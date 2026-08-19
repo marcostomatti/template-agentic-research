@@ -90,9 +90,9 @@ Paths are relative to `packages/service`.
 
 | Path | What it is |
 | --- | --- |
-| `lib/` | The service framework: express, mcp, service-core, errors, logger. |
+| `lib/` | The service framework: express, mcp, service-core, errors, logger — and reserved for it. Distinct from `src/lib/`. |
 | `src/db/` | Drizzle schema and client. Schema v2 lands here in phase 2. |
-| `src/lib/` | Ported pipeline libs, from phase 4 onward: parsing, gating, scoring, and the feature mechanisms. |
+| `src/lib/` | Ported pipeline libs, from phase 4 onward: parsing, gating, scoring, and the feature mechanisms. Distinct from the framework `lib/`. |
 | `src/sources/` | The source adapter contract and the adapters that satisfy it (phase 4 onward), push capture included. |
 | `src/exports/` | Export renderers (phase 6): one per format a subscription can be rendered into. |
 | `src/routes/`, `src/mcp/` | The API surface itself — HTTP routes and MCP tools over the schema. |
@@ -103,6 +103,25 @@ Paths are relative to `packages/service`.
 | `data/` | Seed files only, applied by `scripts/seed.ts`; nothing here is read at runtime. See `data/README.md`. |
 | `tests/` | Cross-cutting tests, including the invariant suite under `tests/invariants/`. |
 | `docs/architecture/` | This document set. |
+
+### `src/lib/` and `lib/` are two directories
+
+The table names both, and no later phase merges them. `lib/` is the
+service framework — express, mcp, service-core, errors, logger — and
+stays reserved for it: a fork-style copy of a service template, held
+as stable library code and changed deliberately. `src/lib/` is
+application code, the pipeline libs ported from phase 4 onward,
+sitting beside the schema, the adapters, and the renderers they run
+against.
+
+The separation is what keeps each half legible. Nothing syncs the
+fork with its template, so pipeline logic dropped into `lib/` leaves
+no way to say afterwards which code is the framework's and which is
+this platform's; framework code moved under `src/lib/` loses the
+deliberate-change bar the rest of `lib/` is held to. Import
+specifiers compound the confusion — `../../lib/…` reaches the
+framework from `src/redis/`, while from a directory under `src/lib/`
+the same text names a sibling pipeline lib.
 
 ## Core vocabulary
 
