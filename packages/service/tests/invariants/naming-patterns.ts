@@ -209,3 +209,84 @@ export const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
     source: VAULT_PATH,
   },
 ];
+
+/** One occurrence of a forbidden name, as the scan reports it. */
+export interface ForbiddenMatch {
+  /**
+   * `id` of the {@link FORBIDDEN_PATTERNS} entry that matched. A failure
+   * report is built from this rather than from the text that matched:
+   * assertion messages reach CI logs and terminal scrollback, and
+   * echoing the name there would seed a fresh copy of it in the one
+   * place nobody can go and fix.
+   */
+  readonly patternId: string;
+  /**
+   * Where the content came from, exactly as the caller named it. The
+   * matcher never opens a file, so this is carried rather than derived
+   * — its only job is to let a caller scanning many files say which one
+   * a hit belongs to.
+   */
+  readonly filePath: string;
+  /**
+   * 1-based, so the pair `<file>:<line>` means the same thing here as in
+   * an editor, a stack trace, or `grep -n` output.
+   */
+  readonly lineNumber: number;
+  /**
+   * The offending line, verbatim and untrimmed. Not part of the failure
+   * message for the reason given on `patternId`; it is here so a caller
+   * that has already found a hit can show it locally without re-reading
+   * the file.
+   */
+  readonly line: string;
+}
+
+/**
+ * Every forbidden name in one file's content, one record per hit.
+ *
+ * Takes content rather than a path, which is the seam that makes the
+ * needles testable: planted samples and false-positive controls can be
+ * assembled in memory and passed straight in, with no fixture file that
+ * would itself have to carry the banned strings.
+ *
+ * One record per hit, not per line or per file. A line naming two
+ * forbidden things is two findings, and a report that collapsed them
+ * would quietly let the second survive the fix for the first.
+ *
+ * Matching is case-insensitive. The origin prefix appears upper-cased in
+ * environment variables and lower-cased in identifiers and paths, and
+ * hostnames are case-insensitive by definition, so a case-sensitive scan
+ * would be a scan somebody slips past without meaning to. Splitting into
+ * lines costs the lookbehind nothing: at the start of a line there is no
+ * preceding character, so it succeeds — which is the form a `.env` key
+ * or a YAML key takes.
+ *
+ * The needles are compiled fresh on every call and never cached. They
+ * match globally, and a global `RegExp` carries `lastIndex` from one use
+ * to the next, so a shared instance would start each file wherever the
+ * previous file left off — a scan that passes and fails alternately over
+ * unchanged input. `matchAll` keeps that property inside the call too:
+ * it iterates an internal clone, so the loops below cannot advance the
+ * instance they were handed.
+ *
+ * Results come back in file order — ascending line number, and within a
+ * line in the order {@link FORBIDDEN_PATTERNS} declares.
+ */
+export function findForbiddenMatches(
+  content: string,
+  filePath: string,
+): readonly ForbiddenMatch[] {
+  const needles = FORBIDDEN_PATTERNS.map((pattern) => ({
+    patternId: pattern.id,
+    needle: new RegExp(pattern.source, 'gi'),
+  }));
+
+  return content.split('\n').flatMap((line, index) => needles.flatMap(
+    ({ patternId, needle }) => [...line.matchAll(needle)].map(() => ({
+      patternId,
+      filePath,
+      lineNumber: index + 1,
+      line,
+    })),
+  ));
+}
