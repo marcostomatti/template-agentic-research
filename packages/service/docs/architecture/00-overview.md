@@ -154,3 +154,30 @@ would need a per-domain branch, migrations would multiply per domain,
 and the guarantee that a column means the same thing on both sides
 would be gone. A display name costs none of it, because nothing joins
 on a label.
+
+## Where each behaviour is documented
+
+The behaviour this platform has divides into the areas below, and each
+has exactly one architecture document. The table names the code an area
+lives in and the document that describes it — one document per area, so
+a question about one behaviour has a single place to look, and a change
+to it has a single row to keep true.
+
+| Behaviour area | Code | Architecture doc |
+| --- | --- | --- |
+| Invariants | `tests/invariants/` | `docs/architecture/01-invariants.md` |
+| Schema | `src/db/`, `drizzle/` | `docs/architecture/02-schema.md` |
+| Workflows | `workflows/src/` | `docs/architecture/03-workflows.md` |
+| Sources | `src/sources/` | `docs/architecture/04-sources.md` |
+| Exports | `src/exports/` | `docs/architecture/05-exports.md` |
+| Scheduling | `workflows/src/ar-dispatch.json`, and the schedule state in `src/db/` | `docs/architecture/06-scheduling.md` |
+
+A document in the right-hand column arrives with the phase that delivers
+its behaviour, so most of that column is a reservation rather than a
+file: the number fixes the reading order, and the row is what a later
+phase fills.
+
+Names in that column are text, never markdown links. A link check reads
+a link as a promise that the file exists, so a linked forward reference
+is a broken link from the moment it is written — and a check that
+reports one per unwritten document is a check nobody keeps running.
