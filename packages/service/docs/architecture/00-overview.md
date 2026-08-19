@@ -205,3 +205,39 @@ since — and the gap it leaves is invisible, because a stale document
 reads exactly like a current one. Deferring it also splits the review
 in half, since the diff showing what the behaviour now does no longer
 shows what it was meant to do.
+
+## Test harness
+
+One runner covers this package. `bun run test` is `vitest run`,
+`vitest.config.ts` is the only runner configuration in it, and the
+tests each later phase brings with it join that suite instead of
+standing beside it.
+
+### Vitest is the single test runner
+
+No second runner is introduced — not for the ported pipeline logic,
+not for the invariant suite, not for a subset that would read more
+naturally under a different one. A test any phase of this port adds is
+a vitest test, collected by the config already here and run by the
+command already documented.
+
+The cost of the alternative is what settles it. A second runner splits
+the suite in two, and everything the package states once has to be
+stated twice: two configurations, two expressions of the isolated
+versus live split, two places `fileParallelism: false` has to hold,
+and two commands whose union nobody re-checks. The repo-root gate
+makes it worse rather than catching it — `bun run test:all` fans out
+by running each package's `test` script, so a second runner left out
+of that script disappears from the gate without failing anything, and
+a suite nothing runs is indistinguishable from a suite that passes.
+
+### Ported tests arrive as vitest tests
+
+The pipeline logic this port brings over carries tests of its own,
+from phase 3 onward. They are plain-function tests — a function is
+called with an input and its return value is asserted on — so what is
+runner-specific about them is the grouping and assertion calls at
+their surface, not the assertions underneath. Rewriting that surface
+is the whole of the port, which is why holding to one runner costs
+nothing here: keeping their original harness would have bought no less
+work, only a second runner to keep.
