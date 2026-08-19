@@ -1,7 +1,8 @@
 /**
  * @packageDocumentation
- * Scan surface for the naming invariant — which paths under
- * `packages/service` the invariant reads, and which it never opens.
+ * Scan surface and needle set for the naming invariant — which paths
+ * under `packages/service` the invariant reads, which it never opens,
+ * and which names it refuses to find in them.
  *
  * Kept apart from the assertions so the surface itself can be asserted.
  * A content check is only as strong as the set of files it was given: a
@@ -14,6 +15,9 @@
  * Everything named here is authored in this repository. Generated,
  * vendored, and rendered output is pruned rather than searched, because
  * none of it is a place a name can be fixed.
+ *
+ * The needles are assembled from fragments rather than written out, so
+ * this file does not itself contain the strings it exists to reject.
  */
 
 /**
@@ -85,4 +89,123 @@ export const EXCLUDED_DIRS: readonly string[] = [
   'dist-external',
   '.docs',
   '.exports',
+];
+
+/**
+ * Fragments the needles are assembled from.
+ *
+ * Each banned name is split across an array join so that none of them
+ * appears contiguously in this file — the same technique
+ * `packages/ui/eslint.config.mjs` uses for its banned import scopes.
+ * Every phase of this port closes with a repo-wide `git grep` for these
+ * names over tracked files, and a scanner that spelled its own needles
+ * out would be the one guaranteed hit: the only way to keep that grep
+ * clean would then be to delete the test.
+ *
+ * None of the fragments carries a regex metacharacter, so each joins
+ * into pattern source unescaped. The one piece of regex syntax in the
+ * table below is the lookbehind on the first entry.
+ */
+const ORIGIN_PREFIX = ['o', 'f', 'w'].join('');
+const ORIGIN_PROJECT = ['open', 'for', 'work'].join('-');
+const ORIGIN_HOST = ['bife', 'mecanico'].join('');
+const VAULT_URI = ['obsidian', '://'].join('');
+const VAULT_PATH = ['/', 'vault', '/'].join('');
+
+/** One forbidden name, as the scan stores it. */
+export interface ForbiddenPattern {
+  /**
+   * Stable identifier, reported in the failure message and used by the
+   * matcher tests to pair each entry with its planted sample. Carries no
+   * part of the name it stands for, so it stays printable in tracked
+   * output and in CI logs.
+   */
+  readonly id: string;
+  /**
+   * Why the name is banned, phrased by reference rather than by example.
+   * Spelling the literal out here would put it back into a tracked file
+   * and make the entry match itself.
+   */
+  readonly description: string;
+  /**
+   * Regex source, not a `RegExp`. The matcher compiles a fresh instance
+   * per call: matching is global, and a shared global instance carries
+   * `lastIndex` from one file into the next, which surfaces as a scan
+   * that alternately passes and fails on unchanged input.
+   */
+  readonly source: string;
+}
+
+/**
+ * The names no scanned file may contain.
+ *
+ * Two categories, five entries. The origin project supplies three — an
+ * identifier prefix, a repository name, a deployment hostname — and one
+ * contributor's local note store supplies two, a path segment and a URI
+ * scheme. A hit in either category means a file carries a name that
+ * belongs to where the code came from rather than to what it does.
+ *
+ * Kept narrow on purpose. Three of these names have legitimate
+ * near-neighbours in this repository or in ordinary English, and a
+ * needle that also flags those is a needle somebody eventually deletes.
+ */
+export const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
+  // The lookbehind is what makes this entry usable. Matching the bare
+  // letters is a false-positive generator with two proven sources:
+  // camelCase compounds (`poolOfWorkers`, `numberOfWorkers`, `endOfWeek`)
+  // and base64 noise, where a case-insensitive sweep of the repo lockfile
+  // returns six hits, all inside `sha512-` integrity strings. Requiring a
+  // non-alphanumeric character in front costs none of the real forms:
+  // each is preceded by an underscore, hyphen, slash, quote, whitespace,
+  // or the start of a line.
+  {
+    id: 'origin-prefix',
+    description:
+      'Short abbreviation of the origin project, used there to prefix ' +
+      'environment variables, table names, and workflow identifiers.',
+    source: `(?<![A-Za-z0-9])${ORIGIN_PREFIX}`,
+  },
+  {
+    id: 'origin-project',
+    description:
+      'Repository name of the origin project. Apache-2.0 §4(d) requires ' +
+      'it as attribution in the repo-root NOTICE, which is why that file ' +
+      'sits outside the scan surface rather than being exempted here.',
+    source: ORIGIN_PROJECT,
+  },
+  // Matched on the domain label alone, without a TLD, so subdomain and
+  // alternate-TLD forms fall to the same entry — and so this check is
+  // never weaker than the repo-wide close-out grep, which uses the same
+  // bare label. The label is distinctive enough that widening it this
+  // far costs no precision.
+  {
+    id: 'origin-host',
+    description:
+      'Hostname the origin deployment ran under. Tracked examples name ' +
+      'localhost, a compose service, or a documented placeholder — never ' +
+      'a real host, which would be a naming leak and a live target both.',
+    source: ORIGIN_HOST,
+  },
+  // Carries its scheme separator rather than matching the application
+  // name alone: `obsidian_md` is a legitimate `ExportFormat` member in
+  // `src/exports/index.ts`, and phase 6 adds a renderer module named
+  // after it. A bare-name needle would flag the port's own export format
+  // on the day it lands.
+  {
+    id: 'vault-uri',
+    description:
+      'Desktop URI scheme of the note application the origin wrote its ' +
+      'output into. A link built on it resolves on one machine only.',
+    source: VAULT_URI,
+  },
+  // Slash-delimited so the needle is a path segment rather than a word.
+  // `vaulted` and a column named `vault_id` are ordinary English and
+  // ordinary schema tokens; neither hard-codes anybody's directory layout.
+  {
+    id: 'vault-path',
+    description:
+      'Path segment naming a personal note store. Reaching a scanned ' +
+      'file, it pins shared code to the directory layout of one machine.',
+    source: VAULT_PATH,
+  },
 ];
