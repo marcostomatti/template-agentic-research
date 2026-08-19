@@ -1,0 +1,63 @@
+# Local dev stack.
+#
+# Default `docker compose up -d` starts ONLY dev Postgres (the template's
+# default datastore). Everything else is opt-in behind profiles:
+#
+#   --profile redis    dev Redis (the service ignores it unless REDIS_URL is set)
+#   --profile stress   the live-test database (see tests/live/ and AGENTS.md)
+#
+# The live-test instance is one digit away from dev on 5433, with a DIFFERENT
+# database name (ar_live) and NO volume — the live suite's
+# assertLiveDatabase guard refuses any other database, so a fat-fingered URL
+# that still connects cannot truncate dev data.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ar
+      POSTGRES_PASSWORD: ar
+      POSTGRES_DB: ar
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ar -d ar"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - ar_pg_data:/var/lib/postgresql/data
+
+  redis:
+    profiles: ["redis"]
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Live-test database — truncated between cases by the test suite. No
+  # persistent volume (state must not survive a run) and a distinct db name
+  # (the destructive helpers verify it before touching anything).
+  postgres-live:
+    profiles: ["stress"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ar
+      POSTGRES_PASSWORD: ar
+      POSTGRES_DB: ar_live
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ar -d ar_live"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  ar_pg_data:

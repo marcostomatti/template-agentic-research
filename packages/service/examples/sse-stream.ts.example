@@ -1,0 +1,62 @@
+// Opt-in example: Server-Sent Events (SSE) endpoint.
+//
+// Copy this file to `src/routes/stream.ts` (drop the `.example` suffix), then
+// mount it from `src/index.ts`:
+//
+//   import { createStreamRouter } from './routes/stream.js';
+//   const stream = createStreamRouter();
+//   register(app) {
+//     app.use('/stream', stream.router);
+//   }
+//
+// Elsewhere in your service you can push events to subscribers:
+//   stream.publish({ type: 'ping', data: Date.now() });
+//
+// No new dependencies are required — plain express + Node EventEmitter.
+
+import type { Request, Response, Router as RouterType } from 'express';
+
+import { EventEmitter } from 'node:events';
+
+import { Router } from 'express';
+
+export interface StreamEvent {
+  type: string;
+  data: unknown;
+}
+
+export interface StreamRouter {
+  router: RouterType;
+  publish(event: StreamEvent): void;
+}
+
+export function createStreamRouter(): StreamRouter {
+  const bus = new EventEmitter();
+  const router = Router();
+
+  router.get('/', (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const write = (event: StreamEvent): void => {
+      res.write(`event: ${event.type}\n`);
+      res.write(`data: ${JSON.stringify(event.data)}\n\n`);
+    };
+
+    bus.on('event', write);
+
+    req.on('close', () => {
+      bus.off('event', write);
+      res.end();
+    });
+  });
+
+  return {
+    router,
+    publish(event: StreamEvent): void {
+      bus.emit('event', event);
+    },
+  };
+}

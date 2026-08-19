@@ -1,0 +1,200 @@
+name: Front
+
+# Frontend pipeline: @ar/ui + @ar/web. Two jobs:
+#
+# - checks: hosted runner — lint, types, unit tests + bundle guard, library
+#   build, storybook compile, web build.
+# - visual: pixel regression on a self-hosted runner. OFF BY DEFAULT — it
+#   does nothing until the repository Actions variable VISUAL_CI is set to
+#   "enabled" (`gh variable set VISUAL_CI --body enabled`). The activation
+#   flag and the runner registration live in GitHub settings, NOT in the
+#   repo, so the real pipeline wiring is never tracked. The local suite
+#   (`bun run test:visual` in packages/ui) is independent and always works.
+#   Runner label default `grow-box`; override via the VISUAL_CI_RUNNER
+#   variable (a JSON label array). Setup: packages/ui/docs/ci/.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/ui/**'
+      - 'packages/web/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'tsconfig.base.json'
+      - 'eslint.base.mjs'
+      - 'sharedRules.mjs'
+      - '.github/workflows/front.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/ui/**'
+      - 'packages/web/**'
+      - 'package.json'
+      - 'bun.lock'
+      - 'tsconfig.base.json'
+      - 'eslint.base.mjs'
+      - 'sharedRules.mjs'
+      - '.github/workflows/front.yml'
+
+# The visual job runs on a self-hosted runner: never execute fork code there.
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: front-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+
+      # @ar/ui's toolchain needs Node 22 on PATH (`bun x` honors node
+      # shebangs only when node exists; without it jest/test-storybook bins
+      # crash under bun's runtime).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run --filter '@ar/ui' lint && bun run --filter '@ar/web' lint
+
+      - name: Type-check
+        run: bun run --filter '@ar/ui' check-types && bun run --filter '@ar/web' check-types
+
+      # `test` in @ar/ui runs pretest (library build + ioredis bundle guard)
+      # then the unit project.
+      - name: Unit tests + bundle guard
+        run: bun run --filter '@ar/ui' test
+
+      - name: Storybook compile
+        working-directory: packages/ui
+        run: bun run build:storybook
+
+      # @ar/web resolves @ar/ui through its dist exports — the ui build ran
+      # as part of the test step above.
+      - name: Web build
+        working-directory: packages/web
+        run: bun run build
+
+  visual:
+    # Gated on the untracked VISUAL_CI variable; same-repo events only —
+    # fork PRs are skipped (no self-hosted-network exposure).
+    if: vars.VISUAL_CI == 'enabled' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ${{ fromJSON(vars.VISUAL_CI_RUNNER || '["self-hosted","grow-box"]') }}
+    defaults:
+      run:
+        working-directory: packages/ui
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner host deliberately has no system Node. See the note on the
+      # checks job; same reasoning.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: .
+        run: bun install --frozen-lockfile
+
+      # Browsers land in the runner user's playwright cache. The OS libraries
+      # they need are a one-time operator install (playwright install-deps).
+      # `bun x`, not `bunx`: the runner host has the bun binary but not the
+      # bunx alias symlink; the subcommand form works everywhere.
+      - name: Install pinned Playwright browser
+        run: bun x playwright install chromium
+
+      # Baselines are per-environment and untracked; this runner's set is
+      # persisted through GitHub's cache backend. The run_id key never hits,
+      # so restore-keys always resolves to the most recently saved set.
+      - name: Restore visual baselines
+        id: baselines
+        uses: actions/cache/restore@v4
+        with:
+          path: packages/ui/visual/__image_snapshots__
+          key: visual-baselines-${{ runner.os }}-pw1.61.1-${{ github.run_id }}
+          restore-keys: |
+            visual-baselines-${{ runner.os }}-pw1.61.1-
+
+      - name: Run visual suite
+        id: visual
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Merge to main = accepted truth: refresh this runner's baselines.
+            bun run test:visual:update
+            echo "mode=refresh" >> "$GITHUB_OUTPUT"
+          elif [[ -z "$(ls -A visual/__image_snapshots__ 2>/dev/null)" ]]; then
+            # No cache (first run or evicted): seed and pass; gate arms next run.
+            bun run test:visual:update
+            echo "mode=seeded" >> "$GITHUB_OUTPUT"
+          else
+            bun run test:visual
+            echo "mode=gate" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save refreshed baselines
+        if: github.event_name == 'push' && always()
+        uses: actions/cache/save@v4
+        with:
+          path: packages/ui/visual/__image_snapshots__
+          key: visual-baselines-${{ runner.os }}-pw1.61.1-${{ github.run_id }}
+
+      - name: Upload diff artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diffs-${{ github.run_id }}
+          path: |
+            packages/ui/visual/__diff_output__/
+            packages/ui/visual-report.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # Best-effort: the visual report is the source of truth; a GitHub API
+      # blip while commenting must not fail the gate (seen 2026-07-17: the
+      # suite passed 182/182 but a 503 from the comments API failed the job).
+      - name: Comment results on PR
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const mode = '${{ steps.visual.outputs.mode }}';
+            let summary = '✅ Visual regression: all stories match this runner\'s baselines.';
+            if (mode === 'seeded') {
+              summary = '🌱 Visual regression: no baseline cache found — baselines were seeded on this run. The gate arms on the next run.';
+            } else {
+              try {
+                const r = JSON.parse(fs.readFileSync('packages/ui/visual-report.json', 'utf8'));
+                if (r.numFailedTests > 0) {
+                  summary = `❌ Visual regression: ${r.numFailedTests} story screenshot(s) changed. ` +
+                    `Download the \`visual-diffs-${context.runId}\` artifact to inspect diffs ` +
+                    '(baseline | delta | actual). Intentional changes: merge refreshes the baselines automatically.';
+                }
+              } catch (e) {
+                summary = '⚠️ Visual regression: could not parse visual-report.json — check the run logs.';
+              }
+            }
+            const body = `### Visual Regression\n\n${summary}`;
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.issue.number,
+            });
+            const prev = comments.find(c => c.body.startsWith('### Visual Regression'));
+            if (prev) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: prev.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }

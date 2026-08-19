@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "React Library",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "allowImportingTsExtensions": false,
+    "verbatimModuleSyntax": true,
+    "allowSyntheticDefaultImports": true,
+    "noImplicitOverride": true,
+    "useDefineForClassFields": true,
+    "jsx": "react-jsx",
+    "types": ["node"]
+  },
+  "include": ["src", "*.ts", "*.tsx", "*.mjs", ".storybook"],
+  "exclude": ["node_modules", "dist", "storybook-static"]
+}

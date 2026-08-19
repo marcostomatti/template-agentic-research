@@ -1,0 +1,17 @@
+node_modules
+dist
+storybook-static/
+
+# Visual regression baselines are per-environment and untracked — regenerate
+# with `bun run test:visual:update`; never copy them between machines.
+visual/
+visual-report.json
+
+*.log
+.DS_Store
+
+# Working plans and sensitive specs are untracked on purpose: they can
+# describe critical (privacy/security) bugs before they are patched.
+# See AGENTS.md — "Plans and specs".
+.plans/
+.specs/

@@ -1,0 +1,183 @@
+/* ----------------------------------------------------------------------------
+   Component contract — maps the semantic theme variables (defined by whatever
+   theme definition is loaded; tokens.css is the default) onto Tailwind 4's
+   @theme layer so utility classes like `bg-primary`, `text-fg1`,
+   `border-border-soft` resolve against the same CSS variables the design
+   source uses.
+
+   This file is the STABLE half of the theming split: themes swap the variable
+   values (tokens.css or a future theming package), components
+   keep their layout and class vocabulary. Don't put theme values here — only
+   the mapping. The color ramps/shadow/font literals below are duplicated from
+   tokens.css by design for now; whether ramps join the swappable theme is a
+   decision deferred to the theming package.
+   --------------------------------------------------------------------------- */
+
+@theme {
+  /* surface */
+  --color-bg: var(--bg);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-sunk: var(--surface-sunk);
+
+  /* foreground */
+  --color-fg1: var(--fg1);
+  --color-fg2: var(--fg2);
+  --color-fg3: var(--fg3);
+  --color-on-primary: var(--fg-on-primary);
+  --color-on-accent: var(--fg-on-accent);
+
+  /* borders */
+  --color-border-soft: var(--border-soft);
+  --color-border-strong: var(--border-strong);
+  --color-border-focus: var(--border-focus);
+
+  /* brand */
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-press: var(--primary-press);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-leaf: var(--leaf);
+
+  /* semantic */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  /* auth lockup + code chip (auth screens) */
+  --color-wordmark-open: var(--wordmark-open);
+  --color-wordmark-tomato: var(--wordmark-tomato);
+  --color-code-bg: var(--code-bg);
+
+  /* tonal tint recipes — the shared tone contract: soft = tinted surface
+     fill, tint = translucent border. Warning reads through gold-500. */
+  --color-success-soft: color-mix(in oklab, var(--success) 14%, var(--surface-1));
+  --color-warning-soft: color-mix(in oklab, var(--gold-500) 16%, var(--surface-1));
+  --color-danger-soft: color-mix(in oklab, var(--danger) 13%, var(--surface-1));
+  --color-info-soft: color-mix(in oklab, var(--info) 14%, var(--surface-1));
+  --color-accent-soft: color-mix(in oklab, var(--accent) 11%, var(--surface-1));
+  --color-success-tint: color-mix(in oklab, var(--success) 34%, transparent);
+  --color-warning-tint: color-mix(in oklab, var(--gold-500) 36%, transparent);
+  --color-danger-tint: color-mix(in oklab, var(--danger) 34%, transparent);
+  --color-info-tint: color-mix(in oklab, var(--info) 34%, transparent);
+  --color-accent-tint: color-mix(in oklab, var(--accent) 34%, transparent);
+
+  /* wash tier — the feedback surfaces' softer 9% fills (rows/banners sit
+     quieter than the 13–16% content-atom pills; borders reuse the -tint
+     tier) */
+  --color-success-wash: color-mix(in oklab, var(--success) 9%, var(--surface-1));
+  --color-warning-wash: color-mix(in oklab, var(--gold-500) 9%, var(--surface-1));
+  --color-danger-wash: color-mix(in oklab, var(--danger) 9%, var(--surface-1));
+  --color-info-wash: color-mix(in oklab, var(--info) 9%, var(--surface-1));
+  --color-neutral-wash: color-mix(in oklab, var(--fg3) 9%, var(--surface-1));
+  --color-neutral-tint: color-mix(in oklab, var(--fg3) 32%, transparent);
+
+  /* Brand red ramp — used directly by tone-aware variants */
+  --color-red-50: #FFF0EC;
+  --color-red-100: #FBD2C9;
+  --color-red-200: #F2A89B;
+  --color-red-300: #E27668;
+  --color-red-400: #C24838;
+  --color-red-500: #900D09;
+  --color-red-600: #780609;
+  --color-red-700: #5E0306;
+  --color-red-800: #420203;
+  --color-red-900: #260101;
+
+  --color-green-50: #F0F7E9;
+  --color-green-100: #DCEDC8;
+  --color-green-200: #B8DC97;
+  --color-green-300: #8FC766;
+  --color-green-400: #6FA84B;
+  --color-green-500: #4F8A2F;
+  --color-green-600: #38691E;
+  --color-green-700: #2D5016;
+  --color-green-800: #1F380E;
+  --color-green-900: #122005;
+
+  --color-cream-50: #FFFCF6;
+  --color-cream-100: #FAF4E8;
+  --color-cream-200: #F2EBD9;
+  --color-cream-300: #E5DCC4;
+  --color-cream-400: #CEC2A4;
+
+  --color-char-50: #6B6253;
+  --color-char-100: #4D453A;
+  --color-char-200: #383128;
+  --color-char-300: #2B251D;
+  --color-char-400: #221C15;
+  --color-char-500: #1A150F;
+  --color-char-600: #14100A;
+  --color-char-700: #0E0B07;
+  --color-char-800: #080604;
+  --color-char-900: #030201;
+
+  --color-gold-400: #E8B23A;
+  --color-gold-500: #C8941F;
+
+  /* radii */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  /* shadows */
+  --shadow-inset: inset 0 1px 2px rgba(40, 20, 10, 0.1);
+  --shadow-xs: 0 1px 2px rgba(40, 20, 10, 0.05);
+  --shadow-sm: 0 1px 3px rgba(40, 20, 10, 0.07), 0 1px 1px rgba(40, 20, 10, 0.04);
+  --shadow-md: 0 3px 8px rgba(40, 20, 10, 0.09), 0 1px 2px rgba(40, 20, 10, 0.05);
+  --shadow-lg: 0 6px 14px rgba(40, 20, 10, 0.11), 0 2px 4px rgba(40, 20, 10, 0.06);
+
+  /* fonts */
+  --font-display: "Bricolage Grotesque", "Sansita", system-ui, sans-serif;
+  --font-body: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  /* feedback motion (indeterminate progress + skeleton shimmer) */
+  --animate-indeterminate: indeterminate 1.25s var(--ease-out) infinite;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  /* auth success pulse (auth.html @keyframes pulseRing) */
+  --animate-pulse-ring: pulseRing 2s var(--ease-out) infinite;
+
+  @keyframes indeterminate {
+    0% {
+      left: -42%;
+    }
+    100% {
+      left: 102%;
+    }
+  }
+  @keyframes shimmer {
+    0% {
+      background-position: -400px 0;
+    }
+    100% {
+      background-position: 400px 0;
+    }
+  }
+  @keyframes pulseRing {
+    0% {
+      transform: scale(1);
+      opacity: 0.6;
+    }
+    100% {
+      transform: scale(1.4);
+      opacity: 0;
+    }
+  }
+}
+
+/* Layer ladder (Tailwind 4 has no z-index theme namespace, so these are
+   custom utilities): overlays sit under their anchored popovers, toasts
+   float above everything. */
+@utility z-overlay {
+  z-index: 1000;
+}
+@utility z-popover {
+  z-index: 1100;
+}
+@utility z-toast {
+  z-index: 1200;
+}

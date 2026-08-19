@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Service",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "declaration": false,
+    "forceConsistentCasingInFileNames": true,
+    "incremental": false,
+    "lib": ["es2022"],
+    "module": "es2022",
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "include": ["src", "lib", "tests", "*.ts", "*.mjs"],
+  // *.test.ts is excluded from check-types (origin parity — vitest executes
+  // them; tsc doesn't gate them). Burning this down is tracked in
+  // .specs/service/test-type-checking.md.
+  "exclude": ["node_modules", ".tmp", "dist", ".docs", "**/*.test.ts"]
+}

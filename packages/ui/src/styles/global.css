@@ -1,0 +1,12 @@
+/* Workbench entry (Storybook, demo app). Published consumers use the package
+   export (`components-library/styles.css` — built from lib.css) instead.
+
+   Layering — the theming split:
+     fonts.css   type faces (swappable source)
+     tokens.css  DEFAULT THEME DEFINITION (semantic variables, light + dark)
+     theme.css   COMPONENT CONTRACT (variables → Tailwind utility mapping)
+   @import statements MUST come first — Google Fonts before any other rule. */
+@import "./fonts.css";
+@import "tailwindcss";
+@import "./tokens.css";
+@import "./theme.css";

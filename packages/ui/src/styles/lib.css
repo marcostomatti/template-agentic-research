@@ -1,0 +1,23 @@
+/* Published consumer entry — shipped as dist/styles/index.css and exported as
+   "components-library/styles.css".
+
+   Usage (consumer's Tailwind 4 CSS entry):
+
+       @import "tailwindcss";
+       @import "components-library/styles.css";
+
+   The @source below points the consumer's Tailwind build at this package's
+   compiled JS, so the utility classes our variants reference are generated
+   in the consumer's bundle (this package ships no prebuilt utilities).
+
+   Theming ("theme definition" approach, v1): tokens.css is the default theme
+   (a copy ships alongside this file in dist/styles). Override by redefining
+   the semantic variables (--bg, --fg1, --primary, …) after this import — or
+   load a different theme package.
+   theme.css (the variable→utility mapping) is part of the components and is
+   not meant to be overridden. */
+@import "./fonts.css";
+@import "./tokens.css";
+@import "./theme.css";
+
+@source "../";

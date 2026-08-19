@@ -1,0 +1,11 @@
+node_modules
+.tmp
+.env
+.docs/
+progress.txt
+
+# Working plans and sensitive specs are untracked on purpose: they can
+# describe critical (privacy/security) bugs before they are patched.
+# See AGENTS.md — "Plans and specs".
+.plans/
+.specs/

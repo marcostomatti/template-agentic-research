@@ -1,0 +1,15 @@
+agentic-research
+Copyright 2026 Marcos Tomatti
+
+This project was created by Marcos Tomatti. Its UI package (@ar/ui) and
+service package (@ar/service) were extracted from Open Tomato (a private
+project by the same author — an agentic platform for development) via the
+standalone component-library and service templates by the same author.
+The design-system extraction pipeline that produced the UI components
+originates in the author's component-breakdown project. Parts of the
+research-pipeline design draw on the author's open-for-work project.
+
+Per section 4(d) of the Apache License 2.0, redistributions of this work
+— in source form or bundled/derivative form — must include a readable
+copy of the attribution notices in this file. In short: keep the credit
+to the original author and the origin projects above.

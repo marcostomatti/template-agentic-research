@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Web app",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "jsx": "react-jsx",
+    "verbatimModuleSyntax": true,
+    "useDefineForClassFields": true,
+    "noImplicitOverride": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src", "*.ts", "*.tsx", "*.mjs"],
+  "exclude": ["node_modules", "dist"]
+}

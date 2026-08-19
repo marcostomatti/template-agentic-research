@@ -1,0 +1,12 @@
+template-service-express
+Copyright 2026 Marcos Tomatti
+
+This service template was created by Marcos Tomatti, extracted from
+Open Tomato (a private project by the same author — an agentic platform
+for development) as a standalone template for small, mostly ad-hoc
+services sharing the same service framework.
+
+Per section 4(d) of the Apache License 2.0, redistributions of this work
+— in source form or derivative form — must include a readable copy of
+the attribution notices in this file. In short: keep the credit to the
+original author and the origin project above.

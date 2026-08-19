@@ -1,0 +1,1 @@
+export { ResetDonePage } from './ResetDonePage';
