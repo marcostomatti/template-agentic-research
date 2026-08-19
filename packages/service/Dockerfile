@@ -12,7 +12,11 @@ FROM oven/bun:1-alpine AS deps
 WORKDIR /app
 
 COPY package.json bun.lock ./
+# All workspace manifests must be present for frozen-lockfile validation,
+# even though only @ar/service gets installed.
 COPY packages/service/package.json ./packages/service/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/web/package.json ./packages/web/
 RUN bun install --frozen-lockfile --filter '@ar/service'
 
 # ---------------------------------------------------------------------------
@@ -40,6 +44,8 @@ ENV NODE_ENV=production
 
 COPY package.json bun.lock ./
 COPY packages/service/package.json ./packages/service/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/web/package.json ./packages/web/
 RUN bun install --frozen-lockfile --production --filter '@ar/service'
 
 COPY --from=build /app/packages/service/lib ./packages/service/lib
