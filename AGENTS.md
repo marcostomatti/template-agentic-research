@@ -63,3 +63,8 @@ subject is already visible in the public code; when in doubt, `.specs/`.
 
 Feature-branch → PR → merge. Conventional commit types (feat, fix, refactor,
 docs, test, chore, perf, ci). Run the verification order before any PR.
+
+**Tag on every completed plan**: when a ralph plan (or an equivalent chunk of
+work) completes and lands on `main`, push and tag it `v<N>` (annotated,
+sequential — `v0` was the umbrella reintegration) so versions trace back to
+the plan that produced them.
