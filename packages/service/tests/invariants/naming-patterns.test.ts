@@ -168,9 +168,13 @@ const FALSE_POSITIVE_CONTROLS: readonly FalsePositiveControl[] = [
     patternId: 'origin-prefix',
     label: 'the origin letters inside a base64 integrity hash',
     nearMiss: ORIGIN_PREFIX,
-    line:
-      '    "integrity": "sha512-Nd0aH9BvcNqA1ofWCmJvT2xqR8kSLpXbGz7YeUw' +
-      'OFWjKcV6nHrTsIuMlPd4gAyBxQEZ0RiWvCkStUnGmLhJfDa==",',
+    // Kept on one line, over the width the prose here wraps at. The
+    // letters are guarded in this token by whatever base64 character
+    // precedes them, and a concatenation broken just in front of one
+    // would put an unguarded copy into this file for the close-out
+    // grep to find — a hit in the source of a control asserting the
+    // runtime string is clean.
+    line: '    "integrity": "sha512-Nd0aH9BvcNqA1ofWCmJvT2xqR8kSLpXbGz7YeUwOFWjKcV6nHrTsIuMlPd4gAyBxQEZ0RiWvCkStUnGmLhJfDa==",',
   },
   // Already tracked, in `src/exports/index.ts`: this is the package's
   // own export format, so a needle matching the note application by its
