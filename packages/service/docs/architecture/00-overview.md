@@ -181,3 +181,27 @@ Names in that column are text, never markdown links. A link check reads
 a link as a promise that the file exists, so a linked forward reference
 is a broken link from the moment it is written — and a check that
 reports one per unwritten document is a check nobody keeps running.
+
+### A behaviour change and its document land in the same commit
+
+A commit that changes behaviour in one of the rows above updates that
+row's document in the same commit — not the next one, not a follow-up
+issue, not a documentation pass at the end of the phase. Behaviour no
+row covers is a new area, and it arrives the same way: add the row
+here, with its code path and a document name taking the next free
+number in the set, in the commit that adds the behaviour.
+
+What triggers the rule is behaviour, not the size of the diff. A
+refactor that leaves every observable result identical changes no
+document; a one-line change to a trigger, a threshold, a ceiling, or
+the shape of a stored row changes exactly one.
+
+Nothing enforces this mechanically, and the commit boundary is what
+makes it checkable by hand instead: a reviewer reading one commit can
+see whether the behaviour it changes carries its document with it.
+Documentation deferred past that boundary is written later, from
+memory, by whoever remembers to, against code that has moved again
+since — and the gap it leaves is invisible, because a stale document
+reads exactly like a current one. Deferring it also splits the review
+in half, since the diff showing what the behaviour now does no longer
+shows what it was meant to do.
