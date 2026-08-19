@@ -20,6 +20,9 @@
  * this file does not itself contain the strings it exists to reject.
  */
 
+import { readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
 /**
  * Directories under the package root walked recursively by the scan.
  *
@@ -90,6 +93,134 @@ export const EXCLUDED_DIRS: readonly string[] = [
   '.docs',
   '.exports',
 ];
+
+/**
+ * Thrown when a declared scan root contributes no files to the walk.
+ *
+ * The failure this catches is a quiet one. A root that is renamed,
+ * mistyped, or emptied simply stops contributing files; the scan keeps
+ * returning a clean result over whatever remains, and nothing in that
+ * result says coverage shrank. A green run over half the surface reads
+ * exactly like a green run over all of it, so the walk refuses to
+ * produce one.
+ *
+ * A distinct class rather than a bare `Error` so the test covering this
+ * path can pin the failure to this cause specifically. A missing
+ * directory, an unreadable entry, and a permission refusal all reach a
+ * caller as `Error` too, and an assertion that accepted any of them
+ * would pass for the wrong reason.
+ */
+export class EmptyScanRootError extends Error {
+  /**
+   * The {@link SCAN_ROOTS} entry that resolved to nothing, exactly as
+   * that list declares it.
+   */
+  readonly root: string;
+
+  /**
+   * @param root - The {@link SCAN_ROOTS} entry that resolved to nothing.
+   * @param packageRoot - Directory the entry was resolved against,
+   * carried into the message because the same entry is populated or
+   * empty depending on which tree the walk was pointed at.
+   */
+  constructor(root: string, packageRoot: string) {
+    super(
+      `Scan root '${root}' resolved to no files under ${packageRoot}. ` +
+      'A declared root that contributes nothing shrinks the naming ' +
+      'invariant to the files that remain, without saying so: either ' +
+      'the root moved and SCAN_ROOTS needs updating, or the walk was ' +
+      'pointed at the wrong tree.',
+    );
+    this.name = this.constructor.name;
+    this.root = root;
+  }
+}
+
+/**
+ * Files beneath one directory, relative to the package root.
+ *
+ * Recursive, pruning {@link EXCLUDED_DIRS} by base name at every level
+ * rather than by path, so a nested build directory is dropped as
+ * readily as a top-level one.
+ *
+ * Regular files only: a symlink is skipped rather than followed, since
+ * following one either re-walks a tree already covered or leaves the
+ * package altogether, and neither yields a file a name can be fixed in.
+ *
+ * Entries are sorted by name at each level, because `readdirSync`
+ * returns directory order — stable on one machine, arbitrary across
+ * them. Sorting makes the file list, and any failure report built from
+ * it, identical everywhere.
+ *
+ * Paths are built with a literal `/` rather than `join`, so what comes
+ * back is package-relative and slash-separated whatever the platform:
+ * the form a failure message prints and a caller matches against a
+ * root name.
+ */
+function walkDirectory(
+  packageRoot: string,
+  relativeDir: string,
+): readonly string[] {
+  const entries = readdirSync(join(packageRoot, relativeDir), {
+    withFileTypes: true,
+  });
+
+  return [...entries]
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .flatMap((entry) => {
+      const relativePath = `${relativeDir}/${entry.name}`;
+
+      if (entry.isDirectory()) {
+        return EXCLUDED_DIRS.includes(entry.name)
+          ? []
+          : walkDirectory(packageRoot, relativePath);
+      }
+
+      return entry.isFile()
+        ? [relativePath]
+        : [];
+    });
+}
+
+/**
+ * Every file the naming invariant reads, relative to `packageRoot`.
+ *
+ * Walks {@link SCAN_ROOTS} in declaration order, pruning
+ * {@link EXCLUDED_DIRS} as it goes, then appends {@link SCAN_FILES}.
+ * The result is package-relative, so a caller joins it back onto
+ * `packageRoot` to read a file and prints it as-is to name one.
+ *
+ * Throws {@link EmptyScanRootError} as soon as a declared root
+ * contributes nothing. A root that is absent, or that is not a
+ * directory at all, takes that same path rather than surfacing as a
+ * filesystem error from inside the walk: both mean the declared surface
+ * and the tree disagree, which is one fact worth reporting once.
+ *
+ * {@link SCAN_FILES} is appended unguarded, deliberately. A declared
+ * file that has gone missing cannot quietly shrink coverage the way an
+ * empty root can, because every path returned here is opened by the
+ * caller, and a missing one fails there naming itself.
+ */
+export function collectScannedFiles(
+  packageRoot: string,
+): readonly string[] {
+  const walked = SCAN_ROOTS.flatMap((root) => {
+    const stats = statSync(join(packageRoot, root), {
+      throwIfNoEntry: false,
+    });
+    const files = stats !== undefined && stats.isDirectory()
+      ? walkDirectory(packageRoot, root)
+      : [];
+
+    if (files.length === 0) {
+      throw new EmptyScanRootError(root, packageRoot);
+    }
+
+    return files;
+  });
+
+  return [...walked, ...SCAN_FILES];
+}
 
 /**
  * Fragments the needles are assembled from.
