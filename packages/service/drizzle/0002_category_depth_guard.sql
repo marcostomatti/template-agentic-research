@@ -86,3 +86,33 @@ BEGIN
 	RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+--> statement-breakpoint
+-- Attaching the function to the table is what gives the rule teeth.
+-- Unattached it is an ordinary function nobody calls, and a database
+-- can carry it while admitting every write it refuses above.
+--
+-- BEFORE, so the guard is asked while the row is still being written
+-- and ahead of the foreign key's own check -- which is what leaves a
+-- parent_id naming no row to the key, refused in its own terms
+-- rather than reported here as a domain or a depth problem.
+--
+-- FOR EACH ROW, because every rule in the function is about one
+-- written row and the row it names as its parent. A statement-level
+-- trigger is handed a null NEW rather than an error, so the root
+-- early-return above reads true and admits every write: the cap
+-- would be gone with nothing raised anywhere to say so.
+--
+-- INSERT and UPDATE both, because the cap breaks from two ends and
+-- the function guards both: an INSERT can reach for a parent that is
+-- already a child, and an UPDATE can hand a parent to a row that
+-- already has children of its own. Naming one event and not the
+-- other would leave that half unguarded with nothing to report it.
+--
+-- What it does not buy: the guards read rows this write does not
+-- lock, so two transactions can each read a taxonomy the other is
+-- about to change and both commit. It refuses every writer, one at a
+-- time; it does not serialize two of them.
+CREATE OR REPLACE TRIGGER categories_enforce_depth_trigger
+	BEFORE INSERT OR UPDATE ON "public"."categories"
+	FOR EACH ROW
+	EXECUTE FUNCTION categories_enforce_depth();
