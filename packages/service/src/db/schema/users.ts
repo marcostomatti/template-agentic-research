@@ -9,8 +9,8 @@
  * Postgres dependency is actually live rather than merely constructed
  * — `GET /health` reports a dependency's recorded status, this route
  * issues a real query. And `tests/live/users.live.test.ts` round-trips
- * a row through the real database, with `users` the sole entry in the
- * `TABLES` list `resetTables` truncates.
+ * a row through the real database, and `users` is one entry in the
+ * hand-maintained `TABLES` list `resetTables` truncates.
  *
  * Dropping the table breaks both, and it breaks them quietly: the live
  * suite self-skips without `AR_LIVE_DATABASE_URL`, so the default

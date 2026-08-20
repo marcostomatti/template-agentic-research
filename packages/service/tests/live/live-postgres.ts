@@ -40,7 +40,24 @@ export const describeLivePg: (name: string, fn: () => void) => void = LIVE_DATAB
   ? describe
   : describe.skip;
 
-/** Tables the suite is allowed to truncate — a deliberate, literal list. */
+/**
+ * Tables the suite is allowed to truncate — a deliberate, literal list,
+ * hand-maintained to hold one entry per table in `src/db/schema/`.
+ *
+ * Growing it from a single entry to all of them did not widen the blast
+ * radius: what bounds the damage is the database this runs against, not
+ * the number of tables named here. `assertLiveDatabase` still opens both
+ * destructive helpers below, so against any database but `ar_live` it
+ * throws before a statement is issued and this list is never read. A name
+ * added here changes what a live run resets between its own cases, and
+ * nothing else.
+ *
+ * Two things that scoping does not cover, so neither is read into it. The
+ * guard compares `current_database()` and knows nothing about which server
+ * holds it, so a second database named `ar_live` would pass. And it binds
+ * the helpers below rather than SQL a case issues for itself on the pool
+ * `createLivePool` hands it.
+ */
 const TABLES = [
   'benchmark_cases',
   'briefings',
