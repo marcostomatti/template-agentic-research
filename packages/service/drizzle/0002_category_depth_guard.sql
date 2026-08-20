@@ -1,5 +1,37 @@
 -- Custom SQL migration file, put your code below! --
 
+-- Hand-written on purpose. Every other statement under drizzle/ was
+-- generated from src/db/schema.ts; the trigger below was not, and
+-- could not be -- the rule it carries reads the parent and the
+-- children of the row being written, which no column constraint and
+-- no drizzle table definition can express. Why the cap is a trigger
+-- at all, and what a trigger does not buy, is argued in the header
+-- of src/db/schema/taxonomy.ts, beside the columns it governs.
+--
+-- drizzle-kit's snapshot models tables, columns, constraints and
+-- indexes, and nothing else. meta/0002_snapshot.json, written beside
+-- this file when it was generated, is meta/0001_snapshot.json with a
+-- fresh id chained onto it: the same 22 tables, and no mention of a
+-- trigger or of a function anywhere in it. So the generator holds no
+-- record of what is below, has nothing to diff it against, and never
+-- proposes dropping it -- which is why db:generate goes on reporting
+-- no changes while the guard stands.
+--
+-- Nor is this file regenerated. db:generate diffs the schema modules
+-- against the newest snapshot and writes a NEW migration where they
+-- differ; it never rewrites one already on disk. An edit here
+-- survives it, and it will never carry a change made in taxonomy.ts
+-- down into one -- a guard that has to follow a column is a hand
+-- edit in the same commit as that column.
+--
+-- What being invisible to the snapshot costs: it cannot be reported
+-- missing either. Nothing in this repository reads pg_trigger, so a
+-- database this migration never reached, or one where the trigger
+-- was dropped at a psql prompt, is indistinguishable from a database
+-- where it holds. A file scan over drizzle/*.sql is evidence about
+-- this file and about nothing else; only the live suite's depth
+-- cases, later in this phase, watch a database refuse the write.
+
 CREATE OR REPLACE FUNCTION categories_enforce_depth() RETURNS trigger AS $$
 DECLARE
 	parent_domain_id bigint;
