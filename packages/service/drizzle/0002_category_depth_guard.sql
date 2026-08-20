@@ -2,6 +2,7 @@
 
 CREATE OR REPLACE FUNCTION categories_enforce_depth() RETURNS trigger AS $$
 DECLARE
+	parent_domain_id bigint;
 	parent_parent_id bigint;
 BEGIN
 	-- A root is always legal: there is nothing above it to measure a
@@ -10,17 +11,47 @@ BEGIN
 		RETURN NEW;
 	END IF;
 
-	-- The parent must itself be a root. If it already has a parent then
-	-- this row would sit two levels down, which is the one shape the
-	-- shallow taxonomy does not admit.
+	-- One lookup answers both of the rules that read the parent: which
+	-- domain it belongs to, and how deep it already sits.
 	--
-	-- A parent_id naming no row leaves this NULL and falls through to
-	-- the foreign key, which refuses it in its own terms rather than
-	-- being reported here as a depth problem.
-	SELECT parent.parent_id INTO parent_parent_id
+	-- A parent_id naming no row leaves both of these NULL and falls
+	-- through to the foreign key, which refuses it in its own terms
+	-- rather than being reported here as a domain or a depth problem.
+	SELECT parent.domain_id, parent.parent_id
+		INTO parent_domain_id, parent_parent_id
 	FROM "public"."categories" AS parent
 	WHERE parent.id = NEW.parent_id;
 
+	-- The parent must belong to the same domain. A category hung under
+	-- another domain's root sits in two taxonomies at once: it carries
+	-- this domain's domain_id, so every query filtering by domain keeps
+	-- it here, while a walk down from the other domain's root reaches
+	-- it, and reaches the terms underneath it.
+	--
+	-- Asked before the depth rule below, because a parent in another
+	-- domain is out of scope rather than too deep. Reporting where it
+	-- sits in its own taxonomy would send the reader to the wrong
+	-- domain to fix a row that is wrong in this one.
+	--
+	-- domain_id is NOT NULL on every stored row, so a NULL here means
+	-- no parent row was found, not a parent without a domain.
+	--
+	-- What it does not reach: the rule is asked at the child, so it
+	-- binds every write naming a parent and nothing else. Moving a
+	-- root that already has children into another domain is accepted
+	-- and strands them across the boundary this refuses to create -- a
+	-- root names no parent, so the first branch above returns first.
+	IF parent_domain_id IS NOT NULL AND parent_domain_id <> NEW.domain_id THEN
+		RAISE EXCEPTION
+			'categories: parent % is in domain %, but % is in domain %',
+			NEW.parent_id, parent_domain_id, NEW.key, NEW.domain_id
+			USING ERRCODE = 'check_violation',
+				HINT = 'A category and its parent belong to the same domain.';
+	END IF;
+
+	-- The parent must itself be a root. If it already has a parent then
+	-- this row would sit two levels down, which is the one shape the
+	-- shallow taxonomy does not admit.
 	IF parent_parent_id IS NOT NULL THEN
 		RAISE EXCEPTION
 			'categories: parent % is itself a child of %, so % would be two levels deep',
