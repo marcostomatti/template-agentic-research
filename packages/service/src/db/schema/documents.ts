@@ -22,6 +22,15 @@
  * now is the shape they write into, which is the same shape
  * `CanonicalDocument` in `src/sources/index.ts` is narrowed to later
  * in this phase, so that no adapter is ever written against a guess.
+ *
+ * The module carries a second table, `ingested_files`, because the
+ * question that one answers is about how a document ARRIVED rather
+ * than about what a domain makes of it: it records that a file in
+ * the ingest tray has already been read, so a later poll passes
+ * over it. That guard and `hash` below are a pair rather than two
+ * copies of one idea — one stops a file being read twice, the
+ * other stops two reads becoming two rows — and each table's own
+ * comments carry the half of the argument belonging to it.
  */
 import { bigint, bigserial, integer, jsonb, pgTable, real, text, timestamp } from 'drizzle-orm/pg-core';
 
@@ -325,3 +334,143 @@ export const documents = pgTable('documents', {
    */
   checkOneOf('documents_parse_status_check', table.parseStatus, DOCUMENT_PARSE_STATUSES),
 ]);
+
+/**
+ * `ingested_files` — the ingest tray's read log: one row per file the
+ * pipeline has already picked up, so a poll that finds the same file
+ * still sitting there passes over it instead of reading it again.
+ *
+ * The tray cannot be marked in place, which is the whole reason the
+ * table exists. It may be a read-only share, and the pipeline never
+ * moves, renames, or deletes what an operator dropped into it, so
+ * "already handled" has nowhere to live in the directory itself.
+ *
+ * Deployment-level rather than domain-level, which is why it carries
+ * no domain FK where nearly every other table in schema v2 does. One
+ * tray serves the service; which domain a file's contents belong to
+ * is settled when the file is READ and is recorded on the document
+ * that comes out of it. A per-domain read log over one shared
+ * directory would be several logs disagreeing about the same files,
+ * and a file dropped for one domain would be read again by each of
+ * the others.
+ */
+export const ingestedFiles = pgTable('ingested_files', {
+  /** Surrogate key; see `domains.id` for why `number` mode. */
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+
+  /**
+   * The hash of the path this file was read at, and the key the skip
+   * decision stands on: a poll compares the tray's listing against
+   * these rows and reads only what is missing from them.
+   *
+   * The PATH rather than the contents, deliberately, and the two are
+   * not interchangeable. Hashing the contents means opening and
+   * reading every file on every poll in order to decide whether to
+   * read it — the work the guard exists to avoid — while a path is
+   * already in the listing that found the file. That choice leaves
+   * the corpus no less guarded, because `documents.hash` above
+   * dedupes on content: the two constraints answer different
+   * questions and neither stands in for the other. This one stops a
+   * file being re-READ; that one stops a re-read becoming a second
+   * row.
+   *
+   * The honest limit is the mirror of the same choice, and both
+   * halves of it are ordinary rather than exotic. A file edited in
+   * place under one path is not read again, since nothing the key
+   * looks at changed — re-reading it means deleting this row or
+   * giving the file another name. A file copied to a second path IS
+   * read twice, and it is `documents.hash` rather than this
+   * constraint that absorbs the second read.
+   *
+   * NOT NULL for the reason `documents.hash` sets out at length and
+   * that does not need restating here: NULL conflicts with nothing,
+   * so a nullable member turns the UNIQUE key into one admitting
+   * every row whose member is absent. What it would look like from
+   * outside is a tray re-read in full on every poll while this table
+   * fills up with rows that skip nothing. That column's control
+   * table is where the property is demonstrated; this one rests on
+   * the same argument rather than on a second proof of it.
+   *
+   * The constraint is named rather than left to drizzle's derivation
+   * so the static-SQL invariant suite can grep for it, and so a
+   * column rename cannot quietly move the name it greps for.
+   */
+  pathHash: text('path_hash').notNull()
+    .unique('ingested_files_path_hash_unique'),
+
+  /**
+   * Where the file was read, kept so that a row can be read back by
+   * a person: the hash above is what a poll compares, and this is
+   * what says which file it stands for.
+   *
+   * Nullable, and the asymmetry with the hash is the point rather
+   * than an oversight. The guard rests on `path_hash` alone, so a
+   * row with no path still skips the file it was written for; what a
+   * NULL costs is legibility — an operator asking which file a row
+   * accounts for has nothing to read — and not correctness. The
+   * derived column being the NOT NULL one and the human-readable
+   * column being nullable reads backwards until those two roles
+   * are held apart.
+   *
+   * Never an empty string, for the reason `url` above is never one:
+   * `''` is a value, and a reader handed it shows a path that was
+   * recorded and recorded as blank.
+   */
+  path: text('path'),
+
+  /**
+   * When the pipeline read this file. Defaults to now because the
+   * read IS the insert, the way `captured_at` above defaults for the
+   * capture: there is no window in which one of these rows exists
+   * and the file it stands for has not been read, so there is no
+   * absent state for the column to encode.
+   *
+   * What it is not is when the file was dropped into the tray.
+   * Nothing here records that, and a filesystem timestamp would be a
+   * fact about the share rather than about this pipeline — so the
+   * gap between this column and a poll's cadence measures how long a
+   * file waited to be noticed, never how long it sat there.
+   */
+  ingestedAt: timestamp('ingested_at', { withTimezone: true }).defaultNow()
+    .notNull(),
+
+  /**
+   * The document this file became, when it became one.
+   *
+   * NULL is a state the ingest path reaches routinely rather than an
+   * edge case, which is what makes the column nullable and what
+   * decides its delete behaviour below. Three ordinary reads end
+   * there: a file that yielded no document at all, a file whose
+   * contents were already in the corpus — the insert is `ON CONFLICT
+   * DO NOTHING` against `documents.hash`, which returns no id to
+   * attribute — and a file recorded as read before its document was
+   * written. All three still need their row, because a file with no
+   * row is read again on the next poll, and a file that can never
+   * yield a document would then be read again on every poll there
+   * is.
+   *
+   * Deliberately no `onDelete`, so it emits `ON DELETE no action`,
+   * and both alternatives fail quietly in ways this one does not.
+   * `ON DELETE SET NULL` is expressible precisely because the column
+   * is nullable, and it would write a fourth meaning over the three
+   * above: a file that DID produce a document would afterwards read
+   * as one that produced none, while the poll went on passing over
+   * it, so the deleted document could not come back and nothing
+   * would say why. A cascade inverts the same fault — dropping this
+   * row unreads the file, so the next poll rebuilds a document an
+   * operator had just deleted.
+   *
+   * What refusing costs is worth stating plainly rather than leaving
+   * to be met, because the absent domain FK makes the refusal reach
+   * further than the document itself. Deleting a domain cascades to
+   * its documents, and the FK check at the end of that statement
+   * finds these rows still citing them, so Postgres refuses the
+   * domain delete too, naming this constraint and the document id.
+   * The remedy is one statement ahead of it, clearing the file rows
+   * for that domain's documents; the point of refusing is that the
+   * operator is asked to make that decision rather than having it
+   * made silently.
+   */
+  documentId: bigint('document_id', { mode: 'number' })
+    .references(() => documents.id),
+});
