@@ -28,6 +28,19 @@ wanted in both places must be made in both repos.
   package; bare `lint`/`check-types`/`test` cover root files + `tools/`.
 - Runtime: bun-first (`packageManager` pinned). `@ar/ui`'s test toolchain
   additionally needs Node 22 on PATH (`bun x` shebang handling).
+- No prettier anywhere, root or package: ESLint is the only style gate and
+  it does not reflow comments, so comment/TSDoc/markdown wrapping is
+  hand-maintained. Match the surrounding file rather than a global number
+  (~76 cols in `packages/service/src`, ≤74 in its architecture docs).
+- `sharedRules.mjs` shapes more code than a style config usually does:
+  `@stylistic/quotes` is single with no `avoidEscape` (an apostrophe inside
+  a string literal must be escaped, or rephrased away), `multiline-ternary`
+  is `always` (every ternary is three lines, even a trivial one),
+  `implicit-arrow-linebreak: beside` plus `arrow-body-style: as-needed`
+  leaves no one-line form for a nested callback (break inside the call
+  parens, not after the `=>`), and `import/order` lists `type` as the FIRST
+  group, so an `import type` sits above the `node:` builtins in its own
+  blank-line-separated block.
 
 ## Plans and specs (CRITICAL)
 
@@ -37,6 +50,14 @@ bugs (privacy/security) before they are patched, and must never reach the
 remote ahead of the fix. Never "tidy" them into a tracked path, and never
 weaken the `.gitignore` entries. Tracked docs are only for material whose
 subject is already visible in the public code; when in doubt, `.specs/`.
+
+Before any `git add -A`, confirm the ignored trio is absent from
+`git status --short --untracked-files=all`: `progress.txt`, `.plans/`, and
+`.specs/` all carry origin paths and pre-patch security content.
+`git check-ignore -v progress.txt .plans .specs` prints the governing rule
+and line for each in one command, which turns "the ignores are fine" from an
+assumption into evidence. The blast radius of being wrong is an origin path
+on the remote.
 
 ## Security posture (carried from the templates, incident-derived)
 
@@ -49,6 +70,18 @@ subject is already visible in the public code; when in doubt, `.specs/`.
   `qa-bug-reporter` agent).
 - No `@open-tomato/*` imports anywhere (ESLint-enforced). Origin prose only
   in README/NOTICE.
+- De-origination has two halves and only one of them is automated. The
+  forbidden needles live once, assembled from string parts, in
+  `packages/service/tests/invariants/naming-patterns.ts` — never write one
+  as a literal into a tracked file, here or anywhere else. Its test scans
+  only that package's `src`, `lib`, `workflows`, `data`, `scripts`, and
+  `drizzle`, plus two config files: roughly a fifth of the repo's tracked
+  files. `packages/ui`, `packages/web`, the root docs, and the TRACKED
+  `.claude/` tree are reached by a manual repo-wide `git grep` of those same
+  needles and by nothing else. Run it after any `.claude/` vendoring, not
+  just after service work — a user-level skill can carry a real origin
+  hostname, and a green `test:all` would not notice. Zero hits is only
+  evidence once the scan itself is proven live (`zero-hit-scan-proof-kit`).
 
 ## Verification order
 
@@ -58,6 +91,25 @@ subject is already visible in the public code; when in doubt, `.specs/`.
 4. UI work additionally follows `packages/ui/AGENTS.md` (visual baselines
    FIRST, then the rest — baselines are per-environment, regenerate, never
    copy).
+
+Read the per-package lines, not just the exit code. Each fan-out expands to
+`bun run <script> && bun run --filter '@ar/*' <script>`: the root run gates
+the fan-out, but among packages the filter does NOT short-circuit, so one
+red package never masks another and a single run gives the whole picture.
+
+- A green `lint:all` prints nothing from ESLint itself — the only positive
+  output is one `@ar/<pkg> lint: Exited with code 0` line per package, and
+  those three lines are what distinguish "all packages linted clean" from
+  "the filter matched nothing". `check-types:all` is the same shape plus the
+  root `tsc --noEmit` echo.
+- `test:all` prints the root vitest summary, then one line per package.
+  TRAP: `@ar/web`'s `test` script is a placeholder `echo`, so its code-0
+  line is not evidence of a passing suite. "Every package suite passes"
+  means two real suites plus one placeholder — report it that way.
+- `@ar/service` reporting 3 skipped tests is the expected steady state: the
+  live suite self-skipping without `AR_LIVE_DATABASE_URL`. A run with zero
+  skipped means the live database leaked into the default suite, not that
+  something improved.
 
 ## Workflow
 

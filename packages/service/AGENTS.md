@@ -66,6 +66,21 @@ Two rules bind every phase of that port:
   try/catch + `next(err)` (see `src/index.ts` `/users`).
 - **Routes**: validate input at the boundary with zod (see the `api` skill).
 - **Docs**: TSDoc on exported surfaces; see the `documentation` skill.
+- **Tracked markdown**: no author/date header — files open straight with
+  `# Title`. Under `docs/architecture/`, `##` headings are noun labels
+  (`Layout`, `Core vocabulary`) while `###` sub-headings are assertive
+  full-sentence claims (`Vitest is the single test runner`), each followed
+  by the why. Prose wraps at ≤74 cols, table rows run long, and paths are
+  inline code rather than links, so a future link check has no forward
+  reference to resolve. `ARCHITECTURE.md` is the one tracked markdown file
+  here that carries links: it indexes the doc set, so a commit landing a new
+  architecture doc adds its row in the same commit.
+- **Two layout maps, neither derived from the other**: the coarse `## Layout`
+  table above (package-level orientation) and the finer one in
+  `docs/architecture/00-overview.md` (per-area detail and rationale). A
+  change that adds a directory updates BOTH, keeps them non-contradictory
+  rather than identical, and inserts the row adjacent to its parent so the
+  table still reads as a tree.
 
 ## Verification order
 
@@ -75,6 +90,24 @@ bun run lint && bun run check-types && bun run test
 
 All three must be green before a PR. `check-types` currently excludes
 `**/*.test.ts` (origin parity — see `specs/test-type-checking.md`).
+
+Run these from inside `packages/service` as the fast inner loop (seconds);
+the root `lint:all` / `check-types:all` / `test:all` fan-out is the gate
+before a PR.
+
+That `**/*.test.ts` exclusion creates an asymmetry inside `tests/`: plain
+`.ts` modules there ARE type-checked (tsconfig `include` lists `tests`)
+while their `*.test.ts` siblings are not. Keep matcher, walker, and helper
+logic in a plain module beside the test — the same code inlined into the
+`.test.ts` gets no tsc gate at all.
+
+A new directory under `src` needs no config change (tsconfig `include`
+already covers `src`, the `lint` script covers `src lib tests`, and vitest
+discovers tests). Directories OUTSIDE those roots — `scripts/`, `workflows/`,
+`data/`, `docs/` — are covered by no lint or type-check target today. Prove
+coverage rather than assuming it: `tsc --noEmit --listFilesOnly` and
+`eslint <path> -f json` both report what they actually read (see the
+`prove-gate-coverage-read-only` skill).
 
 ## Testing — isolated vs live (CRITICAL)
 
@@ -97,6 +130,12 @@ hour. The rules:
    containers. Leave no long-lived processes or scheduled jobs behind.
 6. `fileParallelism: false` lives in `vitest.config.ts`, not on a script
    flag, so exported env vars can't re-parallelize the live files.
+
+Test files open with a `/** ... */` header stating what the file PROVES (not
+what it calls), and separate regions with `// ---` banner comments 78 chars
+wide. Table-driven suites carry their own anti-vacuity guards — pair samples
+to the constant table by id and assert set equality, or an entry added later
+is silently untested (see the `table-driven-test-vacuity-guards` skill).
 
 ## Plans and specs
 
