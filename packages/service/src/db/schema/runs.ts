@@ -226,8 +226,9 @@ export const runs = pgTable('runs', {
    * mistake charged again every time the clock comes round, for as
    * long as it goes unnoticed. That is the framing
    * `docs/architecture/01-invariants.md` writes its cost guards in,
-   * and the same reason it gives there for keeping a ledger at all —
-   * work nobody can attribute is work nobody can act on.
+   * and the same reason it gives there for keeping the `llm_calls`
+   * ledger below at all — work nobody can attribute is work nobody
+   * can act on.
    *
    * NOT NULL with no default, where `status` above defaults. A
    * value-set default names the member meaning nothing has been
@@ -279,6 +280,44 @@ export const runs = pgTable('runs', {
  * pass that made eighty are one row each upstairs, and the tally in
  * `counts` is whatever its writer chose to keep rather than an
  * itemization anything can re-read.
+ *
+ * The second of those two is what an unbounded pass produces: one
+ * call for every row that happened to arrive, stopping at no number
+ * anybody chose. A ceiling is what stops it, and this table is what
+ * a ceiling can be counted against. The bound itself lives in the
+ * workflow making the calls — declared there, applied there, and
+ * invisible to this schema — and what it states is what a pass will
+ * do. These rows are what it did. Without them, a ceiling that
+ * quietly stopped being applied reads exactly like a pass whose
+ * input happened to be small.
+ *
+ * Attribution is the other half, and it is what separates a total
+ * that can be acted on from one that can only be noticed. `run_id`
+ * below is what charges a call to a pass, and it is the column the
+ * design this port draws from declared and never filled: its ledger
+ * inserts named the item a call was about, or named nothing at all,
+ * so the spend could be summed and no pass could be held to any of
+ * it. Spend nobody can attribute is spend nobody can act on — a sum
+ * without it says that something is burning, not which step, which
+ * schedule, or which batch.
+ *
+ * Both halves sit in one row of the register: every model call
+ * carrying a per-run ceiling, writing a ledger row, and never
+ * retrying is a single invariant there, owned by phase 6 and
+ * enforced by a test over the workflows built from `workflows/src/`.
+ * `docs/architecture/01-invariants.md` holds it, along with the
+ * per-tick framing of what a cost guard is worth that
+ * `runs.scheduled_by` above cites for its own half of the argument.
+ *
+ * Nothing here enforces any of that. This table records and refuses
+ * nothing: a call whose row is never written is missing from every
+ * total at once, and no constraint in this schema can notice — which
+ * is why the invariant is asserted against the workflow that should
+ * have written the row rather than against the rows. A ledger kept
+ * only in a database has a second limit, that it is unreadable in
+ * exactly the outage it would explain; the design this port draws
+ * from answered that with a second copy on disk, and whether the
+ * pairing is carried here is phase 6's to settle.
  *
  * Nothing writes these rows yet. The workflows that call a model are
  * `ar-research` and `ar-digest`, phase 6.
