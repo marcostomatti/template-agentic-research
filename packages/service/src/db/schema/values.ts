@@ -9,6 +9,13 @@
  * the direction that fails quietly: the code still type-checks against
  * a value the column refuses, and nothing notices until the insert.
  *
+ * {@link DEFAULT_VERDICT_VOCABULARY} is the one export that is not
+ * such a set. It is the starting value of a per-domain setting rather
+ * than a domain any column is constrained to, and it lives here because
+ * it is the same kind of thing to reach for — the vocabulary of a
+ * stored column. Splitting it out would only hide that one of them is
+ * open.
+ *
  * Nothing here is a table, which is why this module stays out of the
  * `./schema.js` barrel: the barrel is the table set drizzle-kit reads,
  * and it would find no table in this file. The schema modules whose
@@ -135,3 +142,31 @@ export const RUN_SCHEDULERS = ['interval', 'agent', 'operator'] as const;
 
 /** One member of {@link RUN_SCHEDULERS}; the `runs.scheduled_by` domain. */
 export type RunScheduler = (typeof RUN_SCHEDULERS)[number];
+
+/**
+ * The verdict vocabulary a domain starts with when it does not name its
+ * own: an operator's ruling on a finding, ordered `avoid` through
+ * `interested`.
+ *
+ * The one value set here that is not closed, and that is the point of
+ * it. Verdict strings are validated at the app layer against the owning
+ * domain's `settings`, so no CHECK constrains `finding_labels.verdict`
+ * — the column is plain NOT NULL text. A domain judging its findings on
+ * some other axis renames the whole ladder in a row it already owns,
+ * where a CHECK would make that a migration and would fix in DDL what
+ * is meant to be a setting.
+ *
+ * No union type is derived from it, for the same reason: a `Verdict`
+ * union would re-close on the code side what the column deliberately
+ * leaves open, and every consumer written against it would then reject
+ * the verdicts of any domain that had exercised its own vocabulary. The
+ * `readonly string[]` annotation follows from what this is checked
+ * against — a stored string chosen elsewhere — because a literal tuple
+ * narrows `.includes` to its own members and refuses the one call the
+ * constant exists for.
+ *
+ * The seed writes these four into the example domain's settings; the
+ * stored vocabulary is the authority from then on. This is the value a
+ * domain starts from, not a floor under it.
+ */
+export const DEFAULT_VERDICT_VOCABULARY: readonly string[] = ['avoid', 'caution', 'neutral', 'interested'];
