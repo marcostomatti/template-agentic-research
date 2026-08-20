@@ -21,6 +21,7 @@
  * Generate migrations with `bun db:generate`, apply with `bun db:migrate`.
  */
 export * from './schema/domains.js';
+export * from './schema/scheduling.js';
 export * from './schema/sources.js';
 export * from './schema/taxonomy.js';
 export * from './schema/users.js';
