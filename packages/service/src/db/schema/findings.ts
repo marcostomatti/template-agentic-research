@@ -20,8 +20,8 @@
  * Nothing writes these rows yet. `ar-ingest` turns a document into
  * findings and `ar-score` scores them against a domain's criteria,
  * both phase 5. `finding_sightings` below records where a finding
- * has been seen; the labels an operator puts on one arrive next in
- * this stage as the module's third table.
+ * has been seen, and `finding_labels` after it records what an
+ * operator made of one — the module's only rows a person writes.
  */
 import { bigint, bigserial, integer, jsonb, numeric, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
@@ -400,3 +400,118 @@ export const findingSightings = pgTable('finding_sightings', {
    */
   unique('finding_sightings_finding_id_source_id_external_id_unique').on(table.findingId, table.sourceId, table.externalId),
 ]);
+/**
+ * `finding_labels` — what an operator made of a finding: one row per
+ * judgement, kept apart from the finding it judges.
+ *
+ * The separation repeats one level up the split `findings` draws from
+ * `documents`. A finding is what the pipeline computed under a
+ * domain's taxonomy and weights; a label is what a person concluded
+ * looking at it. Plenty in this schema is authored — the taxonomy,
+ * the personas, a domain's settings — but all of that is input the
+ * pipeline consumes, and these are the only rows holding a person's
+ * reading of what it produced. Folded into the finding row a label
+ * would sit in the path of a re-score, which rewrites everything
+ * around it and can recompute none of this.
+ *
+ * A finding may carry several, and the schema neither prevents that
+ * nor orders them. There is no unique key here, so re-judging adds a
+ * row rather than replacing one and the sequence is the record of an
+ * operator changing their mind — worth keeping for the same reason
+ * the last verdict is. What it costs every reader is that a
+ * finding's verdict is not a lookup: it is the latest row by
+ * `labelled_at`, and a query that forgets to order reports whichever
+ * row the scan reached first, with nothing raised and no guarantee
+ * it reaches the same one twice.
+ *
+ * Nothing writes these rows yet. The operator surfaces that produce
+ * them, the API and the UI, arrive outside this port's phases;
+ * `ar-digest`, phase 6, is what renders a finding beside the verdict
+ * standing on it.
+ */
+export const findingLabels = pgTable('finding_labels', {
+  /** Surrogate key; see `domains.id` for why `number` mode. */
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+
+  /**
+   * The finding this judgement is about.
+   *
+   * NOT NULL because the row is a verdict ON something. Without it
+   * the row is the word `avoid` with nothing to attach it to, and no
+   * reader could recover what was judged.
+   *
+   * Cascading on delete, which settles the question `findings` above
+   * defers to this FK: deleting a judged finding IS allowed, and it
+   * takes the judgements with it. The ownership test the module
+   * already applies at `finding_sightings.finding_id` gives the
+   * answer — nothing reads a label except through its finding — and
+   * refusing would preserve no judgement worth having, only a
+   * verdict whose subject is gone.
+   *
+   * The reach is the other half of why refusing was not close.
+   * `findings.document_id` and `findings.domain_id` both cascade, so
+   * `ON DELETE no action` here would refuse deleting a document or a
+   * domain two hops away, over rows an operator standing at either
+   * of those cannot see. That is the shape `ingested_files` states
+   * at its own FK, where the knock-on was accepted; here it would be
+   * paid on the ordinary lifecycle of a domain.
+   *
+   * The honest limit is that the cascade discards the only thing it
+   * reaches that nothing recomputes. Re-scoring rebuilds findings
+   * over a corpus nothing re-fetched; nothing rebuilds what a person
+   * concluded. So whatever deletes findings is what decides whether
+   * judged ones may go, and no constraint here will stop it.
+   */
+  findingId: bigint('finding_id', { mode: 'number' }).notNull()
+    .references(() => findings.id, { onDelete: 'cascade' }),
+
+  /**
+   * The operator's ruling: one of the verdicts the owning domain
+   * names in `DomainSettings.verdictVocabulary`, or one of
+   * `DEFAULT_VERDICT_VOCABULARY` in `./values.ts` where it names
+   * none.
+   *
+   * NOT NULL, because the ruling is the whole content of the row.
+   * The one column in this schema constrained to a value set and
+   * carrying no CHECK for it: the vocabulary is a per-domain setting
+   * rather than a fixed set, so it is validated at the app layer
+   * against the domain's own `settings`.
+   */
+  verdict: text('verdict').notNull(),
+
+  /**
+   * Whatever the operator wanted to say about the verdict, in their
+   * own words.
+   *
+   * NULL is the ordinary case rather than a gap — a ruling that
+   * needed no explanation — which is why this is nullable where a
+   * column an operator is asked to fill would be NOT NULL defaulting
+   * to `''`. There is no writer but a person here, so an absent note
+   * is a person having written none, and the two states a default of
+   * `''` would keep apart do not exist.
+   *
+   * Prose, and nothing computes from it. A reader deriving anything
+   * countable here would be parsing free text against a shape no
+   * domain declared; the structured half of a judgement is `verdict`
+   * beside it, and a second structured field would be a column
+   * rather than a convention inside this one.
+   */
+  note: text('note'),
+
+  /**
+   * When the judgement was made, which is when the row was written.
+   * Defaults to now and NOT NULL on the reason `created_at` above
+   * gives: there is no window in which a label exists and nobody has
+   * made it.
+   *
+   * It is also what orders a finding's labels, and with no unique
+   * key on the table it is the only thing that does — see the header
+   * for what a reader that forgets to order gets. The ordering is
+   * total in practice and not by construction: `now()` is the
+   * transaction's start time rather than the statement's, so two
+   * labels written in one transaction carry the same timestamp to
+   * the microsecond and what separates them is `id`.
+   */
+  labelledAt: timestamp('labelled_at', { withTimezone: true }).defaultNow()
+    .notNull(),
+});
