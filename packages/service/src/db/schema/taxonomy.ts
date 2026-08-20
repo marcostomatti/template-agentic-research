@@ -13,6 +13,35 @@
  * single-operator tools that survive at this job converged on flat
  * labels with group-level inheritance, and this is that shape with one
  * level of grouping — not a taxonomy waiting to deepen.
+ *
+ * The cap is enforced by the database rather than by whoever writes
+ * the row. A `BEFORE INSERT OR UPDATE` trigger on `categories` calls
+ * `categories_enforce_depth()`, which refuses three writes: a row
+ * whose parent is itself a child, a row given a parent while it
+ * already has children — the same cap broken from the other end, by an
+ * UPDATE instead of an INSERT — and a parent belonging to a different
+ * domain than the child.
+ *
+ * Two separate things stop that check living in application code. The
+ * first is that depth is not a property of the row being written: it
+ * is a property of that row's parent, and of its own children, so
+ * there is nothing for a column constraint to look at. The second is
+ * that there is no single writer to put the check in. Rows reach this
+ * table from the seed script, from hand-written SQL inside workflow
+ * nodes, and from an operator at a psql prompt, and a check written in
+ * one of those binds only that one — a branch in a workflow the
+ * executor's UI can edit is not a rule, it is one writer's habit. A
+ * trigger refuses the write whoever makes it. That is the whole of
+ * what it buys: it does not serialize two concurrent writers, and
+ * nothing here relies on it doing so.
+ *
+ * It ships in a hand-written migration under `drizzle/` rather than
+ * being generated from this file, which means the rule is real in the
+ * database and invisible in this module — the columns below do not
+ * show it. That split is deliberate: drizzle-kit's snapshot does not
+ * model triggers, so it never proposes dropping one it cannot see, and
+ * `db:generate` reporting no changes goes on meaning that the schema
+ * and the migrations agree.
  */
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
@@ -61,8 +90,9 @@ export const categories = pgTable('categories', {
    * A parent must be a root and must belong to the same domain, so the
    * tree is at most one level deep and never crosses a domain. Neither
    * rule is expressible as a column constraint, and neither is left to
-   * whoever writes the row: both are enforced in the database, by a
-   * guard that lands with this schema's migrations.
+   * whoever writes the row: both are enforced in the database, by the
+   * `categories_enforce_depth()` trigger this module's header
+   * describes.
    *
    * No cascade here, deliberately, unlike `domain_id` above. Deleting
    * a category that still holds children is refused rather than
