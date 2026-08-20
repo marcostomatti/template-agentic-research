@@ -69,8 +69,30 @@ export const documents = pgTable('documents', {
    * lands on this row instead of adding a rival to it.
    *
    * NOT NULL and UNIQUE are one mechanism here rather than two
-   * constraints that happen to share a column: the pair is what
-   * dedupes at all.
+   * constraints that happen to share a column: the NOT NULL is what
+   * makes the UNIQUE key dedupe at all. NULL is the one value that
+   * conflicts with nothing, another NULL included, so a key with a
+   * nullable member admits every row whose member is absent while
+   * still reading — in the schema, and in review — as a key.
+   *
+   * What that would cost is paid in silence. The write that lands a
+   * repeat capture is an insert with `ON CONFLICT DO NOTHING`, and
+   * against a nullable hash that conflict clause never fires: the
+   * insert proceeds, the statement reports success, and the corpus
+   * grows by a copy per pass with nothing logged. Every later stage
+   * then reads the copies as separate items, so the first symptom
+   * is a count somewhere downstream rather than an error here.
+   *
+   * The live suite proves the property instead of arguing it, and
+   * proves it against a control table, because the obvious assertion
+   * does not bite: two inserts of one non-null hash conflict whether
+   * or not this column is NOT NULL. `tests/live/schema.live.test.ts`,
+   * later in this phase, therefore stands a temporary table with a
+   * nullable hash under the same UNIQUE key beside the real one and
+   * requires it to accept two NULL-hash rows — the defect
+   * reproducing beside the constraint holding, which is what makes
+   * the assertion on this column evidence rather than a claim that
+   * would pass either way.
    *
    * The constraint is named rather than left to drizzle's derivation
    * so the static-SQL invariant suite can assert it is present by
