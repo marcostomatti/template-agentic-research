@@ -27,6 +27,7 @@ import { bigint, bigserial, integer, jsonb, numeric, pgTable, text, timestamp, u
 
 import { documents } from './documents.js';
 import { domains } from './domains.js';
+import { entities } from './entities.js';
 import { sources } from './sources.js';
 
 export const findings = pgTable('findings', {
@@ -76,10 +77,6 @@ export const findings = pgTable('findings', {
    * subject research could be queued against and a registry entry
    * that accumulates every unattributed finding there is.
    *
-   * The reference itself is not here yet: `entities` arrives later in
-   * this stage, and the column takes its `.references()` then. What
-   * is already decided is the delete behaviour, recorded here so that
-   * it is a choice rather than whatever the later edit reaches for.
    * No `onDelete`, so it emits `ON DELETE no action` and deleting an
    * entity that findings still cite is REFUSED. `ON DELETE SET NULL`
    * is expressible precisely because the column is nullable and is
@@ -88,8 +85,15 @@ export const findings = pgTable('findings', {
    * then lost would be indistinguishable from one never made. A
    * cascade inverts the fault — it would discard scored findings
    * because the subject they were about was tidied away.
+   *
+   * Refusing has a reach worth knowing before an entity is deleted:
+   * the way to retire a subject whose findings are still wanted is to
+   * alias it onto the row that replaced it — `entities.alias_of` in
+   * `./entities.js` — which leaves every attribution standing and
+   * resolves to the new subject when it is read.
    */
-  entityId: bigint('entity_id', { mode: 'number' }),
+  entityId: bigint('entity_id', { mode: 'number' })
+    .references(() => entities.id),
 
   /**
    * Everything this domain needs beyond the neutral columns above,
