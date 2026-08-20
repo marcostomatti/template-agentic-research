@@ -12,7 +12,8 @@
  * neither — a row with an interval and no due time repeats on a
  * schedule nothing ever claims.
  */
-import { bigint, bigserial, boolean, integer, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { bigint, bigserial, boolean, index, integer, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
 import { connectors } from './sources.js';
@@ -228,6 +229,41 @@ export const topics = pgTable('topics', {
    * free to research subjects of the same name.
    */
   unique('topics_domain_id_name_unique').on(table.domainId, table.name),
+
+  /**
+   * What the phase-3 claim query stands on. `ar-dispatch` reads the
+   * rows that are enabled and whose `next_run_at` has passed, orders
+   * them oldest-due first and takes a capped batch with `FOR UPDATE
+   * SKIP LOCKED` — this index is those two columns in that order, so
+   * the claim is a range scan over the due rows rather than a scan of
+   * every topic in the table on every tick.
+   *
+   * The `WHERE` predicate is the half that keeps it small. A disabled
+   * topic never enters the index at all, so the structure the
+   * dispatcher walks stays proportional to the rows it can actually
+   * claim rather than to everything that was ever configured — which
+   * matters here more than the row count suggests, because the cost is
+   * paid once per tick forever rather than once per query somebody
+   * runs.
+   *
+   * Two honest limits, since a partial index is easy to overclaim.
+   * Postgres uses one only where it can prove the query's own
+   * predicate implies the index's, so a claim query that filters on
+   * `enabled` in a form the planner cannot match — or omits it because
+   * the caller assumes the index covers it — falls back to a
+   * sequential scan and reports nothing. And within this index every
+   * entry has `enabled` true, so the leading column adds no
+   * selectivity: it is in the key because the pair is what the claim
+   * filters on, not because it narrows anything the predicate has not
+   * narrowed already.
+   *
+   * Named for the reader rather than derived from its columns: an
+   * index found in the generated SQL, or in a plan, says which query
+   * it was added for, and the static-SQL invariant suite greps for
+   * that name.
+   */
+  index('topics_dispatch_claim_idx').on(table.enabled, table.nextRunAt)
+    .where(sql`${table.enabled}`),
 ]);
 
 /**
