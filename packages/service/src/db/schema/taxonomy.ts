@@ -233,6 +233,31 @@ export const criteria = pgTable('criteria', {
    * The bucket this criterion is filed under — a row in `categories`,
    * so which buckets exist is the domain's to decide.
    *
+   * A foreign key here is the port's substantive change to this table.
+   * The design this one is ported from filed a criterion under a text
+   * column constrained to a fixed vocabulary, which put the list of
+   * buckets in DDL: adding one meant dropping the constraint and
+   * re-adding it widened. Here the list is rows in a table the domain
+   * already owns, so a bucket nobody anticipated is an INSERT — the
+   * same row-not-a-migration property `domains.settings` has, applied
+   * to the taxonomy rather than to the configuration.
+   *
+   * What the enum form cost is worth stating, because it is why this
+   * is not merely a tidier spelling of the same thing. A widened
+   * constraint has to be re-added by exactly one migration — the
+   * newest that touches it — or a replay from an intermediate state
+   * meets two migrations adding one constraint and fails. And the
+   * drop is easy to leave out: one migration there described its own
+   * drop in a comment without writing it, so a fresh database aborted
+   * the whole run at the first row carrying a value the original set
+   * did not admit, while the long-lived database, which already held
+   * the widened constraint, never showed it. Nothing about a category
+   * is DDL here, so neither failure has a shape to take.
+   *
+   * The FK also makes the set per-domain, which the enum could not be:
+   * a fixed vocabulary is one list for every domain, so one domain's
+   * new bucket would widen what every other domain may file under.
+   *
    * Cascading on delete for the reason `terms` does: criteria are a
    * category's contents rather than rows of their own, and one left
    * behind by a dropped category is filed under nothing.
