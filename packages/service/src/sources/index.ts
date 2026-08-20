@@ -15,12 +15,19 @@ import type { SOURCE_KINDS } from '../db/schema/values.js';
 /**
  * The kinds of source an adapter can front.
  *
- * These four values are the same domain the schema-v2 `sources.kind` column
- * accepts (phase 2), and the two sides have to stay in step. A stored row
- * whose `kind` this union cannot name has no adapter that can be selected
- * for it; a member added here with no matching column value can never be
- * reached from stored data. Widening the set is therefore a schema change
- * plus a migration, not an edit to this line alone.
+ * Derived from the `SOURCE_KINDS` tuple in `src/db/schema/values.ts`,
+ * which is the same tuple the schema-v2 `sources.kind` CHECK is generated
+ * from. The set an adapter is selected by and the set the column accepts
+ * are therefore one declaration read twice, rather than two that have to
+ * be kept in step: widening the set is an edit to that tuple plus the
+ * migration carrying the widened CHECK, and this line is no longer a
+ * third place that has to be remembered alongside them.
+ *
+ * The union is declared here rather than beside its tuple because this is
+ * where it is consumed — {@link SourceAdapter.kind} is the property it
+ * types. Every other set in that module pairs its union with the tuple;
+ * this one is the deliberate exception, and the tuple's own TSDoc records
+ * the exception, so neither file reads as though the other forgot.
  */
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 
