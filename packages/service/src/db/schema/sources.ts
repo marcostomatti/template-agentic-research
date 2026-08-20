@@ -15,11 +15,19 @@
  * the parse engine they run under in phase 5. What the table fixes now
  * is that everything varying per feed is stored, which is what keeps a
  * per-source branch out of the adapter that would otherwise carry it.
+ *
+ * `connectors` is here for the other half of the same question. A
+ * source is a feed the pipeline reads; a connector is a service it
+ * calls — a model, a search endpoint, a notebook, somewhere an export
+ * is delivered. Both tables are the pipeline's edges, both hold one
+ * row per place it may reach, and both are configuration rather than
+ * code, so pointing either somewhere new is an INSERT and moving one
+ * is an UPDATE.
  */
-import { bigint, bigserial, boolean, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, boolean, integer, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
-import { SOURCE_KINDS, checkOneOf } from './values.js';
+import { CONNECTOR_KINDS, SOURCE_KINDS, checkOneOf } from './values.js';
 
 export const sources = pgTable('sources', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
@@ -252,4 +260,115 @@ export const sources = pgTable('sources', {
    * the constraint is present by grepping for it.
    */
   checkOneOf('sources_kind_check', table.kind, SOURCE_KINDS),
+]);
+
+/**
+ * `connectors` — one external service the pipeline is configured to
+ * call, and what a client needs to reach it.
+ *
+ * Not domain-scoped, unlike the rest of this phase's configuration
+ * half. Which model endpoint answers, or which notebook an export is
+ * handed to, is a fact about the deployment rather than about any
+ * one domain's subject matter, and the choice of connector is made
+ * where it actually varies: an `export_subscriptions` row pairs a
+ * domain and a format with the connector that receives the result.
+ * A copy of the row per domain would record one instance's address
+ * in as many places as there are domains, and a service that moved
+ * would be corrected in some of them.
+ *
+ * The design this one is ported from had no such table. Each
+ * service's address was an environment variable read at BUILD time
+ * and baked into the workflow JSON that was then deployed, so moving
+ * a service — or pointing one workflow at a second instance of it —
+ * meant a rebuild and a redeploy of every workflow that named it,
+ * and the address the running system was actually using could only
+ * be read out of the built artifact. As a row it is read at run time
+ * by the run that needs it: pointing the pipeline somewhere else is
+ * an UPDATE, and asking where it currently points is a SELECT.
+ */
+export const connectors = pgTable('connectors', {
+  /** Surrogate key; see `domains.id` for why `number` mode. */
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+
+  /**
+   * Which family of service this row fronts — see `CONNECTOR_KINDS`
+   * in `./values.js` for what each member means.
+   *
+   * Selects the client that talks to the row, the way `sources.kind`
+   * above selects the adapter that reads a feed, and it is one
+   * declaration read twice for the same reason: the CHECK below is
+   * generated from the tuple the `ConnectorKind` union is derived
+   * from, so a kind no client exists for cannot be stored and a kind
+   * the column refuses cannot be reached from stored data.
+   *
+   * NOT NULL on both counts a nullable column would cost here. A
+   * CHECK is UNKNOWN against NULL and so admits it, and this column
+   * is half the natural key below — two rows carrying a NULL kind and
+   * the same name are not duplicates as far as a unique index is
+   * concerned, so the key that is supposed to make a second write
+   * update the first would let it insert a rival instead.
+   */
+  kind: text('kind').notNull(),
+
+  /**
+   * Which instance of that kind this row is, for whoever picks one:
+   * two model endpoints, or one notebook per environment, are rows
+   * of a single kind told apart by this.
+   *
+   * Operator-authored and NOT NULL, which is not the same as
+   * non-empty. Every connector is one instance among the ones that
+   * could exist, so an empty name is configuration somebody has not
+   * finished rather than the unnamed connector of its kind — and
+   * because the name is half the natural key, storing it empty takes
+   * that place and refuses the next row that means to occupy it.
+   */
+  name: text('name').notNull(),
+
+  /**
+   * What a client needs in order to reach this service: its address,
+   * and whatever else that kind of client takes — a model name, an
+   * account, the path an export is written under.
+   *
+   * Carries no `$type` annotation, for the reason `parser_config`
+   * above carries none: what a config holds is the client's business
+   * and differs by `kind`, so one interface across the four would
+   * describe none of them accurately.
+   *
+   * Defaults to an empty object so every reader faces one shape.
+   * Empty means nothing is configured here, which for a connector
+   * means there is nowhere to reach — the row names a service the
+   * pipeline cannot call rather than one it calls with defaults.
+   *
+   * Whatever authenticates the call is held here too, and the limit
+   * of that is worth stating rather than leaving to be discovered: a
+   * value in this column is protected by the database's access
+   * control and by nothing else, so it is legible to every
+   * connection and present in every dump. A deployment needing more
+   * than that stores a reference here and keeps the secret where it
+   * can be rotated without an UPDATE.
+   */
+  config: jsonb('config').default({})
+    .notNull(),
+}, (table) => [
+  /**
+   * A name identifies one instance within its kind, and that pair is
+   * the row's natural key: an upsert lands on it, so reconfiguring a
+   * connector rewrites its config rather than leaving two rows
+   * claiming the same service with different addresses.
+   *
+   * Scoped to the kind rather than global on purpose. Instances are
+   * named after where they run far more often than after what they
+   * do, so the same name under two kinds is ordinary — a global key
+   * would refuse the second one and push the disambiguation into the
+   * name string, where nothing enforces it.
+   */
+  unique('connectors_kind_name_unique').on(table.kind, table.name),
+
+  /**
+   * The kind domain, enumerated in the generated SQL from the same
+   * tuple `ConnectorKind` is derived from. Named rather than left to
+   * drizzle's derivation so the static-SQL invariant suite can assert
+   * the constraint is present by grepping for it.
+   */
+  checkOneOf('connectors_kind_check', table.kind, CONNECTOR_KINDS),
 ]);
