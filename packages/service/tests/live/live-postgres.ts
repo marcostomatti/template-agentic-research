@@ -41,7 +41,30 @@ export const describeLivePg: (name: string, fn: () => void) => void = LIVE_DATAB
   : describe.skip;
 
 /** Tables the suite is allowed to truncate — a deliberate, literal list. */
-const TABLES = ['users'];
+const TABLES = [
+  'benchmark_cases',
+  'briefings',
+  'categories',
+  'connectors',
+  'criteria',
+  'documents',
+  'domains',
+  'entities',
+  'entity_research',
+  'export_subscriptions',
+  'finding_labels',
+  'finding_sightings',
+  'findings',
+  'ingested_files',
+  'llm_calls',
+  'personas',
+  'research_pool',
+  'runs',
+  'sources',
+  'terms',
+  'topics',
+  'users',
+];
 
 const LIVE_DB_NAME = 'ar_live';
 
