@@ -190,3 +190,101 @@ export const terms = pgTable('terms', {
    */
   checkOneOf('terms_polarity_check', table.polarity, TERM_POLARITIES),
 ]);
+
+/**
+ * `criteria` — one thing a domain has stated about what it wants,
+ * filed under one of its categories.
+ *
+ * A criterion is not matched against a document the way a term is. It
+ * is what the pipeline can say about the domain when it asks a model
+ * to judge something: the things wanted, the things refused, the
+ * background a draft would otherwise have to invent. `terms` decide
+ * mechanically what a document scores; `criteria` are the stated
+ * position that scoring is against.
+ *
+ * That is why the two stay separate tables despite both hanging off a
+ * category. A term is a pattern and a magnitude, and nothing else can
+ * be done with it. A criterion is a sentence about the domain, and one
+ * matched as if it were a pattern — or rendered as if it were a
+ * measurement — is wrong in both directions.
+ *
+ * Nothing reads these rows yet; the scoring port that does is phase 5.
+ */
+export const criteria = pgTable('criteria', {
+  /** Surrogate key; see `domains.id` for why `number` mode. */
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+
+  /**
+   * The domain whose position this row states. Cascading on delete
+   * like every other domain-owned row: a criterion outliving its
+   * domain states a position nobody holds.
+   *
+   * Carried here as well as on the category so a run can read a
+   * domain's whole stated position in one query rather than joining
+   * through the taxonomy to find out whose it is. The two must name
+   * the same domain, and no column constraint says so — a writer that
+   * invents the pair instead of reading it off the category is the
+   * only way they come apart.
+   */
+  domainId: bigint('domain_id', { mode: 'number' }).notNull()
+    .references(() => domains.id, { onDelete: 'cascade' }),
+
+  /**
+   * The bucket this criterion is filed under — a row in `categories`,
+   * so which buckets exist is the domain's to decide.
+   *
+   * Cascading on delete for the reason `terms` does: criteria are a
+   * category's contents rather than rows of their own, and one left
+   * behind by a dropped category is filed under nothing.
+   */
+  categoryId: bigint('category_id', { mode: 'number' }).notNull()
+    .references(() => categories.id, { onDelete: 'cascade' }),
+
+  /**
+   * What is being stated, as the operator wrote it.
+   *
+   * NOT NULL, which is not the same as non-empty. An empty value is an
+   * unfilled criterion: the domain has said the question exists and
+   * has no answer for it yet, and every reader must treat that as no
+   * opinion stated rather than as a stated blank. The distinction is
+   * not cosmetic — read as a value, an empty row under a bucket that
+   * excludes things says "exclude everything", which is the opposite
+   * of what leaving it blank meant.
+   */
+  value: text('value').notNull(),
+
+  /**
+   * Which way the statement points: whether the value is something the
+   * domain wants, something it refuses, or context that is neither.
+   *
+   * It belongs beside the value wherever criteria are handed to a
+   * model, not used to filter them. A refusal dropped from the read,
+   * or presented as background, is the domain's clearest signal
+   * arriving as its vaguest.
+   *
+   * NOT NULL, and free text with no CHECK. Which distinctions are
+   * worth drawing is part of what a domain states, and a set fixed in
+   * DDL would need a migration to admit the next one.
+   */
+  kind: text('kind').notNull(),
+
+  /**
+   * Guidance for whoever edits the row next: what the value should
+   * look like, what leaving it blank means here. NULL means nobody
+   * wrote any, and nothing derives anything from its absence.
+   */
+  notes: text('notes'),
+}, (table) => [
+  /**
+   * A value is stated once per category, and that pair is the row's
+   * natural key: the seed upserts on it, so a second pass rewrites a
+   * criterion's kind and notes rather than leaving two rows stating
+   * the same thing, possibly in opposite directions.
+   *
+   * Scoped to the category rather than to the domain, as `terms` is.
+   * The same value under two categories is two different statements —
+   * what it asserts is the category's — and a domain-wide key would
+   * refuse the second one.
+   */
+  unique('criteria_category_id_value_unique').on(table.categoryId, table.value),
+]);
