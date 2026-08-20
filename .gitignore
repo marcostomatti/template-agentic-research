@@ -19,3 +19,12 @@ visual-report.json
 # See AGENTS.md — "Plans and specs".
 .plans/
 .specs/
+
+# Research-pipeline build and export output: compiled n8n workflow bundles
+# and locally rendered export artifacts, neither of which is ever committed.
+# Anchored from the repo root — a slash-bearing pattern is relative to the
+# directory holding the .gitignore, so a bare `workflows/dist/` here would
+# only match a top-level `workflows/`, never the nested package path.
+packages/service/workflows/dist/
+packages/service/workflows/dist-external/
+packages/service/.exports/
