@@ -22,10 +22,11 @@
  * to open one, phase 3.
  *
  * `llm_calls` below keeps the module's second account, at the
- * granularity of one model call rather than one pass, and
+ * granularity of one model call rather than one pass;
  * `benchmark_cases` after it keeps the judged cases a change to a
- * domain's scoring is replayed against. The module gains
- * `briefings` later in this stage.
+ * domain's scoring is replayed against; and `briefings` last keeps
+ * the digest named above, stored as a row rather than only rendered
+ * and handed on.
  */
 import { bigint, bigserial, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
@@ -608,4 +609,190 @@ export const benchmarkCases = pgTable('benchmark_cases', {
    * finds an absence rather than an error.
    */
   expected: jsonb('expected'),
+});
+/**
+ * `briefings` — a domain's periodic account of itself, kept as a row.
+ *
+ * `runs` above is the pipeline's account of a pass, and its reader is
+ * the next pass. This is the account a PERSON reads: what a period
+ * came to under one domain's taxonomy, written once and stored,
+ * rather than assembled again by whichever surface happens to ask.
+ *
+ * Storing it is what the executor's send-free rule leaves it able to
+ * do. `docs/architecture/00-overview.md` states the rule — the
+ * workflows write to the database, renderers return artifacts, and an
+ * email export produces a draft and stops there — so what a digest
+ * pass produces has to land somewhere that is not a delivery, and a
+ * row is that somewhere. The second thing it buys is that every
+ * format afterwards renders the SAME text: an export and the API
+ * serve one artifact rather than two renderings that can disagree
+ * about what a week came to.
+ *
+ * No FK runs between this table and `export_subscriptions` in
+ * `./scheduling.ts`, and the two answer different questions — a
+ * subscription is what a domain wants delivered and how often, this
+ * is what was produced. Which of the two a renderer reads from, this
+ * row or the findings underneath it, is `ar-digest`'s to settle in
+ * phase 6.
+ *
+ * The divergence from the design this port draws from is the whole
+ * shape rather than a column, so reading that design's table first
+ * misleads: there a briefings row was the state machine for an
+ * asynchronous audio job, keyed one row per digest DATE, and the
+ * digest text was never stored at all — only written out as a file.
+ * Here the text is the point, the audio is not carried, and what
+ * goes with that key is idempotence; see `generated_at` below.
+ *
+ * Nothing writes these rows yet. `ar-digest` is the workflow that
+ * will, phase 6.
+ */
+export const briefings = pgTable('briefings', {
+  /** Surrogate key; see `domains.id` for why `number` mode. */
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+
+  /**
+   * The domain this briefing is about.
+   *
+   * NOT NULL because there is no briefing without one: what it
+   * selected, how those results were scored and what they are called
+   * all come from a domain's taxonomy and settings, so a row citing
+   * none of them is a document nobody can read in context.
+   *
+   * Cascading on delete like every other domain-owned row, and the
+   * cost is `benchmark_cases` above turned around. A case is authored,
+   * so what the cascade takes is attention somebody spent; a briefing
+   * is generated, so what it takes is a record of what a domain said
+   * about a period at the time it said it. Producing it again is not
+   * on offer either: the findings it selected from cascade out of the
+   * same statement, and the drafting step that made prose of them is a
+   * model call, not a function of them.
+   */
+  domainId: bigint('domain_id', { mode: 'number' }).notNull()
+    .references(() => domains.id, { onDelete: 'cascade' }),
+
+  /**
+   * The pass that produced this briefing, when a pass produced it.
+   *
+   * NULL is an ordinary state rather than a gap, as it is at
+   * `entity_research.run_id` in `./entities.ts`: a briefing written
+   * by hand, backfilled from whatever a domain kept before it had a
+   * pipeline, or rendered by the service layer later, was produced
+   * inside no pass.
+   *
+   * No `onDelete`, so it emits `ON DELETE no action` — the opposite
+   * answer to `llm_calls.run_id` above, on the one test that decides
+   * every FK into this table. A ledger row is part of a pass's own
+   * account of itself, in the same sense `runs.counts` is, so the run
+   * owns it. A briefing is a document the pass produced and does not
+   * own — read long after by people with no interest in which tick
+   * assembled it. `ON DELETE SET NULL` is refused for the reason that
+   * column gives: the NULL above already means no pass produced this
+   * row, so a run deleted out from under its own output would silently
+   * reclassify it as hand-written.
+   *
+   * The refusal's reach is the two-hop question `entity_research`'s
+   * own `run_id` traces, and it lands the same way here. A briefing
+   * of the domain its run ran for is already gone by the end of the
+   * statement that drops that domain — this table cascades from
+   * `domain_id` above, the run cascades from the same row — so the
+   * check finds nothing orphaned. Nothing ties the two, though, so a
+   * briefing of one domain citing another domain's run holds that
+   * second domain open until somebody deals with it.
+   */
+  runId: bigint('run_id', { mode: 'number' }).references(() => runs.id),
+
+  /**
+   * The briefing itself, as prose for a person to read.
+   *
+   * Nullable, and the NULL means no text was produced — a pass whose
+   * selection came back but whose drafting step did not, or a writer
+   * that stores the structured half now and renders prose later. `''`
+   * would claim a briefing was written and that it came to nothing,
+   * which a surface then renders as a blank document rather than as
+   * nothing to show. Same split `entity_research.summary` in
+   * `./entities.ts` makes, and the text analogue of what
+   * `findings.score` in `./findings.ts` states for numbers. It is
+   * unbounded for `summary`'s reason too: what a briefing is worth
+   * varies by domain, and the writer calling the model is the only
+   * place that knows what was asked for.
+   *
+   * Not the `benchmark_cases.payload` case above, though the two look
+   * close. That column is NOT NULL with no default because a case
+   * with nothing to replay does not test leniently, it passes
+   * silently. Nothing replays a briefing — it is read — so an empty
+   * one costs a reader a wasted click rather than a green result
+   * nothing checked.
+   *
+   * The honest limit: nothing here refuses a row with no content at
+   * all — a NULL body beside the empty `payload` default below is
+   * storable, and only the writer keeps one from being written when
+   * there was nothing to say.
+   */
+  body: text('body'),
+
+  /**
+   * The structured half of the same briefing: what the period came
+   * to, in whatever shape a domain's renderers want beyond prose.
+   *
+   * NOT NULL defaulting to `{}` on the rule `domains.settings` in
+   * `./domains.ts` sets, applied to this pairing exactly as
+   * `entity_research.payload` in `./entities.ts` applies it to its
+   * own: a briefing that recorded nothing structured and one whose
+   * writer keeps no structure read the same to every renderer, so a
+   * NULL would buy a distinction nothing acts on and cost every
+   * reader a guard.
+   *
+   * Unannotated, for the reason `entity_research.payload` records —
+   * what belongs inside varies by domain and by what a format needs,
+   * and one interface across all of them would describe none of
+   * them. It has nothing to be validated against either, where a
+   * finding's payload has `DomainSettings.fieldContract` in
+   * `./domains.ts`, so a reader has the writing domain's own
+   * convention and nothing else.
+   *
+   * It is also what keeps one stored briefing from fixing what every
+   * export looks like. A renderer handed prose can only reproduce it;
+   * one handed the counts, the ranges and the ids a period selected
+   * can lay them out per format, which is the whole reason the row
+   * carries two halves rather than a rendered document.
+   */
+  payload: jsonb('payload').default({})
+    .notNull(),
+
+  /**
+   * When this briefing was generated.
+   *
+   * NOT NULL defaulting to now, because there is no window in which
+   * one of these rows exists and the briefing behind it has not been
+   * made. The honest limit is which moment it names: the default
+   * dates the WRITE, so a pass that selected at one time and
+   * persisted later is dated by the second.
+   *
+   * What it is not is what the briefing is ABOUT. No column here
+   * holds the period covered, so a reader wanting the digest for a
+   * given week has this timestamp plus the writer's convention that a
+   * briefing is generated at the end of what it covers. The design
+   * this port draws from stored the period instead, one row per
+   * digest date and UNIQUE over it; the roster this port carries
+   * names no such column.
+   *
+   * That missing key is the accumulate-versus-replace trade
+   * `finding_labels` in `./findings.ts` argues and
+   * `entity_research.researched_at` in `./entities.ts` repeats, and
+   * this table takes the same side: every render keeps its own row, so
+   * what changed between two is readable. What differs is the cost,
+   * because the origin's key did a second job — a re-render met the
+   * row already written, so running the digest twice left one
+   * briefing. A second render here inserts a rival, and a reader
+   * wanting the current one says `ORDER BY generated_at DESC LIMIT 1`
+   * rather than assuming one row per period.
+   *
+   * That ordering is total in practice rather than by construction,
+   * with no unique key above it: `now()` is the TRANSACTION's start
+   * time, so two briefings written together tie to the microsecond
+   * and `id` is the tiebreak, as `finding_labels.labelled_at`
+   * records.
+   */
+  generatedAt: timestamp('generated_at', { withTimezone: true }).defaultNow()
+    .notNull(),
 });
