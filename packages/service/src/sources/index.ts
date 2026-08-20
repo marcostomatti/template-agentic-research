@@ -32,16 +32,51 @@ import type { SOURCE_KINDS } from '../db/schema/values.js';
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 
 /**
- * The shape an adapter produces and the only shape the core consumes.
+ * The shape an adapter produces and the only shape the core consumes: one
+ * `documents` row's worth of captured material, and nothing beyond it.
  *
- * Open record in phase 1 on purpose: the canonical document columns are not
- * settled until schema v2 lands, and pinning a guess here would bake a shape
- * into the contract before the table that has to store it exists. **Phase 2
- * narrows this alias** to the document row shape — ahead of the first real
- * adapter in phase 4, so no adapter is ever written against the open record
- * and none has to be revised when the narrowing arrives.
+ * Narrowed from the phase-1 open record now that schema v2 fixes the table
+ * this is written into — ahead of the first real adapter in phase 4, so no
+ * adapter is ever written against the open shape. The members are the
+ * columns a capture can itself supply, which is why `domain_id` and
+ * `captured_at` are not among them: the domain comes from the `sources`
+ * row an adapter was constructed for, and capture time is a fact about the
+ * insert rather than about the document.
  */
-export type CanonicalDocument = Record<string, unknown>;
+export interface CanonicalDocument {
+  /**
+   * Content hash of the document as captured — the key one row per
+   * distinct item stands on, and required for that reason.
+   */
+  readonly hash: string;
+  /**
+   * The `sources` row this document came through, or null when it came
+   * through none: an ingested file, a body an operator pasted in.
+   */
+  readonly sourceId: number | null;
+  /**
+   * Where the document can be read at its source, or null when there is
+   * no such place. Never an empty string, which renders as a link to
+   * nowhere.
+   */
+  readonly url: string | null;
+  /**
+   * The document's text as captured. An empty body is a capture that
+   * yielded no text and is kept anyway — fail-flag-keep — so the member
+   * is required while the string it carries may be empty.
+   */
+  readonly body: string;
+  /**
+   * The source's own payload, verbatim: what `fetch` returned, before
+   * anything was extracted from it. Null when nothing was stored, which
+   * is the state a pasted body or an ingested file is in.
+   *
+   * `unknown` rather than a payload interface, because the shape belongs
+   * to the source rather than to this contract — one type across every
+   * {@link SourceKind} would describe none of them accurately.
+   */
+  readonly raw: unknown;
+}
 
 /**
  * One source adapter: get the bytes, produce canonical documents. An adapter
@@ -79,8 +114,9 @@ export interface SourceAdapter<Raw = unknown, Parsed = unknown> {
    */
   parse(raw: Raw): Parsed[];
   /**
-   * Maps one extracted record onto the canonical shape. Pure, and the seam
-   * that absorbs the phase-2 narrowing of {@link CanonicalDocument}.
+   * Maps one extracted record onto the canonical shape. Pure, and the only
+   * step that has to know what a `documents` row holds — every member of
+   * {@link CanonicalDocument} is produced here or nowhere.
    */
   toCanonical(parsed: Parsed): CanonicalDocument;
 }

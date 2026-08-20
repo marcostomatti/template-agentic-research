@@ -67,11 +67,11 @@ export interface ExportArtifact {
 /**
  * Everything a renderer is given: which domain, and what to render.
  *
- * Both shapes are open records in phase 1 on purpose, for the same reason
- * `CanonicalDocument` is: the `domains` and findings columns are not settled
- * until schema v2 lands. **Phase 2 narrows them** to the stored row shapes,
- * ahead of the first real renderer in phase 6, so no renderer is ever
- * written against the open records.
+ * Both shapes are open records in phase 1 on purpose, for the reason
+ * `CanonicalDocument` was one until phase 2 narrowed it: the `domains` and
+ * findings columns are not settled until schema v2 lands. **Phase 2 narrows
+ * them** to the stored row shapes, ahead of the first real renderer in
+ * phase 6, so no renderer is ever written against the open records.
  *
  * @typeParam Domain - The domain the findings belong to.
  * @typeParam Finding - One scored finding, as stored.
