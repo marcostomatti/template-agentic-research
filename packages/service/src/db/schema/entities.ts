@@ -33,7 +33,8 @@
  */
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
-import { bigint, bigserial, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { bigint, bigserial, check, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
 import { findings } from './findings.js';
@@ -486,10 +487,11 @@ export const researchPool = pgTable('research_pool', {
    *
    * The column is the account of the row rather than the gate
    * itself. Nothing here refuses a transition, and a writer may set
-   * any member at any time; what the database refuses is a
-   * researched row that was never approved, under the constraint
-   * over `approved_at` and `researched_at` below that arrives later
-   * in this stage.
+   * any member at any time — including `done` on a row nobody
+   * approved. What the database refuses is the other account of the
+   * same row: `research_pool_approval_check` at the foot of this
+   * table reads only `approved_at` and `researched_at`, so the two
+   * can disagree and only the timestamps are held to the rule.
    */
   status: text('status').default('pending')
     .notNull(),
@@ -558,8 +560,14 @@ export const researchPool = pgTable('research_pool', {
    * the schema's. An approval is written over whatever is already
    * there with a COALESCE, so re-approving an approved row is a
    * no-op instead of a way to re-run a search already paid for.
-   * Nothing here refuses an UPDATE that moves it, and nothing
-   * records that it was moved.
+   * Nothing here refuses an UPDATE that moves it to another time,
+   * and nothing records that it was moved.
+   *
+   * The one write that is refused is clearing it back to NULL on a
+   * row `researched_at` below already closed, under
+   * `research_pool_approval_check` at the foot of this table: an
+   * approval cannot be withdrawn from a search that has already
+   * been made on it.
    */
   approvedAt: timestamp('approved_at', { withTimezone: true }),
 
@@ -578,12 +586,17 @@ export const researchPool = pgTable('research_pool', {
    * every later pass fetched it first, searched the same subject and
    * spent the same money, indefinitely.
    *
-   * Nullable with no default, like `approved_at` above. Nothing ties
-   * the column to `entity_research` either: a row stamped `done`
-   * with no research stored against its subject is storable, and it
-   * reads as satisfied to everything that looks. Only the writer
-   * holds the two together, in the statement that persists a result
-   * and closes the row it came from.
+   * Nullable with no default, like `approved_at` above — and the
+   * pair is what `research_pool_approval_check` at the foot of this
+   * table constrains: a non-NULL here requires a non-NULL there, so
+   * a row cannot record that it was closed without recording that
+   * it was approved first.
+   *
+   * Nothing ties the column to `entity_research` either: a row
+   * stamped `done` with no research stored against its subject is
+   * storable, and it reads as satisfied to everything that looks.
+   * Only the writer holds the two together, in the statement that
+   * persists a result and closes the row it came from.
    */
   researchedAt: timestamp('researched_at', { withTimezone: true }),
 }, (table) => [
@@ -596,4 +609,29 @@ export const researchPool = pgTable('research_pool', {
    * greps for.
    */
   checkOneOf('research_pool_status_check', table.status, RESEARCH_POOL_STATUSES),
+
+  /**
+   * The gate itself, as a rule the database holds: a row may record
+   * that it was closed only if it already records that it was
+   * approved. What is refused is the STATE rather than a
+   * transition, so it bites from both directions — stamping
+   * `researched_at` on a row nobody approved is rejected, and so is
+   * clearing `approved_at` on a row already closed.
+   *
+   * Named rather than left to drizzle's derivation, for the reason
+   * the status CHECK above gives: the static-SQL invariant suite
+   * asserts the constraint reached the migration by grepping for
+   * this name, and a column rename must not quietly move it.
+   *
+   * What it does not reach is worth reading beside it. Both
+   * timestamps NULL is the open state and passes. An approval
+   * nothing ever acts on passes, indefinitely. `status` a few
+   * columns up is not consulted at all, so a row stamped `done`
+   * with neither timestamp set is storable — the two are separate
+   * accounts of the same row, and only this pair is enforced.
+   */
+  check(
+    'research_pool_approval_check',
+    sql`${table.researchedAt} IS NULL OR ${table.approvedAt} IS NOT NULL`,
+  ),
 ]);
