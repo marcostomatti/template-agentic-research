@@ -34,7 +34,17 @@
  * leaving it out would take a rule for which exports to skip, and any
  * such rule can skip a real tuple too. That is the exact omission the
  * coverage case exists to catch.
+ *
+ * The last case is about `checkOneOf` rather than about a set, and it
+ * belongs here because it closes the loop the module opens. A tuple
+ * and the union derived from it agree by construction; the CHECK
+ * rendered from the same tuple is a third reading that agrees only if
+ * the rendering says so, and it is the reading no type checks. It is
+ * handed a fixture tuple of its own rather than a real value set, so
+ * a rendering that ignored its argument and printed some other tuple
+ * could not pass for a correct one.
  */
+import { PgDialect, pgTable, text } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
 import * as values from '../../src/db/schema/values.js';
@@ -182,6 +192,44 @@ function duplicates(members: readonly string[]): readonly string[] {
 }
 
 // ---------------------------------------------------------------------------
+// checkOneOf fixture
+// ---------------------------------------------------------------------------
+
+/**
+ * The tuple handed to `checkOneOf` by the rendering case.
+ *
+ * Two members because one cannot show the separator between them and a
+ * longer tuple shows nothing the second does not. Members no value set
+ * in the module declares, so a rendering that ignored its argument
+ * would have nothing to print that this case would accept.
+ */
+const FIXTURE_MEMBERS = ['alpha', 'omega'] as const;
+
+/**
+ * A table owning the one column the fixture CHECK constrains, because
+ * `checkOneOf` names a column in the SQL it builds.
+ *
+ * Declaring a table in a test file reaches no snapshot and no
+ * migration: drizzle-kit reads `src/db/schema.ts` and nothing else, so
+ * this one exists only for the duration of the case.
+ */
+const checkOneOfFixture = pgTable('check_one_of_fixture', {
+  member: text('member').notNull(),
+});
+
+/**
+ * Every single-quoted literal in a rendered statement, in order.
+ *
+ * The fixture members carry no quote of their own, so a literal here
+ * cannot hold SQL's doubled-quote escape and the simple form is exact.
+ * A member that did carry one would need the escape unpicked before
+ * this could be compared against the tuple.
+ */
+function literalsIn(renderedSql: string): readonly string[] {
+  return [...renderedSql.matchAll(/'([^']*)'/g)].map((match) => match[1] ?? '');
+}
+
+// ---------------------------------------------------------------------------
 // Cases
 // ---------------------------------------------------------------------------
 
@@ -224,4 +272,29 @@ describe('value sets — members', () => {
       expect(sorted(members)).toEqual(sorted(expectation.members));
     });
   }
+});
+
+describe('checkOneOf — rendered SQL', () => {
+  // Rendered through the Postgres dialect because that is how
+  // drizzle-kit reads a check when it writes a migration, so what this
+  // case reads is the text that reaches the file rather than a
+  // separate rendering of the same builder.
+  it('names every member of the tuple it is given', () => {
+    const constraint = values.checkOneOf(
+      'check_one_of_fixture_member_check',
+      checkOneOfFixture.member,
+      FIXTURE_MEMBERS,
+    );
+
+    const rendered = new PgDialect().sqlToQuery(constraint.value);
+
+    // Equality rather than a search per member, so the case fails both
+    // on a member the SQL left out and on a literal the tuple never
+    // held.
+    expect(sorted(literalsIn(rendered.sql))).toEqual(sorted(FIXTURE_MEMBERS));
+    // The same failure stated as its cause. Values left as bound
+    // parameters render as `$1` into a migration file that binds
+    // nothing, and the CHECK then names no member at all.
+    expect(rendered.params).toEqual([]);
+  });
 });
