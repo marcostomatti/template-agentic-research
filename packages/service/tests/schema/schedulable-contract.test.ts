@@ -41,6 +41,21 @@
  * separately on purpose: a barrel resolving no tables at all is a
  * broken import or a moved path, while a barrel full of tables and no
  * schedulable one is the contract cases quietly covering nothing.
+ *
+ * Which tables carry the set is written out below too, and that is a
+ * different assertion from the ones above it: not that a schedulable
+ * table is well formed, but that the set of them is the one this
+ * phase decided on. A table growing a `next_run_at` — by spreading
+ * the helper or by declaring the columns itself — is another row the
+ * dispatcher claims on every tick from then on, so it fails here
+ * until it is named in the roster. That edit is the acknowledgement:
+ * the place where a recurring cost is agreed to rather than
+ * inherited.
+ *
+ * The roster case subsumes the second guard while the roster is not
+ * empty, and that guard is kept because it stops subsuming it the
+ * moment a failure is cleared by copying the discovered names into
+ * the expectation — an empty discovery included.
  */
 import { Table, getTableColumns, getTableName, is } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
@@ -78,6 +93,28 @@ const REQUIRED_COMPANION_COLUMNS: readonly string[] = [
   'enabled',
   'min_interval_seconds',
   'max_interval_seconds',
+];
+
+/**
+ * The tables that carry the scheduling column set, by database name.
+ *
+ * Written out rather than derived, because deriving it would ask the
+ * schema which tables are schedulable and then agree with whatever it
+ * answered. This list is a decision instead: these are the rows
+ * `ar-dispatch` claims, once per tick, for as long as the service
+ * runs. Joining it is a change to what the pipeline does on a clock,
+ * which is worth a deliberate edit in a second place — a table that
+ * spreads `schedulableColumns()` for the shape of it, or copies a
+ * neighbouring table's columns, is scheduled from that moment on
+ * whether or not anybody meant it to be.
+ *
+ * Database names rather than export names, on the same reasoning the
+ * columns are matched by SQL name: the claim query names what the
+ * database has, so what belongs here is the name it selects from.
+ */
+const EXPECTED_SCHEDULABLE_TABLES: readonly string[] = [
+  'topics',
+  'export_subscriptions',
 ];
 
 // ---------------------------------------------------------------------------
@@ -126,6 +163,11 @@ const SCHEMA_TABLES = collectSchemaTables();
 
 const SCHEDULABLE_TABLES = SCHEMA_TABLES.filter((table) => table.columnNames.has(SCHEDULING_TRUTH_COLUMN));
 
+/** Sorted copy, so an equality is over names rather than over order. */
+function sorted(names: readonly string[]): readonly string[] {
+  return [...names].sort();
+}
+
 // ---------------------------------------------------------------------------
 // Cases
 // ---------------------------------------------------------------------------
@@ -141,6 +183,19 @@ describe('schedulable-row contract — discovery', () => {
   // schedulable, so the contract cases are generated over nothing.
   it('finds at least one table carrying next_run_at', () => {
     expect(SCHEDULABLE_TABLES.length).toBeGreaterThan(0);
+  });
+});
+
+describe('schedulable-row contract — roster', () => {
+  // Sorted-array equality rather than a membership check per name, so
+  // it fails in every direction the roster can be wrong in: a table
+  // that has gained the columns without being listed, a listed table
+  // that has stopped carrying them, and two exports resolving to one
+  // database name.
+  it('holds exactly the tables the dispatcher claims', () => {
+    const discovered = SCHEDULABLE_TABLES.map((table) => table.tableName);
+
+    expect(sorted(discovered)).toEqual(sorted(EXPECTED_SCHEDULABLE_TABLES));
   });
 });
 
