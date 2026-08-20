@@ -15,6 +15,8 @@
 import { bigint, bigserial, boolean, integer, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
+import { connectors } from './sources.js';
+import { EXPORT_FORMATS, checkOneOf } from './values.js';
 
 /**
  * The columns a schedulable row carries, for spreading into a
@@ -226,4 +228,109 @@ export const topics = pgTable('topics', {
    * free to research subjects of the same name.
    */
   unique('topics_domain_id_name_unique').on(table.domainId, table.name),
+]);
+
+/**
+ * `export_subscriptions` — one standing delivery a domain wants: what
+ * gets rendered, where it is handed over, and how often.
+ *
+ * The second schedulable table, and the point where this phase's two
+ * levels of configuration meet. A domain says what it wants exported
+ * and in which format; `connectors` says where an export target
+ * actually is, one row per deployment rather than one per domain.
+ * Pairing them here is what keeps an address out of every domain that
+ * delivers through it — moving a destination is an UPDATE on the one
+ * connector row, and every subscription naming it follows.
+ *
+ * Nothing renders one yet. The dispatcher that claims due rows arrives
+ * in phase 3, and the digest workflow that renders an artifact and
+ * hands it over in phase 6. What the table fixes now is that the
+ * format, the destination and the cadence are one row, so subscribing
+ * a domain to a feed is an INSERT and asking what it currently
+ * receives is a SELECT.
+ *
+ * No row here sends anything on its own account. A format names an
+ * artifact the pipeline writes and hands to its connector — see
+ * `EXPORT_FORMATS` in `./values.js` — and delivery that reaches a
+ * person is the service layer's, behind its own approval gate.
+ */
+export const exportSubscriptions = pgTable('export_subscriptions', {
+  /** Surrogate key; see `domains.id` for why `number` mode. */
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+
+  /**
+   * The domain whose material this subscription exports. Cascading on
+   * delete like every other domain-owned row: a subscription
+   * outliving its domain renders a digest of nothing, and goes on
+   * coming due while it does — the dispatcher claims by `next_run_at`
+   * and is in no position to notice the domain has gone.
+   */
+  domainId: bigint('domain_id', { mode: 'number' }).notNull()
+    .references(() => domains.id, { onDelete: 'cascade' }),
+
+  /**
+   * What this subscription renders — see `EXPORT_FORMATS` in
+   * `./values.js` for what each member produces.
+   *
+   * Selects the renderer, the way `sources.kind` selects an adapter,
+   * and it is one declaration read twice for the same reason: the
+   * CHECK below is generated from the tuple the `ExportFormat` union
+   * is derived from, so a format no renderer exists for cannot be
+   * stored and a format the column refuses cannot be reached from
+   * stored data.
+   *
+   * NOT NULL on both counts a nullable column would cost here. A
+   * CHECK is UNKNOWN against NULL and so admits it, and this column
+   * is one third of the natural key below — where a NULL is not equal
+   * to another NULL as far as a unique index is concerned, so the key
+   * that is supposed to make a second write update the first would
+   * let it insert a rival instead.
+   */
+  format: text('format').notNull(),
+
+  /**
+   * Where the rendered artifact is handed over: the `export_target`
+   * connector that receives it.
+   *
+   * NOT NULL because an export with no destination is a render nobody
+   * receives, and because it is the third part of the natural key, on
+   * the same reasoning as `format` above.
+   *
+   * No `onDelete`, which is a decision rather than the omission it
+   * resembles. The FK emits `ON DELETE no action`, so deleting a
+   * connector that still receives exports is REFUSED — the opposite
+   * of the cascade on `domain_id`, and deliberately so. A domain
+   * going away takes its own configuration with it, but a connector
+   * is deployment-level and shared: the subscriptions pointing at it
+   * belong to the domains that made them, and retiring one service
+   * should not quietly cancel deliveries in every domain that named
+   * it. The refusal makes re-pointing or cancelling them the explicit
+   * step it is.
+   */
+  connectorId: bigint('connector_id', { mode: 'number' }).notNull()
+    .references(() => connectors.id),
+
+  ...schedulableColumns(),
+}, (table) => [
+  /**
+   * Domain, format and destination together are the row's natural
+   * key: a seed pass upserts on the triple, so re-subscribing adjusts
+   * the cadence rather than leaving two rows rendering the same
+   * artifact on independent schedules — which costs twice over, once
+   * in the rendering and again in what arrives at the far end.
+   *
+   * All three, because no pair of them identifies a subscription. One
+   * domain may want the same digest in two formats, and may want one
+   * format delivered to two destinations; both are ordinary, and a
+   * key over either pair would refuse the second row.
+   */
+  unique('export_subscriptions_domain_id_format_connector_id_unique').on(table.domainId, table.format, table.connectorId),
+
+  /**
+   * The format domain, enumerated in the generated SQL from the same
+   * tuple `ExportFormat` is derived from. Named rather than left to
+   * drizzle's derivation so the static-SQL invariant suite can assert
+   * the constraint is present by grepping for it.
+   */
+  checkOneOf('export_subscriptions_format_check', table.format, EXPORT_FORMATS),
 ]);
