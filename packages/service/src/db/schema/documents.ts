@@ -27,6 +27,7 @@ import { bigint, bigserial, jsonb, pgTable, text, timestamp } from 'drizzle-orm/
 
 import { domains } from './domains.js';
 import { sources } from './sources.js';
+import { DOCUMENT_PARSE_STATUSES, checkOneOf } from './values.js';
 
 export const documents = pgTable('documents', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
@@ -114,11 +115,11 @@ export const documents = pgTable('documents', {
    *
    * NOT NULL, which is not the same as non-empty. An empty body is a
    * capture that yielded no text and was kept anyway rather than
-   * dropped — fail-flag-keep, the rule `DOCUMENT_PARSE_STATUSES` in
-   * `./values.js` states — so a source whose shape has drifted leaves
-   * a row to read instead of a silence indistinguishable from a quiet
-   * day. Nullable, the column would add a third state on top of that
-   * pair, and every reader would carry a guard buying no distinction.
+   * dropped — fail-flag-keep, the rule `parse_status` below records
+   * — so a source whose shape has drifted leaves a row to read
+   * instead of a silence indistinguishable from a quiet day.
+   * Nullable, the column would add a third state on top of that pair,
+   * and every reader would carry a guard buying no distinction.
    */
   body: text('body').notNull(),
 
@@ -160,4 +161,66 @@ export const documents = pgTable('documents', {
    */
   capturedAt: timestamp('captured_at', { withTimezone: true }).defaultNow()
     .notNull(),
-});
+
+  /**
+   * Whether this document's payload parsed under its source's
+   * contract — see `DOCUMENT_PARSE_STATUSES` in `./values.js` for
+   * what the two members mean.
+   *
+   * This column is the flag of fail-flag-keep, and the row it sits on
+   * is the keep. A payload its contract rejects is stored with its
+   * `parse_error` rather than dropped, the source's
+   * `consecutive_failures` counter is bumped, and a run of those
+   * rejections trips `sources.flagged` — the adapter-rot detector
+   * that column's comment describes. Dropping the payload instead
+   * would leave the drift showing up only as a fall in volume, which
+   * is what a quiet week looks like too.
+   *
+   * Defaults to `ok` because a failure is something that HAPPENED,
+   * and only the writer that saw it can say so — nothing reading a
+   * stored row later can work out that its parse went wrong. An unset
+   * status can therefore mean nothing else. The honest limit of that
+   * is worth stating rather than leaving to be found: the default
+   * cannot tell a document that parsed from one whose writer never
+   * set the column, and records both as `ok`.
+   *
+   * NOT NULL is what makes the CHECK below cover the column at all. A
+   * CHECK is UNKNOWN against NULL and so admits it, the same way
+   * `sources.kind` is NOT NULL for its own. It also holds the readers
+   * to two cases: the review surface is a `parse_status = 'failed'`
+   * filter, and a third state would be a document neither queue
+   * reports — missing from the failures an operator works through and
+   * missing from the corpus everything else treats as sound.
+   */
+  parseStatus: text('parse_status').default('ok')
+    .notNull(),
+
+  /**
+   * What went wrong, when something did: the parse failure's own
+   * message, kept beside the payload it was raised against.
+   *
+   * NULL means no error was recorded, which for an `ok` row is the
+   * ordinary state. Never an empty string, for the reason `url` above
+   * is never one: `''` is a value, and a reader handed it renders a
+   * failure with no account of itself as though the account had been
+   * read and was blank.
+   *
+   * Nothing in the database ties this column to the one above. A
+   * `failed` row whose error is NULL is storable, and it is the shape
+   * that costs the most — the document is kept, the source's counter
+   * climbs toward its threshold, and what the operator is shown is a
+   * failure nobody can act on. Only the writer keeps the pair
+   * together, so an adapter reporting a failure (phase 4, under the
+   * engine that arrives in phase 5) records the reason in the same
+   * insert that sets the status.
+   */
+  parseError: text('parse_error'),
+}, (table) => [
+  /**
+   * The parse-status domain, enumerated in the generated SQL from the
+   * same tuple `DocumentParseStatus` is derived from. Named rather
+   * than left to drizzle's derivation so the static-SQL invariant
+   * suite can assert the constraint is present by grepping for it.
+   */
+  checkOneOf('documents_parse_status_check', table.parseStatus, DOCUMENT_PARSE_STATUSES),
+]);
