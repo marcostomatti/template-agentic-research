@@ -19,14 +19,15 @@
  *
  * Nothing writes these rows yet. `ar-ingest` turns a document into
  * findings and `ar-score` scores them against a domain's criteria,
- * both phase 5. The sightings that record where a finding was seen
- * and the labels an operator puts on one arrive later in this stage
- * as this module's other two tables.
+ * both phase 5. `finding_sightings` below records where a finding
+ * has been seen; the labels an operator puts on one arrive next in
+ * this stage as the module's third table.
  */
-import { bigint, bigserial, integer, jsonb, numeric, pgTable, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, integer, jsonb, numeric, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 import { documents } from './documents.js';
 import { domains } from './domains.js';
+import { sources } from './sources.js';
 
 export const findings = pgTable('findings', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
@@ -238,3 +239,164 @@ export const findings = pgTable('findings', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
     .notNull(),
 });
+
+/**
+ * `finding_sightings` — where a finding has been seen: one row per
+ * finding, source, and the source's own id for the item, kept and
+ * never pruned.
+ *
+ * A duplicate is evidence rather than noise, which is the whole
+ * reason these rows exist. An item four feeds carry reads
+ * differently from one that turned up in a single place, so
+ * convergence keeps ONE finding and records each sighting against
+ * it — and the count of them is the cheapest syndication measure
+ * there is.
+ *
+ * Nothing else in the schema can hold that. `documents.hash`
+ * collapses a repeat capture onto the row already there, and the
+ * write that does it is an insert with `ON CONFLICT DO NOTHING`, so
+ * it returns no id and changes nothing: `documents.source_id` goes
+ * on naming the feed the document was FIRST captured through, and
+ * no column anywhere records the second. Without these rows a
+ * source's involvement is absorbed by the very mechanism that makes
+ * the corpus one row per item.
+ *
+ * Hung off `findings` rather than `documents` because the finding
+ * is what a digest renders and an operator judges, which is where
+ * the count is read — and read at render rather than copied onto
+ * the finding when it is made. Convergence goes on adding sightings
+ * afterwards, so a count stored at the time would be stale by the
+ * moment the second source arrived.
+ *
+ * Nothing writes these rows yet. The adapters that meet a source's
+ * items arrive in phase 4, under the engine in phase 5 that decides
+ * two captures are the same thing.
+ */
+export const findingSightings = pgTable('finding_sightings', {
+  /** Surrogate key; see `domains.id` for why `number` mode. */
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+
+  /**
+   * The finding this sighting is of.
+   *
+   * NOT NULL because the row has no content without it — a sighting
+   * is the claim that a particular finding was seen somewhere — and
+   * because it is the first member of the natural key below.
+   *
+   * Cascading on delete, where `source_id` beside it refuses,
+   * because the finding does own these rows: they say where IT was
+   * seen and nothing reads them except through it. That is the same
+   * ownership test `findings.document_id` above applies, and a
+   * sighting outliving its finding would be provenance for a row
+   * nobody can reach.
+   */
+  findingId: bigint('finding_id', { mode: 'number' }).notNull()
+    .references(() => findings.id, { onDelete: 'cascade' }),
+
+  /**
+   * The feed this finding was seen at, and the second member of the
+   * natural key.
+   *
+   * NOT NULL, unlike `documents.source_id`, and the difference is
+   * what each column is for. That one records how a document
+   * arrived and admits documents that arrived through no feed at
+   * all — a pasted body, an ingested file. This row IS the
+   * statement that something was seen at a feed, so a sighting
+   * without one says nothing, and there would be no key left to
+   * deduplicate it on.
+   *
+   * Deliberately no `onDelete`, so it emits `ON DELETE no action`
+   * and deleting a source these rows still cite is REFUSED — the
+   * answer `documents.source_id` gives, for a sharper reason here.
+   * This table IS the provenance record, so a cascade would drop
+   * syndication evidence a feed at a time, and every count taken
+   * afterwards would be lower with nothing saying why.
+   * `ON DELETE SET NULL` is not the escape it looks like on a NOT
+   * NULL column: Postgres accepts the declaration and defers the
+   * failure to the delete, which then reports a not-null violation
+   * on this column instead of the reference it was really about.
+   * Refusing outright says the same thing where a reader can act
+   * on it. Retiring a feed without losing what it once carried is
+   * `sources.enabled = false`, the column that exists for exactly
+   * that.
+   */
+  sourceId: bigint('source_id', { mode: 'number' }).notNull()
+    .references(() => sources.id),
+
+  /**
+   * The source's own id for the item behind this finding: what the
+   * feed calls it, kept so a sighting can be matched back to the
+   * entry that produced it.
+   *
+   * Not to be confused with `source_id` above, which is this
+   * schema's FK to `sources`. The two sit a line apart on purpose —
+   * the identifier belongs to the far end, the FK to this one — and
+   * a design carrying the feed's name as text rather than as a
+   * table would have called this one `source_id` instead.
+   *
+   * NULL means the source publishes no id of its own, which is
+   * ordinary rather than exceptional: a feed may offer nothing more
+   * stable than a URL, and some offer an id that changes between
+   * polls.
+   *
+   * Being nullable AND a member of the unique key below is worth
+   * stating plainly rather than leaving to be met, because it is
+   * the property `documents.hash` sets out at length, arriving here
+   * through one member of a key rather than through the whole of
+   * it. NULL conflicts with nothing, another NULL included, so for
+   * a source publishing no id the key does not fire: seeing the
+   * same finding at the same feed again inserts a rival row instead
+   * of landing on the one already there, and an `ON CONFLICT DO
+   * NOTHING` write never no-ops. What that costs is the measure the
+   * table exists for — the count climbs with polls rather than with
+   * syndication, and the first symptom is a number downstream
+   * rather than an error here.
+   *
+   * So for an id-less source the deduplication is the writer's to
+   * hold and not the schema's, and the shape that would move it
+   * back is a NOT NULL column defaulting to `''`, where "publishes
+   * no id" is a value that still conflicts with itself. Where a
+   * source does publish an id the key is whole and asks nothing of
+   * the writer.
+   */
+  externalId: text('external_id'),
+
+  /**
+   * When the pipeline saw this finding at this source — not when
+   * the source published the item, which nothing here records.
+   *
+   * Defaults to now because the sighting IS the insert, the way
+   * `created_at` above defaults for the finding: there is no window
+   * in which one of these rows exists and nothing has been seen.
+   *
+   * Which of a finding's sightings at one feed the timestamp stands
+   * for is the writer's choice rather than the schema's, and the
+   * column has room for one of the two. A repeat write with `ON
+   * CONFLICT DO NOTHING` leaves the first time in place and this
+   * reads as first-seen; one with `DO UPDATE` moves it to the
+   * latest and it reads as last-seen. Neither says whether the item
+   * is still carried by the source, and a reader taking this column
+   * for that answer reports a feed as current on the strength of a
+   * sighting made once.
+   */
+  seenAt: timestamp('seen_at', { withTimezone: true }).defaultNow()
+    .notNull(),
+}, (table) => [
+  /**
+   * Finding, source and the source's own id together are the row's
+   * natural key: seeing the same entry again lands on the row
+   * already there rather than adding a second — subject to what
+   * `external_id` above records about its own NULLs.
+   *
+   * All three, because no pair of them identifies a sighting. One
+   * finding seen at several sources is the signal the table exists
+   * to keep, and one source can carry two entries that converged
+   * onto a single finding, which is two sightings and not one.
+   *
+   * Named rather than left to drizzle's derivation so the
+   * static-SQL invariant suite can assert the constraint is present
+   * by grepping the generated migration for it, and so a column
+   * rename cannot quietly move the name it greps for.
+   */
+  unique('finding_sightings_finding_id_source_id_external_id_unique').on(table.findingId, table.sourceId, table.externalId),
+]);
