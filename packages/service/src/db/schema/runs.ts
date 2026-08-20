@@ -20,8 +20,12 @@
  *
  * Nothing writes these rows yet. `ar-dispatch` is the first workflow
  * to open one, phase 3.
+ *
+ * `llm_calls` below keeps the module's second account, at the
+ * granularity of one model call rather than one pass. The module
+ * gains `benchmark_cases` and `briefings` later in this stage.
  */
-import { bigint, bigserial, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
 import { RUN_SCHEDULERS, RUN_STATUSES, checkOneOf } from './values.js';
@@ -263,3 +267,159 @@ export const runs = pgTable('runs', {
    */
   checkOneOf('runs_scheduled_by_check', table.scheduledBy, RUN_SCHEDULERS),
 ]);
+
+/**
+ * `llm_calls` — one row per model call, written by the step that made
+ * it.
+ *
+ * `runs` above accounts for a pass as a whole: what it came to, what
+ * it counted, what it could not do. This table accounts for the same
+ * work one call at a time, which is the granularity the question
+ * "what did that cost" is asked at. A pass that made one call and a
+ * pass that made eighty are one row each upstairs, and the tally in
+ * `counts` is whatever its writer chose to keep rather than an
+ * itemization anything can re-read.
+ *
+ * Nothing writes these rows yet. The workflows that call a model are
+ * `ar-research` and `ar-digest`, phase 6.
+ */
+export const llmCalls = pgTable('llm_calls', {
+  /** Surrogate key; see `domains.id` for why `number` mode. */
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+
+  /**
+   * The pass this call was made inside, when it was made inside one.
+   *
+   * NULL is an ordinary state rather than a gap, as it is at
+   * `entity_research.run_id` in `./entities.ts`: a call made by hand
+   * against a running service, or by a step that opens no run of its
+   * own, was made inside no pass, and naming one anyway would charge
+   * it to work that never incurred it.
+   *
+   * Cascading on delete, where that column refuses, and the
+   * difference is what the two rows ARE. Research is a result about a
+   * subject, and it outlives the pass that found it; a ledger row is
+   * part of the pass's own account of itself, in the same sense
+   * `counts` above is. So the run owns it, which is the ownership
+   * test every FK in this schema is decided by.
+   *
+   * `ON DELETE SET NULL` is refused for the reason the NULL above
+   * gives: it already means no pass made this call, so a run deleted
+   * out from under its own ledger would silently reclassify its calls
+   * as ones nobody ran.
+   *
+   * NO ACTION is refused on the reach `runs.domain_id` above traces.
+   * This table has no domain-scoped path of its own, so a refusal
+   * here would land on the domain lifecycle every time: dropping a
+   * domain cascades to its runs, rows still citing them would refuse
+   * the whole statement, and the error would name a constraint the
+   * operator never mentioned. `ingested_files.document_id` in
+   * `./documents.ts` records that trap from the inside.
+   *
+   * The cascade's own cost is worth stating rather than meeting: the
+   * ledger of a deleted domain's passes goes with them, so a total
+   * spanning a domain that no longer exists has to have been taken
+   * while it still did.
+   */
+  runId: bigint('run_id', { mode: 'number' }).references(() => runs.id, { onDelete: 'cascade' }),
+
+  /**
+   * Which step made the call, as that step names itself.
+   *
+   * NOT NULL, and known by construction rather than looked up: the
+   * writer IS the step, so its own name is the one fact it cannot
+   * fail to have. `model` below is nullable for the mirror of that
+   * reason.
+   *
+   * NOT NULL is not non-empty, and `''` is the state worth saying
+   * something about: it names no step, which is the thing this column
+   * exists to record, and a total grouped by it collects every
+   * anonymous call under one blank heading. Nothing here refuses it —
+   * only the writer does.
+   *
+   * The value is a name, and names move. A step renamed keeps its old
+   * name on every row already written, so a total by node reports two
+   * steps where there was one and neither half is wrong. Nothing in
+   * the schema can hold that together; a reader totalling over a long
+   * window has to know it.
+   */
+  node: text('node').notNull(),
+
+  /**
+   * Which model answered, as the writer named it.
+   *
+   * Free text rather than one of `./values.ts`'s tuples, for the
+   * reason `domains.embedding_model` in `./domains.ts` sets out at
+   * length: which models exist is a fact about a deployment, so a
+   * closed set here would make trying one a migration.
+   *
+   * The contrast with that column is worth a sentence, since the two
+   * look alike and are not. An embedder is recorded as it REPORTED
+   * itself; this is recorded as the caller believed it to be — in the
+   * design this port draws from, a literal in the SQL of the node
+   * making the call — so a deployment pointed at a different model
+   * goes on writing the old name until somebody edits the caller.
+   * What is stored is what was asked for, not what served it.
+   *
+   * Nullable, where `node` above is not: a caller always knows its
+   * own name and may genuinely not know the model's, behind a gateway
+   * that routes or a runtime that reports none. NULL means it was not
+   * recorded, and such a row still counts as a call while saying
+   * nothing about which model made it.
+   */
+  model: text('model'),
+
+  /**
+   * How large the prompt was, in characters.
+   *
+   * Nullable with no default, in the signal class `findings.score` in
+   * `./findings.ts` sets out: NULL means nothing measured this call.
+   * Zero is a real reading here rather than a stand-in for one — a
+   * call declined before it was sent sends no characters, and the
+   * design this port draws from ledgers exactly that — so a 0 written
+   * for an absent measurement would be indistinguishable from it and
+   * would sit inside every sum and threshold as though it had been
+   * measured.
+   *
+   * Characters rather than tokens because characters are what the
+   * caller has. Tokenization belongs to the model, and this is a
+   * count taken on the way out.
+   */
+  promptChars: integer('prompt_chars'),
+
+  /**
+   * How many tokens that prompt is estimated to have been, in the
+   * same signal class as `prompt_chars` above and NULL for the same
+   * reason.
+   *
+   * The `est_` is load-bearing. This is not a count a provider
+   * reported; in the design this port draws from it is arithmetic
+   * over the column above — characters divided by a constant — so the
+   * two are one reading expressed twice rather than two independent
+   * ones, and a total over this column does not reconcile with a
+   * bill. It is a magnitude for comparing calls against each other,
+   * and nothing stored here says which estimator produced it.
+   */
+  estTokens: integer('est_tokens'),
+
+  /**
+   * When the row was written, and by convention when the call was
+   * made.
+   *
+   * NOT NULL because a ledger entry outside time cannot be totalled
+   * over a window, which is how this table is read.
+   *
+   * The convention is the writer's, as it is for `started_at` above.
+   * `now()` is the transaction's start time rather than the
+   * statement's, so calls ledgered together share this value down to
+   * the microsecond, and a writer recording the row after its call
+   * returns dates the return rather than the request. Nothing stored
+   * here tells any of that apart.
+   *
+   * It is also the ordering, and this table has no unique key above
+   * it to break a tie — `id` is the tiebreak, the same shape
+   * `finding_labels.labelled_at` in `./findings.ts` records.
+   */
+  calledAt: timestamp('called_at', { withTimezone: true }).defaultNow()
+    .notNull(),
+});
