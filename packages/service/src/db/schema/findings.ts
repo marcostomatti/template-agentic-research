@@ -101,6 +101,28 @@ export const findings = pgTable('findings', {
    * against it — no CHECK reaches inside a JSONB payload, so that
    * validation is the whole of the enforcement.
    *
+   * The two halves together — neutral core columns plus a payload
+   * the domain validates — are what let one table serve every
+   * domain. Neither works alone: neutral columns with no payload
+   * push each domain's own material into columns of its own, and a
+   * payload with no neutral core leaves nothing to join, order or
+   * filter on that means the same thing in two domains. What the
+   * split buys is one schema behind the executor, the API and the
+   * exports at once, where a table or a column set per domain would
+   * fork every query into a per-domain branch and multiply
+   * migrations by the number of domains.
+   *
+   * A domain's latitude over the naming stops at the display name of
+   * the term: `DomainSettings.findingsDisplayName` in `./domains.ts`
+   * is what one calls a finding in a heading or an export, resolved
+   * where it is rendered. No alias reaches storage — the table stays
+   * `findings`, and so do its columns, the queries, the API fields
+   * and every identifier in the code — and the keys inside this
+   * payload come from the contract rather than from renaming a
+   * column above. Nothing joins on a label, which is the whole
+   * reason the alias costs nothing; the rule in full lives in
+   * `docs/architecture/00-overview.md`.
+   *
    * Annotated only as a record, which is as much as holds across
    * every domain: the keys come from a contract this schema does not
    * carry, so what the annotation claims is that the payload is an
