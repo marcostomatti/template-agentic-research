@@ -90,10 +90,10 @@ export function schedulableColumns() {
      * unless the run already set a time here, which is what lets any
      * of those modes override the default without a flag declaring
      * which mode is in force. Which writer chose a time is recorded
-     * on the run rather than read back out of this column: all of
-     * them can produce the same timestamp, so a schedule that changed
-     * unexpectedly is only attributable if the choosing was logged
-     * when it happened.
+     * on the run — `runs.scheduled_by` in `./runs.ts` — rather than
+     * read back out of this column: all of them can produce the same
+     * timestamp, so a schedule that changed unexpectedly is only
+     * attributable if the choosing was logged when it happened.
      */
     nextRunAt: timestamp('next_run_at', { withTimezone: true }),
 

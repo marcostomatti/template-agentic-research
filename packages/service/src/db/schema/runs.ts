@@ -24,7 +24,7 @@
 import { bigint, bigserial, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
-import { RUN_STATUSES, checkOneOf } from './values.js';
+import { RUN_SCHEDULERS, RUN_STATUSES, checkOneOf } from './values.js';
 
 export const runs = pgTable('runs', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
@@ -198,6 +198,55 @@ export const runs = pgTable('runs', {
    */
   errors: jsonb('errors').default([])
     .notNull(),
+
+  /**
+   * Which of the three ways of setting a due time chose the one this
+   * pass fired against — see `RUN_SCHEDULERS` in `./values.js` for
+   * what each of them means.
+   *
+   * This is the column that makes an unexpected schedule
+   * attributable afterwards, and afterwards is when the question
+   * gets asked. Every mode writes the same place — `next_run_at`, in
+   * `./scheduling.ts` — and every mode writes a plain timestamp: an
+   * increment the dispatcher added, a time an agent proposed and the
+   * bounds clamped, and a time a person typed are indistinguishable
+   * once stored. That column is then overwritten on the next pass,
+   * so by the time a row running far more often than anyone intended
+   * is noticed, the only surviving copy of the decision is the
+   * newest one — which is the schedule being asked about rather than
+   * the choice that produced it. Recording the chooser here leaves
+   * one line per pass that outlives the timestamp it explains.
+   *
+   * What makes that worth a column is that the cost is per tick: a
+   * schedule nobody meant to change is not one mistake but one
+   * mistake charged again every time the clock comes round, for as
+   * long as it goes unnoticed. That is the framing
+   * `docs/architecture/01-invariants.md` writes its cost guards in,
+   * and the same reason it gives there for keeping a ledger at all —
+   * work nobody can attribute is work nobody can act on.
+   *
+   * NOT NULL with no default, where `status` above defaults. A
+   * value-set default names the member meaning nothing has been
+   * reported yet, and this set has none: all three are real answers,
+   * so any default would file the runs of two of them under the
+   * third, and would do it by absence — filling in the one fact the
+   * column exists to record with a guess. The writer says, or the
+   * insert fails. NOT NULL also for the reason `status` sets out:
+   * the CHECK below passes on a NULL, so without it the column's
+   * real domain is these three plus a fourth nothing reports.
+   *
+   * Two honest limits. What is stored is a writer's account of
+   * itself and nothing checks it against what happened, so this
+   * attributes a schedule the way a signature does rather than the
+   * way a lock does — a row saying `interval` written by hand at a
+   * psql prompt is storable. And the attribution is only as fine as
+   * a run: a pass claiming several due rows at once records one
+   * answer for all of them, so a tick mixing an agent-proposed row
+   * with periodic ones cannot say which was which. Whether a pass
+   * opens a row per claimed row is `ar-dispatch`'s to settle, in
+   * phase 3.
+   */
+  scheduledBy: text('scheduled_by').notNull(),
 }, (table) => [
   /**
    * The run-status domain, enumerated in the generated SQL from the
@@ -206,4 +255,11 @@ export const runs = pgTable('runs', {
    * the constraint is present by grepping for it.
    */
   checkOneOf('runs_status_check', table.status, RUN_STATUSES),
+
+  /**
+   * The run-scheduler domain, enumerated in the generated SQL from
+   * the same tuple `RunScheduler` is derived from, and named for the
+   * reason the status check above is.
+   */
+  checkOneOf('runs_scheduled_by_check', table.scheduledBy, RUN_SCHEDULERS),
 ]);
