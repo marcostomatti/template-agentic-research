@@ -70,6 +70,23 @@ export const sources = pgTable('sources', {
    * regex, a field map — bound to the adapter when it is constructed
    * rather than handed to it per call.
    *
+   * Data the engine executes, never code. The parse engine arriving in
+   * phase 5 performs the operations it implements against the payload,
+   * directed by this column; it evaluates nothing it finds here. That
+   * is what keeps an INSERT into this table an INSERT — a column whose
+   * contents could execute would turn every writer that reaches it,
+   * the seed script and a workflow node and an operator at a psql
+   * prompt alike, into a way to run arbitrary code in the pipeline.
+   *
+   * It is also what makes an extraction replayable: the same payload
+   * under the same config yields the same records every time, so an
+   * adapter is tested against a stored payload with no network, and a
+   * config producing the wrong records is a row to read rather than a
+   * program to debug. The design this one is ported from had no such
+   * column — every source was a hand-written module in a static
+   * registry, so a new feed meant code, review, and a deploy for
+   * extraction differing from its neighbour's by a few selectors.
+   *
    * Carries no `$type` annotation, unlike `domains.settings`. What a
    * parser config holds is the adapter's business and differs by
    * `kind`, so one interface across all four would describe none of
@@ -78,6 +95,20 @@ export const sources = pgTable('sources', {
    * Defaults to an empty object so every reader faces one shape; empty
    * means nothing is configured here and the adapter's own defaults
    * apply.
+   *
+   * No proposed config is written straight into this column. Where a
+   * source has none, or its contract starts failing, a local model is
+   * asked — on demand over plain HTTP, with nothing kept running
+   * between calls — to propose a `parser_config` and a `contract`
+   * together; the proposal lands as a pending row for an operator to
+   * rule on, not as an update here. Only the approval writes these two
+   * columns, and the engine then runs what was approved
+   * deterministically: a model proposes, a person decides once, and no
+   * guess silently changes what the pipeline extracts. Approval is a
+   * database state rather than a branch inside a workflow — the shape
+   * `research_pool` gives this phase's other proposals, where a CHECK
+   * refuses the downstream write until the approval is recorded. The
+   * propose step is not built here; the columns it targets are.
    */
   parserConfig: jsonb('parser_config').default({})
     .notNull(),
@@ -86,10 +117,25 @@ export const sources = pgTable('sources', {
    * What a payload from this source has to contain: the validation
    * schema a document captured from it is checked against.
    *
+   * A schema, and so data on the same terms as `parser_config` above:
+   * the engine checks a captured document against what this column
+   * declares and never runs a predicate stored in it. The two describe
+   * one arrangement from both ends — how to read this source, and what
+   * a correct reading looks like — which is why a proposal covers both
+   * and an approval writes both. An extraction rule approved without
+   * the test that says it still holds leaves nothing to notice the day
+   * the source's shape drifts.
+   *
    * Defaults to an empty object rather than to null. A source nobody
    * has written a contract for and one whose contract demands nothing
    * come to the same thing — nothing is checked — so a null would buy
    * a distinction no reader acts on and cost every reader a guard.
+   *
+   * Which is also the cost of leaving it empty on a source that is
+   * actually fetched. `consecutive_failures` below is bumped by the
+   * payloads this column rejects; where it declares nothing, nothing
+   * is rejected and nothing is counted, so a source whose shape has
+   * drifted reads exactly like one that is still working.
    */
   contract: jsonb('contract').default({})
     .notNull(),
