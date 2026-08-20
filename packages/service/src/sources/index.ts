@@ -35,45 +35,81 @@ export type SourceKind = (typeof SOURCE_KINDS)[number];
  * The shape an adapter produces and the only shape the core consumes: one
  * `documents` row's worth of captured material, and nothing beyond it.
  *
- * Narrowed from the phase-1 open record now that schema v2 fixes the table
- * this is written into — ahead of the first real adapter in phase 4, so no
- * adapter is ever written against the open shape. The members are the
- * columns a capture can itself supply, which is why `domain_id` and
- * `captured_at` are not among them: the domain comes from the `sources`
- * row an adapter was constructed for, and capture time is a fact about the
- * insert rather than about the document.
+ * Every member maps onto a column of `documents` in
+ * `src/db/schema/documents.ts`, and is named for that column's drizzle
+ * property rather than for its SQL name — `sourceId` for `source_id`,
+ * the other four identical either way. That is what makes a canonical
+ * document a SLICE of the table's insert shape rather than something to
+ * translate into one: spread it, add the `domainId` the writer supplies,
+ * and the result is a complete row, with no field renaming in between
+ * for a mismatch to hide in.
+ *
+ * The five members are the columns a CAPTURE supplies, and the nine they
+ * leave out are each somebody else's. `id` is the database's and
+ * `captured_at` the insert's — capture IS the insert, so no window exists
+ * in which the two disagree. `domain_id` is the writer's, taken from the
+ * `sources` row the adapter was constructed for, which records how the
+ * adapter was reached rather than anything it read. `parse_status` and
+ * `parse_error` belong to the contract check rather than to the capture:
+ * the row that most needs them is one whose payload yielded no record at
+ * all, so {@link SourceAdapter.toCanonical} never ran to return a shape
+ * they could have sat in. And `features`, `feature_version`, `embedding`
+ * and `embedding_model` arrive with the feature port in phase 4,
+ * computed from the stored row long after the capture that wrote it.
+ *
+ * Each member below names its column and states only what the CONTRACT
+ * adds. Why the database holds a column the way it does is argued once,
+ * in that column's own comment; a second copy here would be a second
+ * copy to drift.
  */
 export interface CanonicalDocument {
   /**
-   * Content hash of the document as captured — the key one row per
-   * distinct item stands on, and required for that reason.
+   * The content hash of the document as captured: `documents.hash`, the
+   * key the corpus's one row per distinct item stands on. Required here
+   * because it is NOT NULL there — what that constraint buys, and what a
+   * nullable member would cost in silence, is argued at the column.
    */
   readonly hash: string;
   /**
    * The `sources` row this document came through, or null when it came
-   * through none: an ingested file, a body an operator pasted in.
+   * through none: an ingested file, a body an operator pasted in. Maps
+   * onto `documents.source_id`, the one member whose SQL name differs
+   * from the property it is written as.
+   *
+   * Required-but-nullable rather than optional, because the NULL means
+   * something at the column — deleting a source that still has rows is
+   * refused rather than nulling it, so a NULL there is only ever "never
+   * came through one" — and an omitted key would leave the writer to
+   * decide which of the two it had been handed.
    */
   readonly sourceId: number | null;
   /**
    * Where the document can be read at its source, or null when there is
-   * no such place. Never an empty string, which renders as a link to
-   * nowhere.
+   * no such place: `documents.url`, which is nullable for exactly this
+   * absence and never an empty string. `''` is a value, and a reader
+   * handed one renders a link to nowhere.
    */
   readonly url: string | null;
   /**
-   * The document's text as captured. An empty body is a capture that
-   * yielded no text and is kept anyway — fail-flag-keep — so the member
-   * is required while the string it carries may be empty.
+   * The document's text as captured, and what every later stage reads:
+   * `documents.body`, NOT NULL there and required here. Not the same as
+   * non-empty — an empty body is a capture that yielded no text and is
+   * kept anyway, the fail-flag-keep rule `documents.parse_status`
+   * records — so the member is required while the string may be empty.
    */
   readonly body: string;
   /**
-   * The source's own payload, verbatim: what `fetch` returned, before
-   * anything was extracted from it. Null when nothing was stored, which
-   * is the state a pasted body or an ingested file is in.
+   * The source's own payload, verbatim: what {@link SourceAdapter.fetch}
+   * returned, before anything was extracted from it. Maps onto
+   * `documents.raw`, which is nullable for the same absence this member
+   * carries — null when no payload was stored at all, the state a pasted
+   * body or an ingested file is in, rather than `{}` claiming the source
+   * answered and answered with nothing.
    *
-   * `unknown` rather than a payload interface, because the shape belongs
-   * to the source rather than to this contract — one type across every
-   * {@link SourceKind} would describe none of them accurately.
+   * `unknown` rather than a payload interface, matching the column's
+   * lack of a `$type` annotation: the shape belongs to the source rather
+   * than to this contract, and one type across every {@link SourceKind}
+   * would describe none of them accurately.
    */
   readonly raw: unknown;
 }

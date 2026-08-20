@@ -20,8 +20,9 @@
  * Nothing writes these rows yet. The adapters arrive in phase 4 and
  * the parse engine they run under in phase 5; what the table fixes
  * now is the shape they write into, which is the same shape
- * `CanonicalDocument` in `src/sources/index.ts` is narrowed to later
- * in this phase, so that no adapter is ever written against a guess.
+ * `CanonicalDocument` in `src/sources/index.ts` is now narrowed to,
+ * member for column, so that no adapter is ever written against a
+ * guess.
  *
  * The module carries a second table, `ingested_files`, because the
  * question that one answers is about how a document ARRIVED rather
