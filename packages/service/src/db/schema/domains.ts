@@ -10,7 +10,7 @@
  * `settings` rather than in DDL or in a branch: a second domain is a
  * row, not a migration.
  */
-import { bigserial, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigserial, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 /**
  * The declared type of one field in a domain's field contract.
@@ -168,6 +168,55 @@ export const domains = pgTable('domains', {
   settings: jsonb('settings').$type<DomainSettings>()
     .default({})
     .notNull(),
+
+  /**
+   * The feature-vector version this domain's stored vectors are
+   * expected to be at: the pin a document's own `feature_version` is
+   * read against to tell a current vector from a stale one.
+   *
+   * Versioned per domain rather than once in the featurizer, because
+   * a domain's own taxonomy supplies most of what the vector
+   * measures — a term's weight, whether a category exists at all, the
+   * column position a one-hot occupies. Edit one domain's terms and
+   * every vector already stored for it means something slightly
+   * different while nothing has moved for any other domain. A single
+   * global version would have to bump for all of them, which either
+   * discards vectors that were still comparable or teaches everyone
+   * to ignore the bump.
+   *
+   * NULL means this domain has never been featurized. Absent, not
+   * zero: 0 is a version like any other, and writing it here would
+   * claim a vector computed under a scheme that never existed.
+   *
+   * Nothing writes or reads the column yet. Version pinning against
+   * it — reading a stored vector's version against the domain's,
+   * recomputing what differs, bumping when a taxonomy edit moves the
+   * numbers under a vector already stored — arrives with the feature
+   * port in phase 4.
+   */
+  featureVersion: integer('feature_version'),
+
+  /**
+   * The embedding model this domain's stored vectors were produced
+   * by, recorded as the embedder REPORTED it rather than as whatever
+   * configuration said it would be. A vector is only comparable to
+   * another from the same model, and a similarity computed across two
+   * of them is wrong in a way nothing raises: the arithmetic succeeds
+   * and the number means nothing.
+   *
+   * Free text rather than one of `./values.ts`'s tuples. Those are
+   * closed sets the schema is entitled to fix; which models exist is
+   * a fact about a deployment, so a CHECK here would make trying one
+   * a migration, and the value has to be able to record a model the
+   * schema has never heard of.
+   *
+   * NULL means this domain has never been embedded — the same
+   * absence `feature_version` encodes, for the other half of the
+   * pin. Version pinning against it, re-embedding what a model
+   * change left behind, arrives with the feature port in phase 4
+   * alongside it.
+   */
+  embeddingModel: text('embedding_model'),
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
     .notNull(),
