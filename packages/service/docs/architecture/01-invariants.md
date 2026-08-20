@@ -135,3 +135,36 @@ to the specific host that was committed upstream, so it catches that
 string returning rather than every hostname somebody might add; no
 tracked file names a real host, and the rest of that rule is held by
 review.
+
+### The register names what it refuses, and never spells it out
+
+Each of the three rows says which class of name is banned without
+carrying an example of one. The origin-naming row stands for two
+forms: the short abbreviation the origin used to prefix environment
+variables, table names, and workflow identifiers, and the origin's
+repository name. The vault row stands for two more — a path segment
+naming a personal note store, and the desktop URI scheme of the
+application that store belongs to. The hostname row stands for one,
+the domain label that deployment answered on.
+
+Writing any of them out here would not fail the scan, since `docs/`
+is outside it. It would fail the other half of the rule: every phase
+of this port closes with a repo-wide grep for those same names over
+tracked files, and that grep does read this document. A register
+illustrating its own rows would be its one guaranteed hit, and the
+only ways back to a clean grep would be deleting the example or
+narrowing the grep to spare it. The needle set takes the same
+precaution a level down — `tests/invariants/naming-patterns.ts`
+assembles every needle from fragments, so the scanner does not
+contain the strings it exists to reject, and no pattern id is itself
+a hit for any needle in the table — a failure message names what
+broke without seeding a fresh copy of it.
+
+That file is where the exact form is read, and each entry there pairs
+its assembled source with the reason it is drawn as narrowly as it
+is. Narrowness carries the first row in particular: the abbreviation
+is short enough to fall inside ordinary camelCase compounds and
+inside base64 hashes, so it counts as a hit only where a
+non-alphanumeric character precedes it. A row here states the
+property; the needle beside it states how much of that property a
+text search can actually hold.
