@@ -10,6 +10,7 @@
  * in the default suite. An adapter that fetches inside `parse` passes its
  * tests the day it is written and fails them the first time it runs offline.
  */
+import type { SOURCE_KINDS } from '../db/schema/values.js';
 
 /**
  * The kinds of source an adapter can front.
@@ -21,7 +22,7 @@
  * reached from stored data. Widening the set is therefore a schema change
  * plus a migration, not an edit to this line alone.
  */
-export type SourceKind = 'url' | 'api' | 'rss' | 'push';
+export type SourceKind = (typeof SOURCE_KINDS)[number];
 
 /**
  * The shape an adapter produces and the only shape the core consumes.
