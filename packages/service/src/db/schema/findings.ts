@@ -476,6 +476,57 @@ export const findingLabels = pgTable('finding_labels', {
    * carrying no CHECK for it: the vocabulary is a per-domain setting
    * rather than a fixed set, so it is validated at the app layer
    * against the domain's own `settings`.
+   *
+   * A CHECK could not have been per-domain in any case, and that is
+   * the half of the argument standing even where the migration cost
+   * would be tolerable. A CHECK is one predicate over a table, and
+   * this table holds every domain's labels — so the only constraint
+   * expressible here is the union of every vocabulary in the
+   * deployment, which is looser than any single ladder inside it. It
+   * admits for one domain a verdict only another ever named, which
+   * is the write it would have been added to refuse. What it
+   * enforces is that a verdict is somebody's.
+   *
+   * The union also only ever grows. Widening it carries the replay
+   * costs `criteria.category_id` in `./taxonomy.ts` sets out — a
+   * drop and a re-add that exactly one migration may own — while
+   * narrowing it is refused outright, because adding a CHECK scans
+   * the rows already stored. So a domain retiring a verdict could
+   * not express the smaller set without first rewriting the labels
+   * made under the old one, and those are not stale rows: a
+   * judgement is a true statement about the moment it was made,
+   * under the ladder in force then. `NOT VALID` only defers the
+   * scan — what stands afterwards is a rule the stored rows are
+   * known not to meet.
+   *
+   * What separates this column from the value-set columns around it
+   * is not that its set is longer or younger. Each of those is a set
+   * the pipeline itself acts on — `documents.parse_status` is what
+   * the review query selects on, `sources.kind` selects an adapter,
+   * `terms.polarity` decides whether a weight adds or subtracts — so
+   * its members are already fixed by the code consuming them, and a
+   * CHECK adds no authority that code did not have. Nothing branches
+   * on a verdict. It is rendered and filtered on by people, which is
+   * the kind of set a domain may change without a deploy.
+   *
+   * `criteria.kind` is this schema's other NOT NULL text column with
+   * no CHECK, and it is a different case, worth naming so the two
+   * are not read as one convention: no vocabulary is declared for it
+   * anywhere, so there was never a list a constraint could have
+   * enumerated. This column's set IS declared — in the domain's
+   * `settings`, defaulting to `DEFAULT_VERDICT_VOCABULARY` — and
+   * deliberately not enforced where it is declared.
+   *
+   * The limit that leaves is worth stating plainly, because
+   * "validated at the app layer" reads like enforcement: nothing in
+   * the database refuses a verdict outside a domain's ladder, so the
+   * validation binds exactly the writers that run it. A psql prompt
+   * and the pipeline's hand-written SQL are not among them, and the
+   * operator surfaces that will be — the API and the UI this table's
+   * header names — do not exist yet. Nor does a stray verdict
+   * announce itself: a digest rendering a section per vocabulary
+   * entry files the row under none, so the label is made, stored,
+   * and never shown.
    */
   verdict: text('verdict').notNull(),
 
