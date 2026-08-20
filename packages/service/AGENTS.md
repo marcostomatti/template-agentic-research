@@ -10,11 +10,17 @@ in `.claude/skills/` and are pointed to below.
 | --- | --- |
 | `lib/` | The framework: `express` (createService: DI, middleware, health, `/_control`, auth middleware, shutdown), `service-core` (dependencies, typed clients, circuit breaker, retry, http client), `mcp` (createMCP: stdio/HTTP transports + health), `logger` (pino), `errors` (AppError family + the error handler createService registers). Treat as library code — stable, well-tested, changed deliberately. |
 | `src/` | The service: `config.ts` (zod env, fail-fast), `routes/`, `db/` (Drizzle+Postgres, default on), `redis/` (opt-in via `REDIS_URL`), `cron/` (interval jobs as a managed dependency), `notifications/` (preference-aware dispatch + channel stubs), `auth/` (dev introspection stub), `mcp/` (MCP entry + tools). |
+| `src/sources/` | Source adapters: the `SourceAdapter` contract (`fetch` → `parse` → `toCanonical`, with I/O confined to the first step) and the adapters that satisfy it from phase 4 onward, push capture included. |
+| `src/exports/` | Export renderers, one per format a subscription can be rendered into (phase 6). A renderer returns artifacts and never dispatches them — the email format renders a draft and stops there. |
+| `workflows/` | n8n workflow sources in `workflows/src/`, one JSON file per workflow (phase 3 onward); the roster and the build rules are in `workflows/src/README.md`. Build output goes to the gitignored `workflows/dist/` and `workflows/dist-external/`, and is never hand-edited. |
+| `data/` | Seed files only, applied to the database by `scripts/seed.ts` (phase 2) — nothing under it is read at runtime. See `data/README.md`. |
+| `scripts/` | Operator entry points run by hand: seed, approve, workflow build/deploy, stack lifecycle. `scripts/README.md` names each script and the phase it arrives in. |
 | `tools/ralph/` (umbrella root) | The agent task loop: `plan` (spec → PLAN/PREREQUISITES), `start` (tracker loop, `--plan`, `--start-at`), `usage`. |
 | `tests/` | Cross-cutting tests; `tests/live/` is the live suite (see Testing). Package-level tests are colocated (`lib/**/__tests__`, `src/**/*.test.ts`). |
 | `specs/` | TRACKED follow-up specs + index (`specs/README.md`) — only for work whose subject is already visible in the code (refactors, hardening of published code, tooling). |
 | `.specs/`, `.plans/` | UNTRACKED (gitignored) working areas — see "Plans and specs" below. |
 | `docs/` | Tracked guides (drizzle, rpc, sse). Generated output goes to gitignored `.docs/` (`bun run docs:generate`). |
+| `docs/architecture/` | The architecture doc set: the platform shape, the layout map, and the invariant register — indexed from `ARCHITECTURE.md` and numbered by reading order. See "Research pipeline" below. |
 
 ## Research pipeline
 
