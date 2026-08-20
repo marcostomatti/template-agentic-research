@@ -23,7 +23,7 @@
  * `CanonicalDocument` in `src/sources/index.ts` is narrowed to later
  * in this phase, so that no adapter is ever written against a guess.
  */
-import { bigint, bigserial, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, integer, jsonb, pgTable, real, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
 import { sources } from './sources.js';
@@ -215,6 +215,107 @@ export const documents = pgTable('documents', {
    * insert that sets the status.
    */
   parseError: text('parse_error'),
+
+  /**
+   * The deterministic feature vector computed from this document: a
+   * flat record of finite numbers, one key per feature, in a fixed
+   * key order.
+   *
+   * Never read without `feature_version` beside it. The key order is
+   * part of what the vector MEANS rather than a serialization detail
+   * — a one-hot's position is which member it stands for — so two
+   * vectors are comparable only when they were computed under the
+   * same version, and a comparison across two of them is arithmetic
+   * that succeeds over numbers no longer standing for the same
+   * things.
+   *
+   * Nullable rather than defaulting to `{}`, because here the two
+   * absences differ the way they do for `raw` above: NULL says this
+   * document has never been featurized, while `{}` would say a
+   * featurizer ran and measured nothing in it. Only the second is a
+   * result; the first is work the recompute has yet to reach.
+   *
+   * Annotated, unlike `raw`, because the shape is one thing across
+   * every domain — numbers under feature names — even though WHICH
+   * names appear comes from a domain's own taxonomy, which is exactly
+   * what `feature_version` pins. The annotation emits no DDL and
+   * validates nothing at runtime, so it is a claim readers program
+   * against rather than a constraint: the pipeline also writes these
+   * rows through hand-written SQL, which can store a shape it
+   * rejects.
+   */
+  features: jsonb('features').$type<Record<string, number>>(),
+
+  /**
+   * Which version the vector above was computed under — the half of
+   * the pin that lives on the document. `domains.feature_version` is
+   * the other half, and its comment carries why the version is per
+   * domain rather than one constant for the pipeline. A stored vector
+   * is stale exactly when the two numbers differ, and that is a
+   * comparison nobody can make unless both of them were recorded.
+   *
+   * NULL means this document has never been featurized. Absent rather
+   * than zero, for the reason the domain's column gives: 0 is a
+   * version like any other, so writing it would claim a vector
+   * computed under a scheme that never existed.
+   *
+   * Nothing in the database ties this column to `features`, the same
+   * way nothing ties `parse_error` to `parse_status` above, and the
+   * pairing that costs most is a vector stored with a NULL version.
+   * It reads as present to everything that looks for a vector, and
+   * there is no version for a recompute to find it stale by, so it
+   * survives every pass the pin exists to trigger. Only the writer
+   * holds the two together: the featurizer that arrives with the
+   * feature port in phase 4 writes both in one statement or neither.
+   */
+  featureVersion: integer('feature_version'),
+
+  /**
+   * The document's embedding, stored as an array of reals.
+   *
+   * An array rather than a vector-extension column, deliberately. At
+   * the corpus sizes one operator's domains reach, a brute-force
+   * cosine over these arrays is instant, while the extension would
+   * mean changing the Postgres image that everything else in the
+   * stack shares — a large change to the deployment bought for a
+   * scan that is not yet slow. Corpus size is the only trigger for
+   * re-opening it, somewhere in the tens of thousands of documents in
+   * one domain, and it is written here rather than in a plan because
+   * this column is what somebody reads when they wonder why a vector
+   * is an array.
+   *
+   * NULL means this document has never been embedded, and never an
+   * empty array: `[]` is a vector of no dimensions, which a
+   * similarity would consume without complaint and return a number
+   * standing for nothing.
+   *
+   * Never read without `embedding_model` beside it, for the reason
+   * that column and `domains.embedding_model` both give — a
+   * similarity computed across two models is wrong in a way nothing
+   * raises.
+   */
+  embedding: real('embedding').array(),
+
+  /**
+   * The embedder that produced the vector above, recorded as the
+   * embedder REPORTED it rather than as whatever configuration said
+   * it would be. `domains.embedding_model` carries that argument in
+   * full, along with why the column is free text instead of one of
+   * `./values.ts`'s tuples.
+   *
+   * This is the document's half of that pin, as `feature_version` is
+   * for the vector before it: the domain's column says which model
+   * its corpus is meant to be at, this one says which model this row
+   * was actually embedded by, and the rows where the two disagree are
+   * what a re-embed goes looking for.
+   *
+   * NULL means never embedded — the same absence `embedding`'s NULL
+   * encodes, which is why the two are written by one statement or by
+   * neither. A vector whose model is NULL is unusable rather than
+   * merely unlabelled: nothing stored anywhere else can recover which
+   * embedder produced it.
+   */
+  embeddingModel: text('embedding_model'),
 }, (table) => [
   /**
    * The parse-status domain, enumerated in the generated SQL from the
