@@ -126,6 +126,26 @@ export const sources = pgTable('sources', {
    * contract rejects is stored anyway, and this column is what turns
    * a run of those rejections into `flagged` once it crosses the
    * threshold the pipeline reads.
+   *
+   * A counter, and so NOT NULL with a default of 0 — the treatment a
+   * count gets and the one a measurement never does. Zero here is a
+   * reading rather than an absence: a source inserted a moment ago
+   * and a source whose last fetch worked both genuinely have no
+   * failures behind them, and there is no earlier state in which the
+   * count is unknown. The nullable half of the null-vs-zero rule is
+   * for the opposite case — a signal computed from data, like the
+   * scores and feature versions that arrive with `documents` and
+   * `findings` later in this phase — where NULL says never-computed
+   * and a 0 would claim a measurement was taken and came back empty.
+   * `terms.weight` is the third case: NOT NULL with no default,
+   * because it is authored rather than counted or computed.
+   *
+   * The NOT NULL is also what makes the detector work at all.
+   * Flagging is a threshold comparison, and a comparison against NULL
+   * is UNKNOWN rather than false — a row whose counter had never been
+   * set would neither trip the detector nor turn up among the rows it
+   * passed over. That is the same way a NULL slips past a CHECK, and
+   * the same reason `kind` above is NOT NULL.
    */
   consecutiveFailures: integer('consecutive_failures').default(0)
     .notNull(),
@@ -134,6 +154,11 @@ export const sources = pgTable('sources', {
    * When this source last yielded a payload that was accepted. NULL
    * means it never has — a source configured but not yet fetched from
    * successfully, which is not the same as one that used to work.
+   *
+   * The other side of the rule the counter above states. A count has
+   * a real zero and so is given one; a time has no equivalent, and
+   * any placeholder stood in here would date a success that never
+   * happened.
    */
   lastSuccessAt: timestamp('last_success_at', { withTimezone: true }),
 
