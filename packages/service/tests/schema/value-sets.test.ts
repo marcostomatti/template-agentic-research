@@ -110,6 +110,11 @@ const VALUE_SET_EXPECTATIONS: readonly ValueSetExpectation[] = [
     members: ['pending', 'approved', 'done', 'skipped'],
   },
   {
+    exportName: 'RUN_STATUSES',
+    describes: 'runs.status',
+    members: ['running', 'ok', 'partial', 'failed'],
+  },
+  {
     exportName: 'RUN_SCHEDULERS',
     describes: 'runs.scheduled_by',
     members: ['interval', 'agent', 'operator'],

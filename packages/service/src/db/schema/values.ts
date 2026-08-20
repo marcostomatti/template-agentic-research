@@ -139,6 +139,26 @@ export const RESEARCH_POOL_STATUSES = ['pending', 'approved', 'done', 'skipped']
 export type ResearchPoolStatus = (typeof RESEARCH_POOL_STATUSES)[number];
 
 /**
+ * How a `runs` row ended: open and unreported (`running`), finished
+ * with nothing to report (`ok`), finished with part of it failing
+ * (`partial`), or finished having failed (`failed`).
+ *
+ * `partial` is what makes the set four rather than three, and it is
+ * the member fail-flag-keep needs. A pass that read six sources and
+ * lost one produced real work and a real failure at once, and either
+ * neighbour loses half of that: `ok` hides the loss, `failed` throws
+ * away the five that worked.
+ *
+ * `running` is the member no writer reports. It is the value a row
+ * holds because nothing has overwritten it, which is what makes it
+ * the column's default and what its limit at `runs.status` is about.
+ */
+export const RUN_STATUSES = ['running', 'ok', 'partial', 'failed'] as const;
+
+/** One member of {@link RUN_STATUSES}; the `runs.status` domain. */
+export type RunStatus = (typeof RUN_STATUSES)[number];
+
+/**
  * Who set the `next_run_at` a `runs` row fired against: the dispatcher's
  * default increment (`interval`), the research agent proposing a time
  * within the schedulable row's min/max bounds (`agent`), or a person

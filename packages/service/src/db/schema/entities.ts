@@ -38,6 +38,7 @@ import { bigint, bigserial, check, jsonb, pgTable, text, timestamp, unique } fro
 
 import { domains } from './domains.js';
 import { findings } from './findings.js';
+import { runs } from './runs.js';
 import { RESEARCH_POOL_STATUSES, checkOneOf } from './values.js';
 
 /**
@@ -238,27 +239,31 @@ export const entityResearch = pgTable('entity_research', {
    * run, and naming one anyway would make the ledger claim work it
    * never did.
    *
-   * The reference is not here yet: `runs` arrives later in this
-   * stage, and `.references()` cannot name a module that does not
-   * exist. What it will take is already settled, so the later edit is
-   * one line rather than a decision made in passing. No `onDelete`,
-   * emitting `ON DELETE no action`, on the rule the rest of this
-   * schema follows: cascade only where the referenced row owns the
-   * referencing one, and a run does not own what it found — the
-   * entity one column above does. `ON DELETE SET NULL` is the option
-   * worth refusing explicitly, because the NULL it writes already
-   * means no run produced this row, so a run deleted out from under
-   * its own results would silently reclassify them as hand-written.
+   * No `onDelete`, so it emits `ON DELETE no action`, on the rule the
+   * rest of this schema follows: cascade only where the referenced
+   * row owns the referencing one, and a run does not own what it
+   * found — the entity one column above does. `ON DELETE SET NULL` is
+   * the option worth refusing explicitly, because the NULL it writes
+   * already means no run produced this row, so a run deleted out from
+   * under its own results would silently reclassify them as
+   * hand-written.
    *
-   * Refusing has a reach to check when the reference is wired rather
-   * than to assume now: a run scoped to a domain goes when that
-   * domain does, and whether the results citing it are already gone
-   * by the end of that statement is what decides whether dropping a
-   * domain is refused. `ingested_files.document_id` in
-   * `./documents.ts` records the same two-hop trap met from the other
-   * side.
+   * That refusal has a reach worth tracing rather than meeting, since
+   * a run scoped to a domain goes when that domain does: whether the
+   * results citing it are already gone by the end of that statement
+   * is what decides whether dropping a domain is refused outright.
+   * For a result whose entity belongs to the same domain the run ran
+   * for they are — this table cascades from its entity, which
+   * cascades from that domain, so the check at the end of the
+   * statement finds nothing orphaned. Verified against a real
+   * Postgres, along with the case that does refuse: nothing here ties
+   * a result's entity to its run's domain, so a row pairing one
+   * domain's entity with another domain's run holds the second domain
+   * open until it is dealt with. `ingested_files.document_id` in
+   * `./documents.ts` records the same two-hop trap from the side
+   * where it lands on the domain lifecycle every time.
    */
-  runId: bigint('run_id', { mode: 'number' }),
+  runId: bigint('run_id', { mode: 'number' }).references(() => runs.id),
 
   /**
    * What the research found, in prose, for a person to read.
