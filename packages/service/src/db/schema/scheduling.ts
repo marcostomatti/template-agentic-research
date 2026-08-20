@@ -12,7 +12,9 @@
  * neither — a row with an interval and no due time repeats on a
  * schedule nothing ever claims.
  */
-import { boolean, integer, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, boolean, integer, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+
+import { domains } from './domains.js';
 
 /**
  * The columns a schedulable row carries, for spreading into a
@@ -138,3 +140,90 @@ export function schedulableColumns() {
     maxIntervalSeconds: integer('max_interval_seconds'),
   };
 }
+
+/**
+ * `topics` — one standing subject a domain wants looked into, and how
+ * often.
+ *
+ * The schedulable research unit: a topic names what to go and find
+ * out, carries the terms a run issues on its behalf, and holds the
+ * column set above that says when it is next due. Adding a subject to
+ * a domain is an INSERT, and it starts being researched as soon as
+ * `next_run_at` is set — no workflow gains a branch and no schedule is
+ * configured anywhere else.
+ *
+ * Nothing runs a topic yet. The dispatcher that claims due rows
+ * arrives in phase 3 and the research workflow it invokes in phase 6.
+ * What the table fixes now is that the subject, its terms and its
+ * cadence are one row, so what the pipeline is currently looking into
+ * — and when it will next look — is a SELECT rather than a reading of
+ * whatever the workflows happen to be built from.
+ */
+export const topics = pgTable('topics', {
+  /** Surrogate key; see `domains.id` for why `number` mode. */
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+
+  /**
+   * The domain whose research this topic is part of. Cascading on
+   * delete like every other domain-owned row: a topic outliving its
+   * domain is a subject nothing is interested in any more, and one
+   * that goes on coming due — the dispatcher claims by `next_run_at`
+   * and is in no position to notice the domain has gone.
+   */
+  domainId: bigint('domain_id', { mode: 'number' }).notNull()
+    .references(() => domains.id, { onDelete: 'cascade' }),
+
+  /**
+   * What this topic is about, in the operator's words. Also half the
+   * natural key below, so it is what a seed pass upserts on and what a
+   * person names the topic by when asking why a run happened.
+   *
+   * NOT NULL, which is not the same as non-empty. A topic exists
+   * because somebody wanted a particular thing looked into, so an
+   * empty name is a row somebody has not finished rather than the
+   * unnamed topic of its domain — and because the name is half the
+   * key, an empty one takes that place and refuses the next row
+   * meaning to occupy it.
+   */
+  name: text('name').notNull(),
+
+  /**
+   * The terms a run issues on this topic's behalf — what actually goes
+   * to a search connector, stored rather than assembled at run time.
+   *
+   * Stored so that what will be issued can be read before it is
+   * issued: a term list built inside a workflow node is only visible
+   * once a run has already gone out with it, and correcting it means
+   * editing the thing that ran rather than the row that described it.
+   * The design this one is ported from stored terms on the same
+   * reasoning, on the rows an operator ruled on before anything was
+   * sent.
+   *
+   * Carries a `$type` annotation, unlike `sources.parser_config`: a
+   * list of terms is one shape whatever the domain, so an interface
+   * over it describes every row rather than none of them. The
+   * annotation is a claim readers program against and not a
+   * constraint — it emits no DDL and validates nothing, so a writer
+   * reaching this column with hand-written SQL can still store a shape
+   * it rejects.
+   *
+   * Defaults to an empty list so every reader faces one shape. Empty
+   * means this topic has no terms of its own, which for a schedulable
+   * row is worth naming rather than assuming: it comes due on time and
+   * gives its run nothing to issue.
+   */
+  searchTerms: jsonb('search_terms').$type<string[]>()
+    .default([])
+    .notNull(),
+
+  ...schedulableColumns(),
+}, (table) => [
+  /**
+   * A name identifies one topic within its domain, and that pair is
+   * the row's natural key: the seed upserts on it, so re-seeding a
+   * topic adjusts its terms and its cadence rather than leaving two
+   * rows on the same subject coming due independently. Two domains are
+   * free to research subjects of the same name.
+   */
+  unique('topics_domain_id_name_unique').on(table.domainId, table.name),
+]);
