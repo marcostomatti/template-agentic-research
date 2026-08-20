@@ -22,8 +22,10 @@
  * to open one, phase 3.
  *
  * `llm_calls` below keeps the module's second account, at the
- * granularity of one model call rather than one pass. The module
- * gains `benchmark_cases` and `briefings` later in this stage.
+ * granularity of one model call rather than one pass, and
+ * `benchmark_cases` after it keeps the judged cases a change to a
+ * domain's scoring is replayed against. The module gains
+ * `briefings` later in this stage.
  */
 import { bigint, bigserial, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
@@ -461,4 +463,149 @@ export const llmCalls = pgTable('llm_calls', {
    */
   calledAt: timestamp('called_at', { withTimezone: true }).defaultNow()
     .notNull(),
+});
+
+/**
+ * `benchmark_cases` — inputs somebody has judged, kept so a change to
+ * a domain's judgement can be measured rather than assumed.
+ *
+ * Judgement changes quietly. A weight edited in `terms` in
+ * `./taxonomy.ts`, a figure moved in `DomainSettings.scoringWeights`
+ * in `./domains.ts`, a persona reworded in `personas` beside it —
+ * each one changes every reading the pipeline produces from then on,
+ * and none of them changes anything already stored.
+ * `findings.score_version` in `./findings.ts` records which scheme a
+ * row was scored under, which is what finds the stale ones; it says
+ * nothing about whether the new scheme reads better than the old.
+ * These rows are what that question can be put to. They are to a
+ * domain's judgement what this package's unit tests are to its
+ * parsing, and they are rows rather than fixtures because what they
+ * pin belongs to a domain rather than to the code.
+ *
+ * A case is an input plus an expected reading of it, and both are
+ * stored here rather than pointed at. A row citing `documents` in
+ * `./documents.ts` would replay whatever that document says now, and
+ * a document can be re-parsed, superseded, or deleted with its
+ * domain's corpus; two replays are only comparable if what they read
+ * did not move in between, which is the whole of what a case is for.
+ *
+ * The judgement stored here is a different act from the one
+ * `finding_labels` in `./findings.ts` keeps, and the two are worth
+ * telling apart before either is read as the other. A label is a
+ * person's reading of a result the pipeline actually produced,
+ * written after the fact. An expected reading is written about an
+ * input and says what a correct pipeline WOULD produce, so it stands
+ * whether or not anything has ever run against it.
+ *
+ * What a replay then produced is not kept here — the roster this
+ * port carries gives the table no column for it, where the design it
+ * draws from stored the last observed reading beside the expected
+ * one. A pass's own account of itself is `runs` above.
+ *
+ * Nothing writes or replays these rows yet, and no phase of the
+ * sequencing names the harness that would: the table is carried
+ * forward ahead of the loop that fills it.
+ */
+export const benchmarkCases = pgTable('benchmark_cases', {
+  /** Surrogate key; see `domains.id` for why `number` mode. */
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+
+  /**
+   * The domain whose judgement this case tests. Cascading on delete
+   * like every other domain-owned row: an expected reading is an
+   * expectation under one domain's taxonomy, weights and personas,
+   * and there is nothing left to hold it to once they are gone.
+   *
+   * The cascade costs more here than at the rows it sits among, and
+   * the difference is worth naming rather than meeting. A case is
+   * authored, the way the taxonomy and `personas` in `./domains.ts`
+   * are, so what goes with the domain is attention somebody spent
+   * rather than a result another pass could produce again. That is an
+   * argument for care around the delete, not for refusing it.
+   */
+  domainId: bigint('domain_id', { mode: 'number' }).notNull()
+    .references(() => domains.id, { onDelete: 'cascade' }),
+
+  /**
+   * What this case is called, for a person reading a report of what
+   * disagreed.
+   *
+   * NOT NULL, and authored rather than computed, so there is no
+   * never-written state for a NULL to encode. NOT NULL is not
+   * non-empty, though, and `''` is the state worth saying something
+   * about: it names no case, and a report listing disagreements by
+   * label gathers every unnamed one under a single blank heading.
+   * Nothing here refuses it — only the writer does.
+   *
+   * No unique key over it, alone or with the domain, because the
+   * roster this port carries names none. So two rows may share a
+   * label, and re-seeding a case inserts a rival rather than
+   * replacing the first — the same shape `finding_labels` in
+   * `./findings.ts` records for its own missing key, minus that
+   * table's reason for wanting the history.
+   *
+   * A caution for whoever gives this table its first writer, from
+   * what the design this port draws from did with the same column: it
+   * keyed on the name AND read a second fact out of its shape, so
+   * which of two populations a row belonged to was decided by a
+   * pattern match over the name, and the guard keeping the frozen
+   * cases out of what it trained on was that regex. A name that
+   * decides what a row IS moves the row when somebody renames it.
+   * Nothing here carries meaning in the label, and nothing here
+   * distinguishes populations either.
+   */
+  label: text('label').notNull(),
+
+  /**
+   * The input this case replays: whatever the pipeline reads to reach
+   * a reading, stored verbatim.
+   *
+   * NOT NULL with no default, which no other JSONB column in this
+   * schema is — every one of them either defaults to `{}` or is
+   * nullable. Both of those shapes describe a payload incidental to
+   * its row, and this one IS the row. A case with nothing to replay
+   * does not test leniently, it passes silently, so a default here
+   * would let the one thing the row exists to hold be skipped without
+   * a word. Same reasoning as the authored magnitude at `terms.weight`
+   * in `./taxonomy.ts`: nothing computes it, so there is no
+   * never-computed state a default could stand for.
+   *
+   * Unannotated, on the rule `entity_research.payload` in
+   * `./entities.ts` records — what a domain's pipeline reads varies
+   * by domain, and one interface across all of them would describe
+   * none of them accurately. A reader has the writing domain's own
+   * convention and nothing else.
+   */
+  payload: jsonb('payload').notNull(),
+
+  /**
+   * The reading a correct pipeline should reach for that input.
+   *
+   * Nullable, and the NULL means nobody has judged this case yet —
+   * an input frozen at capture, ahead of the attention that says what
+   * it should come to, which is worth doing separately because the
+   * input is the half that perishes. `{}` would claim the opposite:
+   * that somebody judged it and expected nothing, which a replay
+   * would then hold the pipeline to. Same split `documents.raw` in
+   * `./documents.ts` makes between a payload never stored and one
+   * stored empty, and the payload analogue of what `findings.score`
+   * in `./findings.ts` states for numbers.
+   *
+   * A payload rather than a verdict, because the answer is not the
+   * only thing worth expecting. A case whose verdict still comes out
+   * right can have come out right for a worse reason — a margin that
+   * has narrowed, a term that stopped firing — and what makes a
+   * disagreement diagnosable rather than merely red is recording what
+   * the reading should CONTAIN. The design this port draws from spent
+   * a column each on the parts its own subject matter had, which is
+   * the half that cannot port; the bounds and labels a domain wants
+   * to hold to go in here instead, under keys this schema does not
+   * declare.
+   *
+   * Unannotated for the reason `payload` above gives, with the
+   * consequence that follows from it: nothing validates a stored
+   * expectation, so a replay looking for a key no writer ever wrote
+   * finds an absence rather than an error.
+   */
+  expected: jsonb('expected'),
 });
