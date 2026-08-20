@@ -369,4 +369,35 @@ export const exportSubscriptions = pgTable('export_subscriptions', {
    * the constraint is present by grepping for it.
    */
   checkOneOf('export_subscriptions_format_check', table.format, EXPORT_FORMATS),
+
+  /**
+   * The export half of the claim path, and the same index as
+   * `topics_dispatch_claim_idx` above because it is the same query:
+   * one dispatcher on one cron reads both tables the same way —
+   * enabled rows whose `next_run_at` has passed, oldest due first, a
+   * capped batch taken with `FOR UPDATE SKIP LOCKED`. A schedulable
+   * table missing this index does not fail; it hands that tick a
+   * sequential scan, once per tick, for as long as nobody looks.
+   *
+   * The reasoning is written out on the topics index and not
+   * repeated here: why the `WHERE` predicate rather than the key is
+   * what keeps the structure proportional to the rows that can
+   * actually be claimed, and the two things a partial index does not
+   * buy — a claim query whose own predicate the planner cannot prove
+   * implies this one falls back to a sequential scan with no error,
+   * and a leading `enabled` narrows nothing inside an index whose
+   * every entry already has it true.
+   *
+   * What the predicate leaves out here is configuration somebody
+   * kept. Disabling a subscription is not cancelling it — the row
+   * keeps its format, its destination and its cadence, and
+   * cancelling is a DELETE — so the excluded rows are ones a domain
+   * may switch back on, and while they are off they cost the
+   * dispatcher nothing per tick. Named for its reader on the same
+   * convention as the topics index, so the generated SQL and an
+   * EXPLAIN plan both say which query it exists for, and the
+   * static-SQL invariant suite has a name to grep.
+   */
+  index('export_subscriptions_dispatch_claim_idx').on(table.enabled, table.nextRunAt)
+    .where(sql`${table.enabled}`),
 ]);
