@@ -32,6 +32,30 @@ export const TERM_POLARITIES = ['positive', 'negative', 'ignore'] as const;
 export type TermPolarity = (typeof TERM_POLARITIES)[number];
 
 /**
+ * How a `sources` row's payload reaches the pipeline: fetched from an
+ * address (`url`), from a structured endpoint (`api`), from a feed
+ * (`rss`), or not fetched at all (`push`).
+ *
+ * `push` is what makes the set four rather than three: it is the one
+ * kind the pipeline never polls, so its row's endpoint names where a
+ * payload lands rather than what to request. An adapter selected for a
+ * row has to know which of the two it is holding.
+ *
+ * The same four values are the domain of the `sources.kind` column and
+ * of the `SourceKind` union `src/sources/index.ts` exports for adapter
+ * selection. Declaring them here once is what keeps those two readings
+ * the same set: written out twice they drift in a direction neither
+ * side reports — a stored row whose `kind` the union cannot name has
+ * no adapter that can be selected for it, and a member the column
+ * refuses can never be reached from stored data at all.
+ *
+ * It is also the one set whose union is not declared beside it: that
+ * union already has a home in the adapter contract, next to the
+ * interface whose `kind` property it types.
+ */
+export const SOURCE_KINDS = ['url', 'api', 'rss', 'push'] as const;
+
+/**
  * The families of external service a `connectors` row can front, each
  * row carrying its own endpoint and credentials in its `config`.
  *
