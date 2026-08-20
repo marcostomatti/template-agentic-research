@@ -146,6 +146,44 @@ export const findings = pgTable('findings', {
    * a digest orders by and a threshold filters on. NULL means it has
    * not been scored.
    *
+   * This is the signal half of the null-vs-zero rule, and the column
+   * to cite for it: a number computed from data is nullable with no
+   * default, and an absent measurement is never stored as 0. The
+   * other two numeric classes have exemplars of their own —
+   * `sources.consecutive_failures` is a counter, NOT NULL with a 0
+   * default because no failures is a reading; `terms.weight` is an
+   * authored magnitude, NOT NULL with no default because nothing
+   * computes it. A numeric column added later joins one of the three
+   * deliberately, which is what a test later in this phase pins by
+   * listing the signal and the counter columns explicitly.
+   *
+   * A zero costs more here than in a version column like
+   * `score_version` below, where 0 at least names a scheme that never
+   * existed. A score's zero sits inside the range the column reports,
+   * so it reads as wrong nowhere: an unscored finding written as 0
+   * takes its place at the bottom of every ranking as though it had
+   * been read and found worthless, and nothing distinguishes it from
+   * a finding genuinely scored to zero — an ordinary outcome for a
+   * document that matched nothing the domain weights, or whose
+   * matches cancelled.
+   *
+   * NULL is also what makes the filters behave. A `score >= 0.7`
+   * threshold evaluates to UNKNOWN against a NULL and so neither takes
+   * an unscored finding nor reports it, which is right, because
+   * nothing has measured it. That is the same three-valued logic that
+   * makes a NULL dangerous in `sources.consecutive_failures`, where a
+   * counter never set escapes the detector it exists for; the
+   * treatments differ only because the question does — whether the
+   * absent state is a real reading. There is no default for the same
+   * reason: any number one named would be a measurement claim about a
+   * row nothing has read.
+   *
+   * What the schema buys is room for the truthful answer and no more
+   * than that. Nullability does not stop a scorer writing a 0 for a
+   * finding it failed to score, and once stored no constraint can
+   * tell that apart from a measured zero — `ar-score`, phase 5, is
+   * the only thing holding the rule.
+   *
    * `numeric` rather than a binary float, because the value is
    * compared against thresholds a person writes as decimals. In
    * binary floating point 0.7 is not the number that was typed, so a
