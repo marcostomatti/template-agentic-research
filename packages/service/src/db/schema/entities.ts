@@ -618,6 +618,36 @@ export const researchPool = pgTable('research_pool', {
    * `researched_at` on a row nobody approved is rejected, and so is
    * clearing `approved_at` on a row already closed.
    *
+   * A rule the database holds rather than a branch a workflow takes,
+   * because there is no single writer to put a branch in. Intentions
+   * are raised by one workflow and drained by another, approved
+   * through `scripts/approve.ts` later in this phase and through the
+   * API and the UI after that, and corrected by an operator at a
+   * psql prompt when something has gone wrong. A branch is a
+   * statement inside one of those, so it governs the writes that one
+   * issues and leaves every other writer to its own habits — and the
+   * writes it does not cover are exactly the ones nothing was
+   * watching. A CHECK is evaluated by the server on every write,
+   * whoever makes it. The depth cap `categories` in `./taxonomy.ts`
+   * records needed a trigger for that same reason and one more; here
+   * the rule reads only the row being written, both of its columns,
+   * so a plain CHECK carries it — generated from this file and
+   * visible in it.
+   *
+   * The other half is that a branch can be edited where nothing
+   * reviews it. The workflow instance is a deploy target rather than
+   * a source, so a guard changed on the canvas is lost at the next
+   * import and reaches no diff on the way — `personas` in
+   * `./domains.ts` records that round trip for prompts, and
+   * `workflows/src/README.md` carries it in full. This constraint is
+   * not beyond changing either, but changing it in the repository is
+   * DDL: a migration under `drizzle/`, tracked, and read like any
+   * other diff. A `DROP CONSTRAINT` issued by hand at a psql prompt
+   * is as unreviewed as the branch edit and nothing here would
+   * report it — what the database buys is not that the rule cannot
+   * be removed, only that the ordinary way of removing it passes
+   * through a diff on the way.
+   *
    * Named rather than left to drizzle's derivation, for the reason
    * the status CHECK above gives: the static-SQL invariant suite
    * asserts the constraint reached the migration by grepping for
