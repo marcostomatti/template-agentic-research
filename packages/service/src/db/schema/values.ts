@@ -16,12 +16,22 @@
  * stored column. Splitting it out would only hide that one of them is
  * open.
  *
+ * {@link checkOneOf} is the mechanism the first paragraph relies on. It
+ * renders a tuple into the CHECK its column carries, which is what makes
+ * "one declaration read two ways" something the code does rather than
+ * something a convention asks for: every value-set CHECK in the schema
+ * is generated from the tuple beside it, and none is restated in SQL.
+ *
  * Nothing here is a table, which is why this module stays out of the
  * `./schema.js` barrel: the barrel is the table set drizzle-kit reads,
  * and it would find no table in this file. The schema modules whose
  * CHECK constraints are built from these tuples import it directly, as
  * does any app-layer consumer that needs the same union.
  */
+import type { AnyPgColumn, CheckBuilder } from 'drizzle-orm/pg-core';
+
+import { sql } from 'drizzle-orm';
+import { check } from 'drizzle-orm/pg-core';
 
 /**
  * How a `terms` row's match moves the score of the document it matched:
@@ -170,3 +180,44 @@ export type RunScheduler = (typeof RUN_SCHEDULERS)[number];
  * domain starts from, not a floor under it.
  */
 export const DEFAULT_VERDICT_VOCABULARY: readonly string[] = ['avoid', 'caution', 'neutral', 'interested'];
+
+/**
+ * Builds the CHECK constraint that pins a column to one value set,
+ * enumerating the set in the generated SQL — a `terms.polarity` built
+ * from {@link TERM_POLARITIES} renders as
+ * `CHECK ("terms"."polarity" in ('positive', 'negative', 'ignore'))`.
+ *
+ * Every value-set CHECK in the schema goes through here so that the
+ * constraint and the union are the same declaration read twice. Written
+ * out by hand beside its tuple a CHECK is the second declaration this
+ * module exists to prevent, and it is the half that drifts silently: a
+ * member added to the tuple type-checks at every call site while the
+ * column goes on refusing it, and nothing reports the disagreement
+ * until a row is inserted.
+ *
+ * The values are inlined as escaped literals rather than left as bound
+ * parameters, because this SQL is read at generate time by drizzle-kit
+ * and written into a migration file, not executed against a session: a
+ * parameter would serialize as `$1` and the migration would carry a
+ * placeholder no statement ever binds. The escaping is drizzle's own
+ * dialect routine, so a quote inside a value cannot close the literal.
+ *
+ * @param name - Constraint name. This is what the constraint is
+ *   greppable by in the generated SQL, so the static-SQL invariant
+ *   suite can assert the constraint is present by naming it.
+ * @param column - The column to constrain, as handed to the table's
+ *   extra-config callback.
+ * @param values - The value set, normally one of this module's tuples.
+ *   Typed non-empty because `in ()` is not valid SQL and an empty set
+ *   would otherwise surface as a syntax error at `db:migrate`, a
+ *   migration away from the call that passed it.
+ */
+export function checkOneOf(
+  name: string,
+  column: AnyPgColumn,
+  values: readonly [string, ...string[]],
+): CheckBuilder {
+  const literals = values.map((value) => sql`${value}`);
+
+  return check(name, sql`${column} in (${sql.join(literals, sql`, `)})`.inlineParams());
+}
