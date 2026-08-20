@@ -243,6 +243,35 @@ export const domains = pgTable('domains', {
  * A persona is configuration of a domain, not of the pipeline: what a
  * researcher is asked to be is a property of the subject being
  * researched, so it belongs to the domain that names the subject.
+ *
+ * A run reads its personas from these rows at the top of each
+ * execution — one query in the first node after its trigger, fetching
+ * the domain's taxonomy alongside them — so no prompt string is
+ * written into a workflow file at all. What a role is asked to be is
+ * data an operator owns; a workflow is only the machinery that fetches
+ * it.
+ *
+ * A prompt held in a workflow file instead would be wrong three ways
+ * at once. One file serves every domain, so the string could not vary
+ * by subject, and varying by subject is the whole reason the column
+ * exists. Changing it would be a source edit, a rebuild and a
+ * re-import rather than an UPDATE, which puts the most-tuned prose in
+ * the system behind a deploy. And the built artifact is untracked
+ * while the n8n instance is a deploy target rather than a source, so a
+ * prompt fixed on the canvas is lost at the next import with nothing
+ * left to review — `workflows/src/README.md` carries that round trip
+ * in full.
+ *
+ * Reading them per execution rather than caching them is what makes an
+ * edit take effect on the next run with no invalidation path to get
+ * wrong. A run already in flight keeps the text it started with, so
+ * what a run did stays attributable to one set of rows rather than to
+ * whichever edit landed partway through it.
+ *
+ * Nothing reads these rows yet: the first workflow arrives in phase 3
+ * and the model-calling ones in phase 6. The rule binds from here
+ * regardless — a prompt is a row in this table before it is anything
+ * else.
  */
 export const personas = pgTable('personas', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
