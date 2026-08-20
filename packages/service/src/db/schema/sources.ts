@@ -16,7 +16,7 @@
  * is that everything varying per feed is stored, which is what keeps a
  * per-source branch out of the adapter that would otherwise carry it.
  */
-import { bigint, bigserial, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, boolean, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
 import { SOURCE_KINDS, checkOneOf } from './values.js';
@@ -116,6 +116,63 @@ export const sources = pgTable('sources', {
    * for two editors to conflict over.
    */
   cursor: text('cursor'),
+
+  /**
+   * How many fetches have failed in a row since the last one that
+   * succeeded. The next success sets it back to 0, so it measures the
+   * current streak and not the source's history.
+   *
+   * This is the counter the fail-flag-keep path bumps: a payload the
+   * contract rejects is stored anyway, and this column is what turns
+   * a run of those rejections into `flagged` once it crosses the
+   * threshold the pipeline reads.
+   */
+  consecutiveFailures: integer('consecutive_failures').default(0)
+    .notNull(),
+
+  /**
+   * When this source last yielded a payload that was accepted. NULL
+   * means it never has — a source configured but not yet fetched from
+   * successfully, which is not the same as one that used to work.
+   */
+  lastSuccessAt: timestamp('last_success_at', { withTimezone: true }),
+
+  /**
+   * When this source last failed. NULL means it never has.
+   *
+   * Kept beside `last_success_at` rather than folded into it: which of
+   * the two is the more recent is what says whether the source is
+   * broken right now, and one column holding "last outcome" could not
+   * answer that without also losing when the other one happened.
+   */
+  lastFailureAt: timestamp('last_failure_at', { withTimezone: true }),
+
+  /**
+   * Whether the pipeline may read this source at all. Operator-owned:
+   * nothing automatic clears it, so a source switched off stays off
+   * until somebody switches it back on.
+   *
+   * Defaults to true because a source row exists in order to be read.
+   * A row that has to be enabled after it is inserted is a feed
+   * somebody configured and the pipeline then quietly ignored.
+   */
+  enabled: boolean('enabled').default(true)
+    .notNull(),
+
+  /**
+   * Whether this source has tripped the adapter-rot detector — set by
+   * the pipeline when `consecutive_failures` crosses its threshold,
+   * not by an operator.
+   *
+   * Separate from `enabled` because the two answer different questions
+   * and have different writers. `flagged` says the pipeline believes
+   * something here has stopped working; `enabled` says whether it
+   * reads the source regardless. Collapsing them would let the
+   * detector switch off a feed an operator deliberately turned on, and
+   * would leave no way to record a suspect source still worth reading.
+   */
+  flagged: boolean('flagged').default(false)
+    .notNull(),
 }, (table) => [
   /**
    * The kind domain, enumerated in the generated SQL from the same
