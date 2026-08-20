@@ -29,6 +29,29 @@ BEGIN
 				HINT = 'The taxonomy is one level deep: a category is a root, or the child of a root.';
 	END IF;
 
+	-- The row must also have nothing under it. Giving a parent to a
+	-- row that is already one pushes its own children a level down
+	-- without touching them, and the check above reads this row's
+	-- parent rather than its children, so it never sees them. Same
+	-- cap, broken from the other end.
+	--
+	-- Only an UPDATE can reach this. On INSERT the id is fresh from
+	-- the sequence and nothing can point at it yet, so the lookup
+	-- finds nothing and refuses nothing. It is left unconditional
+	-- rather than guarded on TG_OP so the cap does not rest on that
+	-- reasoning staying true.
+	IF EXISTS (
+		SELECT 1
+		FROM "public"."categories" AS child
+		WHERE child.parent_id = NEW.id
+	) THEN
+		RAISE EXCEPTION
+			'categories: % already has children, so parent % would push them two levels deep',
+			NEW.key, NEW.parent_id
+			USING ERRCODE = 'check_violation',
+				HINT = 'The taxonomy is one level deep: a category is a root, or the child of a root.';
+	END IF;
+
 	RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
