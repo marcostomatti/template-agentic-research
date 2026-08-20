@@ -9,8 +9,12 @@
  * What would otherwise be per-subject code lives in a domain's
  * `settings` rather than in DDL or in a branch: a second domain is a
  * row, not a migration.
+ *
+ * `personas` lives here rather than in a module of its own because it
+ * is the same unit: a persona has no identity apart from the domain
+ * it belongs to, and it is created and dropped with that domain.
  */
-import { bigserial, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, integer, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 /**
  * The declared type of one field in a domain's field contract.
@@ -231,3 +235,44 @@ export const domains = pgTable('domains', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow()
     .notNull(),
 });
+
+/**
+ * `personas` — the system text a domain gives each role a run plays,
+ * one row per role.
+ *
+ * A persona is configuration of a domain, not of the pipeline: what a
+ * researcher is asked to be is a property of the subject being
+ * researched, so it belongs to the domain that names the subject.
+ */
+export const personas = pgTable('personas', {
+  /** Surrogate key; see `domains.id` for why `number` mode. */
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+
+  /**
+   * The domain this persona speaks for. Cascading on delete because a
+   * persona has no meaning without it: dropping a domain and leaving
+   * its personas behind would keep rows no query could reach and no
+   * role could be resolved through.
+   */
+  domainId: bigint('domain_id', { mode: 'number' }).notNull()
+    .references(() => domains.id, { onDelete: 'cascade' }),
+
+  /**
+   * Which role the text is for — `researcher`, `scorer`, `drafter`.
+   * Free text rather than one of `./values.ts`'s tuples: the roles a
+   * pipeline plays grow with the pipeline, and a CHECK here would make
+   * adding one a migration in a table that exists to be edited.
+   */
+  role: text('role').notNull(),
+
+  /** The system text the role is given. */
+  systemText: text('system_text').notNull(),
+}, (table) => [
+  /**
+   * A domain names one persona per role, and that pair is the row's
+   * natural key: the seed upserts on it, so UNIQUE is what makes a
+   * second seed pass rewrite the same persona rather than add a rival
+   * one the role lookup would then have to choose between.
+   */
+  unique('personas_domain_id_role_unique').on(table.domainId, table.role),
+]);
