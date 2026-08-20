@@ -1,18 +1,20 @@
 /**
- * The read behind the static-SQL invariant, against real directories.
+ * The static-SQL invariant: what the generated migration is required to
+ * say, and the read that hands it over.
  *
  * The assertions over what the migration says are must-find, so the one
  * input they cannot report is the one they were never handed. A read
  * that came back with nothing turns every one of them red at once, each
  * naming a constraint it went looking for and none of them naming the
  * empty string it looked in. `readMigrationSql` refuses instead, and
- * this is where the refusals are shown to happen.
+ * the first half of this file is where those refusals are shown to
+ * happen.
  *
- * Every case runs against a directory on disk rather than a mocked
- * `node:fs`. What the read has to get right is filesystem behaviour — a
- * path that is a file where a directory was expected, a `.sql` sitting
- * one level down — and a mock of that behaviour proves only that the
- * mock and the assertion were written to agree.
+ * Every case about the read runs against a directory on disk rather
+ * than a mocked `node:fs`. What the read has to get right is filesystem
+ * behaviour — a path that is a file where a directory was expected, a
+ * `.sql` sitting one level down — and a mock of that behaviour proves
+ * only that the mock and the assertion were written to agree.
  *
  * The refusals rest on the control above them. A read that threw for
  * whatever it was handed would satisfy every one of them, so the
@@ -20,11 +22,19 @@
  * establish about a read that returns text when there is text to
  * return.
  *
- * What none of it says is anything about the real migrations. The
- * directory parameter exists so these two refusals are reachable
- * without emptying the package, and the assertions that read the
- * package for real call `readMigrationSql` with no argument at all.
+ * The assertions themselves take no fixture at all. The directory
+ * parameter exists so those two refusals are reachable without emptying
+ * the package, and the sweep over the roster calls `readMigrationSql`
+ * with no argument, against the migrations this package generates.
+ *
+ * What that sweep is evidence about is the repository, never a
+ * database. A constraint dropped at a psql prompt leaves every
+ * statement asserted here exactly where it was, and the live suite is
+ * the only seam that watches a database refuse a write — the point
+ * `schema-sql.ts` makes at the roster itself.
  */
+import type { SchemaSqlAssertion } from './schema-sql.js';
+
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -34,6 +44,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   EmptyMigrationDirectoryError,
   EmptyMigrationFileError,
+  SCHEMA_SQL_ASSERTIONS,
   readMigrationSql,
 } from './schema-sql.js';
 
@@ -298,4 +309,74 @@ describe('readMigrationSql — a migration holding no SQL', () => {
 
     expect(refusedFile(directory)).toBe(SECOND_FILE);
   });
+});
+
+// ---------------------------------------------------------------------------
+// The generated migration
+// ---------------------------------------------------------------------------
+
+/**
+ * The migrations this package generates, read once for the whole file.
+ *
+ * At module scope for the reason the naming invariant resolves its scan
+ * surface there: a read that cannot hand back migration text throws,
+ * and that failure belongs to the file rather than to one case. The
+ * refusal names the directory that came back empty, which is the one
+ * thing worth reporting — the cases below would each report a
+ * constraint instead, every one of them, and none of them the read.
+ *
+ * The cost is that the refusals above cannot run to say the reader
+ * still works. They would pass, and passing is not what a reader
+ * looking at an empty `drizzle/` needs to be told.
+ *
+ * Called with no argument, so what is asserted is the package's own
+ * migration directory and never a fixture. Nothing the fixtures above
+ * hold reaches this text.
+ */
+const MIGRATION = readMigrationSql();
+
+/** Reported in place of an entry the migration text carries. */
+const CARRIED = '(carried)';
+
+/**
+ * The entry's id and description when the migration text does not carry
+ * its statement, or {@link CARRIED} when it does.
+ *
+ * Compared against a sentinel rather than asserted as a boolean, so the
+ * failure diff is the entry itself. `toBe(true)` reports that something
+ * was false and leaves a reader to open this file, find the roster and
+ * work out which property of the database went with it — which is what
+ * the description is written to say instead, to someone who has opened
+ * neither.
+ */
+function missingStatement(assertion: SchemaSqlAssertion): string {
+  if (assertion.pattern.test(MIGRATION.text)) {
+    return CARRIED;
+  }
+
+  return `${assertion.id} — ${assertion.description}`;
+}
+
+describe('static-SQL invariant — the generated migration', () => {
+  // In front of the loop rather than left to it. A roster that came
+  // back empty generates no case at all, and a describe block with
+  // nothing in it is the whole invariant going quiet — this is what
+  // names the list it went quiet over.
+  it('declares at least one statement to require', () => {
+    expect(SCHEMA_SQL_ASSERTIONS.length).toBeGreaterThan(0);
+  });
+
+  for (const assertion of SCHEMA_SQL_ASSERTIONS) {
+    // Named for the id, so a verbose run lists every entry the sweep
+    // reached and a new one is visible as a case that was collected
+    // rather than as a count that moved.
+    //
+    // One case per entry rather than one sweep reporting all the
+    // misses together. The roster is eight hand-written entries, not a
+    // tree of unknown size, and a case per entry is what lets the run
+    // itself say which ids were exercised.
+    it(`carries the statement behind ${assertion.id}`, () => {
+      expect(missingStatement(assertion)).toBe(CARRIED);
+    });
+  }
 });
