@@ -16,6 +16,37 @@ in `.claude/skills/` and are pointed to below.
 | `.specs/`, `.plans/` | UNTRACKED (gitignored) working areas — see "Plans and specs" below. |
 | `docs/` | Tracked guides (drizzle, rpc, sse). Generated output goes to gitignored `.docs/` (`bun run docs:generate`). |
 
+## Research pipeline
+
+This package is where the research pipeline lands, and its design is
+written down rather than inferred:
+
+- `ARCHITECTURE.md` — the index of the architecture doc set; read it
+  first.
+- `docs/architecture/00-overview.md` — the platform shape (Postgres as
+  the only source of truth, n8n as the pipeline executor, this service
+  as the API over the same schema), the layout map, the core
+  vocabulary, which document covers each behaviour area, and the test
+  harness.
+- `docs/architecture/01-invariants.md` — the register of platform-wide
+  invariants: what each one is, the artifact that fails when it stops
+  holding, the phase that lands that artifact, and its status today.
+- `.specs/2026-08-19-research-pipeline-port.md` — the approved parent
+  design the port runs from, in seven phases. Untracked on purpose
+  (see "Plans and specs" below), so it sits on the machine doing the
+  work rather than in a clone.
+
+Two rules bind every phase of that port:
+
+- **Same-commit doc-update law**: a commit that changes behaviour in a
+  row of the mapping table in `docs/architecture/00-overview.md` updates
+  that row's document in the same commit, and behaviour no row covers
+  adds a row.
+- **Naming invariant**: no naming from the project this pipeline was
+  ported from, no vault path, and no real hostname appears in the
+  package's scanned source — `tests/invariants/naming.test.ts` fails
+  naming the file and line of every hit.
+
 ## Conventions
 
 - **Env**: all configuration through `src/config.ts` — zod-validated at
