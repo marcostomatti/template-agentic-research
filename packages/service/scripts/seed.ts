@@ -5,9 +5,10 @@
  *
  * Three parts are here today: the underscore stripping that clears a
  * seed's commentary, the per-file schemas each stripped file is then
- * validated against, and `loadSeedBundle`, which reads the roster and
- * refuses the whole bundle when any file fails. The idempotent apply
- * and the CLI entry point arrive later in this stage.
+ * validated against, and `loadSeedBundle`, which reads the roster,
+ * refuses the whole bundle when any file fails, and then holds the
+ * rows that survived against each other. The idempotent apply and the
+ * CLI entry point arrive later in this stage.
  *
  * Every object in every schema below is `.strict()`. Zod's default is
  * to STRIP an unknown key and report nothing, which is the failure
@@ -56,7 +57,9 @@
  * stand in for keys the database issues, which no seed can know
  * before the parent row is written. The schemas check their shape and
  * nothing more; whether one resolves to a row the bundle carries is
- * the loader's cross-file check, arriving next.
+ * {@link loadSeedBundle}'s cross-file pass, which resolves the first
+ * two and leaves the third to the apply pass, for the reason recorded
+ * there.
  *
  * The limit of `.strict()` is that it covers the members a schema
  * NAMES. `scoringWeights` and `fieldContract` are open by key on
@@ -727,6 +730,129 @@ function failuresOf(
 }
 
 /**
+ * What a failure says about a member naming a domain the bundle does
+ * not carry.
+ *
+ * Built from {@link SEED_ROSTER} rather than written out, so a seed
+ * file renamed there is renamed in the message a reader is sent to
+ * open. Its counterpart for a category is
+ * {@link UNRESOLVED_CATEGORY_MESSAGE}, and both are phrased to read
+ * after the field {@link formatSeedFailure} puts in front of them.
+ */
+const UNRESOLVED_DOMAIN_MESSAGE =
+  `names a domain slug no row in ${SEED_ROSTER.domains.file} declares`;
+
+/**
+ * What a failure says about a member naming a category the bundle
+ * does not declare. Built from the roster for the reason
+ * {@link UNRESOLVED_DOMAIN_MESSAGE} gives.
+ */
+const UNRESOLVED_CATEGORY_MESSAGE =
+  `names a category key no row in ${SEED_ROSTER.categories.file} declares`;
+
+/**
+ * Every row of one concern whose reference names no key the bundle
+ * carries.
+ *
+ * One failure per ROW rather than one per unresolved value: two
+ * personas naming a single absent domain are two rows to correct, and
+ * folding them together would leave the second to be found by hand.
+ *
+ * Field paths come from {@link formatFieldPath}, the renderer the
+ * schema refusals already use, so `terms[3].categoryKey` reads off
+ * the file the same way whichever pass refused it.
+ *
+ * @param concern - Roster key of the concern the rows belong to,
+ * which names both the file the failures are reported against and the
+ * root of every field path.
+ * @param member - The referring member, spelled as the seed file
+ * spells it.
+ * @param values - That member's value for every row, in row order.
+ * @param known - Every key the referenced concern declares.
+ * @param message - What an unresolved value is reported as, ahead of
+ * the value itself.
+ * @returns One failure per row that resolved to nothing, in row
+ * order.
+ */
+function unresolvedReferences(
+  concern: keyof typeof SEED_ROSTER,
+  member: string,
+  values: readonly string[],
+  known: ReadonlySet<string>,
+  message: string,
+): readonly SeedFailure[] {
+  return values.flatMap((value, index): readonly SeedFailure[] => {
+    if (known.has(value)) {
+      return [];
+    }
+
+    return [{
+      file: SEED_ROSTER[concern].file,
+      field: formatFieldPath([concern, index, member]),
+      message: `${message}: '${value}'`,
+    }];
+  });
+}
+
+/**
+ * Every reference across the bundle's files that resolves to nothing.
+ *
+ * Four of them, swept in roster order so two runs over one broken
+ * bundle print the same list: a persona, a category and a topic each
+ * name a domain by its `slug`, and a term names a category by its
+ * `key`. Those are the members no seed can spell as an id, since the
+ * id does not exist until the parent row is written.
+ *
+ * A reference resolves against the rows the BUNDLE carries and never
+ * against the database, which is forced rather than chosen — the
+ * loader is handed no connection and opens none, so a parent already
+ * stored is not something it can see. The cost is that a bundle has
+ * to be self-contained: a persona whose domain was seeded by an
+ * earlier pass and has since been dropped from `domains.json` is
+ * refused, though the row it names is sitting in the database.
+ *
+ * @param bundle - Every concern's rows, each already validated
+ * against its own file's schema.
+ * @returns Every unresolved reference, and an empty list when the
+ * bundle agrees with itself.
+ */
+function crossFileFailures(bundle: SeedBundle): readonly SeedFailure[] {
+  const domainSlugs = new Set(bundle.domains.map((row) => row.slug));
+  const categoryKeys = new Set(bundle.categories.map((row) => row.key));
+
+  return [
+    ...unresolvedReferences(
+      'personas',
+      'domainSlug',
+      bundle.personas.map((row) => row.domainSlug),
+      domainSlugs,
+      UNRESOLVED_DOMAIN_MESSAGE,
+    ),
+    ...unresolvedReferences(
+      'categories',
+      'domainSlug',
+      bundle.categories.map((row) => row.domainSlug),
+      domainSlugs,
+      UNRESOLVED_DOMAIN_MESSAGE,
+    ),
+    ...unresolvedReferences(
+      'terms',
+      'categoryKey',
+      bundle.terms.map((row) => row.categoryKey),
+      categoryKeys,
+      UNRESOLVED_CATEGORY_MESSAGE,
+    ),
+    ...unresolvedReferences(
+      'topics',
+      'domainSlug',
+      bundle.topics.map((row) => row.domainSlug),
+      domainSlugs,
+      UNRESOLVED_DOMAIN_MESSAGE,
+    ),
+  ];
+}
+
+/**
  * Every seed file under `dataDir`, read, stripped and validated.
  *
  * The whole roster is read before anything is decided. A file that is
@@ -741,17 +867,31 @@ function failuresOf(
  * connection: a bundle that cannot be applied whole is refused before
  * anything is applied at all.
  *
- * What this does not check is whether the rows agree with EACH OTHER
- * — that a persona names a domain the bundle carries, that a term
- * names a category it declares. Every file is held to its own schema
- * and to nothing else; the cross-file check arrives next in this
- * stage.
+ * Once every file has validated, the rows are held against each
+ * other: a persona, a category and a topic each name a domain the
+ * bundle must carry, and a term names a category it must declare.
+ * That pass runs after the per-file one rather than beside it, and
+ * the order is what keeps its report readable — a `domains.json`
+ * refused for one mistyped key declares no slug at all, so every
+ * persona, category and topic in the bundle would be reported as
+ * naming a domain that is not there.
+ *
+ * What it resolves is presence and nothing past it. A `categoryKey`
+ * names one half of a category's (domain, key) natural key, so it is
+ * held against every key the bundle declares: with one domain seeded
+ * that names one row, and a second domain reusing a key would make
+ * the member ambiguous without making it unresolved. `parentKey` is
+ * not resolved here at all, so a category naming a parent the bundle
+ * does not carry reaches the apply pass, which is where such a key
+ * becomes an id.
  *
  * @param dataDir - Directory holding the roster's files. Defaults to
  * {@link SEED_DATA_DIR}, the seeds this package ships.
  * @returns Every concern's validated rows.
- * @throws SeedValidationError When any file fails, carrying every
- * failure across every file rather than the first.
+ * @throws SeedValidationError When any file fails to read or
+ * validate, or — once every file has — when any reference across
+ * them resolves to nothing. Either refusal carries every failure its
+ * own pass found rather than the first.
  */
 export function loadSeedBundle(
   dataDir: string = SEED_DATA_DIR,
@@ -783,11 +923,24 @@ export function loadSeedBundle(
     ]);
   }
 
-  return {
+  const bundle: SeedBundle = {
     domains: domains.value.domains,
     personas: personas.value.personas,
     categories: categories.value.categories,
     terms: terms.value.terms,
     topics: topics.value.topics,
   };
+  const unresolved = crossFileFailures(bundle);
+
+  // A count is the right test here where a discriminant one was the
+  // right test above, and the difference is what each guard is for:
+  // that one had to narrow five outcomes before the rows below it
+  // were reachable, while these rows are already in hand and the
+  // only question left is whether anything was reported against
+  // them.
+  if (unresolved.length > 0) {
+    throw new SeedValidationError(dataDir, unresolved);
+  }
+
+  return bundle;
 }
