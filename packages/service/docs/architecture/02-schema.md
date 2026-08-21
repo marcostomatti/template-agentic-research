@@ -301,3 +301,48 @@ domain rule is asked at the child, so it binds every write naming a
 parent and nothing else: moving a root that already has children into
 another domain is accepted, and strands them across the boundary the
 rule otherwise refuses to create.
+
+## Which migration owns which constraint
+
+`drizzle/` holds three files and two mechanisms. Two of them were
+written by `db:generate`, which diffs `src/db/schema.ts` against the
+newest snapshot under `drizzle/meta/` and emits the difference;
+`0002_category_depth_guard.sql` was written by hand and is the only
+migration here that was.
+
+| Owner | What it carries |
+| --- | --- |
+| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 22 tables, 150 columns. Every named key and constraint over a stored row: 13 UNIQUE, and 9 CHECK — the eight value-set checks generated from the tuples in `src/db/schema/values.ts`, plus the two-column `research_pool_approval_check`. All 31 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. Both partial dispatch-claim indexes. |
+| Hand-written — `0002_category_depth_guard.sql` | `categories_enforce_depth()` and the `BEFORE INSERT OR UPDATE` trigger on `categories` that calls it. Two statements, one rule, and the whole of the custom-owned DDL. |
+
+The snapshot decides that split, not taste. A table's entry in
+`drizzle/meta/*_snapshot.json` models its columns, check constraints,
+unique constraints, indexes and foreign keys — the first row of the
+table above, exactly — and carries no notion of a trigger or of a
+function anywhere in it. So a rule of that first kind has to be
+declared in a schema module and generated from it. Hand-write one
+into a migration instead and the snapshot goes on describing a
+database without it, which is a generator whose "no changes" verdict
+has stopped meaning anything. The trigger is hand-written safely for
+the mirror-image reason, argued above and in the header of
+`0002_category_depth_guard.sql`: what the snapshot cannot describe it
+cannot diff, cannot propose dropping, and cannot regenerate.
+
+What decides where a new rule goes is therefore whether drizzle can
+express it, not whether it looks exotic. Both partial indexes read
+like custom work and are not — `index(...).where(...)` is an ordinary
+drizzle declaration, so they sit in `src/db/schema/scheduling.ts` and
+are generated like everything else. The depth cap goes the other way
+for the reason its own section gives: it reads the parent and the
+children of the row being written, which no table definition states.
+
+Ownership says nothing about the reading. `readMigrationSql()` in
+`tests/invariants/schema-sql.ts` concatenates every `.sql` under
+`drizzle/` and its assertions run over the whole text, so six of them
+land in the generated migration and two in the hand-written one with
+nothing in the roster recording which. What does follow from the
+split is what a match there is worth. A generated statement is one of
+two tracked copies of one rule, and the module it came from is the
+other; the trigger is written down once, so that file is the only
+tracked record of it, and the live suite is the only thing anywhere
+that watches a database refuse the write.
