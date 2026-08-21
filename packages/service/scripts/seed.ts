@@ -3,11 +3,11 @@
  * The seed pipeline: the path that takes the seed files in `data/`
  * and applies them to the database.
  *
- * Two halves are here today: the underscore stripping that clears a
- * seed's commentary, and the per-file schemas each stripped file is
- * then validated against. The loader that reads the bundle, the
- * idempotent apply and the CLI entry point all arrive later in this
- * stage.
+ * Three parts are here today: the underscore stripping that clears a
+ * seed's commentary, the per-file schemas each stripped file is then
+ * validated against, and `loadSeedBundle`, which reads the roster and
+ * refuses the whole bundle when any file fails. The idempotent apply
+ * and the CLI entry point arrive later in this stage.
  *
  * Every object in every schema below is `.strict()`. Zod's default is
  * to STRIP an unknown key and report nothing, which is the failure
@@ -67,6 +67,10 @@
  * the VALUE: a weight is a number, and a field spec is itself strict.
  */
 import type { DomainFieldType } from '../src/db/schema.js';
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
@@ -425,3 +429,365 @@ export type TermSeed = z.infer<typeof termSeedSchema>;
  * yields it.
  */
 export type TopicSeed = z.infer<typeof topicSeedSchema>;
+
+/**
+ * The seed directory this package ships, resolved from this file's
+ * own location rather than from the working directory: a path built
+ * from the working directory would name these files only while the
+ * process was started from the package, and resolve nowhere from the
+ * repo root, which is where a `vitest --root packages/service` run is
+ * launched. `tests/invariants/schema-sql.ts` resolves the migrations
+ * it reads the same way and for the same reason.
+ */
+export const SEED_DATA_DIR = fileURLToPath(
+  new URL('../data', import.meta.url),
+);
+
+/**
+ * Every seed file this package ships, keyed by the concern it seeds.
+ *
+ * The roster is the loader's whole notion of what `data/` holds: a
+ * file not named here is never read, and a file named here and absent
+ * is a failure rather than an empty concern. Reading the directory
+ * instead would turn dropping a file into it into applying it, and
+ * which rows reach the database is a decision worth a diff.
+ *
+ * Declaration order is parent before child, which is the order the
+ * rows have to be written in and the order failures are reported in,
+ * so two runs over one broken bundle print the same list.
+ */
+export const SEED_ROSTER = {
+  domains: { file: 'domains.json', schema: DomainsFileSchema },
+  personas: { file: 'personas.json', schema: PersonasFileSchema },
+  categories: { file: 'categories.json', schema: CategoriesFileSchema },
+  terms: { file: 'terms.json', schema: TermsFileSchema },
+  topics: { file: 'topics.json', schema: TopicsFileSchema },
+} as const;
+
+/**
+ * Every seed file's rows, validated, in one value.
+ *
+ * One member per {@link SEED_ROSTER} entry, carrying that file's rows
+ * and named for the concern rather than for the file. A bundle only
+ * ever exists whole — {@link loadSeedBundle} returns one or throws —
+ * so no member is optional and none stands in for a file that could
+ * not be read.
+ */
+export interface SeedBundle {
+  readonly domains: readonly DomainSeed[];
+  readonly personas: readonly PersonaSeed[];
+  readonly categories: readonly CategorySeed[];
+  readonly terms: readonly TermSeed[];
+  readonly topics: readonly TopicSeed[];
+}
+
+/**
+ * One thing wrong with one seed file.
+ *
+ * Granular by design: a file carrying four mistyped members yields
+ * four of these, not one reporting the file as invalid. An aggregate
+ * collapsing them into a line per file would spend the strictness the
+ * schemas above buy.
+ */
+export interface SeedFailure {
+  /** File the problem is in, relative to the seed directory. */
+  readonly file: string;
+
+  /**
+   * The member at fault, as a path from the file's own root
+   * (`terms[3].polarity`, an index bracketed so a position is
+   * distinguishable from a key named for a number), or `null` when
+   * the whole file is the problem — missing, holding no JSON, or
+   * opening with something other than an object.
+   */
+  readonly field: string | null;
+
+  /** What is wrong, in Zod's words wherever Zod is the refuser. */
+  readonly message: string;
+}
+
+/**
+ * What a failure says about a key no schema names.
+ *
+ * Written here rather than taken from Zod, which names every
+ * unrecognized key of one object in a single message: each key
+ * becomes its own failure, and repeating the list beside each would
+ * read as though every one were wrong once per sibling.
+ */
+const UNRECOGNIZED_KEY_MESSAGE =
+  'unrecognized key: the schema for this file names no such member';
+
+/**
+ * Thrown when any seed file fails to read or to validate.
+ *
+ * Carries every failure across every file rather than the first one:
+ * reading all five costs five opens, while stopping at the first
+ * turns a bundle with one mistake per file into five edits and five
+ * runs.
+ *
+ * A distinct class rather than a bare `Error`, so a caller can pin
+ * the refusal to this cause — a `TypeError` from a bad call reaches a
+ * catch as an `Error` too.
+ */
+export class SeedValidationError extends Error {
+  /** Directory that was read, exactly as the caller named it. */
+  readonly directory: string;
+
+  /** Every problem found, in roster then Zod issue order. */
+  readonly failures: readonly SeedFailure[];
+
+  /**
+   * @param directory - Seed directory that was read.
+   * @param failures - Every problem found across every file in it.
+   */
+  constructor(directory: string, failures: readonly SeedFailure[]) {
+    const files = new Set(failures.map((failure) => failure.file));
+
+    super(
+      `${failures.length} problem(s) in ${files.size} seed file(s) ` +
+      `under ${directory}. Nothing was applied.\n` +
+      failures.map(formatSeedFailure)
+        .join('\n'),
+    );
+    this.name = this.constructor.name;
+    this.directory = directory;
+    this.failures = failures;
+  }
+}
+
+/**
+ * One failure as an indented line of the aggregate's message, naming
+ * the file, the field where there is one, and what is wrong.
+ *
+ * @param failure - The failure to render.
+ */
+function formatSeedFailure(failure: SeedFailure): string {
+  if (failure.field === null) {
+    return `  ${failure.file}: ${failure.message}`;
+  }
+
+  return `  ${failure.file} (${failure.field}): ${failure.message}`;
+}
+
+/**
+ * A Zod issue path rendered as a field a reader can find in the file:
+ * `['terms', 3, 'polarity']` becomes `terms[3].polarity`. An empty
+ * path is the file itself and comes back `null`, which is what
+ * {@link SeedFailure.field} carries for a problem no member owns.
+ *
+ * @param path - Zod's own path for the issue.
+ */
+function formatFieldPath(
+  path: readonly (string | number)[],
+): string | null {
+  if (path.length === 0) {
+    return null;
+  }
+
+  return path.reduce<string>((rendered, segment) => {
+    if (typeof segment === 'number') {
+      return `${rendered}[${segment}]`;
+    }
+
+    return rendered === ''
+      ? segment
+      : `${rendered}.${segment}`;
+  }, '');
+}
+
+/**
+ * Every issue in a Zod refusal, as failures naming file and field.
+ *
+ * An `unrecognized_keys` issue is split into one failure per key. Zod
+ * reports it against the path of the object that HELD the keys, so an
+ * aggregate keyed on `path` alone names the row and never the typo —
+ * which is the half of the strictness above that shortens the walk.
+ *
+ * @param file - File the refusal came from.
+ * @param error - Zod's refusal.
+ */
+function toSeedFailures(
+  file: string,
+  error: z.ZodError,
+): readonly SeedFailure[] {
+  return error.issues.flatMap((issue): readonly SeedFailure[] => {
+    if (issue.code === z.ZodIssueCode.unrecognized_keys) {
+      return issue.keys.map((key) => ({
+        file,
+        field: formatFieldPath([...issue.path, key]),
+        message: UNRECOGNIZED_KEY_MESSAGE,
+      }));
+    }
+
+    return [{
+      file,
+      field: formatFieldPath(issue.path),
+      message: issue.message,
+    }];
+  });
+}
+
+/** One seed file's parsed JSON, or the reason there is none. */
+type SeedJsonRead =
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * One seed file read from disk and parsed.
+ *
+ * An absent file and one holding text no parser accepts fail the same
+ * way for a caller: there is nothing to validate. Both come back as a
+ * reason rather than as a thrown error, so the loader can carry them
+ * into the same aggregate as a schema refusal instead of ending the
+ * run at the first file it cannot open. They are told apart by the
+ * error class rather than by its text, because an absent file and a
+ * mistyped comma send a reader to different places.
+ *
+ * @param path - Path to the file.
+ */
+function readSeedJson(path: string): SeedJsonRead {
+  try {
+    const raw = readFileSync(path, 'utf8');
+
+    return { ok: true, value: JSON.parse(raw) as unknown };
+  } catch (cause) {
+    const detail = cause instanceof Error
+      ? cause.message
+      : String(cause);
+
+    return {
+      ok: false,
+      reason: cause instanceof SyntaxError
+        ? `holds no valid JSON (${detail})`
+        : `could not be read (${detail})`,
+    };
+  }
+}
+
+/**
+ * One roster entry's rows, or every reason it was refused. `Payload`
+ * is what the entry's schema yields.
+ */
+type SeedFileOutcome<Payload> =
+  | { readonly ok: true; readonly value: Payload }
+  | { readonly ok: false; readonly failures: readonly SeedFailure[] };
+
+/**
+ * One roster entry read, stripped and validated.
+ *
+ * The three steps are ordered rather than merely adjacent, for the
+ * reason the module header gives at length.
+ *
+ * @param directory - Seed directory to read the file from.
+ * @param entry - A {@link SEED_ROSTER} entry, naming the file and the
+ * schema it is held to.
+ * @returns The file's rows, or its failures.
+ */
+function readSeedFile<Schema extends z.ZodTypeAny>(
+  directory: string,
+  entry: { readonly file: string; readonly schema: Schema },
+): SeedFileOutcome<z.infer<Schema>> {
+  const read = readSeedJson(join(directory, entry.file));
+
+  if (!read.ok) {
+    return {
+      ok: false,
+      failures: [
+        { file: entry.file, field: null, message: read.reason },
+      ],
+    };
+  }
+
+  const stripped = stripUnderscoreKeys(read.value);
+  const validated = entry.schema.safeParse(stripped);
+
+  if (!validated.success) {
+    return {
+      ok: false,
+      failures: toSeedFailures(entry.file, validated.error),
+    };
+  }
+
+  return { ok: true, value: validated.data };
+}
+
+/**
+ * An outcome's failures, and an empty list when it carries rows.
+ *
+ * @param outcome - Any roster entry's outcome.
+ */
+function failuresOf(
+  outcome: SeedFileOutcome<unknown>,
+): readonly SeedFailure[] {
+  if (outcome.ok) {
+    return [];
+  }
+
+  return outcome.failures;
+}
+
+/**
+ * Every seed file under `dataDir`, read, stripped and validated.
+ *
+ * The whole roster is read before anything is decided. A file that is
+ * missing, that holds no JSON, or that its schema refuses contributes
+ * its failures and does not end the run, so one pass reports
+ * everything wrong with the bundle rather than the first thing wrong
+ * with it. A directory that is not there needs no case of its own:
+ * every file then fails to be read and each failure names the path.
+ *
+ * Either every concern comes back or none does, which is what lets
+ * the CLI arriving later in this stage validate before it opens a
+ * connection: a bundle that cannot be applied whole is refused before
+ * anything is applied at all.
+ *
+ * What this does not check is whether the rows agree with EACH OTHER
+ * — that a persona names a domain the bundle carries, that a term
+ * names a category it declares. Every file is held to its own schema
+ * and to nothing else; the cross-file check arrives next in this
+ * stage.
+ *
+ * @param dataDir - Directory holding the roster's files. Defaults to
+ * {@link SEED_DATA_DIR}, the seeds this package ships.
+ * @returns Every concern's validated rows.
+ * @throws SeedValidationError When any file fails, carrying every
+ * failure across every file rather than the first.
+ */
+export function loadSeedBundle(
+  dataDir: string = SEED_DATA_DIR,
+): SeedBundle {
+  const domains = readSeedFile(dataDir, SEED_ROSTER.domains);
+  const personas = readSeedFile(dataDir, SEED_ROSTER.personas);
+  const categories = readSeedFile(dataDir, SEED_ROSTER.categories);
+  const terms = readSeedFile(dataDir, SEED_ROSTER.terms);
+  const topics = readSeedFile(dataDir, SEED_ROSTER.topics);
+
+  // Tested outcome by outcome rather than on a collected failure
+  // count, because a count narrows nothing: only a discriminant test
+  // each proves to the compiler that the rows below exist. The two
+  // can never disagree — an outcome carries failures exactly when it
+  // carries no rows.
+  if (
+    !domains.ok
+    || !personas.ok
+    || !categories.ok
+    || !terms.ok
+    || !topics.ok
+  ) {
+    throw new SeedValidationError(dataDir, [
+      ...failuresOf(domains),
+      ...failuresOf(personas),
+      ...failuresOf(categories),
+      ...failuresOf(terms),
+      ...failuresOf(topics),
+    ]);
+  }
+
+  return {
+    domains: domains.value.domains,
+    personas: personas.value.personas,
+    categories: categories.value.categories,
+    terms: terms.value.terms,
+    topics: topics.value.topics,
+  };
+}
