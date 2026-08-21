@@ -1,0 +1,71 @@
+{
+  "_readme": [
+    "SEED FILE. `scripts/seed.ts` is the only code path that opens this",
+    "directory, and nothing here is read at runtime: Postgres is the",
+    "single source of truth once a row lands, so an edit below changes",
+    "nothing until the next seed pass applies it.",
+    "",
+    "Keys beginning with an underscore are stripped by the loader before",
+    "anything is validated or written, which is what lets a seed file",
+    "carry this header at all. A seed is usually met on its own, in a",
+    "diff or an editor tab, where nothing about the content says which",
+    "path owns it.",
+    "",
+    "This file seeds `categories`. A category is upserted by the",
+    "(domain, key) pair `categories_domain_id_key_unique` holds, so a",
+    "second seed pass rewrites the same row rather than adding a rival",
+    "one that a term or a `criteria` row would then have to choose",
+    "between.",
+    "",
+    "`domainSlug` is not a column. `categories.domain_id` holds a key",
+    "the database issues, and no seed file can know one before the",
+    "domain row is written, so a category names its domain by the only",
+    "key an author owns: the slug `domains.json` seeds. The loader",
+    "resolves it, and refuses a category naming a slug the bundle does",
+    "not carry.",
+    "",
+    "`parentKey` is the same substitution one level down, standing in",
+    "for `categories.parent_id`, and every row below carries it as null.",
+    "Null is written out rather than left off because a root is not a",
+    "category missing a parent: it is the ordinary shape of a flat",
+    "taxonomy, and the member is where a child would name the root it",
+    "sits under.",
+    "",
+    "Nesting is capped at one level by a trigger on `categories`, which",
+    "refuses a parent that is itself a child and a parent belonging to",
+    "another domain. Shipping only roots keeps the worked example on the",
+    "right side of that cap; a seed test later in this phase asserts it",
+    "rather than leaving it to review.",
+    "",
+    "Nothing in the schema fixes this set of three. A `criteria` row",
+    "points at a category by foreign key rather than naming one of a",
+    "fixed list, so a fourth bucket is a row rather than a migration.",
+    "",
+    "The categories below are illustrative, like the rest of",
+    "`example-tech-radar`: they show that a domain sorts its subject",
+    "matter into named buckets which terms then hang off, and they stay",
+    "neutral about the subject. A real taxonomy belongs to whoever",
+    "operates an instance and reaches the database through their own",
+    "seeds."
+  ],
+  "categories": [
+    {
+      "domainSlug": "example-tech-radar",
+      "key": "technologies",
+      "name": "Technologies",
+      "parentKey": null
+    },
+    {
+      "domainSlug": "example-tech-radar",
+      "key": "phrases",
+      "name": "Phrases",
+      "parentKey": null
+    },
+    {
+      "domainSlug": "example-tech-radar",
+      "key": "industries",
+      "name": "Industries",
+      "parentKey": null
+    }
+  ]
+}
