@@ -689,8 +689,9 @@ async function applyTopics(
  * selects is held against the values the pass would write, and a row
  * already carrying all of them is counted unchanged and left where it
  * is rather than rewritten with what it holds. That is what makes the
- * returned counts worth reading: a summary reporting every row as
- * updated on every pass reports only that the pass ran.
+ * returned counts worth reading: `formatSeedSummary` renders them as
+ * a block, and one reporting every row as updated on every pass
+ * reports only that the pass ran.
  *
  * Four limits. The pass adds and rewrites and never deletes, so a
  * term dropped from `terms.json` stays: a row removed from a seed and

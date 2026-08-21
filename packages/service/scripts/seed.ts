@@ -6,8 +6,10 @@
  * The reading half is here: the underscore stripping that clears a
  * seed's commentary, and `loadSeedBundle`, which reads the roster,
  * refuses the whole bundle when any file fails, and then holds the
- * rows that survived against each other. The CLI entry point that
- * drives both halves arrives later in this stage.
+ * rows that survived against each other. `formatSeedSummary` sits
+ * here too and belongs to neither half — it renders what an apply
+ * pass reported, and is put where the CLI entry point that prints it
+ * will be. That entry point arrives later in this stage.
  *
  * Two sibling modules carry the rest, and this one re-exports both
  * whole, so importing any of it from here works as it did when all
@@ -17,6 +19,7 @@
  * seed looks like, what reads one and what writes one are separate
  * enough to follow apart.
  */
+import type { SeedCounts, SeedRowCounts } from './seed-apply.js';
 import type {
   CategorySeed,
   DomainSeed,
@@ -619,3 +622,119 @@ export function loadSeedBundle(
   return bundle;
 }
 
+/**
+ * The tallies a summary prints, in the order it prints them. Each
+ * name is both the member it reads and the heading it prints under.
+ *
+ * Held against {@link SeedRowCounts} rather than merely resembling
+ * it, so a tally renamed there stops compiling here. The tie runs one
+ * way: a tally added to that interface and left out of this list
+ * would be left out of the block too. Not silently, though — the
+ * total row below builds a `SeedRowCounts` as an annotated literal,
+ * so a fourth member turns `check-types` red there, and this list is
+ * the fix.
+ */
+const SUMMARY_TALLIES = [
+  'created',
+  'updated',
+  'unchanged',
+] as const satisfies readonly (keyof SeedRowCounts)[];
+
+/** One of the tallies {@link SUMMARY_TALLIES} names. */
+type SummaryTally = (typeof SUMMARY_TALLIES)[number];
+
+/** What a summary block opens with, so it is greppable in a log. */
+const SUMMARY_TITLE = 'seed summary';
+
+/** The heading over a summary's leftmost column. */
+const SUMMARY_LABEL_HEADING = 'concern';
+
+/** What the row totalling every concern above it is labelled. */
+const SUMMARY_TOTAL_LABEL = 'total';
+
+/** One line of a summary block below its headings. */
+interface SummaryRow {
+  /** What the line is about — a concern, or the pass as a whole. */
+  readonly label: string;
+
+  /** The tallies that line prints. */
+  readonly counts: SeedRowCounts;
+}
+
+/**
+ * What one `applySeedBundle` pass did, as one block of text.
+ *
+ * A line per concern in {@link SEED_ROSTER} order, so the block lists
+ * them in the order the pass wrote them and the loader reports
+ * failures in — a parent above the rows naming it. The concerns are
+ * read off the roster rather than written out again here, so there is
+ * no second list to keep in step: a concern added to the roster is in
+ * the block, and one added there with no tally of its own stops the
+ * lookup below compiling rather than printing `undefined`.
+ *
+ * The numbers are right-aligned under their headings and the labels
+ * padded to the widest, because what a summary is opened with is
+ * whether anything is nonzero, and a column of digits answers that at
+ * a glance where a run of prose does not. Every width is measured off
+ * what is being printed, so a tally of five figures widens its column
+ * rather than pushing its row out of line.
+ *
+ * A total row closes the block. It holds nothing the lines above do
+ * not, but it holds the one thing they yield only to arithmetic:
+ * whether the pass changed anything at all.
+ *
+ * What the block reports is what the pass reported and nothing
+ * beside it. `applySeedBundle` records what each tally does and does
+ * not count — an unchanged row is unchanged in the columns that pass
+ * writes, not in every column it has.
+ *
+ * @param counts - What one pass reported, a concern at a time.
+ * @returns The block: newline-separated, no trailing newline, every
+ * line below the title indented, so a caller can print it under a
+ * line of its own without the two running together.
+ */
+export function formatSeedSummary(counts: SeedCounts): string {
+  // `Object.keys` is typed to `string[]`, since in general an object
+  // carries keys its type does not name. This one is a `const`
+  // literal in this file, so its keys are exactly the concerns named
+  // there, and narrowing them is what lets the lookups below reach
+  // `counts` by a key it declares.
+  const concerns = Object.keys(SEED_ROSTER) as (keyof typeof SEED_ROSTER)[];
+  const totals = concerns.reduce<SeedRowCounts>((running, concern) => ({
+    created: running.created + counts[concern].created,
+    updated: running.updated + counts[concern].updated,
+    unchanged: running.unchanged + counts[concern].unchanged,
+  }), { created: 0, updated: 0, unchanged: 0 });
+  const rows: readonly SummaryRow[] = [
+    ...concerns.map((concern) => ({
+      label: concern,
+      counts: counts[concern],
+    })),
+    { label: SUMMARY_TOTAL_LABEL, counts: totals },
+  ];
+  const labelWidth = Math.max(
+    SUMMARY_LABEL_HEADING.length,
+    ...rows.map((row) => row.label.length),
+  );
+  const columns = SUMMARY_TALLIES.map((tally) => ({
+    tally,
+    width: Math.max(
+      tally.length,
+      ...rows.map((row) => String(row.counts[tally]).length),
+    ),
+  }));
+  const renderLine = (
+    label: string,
+    cell: (tally: SummaryTally) => string,
+  ): string => `  ${label.padEnd(labelWidth)}` + columns
+    .map((column) => `  ${cell(column.tally).padStart(column.width)}`)
+    .join('');
+
+  return [
+    SUMMARY_TITLE,
+    renderLine(SUMMARY_LABEL_HEADING, (tally) => tally),
+    ...rows.map(
+      (row) => renderLine(row.label, (tally) => String(row.counts[tally])),
+    ),
+  ].join('\n');
+}
