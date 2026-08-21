@@ -60,9 +60,10 @@ land here. The failure it prevents is the quiet kind: a type error in an
 unchecked script does not turn `check-types:all` red, so the suite keeps
 reporting a clean result over a file it never looked at.
 
-The package's `lint` script (`eslint src lib tests`) has the same gap.
-Whether this directory joins that target is a separate call, taken when
-there is a script here to lint.
+The package's `lint` script was widened with it, and now reads
+`eslint src lib tests scripts` (`lint:fix` likewise). The reason is the
+same one, one gate over: an unlinted `.ts` file makes a green `lint:all`
+a statement about files it never read.
 
 ## Files added here are scanned
 

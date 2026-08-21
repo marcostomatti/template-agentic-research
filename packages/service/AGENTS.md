@@ -102,10 +102,11 @@ logic in a plain module beside the test — the same code inlined into the
 `.test.ts` gets no tsc gate at all.
 
 A new directory under `src` needs no config change (tsconfig `include`
-already covers `src`, the `lint` script covers `src lib tests`, and vitest
-discovers tests). `scripts/` is asymmetric: tsconfig `include` lists it, so
-a `.ts` file there is type-checked, while the `lint` script does not name it.
-The directories outside every root — `workflows/`, `data/`, `docs/` — are
+already covers `src`, the `lint` script covers `src lib tests scripts`,
+and vitest discovers tests). `scripts/` used to be asymmetric — listed by
+tsconfig `include`, unnamed by the `lint` script — and phase 2 closed the
+gap, so a `.ts` file there is both type-checked and linted. The
+directories outside every root — `workflows/`, `data/`, `docs/` — are
 covered by no lint or type-check target today. Prove coverage rather than
 assuming it: `tsc --noEmit --listFilesOnly` and `eslint <path> -f json` both
 report what they actually read (see the `prove-gate-coverage-read-only`
