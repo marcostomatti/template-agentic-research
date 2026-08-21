@@ -19,6 +19,37 @@
  * `applySeedBundle` and the per-concern writers beneath it. What a
  * seed looks like, what reads one and what writes one are separate
  * enough to follow apart.
+ *
+ * This is the only code path permitted to read `data/`. The rule is
+ * `data/README.md`'s and it is absolute rather than a default: a file
+ * read at runtime is a second source of truth, and the two drift the
+ * moment somebody edits a row a file also declares. Whatever wants a
+ * value out of one of those files reads it from the database a pass
+ * wrote it into, so a second reader is a change to that rule and not
+ * a file added beside this one.
+ *
+ * Two things scope that claim. The whole of the reading is
+ * `SEED_DATA_DIR` and the roster under it, so what opens the
+ * directory is greppable from two names rather than spread across the
+ * module. And the naming invariant walks the same directory, `data/`
+ * being one of its scan roots, which is not the exception it looks
+ * like: it reads those files as bytes to check the names in them and
+ * takes no value out of one.
+ *
+ * Validation completes before any connection is opened, and the split
+ * above is what makes that structural rather than an order somebody
+ * remembered: `loadSeedBundle` is handed no database and opens none,
+ * so there is nothing to write through until it has returned a whole
+ * bundle. A malformed seed cannot half-apply, because the pass that
+ * would apply it never begins — `runSeedCli` records that at the
+ * point the two meet.
+ *
+ * That covers what this module can refuse and nothing past it. A
+ * bundle that validates and the database then refuses — the depth
+ * trigger, a foreign key, a constraint — is held by the other guard,
+ * `applySeedBundle` writing in one transaction and rolling back the
+ * concerns already written. Two failures, two mechanisms, and neither
+ * stands in for the other.
  */
 import type { SeedCounts, SeedRowCounts } from './seed-apply.js';
 import type {
