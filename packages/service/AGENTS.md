@@ -103,11 +103,13 @@ logic in a plain module beside the test — the same code inlined into the
 
 A new directory under `src` needs no config change (tsconfig `include`
 already covers `src`, the `lint` script covers `src lib tests`, and vitest
-discovers tests). Directories OUTSIDE those roots — `scripts/`, `workflows/`,
-`data/`, `docs/` — are covered by no lint or type-check target today. Prove
-coverage rather than assuming it: `tsc --noEmit --listFilesOnly` and
-`eslint <path> -f json` both report what they actually read (see the
-`prove-gate-coverage-read-only` skill).
+discovers tests). `scripts/` is asymmetric: tsconfig `include` lists it, so
+a `.ts` file there is type-checked, while the `lint` script does not name it.
+The directories outside every root — `workflows/`, `data/`, `docs/` — are
+covered by no lint or type-check target today. Prove coverage rather than
+assuming it: `tsc --noEmit --listFilesOnly` and `eslint <path> -f json` both
+report what they actually read (see the `prove-gate-coverage-read-only`
+skill).
 
 ## Testing — isolated vs live (CRITICAL)
 

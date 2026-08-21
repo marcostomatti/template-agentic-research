@@ -46,21 +46,19 @@ The split is worth keeping deliberate: a shell script that grows a
 non-trivial decision has quietly become untestable, and that is the point
 to move the decision into a `.ts` module the shell calls.
 
-## `tsconfig.json` must widen `include` when the first `.ts` script lands
+## `tsconfig.json` covers `scripts`
 
 `packages/service/tsconfig.json` reads
-`"include": ["src", "lib", "tests", "*.ts", "*.mjs"]`. `scripts` is not
-in it, and the `*.ts` entry matches only files sitting directly in the
-package root — a glob segment does not cross a directory separator. Every
-`.ts` file added to this directory is therefore invisible to
-`bun run check-types` until `scripts` joins that array.
+`"include": ["src", "lib", "tests", "scripts", "*.ts", "*.mjs"]`. The
+`scripts` entry is load-bearing rather than decorative: the `*.ts` entry
+beside it matches only files sitting directly in the package root — a
+glob segment does not cross a directory separator — so without it every
+`.ts` file added here would be invisible to `bun run check-types`.
 
-Nothing is broken today, because phase 1 adds no script. The debt falls
-due in **phase 2**, with `scripts/seed.ts` — the first `.ts` file here —
-and widening `include` belongs to that task rather than to a follow-up.
-The failure it prevents is the quiet kind: a type error in an unchecked
-script does not turn `check-types:all` red, so the suite keeps reporting
-a clean result over a file it never looked at.
+Phase 2 widened it, ahead of `scripts/seed.ts`, the first `.ts` file to
+land here. The failure it prevents is the quiet kind: a type error in an
+unchecked script does not turn `check-types:all` red, so the suite keeps
+reporting a clean result over a file it never looked at.
 
 The package's `lint` script (`eslint src lib tests`) has the same gap.
 Whether this directory joins that target is a separate call, taken when
