@@ -1,5 +1,6 @@
 /**
- * What `loadSeedBundle` refuses, and what it says when it does.
+ * What `loadSeedBundle` refuses, what it says when it does, and what
+ * a run does with a refusal.
  *
  * Four refusals, in the order the loader reaches them: a key no
  * schema names, a value outside a closed set, and — once every file
@@ -22,6 +23,14 @@
  * naming no row in it is a reference that would still be naming
  * nothing at the insert.
  *
+ * The block at the end is about what a refusal is worth. It drives
+ * `runSeedCli`, where the loader running before anything is opened
+ * is the difference between a seed nobody can apply and a seed half
+ * applied. That order is a decision inside one function and shows
+ * from neither side of it, so the run is driven against a double
+ * standing in for the database, and what the case reads is what the
+ * run asked of it.
+ *
  * The bundles below are written to disk rather than handed to a
  * schema directly. What `loadSeedBundle` has to get right is the
  * roster it opens, the stripping that runs before validation, and
@@ -34,9 +43,12 @@
  * that refused whatever it was handed would satisfy every assertion
  * here, so the sound fixture is read first: what these cases
  * establish, they establish about a loader that returns rows when
- * the rows are sound.
+ * the rows are sound. The block driving `runSeedCli` carries the
+ * same control turned around, since a call log that stayed empty is
+ * worth nothing until a sound bundle is shown to fill it.
  */
-import type { SeedFailure } from '../../scripts/seed.js';
+import type { SeedConnection, SeedFailure } from '../../scripts/seed.js';
+import type { Db } from '../../src/db/index.js';
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -48,6 +60,7 @@ import {
   SEED_ROSTER,
   SeedValidationError,
   loadSeedBundle,
+  runSeedCli,
 } from '../../scripts/seed.js';
 import { TERM_POLARITIES } from '../../src/db/schema/values.js';
 
@@ -496,5 +509,116 @@ describe('loadSeedBundle — a term naming an absent category', () => {
         ),
       },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The connection a refused bundle never opens
+// ---------------------------------------------------------------------------
+
+/**
+ * What the double throws when a run reaches it.
+ *
+ * A sentence of its own rather than a bare `Error`, so a case that
+ * expected the loader's refusal and met this one instead says which
+ * of the two happened rather than that something threw.
+ */
+const DOUBLE_REACHED = 'the seed pass reached the database double';
+
+/** What a run asked of the double, and the opener to hand it. */
+interface DatabaseDouble {
+  /** Every request the run made, in the order it made them. */
+  readonly calls: readonly string[];
+
+  /** What `runSeedCli` takes in place of a pool. */
+  readonly connect: () => SeedConnection;
+}
+
+/**
+ * A database that refuses everything, and the log of what was asked
+ * of it.
+ *
+ * The `db` throws on any property whatever rather than on
+ * `transaction` alone. What the apply pass reaches for first is that
+ * pass's business, and a double that had to know would go quiet the
+ * day it changed: a method it had not thought of reads as
+ * `undefined` and fails somewhere else, or nowhere.
+ *
+ * The log is what the cases below are about. A run that refused
+ * before opening anything and a run that opened a connection and
+ * died on its first write both come back as one rejected promise,
+ * and nothing but the calls tells them apart.
+ *
+ * @returns The log and the opener, sharing one closure.
+ */
+function databaseDouble(): DatabaseDouble {
+  const calls: string[] = [];
+  const db = new Proxy(
+    {},
+    {
+      get: (_target, property) => {
+        const call = `db.${String(property)}`;
+
+        calls.push(call);
+
+        throw new Error(`${DOUBLE_REACHED}: ${call}`);
+      },
+    },
+  ) as unknown as Db;
+
+  return {
+    calls,
+    connect: () => {
+      calls.push('connect');
+
+      return {
+        db,
+        close: async () => {
+          calls.push('close');
+        },
+      };
+    },
+  };
+}
+
+describe('runSeedCli — what a refusal costs the apply pass', () => {
+  // The control the case below rests on, and the whole of what makes
+  // an empty log mean anything. Handed a bundle nothing is wrong
+  // with, the run reaches the double, and reaches it at
+  // `transaction` — which is `applySeedBundle`'s first act, so what
+  // the log records is the apply pass beginning rather than a
+  // connection merely being opened.
+  //
+  // It closes on the way out too, which is the `finally` rather than
+  // the happy path: a pool nobody ended keeps the process alive, and
+  // a command that printed its error and then hung reads as the
+  // worse failure of the two.
+  it('reaches the apply pass when the bundle is sound', async () => {
+    const directory = writeFixture(FIXTURE_ROWS);
+    const double = databaseDouble();
+
+    await expect(runSeedCli(double.connect, directory))
+      .rejects.toThrow(DOUBLE_REACHED);
+    expect(double.calls).toEqual(['connect', 'db.transaction', 'close']);
+  });
+
+  // Two assertions, because the order can break in two directions
+  // and either one alone is satisfied by the other's failure. A run
+  // that opened its connection first still refuses the bundle, so
+  // the error on its own is met by the very order this case exists
+  // to rule out; a run that skipped the loader reaches the double,
+  // so the log on its own is met by an error nobody asked for.
+  //
+  // The bundle is the unknown-key one, so what the ordering is worth
+  // here is concrete: the pass it stops is the one that would have
+  // written that topic row with a member silently missing and
+  // reported it created.
+  it('opens nothing when the bundle is refused', async () => {
+    const directory = writeFixture(FIXTURE_ROWS_WITH_UNKNOWN_KEY);
+    const double = databaseDouble();
+
+    await expect(runSeedCli(double.connect, directory))
+      .rejects.toThrow(SeedValidationError);
+    expect(double.calls).toEqual([]);
   });
 });
