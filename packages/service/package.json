@@ -27,6 +27,7 @@
     "db:reset": "docker compose down -v && docker compose up -d postgres",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:seed": "bun scripts/seed.ts",
     "docs:generate": "typedoc"
   },
   "dependencies": {
