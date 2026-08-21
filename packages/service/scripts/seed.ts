@@ -3,11 +3,13 @@
  * The seed pipeline: the path that takes the seed files in `data/`
  * and applies them to the database.
  *
- * Two parts are here today: the underscore stripping that clears a
- * seed's commentary, and `loadSeedBundle`, which reads the roster,
+ * Three parts are here today: the underscore stripping that clears a
+ * seed's commentary, `loadSeedBundle`, which reads the roster,
  * refuses the whole bundle when any file fails, and then holds the
- * rows that survived against each other. The idempotent apply and the
- * CLI entry point arrive later in this stage.
+ * rows that survived against each other, and `applySeedBundle`, which
+ * upserts them on their natural keys inside one transaction. The
+ * summary a pass reports and the CLI entry point arrive later in this
+ * stage.
  *
  * The per-file schemas a stripped file is validated against are in
  * `./seed-schemas.ts`, which this module re-exports whole: the shape
@@ -22,12 +24,22 @@ import type {
   TermSeed,
   TopicSeed,
 } from './seed-schemas.js';
+import type { Db } from '../src/db/index.js';
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { sql } from 'drizzle-orm';
 import { z } from 'zod';
+
+import {
+  categories,
+  domains,
+  personas,
+  terms,
+  topics,
+} from '../src/db/schema.js';
 
 import {
   CategoriesFileSchema,
@@ -614,4 +626,395 @@ export function loadSeedBundle(
   }
 
   return bundle;
+}
+
+/**
+ * The transaction every write in the apply pass runs inside, as
+ * drizzle types it.
+ *
+ * Derived from {@link Db} rather than written out: naming the type
+ * means restating `PgTransaction`'s arguments, and an annotation that
+ * drifts from what `db.transaction` actually hands over is a cast
+ * waiting to be added.
+ */
+type SeedTx = Parameters<Parameters<Db['transaction']>[0]>[0];
+
+/**
+ * What every refusal from the apply pass opens with, so a failure
+ * raised while writing is greppable and reads apart from one
+ * {@link SeedValidationError} raised before anything was opened.
+ */
+const APPLY_ERROR_PREFIX = 'seed apply:';
+
+/**
+ * The id an upsert returned.
+ *
+ * The empty case cannot arise as this module calls it: `ON CONFLICT
+ * … DO UPDATE` writes the row whichever branch it takes, so
+ * `RETURNING` yields exactly one. It is written out rather than
+ * asserted away because `onConflictDoNothing` is one word from
+ * `onConflictDoUpdate` and DOES return nothing on a conflict — under
+ * an assertion that edit would put an `undefined` id into the next
+ * concern's foreign key rather than raise anything here.
+ *
+ * @param rows - What the upsert's `RETURNING` came back with.
+ * @param what - The row being written, for the message.
+ * @throws Error When the upsert returned no row.
+ */
+function upsertedId(
+  rows: readonly { readonly id: number }[],
+  what: string,
+): number {
+  const [row] = rows;
+
+  if (row === undefined) {
+    throw new Error(`${APPLY_ERROR_PREFIX} upserting ${what} returned no row`);
+  }
+
+  return row.id;
+}
+
+/**
+ * The id a natural key names, among the ids an earlier concern of the
+ * same pass wrote.
+ *
+ * {@link loadSeedBundle} already refuses a bundle whose personas,
+ * categories or topics name a domain it does not carry, or whose
+ * terms name a category it does not declare, so every lookup here
+ * resolves for a bundle that came from there. This covers the other
+ * caller: a {@link SeedBundle} assembled by hand type checks without
+ * going through that pass, and an unresolved key would otherwise
+ * reach a foreign key as `undefined`.
+ *
+ * @param ids - Keys an earlier concern wrote, against the ids the
+ * database issued for them.
+ * @param key - The key to resolve.
+ * @param reference - The referring row and the thing it names, read
+ * ahead of the key itself.
+ * @throws Error When the key names no row this bundle declares.
+ */
+function resolvedId(
+  ids: ReadonlyMap<string, number>,
+  key: string,
+  reference: string,
+): number {
+  const id = ids.get(key);
+
+  if (id === undefined) {
+    throw new Error(
+      `${APPLY_ERROR_PREFIX} ${reference} '${key}', ` +
+      'which this bundle does not declare',
+    );
+  }
+
+  return id;
+}
+
+/**
+ * Every domain the bundle carries, upserted by `slug`.
+ *
+ * @param tx - The transaction the whole pass runs in.
+ * @param rows - Every `data/domains.json` row.
+ * @returns Each slug against the id the database holds that domain
+ * under, which is what every concern below resolves `domainSlug`
+ * against.
+ */
+async function applyDomains(
+  tx: SeedTx,
+  rows: readonly DomainSeed[],
+): Promise<ReadonlyMap<string, number>> {
+  const ids = new Map<string, number>();
+
+  for (const row of rows) {
+    const settings = row.settings ?? {};
+    const returned = await tx.insert(domains)
+      .values({ slug: row.slug, name: row.name, settings })
+      .onConflictDoUpdate({
+        target: domains.slug,
+        set: { name: row.name, settings, updatedAt: sql`now()` },
+      })
+      .returning({ id: domains.id });
+
+    ids.set(row.slug, upsertedId(returned, `domain '${row.slug}'`));
+  }
+
+  return ids;
+}
+
+/**
+ * Every persona the bundle carries, upserted by the (domain, role)
+ * pair `personas_domain_id_role_unique` holds.
+ *
+ * @param tx - The transaction the whole pass runs in.
+ * @param rows - Every `data/personas.json` row.
+ * @param domainIds - What {@link applyDomains} returned.
+ */
+async function applyPersonas(
+  tx: SeedTx,
+  rows: readonly PersonaSeed[],
+  domainIds: ReadonlyMap<string, number>,
+): Promise<void> {
+  for (const row of rows) {
+    const domainId = resolvedId(
+      domainIds,
+      row.domainSlug,
+      `persona '${row.role}' names domain`,
+    );
+
+    await tx.insert(personas)
+      .values({ domainId, role: row.role, systemText: row.systemText })
+      .onConflictDoUpdate({
+        target: [personas.domainId, personas.role],
+        set: { systemText: row.systemText },
+      });
+  }
+}
+
+/**
+ * The id a category's `parentKey` names, or `null` for a root.
+ *
+ * Resolved against the ROOTS of this bundle alone, which is what
+ * makes the refusal say something true: nesting is capped at one
+ * level by the trigger on `categories`, so the only row a parent key
+ * can legitimately name is a root, and a key naming a child would
+ * otherwise be reported as absent from a bundle that declares it.
+ *
+ * @param rootIds - The keys of every root category written by this
+ * pass, against their ids.
+ * @param row - The category whose parent is being resolved.
+ * @throws Error When the row names a parent that is no root of this
+ * bundle's taxonomy.
+ */
+function resolveParentId(
+  rootIds: ReadonlyMap<string, number>,
+  row: CategorySeed,
+): number | null {
+  if (row.parentKey === null) {
+    return null;
+  }
+
+  const parentId = rootIds.get(row.parentKey);
+
+  if (parentId === undefined) {
+    throw new Error(
+      `${APPLY_ERROR_PREFIX} category '${row.key}' names parent ` +
+      `'${row.parentKey}', which is no root of this bundle's taxonomy`,
+    );
+  }
+
+  return parentId;
+}
+
+/**
+ * Every category the bundle carries, upserted by the (domain, key)
+ * pair `categories_domain_id_key_unique` holds.
+ *
+ * Roots are written before the rows naming one, because a parent has
+ * to exist as a row before a child can point at it. That ordering is
+ * not the depth cap and does not stand in for it: a category naming a
+ * child rather than a root is refused here for naming no root, and a
+ * row that reached the database another way is refused by the
+ * trigger, which is where the rule lives.
+ *
+ * @param tx - The transaction the whole pass runs in.
+ * @param rows - Every `data/categories.json` row.
+ * @param domainIds - What {@link applyDomains} returned.
+ * @returns Each category key against its id — roots and children
+ * together, since a term names either.
+ */
+async function applyCategories(
+  tx: SeedTx,
+  rows: readonly CategorySeed[],
+  domainIds: ReadonlyMap<string, number>,
+): Promise<ReadonlyMap<string, number>> {
+  const ids = new Map<string, number>();
+  const rootIds = new Map<string, number>();
+  const roots = rows.filter((row) => row.parentKey === null);
+  const children = rows.filter((row) => row.parentKey !== null);
+
+  for (const row of [...roots, ...children]) {
+    const domainId = resolvedId(
+      domainIds,
+      row.domainSlug,
+      `category '${row.key}' names domain`,
+    );
+    const parentId = resolveParentId(rootIds, row);
+    const returned = await tx.insert(categories)
+      .values({ domainId, key: row.key, name: row.name, parentId })
+      .onConflictDoUpdate({
+        target: [categories.domainId, categories.key],
+        set: { name: row.name, parentId },
+      })
+      .returning({ id: categories.id });
+    const id = upsertedId(returned, `category '${row.key}'`);
+
+    ids.set(row.key, id);
+
+    if (parentId === null) {
+      rootIds.set(row.key, id);
+    }
+  }
+
+  return ids;
+}
+
+/**
+ * Every term the bundle carries, upserted by the (category, pattern)
+ * pair `terms_category_id_pattern_unique` holds.
+ *
+ * @param tx - The transaction the whole pass runs in.
+ * @param rows - Every `data/terms.json` row.
+ * @param categoryIds - What {@link applyCategories} returned.
+ */
+async function applyTerms(
+  tx: SeedTx,
+  rows: readonly TermSeed[],
+  categoryIds: ReadonlyMap<string, number>,
+): Promise<void> {
+  for (const row of rows) {
+    const categoryId = resolvedId(
+      categoryIds,
+      row.categoryKey,
+      `term '${row.pattern}' names category`,
+    );
+
+    await tx.insert(terms)
+      .values({
+        categoryId,
+        pattern: row.pattern,
+        weight: row.weight,
+        polarity: row.polarity,
+        notes: row.notes,
+      })
+      .onConflictDoUpdate({
+        target: [terms.categoryId, terms.pattern],
+        set: {
+          weight: row.weight,
+          polarity: row.polarity,
+          notes: row.notes,
+        },
+      });
+  }
+}
+
+/**
+ * Every topic the bundle carries, upserted by the (domain, name) pair
+ * `topics_domain_id_name_unique` holds.
+ *
+ * The same object supplies the inserted values and the DO UPDATE set,
+ * so what a first pass writes and what a second rewrites cannot be
+ * edited apart. `next_run_at` and `enabled` are in neither: they are
+ * the dispatcher's and the operator's, and `data/topics.json`'s
+ * header states the consequence a seeded topic then has — configured
+ * and not yet due.
+ *
+ * @param tx - The transaction the whole pass runs in.
+ * @param rows - Every `data/topics.json` row.
+ * @param domainIds - What {@link applyDomains} returned.
+ */
+async function applyTopics(
+  tx: SeedTx,
+  rows: readonly TopicSeed[],
+  domainIds: ReadonlyMap<string, number>,
+): Promise<void> {
+  for (const row of rows) {
+    const domainId = resolvedId(
+      domainIds,
+      row.domainSlug,
+      `topic '${row.name}' names domain`,
+    );
+    const configured = {
+      searchTerms: row.searchTerms ?? [],
+      intervalSeconds: row.intervalSeconds,
+      minIntervalSeconds: row.minIntervalSeconds,
+      maxIntervalSeconds: row.maxIntervalSeconds,
+    };
+
+    await tx.insert(topics)
+      .values({ domainId, name: row.name, ...configured })
+      .onConflictDoUpdate({
+        target: [topics.domainId, topics.name],
+        set: configured,
+      });
+  }
+}
+
+/**
+ * Every row the bundle carries, written to the database.
+ *
+ * One pass is an upsert per row keyed on that concern's natural key —
+ * a domain by `slug`, a persona by (domain, role), a category by
+ * (domain, key), a term by (category, pattern), a topic by (domain,
+ * name) — so a second pass over the same files leaves the same rows
+ * rather than a second set beside the first. Those keys are the only
+ * ones a seed can spell, an id being the database's to issue, and
+ * they are also the only ones it would be safe to key on: a delete
+ * and re-insert would reissue every id and take the findings,
+ * criteria and research citing the old ones with it.
+ *
+ * The order is the one the foreign keys force. Domains first, since
+ * everything else names one; categories before terms, since a term
+ * hangs off a category id; and roots before the categories naming
+ * one, for the reason {@link applyCategories} records.
+ *
+ * The whole pass is one transaction. A refusal partway through — the
+ * depth trigger, a foreign key, a reference the bundle does not carry
+ * — rolls back the concerns already written rather than leaving them,
+ * so a broken bundle is an edit and another run rather than an edit
+ * and a reconciliation. What that does not buy is exclusion: the
+ * locks are taken row by row as the pass reaches them, so two passes
+ * at once serialize per row and either may end up the last writer of
+ * any given one, while neither leaves a half-applied bundle.
+ *
+ * Each DO UPDATE clause writes what the seed file states and nothing
+ * beside it. `next_run_at` and `enabled` on a topic are absent, and
+ * so are `feature_version` and `embedding_model` on a domain, so a
+ * pass neither re-enables a topic somebody switched off nor clears a
+ * pin the feature port (phase 4) wrote. A member the schema makes
+ * optional because the column's default means the same as absence —
+ * `settings` and `searchTerms` — is written as that default rather
+ * than left out of the update, so the file states the whole row and a
+ * settings block deleted from `domains.json` is deleted from the
+ * database by the next pass rather than surviving it.
+ *
+ * Three limits. The pass adds and rewrites and never deletes, so a
+ * term dropped from `terms.json` stays: a row removed from a seed and
+ * a row somebody added through another path are indistinguishable
+ * from here. `domains.updated_at` is stamped on every domain the
+ * bundle carries whether or not anything about it changed, until the
+ * comparison arriving later in this stage gives an unchanged row a
+ * write to skip. And a term names its category by `key` alone, half
+ * of that table's (domain, key) natural key, so two domains reusing
+ * one key would collapse onto whichever was written last —
+ * `data/terms.json`'s header records that as belonging to whoever
+ * adds the second domain.
+ *
+ * @param db - An open database. The caller owns it: nothing here
+ * opens or closes a connection, which is what lets a live test and
+ * the CLI arriving later in this stage each hand over one of their
+ * own.
+ * @param bundle - Every concern's rows, as {@link loadSeedBundle}
+ * returns them.
+ * @throws Error When a reference resolves to no row. A bundle from
+ * {@link loadSeedBundle} has had every `domainSlug` and `categoryKey`
+ * resolved already; `parentKey` is resolved here for the first time.
+ */
+export async function applySeedBundle(
+  db: Db,
+  bundle: SeedBundle,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const domainIds = await applyDomains(tx, bundle.domains);
+
+    await applyPersonas(tx, bundle.personas, domainIds);
+
+    const categoryIds = await applyCategories(
+      tx,
+      bundle.categories,
+      domainIds,
+    );
+
+    await applyTerms(tx, bundle.terms, categoryIds);
+    await applyTopics(tx, bundle.topics, domainIds);
+  });
 }
