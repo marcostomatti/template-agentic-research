@@ -2,8 +2,8 @@
 
 This directory holds the commands an operator runs by hand: seeding,
 approving, building and deploying workflows, standing the stack up, and
-tearing it down again. It is empty today — phase 1 lands the layout and
-the roster below, and the first script arrives in phase 2.
+tearing it down again. Phase 1 landed the layout and the roster below;
+phase 2 is filling it, starting with `seed.ts`.
 
 Phase numbers throughout refer to the 7-phase sequencing in the parent
 design, `.specs/2026-08-19-research-pipeline-port.md` §7.
