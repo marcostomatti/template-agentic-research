@@ -1,0 +1,54 @@
+{
+  "_readme": [
+    "SEED FILE. `scripts/seed.ts` is the only code path that opens this",
+    "directory, and nothing here is read at runtime: Postgres is the",
+    "single source of truth once a row lands, so an edit below changes",
+    "nothing until the next seed pass applies it.",
+    "",
+    "Keys beginning with an underscore are stripped by the loader before",
+    "anything is validated or written, which is what lets a seed file",
+    "carry this header at all. A seed is usually met on its own, in a",
+    "diff or an editor tab, where nothing about the content says which",
+    "path owns it.",
+    "",
+    "This file seeds `personas`. A persona is upserted by the (domain,",
+    "role) pair `personas_domain_id_role_unique` holds, so a second seed",
+    "pass rewrites the same row rather than adding a rival one a role",
+    "lookup would then have to choose between.",
+    "",
+    "`domainSlug` is not a column. `personas.domain_id` holds a key the",
+    "database issues, and no seed file can know one before the domain",
+    "row is written, so a persona names its domain by the only key an",
+    "author owns: the slug `domains.json` seeds. The loader resolves it,",
+    "and refuses a persona naming a slug the bundle does not carry.",
+    "",
+    "The three roles below are the ones the pipeline plays today, not a",
+    "closed set. `personas.role` carries no CHECK, so a fourth role is a",
+    "row rather than a migration.",
+    "",
+    "The system text is placeholder prose and says so in its own first",
+    "word, because a persona is usually met as a row in a database with",
+    "no file in view. It shows what the column holds — a role's standing",
+    "instructions, kept where an operator can edit them — and stays",
+    "neutral about the subject, like the rest of `example-tech-radar`.",
+    "Real prompt text belongs to whoever operates an instance and",
+    "reaches the database through their own seeds."
+  ],
+  "personas": [
+    {
+      "domainSlug": "example-tech-radar",
+      "role": "researcher",
+      "systemText": "Placeholder. You research the Example Tech Radar domain: work from the documents the pipeline hands you, summarize what each one says, and name the document behind every claim."
+    },
+    {
+      "domainSlug": "example-tech-radar",
+      "role": "scorer",
+      "systemText": "Placeholder. You judge one finding for the Example Tech Radar domain against that domain's own terms and criteria, and say which of them the finding met."
+    },
+    {
+      "domainSlug": "example-tech-radar",
+      "role": "drafter",
+      "systemText": "Placeholder. You write the periodic digest for the Example Tech Radar domain from the findings of a single pass, in the order they are given and without adding any that are not in the list."
+    }
+  ]
+}
