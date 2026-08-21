@@ -1,0 +1,156 @@
+{
+  "_readme": [
+    "SEED FILE. `scripts/seed.ts` is the only code path that opens this",
+    "directory, and nothing here is read at runtime: Postgres is the",
+    "single source of truth once a row lands, so an edit below changes",
+    "nothing until the next seed pass applies it.",
+    "",
+    "Keys beginning with an underscore are stripped by the loader before",
+    "anything is validated or written, which is what lets a seed file",
+    "carry this header at all. A seed is usually met on its own, in a",
+    "diff or an editor tab, where nothing about the content says which",
+    "path owns it.",
+    "",
+    "This file seeds `terms`. A term is upserted by the (category,",
+    "pattern) pair `terms_category_id_pattern_unique` holds, so a second",
+    "seed pass rewrites a term's weight and polarity rather than adding",
+    "a second row that would then count the same match twice.",
+    "",
+    "`categoryKey` is not a column. `terms.category_id` holds a key the",
+    "database issues, and no seed file can know one before the category",
+    "row is written, so a term names its category by the key",
+    "`categories.json` seeds. The loader resolves it, and refuses a term",
+    "naming a key the bundle does not carry.",
+    "",
+    "What that member does not carry is the other half of a category's",
+    "natural key. A category is identified by (domain, key), and the",
+    "bundle holds one domain today, so a key names one row; a second",
+    "domain reusing `technologies` would make this member ambiguous, and",
+    "the loader's cross-file check is where that surfaces rather than",
+    "the insert.",
+    "",
+    "`weight` is magnitude only. Which way a match points is",
+    "`polarity`'s to say, and the sign written here is not consulted, so",
+    "a negative number would mean exactly what its positive means. The",
+    "two are separate columns for that reason, and no row below infers",
+    "either from the other.",
+    "",
+    "`polarity` is one of `positive`, `negative` or `ignore` — the set",
+    "`terms_polarity_check` holds, generated from `TERM_POLARITIES` in",
+    "`src/db/schema/values.ts`. Every category below carries all three,",
+    "so the worked example exercises the whole set rather than the two",
+    "members a shorter list would reach, and its three `ignore` rows are",
+    "there for three different reasons: a pattern that matches",
+    "everything, one suspended with its weight intact, and one",
+    "considered and left neutral.",
+    "",
+    "Nothing in the schema says what an `ignore` row's weight should be,",
+    "and the rows below keep the magnitude they would carry under a",
+    "different polarity rather than flattening it to zero. Suspending or",
+    "restoring a term is then one UPDATE of one column, with no second",
+    "decision to re-take. Whether a matcher consults a suspended row's",
+    "weight is the matcher's decision and not this file's; the matcher",
+    "arrives with the scoring port in phase 5.",
+    "",
+    "`notes` is nullable and written out on every row, null included, so",
+    "a row with nothing recorded is distinguishable from a member",
+    "somebody left off. The rows carrying prose are the ones whose",
+    "direction would otherwise read as arbitrary — the negative and the",
+    "ignore ones — while a positive term at an ordinary weight explains",
+    "itself.",
+    "",
+    "The patterns are illustrative, like the rest of",
+    "`example-tech-radar`: kinds of technology rather than products, and",
+    "sectors rather than positions on them. A term pointing away from",
+    "something records the example's own stated preference and is not a",
+    "recommendation this repository makes. Real vocabulary belongs to",
+    "whoever operates an instance and reaches the database through their",
+    "own seeds."
+  ],
+  "terms": [
+    {
+      "categoryKey": "technologies",
+      "pattern": "message queue",
+      "weight": 3,
+      "polarity": "positive",
+      "notes": null
+    },
+    {
+      "categoryKey": "technologies",
+      "pattern": "graph database",
+      "weight": 2,
+      "polarity": "positive",
+      "notes": null
+    },
+    {
+      "categoryKey": "technologies",
+      "pattern": "proprietary runtime",
+      "weight": 4,
+      "polarity": "negative",
+      "notes": "Illustrative: this example's radar prefers technology it can run without a vendor relationship."
+    },
+    {
+      "categoryKey": "technologies",
+      "pattern": "framework",
+      "weight": 1,
+      "polarity": "ignore",
+      "notes": "Matches nearly every document this domain reads, so it sorts nothing. Kept as a row rather than deleted, so the next reader meets a pattern that was considered and not one that was missed."
+    },
+    {
+      "categoryKey": "phrases",
+      "pattern": "generally available",
+      "weight": 3,
+      "polarity": "positive",
+      "notes": null
+    },
+    {
+      "categoryKey": "phrases",
+      "pattern": "reference implementation",
+      "weight": 2,
+      "polarity": "positive",
+      "notes": null
+    },
+    {
+      "categoryKey": "phrases",
+      "pattern": "end of life",
+      "weight": 5,
+      "polarity": "negative",
+      "notes": "The strongest signal in this example: a document announcing one is describing something the radar can stop following."
+    },
+    {
+      "categoryKey": "phrases",
+      "pattern": "benchmark results",
+      "weight": 2,
+      "polarity": "ignore",
+      "notes": "Suspended rather than removed — it turned up on both sides often enough to separate nothing. The weight is the one it carried, so restoring it is an edit to this row's polarity alone."
+    },
+    {
+      "categoryKey": "industries",
+      "pattern": "public sector",
+      "weight": 3,
+      "polarity": "positive",
+      "notes": null
+    },
+    {
+      "categoryKey": "industries",
+      "pattern": "logistics",
+      "weight": 2,
+      "polarity": "positive",
+      "notes": null
+    },
+    {
+      "categoryKey": "industries",
+      "pattern": "real estate",
+      "weight": 3,
+      "polarity": "negative",
+      "notes": "Illustrative only. A radar narrows what it reads by naming sectors it is not following; the row shows that shape and makes no claim about the sector."
+    },
+    {
+      "categoryKey": "industries",
+      "pattern": "education",
+      "weight": 1,
+      "polarity": "ignore",
+      "notes": "Considered and left neutral: documents from this sector are read like any other. The row is what lets the next reader tell a decision from an omission."
+    }
+  ]
+}
