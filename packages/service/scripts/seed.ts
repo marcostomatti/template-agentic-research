@@ -8,8 +8,9 @@
  * refuses the whole bundle when any file fails, and then holds the
  * rows that survived against each other. `formatSeedSummary` sits
  * here too and belongs to neither half — it renders what an apply
- * pass reported, and is put where the CLI entry point that prints it
- * will be. That entry point arrives later in this stage.
+ * pass reported — and below both is the entry point that runs a pass,
+ * which is why `bun scripts/seed.ts` seeds while importing this
+ * module hands over its exports and does nothing else.
  *
  * Two sibling modules carry the rest, and this one re-exports both
  * whole, so importing any of it from here works as it did when all
@@ -27,13 +28,21 @@ import type {
   TermSeed,
   TopicSeed,
 } from './seed-schemas.js';
+import type { Db } from '../src/db/index.js';
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import { z } from 'zod';
 
+import { config } from '../src/config.js';
+import * as schema from '../src/db/schema.js';
+
+import { applySeedBundle } from './seed-apply.js';
 import {
   CategoriesFileSchema,
   DomainsFileSchema,
@@ -540,9 +549,9 @@ function crossFileFailures(bundle: SeedBundle): readonly SeedFailure[] {
  * every file then fails to be read and each failure names the path.
  *
  * Either every concern comes back or none does, which is what lets
- * the CLI arriving later in this stage validate before it opens a
- * connection: a bundle that cannot be applied whole is refused before
- * anything is applied at all.
+ * {@link runSeedCli} validate before it opens a connection: a bundle
+ * that cannot be applied whole is refused before anything is applied
+ * at all.
  *
  * Once every file has validated, the rows are held against each
  * other: a persona, a category and a topic each name a domain the
@@ -737,4 +746,115 @@ export function formatSeedSummary(counts: SeedCounts): string {
       (row) => renderLine(row.label, (tally) => String(row.counts[tally])),
     ),
   ].join('\n');
+}
+
+/**
+ * An open database and the way to let go of it.
+ *
+ * A pair rather than `src/db/index.ts`'s dependency: that one carries
+ * the eager probe and the managed stop a pool held for a service's
+ * lifetime wants, where a seed pass opens one, writes one transaction
+ * and closes it. It is also the seam a test drives
+ * {@link runSeedCli} through, against a double rather than a server.
+ */
+export interface SeedConnection {
+  /** What `applySeedBundle` writes through. */
+  readonly db: Db;
+
+  /** Releases it, whether or not the pass succeeded. */
+  close(): Promise<void>;
+}
+
+/**
+ * A pool over the database `DATABASE_URL` names.
+ *
+ * The URL is read through `src/config.ts` rather than off
+ * `process.env`, so this command and the service resolve one setting
+ * the same way and a malformed environment is refused once, at
+ * import, by the schema that owns it. The pool is small because a
+ * pass is one transaction on one connection.
+ */
+function openSeedConnection(): SeedConnection {
+  const pool = new Pool({ connectionString: config.DATABASE_URL, max: 2 });
+
+  return {
+    db: drizzle({ client: pool, schema }),
+    close: () => pool.end(),
+  };
+}
+
+/**
+ * One seed pass end to end: read the bundle, apply it, report what it
+ * did.
+ *
+ * The bundle is loaded before anything is opened, and that order is
+ * the point rather than an accident of layout: `loadSeedBundle`
+ * refuses a bundle whole, so a seed nobody can apply ends the run
+ * with no connection made and not a row written.
+ *
+ * The connection is closed in a `finally`, so a pass that threw
+ * releases it too — a pool nobody ended keeps the process alive, and
+ * a command that printed its error and then hung reads as a worse
+ * failure than the one it reported.
+ *
+ * @param connect - How to reach a database. Defaults to a pool over
+ * `DATABASE_URL`; a caller handing over its own is what makes this
+ * drivable with no server.
+ * @param dataDir - Directory the roster is read from. Defaults to
+ * {@link SEED_DATA_DIR}, the seeds this package ships.
+ * @returns What the pass did, as `applySeedBundle` reported it.
+ * @throws SeedValidationError When the bundle is refused, which is
+ * before `connect` is called at all.
+ */
+export async function runSeedCli(
+  connect: () => SeedConnection = openSeedConnection,
+  dataDir: string = SEED_DATA_DIR,
+): Promise<SeedCounts> {
+  const bundle = loadSeedBundle(dataDir);
+  const connection = connect();
+
+  try {
+    const counts = await applySeedBundle(connection.db, bundle);
+
+    console.log(`seeded from ${dataDir}`);
+    console.log(formatSeedSummary(counts));
+
+    return counts;
+  } finally {
+    await connection.close();
+  }
+}
+
+/**
+ * Whether this file is what the process was started with, rather than
+ * something another module imported.
+ *
+ * `import.meta.url` is a `file:` URL where `process.argv[1]` is a
+ * path, so comparing the two as they come is false however the
+ * process was started, and the block below would silently never run.
+ * `fileURLToPath` is what makes the comparison able to hold at all.
+ *
+ * Worth asking because this module is both a command and a library:
+ * `bun scripts/seed.ts` runs a pass, while a test importing
+ * `loadSeedBundle` or {@link runSeedCli} gets the exports and no
+ * pass.
+ */
+const INVOKED_AS_CLI = process.argv[1] !== undefined
+  && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (INVOKED_AS_CLI) {
+  try {
+    await runSeedCli();
+  } catch (cause) {
+    // A validation refusal is already a report — every failure, with
+    // its file and its field — so a stack above it buries the thing
+    // worth reading. Anything else is unexpected, and there the stack
+    // is what a reader needs.
+    process.exitCode = 1;
+    console.error(
+      cause instanceof SeedValidationError
+        ? cause.message
+        : cause,
+    );
+  }
 }

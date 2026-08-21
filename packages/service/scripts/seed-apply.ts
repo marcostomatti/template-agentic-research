@@ -709,8 +709,7 @@ async function applyTopics(
  *
  * @param db - An open database. The caller owns it: nothing here
  * opens or closes a connection, which is what lets a live test and
- * the CLI arriving later in this stage each hand over one of their
- * own.
+ * `runSeedCli` each hand over one of their own.
  * @param bundle - Every concern's rows, as `loadSeedBundle`
  * returns them.
  * @returns How each concern's rows came out — created, updated and
