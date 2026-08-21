@@ -27,6 +27,11 @@
  * the package, and the sweep over the roster calls `readMigrationSql`
  * with no argument, against the migrations this package generates.
  *
+ * The sweep generates one case per roster entry and asks afterwards
+ * which of them ran. An entry added to the table is covered by
+ * construction today, so what that question is worth is what it
+ * notices when the sweep stops being generated from the table at all.
+ *
  * The last case asks something the roster deliberately does not. Every
  * entry there is one string the migration has to carry, which is a
  * question about the constraint rather than about what it lets through
@@ -371,6 +376,23 @@ function missingStatement(assertion: SchemaSqlAssertion): string {
   return `${assertion.id} — ${assertion.description}`;
 }
 
+/**
+ * Ids of the roster entries whose case ran, added as each one does.
+ *
+ * Recorded from inside the case rather than as the loop declares it,
+ * which is the difference between a roster the sweep was written over
+ * and one it reached. Recorded before the assertion too, so an entry
+ * whose statement is missing still counts as exercised — otherwise one
+ * absent constraint is reported twice, the second time as an entry
+ * nothing covers.
+ *
+ * A set rather than a list, so an id declared twice arrives here once
+ * and fails against a roster carrying it twice. Nothing else holds the
+ * ids to the uniqueness {@link SchemaSqlAssertion} claims for them, and
+ * two entries sharing one are two cases a reader cannot tell apart.
+ */
+const EXERCISED_IDS = new Set<string>();
+
 describe('static-SQL invariant — the generated migration', () => {
   // In front of the loop rather than left to it. A roster that came
   // back empty generates no case at all, and a describe block with
@@ -390,9 +412,35 @@ describe('static-SQL invariant — the generated migration', () => {
     // tree of unknown size, and a case per entry is what lets the run
     // itself say which ids were exercised.
     it(`carries the statement behind ${assertion.id}`, () => {
+      EXERCISED_IDS.add(assertion.id);
+
       expect(missingStatement(assertion)).toBe(CARRIED);
     });
   }
+
+  // Last in the block on purpose: vitest runs a file's cases in the
+  // order they were declared, so the set read here is one every case
+  // above has already written to. A run that selects this case without
+  // them — a `-t` filter naming it — reports the whole roster as
+  // unexercised, which is what asking at run time costs over reading
+  // the loop that declared them.
+  //
+  // Run time is what makes it worth the cost. The cases are generated
+  // from `SCHEMA_SQL_ASSERTIONS`, so the loop and the roster agree by
+  // construction and an id counted off the loop would be the table
+  // compared against itself. Counted off the cases, what is asserted
+  // is that each entry reached one that ran.
+  //
+  // Which is the drift it is here for: a sweep narrowed away from the
+  // table — a slice, a filter, a hand-written list of ids — goes on
+  // passing over whatever is left, and an entry added after that has
+  // no case at all. Equality reports it by name in both directions.
+  it('runs a case for every entry the roster declares', () => {
+    const exercised = [...EXERCISED_IDS].sort();
+    const declared = SCHEMA_SQL_ASSERTIONS.map((entry) => entry.id).sort();
+
+    expect(exercised).toEqual(declared);
+  });
 });
 
 // ---------------------------------------------------------------------------
