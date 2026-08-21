@@ -1,16 +1,26 @@
 /**
- * What `loadSeedBundle` does with a seed file carrying a key no
- * schema names.
+ * What `loadSeedBundle` refuses, and what it says when it does.
  *
- * The schemas under `scripts/seed-schemas.ts` are strict at every
- * level, and that is a decision about silence rather than about
- * correctness. Zod's default is to drop a key it does not recognize
- * and report nothing, so a member spelled wrong reaches the apply
- * pass as a member that was never written — the row lands, missing
- * whatever the key was carrying, and the pass reports it created.
- * What the refusal in its place has to say is which file and which
- * member, because that is the whole of what a reader needs to find
- * it.
+ * Four refusals, in the order the loader reaches them: a key no
+ * schema names, a value outside a closed set, and — once every file
+ * has validated — a persona and a term each naming a row the bundle
+ * does not carry.
+ *
+ * The first two are the schemas under `scripts/seed-schemas.ts`
+ * being strict at every level, and that is a decision about silence
+ * rather than about correctness. Zod's default is to drop a key it
+ * does not recognize and report nothing, so a member spelled wrong
+ * reaches the apply pass as a member that was never written — the
+ * row lands, missing whatever the key was carrying, and the pass
+ * reports it created. What the refusal in its place has to say is
+ * which file and which member, because that is the whole of what a
+ * reader needs to find it.
+ *
+ * The other two are the pass that holds the validated rows against
+ * each other. A member standing in for a key the database issues has
+ * nothing but the bundle to resolve against, so a slug or a key
+ * naming no row in it is a reference that would still be naming
+ * nothing at the insert.
  *
  * The bundles below are written to disk rather than handed to a
  * schema directly. What `loadSeedBundle` has to get right is the
@@ -20,11 +30,11 @@
  * `SEED_ROSTER` itself, so their files are the files the loader
  * opens rather than five names typed out twice.
  *
- * The refusal rests on the control in front of it. A loader that
- * refused whatever it was handed would satisfy every assertion here,
- * so the sound fixture is read first: what these cases establish,
- * they establish about a loader that returns rows when the rows are
- * sound.
+ * Every refusal here rests on the control in front of it. A loader
+ * that refused whatever it was handed would satisfy every assertion
+ * here, so the sound fixture is read first: what these cases
+ * establish, they establish about a loader that returns rows when
+ * the rows are sound.
  */
 import type { SeedFailure } from '../../scripts/seed.js';
 
@@ -39,6 +49,7 @@ import {
   SeedValidationError,
   loadSeedBundle,
 } from '../../scripts/seed.js';
+import { TERM_POLARITIES } from '../../src/db/schema/values.js';
 
 // ---------------------------------------------------------------------------
 // Fixture material
@@ -64,10 +75,35 @@ const FIXTURE_TOPIC = {
 };
 
 /**
+ * The term row two of the mutated bundles below plant into, held
+ * apart for the reason {@link FIXTURE_TOPIC} gives. Each of them
+ * differs from this row in one member, so anything either one is
+ * refused for has that member alone to be about.
+ */
+const FIXTURE_TERM = {
+  categoryKey: FIXTURE_CATEGORY_KEY,
+  pattern: 'alpha',
+  weight: 1,
+  polarity: 'positive',
+  notes: null,
+};
+
+/**
+ * The persona row the absent domain slug goes into, held apart for
+ * the reason {@link FIXTURE_TOPIC} gives.
+ */
+const FIXTURE_PERSONA = {
+  domainSlug: FIXTURE_DOMAIN_SLUG,
+  role: 'researcher',
+  systemText: 'Placeholder.',
+};
+
+/**
  * One list of rows per roster concern, as a fixture states them.
  *
  * Typed loosely on purpose: a fixture has to be able to state a row
- * the schemas refuse, which is what the mutated bundle below does.
+ * the schemas refuse, which is what the unknown-key and the polarity
+ * bundles below do.
  */
 type FixtureRows = Record<keyof typeof SEED_ROSTER, readonly unknown[]>;
 
@@ -84,13 +120,7 @@ const FIXTURE_ROWS: FixtureRows = {
   domains: [
     { slug: FIXTURE_DOMAIN_SLUG, name: 'Fixture domain' },
   ],
-  personas: [
-    {
-      domainSlug: FIXTURE_DOMAIN_SLUG,
-      role: 'researcher',
-      systemText: 'Placeholder.',
-    },
-  ],
+  personas: [FIXTURE_PERSONA],
   categories: [
     {
       domainSlug: FIXTURE_DOMAIN_SLUG,
@@ -99,15 +129,7 @@ const FIXTURE_ROWS: FixtureRows = {
       parentKey: null,
     },
   ],
-  terms: [
-    {
-      categoryKey: FIXTURE_CATEGORY_KEY,
-      pattern: 'alpha',
-      weight: 1,
-      polarity: 'positive',
-      notes: null,
-    },
-  ],
+  terms: [FIXTURE_TERM],
   topics: [FIXTURE_TOPIC],
 };
 
@@ -155,6 +177,55 @@ const UNKNOWN_KEY_FIELD = `topics[0].${UNKNOWN_KEY}`;
  * holding the whole of it here would make a rewording a failure.
  */
 const UNKNOWN_KEY_REASON = 'unrecognized key';
+
+/**
+ * The polarity planted in a term row, and the whole of what is wrong
+ * with the bundle below.
+ *
+ * `terms.polarity` is held to `TERM_POLARITIES`, the tuple
+ * `terms_polarity_check` is generated from, so a value outside it is
+ * one the column would refuse as well. What the case below settles
+ * is which of the two does the refusing: the file turned back with a
+ * field to correct, rather than the column refusing it partway
+ * through an apply pass whose transaction then rolls the rest back.
+ */
+const POLARITY_OUTSIDE_TUPLE = 'sideways';
+
+/** The fixture above, with that polarity on its term row. */
+const FIXTURE_ROWS_WITH_UNKNOWN_POLARITY: FixtureRows = {
+  ...FIXTURE_ROWS,
+  terms: [{ ...FIXTURE_TERM, polarity: POLARITY_OUTSIDE_TUPLE }],
+};
+
+/**
+ * The domain slug planted in a persona row: one no row of the
+ * bundle's `domains.json` declares.
+ *
+ * A slug rather than an id, because a slug is the only half of the
+ * reference a seed can spell — `personas.domain_id` holds a key the
+ * database issues, and nothing knows it before the domain row is
+ * written. Something has to resolve the one to the other, and this
+ * fixture and the next are about the pass that does.
+ */
+const ABSENT_DOMAIN_SLUG = 'absent-domain';
+
+/** The fixture above, with its persona naming that slug. */
+const FIXTURE_ROWS_WITH_ABSENT_DOMAIN_SLUG: FixtureRows = {
+  ...FIXTURE_ROWS,
+  personas: [{ ...FIXTURE_PERSONA, domainSlug: ABSENT_DOMAIN_SLUG }],
+};
+
+/**
+ * The category key planted in a term row: one no row of the bundle's
+ * `categories.json` declares.
+ */
+const ABSENT_CATEGORY_KEY = 'absent-category';
+
+/** The fixture above, with its term naming that key. */
+const FIXTURE_ROWS_WITH_ABSENT_CATEGORY_KEY: FixtureRows = {
+  ...FIXTURE_ROWS,
+  terms: [{ ...FIXTURE_TERM, categoryKey: ABSENT_CATEGORY_KEY }],
+};
 
 // ---------------------------------------------------------------------------
 // Fixture directories
@@ -330,5 +401,100 @@ describe('loadSeedBundle — a key no schema names', () => {
     expect(refusedMessage(directory)).toContain(
       `${UNKNOWN_KEY_FILE} (${UNKNOWN_KEY_FIELD})`,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A value outside a closed set
+// ---------------------------------------------------------------------------
+
+describe('loadSeedBundle — a polarity outside the tuple', () => {
+  // The guard that keeps the case below about a value the tuple does
+  // not carry. A member added to `TERM_POLARITIES` later makes the
+  // fixture sound, which reddens that case with a diff about a list
+  // of failures rather than about the fixture that stopped being
+  // one. This case says which happened.
+  it('plants a value the polarity tuple does not carry', () => {
+    expect(TERM_POLARITIES).not.toContain(POLARITY_OUTSIDE_TUPLE);
+  });
+
+  // Equality over the whole list for the reason the unknown-key case
+  // gives. The message is pinned at the offending value and nowhere
+  // else: the sentence around it is Zod's to word, while a refusal
+  // naming the row without the value is a reader sent to the right
+  // row to find nothing. The value is also what tells this refusal
+  // from one over the same member for another reason — a polarity
+  // that is not a string is refused too, by a message quoting
+  // nothing.
+  it('reports the file and the field, and nothing else', () => {
+    const directory = writeFixture(FIXTURE_ROWS_WITH_UNKNOWN_POLARITY);
+
+    expect(refusedFailures(directory)).toEqual([
+      {
+        file: SEED_ROSTER.terms.file,
+        field: 'terms[0].polarity',
+        message: expect.stringContaining(`'${POLARITY_OUTSIDE_TUPLE}'`),
+      },
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A reference resolving to nothing
+// ---------------------------------------------------------------------------
+
+describe('loadSeedBundle — a persona naming an absent domain', () => {
+  // The rows are held against each other only once every file has
+  // validated, so this bundle is sound file by file and disagrees
+  // only across them. That ordering is why the case rests on the
+  // ones above as much as on the sound fixture: a bundle any schema
+  // refused never reaches the pass under test.
+  //
+  // Equality over the whole list carries a second load here. A
+  // category row and a topic row name a domain slug too and both
+  // still resolve, so a pass resolving against the wrong set of
+  // slugs reports three failures where this one reports one.
+  //
+  // Two files are in play and the failure carries both. It is
+  // reported against `personas.json`, which holds the row to
+  // correct, while the message names `domains.json`, where the slug
+  // would have to be declared for it to resolve — so the tail of the
+  // message is pinned rather than the value alone. The sentence in
+  // front of that tail is the loader's to word and is not held here.
+  it('reports the file and the field, and nothing else', () => {
+    const directory = writeFixture(FIXTURE_ROWS_WITH_ABSENT_DOMAIN_SLUG);
+
+    expect(refusedFailures(directory)).toEqual([
+      {
+        file: SEED_ROSTER.personas.file,
+        field: 'personas[0].domainSlug',
+        message: expect.stringContaining(
+          `${SEED_ROSTER.domains.file} declares: '${ABSENT_DOMAIN_SLUG}'`,
+        ),
+      },
+    ]);
+  });
+});
+
+describe('loadSeedBundle — a term naming an absent category', () => {
+  // The half of that pass keyed on something other than a domain
+  // slug: a term names a category by the `key` half of that table's
+  // (domain, key) natural key, and the two files it puts in play are
+  // `terms.json` and `categories.json`.
+  //
+  // Equality over the whole list, and a message pinned at its tail,
+  // for the reasons the persona case gives.
+  it('reports the file and the field, and nothing else', () => {
+    const directory = writeFixture(FIXTURE_ROWS_WITH_ABSENT_CATEGORY_KEY);
+
+    expect(refusedFailures(directory)).toEqual([
+      {
+        file: SEED_ROSTER.terms.file,
+        field: 'terms[0].categoryKey',
+        message: expect.stringContaining(
+          `${SEED_ROSTER.categories.file} declares: '${ABSENT_CATEGORY_KEY}'`,
+        ),
+      },
+    ]);
   });
 });
