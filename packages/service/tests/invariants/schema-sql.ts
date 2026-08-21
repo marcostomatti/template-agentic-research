@@ -382,3 +382,69 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
     pattern: /^[ \t]*CONSTRAINT "sources_kind_check" CHECK \("sources"\."kind" in \(/m,
   },
 ];
+
+/**
+ * The value list inside the `sources.kind` CHECK, captured whole.
+ *
+ * Not the roster entry of the same name, which stops at the opening
+ * parenthesis. That one asks whether the constraint is there and this
+ * one asks what it admits: a single pattern spelling the members out
+ * would report a tuple widened without a migration as a constraint
+ * that had gone missing, which is one defect reported as another in
+ * the first place a reader would go looking for it.
+ *
+ * Greedy to the last `))` on the line, where `checkOneOf` closes the
+ * membership test and the CHECK around it. `.` stops at a newline and
+ * drizzle writes the list on one line, so the capture cannot run on
+ * past the statement it started in.
+ */
+const SOURCES_KIND_CHECK_VALUES = /^[ \t]*CONSTRAINT "sources_kind_check" CHECK \("sources"\."kind" in \((.*)\)\)/m;
+
+/**
+ * Every single-quoted literal in a rendered value list, in order.
+ *
+ * The plain form, matching what `tests/schema/value-sets.test.ts`
+ * reads out of a freshly rendered CHECK. A member carrying a quote of
+ * its own reaches the migration as SQL's doubled-quote escape and
+ * comes back out of here as two literals — wrong, but not quiet: the
+ * comparison against the tuple then fails rather than passing on a
+ * member neither side holds.
+ */
+function literalsIn(valueList: string): readonly string[] {
+  return [...valueList.matchAll(/'([^']*)'/g)].map((match) => match[1] ?? '');
+}
+
+/**
+ * The members the generated migration's `sources.kind` CHECK admits.
+ *
+ * Read out of the SQL rather than off `SOURCE_KINDS`, which is the
+ * whole of what makes asking worthwhile: the tuple and the CHECK are
+ * two declarations of one set, and the migration is where the second
+ * stops following the first. A tuple widened in `values.ts` and never
+ * generated leaves the database refusing rows the union derived from
+ * it calls valid, and no other seam in this package reads both sides.
+ *
+ * Refuses rather than returning nothing when the constraint is not
+ * there. An empty list compares against the tuple as a CHECK admitting
+ * no member at all, which is a different defect from a CHECK that is
+ * gone — and the roster entry beside it is what reports that one.
+ *
+ * @param text - Concatenated migration SQL, as
+ * {@link readMigrationSql} returns it.
+ * @returns The literals the CHECK names, in the order it names them.
+ */
+export function sourceKindCheckMembers(text: string): readonly string[] {
+  const match = SOURCES_KIND_CHECK_VALUES.exec(text);
+
+  if (match === null) {
+    throw new Error(
+      'No sources_kind_check CHECK resolved from the migration text, ' +
+      'so there is no value list to compare against SOURCE_KINDS. The ' +
+      'roster entry sources-kind-check reports that absence as what it ' +
+      'is; this refusal is here so the two are never confused for a ' +
+      'CHECK that admits nothing.',
+    );
+  }
+
+  return literalsIn(match[1] ?? '');
+}

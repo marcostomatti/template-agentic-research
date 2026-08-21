@@ -27,6 +27,17 @@
  * the package, and the sweep over the roster calls `readMigrationSql`
  * with no argument, against the migrations this package generates.
  *
+ * The last case asks something the roster deliberately does not. Every
+ * entry there is one string the migration has to carry, which is a
+ * question about the constraint rather than about what it lets through
+ * — so the members behind `sources.kind` are compared against
+ * `SOURCE_KINDS` itself, the tuple the CHECK was generated from. The
+ * two sides are independent in the way that matters: one is TypeScript
+ * somebody edits, the other is SQL a generator wrote, and widening the
+ * first without re-running the second is exactly the state where the
+ * union a caller programs against and the constraint the database
+ * enforces stop describing the same set.
+ *
  * What that sweep is evidence about is the repository, never a
  * database. A constraint dropped at a psql prompt leaves every
  * statement asserted here exactly where it was, and the live suite is
@@ -41,11 +52,14 @@ import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
+import { SOURCE_KINDS } from '../../src/db/schema/values.js';
+
 import {
   EmptyMigrationDirectoryError,
   EmptyMigrationFileError,
   SCHEMA_SQL_ASSERTIONS,
   readMigrationSql,
+  sourceKindCheckMembers,
 } from './schema-sql.js';
 
 // ---------------------------------------------------------------------------
@@ -379,4 +393,33 @@ describe('static-SQL invariant — the generated migration', () => {
       expect(missingStatement(assertion)).toBe(CARRIED);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// The sources.kind value set
+// ---------------------------------------------------------------------------
+
+/** Sorted copy, so an equality is over members rather than over order. */
+function sorted(members: readonly string[]): readonly string[] {
+  return [...members].sort();
+}
+
+describe('static-SQL invariant — the sources.kind value set', () => {
+  // Equality rather than a search per member, which is what makes the
+  // case fail in both directions: on a member the tuple grew and the
+  // migration never heard about, and on a literal the CHECK admits
+  // that the tuple no longer declares. Only the second of those is
+  // visible from the database, and neither is visible from the roster
+  // entry above — it stops at the opening parenthesis for this reason.
+  //
+  // `SOURCE_KINDS` is imported rather than written out here, unlike the
+  // members in `tests/schema/value-sets.test.ts`. That file is what
+  // holds the tuple to a set somebody typed by hand; this one is about
+  // the tuple and the generated SQL agreeing, so importing one side is
+  // the assertion rather than a shortcut around it.
+  it('names exactly the members of SOURCE_KINDS', () => {
+    const members = sourceKindCheckMembers(MIGRATION.text);
+
+    expect(sorted(members)).toEqual(sorted(SOURCE_KINDS));
+  });
 });
