@@ -46,10 +46,10 @@
  * What no schema names is as deliberate as what it does. Surrogate
  * ids, `created_at` and `updated_at` belong to the database;
  * `next_run_at` and `enabled` on a topic belong to the dispatcher and
- * the operator. A seed file upserts on every pass, so seeding
- * `enabled` would switch a topic back on that somebody had switched
- * off, and seeding a due time would reset a schedule already in
- * flight. Leaving them unnamed under `.strict()` is what turns
+ * the operator. A pass writes back whatever a seed file states, so
+ * seeding `enabled` would switch a topic back on that somebody had
+ * switched off, and seeding a due time would reset a schedule already
+ * in flight. Leaving them unnamed under `.strict()` is what turns
  * writing one into an error rather than a quiet overwrite.
  *
  * `domainSlug`, `categoryKey` and `parentKey` are not columns. They

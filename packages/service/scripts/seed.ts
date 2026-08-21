@@ -7,9 +7,9 @@
  * seed's commentary, `loadSeedBundle`, which reads the roster,
  * refuses the whole bundle when any file fails, and then holds the
  * rows that survived against each other, and `applySeedBundle`, which
- * upserts them on their natural keys inside one transaction. The
- * summary a pass reports and the CLI entry point arrive later in this
- * stage.
+ * upserts them on their natural keys inside one transaction and
+ * counts what each concern's rows did. The rendering of those counts
+ * and the CLI entry point arrive later in this stage.
  *
  * The per-file schemas a stripped file is validated against are in
  * `./seed-schemas.ts`, which this module re-exports whole: the shape
@@ -30,7 +30,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -647,6 +647,179 @@ type SeedTx = Parameters<Parameters<Db['transaction']>[0]>[0];
 const APPLY_ERROR_PREFIX = 'seed apply:';
 
 /**
+ * How one concern's rows came out of a pass.
+ *
+ * Three tallies rather than a written/skipped pair, because what an
+ * operator asks after a run is whether it did what the edit intended:
+ * `updated: 1` beside `unchanged: 40` answers that, and one total of
+ * the rows a pass touched does not.
+ */
+export interface SeedRowCounts {
+  /** Rows inserted, the natural key naming none before the pass. */
+  readonly created: number;
+
+  /** Rows rewritten, a stored value differing from the seed's. */
+  readonly updated: number;
+
+  /** Rows left alone, every value the pass writes already stored. */
+  readonly unchanged: number;
+}
+
+/**
+ * What one {@link applySeedBundle} pass did, a concern at a time.
+ *
+ * One member per {@link SEED_ROSTER} entry and named the same way, so
+ * a concern's file in `data/`, its rows in a {@link SeedBundle} and
+ * its counts here all carry one name.
+ */
+export interface SeedCounts {
+  readonly domains: SeedRowCounts;
+  readonly personas: SeedRowCounts;
+  readonly categories: SeedRowCounts;
+  readonly terms: SeedRowCounts;
+  readonly topics: SeedRowCounts;
+}
+
+/** What a pass did to one row. */
+type SeedOutcome = 'created' | 'updated' | 'unchanged';
+
+/**
+ * One concern's outcomes, counted.
+ *
+ * @param outcomes - One entry per row the concern carried, in the
+ * order the pass reached them.
+ */
+function seedRowCounts(outcomes: readonly SeedOutcome[]): SeedRowCounts {
+  const total = (outcome: SeedOutcome): number => (
+    outcomes.filter((member) => member === outcome).length
+  );
+
+  return {
+    created: total('created'),
+    updated: total('updated'),
+    unchanged: total('unchanged'),
+  };
+}
+
+/**
+ * Whether a value is a plain JSON object rather than an array, a
+ * scalar, `null`, or an instance of something.
+ *
+ * The prototype test is what keeps {@link sameStoredValue} honest
+ * about values it was not written for. A `Date` is an object with no
+ * own enumerable keys, so a comparison by key set would report any
+ * two of them as the same value.
+ */
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype: unknown = Object.getPrototypeOf(value);
+
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * Whether the database already holds the value this pass would write.
+ *
+ * Structural rather than `===`, because two of the compared columns
+ * are JSONB and come back as a fresh object on every read, so
+ * identity is false for a row nothing has touched. `JSON.stringify`
+ * on both sides would not serve either: Postgres stores a jsonb
+ * object's keys sorted by length and then bytewise rather than as
+ * they were written, so a settings block round-trips with its members
+ * reordered and the two strings differ where the two values do not.
+ *
+ * The value space is JSON's — strings, numbers, booleans, `null`,
+ * arrays and plain objects — which is what these columns hold. A
+ * value outside it falls through to identity and reports the row as
+ * changed, so the cost of meeting one is a write nobody needed rather
+ * than a change nobody made.
+ *
+ * @param stored - What the database came back with.
+ * @param written - What this pass would write.
+ */
+function sameStoredValue(stored: unknown, written: unknown): boolean {
+  if (Array.isArray(stored) && Array.isArray(written)) {
+    return stored.length === written.length
+      && stored.every((item, at) => sameStoredValue(item, written[at]));
+  }
+
+  if (isJsonRecord(stored) && isJsonRecord(written)) {
+    const keys = Object.keys(stored);
+
+    return keys.length === Object.keys(written).length
+      && keys.every((key) => sameStoredValue(stored[key], written[key]));
+  }
+
+  return stored === written;
+}
+
+/** A row the database holds, as much of it as a pass reads. */
+interface StoredRow {
+  /** The id the database issued for it. */
+  readonly id: number;
+
+  /**
+   * Every column this pass writes, as the database holds them, under
+   * the member names the pass writes them under.
+   */
+  readonly written: unknown;
+}
+
+/**
+ * What a pass does to one row, carrying the id where it does nothing.
+ *
+ * The id rides on the unchanged branch alone because that is the one
+ * branch with no `RETURNING` to read it from, and the concerns below
+ * still need it: skipping the write for an unchanged domain must not
+ * leave the personas naming it with no foreign key to resolve to.
+ */
+type SeedRowPlan =
+  | { readonly outcome: 'created' }
+  | { readonly outcome: 'updated' }
+  | { readonly outcome: 'unchanged'; readonly id: number };
+
+/**
+ * What writing one seed row over what the database holds would do.
+ *
+ * @param stored - What the natural key selected, or `undefined` when
+ * it selected nothing.
+ * @param written - Every value this pass would write, as one object.
+ * That same object supplies the insert and the DO UPDATE set, which
+ * is what stops the comparison and the write being edited apart: a
+ * column written but not compared would let a genuinely changed row
+ * report unchanged and skip the update it needed.
+ */
+function plannedRow(
+  stored: StoredRow | undefined,
+  written: unknown,
+): SeedRowPlan {
+  if (stored === undefined) {
+    return { outcome: 'created' };
+  }
+
+  if (sameStoredValue(stored.written, written)) {
+    return { outcome: 'unchanged', id: stored.id };
+  }
+
+  return { outcome: 'updated' };
+}
+
+/**
+ * What a concern the concerns below resolve keys against came back
+ * with.
+ */
+interface AppliedConcern {
+  /** Each natural key against the id the database holds it under. */
+  readonly ids: ReadonlyMap<string, number>;
+
+  /** How this concern's own rows came out. */
+  readonly counts: SeedRowCounts;
+}
+
+/**
  * The id an upsert returned.
  *
  * The empty case cannot arise as this module calls it: `ON CONFLICT
@@ -672,6 +845,32 @@ function upsertedId(
   }
 
   return row.id;
+}
+
+/**
+ * The id a planned row ends up under: the one already stored where
+ * the pass has nothing to write, and the upsert's own otherwise.
+ *
+ * The two concerns other concerns resolve keys against — domains and
+ * categories — need an id whichever branch a row takes, so an
+ * unchanged row skipping its write must not also skip the map entry
+ * a later concern's foreign key resolves through.
+ *
+ * @param plan - What {@link plannedRow} decided for the row.
+ * @param upsert - The write to issue, deferred so an unchanged row
+ * never issues it.
+ * @param what - The row being written, for the message.
+ */
+async function plannedId(
+  plan: SeedRowPlan,
+  upsert: () => PromiseLike<readonly { readonly id: number }[]>,
+  what: string,
+): Promise<number> {
+  if (plan.outcome === 'unchanged') {
+    return plan.id;
+  }
+
+  return upsertedId(await upsert(), what);
 }
 
 /**
@@ -713,32 +912,51 @@ function resolvedId(
 /**
  * Every domain the bundle carries, upserted by `slug`.
  *
+ * `updated_at` is stamped by the DO UPDATE clause and so moves only
+ * on the rows this pass actually rewrites, which is what the
+ * comparison ahead of the write buys the column: it goes on recording
+ * when the domain last changed rather than when the seed was last
+ * applied.
+ *
  * @param tx - The transaction the whole pass runs in.
  * @param rows - Every `data/domains.json` row.
  * @returns Each slug against the id the database holds that domain
  * under, which is what every concern below resolves `domainSlug`
- * against.
+ * against, and how these rows came out.
  */
 async function applyDomains(
   tx: SeedTx,
   rows: readonly DomainSeed[],
-): Promise<ReadonlyMap<string, number>> {
+): Promise<AppliedConcern> {
   const ids = new Map<string, number>();
+  const outcomes: SeedOutcome[] = [];
 
   for (const row of rows) {
-    const settings = row.settings ?? {};
-    const returned = await tx.insert(domains)
-      .values({ slug: row.slug, name: row.name, settings })
-      .onConflictDoUpdate({
-        target: domains.slug,
-        set: { name: row.name, settings, updatedAt: sql`now()` },
-      })
-      .returning({ id: domains.id });
+    const written = { name: row.name, settings: row.settings ?? {} };
+    const [stored] = await tx.select({
+      id: domains.id,
+      written: { name: domains.name, settings: domains.settings },
+    })
+      .from(domains)
+      .where(eq(domains.slug, row.slug));
+    const plan = plannedRow(stored, written);
 
-    ids.set(row.slug, upsertedId(returned, `domain '${row.slug}'`));
+    outcomes.push(plan.outcome);
+
+    ids.set(row.slug, await plannedId(
+      plan,
+      () => tx.insert(domains)
+        .values({ slug: row.slug, ...written })
+        .onConflictDoUpdate({
+          target: domains.slug,
+          set: { ...written, updatedAt: sql`now()` },
+        })
+        .returning({ id: domains.id }),
+      `domain '${row.slug}'`,
+    ));
   }
 
-  return ids;
+  return { ids, counts: seedRowCounts(outcomes) };
 }
 
 /**
@@ -753,21 +971,42 @@ async function applyPersonas(
   tx: SeedTx,
   rows: readonly PersonaSeed[],
   domainIds: ReadonlyMap<string, number>,
-): Promise<void> {
+): Promise<SeedRowCounts> {
+  const outcomes: SeedOutcome[] = [];
+
   for (const row of rows) {
     const domainId = resolvedId(
       domainIds,
       row.domainSlug,
       `persona '${row.role}' names domain`,
     );
+    const written = { systemText: row.systemText };
+    const [stored] = await tx.select({
+      id: personas.id,
+      written: { systemText: personas.systemText },
+    })
+      .from(personas)
+      .where(and(
+        eq(personas.domainId, domainId),
+        eq(personas.role, row.role),
+      ));
+    const plan = plannedRow(stored, written);
+
+    outcomes.push(plan.outcome);
+
+    if (plan.outcome === 'unchanged') {
+      continue;
+    }
 
     await tx.insert(personas)
-      .values({ domainId, role: row.role, systemText: row.systemText })
+      .values({ domainId, role: row.role, ...written })
       .onConflictDoUpdate({
         target: [personas.domainId, personas.role],
-        set: { systemText: row.systemText },
+        set: written,
       });
   }
+
+  return seedRowCounts(outcomes);
 }
 
 /**
@@ -779,8 +1018,9 @@ async function applyPersonas(
  * can legitimately name is a root, and a key naming a child would
  * otherwise be reported as absent from a bundle that declares it.
  *
- * @param rootIds - The keys of every root category written by this
- * pass, against their ids.
+ * @param rootIds - The keys of every root category this pass reached,
+ * against their ids — written this pass or already stored, since an
+ * unchanged root still resolves.
  * @param row - The category whose parent is being resolved.
  * @throws Error When the row names a parent that is no root of this
  * bundle's taxonomy.
@@ -820,15 +1060,16 @@ function resolveParentId(
  * @param rows - Every `data/categories.json` row.
  * @param domainIds - What {@link applyDomains} returned.
  * @returns Each category key against its id — roots and children
- * together, since a term names either.
+ * together, since a term names either — and how these rows came out.
  */
 async function applyCategories(
   tx: SeedTx,
   rows: readonly CategorySeed[],
   domainIds: ReadonlyMap<string, number>,
-): Promise<ReadonlyMap<string, number>> {
+): Promise<AppliedConcern> {
   const ids = new Map<string, number>();
   const rootIds = new Map<string, number>();
+  const outcomes: SeedOutcome[] = [];
   const roots = rows.filter((row) => row.parentKey === null);
   const children = rows.filter((row) => row.parentKey !== null);
 
@@ -839,14 +1080,31 @@ async function applyCategories(
       `category '${row.key}' names domain`,
     );
     const parentId = resolveParentId(rootIds, row);
-    const returned = await tx.insert(categories)
-      .values({ domainId, key: row.key, name: row.name, parentId })
-      .onConflictDoUpdate({
-        target: [categories.domainId, categories.key],
-        set: { name: row.name, parentId },
-      })
-      .returning({ id: categories.id });
-    const id = upsertedId(returned, `category '${row.key}'`);
+    const written = { name: row.name, parentId };
+    const [stored] = await tx.select({
+      id: categories.id,
+      written: { name: categories.name, parentId: categories.parentId },
+    })
+      .from(categories)
+      .where(and(
+        eq(categories.domainId, domainId),
+        eq(categories.key, row.key),
+      ));
+    const plan = plannedRow(stored, written);
+
+    outcomes.push(plan.outcome);
+
+    const id = await plannedId(
+      plan,
+      () => tx.insert(categories)
+        .values({ domainId, key: row.key, ...written })
+        .onConflictDoUpdate({
+          target: [categories.domainId, categories.key],
+          set: written,
+        })
+        .returning({ id: categories.id }),
+      `category '${row.key}'`,
+    );
 
     ids.set(row.key, id);
 
@@ -855,7 +1113,7 @@ async function applyCategories(
     }
   }
 
-  return ids;
+  return { ids, counts: seedRowCounts(outcomes) };
 }
 
 /**
@@ -870,43 +1128,63 @@ async function applyTerms(
   tx: SeedTx,
   rows: readonly TermSeed[],
   categoryIds: ReadonlyMap<string, number>,
-): Promise<void> {
+): Promise<SeedRowCounts> {
+  const outcomes: SeedOutcome[] = [];
+
   for (const row of rows) {
     const categoryId = resolvedId(
       categoryIds,
       row.categoryKey,
       `term '${row.pattern}' names category`,
     );
+    const written = {
+      weight: row.weight,
+      polarity: row.polarity,
+      notes: row.notes,
+    };
+    const [stored] = await tx.select({
+      id: terms.id,
+      written: {
+        weight: terms.weight,
+        polarity: terms.polarity,
+        notes: terms.notes,
+      },
+    })
+      .from(terms)
+      .where(and(
+        eq(terms.categoryId, categoryId),
+        eq(terms.pattern, row.pattern),
+      ));
+    const plan = plannedRow(stored, written);
+
+    outcomes.push(plan.outcome);
+
+    if (plan.outcome === 'unchanged') {
+      continue;
+    }
 
     await tx.insert(terms)
-      .values({
-        categoryId,
-        pattern: row.pattern,
-        weight: row.weight,
-        polarity: row.polarity,
-        notes: row.notes,
-      })
+      .values({ categoryId, pattern: row.pattern, ...written })
       .onConflictDoUpdate({
         target: [terms.categoryId, terms.pattern],
-        set: {
-          weight: row.weight,
-          polarity: row.polarity,
-          notes: row.notes,
-        },
+        set: written,
       });
   }
+
+  return seedRowCounts(outcomes);
 }
 
 /**
  * Every topic the bundle carries, upserted by the (domain, name) pair
  * `topics_domain_id_name_unique` holds.
  *
- * The same object supplies the inserted values and the DO UPDATE set,
- * so what a first pass writes and what a second rewrites cannot be
- * edited apart. `next_run_at` and `enabled` are in neither: they are
- * the dispatcher's and the operator's, and `data/topics.json`'s
- * header states the consequence a seeded topic then has — configured
- * and not yet due.
+ * The same object supplies the compared values, the inserted values
+ * and the DO UPDATE set, so what a first pass writes, what a second
+ * rewrites and what either holds a stored row against cannot be
+ * edited apart. `next_run_at` and `enabled` are in none of the three:
+ * they are the dispatcher's and the operator's, and
+ * `data/topics.json`'s header states the consequence a seeded topic
+ * then has — configured and not yet due.
  *
  * @param tx - The transaction the whole pass runs in.
  * @param rows - Every `data/topics.json` row.
@@ -916,27 +1194,52 @@ async function applyTopics(
   tx: SeedTx,
   rows: readonly TopicSeed[],
   domainIds: ReadonlyMap<string, number>,
-): Promise<void> {
+): Promise<SeedRowCounts> {
+  const outcomes: SeedOutcome[] = [];
+
   for (const row of rows) {
     const domainId = resolvedId(
       domainIds,
       row.domainSlug,
       `topic '${row.name}' names domain`,
     );
-    const configured = {
+    const written = {
       searchTerms: row.searchTerms ?? [],
       intervalSeconds: row.intervalSeconds,
       minIntervalSeconds: row.minIntervalSeconds,
       maxIntervalSeconds: row.maxIntervalSeconds,
     };
+    const [stored] = await tx.select({
+      id: topics.id,
+      written: {
+        searchTerms: topics.searchTerms,
+        intervalSeconds: topics.intervalSeconds,
+        minIntervalSeconds: topics.minIntervalSeconds,
+        maxIntervalSeconds: topics.maxIntervalSeconds,
+      },
+    })
+      .from(topics)
+      .where(and(
+        eq(topics.domainId, domainId),
+        eq(topics.name, row.name),
+      ));
+    const plan = plannedRow(stored, written);
+
+    outcomes.push(plan.outcome);
+
+    if (plan.outcome === 'unchanged') {
+      continue;
+    }
 
     await tx.insert(topics)
-      .values({ domainId, name: row.name, ...configured })
+      .values({ domainId, name: row.name, ...written })
       .onConflictDoUpdate({
         target: [topics.domainId, topics.name],
-        set: configured,
+        set: written,
       });
   }
+
+  return seedRowCounts(outcomes);
 }
 
 /**
@@ -977,17 +1280,26 @@ async function applyTopics(
  * settings block deleted from `domains.json` is deleted from the
  * database by the next pass rather than surviving it.
  *
- * Three limits. The pass adds and rewrites and never deletes, so a
+ * Every row is read before it is written. What the natural key
+ * selects is held against the values the pass would write, and a row
+ * already carrying all of them is counted unchanged and left where it
+ * is rather than rewritten with what it holds. That is what makes the
+ * returned counts worth reading: a summary reporting every row as
+ * updated on every pass reports only that the pass ran.
+ *
+ * Four limits. The pass adds and rewrites and never deletes, so a
  * term dropped from `terms.json` stays: a row removed from a seed and
  * a row somebody added through another path are indistinguishable
- * from here. `domains.updated_at` is stamped on every domain the
- * bundle carries whether or not anything about it changed, until the
- * comparison arriving later in this stage gives an unchanged row a
- * write to skip. And a term names its category by `key` alone, half
- * of that table's (domain, key) natural key, so two domains reusing
- * one key would collapse onto whichever was written last —
- * `data/terms.json`'s header records that as belonging to whoever
- * adds the second domain.
+ * from here. The read and the write are two statements, so a row
+ * another writer inserts between them is absorbed by the DO UPDATE
+ * clause and counted created though it updated — the row is right and
+ * the tally is one out. An unchanged row is unchanged in the columns
+ * this pass writes and says nothing about the others, so a topic
+ * whose `next_run_at` has moved is unchanged here. And a term names
+ * its category by `key` alone, half of that table's (domain, key)
+ * natural key, so two domains reusing one key would collapse onto
+ * whichever was written last — `data/terms.json`'s header records
+ * that as belonging to whoever adds the second domain.
  *
  * @param db - An open database. The caller owns it: nothing here
  * opens or closes a connection, which is what lets a live test and
@@ -995,6 +1307,8 @@ async function applyTopics(
  * own.
  * @param bundle - Every concern's rows, as {@link loadSeedBundle}
  * returns them.
+ * @returns How each concern's rows came out — created, updated and
+ * unchanged, counted a concern at a time.
  * @throws Error When a reference resolves to no row. A bundle from
  * {@link loadSeedBundle} has had every `domainSlug` and `categoryKey`
  * resolved already; `parentKey` is resolved here for the first time.
@@ -1002,19 +1316,28 @@ async function applyTopics(
 export async function applySeedBundle(
   db: Db,
   bundle: SeedBundle,
-): Promise<void> {
-  await db.transaction(async (tx) => {
-    const domainIds = await applyDomains(tx, bundle.domains);
-
-    await applyPersonas(tx, bundle.personas, domainIds);
-
-    const categoryIds = await applyCategories(
+): Promise<SeedCounts> {
+  return db.transaction(async (tx) => {
+    const appliedDomains = await applyDomains(tx, bundle.domains);
+    const personas = await applyPersonas(
+      tx,
+      bundle.personas,
+      appliedDomains.ids,
+    );
+    const appliedCategories = await applyCategories(
       tx,
       bundle.categories,
-      domainIds,
+      appliedDomains.ids,
     );
+    const terms = await applyTerms(tx, bundle.terms, appliedCategories.ids);
+    const topics = await applyTopics(tx, bundle.topics, appliedDomains.ids);
 
-    await applyTerms(tx, bundle.terms, categoryIds);
-    await applyTopics(tx, bundle.topics, domainIds);
+    return {
+      domains: appliedDomains.counts,
+      personas,
+      categories: appliedCategories.counts,
+      terms,
+      topics,
+    };
   });
 }
