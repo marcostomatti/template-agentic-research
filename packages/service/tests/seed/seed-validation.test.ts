@@ -1,7 +1,8 @@
 /**
  * What `stripUnderscoreKeys` drops, what `loadSeedBundle` refuses,
  * what it says when it does, what it makes of the seeds this package
- * ships, and what a run does with a refusal.
+ * ships, what the shipped taxonomy has to be that no schema asks of
+ * it, and what a run does with a refusal.
  *
  * The strip runs ahead of every schema and is asserted on its own
  * rather than through a fixture bundle. What it has to get right is
@@ -12,6 +13,12 @@
  * with a file it is handed; only `data/` says whether the files it
  * was written for are ones it still accepts, and nothing else in
  * this package holds them to a schema at all.
+ *
+ * One of them is held to something past its schema. Nesting is
+ * capped at one level by a trigger on `categories`, and the worked
+ * example stays clear of that cap by carrying roots and nothing else
+ * — a property nothing between the file and the database asks of it,
+ * and one asked here rather than met partway through an apply pass.
  *
  * Four refusals, in the order the loader reaches them: a key no
  * schema names, a value outside a closed set, and — once every file
@@ -507,6 +514,57 @@ describe('loadSeedBundle — the seed files this package ships', () => {
 
     expect(ROSTER_CONCERNS.length).toBeGreaterThan(0);
     expect(emptyFiles).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The taxonomy this package ships, and the cap it stays under
+// ---------------------------------------------------------------------------
+
+describe('data/categories.json — a taxonomy of roots', () => {
+  // Nesting is capped at one level by a trigger on `categories`, and
+  // nothing between this file and that trigger holds the taxonomy
+  // this package ships to it. The row schema sees one row at a time,
+  // and the pass that holds rows against each other resolves a
+  // `categoryKey` and leaves `parentKey` alone.
+  //
+  // What does look is the apply pass, which orders roots before the
+  // rows naming one and refuses a parent that is no root of the same
+  // bundle. It is not the cap and does not stand in for it — a
+  // parent that is a root of another domain resolves there and is
+  // refused by the trigger — and either way the refusal lands inside
+  // a transaction, with a connection open and the rest of the bundle
+  // written and about to be rolled back. Asked here, the same
+  // question is a red case over a file, with nothing opened.
+  //
+  // Roots and nothing else is stronger than the cap requires: one
+  // level of nesting is legal, and both the seed and the apply pass
+  // write it. It is what the worked example ships anyway, because a
+  // taxonomy in which no row names a parent leaves neither guard of
+  // that trigger anything to fire on, and stays clear of the cap
+  // without anyone working out which side of it a row added later
+  // falls on.
+  //
+  // Read through `loadSeedBundle` rather than by opening the file,
+  // because what it hands back is what an apply pass writes: the
+  // header stripped off the object above these rows, and every
+  // member of each one held to the schema that names it.
+  //
+  // The count in front of the list is the whole of what makes the
+  // list mean anything. No file schema carries a `.min(1)`, so a
+  // `categories.json` emptied to `[]` loads clean, and every
+  // category in an empty list is a root. The case above asks whether
+  // each file came back with rows at all, which is a different
+  // question in a different case: this one is only as sound as what
+  // it asserts itself.
+  it('carries no category naming a parent', () => {
+    const { categories } = loadSeedBundle();
+    const nested = categories
+      .filter((category) => category.parentKey !== null)
+      .map((category) => `${category.key} names ${category.parentKey}`);
+
+    expect(categories.length).toBeGreaterThan(0);
+    expect(nested).toEqual([]);
   });
 });
 
