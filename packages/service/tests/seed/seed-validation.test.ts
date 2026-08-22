@@ -1,6 +1,10 @@
 /**
- * What `loadSeedBundle` refuses, what it says when it does, and what
- * a run does with a refusal.
+ * What `stripUnderscoreKeys` drops, what `loadSeedBundle` refuses,
+ * what it says when it does, and what a run does with a refusal.
+ *
+ * The strip runs ahead of every schema and is asserted on its own
+ * rather than through a fixture bundle. What it has to get right is
+ * depth, and the files it was written for carry a header at one.
  *
  * Four refusals, in the order the loader reaches them: a key no
  * schema names, a value outside a closed set, and — once every file
@@ -61,6 +65,7 @@ import {
   SeedValidationError,
   loadSeedBundle,
   runSeedCli,
+  stripUnderscoreKeys,
 } from '../../scripts/seed.js';
 import { TERM_POLARITIES } from '../../src/db/schema/values.js';
 
@@ -361,6 +366,78 @@ function refusedMessage(directory: string): string {
 
   return NOT_REFUSED.message;
 }
+
+// ---------------------------------------------------------------------------
+// The header a seed file opens with
+// ---------------------------------------------------------------------------
+
+/**
+ * A seed file's shape carrying a `_readme` at every depth the walk
+ * reaches: the outermost object, a row in the list under it, and the
+ * payload inside that row.
+ *
+ * Depth is the whole of what this fixture is for. The files under
+ * `data/` carry a header on the outermost object and nowhere else,
+ * so a bundle exercises one depth, and a walk that never descended
+ * would read as correct against it — while the convention the header
+ * serves puts a note wherever a reader meets what it describes, a
+ * row included. The rows sit in an array because that is where a
+ * seed's rows are, and an array is the member the walk descends
+ * through while dropping nothing of its own.
+ *
+ * `time_to_read` is the key whose underscore does not lead, and it
+ * is one a domain could really write rather than an invented
+ * near-miss: the keys of `settings.scoringWeights` are that domain's
+ * own vocabulary and go unchecked, so nothing spells them for it.
+ * What decides a key here is its first character, and a filter
+ * matching an underscore anywhere in the name would take this one
+ * with the headers.
+ *
+ * Handed to `stripUnderscoreKeys` directly rather than written to a
+ * fixture directory. No schema sees it, so it states what the walk
+ * has to reach and nothing else.
+ */
+const VALUE_WITH_HEADERS = {
+  _readme: ['A header on the file.'],
+  domains: [
+    {
+      _readme: ['A header on the row.'],
+      slug: 'fixture-domain',
+      settings: {
+        _readme: ['A header on the payload inside the row.'],
+        scoringWeights: { time_to_read: 2 },
+      },
+    },
+  ],
+};
+
+/** The same value with every one of those headers gone. */
+const VALUE_WITHOUT_HEADERS = {
+  domains: [
+    {
+      slug: 'fixture-domain',
+      settings: {
+        scoringWeights: { time_to_read: 2 },
+      },
+    },
+  ],
+};
+
+describe('stripUnderscoreKeys — a header at every depth', () => {
+  // One equality over the whole value rather than a lookup per key.
+  // The expected shape states the result at every depth, so a walk
+  // that stopped at the outermost object, one that never descended
+  // through the array, and one that dropped a key it was meant to
+  // keep each fail at the member they differ at.
+  //
+  // Strict equality, because a key left in place holding `undefined`
+  // is not a key removed, and the looser comparison reads those two
+  // as one value.
+  it('drops the header at every depth and keeps an inner underscore', () => {
+    expect(stripUnderscoreKeys(VALUE_WITH_HEADERS))
+      .toStrictEqual(VALUE_WITHOUT_HEADERS);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // A bundle nothing is wrong with
