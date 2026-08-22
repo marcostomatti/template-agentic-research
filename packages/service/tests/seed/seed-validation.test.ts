@@ -1,10 +1,17 @@
 /**
  * What `stripUnderscoreKeys` drops, what `loadSeedBundle` refuses,
- * what it says when it does, and what a run does with a refusal.
+ * what it says when it does, what it makes of the seeds this package
+ * ships, and what a run does with a refusal.
  *
  * The strip runs ahead of every schema and is asserted on its own
  * rather than through a fixture bundle. What it has to get right is
  * depth, and the files it was written for carry a header at one.
+ *
+ * The seeds this package ships are read too, beside the fixtures
+ * rather than through one. The fixtures say what the loader does
+ * with a file it is handed; only `data/` says whether the files it
+ * was written for are ones it still accepts, and nothing else in
+ * this package holds them to a schema at all.
  *
  * Four refusals, in the order the loader reaches them: a key no
  * schema names, a value outside a closed set, and — once every file
@@ -35,11 +42,11 @@
  * standing in for the database, and what the case reads is what the
  * run asked of it.
  *
- * The bundles below are written to disk rather than handed to a
- * schema directly. What `loadSeedBundle` has to get right is the
- * roster it opens, the stripping that runs before validation, and
- * which file a failure is attributed to — none of which a call into
- * one schema ever reaches. The fixtures are written through
+ * The fixture bundles below are written to disk rather than handed
+ * to a schema directly. What `loadSeedBundle` has to get right is
+ * the roster it opens, the stripping that runs before validation,
+ * and which file a failure is attributed to — none of which a call
+ * into one schema ever reaches. The fixtures are written through
  * `SEED_ROSTER` itself, so their files are the files the loader
  * opens rather than five names typed out twice.
  *
@@ -456,6 +463,50 @@ describe('loadSeedBundle — a sound fixture bundle', () => {
     const directory = writeFixture(FIXTURE_ROWS);
 
     expect(loadSeedBundle(directory)).toEqual(FIXTURE_ROWS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The seeds this package ships
+// ---------------------------------------------------------------------------
+
+describe('loadSeedBundle — the seed files this package ships', () => {
+  // The fixtures either side of this case say what the loader does
+  // with a file it is handed. Only `data/` says whether the files it
+  // was written for are files it still accepts, and nothing else in
+  // this package asks: a seed file is read by no linter, reaches no
+  // type-checker, and is opened by the naming invariant for the
+  // names in it rather than for its members. A schema tightened past
+  // what the worked example states makes `bun run db:seed` a command
+  // nobody can run, and every fixture here stays green.
+  //
+  // Read through `SEED_ROSTER` rather than against five file names
+  // written out again, so a concern added to the roster is one this
+  // case covers rather than one it never hears about. An entry the
+  // loader does not read comes back with nothing under it and is
+  // reported here as a file with no rows, which is what it is.
+  //
+  // Rows rather than the absence of a throw, for the reason the
+  // sound fixture above gives: a bundle the loader had emptied
+  // satisfies a case that only asked whether it had refused.
+  //
+  // The count in front of that list is the whole of what makes the
+  // list mean anything — an emptied roster leaves nothing to filter,
+  // and an empty list equals an empty list whatever `data/` holds.
+  //
+  // Called with no argument, which is how the command reaches it:
+  // `runSeedCli` falls through to the same default, so what this
+  // case reads is what `bun run db:seed` reads. A default resolving
+  // nowhere is refused as five files that could not be read rather
+  // than passing quietly.
+  it('loads and validates every file the roster names', () => {
+    const bundle = loadSeedBundle();
+    const emptyFiles = ROSTER_CONCERNS
+      .filter((concern) => (bundle[concern] ?? []).length === 0)
+      .map((concern) => SEED_ROSTER[concern].file);
+
+    expect(ROSTER_CONCERNS.length).toBeGreaterThan(0);
+    expect(emptyFiles).toEqual([]);
   });
 });
 
