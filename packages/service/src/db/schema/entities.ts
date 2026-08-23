@@ -464,12 +464,13 @@ export const researchPool = pgTable('research_pool', {
     .references(() => findings.id),
 
   /**
-   * Where the row stands in the gate: `pending` until it is ruled
-   * on, then `approved` and `done` along the accepted path, or
-   * `skipped` where it is refused or closed without a search. The
-   * members are `RESEARCH_POOL_STATUSES` in `./values.ts`,
-   * enumerated in the generated SQL by the CHECK below from that
-   * same tuple.
+   * Where the row stands in the gate: `pending` until it is ruled on,
+   * then `approved` and `done` along the accepted path, or `skipped`
+   * where it is refused or closed without a search — the refusal is
+   * `rejectById` in `scripts/approve.ts`, which writes this member
+   * and nothing else. The members are `RESEARCH_POOL_STATUSES` in
+   * `./values.ts`, enumerated in the generated SQL by the CHECK below
+   * from that same tuple.
    *
    * Defaults to `pending`, which is the only honest state for a row
    * nobody has looked at, and the default is also what makes it the

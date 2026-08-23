@@ -140,3 +140,71 @@ export async function approveById(
 
   return row ?? null;
 }
+
+/**
+ * The status a row carries once it has been ruled against.
+ *
+ * Annotated against {@link ResearchPoolStatus} for the reason
+ * `APPROVED_STATUS` above gives: it is the same write side, and the
+ * same `research_pool_status_check` refuses a member the tuple no
+ * longer names.
+ *
+ * What is particular to this member is that it has a second writer.
+ * The drain stamps the same `skipped` on a row it declines to search,
+ * closing it as it goes, so the member alone does not say which of
+ * the two rulings a row carries — `research_pool.status` in
+ * `src/db/schema/entities.ts` records both readings. Along the
+ * ordinary path the timestamps tell them apart: a row reached through
+ * the pending queue carries no `researched_at`, and this function
+ * does not give it one.
+ */
+const SKIPPED_STATUS: ResearchPoolStatus = 'skipped';
+
+/**
+ * Rule against one intention: move it to `skipped` and leave both
+ * timestamps where they are.
+ *
+ * The id is bound and the row is matched by id alone, for the reasons
+ * `approveById` above records; nothing is asked of the status here
+ * either, and the queue an operator reads offers only a pending row.
+ *
+ * What differs is that nothing is stamped. `approved_at` is not
+ * cleared, so a row approved and then ruled against records both, in
+ * the order they happened, rather than reading as one nobody ever
+ * approved. That is also what keeps this total over every state a row
+ * can be in: clearing the column on a row already closed is precisely
+ * the write `research_pool_approval_check` refuses, so the tidier
+ * variant would fail on the rows furthest along and nowhere else.
+ *
+ * The constraint cannot refuse this write at all. It reads only
+ * `approved_at` and `researched_at`, and a status-only UPDATE leaves
+ * the pair exactly as the stored row already had it — a pair that was
+ * storable a moment ago. It is re-evaluated against the whole new row
+ * all the same, which is why that is worth knowing rather than
+ * assuming.
+ *
+ * A ruling against is a change to the account of the row and not a
+ * withdrawal from the drain. `research_pool.researched_at` records
+ * the drain as selecting on approved and not yet closed, and neither
+ * column moves here, so an already-approved row ruled against by id
+ * is still one the drain will reach — what closes a row is the write
+ * that stamps it. Along the ordinary path there is nothing to
+ * withdraw, since a pending row was never approved.
+ *
+ * @param db - The database to write through.
+ * @param id - The `research_pool` row to rule on.
+ * @returns The row as it stands after the ruling, or `null` when no
+ * row carries that id, which says what it says at `approveById`
+ * above.
+ */
+export async function rejectById(
+  db: Db,
+  id: number,
+): Promise<ResearchPoolRow | null> {
+  const [row] = await db.update(researchPool)
+    .set({ status: SKIPPED_STATUS })
+    .where(eq(researchPool.id, id))
+    .returning();
+
+  return row ?? null;
+}
