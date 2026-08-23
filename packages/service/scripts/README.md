@@ -46,14 +46,14 @@ The split is worth keeping deliberate: a shell script that grows a
 non-trivial decision has quietly become untestable, and that is the point
 to move the decision into a `.ts` module the shell calls.
 
-## `tsconfig.json` covers `scripts`
+## `tsconfig.json` and `lint` both cover `scripts`
 
 `packages/service/tsconfig.json` reads
 `"include": ["src", "lib", "tests", "scripts", "*.ts", "*.mjs"]`. The
 `scripts` entry is load-bearing rather than decorative: the `*.ts` entry
-beside it matches only files sitting directly in the package root — a
-glob segment does not cross a directory separator — so without it every
-`.ts` file added here would be invisible to `bun run check-types`.
+beside it matches only files sitting directly in the package root — a glob
+segment does not cross a directory separator — so without it every `.ts`
+file added here would be invisible to `bun run check-types`.
 
 Phase 2 widened it, ahead of `scripts/seed.ts`, the first `.ts` file to
 land here. The failure it prevents is the quiet kind: a type error in an
@@ -62,8 +62,31 @@ reporting a clean result over a file it never looked at.
 
 The package's `lint` script was widened with it, and now reads
 `eslint src lib tests scripts` (`lint:fix` likewise). The reason is the
-same one, one gate over: an unlinted `.ts` file makes a green `lint:all`
-a statement about files it never read.
+same one, one gate over: an unlinted `.ts` file makes a green `lint:all` a
+statement about files it never read.
+
+Both widenings were then proved by reading rather than assumed.
+`tsc -p tsconfig.json --showConfig` echoes the `include` array as tsc
+parsed it, which is the half answerable before any `.ts` file exists;
+`tsc --noEmit --listFilesOnly` names every file in the program, and every
+`.ts` file in this directory appears in it (four at the close of phase 2),
+while the by-design `**/*.test.ts` exclusion still counts zero.
+
+`eslint scripts -f json` reports one file more for this directory: the
+same scripts plus this README, because `eslint.base.mjs` lints markdown
+wherever a target reaches it. Run it from inside the package — from the
+repo root the leaf config never applies, and eslint reports the path
+ignored while still exiting 0, which reads exactly like a clean lint of a
+file it never opened.
+
+A listing says what a gate read, never what it would catch, and the two
+catch disjoint things. A scratch `scripts/__gate-probe.ts` holding one
+type error makes `bun run check-types` exit 2 naming the file and the
+line, and lints at zero errors and zero warnings in the same second,
+because the type-aware `project` setting in `eslint.base.mjs` is commented
+out. So a green `lint` here is no evidence about types and a green
+`check-types` is none about style: a directory is covered only once both
+reports name it.
 
 ## Files added here are scanned
 
