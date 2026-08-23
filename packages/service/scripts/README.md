@@ -12,8 +12,8 @@ design, `.specs/2026-08-19-research-pipeline-port.md` §7.
 
 | Script | Arrives in | Role |
 | --- | --- | --- |
-| `seed.ts` | phase 2 | Applies the seed files in `data/` to the database. The only code path that reads that directory. |
-| `approve.ts` | phase 2 | CLI over the database approval gate, so a pending row can be approved before the service or UI exists to do it. |
+| `seed.ts` | phase 2 — landed | `bun run db:seed`. Validates every seed file in `data/` before a connection is opened, then applies the bundle in one transaction and reports created, updated and unchanged per concern. The only code path that takes a value out of that directory. `seed-schemas.ts` and `seed-apply.ts` are the shape half and the write half beneath it, not entry points of their own. |
+| `approve.ts` | phase 2 — landed | `bun run approve`. Lists the rows waiting on a ruling and approves or rejects one by id, a client of `research_pool_approval_check` rather than a substitute for it. The whole operator surface until the API and UI take approvals over. |
 | `build-workflows.ts` | phase 3 | Reads every source in `workflows/src/`, resolves its markers (transpile-and-splice libs, bake settings), writes `workflows/dist/`. |
 | `deploy-external.ts` | phase 3 | Uploads built workflows to an existing n8n over its public REST API — no Docker, no shell on the target host. |
 | `activate-workflows.sh` | phase 3 | Activates imported workflows on a local instance, where activation goes through the CLI rather than the API. |
