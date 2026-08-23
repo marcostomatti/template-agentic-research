@@ -381,9 +381,8 @@ export const entityResearch = pgTable('entity_research', {
  * Nothing writes these rows yet. `ar-ingest` and `ar-score` raise
  * them (phase 5) and `ar-research` drains them (phase 6). The
  * operator surface between the two is `scripts/approve.ts`, the
- * interim CLI later in this phase, which stands in until the API and
- * the UI take approvals over — a client of the gate rather than the
- * gate itself.
+ * interim CLI that stands in until the API and the UI take approvals
+ * over — a client of the gate rather than the gate itself.
  */
 export const researchPool = pgTable('research_pool', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
@@ -628,18 +627,17 @@ export const researchPool = pgTable('research_pool', {
    * A rule the database holds rather than a branch a workflow takes,
    * because there is no single writer to put a branch in. Intentions
    * are raised by one workflow and drained by another, approved
-   * through `scripts/approve.ts` later in this phase and through the
-   * API and the UI after that, and corrected by an operator at a
-   * psql prompt when something has gone wrong. A branch is a
-   * statement inside one of those, so it governs the writes that one
-   * issues and leaves every other writer to its own habits — and the
-   * writes it does not cover are exactly the ones nothing was
-   * watching. A CHECK is evaluated by the server on every write,
-   * whoever makes it. The depth cap `categories` in `./taxonomy.ts`
-   * records needed a trigger for that same reason and one more; here
-   * the rule reads only the row being written, both of its columns,
-   * so a plain CHECK carries it — generated from this file and
-   * visible in it.
+   * through `scripts/approve.ts` and through the API and the UI
+   * after that, and corrected by an operator at a psql prompt when
+   * something has gone wrong. A branch is a statement inside one of
+   * those, so it governs the writes that one issues and leaves every
+   * other writer to its own habits — and the writes it does not
+   * cover are exactly the ones nothing was watching. A CHECK is
+   * evaluated by the server on every write, whoever makes it. The
+   * depth cap `categories` in `./taxonomy.ts` records needed a
+   * trigger for that same reason and one more; here the rule reads
+   * only the row being written, both of its columns, so a plain
+   * CHECK carries it — generated from this file and visible in it.
    *
    * The other half is that a branch can be edited where nothing
    * reviews it. The workflow instance is a deploy target rather than

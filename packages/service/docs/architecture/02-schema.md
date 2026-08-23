@@ -235,12 +235,11 @@ update, so the reverse write needs no second constraint.
 It is a rule the database holds rather than a branch a workflow takes
 because there is no single writer to put a branch in. Intentions are
 raised by one workflow and drained by another, approved through a
-small CLI (`scripts/approve.ts`, later in this phase) and through the
-API and the UI after that, and corrected by an operator at a psql
-prompt when something has gone wrong. A branch governs the writes of
-the one thing it sits in and leaves every other writer to its own
-habits — and the writes it does not cover are exactly the ones nothing
-was watching.
+small CLI (`scripts/approve.ts`) and through the API and the UI after
+that, and corrected by an operator at a psql prompt when something has
+gone wrong. A branch governs the writes of the one thing it sits in
+and leaves every other writer to its own habits — and the writes it
+does not cover are exactly the ones nothing was watching.
 
 The other half is reviewability. A guard edited on the executor's
 canvas is lost at the next import and reaches no diff on the way.
