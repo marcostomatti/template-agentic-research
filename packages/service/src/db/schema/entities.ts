@@ -541,10 +541,11 @@ export const researchPool = pgTable('research_pool', {
    * insert: there is no window in which one of these rows exists and
    * nothing has been noticed.
    *
-   * It is also what a review queue is ordered by, newest first, so
-   * an operator reading top-down meets what just arrived rather than
-   * what has been ignored longest. It carries that ordering with no
-   * unique key above it, which is when the tie and the tiebreak
+   * It is also what a review queue is ordered by: `listPending` in
+   * `scripts/approve.ts` reads the rows still pending oldest first,
+   * so a queue worked top-down empties rather than burying whatever
+   * has waited longest. It carries that ordering with no unique key
+   * above it, which is when the tie and the tiebreak
    * `entity_research.researched_at` above records apply here
    * unchanged.
    */
