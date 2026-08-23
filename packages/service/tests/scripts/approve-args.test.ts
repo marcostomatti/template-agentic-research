@@ -1,5 +1,6 @@
 /**
- * What `parseApproveArgs` refuses, and what it says when it does.
+ * What `parseApproveArgs` refuses, what it says when it does, and
+ * what it makes of the three command lines it reads.
  *
  * Four command lines, one per way arguments can name nothing this
  * tool can run: no command at all, a word that is none of the three,
@@ -24,16 +25,18 @@
  * case would make rewording it a failure in four places that are not
  * about it.
  *
- * What no case here establishes is that anything is ACCEPTED. A
- * parser that refused every command line it was handed would satisfy
- * all of this, and nothing below would report it.
+ * The three it reads are pinned whole — the word it matched and
+ * whatever the command carries beside it — rather than at the word
+ * alone. Every refusal above is equally satisfied by a parser that
+ * refused whatever it was handed, and those three cases are the only
+ * thing here that would report one.
  */
 import { describe, expect, it } from 'vitest';
 
 import { ApproveArgsError, parseApproveArgs } from '../../scripts/approve.js';
 
 // ---------------------------------------------------------------------------
-// The command lines these cases hand it
+// The command lines these cases hand it to refuse
 // ---------------------------------------------------------------------------
 
 /**
@@ -124,6 +127,50 @@ const NON_NUMERIC_ID_PROBLEM =
  * anything.
  */
 const USAGE_LINE = 'usage: list | approve <id> | reject <id>';
+
+// ---------------------------------------------------------------------------
+// The command lines it reads, and what each one comes back as
+// ---------------------------------------------------------------------------
+
+/**
+ * The row both rulings below are about.
+ *
+ * Written out separately from the argument spelling it rather than
+ * derived from it: text on the command line and a number in the
+ * command is the difference those two cases are about, and deriving
+ * either from the other would put the conversion under test on both
+ * sides of its own assertion.
+ */
+const RULED_ROW_ID = 42;
+
+/** How {@link RULED_ROW_ID} is spelled on a command line. */
+const RULED_ROW_ARGUMENT = '42';
+
+/** A command line asking for whatever is pending. */
+const LIST_ARGV: readonly string[] = ['list'];
+
+/** A command line approving one row. */
+const APPROVE_ARGV: readonly string[] = ['approve', RULED_ROW_ARGUMENT];
+
+/** A command line rejecting the same row. */
+const REJECT_ARGV: readonly string[] = ['reject', RULED_ROW_ARGUMENT];
+
+/**
+ * What `list` comes back as: the word, carrying nothing else.
+ *
+ * That absence is half of what its case is for, and it is why the
+ * three below compare with `toStrictEqual`. `toEqual` reads a key
+ * present with an `undefined` value as absent, so a `list` handed
+ * back as `{ command: 'list', id: undefined }` would satisfy it —
+ * and that is a `list` a caller could switch over and find an id on.
+ */
+const LIST_COMMAND = { command: 'list' };
+
+/** What `approve <id>` comes back as, for the row it named. */
+const APPROVE_COMMAND = { command: 'approve', id: RULED_ROW_ID };
+
+/** What `reject <id>` comes back as, for that same row. */
+const REJECT_COMMAND = { command: 'reject', id: RULED_ROW_ID };
 
 // ---------------------------------------------------------------------------
 // Refusals
@@ -257,5 +304,37 @@ describe('parseApproveArgs — what a refusal says to type instead', () => {
     const tails = REFUSED_ARGUMENTS.map((argv) => refusedTail(argv));
 
     expect(tails).toStrictEqual(REFUSED_ARGUMENTS.map(() => [USAGE_LINE]));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Command lines it reads
+// ---------------------------------------------------------------------------
+
+describe('parseApproveArgs — a command line it reads', () => {
+  // Each of the three is compared whole rather than by the word it
+  // came back with, which is what tells them apart: a parser
+  // answering every command line with one constant command satisfies
+  // any single one of these cases, and no two of them together.
+  it('reads `list` as the command that names no row', () => {
+    expect(parseApproveArgs(LIST_ARGV)).toStrictEqual(LIST_COMMAND);
+  });
+
+  // The id comes back as a number where the command line carried
+  // text, which is the whole of what a ruling adds over `list` here.
+  // Comparing the command against a hand-written one rather than
+  // reading `.id` off it is what also holds it to carrying nothing
+  // else.
+  it('reads a row id off `approve` as the number it names', () => {
+    expect(parseApproveArgs(APPROVE_ARGV)).toStrictEqual(APPROVE_COMMAND);
+  });
+
+  // Both rulings leave `parseApproveArgs` through one return, which
+  // carries the word it matched rather than a literal. So this case
+  // and the one above are a pair holding that word to what was
+  // typed; either on its own passes for a branch that always says
+  // `approve`.
+  it('reads the same id off `reject`, as the other ruling', () => {
+    expect(parseApproveArgs(REJECT_ARGV)).toStrictEqual(REJECT_COMMAND);
   });
 });
