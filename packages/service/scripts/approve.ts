@@ -4,6 +4,36 @@
  * read what is waiting on a ruling, rule on it a row at a time, and
  * read the command line that asks for either.
  *
+ * What holds the gate shut is `research_pool_approval_check` in
+ * `src/db/schema/entities.ts`, and this is a client of that rule
+ * rather than a substitute for it. Nothing here decides what may be
+ * written. The server refuses a `researched_at` stamped on a row
+ * nobody approved whoever issues the statement — this tool, a
+ * workflow, an operator at a psql prompt — and it would go on
+ * refusing it with this file deleted. The two rulings below stay on
+ * the permitted side by construction: `approveById` only ever sets
+ * `approved_at`, which can satisfy the constraint and never breach
+ * it, and `rejectById` leaves both timestamps exactly as the stored
+ * row already had them. So a run of this tool never meets the refusal
+ * at all, which is what being a client of it means.
+ *
+ * The reverse direction is what makes that worth stating. The
+ * constraint reads those two timestamps and consults `status` not at
+ * all, so everything this adds above it — the order `listPending`
+ * reads in, the `coalesce` that stops a second approval re-dating the
+ * first, an id read narrowly enough to rule on no neighbouring row —
+ * is the writer's discipline and enforced nowhere. A reader of the
+ * rows cannot recover any of it, and the writer that comes next
+ * either carries it or drops it silently.
+ *
+ * The writer that comes next is the API and the UI, which arrive
+ * outside this port's phases and take approvals over when they do.
+ * Until then this is the whole of the operator surface, and interim
+ * in a way the schema does not pay for: `research_pool` carries no
+ * column this tool asked for, and what replaces it reaches the same
+ * table through the same constraint. The table's own header in
+ * `src/db/schema/entities.ts` names this file from that side.
+ *
  * Every function that reaches the database takes the one it works
  * through, which is what lets a live test drive it against a database
  * of its own. One place opens a connection — `openApproveConnection`
