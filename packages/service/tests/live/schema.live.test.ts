@@ -44,6 +44,7 @@
  */
 import type { Pool } from 'pg';
 
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 
 import { categories, domains } from '../../src/db/schema.js';
@@ -73,7 +74,8 @@ interface DriverError {
 }
 
 /**
- * The key of the category the guard must refuse.
+ * The key of the category refused for reaching UP — the one naming a
+ * parent that is itself a child.
  *
  * Spelled once and used twice on purpose: the value goes into the
  * insert and comes back inside the message Postgres raises, so the two
@@ -82,6 +84,17 @@ interface DriverError {
  * written out by hand on both sides.
  */
 const TWO_DEEP_KEY = 'two-levels-down';
+
+/**
+ * The key of the category refused for what is already UNDER it — the
+ * root handed a parent while its own child stays where it is.
+ *
+ * Read back out of the refusal for the reason `TWO_DEEP_KEY` records
+ * above, and it is the whole of what the message quotes about the
+ * moved row: the guard names this row by key and its intended parent
+ * by id, so nothing else in the setup has to be spelled twice.
+ */
+const ROOT_WITH_CHILD_KEY = 'root-with-a-child';
 
 describeLivePg('schema migrations (live Postgres)', () => {
   let pool: Pool;
@@ -174,6 +187,59 @@ describeLivePg('schema migrations (live Postgres)', () => {
     expect(cause?.code).toBe('23514');
     expect(cause?.message).toBe(
       `categories: parent ${child.id} is itself a child of ${root.id}, so ${TWO_DEEP_KEY} would be two levels deep`,
+    );
+  });
+
+  it('refuses giving a parent to a category that already has children', async () => {
+    // The cap breaks from two ends and this is the end an INSERT
+    // cannot reach: giving a root a parent pushes whatever sits under
+    // it a level down without touching those rows, and the branch the
+    // case above exercises reads the written row's PARENT rather than
+    // its children, so it never sees them. On INSERT the id is fresh
+    // from the sequence and nothing can point at it yet, which leaves
+    // the UPDATE as the only statement that gets here.
+    //
+    // The new parent is a root on purpose. Hand this row a parent that
+    // is itself a child and the depth branch refuses the very same
+    // statement first — the case goes green having watched the
+    // neighbouring rule, which is why the message and not the SQLSTATE
+    // is what says which branch answered.
+    //
+    // The child below is the near-miss the case rests on. The same
+    // UPDATE against a root with nothing under it is accepted, so what
+    // goes red here is this row's children and not the act of giving a
+    // root a parent.
+    const [domain] = await db.insert(domains)
+      .values({ slug: 'depth-cap-update', name: 'Depth cap (update)' })
+      .returning({ id: domains.id });
+    const [moved] = await db.insert(categories)
+      .values({
+        domainId: domain.id,
+        key: ROOT_WITH_CHILD_KEY,
+        name: 'Root with a child',
+        parentId: null,
+      })
+      .returning({ id: categories.id });
+    await db.insert(categories)
+      .values({ domainId: domain.id, key: 'child', name: 'Child', parentId: moved.id });
+    const [newParent] = await db.insert(categories)
+      .values({ domainId: domain.id, key: 'other-root', name: 'Other root', parentId: null })
+      .returning({ id: categories.id });
+
+    const failure = await db.update(categories)
+      .set({ parentId: newParent.id })
+      .where(eq(categories.id, moved.id))
+      .then(() => null, (thrown: unknown) => thrown);
+
+    // Both halves sit on the cause for the reason the case above
+    // records. The message is what separates this branch from the two
+    // that share its SQLSTATE, and interpolating the parent id back
+    // into it ties the refusal to the row this case made.
+    expect(failure).toBeInstanceOf(Error);
+    const { cause } = failure as { cause?: DriverError };
+    expect(cause?.code).toBe('23514');
+    expect(cause?.message).toBe(
+      `categories: ${ROOT_WITH_CHILD_KEY} already has children, so parent ${newParent.id} would push them two levels deep`,
     );
   });
 });
