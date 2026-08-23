@@ -61,5 +61,10 @@ Two consequences worth stating plainly:
   those belong in the untracked environment, never in a tracked file.
 
 This directory is one of the scan roots of the naming invariant
-(`tests/invariants/naming.test.ts`), so the first two rules are enforced
-by the default test suite rather than left to review.
+(`tests/invariants/naming.test.ts`), so the origin's own names — its
+prefix, its repository, the host it ran under, the note-store paths — are
+refused by the default test suite rather than left to review. That needle
+set is fixed and holds no subject's vocabulary and no hostname but that
+one, so the rest of both rules above is held by review. `docs/SEEDING.md`
+§"`data/` is scanned for origin naming" states the split as it reaches
+somebody writing a file.

@@ -8,10 +8,11 @@ This document is what to write in one, and what happens to it.
 
 `data/README.md` states the rules the directory is under and names
 this file as the one that fixes the format. What follows is that
-format. The argument behind each rule stays with the code that
-enforces it — `scripts/seed-schemas.ts` for what a row must carry,
-`scripts/seed.ts` for how a bundle is read, `scripts/seed-apply.ts`
-for how one is written — and the columns underneath are described in
+format, and the rules on content that come with it. The argument
+behind each rule stays with the code that enforces it —
+`scripts/seed-schemas.ts` for what a row must carry, `scripts/seed.ts`
+for how a bundle is read, `scripts/seed-apply.ts` for how one is
+written — and the columns underneath are described in
 `docs/architecture/02-schema.md`.
 
 ## What a seed file looks like
@@ -218,6 +219,63 @@ What a pass never does is delete. A term dropped from `terms.json`
 stays in the database, because a row removed from a seed and a row
 somebody added another way are indistinguishable from the pass's
 side. Removing one is a DELETE somebody issues.
+
+## Rules on what a seed carries
+
+Three rules bind a seed's content rather than its shape, and
+`data/README.md` argues all three. What each asks of an author, and
+which of them anything checks, is below.
+
+### Seed content stays domain-neutral
+
+A seed tracked here carries structure — the shape of a domain, its
+taxonomy, its cadence — and never a particular subject's vocabulary.
+The platform is domain-parameterized: the subject a deployment
+researches is data its operator supplies, so `example-tech-radar`
+exists to show the shape and is nobody's radar. Real subject matter
+reaches the database through an operator's own seeds, and a real
+hostname, credential or personal datum reaches nothing tracked at all.
+
+That gives a test for a row worth shipping. One that exercises
+something closed earns its place: the example's field contract names
+seven fields covering all six members of `DomainFieldType`, so the set
+is exercised rather than sampled and whatever validates a contract
+later has a case for each. One chosen because it reads plausibly does
+not. And a row says as much in its own text — each seeded persona
+opens with the word `Placeholder`, because a persona is met in a
+database row or an API response with no file in view.
+
+### `data/` is scanned for origin naming
+
+The directory is one of the scan roots of the naming invariant
+(`tests/invariants/naming.test.ts`): every file here is read like the
+scanned source beside it, and a hit fails the default suite naming the
+file and the line.
+
+What it looks for is a fixed set of names — the origin project's short
+prefix and its repository name, the host that deployment ran under,
+and two forms of a personal note-store reference. So it holds the
+naming half of the rule above and no more than that. A subject's
+vocabulary is on no needle list, and a seed full of one domain's terms
+passes `bun run test` without a word: that half is held by review,
+which is worth knowing before reading a green run as agreement.
+
+### Nothing here is read at runtime
+
+`scripts/seed.ts` is the only code path that takes a value out of a
+file in `data/`. From the first pass on, the database is what reads a
+seeded value — the service, the workflows and the scripts alike — so a
+file here is how a row gets in, and never what anything consults
+afterwards.
+
+The consequence for an author is where a value goes rather than how it
+is written: something that has to be true while the service runs
+belongs in a row, in a domain's `settings` or in a table of its own. A
+file here would be a second source of truth, and the two drift the
+moment somebody edits a row a file also declares. The naming invariant
+walking the same directory is not the exception it looks like — it
+opens these files to check the names in them and takes no value out of
+one.
 
 ## Adding a domain
 
