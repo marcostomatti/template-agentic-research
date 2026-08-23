@@ -29,8 +29,8 @@
 -- database this migration never reached, or one where the trigger
 -- was dropped at a psql prompt, is indistinguishable from a database
 -- where it holds. A file scan over drizzle/*.sql is evidence about
--- this file and about nothing else; only the live suite's depth
--- cases, later in this phase, watch a database refuse the write.
+-- this file and about nothing else; only the depth cases in
+-- tests/live/schema.live.test.ts watch a database refuse the write.
 
 CREATE OR REPLACE FUNCTION categories_enforce_depth() RETURNS trigger AS $$
 DECLARE

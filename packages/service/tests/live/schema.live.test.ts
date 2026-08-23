@@ -1,7 +1,8 @@
 /**
  * The migrations under `drizzle/` apply against a real Postgres with
- * no error, and this database carries every one the journal names.
- * Self-skips when AR_LIVE_DATABASE_URL is unset — run via:
+ * no error, this database carries every one the journal names, and the
+ * rules they install hold against a write that breaks them. Self-skips
+ * when AR_LIVE_DATABASE_URL is unset — run via:
  *
  *   bun run stress:start && bun run test:live && bun run stress:stop
  *
@@ -26,14 +27,30 @@
  *
  * `resetTables` names the schema's own tables and never the `drizzle`
  * schema the ledger lives in, so the reset between cases leaves what
- * these cases read alone.
+ * those two read alone.
+ *
+ * The cases after them read the rules the migrations INSTALLED rather
+ * than the record of their applying, and they need a server for the
+ * same reason: a scan over `drizzle/*.sql` reports what the files say,
+ * so a database the depth guard's migration never reached, or one
+ * where the trigger was dropped at a psql prompt, reads exactly like
+ * one where the rule holds. Only a refused write tells them apart.
+ *
+ * Each pins the refusal twice. The SQLSTATE is the class a caller
+ * programs against, and the message is the only thing naming WHICH
+ * rule refused — the depth guard raises `check_violation` from three
+ * separate branches and two of them share a HINT, so a case asserting
+ * the code alone passes on a neighbouring rule.
  */
 import type { Pool } from 'pg';
 
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 
+import { categories, domains } from '../../src/db/schema.js';
+
 import {
   applyMigrations,
+  createLiveDb,
   createLivePool,
   describeLivePg,
   readAppliedMigrationTags,
@@ -41,12 +58,39 @@ import {
   resetTables,
 } from './live-postgres.js';
 
+/**
+ * What the pg driver puts on a rejected query, as far as these cases
+ * read it. Drizzle wraps that error rather than rethrowing it, so
+ * neither field is reachable on the error it hands back and both are
+ * read off its `cause`.
+ */
+interface DriverError {
+  /** Postgres SQLSTATE. `23514` for a check violation. */
+  readonly code?: string;
+
+  /** The server's own text, which for a trigger is its RAISE. */
+  readonly message?: string;
+}
+
+/**
+ * The key of the category the guard must refuse.
+ *
+ * Spelled once and used twice on purpose: the value goes into the
+ * insert and comes back inside the message Postgres raises, so the two
+ * cannot be written apart. Nothing is being converted between them,
+ * which is what separates this from a fixture pair that has to be
+ * written out by hand on both sides.
+ */
+const TWO_DEEP_KEY = 'two-levels-down';
+
 describeLivePg('schema migrations (live Postgres)', () => {
   let pool: Pool;
+  let db: ReturnType<typeof createLiveDb>;
 
   beforeAll(async () => {
     pool = createLivePool();
     await applyMigrations(pool);
+    db = createLiveDb(pool);
   });
 
   afterAll(async () => {
@@ -81,5 +125,55 @@ describeLivePg('schema migrations (live Postgres)', () => {
 
     const after = await readAppliedMigrationTags(pool);
     expect(after).toEqual(before);
+  });
+
+  it('refuses a category whose parent is itself a child', async () => {
+    // Two levels is the one shape the shallow taxonomy does not admit,
+    // and the `categories_enforce_depth()` trigger shipped by
+    // `drizzle/0002_category_depth_guard.sql` is the whole of what
+    // refuses it: depth is a property of the parent, so there is
+    // nothing here for a column constraint to read.
+    //
+    // The child insert below is the near-miss the case rests on. The
+    // same statement shape — a category naming an existing parent in
+    // its own domain — is accepted one level down and refused two, so
+    // what goes red here is the parent's depth and not the presence of
+    // a parent.
+    //
+    // The parent has to EXIST for that to hold. A `parent_id` naming
+    // no row leaves the trigger's lookup empty and falls through to
+    // the foreign key, which refuses the insert as 23503 — a rejection
+    // that reads the same from here while saying nothing about the
+    // guard.
+    const [domain] = await db.insert(domains)
+      .values({ slug: 'depth-cap', name: 'Depth cap' })
+      .returning({ id: domains.id });
+    const [root] = await db.insert(categories)
+      .values({ domainId: domain.id, key: 'root', name: 'Root', parentId: null })
+      .returning({ id: categories.id });
+    const [child] = await db.insert(categories)
+      .values({ domainId: domain.id, key: 'child', name: 'Child', parentId: root.id })
+      .returning({ id: categories.id });
+
+    const failure = await db.insert(categories)
+      .values({
+        domainId: domain.id,
+        key: TWO_DEEP_KEY,
+        name: 'Two levels down',
+        parentId: child.id,
+      })
+      .then(() => null, (thrown: unknown) => thrown);
+
+    // Drizzle wraps the driver's error, so both halves sit on the
+    // cause rather than on the error itself. The code is the class;
+    // the message names the branch, and interpolating the two ids back
+    // into it is what ties the refusal to the rows this case made
+    // rather than to some row a neighbour left behind.
+    expect(failure).toBeInstanceOf(Error);
+    const { cause } = failure as { cause?: DriverError };
+    expect(cause?.code).toBe('23514');
+    expect(cause?.message).toBe(
+      `categories: parent ${child.id} is itself a child of ${root.id}, so ${TWO_DEEP_KEY} would be two levels deep`,
+    );
   });
 });

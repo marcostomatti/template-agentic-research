@@ -285,12 +285,12 @@ proposes dropping a trigger it cannot see, and `db:generate`
 reporting no changes goes on meaning that the schema and the
 migrations agree.
 
-Being invisible to the snapshot costs the other direction. The
-trigger cannot be reported missing either: nothing in this repository
-reads `pg_trigger`, so a database this migration never reached is
+Being invisible to the snapshot costs the other direction. The trigger
+cannot be reported missing either: nothing in this repository reads
+`pg_trigger`, so a database this migration never reached is
 indistinguishable from one where the guard stands. A scan over
 `drizzle/*.sql` is evidence about the file and about nothing else;
-only the live suite's depth cases, later in this phase, watch a
+only the depth cases in `tests/live/schema.live.test.ts` watch a
 database refuse a write.
 
 Two more limits. A trigger refuses the write whoever makes it, and
