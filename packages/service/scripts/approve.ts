@@ -11,7 +11,7 @@
 import type { Db } from '../src/db/index.js';
 import type { ResearchPoolStatus } from '../src/db/schema/values.js';
 
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 
 import { researchPool } from '../src/db/schema.js';
 
@@ -71,4 +71,72 @@ export async function listPending(
     .where(eq(researchPool.status, PENDING_STATUS))
     .orderBy(asc(researchPool.createdAt), asc(researchPool.id))
     .limit(limit);
+}
+
+/**
+ * The status a row carries once it has been ruled in favour of.
+ *
+ * Annotated against {@link ResearchPoolStatus} for the reason
+ * `PENDING_STATUS` above records. What the annotation heads off
+ * differs on this side: a read against a member that no longer
+ * exists reports an empty queue, while a write of one is refused by
+ * `research_pool_status_check` at the moment somebody is trying to
+ * clear a backlog.
+ */
+const APPROVED_STATUS: ResearchPoolStatus = 'approved';
+
+/**
+ * Rule in favour of one intention: move it to `approved` and stamp
+ * `approved_at`.
+ *
+ * The id is bound rather than interpolated. drizzle renders
+ * `eq(column, value)` as a placeholder and sends the value beside
+ * the statement, so nothing a caller passes becomes SQL — which is
+ * what makes this safe to hand an id read off a terminal. The
+ * argument parser arriving later in this stage refuses a
+ * non-numeric id before it gets here; that is a second guard, not
+ * the one this rests on.
+ *
+ * `approved_at` is written `coalesce(approved_at, now())` rather
+ * than as a bare `now()`, so an approval already given keeps the
+ * time it was given and ruling twice on one row is a no-op. That is
+ * the discipline `research_pool.approved_at` in
+ * `src/db/schema/entities.ts` records as the writer's rather than
+ * the schema's: nothing in the database refuses a second approval
+ * that re-dates the first, so it is refused here.
+ *
+ * `now()` is the server's clock rather than this process's, and it
+ * is the transaction's start time — so approvals written in one
+ * transaction tie to the microsecond, exactly as `created_at` does,
+ * with `id` breaking the tie.
+ *
+ * The row is matched by id alone and nothing is asked of its
+ * status. An id typed for a row already closed moves it back to
+ * `approved` without moving `approved_at`, and
+ * `research_pool_approval_check` permits that: the constraint holds
+ * the two timestamps against each other and never consults the
+ * status column. `listPending` above is the queue an operator
+ * reads, so the ordinary path offers only a pending row — this is
+ * what a mistyped id reaches.
+ *
+ * @param db - The database to write through.
+ * @param id - The `research_pool` row to rule on.
+ * @returns The row as it stands after the ruling, or `null` when no
+ * row carries that id. An id that never existed and one deleted
+ * since the queue was read are indistinguishable here, and both say
+ * the same thing to a caller: there was nothing to rule on.
+ */
+export async function approveById(
+  db: Db,
+  id: number,
+): Promise<ResearchPoolRow | null> {
+  const [row] = await db.update(researchPool)
+    .set({
+      approvedAt: sql`coalesce(${researchPool.approvedAt}, now())`,
+      status: APPROVED_STATUS,
+    })
+    .where(eq(researchPool.id, id))
+    .returning();
+
+  return row ?? null;
 }

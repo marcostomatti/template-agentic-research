@@ -563,11 +563,11 @@ export const researchPool = pgTable('research_pool', {
    * table exists to require.
    *
    * Set once and never moved is the writer's discipline rather than
-   * the schema's. An approval is written over whatever is already
-   * there with a COALESCE, so re-approving an approved row is a
-   * no-op instead of a way to re-run a search already paid for.
-   * Nothing here refuses an UPDATE that moves it to another time,
-   * and nothing records that it was moved.
+   * the schema's. `approveById` in `scripts/approve.ts` writes the
+   * column as `coalesce(approved_at, now())`, so re-approving an
+   * approved row is a no-op instead of a way to re-run a search
+   * already paid for. Nothing here refuses an UPDATE that moves it
+   * to another time, and nothing records that it was moved.
    *
    * The one write that is refused is clearing it back to NULL on a
    * row `researched_at` below already closed, under
