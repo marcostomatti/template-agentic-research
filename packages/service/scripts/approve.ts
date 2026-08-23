@@ -1,12 +1,14 @@
 /**
  * @packageDocumentation
  * The operator's surface over the approval gate in `research_pool`:
- * read what is waiting on a ruling, and rule on it a row at a time.
+ * read what is waiting on a ruling, rule on it a row at a time, and
+ * read the command line that asks for either.
  *
- * Nothing here opens a connection. Every function takes the database
- * it works through, which is what lets a live test drive it against a
- * database of its own — and what will let the entry point arriving
- * later in this stage hand over the one it opened.
+ * Nothing here opens a connection. Every function that reaches the
+ * database takes the one it works through, which is what lets a live
+ * test drive it against a database of its own — and what will let the
+ * entry point arriving later in this stage hand over the one it
+ * opened.
  */
 import type { Db } from '../src/db/index.js';
 import type { ResearchPoolStatus } from '../src/db/schema/values.js';
@@ -92,10 +94,9 @@ const APPROVED_STATUS: ResearchPoolStatus = 'approved';
  * The id is bound rather than interpolated. drizzle renders
  * `eq(column, value)` as a placeholder and sends the value beside
  * the statement, so nothing a caller passes becomes SQL — which is
- * what makes this safe to hand an id read off a terminal. The
- * argument parser arriving later in this stage refuses a
- * non-numeric id before it gets here; that is a second guard, not
- * the one this rests on.
+ * what makes this safe to hand an id read off a terminal.
+ * `parseApproveArgs` below refuses a non-numeric id before it gets
+ * here; that is a second guard, not the one this rests on.
  *
  * `approved_at` is written `coalesce(approved_at, now())` rather
  * than as a bare `now()`, so an approval already given keeps the
@@ -207,4 +208,178 @@ export async function rejectById(
     .returning();
 
   return row ?? null;
+}
+
+/**
+ * What a command line asked this tool for, once it has been read.
+ *
+ * Discriminated on `command` rather than one shape carrying an
+ * optional id: a caller switching over it is handed the row id
+ * exactly where a ruling names one, so neither ruling can be written
+ * against an id nothing established. `list` carries nothing because
+ * it asks for nothing — what it reads is whatever is pending.
+ */
+export type ApproveCommand =
+  | { readonly command: 'list' }
+  | { readonly command: 'approve'; readonly id: number }
+  | { readonly command: 'reject'; readonly id: number };
+
+/**
+ * How the three commands are spelled, shown by every refusal below.
+ *
+ * One declaration rather than a line per message: a refusal is
+ * usually where a caller learns the spelling, and a usage line that
+ * had drifted from what the parser accepts would send them round
+ * again.
+ */
+const USAGE = 'usage: list | approve <id> | reject <id>';
+
+/**
+ * Thrown when the arguments name no command this can run.
+ *
+ * A class of its own rather than a bare `Error`, so the entry point
+ * arriving later in this stage can tell a mistyped command line —
+ * which wants its message and nothing else — from a failure inside a
+ * run, where the stack is what a reader needs. `SeedValidationError`
+ * in `scripts/seed.ts` is the same arrangement for the same reason.
+ *
+ * `USAGE` is appended here rather than by each refusal, so one added
+ * later cannot forget to say what should have been typed.
+ */
+export class ApproveArgsError extends Error {
+  /**
+   * @param problem - What is wrong with the arguments, naming the
+   * offending word wherever there is one.
+   */
+  constructor(problem: string) {
+    super(`${problem}\n${USAGE}`);
+    this.name = this.constructor.name;
+  }
+}
+
+/**
+ * What a row id looks like typed out: one or more digits, no leading
+ * zero, no sign and no separator.
+ *
+ * Narrower than what a number parser accepts, and deliberately: both
+ * of the obvious ones read a value out of input nobody typed as a
+ * number. `parseInt('12abc', 10)` is 12 and `Number('')` is 0, so a
+ * fumbled paste becomes a ruling on a row the operator never named,
+ * reported as a success. The ids this tool is handed come off its own
+ * listing, which prints them as `bigserial` issues them — from 1
+ * upward, unpadded — so anything else is a typo rather than an
+ * unusual spelling of an id.
+ */
+const ROW_ID_PATTERN = /^[1-9][0-9]*$/;
+
+/**
+ * The one row id a ruling names, read out of whatever followed it.
+ *
+ * The safe-integer test is the other half of the pattern above.
+ * `research_pool.id` is a `bigserial` read in `number` mode, so an id
+ * past `Number.MAX_SAFE_INTEGER` is not one JavaScript can hold apart
+ * from its neighbours: `Number('9007199254740993')` is
+ * 9007199254740992, the row next door. Refusing it keeps a ruling off
+ * that row for the same reason the pattern keeps one off row 12 when
+ * `12abc` was typed.
+ *
+ * @param command - The ruling being asked for, so a refusal names
+ * which one.
+ * @param operands - Whatever followed the command.
+ * @returns The row id it names.
+ * @throws ApproveArgsError When no id followed, more than one
+ * argument did, or the id is one this cannot read exactly.
+ */
+function readRowId(
+  command: 'approve' | 'reject',
+  operands: readonly string[],
+): number {
+  const [raw, ...extra] = operands;
+
+  if (raw === undefined) {
+    throw new ApproveArgsError(`${command} names no row id`);
+  }
+
+  if (extra.length > 0) {
+    throw new ApproveArgsError(
+      `${command} rules on one row, and ${operands.length} ` +
+      'arguments followed it',
+    );
+  }
+
+  if (!ROW_ID_PATTERN.test(raw)) {
+    throw new ApproveArgsError(
+      `${command} was given '${raw}', which is not a row id: ` +
+      'an id is digits, from 1 upward, unpadded',
+    );
+  }
+
+  const id = Number(raw);
+
+  if (!Number.isSafeInteger(id)) {
+    throw new ApproveArgsError(
+      `${command} was given '${raw}', which is past the largest ` +
+      `id this reads exactly (${Number.MAX_SAFE_INTEGER})`,
+    );
+  }
+
+  return id;
+}
+
+/**
+ * The command line read into something an entry point can act on.
+ *
+ * `argv` is what followed the script name — `process.argv.slice(2)` —
+ * and not `process.argv` itself. The launcher's own two entries say
+ * nothing about what was asked for, and leaving them out is what
+ * makes an empty list a real input here rather than an impossible
+ * one: it is the case of a command run with no command at all.
+ *
+ * Nothing is guessed. There is no default, because the charity that
+ * would let a bare run mean `list` is the same charity that would let
+ * a mistyped `approve` mean something — and one of those two rules on
+ * a row. A command line this cannot read is refused whole, before an
+ * entry point opens anything.
+ *
+ * Each command takes exactly its own arguments, and a trailing one is
+ * refused rather than ignored. `approve 41 42` is two rulings to
+ * whoever typed it: ignoring the second would rule on one row and say
+ * nothing at all about the other.
+ *
+ * What this establishes is that the arguments could name a row, never
+ * that they do. Nothing here reaches a database, so an id no row
+ * carries parses clean and is answered further down, by the `null`
+ * `approveById` and `rejectById` return.
+ *
+ * @param argv - The arguments after the script name.
+ * @returns The command, discriminated on `command` so a row id is
+ * reachable exactly where one was named.
+ * @throws ApproveArgsError When the arguments name no command this
+ * can run, or name one with arguments it does not take.
+ */
+export function parseApproveArgs(
+  argv: readonly string[],
+): ApproveCommand {
+  const [command, ...operands] = argv;
+
+  if (command === undefined) {
+    throw new ApproveArgsError('no command given');
+  }
+
+  if (command === 'list') {
+    if (operands.length > 0) {
+      throw new ApproveArgsError(
+        `list takes no arguments, and ${operands.length} ` +
+        'followed it',
+      );
+    }
+
+    return { command: 'list' };
+  }
+
+  if (command === 'approve' || command === 'reject') {
+    return { command, id: readRowId(command, operands) };
+  }
+
+  throw new ApproveArgsError(`unknown command '${command}'`);
 }
