@@ -1,8 +1,9 @@
 /**
  * The migrations under `drizzle/` apply against a real Postgres with
  * no error, this database carries every one the journal names, and the
- * rules they install hold against a write that breaks them. Self-skips
- * when AR_LIVE_DATABASE_URL is unset — run via:
+ * rules they install refuse a write that breaks them and admit one
+ * that does not. Self-skips when AR_LIVE_DATABASE_URL is unset — run
+ * via:
  *
  *   bun run stress:start && bun run test:live && bun run stress:stop
  *
@@ -36,11 +37,19 @@
  * where the trigger was dropped at a psql prompt, reads exactly like
  * one where the rule holds. Only a refused write tells them apart.
  *
- * Each pins the refusal twice. The SQLSTATE is the class a caller
+ * Each refusal is pinned twice. The SQLSTATE is the class a caller
  * programs against, and the message is the only thing naming WHICH
  * rule refused — the depth guard raises `check_violation` from three
  * separate branches and two of them share a HINT, so a case asserting
  * the code alone passes on a neighbouring rule.
+ *
+ * The accepted write beside them is what says where the guard stops. A
+ * rule that refused every category, or one that silently dropped what
+ * it was handed, reddens those two in their SETUP rather than in an
+ * assertion, where a rejected query and a missing row both read as a
+ * broken test and not as a finding. So the shape a taxonomy is mostly
+ * made of is asserted on its own rather than left standing as their
+ * precondition.
  */
 import type { Pool } from 'pg';
 
@@ -95,6 +104,18 @@ const TWO_DEEP_KEY = 'two-levels-down';
  * by id, so nothing else in the setup has to be spelled twice.
  */
 const ROOT_WITH_CHILD_KEY = 'root-with-a-child';
+
+/**
+ * The key of the category the guard must ADMIT — a root, naming no
+ * parent at all.
+ *
+ * Spelled once and used twice for the reason `TWO_DEEP_KEY` records,
+ * with the second use being the difference between this case and those
+ * two: the value comes back out of the ROW rather than out of a
+ * refusal, because what this case watches is a write Postgres
+ * accepted.
+ */
+const ADMITTED_ROOT_KEY = 'a-root-of-its-own';
 
 describeLivePg('schema migrations (live Postgres)', () => {
   let pool: Pool;
@@ -241,5 +262,49 @@ describeLivePg('schema migrations (live Postgres)', () => {
     expect(cause?.message).toBe(
       `categories: ${ROOT_WITH_CHILD_KEY} already has children, so parent ${newParent.id} would push them two levels deep`,
     );
+  });
+
+  it('accepts a root category, so the guard refuses only what it is meant to', async () => {
+    // The two refusals above say what the guard stops. This says where
+    // it stops, and it is the branch most of a taxonomy takes: a root
+    // names no parent, so `categories_enforce_depth()` returns on its
+    // first rule without a lookup and without a depth to measure.
+    //
+    // It is asserted here rather than left standing as a precondition
+    // of those two, which each insert a root before reaching their
+    // refusal. A guard that stopped admitting roots does redden them,
+    // but in the setup and as a rejected query naming no constraint,
+    // or as a TypeError over a row that never came back. Either reads
+    // as a broken test rather than as the rule having changed.
+    //
+    // The returned row is the assertion, and not the absence of a
+    // throw. A BEFORE ... FOR EACH ROW trigger that returns NULL
+    // cancels the write for that row and raises nothing whatever:
+    // SQLSTATE 00000, `INSERT 0 0`, and a table with nothing in it.
+    // Awaiting the insert passes over that; the row coming back is
+    // what rules it out.
+    //
+    // What this case does not say is that the guard is installed at
+    // all. Detach the trigger and it goes on passing, because a table
+    // with no guard admits a root too. Only the refusals above tell
+    // those apart, which is why this sits beside them rather than
+    // standing in for them.
+    const [domain] = await db.insert(domains)
+      .values({ slug: 'depth-cap-root', name: 'Depth cap (root)' })
+      .returning({ id: domains.id });
+
+    const inserted = await db.insert(categories)
+      .values({
+        domainId: domain.id,
+        key: ADMITTED_ROOT_KEY,
+        name: 'A root of its own',
+        parentId: null,
+      })
+      .returning({ key: categories.key, parentId: categories.parentId });
+
+    // One row, holding what it was handed. The count says the write
+    // was not cancelled, and the NULL says the trigger left the column
+    // it reads alone rather than filling it in on the way past.
+    expect(inserted).toStrictEqual([{ key: ADMITTED_ROOT_KEY, parentId: null }]);
   });
 });
