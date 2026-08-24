@@ -449,3 +449,69 @@ export class UnresolvedSettingError extends Error {
     this.setting = setting;
   }
 }
+
+/**
+ * Resolve one `__ENVVAR:<NAME>__` setting against the chain.
+ *
+ * The chain is walked rather than merged, and the first source
+ * holding an answer for the name settles it. That is what makes
+ * the precedence {@link envSources} builds mean anything: where
+ * an environment answers, neither the `.env` file nor the
+ * defaults table behind it is consulted for that name at all.
+ *
+ * An empty string is not an answer. A source carrying the name
+ * with nothing under it is walked past exactly as a source not
+ * carrying the name is, so a `.env` line reading
+ * `AR_DISPATCH_CRON=` resolves to the entry in `ENV_DEFAULTS`
+ * rather than to a blank.
+ *
+ * That rule is about what an emptied value MEANS in a file an
+ * operator edits by hand. A key left with its value deleted reads
+ * as a setting being taken back OUT of the file, not as one being
+ * set to the empty string, and nothing downstream of the parse can
+ * tell those apart. Taking it at face value bakes a blank into a
+ * node parameter — a schedule trigger with no cron expression, an
+ * Execute Workflow node with no target id — which is a build that
+ * succeeds and an artifact that fails on an instance later, in a
+ * workflow nobody is watching. Falling through costs an override
+ * the operator was removing anyway.
+ *
+ * The cost of the rule, stated rather than hidden: a setting whose
+ * intended value IS the empty string cannot be expressed through
+ * this chain. Nothing in `ENV_DEFAULTS` wants one, and a marker
+ * stands where a value is required, so the case is priced out
+ * instead of served. A setting that later wants an empty value
+ * needs a sentinel with a name, not a blank.
+ *
+ * Nothing here judges the text. A cron expression missing a
+ * field, a workflow id naming nothing on any instance, a URL with
+ * a typo in the host: every one of them resolves. What a setting
+ * is FOR lives in the node the marker sits in, and a build cannot
+ * ask an instance whether what it just wrote is usable — so the
+ * only failure this reports is a name it has no text for at all.
+ *
+ * @param name - The setting the marker named, without the marker
+ *   syntax around it.
+ * @param sources - The chain to walk, highest precedence first.
+ *   Defaults to `envSources()`, which is `ENV_DEFAULTS` behind two
+ *   empty objects — the default build's chain, and the safe one to
+ *   inherit.
+ * @returns The first non-empty value a source in the chain holds
+ *   for the name.
+ * @throws UnresolvedSettingError When no source in the chain
+ *   answers for the name.
+ */
+export function resolveEnvVar(
+  name: string,
+  sources: readonly EnvSource[] = envSources(),
+): string {
+  for (const source of sources) {
+    const value = source[name];
+
+    if (typeof value === 'string' && value !== '') {
+      return value;
+    }
+  }
+
+  throw new UnresolvedSettingError(name);
+}
