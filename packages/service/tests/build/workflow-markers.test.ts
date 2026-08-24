@@ -1,15 +1,17 @@
 /**
- * What `resolveEnvVar` reads out of a chain of sources: the setting
- * no source answers for, and the source carrying a name with
- * nothing under it.
+ * What the build's settings rules answer with: the setting no
+ * source in the chain answers for, the source carrying a name with
+ * nothing under it, and the `.env` line forms that fill a source in
+ * the first place.
  *
  * Every case here runs against values handed in as arguments: a
- * chain of sources, and the name to look up in it. That is the
- * payoff of keeping the rules in `scripts/workflow-markers.ts`
- * apart from the entry point above them — a refusal is asserted by
- * calling one function, with no source tree to build over, no
- * `.env` on disk, and no `Bun.Transpiler` anywhere in the run,
- * which is the one thing a vitest worker cannot supply.
+ * chain of sources and the name to look up in it, or the text a
+ * `.env` would hold. That is the payoff of keeping the rules in
+ * `scripts/workflow-markers.ts` apart from the entry point above
+ * them — a refusal is asserted by calling one function, with no
+ * source tree to build over, no `.env` on disk, and no
+ * `Bun.Transpiler` anywhere in the run, which is the one thing a
+ * vitest worker cannot supply.
  *
  * The claim has two halves, and a case reading only that something
  * was thrown proves neither. Resolution can fail other ways that
@@ -45,9 +47,18 @@
  * the head of the chain is known to be consulted does the later
  * value mean the empty entry was declined rather than unseen.
  *
- * The rest of the marker rules — what a `.env` line parses to, and
- * the precedence between the sources — arrive as further cases in
- * this file later in this stage.
+ * The third claim sits underneath both of those: what one line of
+ * a `.env` parses to, before any chain has been built out of it.
+ * Its two halves pull opposite ways — four line forms that must be
+ * READ, two that must be SKIPPED — so they share one fixture text
+ * rather than getting one each. A skipped line can only be shown
+ * declined against a key set the readable lines populated; on its
+ * own, "nothing came out of the comment" is what a parser reading
+ * nothing at all reports too.
+ *
+ * The precedence between the sources — which of an environment, a
+ * `.env` file and the defaults table answers a name first —
+ * arrives as a further case in this file later in this stage.
  */
 import type { EnvSource } from '../../scripts/workflow-markers.js';
 
@@ -56,6 +67,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ENV_DEFAULTS,
   UnresolvedSettingError,
+  parseDotenv,
   resolveEnvVar,
 } from '../../scripts/workflow-markers.js';
 
@@ -369,5 +381,145 @@ describe('resolveEnvVar — an earlier source holding an empty value', () => {
     );
 
     expect(refusal.setting).toBe(EMPTIED_SETTING);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The line forms a `.env` is written in
+// ---------------------------------------------------------------------------
+
+/**
+ * A `.env` carrying every line form `parseDotenv` reads, and both
+ * of the forms it skips.
+ *
+ * One text rather than one per form, because the skipped forms
+ * cannot be shown declined against anything smaller. "No key came
+ * out of the comment line" holds for a parser that read nothing at
+ * all, so what carries that claim is the key set of THIS text: the
+ * readable lines have to arrive for the skipped ones to be absent
+ * on purpose rather than absent along with everything else.
+ *
+ * The names are ordinary rather than the `AR_` ones a real file
+ * carries, because parsing a file and deciding what a setting
+ * resolves to are separate steps. Nothing here judges a name
+ * against `ENV_DEFAULTS` — the parse reads whatever the operator
+ * wrote, and the chain built out of it decides afterwards whether
+ * any marker wanted the name.
+ *
+ * The commented-out line repeats a key the file already declares,
+ * which is the shape an operator leaves behind when they take a
+ * setting back out by hand. Both halves of that matter: the live
+ * line above it has to survive, and the `#` line has to contribute
+ * no key of its own.
+ */
+const DOTENV_LINES: readonly string[] = [
+  '# What the file is for, written where no value can be read out.',
+  '',
+  'PLAIN=unquoted-value',
+  'SINGLE=\'single quoted\'',
+  'DOUBLE="double quoted"',
+  'export EXPORTED=exported-value',
+  'TRAILING=trailing-value # what the setting above is for',
+  'QUOTED_HASH="a # the quotes around it keep"',
+  'UNSPACED_HASH=a#b',
+  '#PLAIN=the value an operator took back out',
+  '',
+];
+
+/** The text {@link DOTENV_LINES} spells, as a file holds it. */
+const DOTENV_TEXT = DOTENV_LINES.join('\n');
+
+/**
+ * Every key the text above declares, in sorted order.
+ *
+ * The skipped forms are asserted as this set rather than as
+ * absences named one at a time, and the two are not the same
+ * strength. A case listing the keys it expects NOT to see has to
+ * think of them first, and a comment line's leaked key is exactly
+ * the one nobody writes down — `#PLAIN` is not a name anyone means
+ * to look for. Asking what the parser produced puts the burden the
+ * other way round.
+ */
+const DOTENV_KEYS: readonly string[] = [
+  'DOUBLE',
+  'EXPORTED',
+  'PLAIN',
+  'QUOTED_HASH',
+  'SINGLE',
+  'TRAILING',
+  'UNSPACED_HASH',
+];
+
+describe('parseDotenv — the line forms an operator writes', () => {
+  // The guard the skip claim rests on, and the one thing about this
+  // fixture that cannot be read off the parser's own output. A text
+  // carrying neither a comment nor a blank line satisfies "nothing
+  // came out of one" without the parser having declined anything,
+  // and reads identically in a green run.
+  it('is asked against a text carrying both skipped forms', () => {
+    const comments = DOTENV_LINES.filter(
+      (line) => line.startsWith('#'),
+    );
+    const blanks = DOTENV_LINES.filter((line) => line === '');
+
+    expect(comments).not.toHaveLength(0);
+    expect(blanks).not.toHaveLength(0);
+  });
+
+  it('reads an unquoted value whole', () => {
+    expect(parseDotenv(DOTENV_TEXT).PLAIN).toBe('unquoted-value');
+  });
+
+  // Either quote character, and neither survives into the value.
+  // What comes back is what the shell would have exported, so a
+  // marker resolving to it carries no quoting for a node parameter
+  // to strip on the far side of the build.
+  it('strips the quotes around a quoted value', () => {
+    const settings = parseDotenv(DOTENV_TEXT);
+
+    expect(settings.SINGLE).toBe('single quoted');
+    expect(settings.DOUBLE).toBe('double quoted');
+  });
+
+  // The prefix is what lets the same file be sourced as a shell
+  // script, so it is the operator's file that puts it there rather
+  // than this build wanting it. Read past rather than refused, and
+  // never taken for part of the name.
+  it('reads a line carrying an export prefix', () => {
+    expect(parseDotenv(DOTENV_TEXT).EXPORTED).toBe('exported-value');
+  });
+
+  it('drops a comment trailing an unquoted value', () => {
+    expect(parseDotenv(DOTENV_TEXT).TRAILING).toBe('trailing-value');
+  });
+
+  // The two controls on the rule above, both of them values a
+  // parser cutting at every `#` truncates without saying so.
+  // Quoting is the whole of what buys an operator a `#` in a value;
+  // the unspaced one is the near neighbour, since `a#b` is a single
+  // token to a shell and is how a fragment or a colour gets
+  // written.
+  it('keeps a # the comment rule does not reach', () => {
+    const settings = parseDotenv(DOTENV_TEXT);
+
+    expect(settings.QUOTED_HASH).toBe('a # the quotes around it keep');
+    expect(settings.UNSPACED_HASH).toBe('a#b');
+  });
+
+  // The claim about the two skipped forms, and the reason every
+  // case above reads the same text. The keys that arrived are the
+  // evidence the parser ran at all; the keys that did not are then
+  // evidence it declined the comment and the blank rather than
+  // never having reached them.
+  //
+  // What this does not prove is which rule did the declining. The
+  // key grammar behind them refuses `#PLAIN` on its own, so a
+  // parser that had lost its comment branch still fails to produce
+  // that key — the two stand behind each other, and this case goes
+  // red only when both are gone. The claim is the behaviour an
+  // operator relies on, not the branch that supplies it.
+  it('declares the keys its readable lines carry, and no others', () => {
+    expect(Object.keys(parseDotenv(DOTENV_TEXT)).sort())
+      .toEqual(DOTENV_KEYS);
   });
 });
