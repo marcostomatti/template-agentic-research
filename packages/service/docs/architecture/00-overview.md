@@ -91,7 +91,7 @@ Paths are relative to `packages/service`.
 | Path | What it is |
 | --- | --- |
 | `lib/` | The service framework: express, mcp, service-core, errors, logger — and reserved for it. Distinct from `src/lib/`. |
-| `src/db/` | Drizzle schema and client. Schema v2 lands here in phase 2. |
+| `src/db/` | Schema v2 and the drizzle client: the tables one file per concern under `src/db/schema/`, re-exported by the `src/db/schema.ts` barrel that drizzle-kit and the client both read. |
 | `src/lib/` | Ported pipeline libs, from phase 4 onward: parsing, gating, scoring, and the feature mechanisms. Distinct from the framework `lib/`. |
 | `src/sources/` | The source adapter contract and the adapters that satisfy it (phase 4 onward), push capture included. |
 | `src/exports/` | Export renderers (phase 6): one per format a subscription can be rendered into. |
