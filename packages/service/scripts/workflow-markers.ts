@@ -387,3 +387,65 @@ export function envSources(options: EnvSourceOptions = {}): readonly EnvSource[]
 
   return [env, readEnvFile(envFile), envDefaults];
 }
+
+/**
+ * Thrown when a `__ENVVAR:<NAME>__` marker names a setting no
+ * source in the chain answers for.
+ *
+ * A distinct class rather than a bare `Error`, so a case covering
+ * this path can pin the refusal to this cause. The other ways
+ * resolution can fail reach a caller as `Error` too — a `.env` the
+ * build may not open, a source that is not the object it was taken
+ * for, a call made wrongly — and an assertion accepting any of
+ * them would pass for the wrong reason. `SeedValidationError` in
+ * `scripts/seed.ts` is the same arrangement for the same reason.
+ *
+ * The name is a field as well as part of the message, so a caller
+ * can say which setting is missing without parsing prose it did
+ * not write.
+ *
+ * `ENV_DEFAULTS` standing behind every name is what makes this
+ * narrow. The table is the last source in every chain
+ * {@link envSources} builds, so a shipped build reaching here names
+ * a setting the table has no entry for: a misspelt marker, or an
+ * entry never added beside the marker that wants it. The other way
+ * in is a caller supplying its own `envDefaults`, which is how a
+ * case reaches this refusal without editing the shipped table.
+ *
+ * A name misspelt inside a well-formed marker fails here; a marker
+ * malformed around a good name does not. `__ENVVAR:AR_BUILD_TG__`
+ * carries the marker form, is resolved against the chain, and
+ * fails with this. Something the marker form never matches is not
+ * a marker to resolve at all, and survives the pass into the
+ * serialized output instead — refused there rather than here, by a
+ * check arriving later in this stage.
+ *
+ * What the message cannot name is the file the marker came out of.
+ * Resolution walks strings already parsed out of their source, so
+ * the setting is the whole of what it has to hand, and a `git grep`
+ * for the marker form across `workflows/src/` is what turns that
+ * back into a file.
+ */
+export class UnresolvedSettingError extends Error {
+  /**
+   * The setting the marker named, without the marker syntax around
+   * it — `AR_BUILD_TAG` rather than `__ENVVAR:AR_BUILD_TAG__`.
+   */
+  readonly setting: string;
+
+  /**
+   * @param setting - The setting no source in the chain answered
+   *   for.
+   */
+  constructor(setting: string) {
+    super(
+      `__ENVVAR:${setting}__ has no value: no source the build was ` +
+      'given answers for the name, and ENV_DEFAULTS carries no ' +
+      'entry under it. Either the marker is misspelt, or the ' +
+      'setting needs an entry in ENV_DEFAULTS beside the marker ' +
+      'that wants it.',
+    );
+    this.name = this.constructor.name;
+    this.setting = setting;
+  }
+}
