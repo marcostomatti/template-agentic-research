@@ -1,5 +1,7 @@
 /**
- * What `resolveEnvVar` does with a setting no source answers for.
+ * What `resolveEnvVar` reads out of a chain of sources: the setting
+ * no source answers for, and the source carrying a name with
+ * nothing under it.
  *
  * Every case here runs against values handed in as arguments: a
  * chain of sources, and the name to look up in it. That is the
@@ -33,10 +35,19 @@
  * asks the same chains for a name they do hold and reads the value
  * back.
  *
- * The rest of the marker rules — what a `.env` line parses to,
- * what an emptied value means, and the precedence between the
- * sources — arrive as further cases in this file later in this
- * stage.
+ * The second claim is the rule deciding which entries in a chain
+ * count as answers at all: a source carrying the name with an
+ * empty string is walked past exactly as one not carrying it is.
+ * Read on its own that is indistinguishable from a resolver never
+ * reaching the source — both leave the value behind it standing —
+ * so the emptied entry and a real one sit in the SAME fixture
+ * source, and a guard asks that source for the real one. Only once
+ * the head of the chain is known to be consulted does the later
+ * value mean the empty entry was declined rather than unseen.
+ *
+ * The rest of the marker rules — what a `.env` line parses to, and
+ * the precedence between the sources — arrive as further cases in
+ * this file later in this stage.
  */
 import type { EnvSource } from '../../scripts/workflow-markers.js';
 
@@ -238,5 +249,125 @@ describe('resolveEnvVar — a setting no source answers for', () => {
     const refusal = refusalOf(() => resolveEnvVar(UNANSWERED_SETTING));
 
     expect(refusal.setting).toBe(UNANSWERED_SETTING);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A setting an earlier source carries with nothing under it
+// ---------------------------------------------------------------------------
+
+/**
+ * The setting the fixtures below empty, and one `ENV_DEFAULTS`
+ * really carries an entry for.
+ *
+ * A declared entry rather than an invented name, because the shape
+ * this rule exists for is an operator deleting a value out of a
+ * `.env` they also source by hand: the line stays, the value goes,
+ * and what should stand behind it is the table's own entry. A name
+ * the table never carried would fall through to a refusal whether
+ * the empty entry was declined or taken at face value, which is a
+ * fixture the rule is not about.
+ */
+const EMPTIED_SETTING = 'AR_DISPATCH_CRON';
+
+/**
+ * What {@link EMPTIED_SETTING} resolves to from the source sitting
+ * behind the emptied one, chosen to be nothing `ENV_DEFAULTS`
+ * carries.
+ *
+ * A cron expression the table does not ship, so a resolver that had
+ * stopped walking the chain and answered from the table alone fails
+ * the case rather than passing it with the right-looking kind of
+ * value.
+ */
+const FIXTURE_CRON = '*/7 * * * *';
+
+/**
+ * A chain whose head carries {@link EMPTIED_SETTING} with nothing
+ * under it, and {@link ANSWERED_SETTING} with a real value.
+ *
+ * Both entries sit in the SAME object on purpose. The claim is that
+ * the empty one is declined, and a head holding only the empty
+ * entry could not tell that apart from a head never read: either
+ * way the value behind it stands. Pairing them leaves the guard
+ * below asking this exact source for a name it does answer for.
+ */
+const CHAIN_WITH_IT_EMPTIED: readonly EnvSource[] = [
+  { [ANSWERED_SETTING]: FIXTURE_BUILD_TAG, [EMPTIED_SETTING]: '' },
+  { [EMPTIED_SETTING]: FIXTURE_CRON },
+];
+
+/**
+ * The shape a shipped build meets the rule in: the setting emptied
+ * in front, nothing between, and the defaults table at the back.
+ *
+ * Three sources because that is what `envSources` builds, written
+ * out by hand rather than through it — the precedence that call
+ * arranges is a claim of its own, and asserting it here would leave
+ * this case failing for a reason it is not about.
+ */
+const CHAIN_EMPTIED_OVER_DEFAULTS: readonly EnvSource[] = [
+  { [EMPTIED_SETTING]: '' },
+  {},
+  ENV_DEFAULTS,
+];
+
+/**
+ * A chain in which every source carries the name and empties it.
+ *
+ * Where the rule runs out: nothing is left to fall through to, so
+ * the walk ends the way it does for a name no source mentions.
+ */
+const CHAIN_EMPTIED_THROUGHOUT: readonly EnvSource[] = [
+  { [EMPTIED_SETTING]: '' },
+  { [EMPTIED_SETTING]: '' },
+];
+
+describe('resolveEnvVar — an earlier source holding an empty value', () => {
+  // The guard everything below rests on. An entry declined and a
+  // source never reached leave the same value standing, so this asks
+  // the head of the chain for the name it does answer for: the
+  // fixture tag can only have come from that object, which is what
+  // makes the head demonstrably consulted rather than assumed to be.
+  it('is asked against a chain whose head source is consulted', () => {
+    expect(resolveEnvVar(ANSWERED_SETTING, CHAIN_WITH_IT_EMPTIED))
+      .toBe(FIXTURE_BUILD_TAG);
+  });
+
+  // The other half of that guard, and what keeps the fall-through
+  // case about an operator emptying a line rather than about a name
+  // nothing ever declared.
+  it('empties a setting ENV_DEFAULTS carries an entry for', () => {
+    expect(Object.keys(ENV_DEFAULTS)).toContain(EMPTIED_SETTING);
+  });
+
+  // The claim. A resolver taking the empty string for an answer
+  // returns it and fails here; one walking past it reaches the
+  // source behind, whose value is nothing the shipped table holds.
+  it('walks past the empty entry to the source behind it', () => {
+    expect(resolveEnvVar(EMPTIED_SETTING, CHAIN_WITH_IT_EMPTIED))
+      .toBe(FIXTURE_CRON);
+  });
+
+  // The same rule where a build actually meets it: a `.env` line
+  // reading `AR_DISPATCH_CRON=` with nothing exported over it
+  // resolves to the table's entry, which is the value the operator
+  // was putting back by deleting theirs.
+  it('falls through an emptied entry to the defaults table', () => {
+    expect(resolveEnvVar(EMPTIED_SETTING, CHAIN_EMPTIED_OVER_DEFAULTS))
+      .toBe(ENV_DEFAULTS[EMPTIED_SETTING]);
+  });
+
+  // The end of the rule, and the case a resolver taking `''` for an
+  // answer fails loudest: it returns the empty string where nothing
+  // in the chain set one. A refusal here is the same refusal a name
+  // no source mentions gets, which is the point — an emptied entry
+  // is not a quieter kind of value.
+  it('refuses when every source in the chain empties it', () => {
+    const refusal = refusalOf(
+      () => resolveEnvVar(EMPTIED_SETTING, CHAIN_EMPTIED_THROUGHOUT),
+    );
+
+    expect(refusal.setting).toBe(EMPTIED_SETTING);
   });
 });
