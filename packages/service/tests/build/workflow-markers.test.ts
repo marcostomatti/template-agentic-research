@@ -72,7 +72,24 @@
  * green when that order changes: a fixture guard moving with the
  * order would be restating the claim rather than standing behind
  * it.
+ *
+ * The last subject is not a settings rule at all, and sits here
+ * because it belongs to the same module: which libraries the build
+ * will paste into a Code node. `assertSpliceable` judges a library
+ * a transpiler has already been over, so its cases hand it a
+ * recorded transpile-and-scan pair out of `marker-fixtures.ts` —
+ * the same reason the settings cases run on arguments, a vitest
+ * worker having no `Bun.Transpiler` to produce a fresh one with.
+ *
+ * Its refusals need a guard the settings ones do not. The whole
+ * output of that function is a throw, so every refusal case ever
+ * written for it is satisfied by a version refusing whatever it is
+ * handed, and a section of nothing but refusals reads green under
+ * one. Each refused sample is asked beside the nearest library
+ * that must be ACCEPTED, and the two differ by the thing the rule
+ * is about.
  */
+import type { LibSample } from './marker-fixtures.js';
 import type { EnvSource } from '../../scripts/workflow-markers.js';
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -83,12 +100,19 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import {
   ENV_DEFAULTS,
+  SpliceableLibError,
   UnresolvedSettingError,
+  assertSpliceable,
   envSources,
   parseDotenv,
   readEnvFile,
   resolveEnvVar,
 } from '../../scripts/workflow-markers.js';
+
+import {
+  LIB_CONTROL_SAMPLES,
+  REFUSED_LIB_SAMPLES,
+} from './marker-fixtures.js';
 
 // ---------------------------------------------------------------------------
 // The settings these cases ask for
@@ -747,5 +771,198 @@ describe('envSources — which source answers a name first', () => {
   it('resolves from ENV_DEFAULTS where neither source answers', () => {
     expect(resolveEnvVar(DEFAULTS_WINNING_SETTING, FULL_CHAIN))
       .toBe(ENV_DEFAULTS[DEFAULTS_WINNING_SETTING]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A library carrying a dependency the transpile left behind
+// ---------------------------------------------------------------------------
+
+/**
+ * The sample a roster carries under one id.
+ *
+ * A lookup rather than a literal, so what a case asserts on is the
+ * source measured against a real transpiler with its output
+ * recorded beside it. A copy written out here would go on passing
+ * after that recording had been re-measured, describing a
+ * transpile no build produces.
+ *
+ * Refusing an id nothing carries is the whole reason it throws.
+ * `find` answers `undefined`, and a case handed one fails several
+ * lines later on a property of `undefined`, naming neither the
+ * roster nor the id it was looking for — which is exactly how a
+ * renamed fixture entry arrives.
+ *
+ * @param samples - The roster to look in.
+ * @param id - The sample wanted out of it.
+ * @returns The sample carrying that id.
+ */
+function sampleById<Sample extends LibSample>(
+  samples: readonly Sample[],
+  id: string,
+): Sample {
+  const sample = samples.find((candidate) => candidate.id === id);
+
+  if (sample === undefined) {
+    throw new Error(
+      `No sample in marker-fixtures.ts carries the id ${JSON.stringify(id)}. `
+      + `The roster asked holds: ${samples.map((entry) => entry.id).join(', ')}.`,
+    );
+  }
+
+  return sample;
+}
+
+/**
+ * The library refused here: one importing a value out of `node:fs`,
+ * which the transpile leaves standing in the text and the scan
+ * reports as a dependency.
+ *
+ * A dependency is the form with no lighter fix. The three re-export
+ * forms are a library declaring its names the wrong way and are
+ * rewritten where they are written; an import is a library needing
+ * something a Code node has no way to fetch, so what it asks for
+ * has to be given up or carried in beside it.
+ */
+const VALUE_IMPORT_SAMPLE = sampleById(
+  REFUSED_LIB_SAMPLES,
+  'refused-value-import',
+);
+
+/**
+ * The nearest library that must be ACCEPTED: an import statement
+ * over a dependency that is nothing but a type.
+ *
+ * It carries two loads. The first is vacuity — `assertSpliceable`
+ * returns nothing, so a version refusing whatever it is handed
+ * passes every refusal case below it, and this is the one case
+ * that reddens there. The second is what the rule is about: this
+ * source opens with an import statement exactly as the refused one
+ * does, and the two part company only because `import type` erases
+ * before either the transpiled text or the scan sees it. Refusing
+ * on the word rather than on the dependency would fail here and
+ * nowhere else.
+ */
+const TYPE_ONLY_SAMPLE = sampleById(
+  LIB_CONTROL_SAMPLES,
+  'control-type-only-import',
+);
+
+/**
+ * The {@link SpliceableLibError} a call refused with.
+ *
+ * A second helper beside {@link refusalOf} rather than one taking a
+ * class, because pinning a named class is the point of both and a
+ * helper handed the class to expect would let a case pin whatever
+ * it happened to pass. Anything else thrown is rethrown, so a rule
+ * that had started failing some other way fails the cases below
+ * with that error instead of passing them.
+ *
+ * A call that RETURNED is its own failure and says so. Reading a
+ * field off a refusal that never happened would otherwise fail on a
+ * property of `undefined`, naming neither what was expected nor
+ * what occurred.
+ *
+ * @param assertLib - The call under test, passed unmade so what it
+ *   throws lands here.
+ * @returns The refusal it threw.
+ */
+function spliceRefusalOf(assertLib: () => void): SpliceableLibError {
+  try {
+    assertLib();
+  } catch (thrown) {
+    if (thrown instanceof SpliceableLibError) {
+      return thrown;
+    }
+
+    throw thrown;
+  }
+
+  throw new Error(
+    'assertSpliceable returned where a refusal was expected.',
+  );
+}
+
+describe('assertSpliceable — a library depending on a value', () => {
+  // The fixture guard, and the one thing here that cannot be read
+  // off the function's own behaviour. The claim is about a scan
+  // REPORTING a dependency, so a sample whose scan reported none
+  // would leave every case below about some other rule entirely —
+  // and the control is only a control while its own scan is empty
+  // despite its source opening with an import statement.
+  it('is asked about a scan reporting a dependency, and one not', () => {
+    expect(VALUE_IMPORT_SAMPLE.scan.imports.map((entry) => entry.path))
+      .toEqual(['node:fs']);
+    expect(TYPE_ONLY_SAMPLE.source).toMatch(/^import[ \t]/mu);
+    expect(TYPE_ONLY_SAMPLE.scan.imports).toEqual([]);
+  });
+
+  // The accept path, and what stops the refusals below passing for
+  // a rule that refuses everything it is handed. The value is only
+  // that it returned: there is nothing else to read back, which is
+  // why this case has to exist rather than being implied by one of
+  // them.
+  it('accepts the library whose dependency erased before the scan', () => {
+    expect(() => assertSpliceable(
+      TYPE_ONLY_SAMPLE.transpiled,
+      TYPE_ONLY_SAMPLE.scan,
+      TYPE_ONLY_SAMPLE.path,
+    )).not.toThrow();
+  });
+
+  // The class rather than the throw. Every case under this one
+  // reads a field off the refusal and would take any object
+  // carrying one, so this is what says which error a build catching
+  // narrowly will see — and the other ways an inline fails reach a
+  // caller as a bare `Error`.
+  it('throws SpliceableLibError rather than a bare Error', () => {
+    expect(() => assertSpliceable(
+      VALUE_IMPORT_SAMPLE.transpiled,
+      VALUE_IMPORT_SAMPLE.scan,
+      VALUE_IMPORT_SAMPLE.path,
+    )).toThrow(SpliceableLibError);
+  });
+
+  // The path the marker named, carried as a field so a caller can
+  // say which file to open without parsing a sentence it did not
+  // write. Nothing else in the refusal locates the library: the
+  // text handed over is a transpiled body, and by then the workflow
+  // source whose marker pulled it in is gone.
+  it('carries the library path as a field on the refusal', () => {
+    const refusal = spliceRefusalOf(() => assertSpliceable(
+      VALUE_IMPORT_SAMPLE.transpiled,
+      VALUE_IMPORT_SAMPLE.scan,
+      VALUE_IMPORT_SAMPLE.path,
+    ));
+
+    expect(refusal.libPath).toBe(VALUE_IMPORT_SAMPLE.path);
+  });
+
+  // The same name in the sentence an operator actually reads, since
+  // a build refusing on a terminal prints the message and none of
+  // the fields.
+  it('names the library path in the message', () => {
+    const refusal = spliceRefusalOf(() => assertSpliceable(
+      VALUE_IMPORT_SAMPLE.transpiled,
+      VALUE_IMPORT_SAMPLE.scan,
+      VALUE_IMPORT_SAMPLE.path,
+    ));
+
+    expect(refusal.message).toContain(VALUE_IMPORT_SAMPLE.path);
+  });
+
+  // Which rule caught it, read off the fixture rather than spelled
+  // again. One library can carry two refused forms at once, so a
+  // case reading only that something threw is covered by whichever
+  // rule happened to reach it first — and this sample is refused by
+  // the dependency rule or by nothing.
+  it('names the dependency as the form it refused for', () => {
+    const refusal = spliceRefusalOf(() => assertSpliceable(
+      VALUE_IMPORT_SAMPLE.transpiled,
+      VALUE_IMPORT_SAMPLE.scan,
+      VALUE_IMPORT_SAMPLE.path,
+    ));
+
+    expect(refusal.form).toBe(VALUE_IMPORT_SAMPLE.refusedForm);
   });
 });

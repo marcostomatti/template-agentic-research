@@ -8,13 +8,14 @@
  *
  * A shared module rather than literals inside one suite, because
  * three files want the same samples — the marker cases beside this
- * file, the build cases driving a build over a fixture tree, and the
- * splice case that spawns a real build, all arriving later in this
- * stage. Sharing is also what makes a roster assertable: a case can
- * ask whether every refused form was reached, which is a question no
- * inline literal answers. `tsconfig.json` excludes every `*.test.ts`
- * from the program and includes this directory, so what a type
- * checker reads about these shapes it reads here.
+ * file, which read it now, and the build cases driving a build over
+ * a fixture tree and the splice case that spawns a real build, both
+ * still to come in this stage. Sharing is also what makes a roster
+ * assertable: a case can ask whether every refused form was reached,
+ * which is a question no inline literal answers. `tsconfig.json`
+ * excludes every `*.test.ts` from the program and includes this
+ * directory, so what a type checker reads about these shapes it
+ * reads here.
  *
  * A stand-in is needed at all because `Bun.Transpiler` is not
  * reachable from a vitest worker: `tests/helpers/bun-polyfill.ts`
