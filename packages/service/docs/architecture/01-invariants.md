@@ -21,7 +21,7 @@ refer to the 7-phase sequencing in that design, §7.
 | A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
 | Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
 | Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/`, over workflows built from `workflows/src/` | 3 | Pending |
-| Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated SQL under `drizzle/`, read by `tests/invariants/` | 2 | Pending |
+| Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
 | No naming from the project this pipeline was ported from survives in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No vault path appears in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No real hostname appears in a tracked file | `tests/invariants/naming.test.ts` | 1 | Implemented |
@@ -36,8 +36,8 @@ is still a reservation.
 
 ### A row is written before the artifact that enforces it
 
-Five of the eight rows are pending, and the register is written that way
-on purpose: a property is recorded once it is decided, not once somebody
+Several of the rows are pending, and the register is written that way on
+purpose: a property is recorded once it is decided, not once somebody
 gets around to checking it.
 
 Filling the table the other way round — adding a row when its
@@ -49,7 +49,8 @@ written down which phase that is.
 
 ### The suite is the spine, and later phases extend it
 
-Phase 1 opened `tests/invariants/` with the naming invariant. Phase 3
+Phase 1 opened `tests/invariants/` with the naming invariant, and
+phase 2 added the static-SQL scan over `drizzle/` beside it. Phase 3
 lands the rest of the spine next to the build system that produces the
 artifacts those assertions read — before most of the behaviour they
 guard exists — and each later phase adds its assertions to that same
@@ -117,7 +118,7 @@ not a substitute for it.
 
 ### The three de-origination rows hold from the first commit
 
-They are the only rows enforced today, and they could be enforced this
+They were the first rows to be enforced, and they could be enforced that
 early because what they constrain is tracked text — which exists from
 the first commit — rather than behaviour no phase has landed yet.
 `tests/invariants/naming.test.ts` walks the package's declared scan
