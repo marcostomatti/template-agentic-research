@@ -88,6 +88,14 @@
  * one. Each refused sample is asked beside the nearest library
  * that must be ACCEPTED, and the two differ by the thing the rule
  * is about.
+ *
+ * The forms refused for how a library DECLARES its names need one
+ * thing the dependency form does not: the refusal has to say WHICH
+ * of them caught the library. One source can break two rules at
+ * once — a star re-export is a dependency wearing an export
+ * keyword, and is measured to be both — so a case reading only that
+ * something was thrown is covered by whichever rule reached it
+ * first, and would stay green with the star rule deleted outright.
  */
 import type { LibSample } from './marker-fixtures.js';
 import type { EnvSource } from '../../scripts/workflow-markers.js';
@@ -112,6 +120,7 @@ import {
 import {
   LIB_CONTROL_SAMPLES,
   REFUSED_LIB_SAMPLES,
+  SPLICEABLE_LIB_SAMPLES,
 } from './marker-fixtures.js';
 
 // ---------------------------------------------------------------------------
@@ -965,4 +974,152 @@ describe('assertSpliceable — a library depending on a value', () => {
 
     expect(refusal.form).toBe(VALUE_IMPORT_SAMPLE.refusedForm);
   });
+});
+
+// ---------------------------------------------------------------------------
+// A library exporting its names in a form no strip repairs
+// ---------------------------------------------------------------------------
+
+/** One refused export form, paired to the sample planted for it. */
+interface ReexportCase {
+  /** The form the refusal has to name. */
+  readonly form: string;
+
+  /** The sample in `REFUSED_LIB_SAMPLES` standing for that form. */
+  readonly id: string;
+}
+
+/**
+ * The three forms refused for how a library DECLARES its names,
+ * rather than for what it depends on.
+ *
+ * Each is a statement in its own right — a trailing list, a default,
+ * a star — so there is no keyword at the head of a declaration to
+ * take off, and no version of `stripDeclarationExports` repairs one.
+ * That is what separates them from the dependency form above, which
+ * is refused for naming a file a Code node has no way to fetch.
+ *
+ * The form is written out here rather than read off the sample, and
+ * a guard below asserts the two agree. Reading it off would make the
+ * pairing true however either side moved: a fixture re-measured and
+ * re-labelled to match whatever the build had started reporting
+ * would carry this section along with it, leaving three cases
+ * passing about a rule nobody chose.
+ */
+const REEXPORT_CASES: readonly ReexportCase[] = [
+  { form: 'export {', id: 'refused-named-list' },
+  { form: 'export default', id: 'refused-default' },
+  { form: 'export *', id: 'refused-star' },
+];
+
+/**
+ * The star sample, read out here for the guard that keeps its claim
+ * about the ORDER the forms are tried in rather than about the
+ * throw.
+ */
+const STAR_SAMPLE = sampleById(REFUSED_LIB_SAMPLES, 'refused-star');
+
+/**
+ * The form `assertSpliceable` refused a sample under, or `null`
+ * where it accepted one.
+ *
+ * A returned value rather than a thrown refusal, so a guard can name
+ * every sample it was wrong about instead of stopping at the first —
+ * a helper that throws cannot be called from inside a filter.
+ * Anything that is not a {@link SpliceableLibError} is rethrown,
+ * which is where the class gets pinned for the claims below: a rule
+ * that had started failing some other way fails them with that error
+ * rather than passing them.
+ *
+ * @param sample - The library to judge, with the transpile and the
+ *   scan measured beside it.
+ * @returns The form the refusal named, or `null` where the library
+ *   was accepted.
+ */
+function refusedFormOf(sample: LibSample): string | null {
+  try {
+    assertSpliceable(sample.transpiled, sample.scan, sample.path);
+  } catch (thrown) {
+    if (thrown instanceof SpliceableLibError) {
+      return thrown.form;
+    }
+
+    throw thrown;
+  }
+
+  return null;
+}
+
+describe('assertSpliceable — a library exporting in a refused form', () => {
+  // The coverage guard, and it reaches past this section on purpose:
+  // the three forms here plus the dependency form above are every
+  // entry the fixture roster carries. A fifth form planted there
+  // with no case beside it is a rule nothing proves still fires, and
+  // the suite would stay green while the coverage shrank.
+  it('reaches every refused sample the fixture roster carries', () => {
+    const reached = [
+      ...REEXPORT_CASES.map((entry) => entry.id),
+      VALUE_IMPORT_SAMPLE.id,
+    ].sort();
+    const planted = REFUSED_LIB_SAMPLES.map((sample) => sample.id).sort();
+
+    expect(reached).toEqual(planted);
+  });
+
+  // The pairing itself, asserted rather than assumed. Each claim
+  // below reads its form out of the table above, so a fixture whose
+  // `refusedForm` had been edited to something else would leave one
+  // sample standing for two different forms — and the claim would go
+  // on passing under whichever label the fixture had acquired.
+  it('pairs each sample to the form the fixture says it stands for', () => {
+    const planted = REEXPORT_CASES.map(
+      (entry) => sampleById(REFUSED_LIB_SAMPLES, entry.id).refusedForm,
+    );
+
+    expect(planted).toEqual(REEXPORT_CASES.map((entry) => entry.form));
+  });
+
+  // What makes the star claim a claim about ORDER. That sample is
+  // measured to break two rules at once: its text carries
+  // `export *`, and its scan reports the file it re-exports as a
+  // dependency. Only while both hold does a refusal naming the star
+  // form say the star rule was reached FIRST — with the scan empty,
+  // the dependency rule could never have caught it and the order
+  // would go untested. Read off the fixture rather than through the
+  // function, so it says the same thing whatever order the rules are
+  // tried in.
+  it('is asked about a star sample its own scan calls a dependency', () => {
+    expect(STAR_SAMPLE.transpiled).toContain('export *');
+    expect(STAR_SAMPLE.scan.imports).not.toHaveLength(0);
+  });
+
+  // The guard the three claims rest on, and the only case here that
+  // moves when the rule starts refusing whatever it is handed.
+  // `assertSpliceable` returns nothing, so a refusal case has no
+  // value to read back and a section of nothing but refusals reads
+  // green under such a version. The declaration forms are the near
+  // misses that matter: every rule here fires on an `export` at the
+  // start of a line, and these five are exactly that and must be
+  // spliced.
+  it('accepts every declaration form the build splices', () => {
+    const refused = SPLICEABLE_LIB_SAMPLES
+      .filter((sample) => refusedFormOf(sample) !== null)
+      .map((sample) => sample.id);
+
+    expect(refused).toEqual([]);
+  });
+
+  for (const entry of REEXPORT_CASES) {
+    // Which rule caught the library, not merely that something did.
+    // One source can carry two refused forms at once, so a case
+    // reading only the throw is covered by whichever rule reached it
+    // first: delete the star rule and its sample is still refused,
+    // under the dependency form, with a `toThrow` assertion none the
+    // wiser.
+    it(`refuses ${entry.id} under the form ${entry.form}`, () => {
+      const sample = sampleById(REFUSED_LIB_SAMPLES, entry.id);
+
+      expect(refusedFormOf(sample)).toBe(entry.form);
+    });
+  }
 });
