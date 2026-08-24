@@ -515,3 +515,78 @@ export function resolveEnvVar(
 
   throw new UnresolvedSettingError(name);
 }
+
+/**
+ * Thrown when a library named by an `__INLINE:<path>__` marker
+ * cannot stand alone in a Code node.
+ *
+ * A spliced library is pasted into a node body, and a node body is
+ * not a module: nothing there resolves a specifier, and nothing
+ * consumes an export. What survives that is a declaration wearing
+ * a leading `export ` keyword, because the keyword can be removed
+ * and the declaration left running exactly as written. Every other
+ * form is refused here, naming the file and the form, rather than
+ * being written into a node that throws on its first execution.
+ *
+ * The refusal is the dual-context rule made mechanical. A library
+ * under `src/lib/` is imported by the test suite AND spliced into
+ * a workflow, and only the first of those two readers forgives an
+ * import or a trailing export list. A build that let one through
+ * would produce an artifact that passes every check this package
+ * runs and fails on an instance, in a node nobody is watching.
+ *
+ * A distinct class rather than a bare `Error`, so a case covering
+ * this rule can pin the refusal to it. The other ways an inline
+ * fails arrive as `Error` too — a marker path naming no file, a
+ * library the build may not read, a source the transpiler itself
+ * rejects — and an assertion accepting any of them would pass
+ * while the splice rule was missing entirely.
+ *
+ * Both values are fields as well as parts of the message, so a
+ * case asserts on which form was named rather than parsing prose
+ * it did not write. That matters because one source can break two
+ * rules at once: `export * from './x.js'` is a re-export and a
+ * dependency both, and a sample paired to the form it stands for
+ * is only covered if the refusal named that form. The field says
+ * what the refusal reported, never everything wrong with the file.
+ *
+ * What the message cannot name is the workflow source whose marker
+ * pulled the library in. A library is loaded by path and the
+ * marker site is gone by then, so a `git grep` for the marker form
+ * across `workflows/src/` is what turns the path back into a
+ * caller.
+ */
+export class SpliceableLibError extends Error {
+  /**
+   * The library the marker named, as the marker wrote it —
+   * relative to the library directory, not an absolute path.
+   */
+  readonly libPath: string;
+
+  /**
+   * The form the refusal named: `export {`, `export default`,
+   * `export *`, or `import` for a dependency that survived the
+   * transpile.
+   */
+  readonly form: string;
+
+  /**
+   * @param libPath - The library the marker named.
+   * @param form - The form it is refused for.
+   */
+  constructor(libPath: string, form: string) {
+    super(
+      `${libPath} cannot be spliced into a Code node: it carries ` +
+      `"${form}". A spliced library is pasted into a node body, ` +
+      'which is not a module, so the only form that survives is a ' +
+      'declaration under a leading export keyword — export ' +
+      'function, const, class, let or var. Either rewrite it as ' +
+      'one of those and drop any value import, or leave the ' +
+      'library out of the splice and let the node carry the logic ' +
+      'itself.',
+    );
+    this.name = this.constructor.name;
+    this.libPath = libPath;
+    this.form = form;
+  }
+}
