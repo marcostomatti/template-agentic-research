@@ -660,11 +660,31 @@ interface SpliceRefusal {
  * A roster rather than a run of conditions because the order is a
  * decision rather than an accident: the first entry that matches
  * settles what the refusal NAMES, and one library can carry two
- * forms at once. The remaining entries — the re-export forms a
- * leading keyword cannot be stripped from — arrive next in this
- * stage, ahead of this one.
+ * forms at once. The star form is what fixes the order. A source
+ * reading `export * from './x.js'` scans as a dependency AND
+ * carries a re-export in its text, so the dependency entry sits
+ * last: ahead of the others it would refuse that library under the
+ * name `import`, leaving the star rule present, working, and never
+ * once the reason anything failed.
  *
- * A dependency is the entry here. A Code node is not a module: it
+ * The three re-export entries read the transpiled text rather than
+ * the scan, and they have to. A transpiler reports a re-export as
+ * an import and says nothing about the export keyword worn over
+ * it, so a scan can tell that something is wrong but never which
+ * form it is — and the form is the half a reader acts on.
+ *
+ * Each is anchored to the start of a line and to column one,
+ * because `export` is an ordinary word. A library quoting the
+ * splice rule in a string, or showing a declaration inside a
+ * template literal, carries the text without carrying the form: a
+ * statement begins a line, so a mid-line match is inside a literal
+ * and an indented one is inside something. The limit that leaves
+ * is real and goes undetected — an unindented `export const` on
+ * its own line inside a template literal reads exactly like a
+ * declaration, to this roster and to the strip alike. No library
+ * writes one today, and nothing here would notice if one did.
+ *
+ * A dependency is the last entry. A Code node is not a module: it
  * resolves no specifier, so an import that survived the transpile
  * fails on the node's first execution rather than at build time,
  * which is what this refusal moves. The scan is the authority for
@@ -674,6 +694,18 @@ interface SpliceRefusal {
  * not.
  */
 const SPLICE_REFUSALS: readonly SpliceRefusal[] = [
+  {
+    form: 'export {',
+    refuses: ({ transpiled }) => /^export[ \t]*\{/mu.test(transpiled),
+  },
+  {
+    form: 'export default',
+    refuses: ({ transpiled }) => /^export[ \t]+default\b/mu.test(transpiled),
+  },
+  {
+    form: 'export *',
+    refuses: ({ transpiled }) => /^export[ \t]*\*/mu.test(transpiled),
+  },
   {
     form: 'import',
     refuses: ({ scan }) => scan.imports.length > 0,
@@ -697,8 +729,8 @@ const SPLICE_REFUSALS: readonly SpliceRefusal[] = [
  *   named it, so the refusal points at a file rather than at a
  *   fragment of text.
  * @throws SpliceableLibError When the library carries a form a Code
- *   node cannot run — today, a dependency that survived the
- *   transpile.
+ *   node cannot run — a re-export no strip can repair, or a
+ *   dependency that survived the transpile.
  */
 export function assertSpliceable(
   transpiled: string,
