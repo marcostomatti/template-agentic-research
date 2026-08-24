@@ -1,17 +1,23 @@
 /**
  * What the build's settings rules answer with: the setting no
  * source in the chain answers for, the source carrying a name with
- * nothing under it, and the `.env` line forms that fill a source in
- * the first place.
+ * nothing under it, the `.env` line forms that fill a source in the
+ * first place, and the order the sources are asked in.
  *
- * Every case here runs against values handed in as arguments: a
- * chain of sources and the name to look up in it, or the text a
- * `.env` would hold. That is the payoff of keeping the rules in
- * `scripts/workflow-markers.ts` apart from the entry point above
- * them — a refusal is asserted by calling one function, with no
- * source tree to build over, no `.env` on disk, and no
- * `Bun.Transpiler` anywhere in the run, which is the one thing a
- * vitest worker cannot supply.
+ * Almost every case here runs against values handed in as
+ * arguments: a chain of sources and the name to look up in it, or
+ * the text a `.env` would hold. That is the payoff of keeping the
+ * rules in `scripts/workflow-markers.ts` apart from the entry point
+ * above them — a refusal is asserted by calling one function, with
+ * no source tree to build over and no `Bun.Transpiler` anywhere in
+ * the run, which is the one thing a vitest worker cannot supply.
+ *
+ * The exception is the precedence claim at the foot of the file,
+ * and it is one respect rather than a different approach: the
+ * middle source of a chain is filled by reading a path and by
+ * nothing else, so those cases write a `.env` into a temporary
+ * directory and hand the path over. Still one function called,
+ * still no tree to build.
  *
  * The claim has two halves, and a case reading only that something
  * was thrown proves neither. Resolution can fail other ways that
@@ -56,18 +62,31 @@
  * own, "nothing came out of the comment" is what a parser reading
  * nothing at all reports too.
  *
- * The precedence between the sources — which of an environment, a
- * `.env` file and the defaults table answers a name first —
- * arrives as a further case in this file later in this stage.
+ * The fourth claim is the order those sources are handed over in:
+ * an environment ahead of the `.env` file, the file ahead of
+ * `ENV_DEFAULTS`. It belongs to `envSources` rather than to the
+ * resolver, and the cases read it back through one — each
+ * contested name is answered by exactly one tier, so the value
+ * that comes back says which source was reached without any case
+ * inspecting the array it walked. Their guards are built to stay
+ * green when that order changes: a fixture guard moving with the
+ * order would be restating the claim rather than standing behind
+ * it.
  */
 import type { EnvSource } from '../../scripts/workflow-markers.js';
 
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterAll, describe, expect, it } from 'vitest';
 
 import {
   ENV_DEFAULTS,
   UnresolvedSettingError,
+  envSources,
   parseDotenv,
+  readEnvFile,
   resolveEnvVar,
 } from '../../scripts/workflow-markers.js';
 
@@ -521,5 +540,212 @@ describe('parseDotenv — the line forms an operator writes', () => {
   it('declares the keys its readable lines carry, and no others', () => {
     expect(Object.keys(parseDotenv(DOTENV_TEXT)).sort())
       .toEqual(DOTENV_KEYS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Which source in the chain answers a name first
+// ---------------------------------------------------------------------------
+
+/**
+ * The setting every tier carries, and the one the environment is
+ * asserted to win.
+ *
+ * Contested by all three on purpose. A name only two of them hold
+ * would leave the third's place in the chain unpinned, and where
+ * each source sits is the whole of what these cases are about.
+ */
+const ENV_WINNING_SETTING = 'AR_BUILD_TAG';
+
+/**
+ * The setting the `.env` file and the table carry and the
+ * environment does not — the one the file is asserted to win.
+ *
+ * The environment staying silent for this name is what makes the
+ * value that comes back attributable to the file rather than to
+ * whatever sits above it.
+ */
+const FILE_WINNING_SETTING = 'AR_DISPATCH_CRON';
+
+/**
+ * The setting neither the environment nor the file carries, left to
+ * the table at the back of the chain.
+ *
+ * The tail rather than a further precedence rule, and worth asking
+ * for anyway: it is the case a chain that had dropped its defaults
+ * table fails, and it is how a shipped build resolves nearly every
+ * marker it meets.
+ */
+const DEFAULTS_WINNING_SETTING = 'AR_DISPATCH_BATCH_CAP';
+
+/**
+ * What the fixture environment holds for
+ * {@link ENV_WINNING_SETTING}.
+ *
+ * Neither what `ENV_DEFAULTS` ships nor what the fixture file
+ * holds, so reading it back names the environment and nothing else.
+ */
+const ENVIRONMENT_BUILD_TAG = 'tag-from-the-environment';
+
+/**
+ * What the fixture `.env` holds for {@link ENV_WINNING_SETTING},
+ * and the value the environment in front of it has to beat.
+ */
+const FILE_BUILD_TAG = 'tag-from-the-env-file';
+
+/**
+ * What the fixture `.env` holds for {@link FILE_WINNING_SETTING}.
+ *
+ * A cron expression the table does not ship, so the value coming
+ * back says the file was reached rather than only that something
+ * of the right shape was.
+ */
+const FILE_CRON = '*/3 * * * *';
+
+/**
+ * The environment handed to `envSources`, carrying exactly one of
+ * the three contested names.
+ *
+ * A plain object rather than `process.env`. The build reads the
+ * environment a caller passes and never reaches for an ambient
+ * one, so there is nothing here for a developer's own exports to
+ * arrive through — which is the property that keeps a build
+ * reproducible, and is asserted elsewhere rather than here.
+ */
+const FIXTURE_ENVIRONMENT: EnvSource = {
+  [ENV_WINNING_SETTING]: ENVIRONMENT_BUILD_TAG,
+};
+
+/**
+ * The fixture `.env`: the name the environment contests, and the
+ * name only the table stands behind it on.
+ */
+const FIXTURE_DOTENV_TEXT = [
+  `${ENV_WINNING_SETTING}=${FILE_BUILD_TAG}`,
+  `${FILE_WINNING_SETTING}=${FILE_CRON}`,
+  '',
+].join('\n');
+
+/**
+ * A directory holding that file, removed once this file finishes.
+ *
+ * The one place these cases touch a disk, and not avoidable:
+ * `envSources` fills its middle source by reading a path, so a
+ * chain whose file tier holds anything at all is a chain built over
+ * a real file. There is no seam to hand parsed text through, and
+ * adding one would leave the read itself — the step that turns a
+ * path into that tier — outside every case in this file.
+ */
+const FIXTURE_DIR = mkdtempSync(join(tmpdir(), 'ar-workflow-markers-'));
+
+afterAll(() => {
+  rmSync(FIXTURE_DIR, { recursive: true, force: true });
+});
+
+/** The path the chains below are built over. */
+const FIXTURE_ENV_FILE = join(FIXTURE_DIR, '.env');
+
+writeFileSync(FIXTURE_ENV_FILE, FIXTURE_DOTENV_TEXT);
+
+/**
+ * The chain a deploy build resolves against: an environment, a
+ * `.env` path, and the table behind them both.
+ *
+ * `envDefaults` is left out rather than replaced, so the tier at
+ * the back is the table the build itself ships. That costs these
+ * cases their choice of what it answers with, which is why the
+ * values read off `ENV_DEFAULTS` below are read rather than
+ * spelled again.
+ */
+const FULL_CHAIN = envSources({
+  env: FIXTURE_ENVIRONMENT,
+  envFile: FIXTURE_ENV_FILE,
+});
+
+describe('envSources — which source answers a name first', () => {
+  // The guard the two lower claims rest on. Each of them reads a
+  // value back and says which tier it came from, and that reading
+  // holds only while the tiers in front stay silent for the name —
+  // an environment that had grown an `AR_DISPATCH_CRON` entry would
+  // answer the file's claim itself, and would look right doing it.
+  it('is asked with an environment carrying one contested name', () => {
+    expect(Object.keys(FIXTURE_ENVIRONMENT)).toEqual([ENV_WINNING_SETTING]);
+  });
+
+  // The guard the first claim rests on, and the one thing here that
+  // cannot be read off a fixture constant. A `.env` the build never
+  // found, or found and could not parse, contributes an empty
+  // source — and "the environment won" holds over one of those
+  // exactly as it holds over a file that lost. Read through
+  // `readEnvFile` rather than through a chain, so the guard says
+  // what the file carries whatever order the sources end up in.
+  //
+  // It is half of what the first claim needs, and the case below
+  // resolving the file's own name is the other half: this one says
+  // the file carries the contested name, that one says the chain
+  // reaches the file at all. Neither is the first claim, and the
+  // first claim passes green without either — a `.env` that was
+  // never written leaves the environment winning against nothing.
+  //
+  // Whole rather than key by key: the third claim needs this file
+  // NOT to carry the name it leaves to the table, and an absence
+  // nobody writes down is the one that leaks.
+  it('is asked against a `.env` the build reads as written', () => {
+    expect(readEnvFile(FIXTURE_ENV_FILE)).toEqual({
+      [ENV_WINNING_SETTING]: FILE_BUILD_TAG,
+      [FILE_WINNING_SETTING]: FILE_CRON,
+    });
+  });
+
+  // The same for the tier at the back. A table with no entry under
+  // one of these names would leave the claim below it passing for a
+  // chain that had dropped the table altogether.
+  it('is asked against a table carrying all three names', () => {
+    const declared = Object.keys(ENV_DEFAULTS);
+
+    expect(declared).toContain(ENV_WINNING_SETTING);
+    expect(declared).toContain(FILE_WINNING_SETTING);
+    expect(declared).toContain(DEFAULTS_WINNING_SETTING);
+  });
+
+  // The last guard, and what makes a returned value name a tier at
+  // all. Two tiers answering a contested name with the same string
+  // would leave the case reading it back green whichever of them
+  // was reached.
+  it('is asked with a different value in every tier', () => {
+    const tags = new Set([
+      ENVIRONMENT_BUILD_TAG,
+      FILE_BUILD_TAG,
+      ENV_DEFAULTS[ENV_WINNING_SETTING],
+    ]);
+
+    expect(tags.size).toBe(3);
+    expect(FILE_CRON).not.toBe(ENV_DEFAULTS[FILE_WINNING_SETTING]);
+  });
+
+  // The first claim. Both sources carry the name, and the value
+  // that comes back is the environment's — so the file behind it
+  // was never consulted for it, which is what an operator exporting
+  // a setting over their own `.env` is relying on.
+  it('resolves the environment ahead of the `.env` file', () => {
+    expect(resolveEnvVar(ENV_WINNING_SETTING, FULL_CHAIN))
+      .toBe(ENVIRONMENT_BUILD_TAG);
+  });
+
+  // The second, one tier down: the environment is silent for this
+  // name, and the value is the file's rather than the table's. A
+  // chain ordering the table in front of the file passes the case
+  // above and fails this one, which is why the two claims are made
+  // over different names.
+  it('resolves the `.env` file ahead of ENV_DEFAULTS', () => {
+    expect(resolveEnvVar(FILE_WINNING_SETTING, FULL_CHAIN)).toBe(FILE_CRON);
+  });
+
+  // The end of the chain. Neither tier in front answers, and the
+  // table does — which is every marker a default build resolves,
+  // reached here through a chain that had somewhere else to look.
+  it('resolves from ENV_DEFAULTS where neither source answers', () => {
+    expect(resolveEnvVar(DEFAULTS_WINNING_SETTING, FULL_CHAIN))
+      .toBe(ENV_DEFAULTS[DEFAULTS_WINNING_SETTING]);
   });
 });
