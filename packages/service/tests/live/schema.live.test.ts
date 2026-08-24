@@ -38,10 +38,14 @@
  * one where the rule holds. Only a refused write tells them apart.
  *
  * Each refusal is pinned twice. The SQLSTATE is the class a caller
- * programs against, and the message is the only thing naming WHICH
- * rule refused — the depth guard raises `check_violation` from three
- * separate branches and two of them share a HINT, so a case asserting
- * the code alone passes on a neighbouring rule.
+ * programs against, and it is shared: every rule below raises
+ * `check_violation`, so a case asserting the code alone passes on a
+ * neighbouring rule. The second pin is what names WHICH rule refused,
+ * and which field carries it follows from the mechanism. A CHECK puts
+ * its own constraint name on the error. A trigger's RAISE leaves that
+ * field empty, so the depth cases pin the message it raises instead —
+ * and they have to, since that guard refuses from three separate
+ * branches and two of them share a HINT.
  *
  * The accepted write beside them is what says where the guard stops. A
  * rule that refused every category, or one that silently dropped what
@@ -56,7 +60,7 @@ import type { Pool } from 'pg';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 
-import { categories, domains } from '../../src/db/schema.js';
+import { categories, domains, researchPool } from '../../src/db/schema.js';
 
 import {
   applyMigrations,
@@ -71,7 +75,7 @@ import {
 /**
  * What the pg driver puts on a rejected query, as far as these cases
  * read it. Drizzle wraps that error rather than rethrowing it, so
- * neither field is reachable on the error it hands back and both are
+ * none of these is reachable on the error it hands back and all are
  * read off its `cause`.
  */
 interface DriverError {
@@ -80,6 +84,13 @@ interface DriverError {
 
   /** The server's own text, which for a trigger is its RAISE. */
   readonly message?: string;
+
+  /**
+   * The constraint the refusal came from. A CHECK names itself
+   * here; a trigger's RAISE leaves it undefined, which is why the
+   * depth cases pin `message` and the approval case pins this.
+   */
+  readonly constraint?: string;
 }
 
 /**
@@ -306,5 +317,53 @@ describeLivePg('schema migrations (live Postgres)', () => {
     // was not cancelled, and the NULL says the trigger left the column
     // it reads alone rather than filling it in on the way past.
     expect(inserted).toStrictEqual([{ key: ADMITTED_ROOT_KEY, parentId: null }]);
+  });
+
+  it('refuses stamping researched_at on a row nobody approved', async () => {
+    // The approval gate as a rule the database holds: a row may record
+    // that it was closed only if it already records that it was
+    // approved. Both columns belong to the row being written, so
+    // `research_pool_approval_check` carries it as a plain CHECK
+    // generated out of `src/db/schema/entities.ts` — where the depth
+    // cap above, whose rule is about rows other than the written one,
+    // needed a trigger.
+    //
+    // The insert below is the near-miss the case rests on. Both
+    // timestamps NULL is the open state every row is raised in and the
+    // same CHECK admits it, so what goes red here is the pair the
+    // UPDATE would leave behind and not the act of writing the column.
+    //
+    // An UPDATE rather than an INSERT because that is the path a drain
+    // takes — a row is raised open and closed later — and not because
+    // the statement kind matters. What is refused is a state, so the
+    // same pair is refused however the row arrives at it.
+    const [domain] = await db.insert(domains)
+      .values({ slug: 'approval-gate', name: 'Approval gate' })
+      .returning({ id: domains.id });
+    const [queued] = await db.insert(researchPool)
+      .values({ domainId: domain.id })
+      .returning({ id: researchPool.id, approvedAt: researchPool.approvedAt });
+
+    // The precondition this case is named for, read back rather than
+    // inferred. Give the column a default and the UPDATE below is
+    // accepted; without this that reports as the CHECK having gone
+    // rather than as the row having arrived approved.
+    expect(queued.approvedAt).toBeNull();
+
+    const failure = await db.update(researchPool)
+      .set({ researchedAt: new Date() })
+      .where(eq(researchPool.id, queued.id))
+      .then(() => null, (thrown: unknown) => thrown);
+
+    // Both halves sit on the cause for the reason the depth cases
+    // record. The constraint name is what separates this rule from
+    // `research_pool_status_check`, which sits on the same table and
+    // answers with the same SQLSTATE — and unlike the text a trigger
+    // raises, it is a name this repository chose rather than the
+    // server's own prose.
+    expect(failure).toBeInstanceOf(Error);
+    const { cause } = failure as { cause?: DriverError };
+    expect(cause?.code).toBe('23514');
+    expect(cause?.constraint).toBe('research_pool_approval_check');
   });
 });
