@@ -282,3 +282,74 @@ export function readEnvFile(path: string | null): Record<string, string> {
 
   return parseDotenv(readFileSync(path, 'utf8'));
 }
+
+/**
+ * One place a setting may be read from while a marker resolves.
+ *
+ * Values are optional because an environment types them that way:
+ * `process.env` answers for a name it does not carry with
+ * `undefined` rather than leaving the key out, so a source has to
+ * admit that value to be one of these at all.
+ */
+export type EnvSource = Readonly<Record<string, string | undefined>>;
+
+/**
+ * The places a build reads settings from.
+ *
+ * Every member is optional, and each is a place the build does not
+ * read unless it is given one: an omitted member contributes
+ * nothing rather than being filled in from the process the build
+ * happens to be running in.
+ */
+export interface EnvSourceOptions {
+  /**
+   * An environment to read, `process.env` where a caller means
+   * that — handed over deliberately, never reached for here.
+   */
+  readonly env?: EnvSource;
+
+  /**
+   * Path to a `.env`-style file to read, or `null` for none. Read
+   * through {@link readEnvFile}, so a path naming nothing costs an
+   * override rather than failing the build.
+   */
+  readonly envFile?: string | null;
+
+  /**
+   * The table standing behind every name, {@link ENV_DEFAULTS}
+   * unless a caller replaces it — which is how a case pins what it
+   * resolves against instead of inheriting the shipped values.
+   */
+  readonly envDefaults?: Readonly<Record<string, string>>;
+}
+
+/**
+ * Build the ordered chain one `__ENVVAR:<NAME>__` is resolved
+ * against.
+ *
+ * Highest precedence first: the environment, then the `.env` file,
+ * then the defaults table. Called with no arguments the chain is
+ * `ENV_DEFAULTS` behind two empty objects — the default build
+ * resolves against the table alone, and neither an environment nor
+ * a file is read unless a caller passes one.
+ *
+ * A chain rather than one merged object, because the sources are
+ * walked rather than layered. Which entries count as answers is
+ * the resolver's rule, and merging here would settle that question
+ * before the resolver arrives later in this stage — an empty entry
+ * in an earlier source would have overwritten a real value in a
+ * later one while both were still objects, leaving nothing to
+ * decline.
+ *
+ * The `.env` file is read while the chain is built rather than on
+ * demand, so a build reads it once however many markers its
+ * sources carry.
+ *
+ * @param options - The places to read, each defaulting to nothing.
+ * @returns The sources to walk, highest precedence first.
+ */
+export function envSources(options: EnvSourceOptions = {}): readonly EnvSource[] {
+  const { env = {}, envFile = null, envDefaults = ENV_DEFAULTS } = options;
+
+  return [env, readEnvFile(envFile), envDefaults];
+}
