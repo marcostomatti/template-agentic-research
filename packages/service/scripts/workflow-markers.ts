@@ -721,6 +721,44 @@ const SPLICE_REFUSALS: readonly SpliceRefusal[] = [
  * transpiled, and what remains is whether pasting it into a node
  * body would produce something that runs.
  *
+ * The refusal lands at build time on purpose. A Code node is not
+ * a module, so a library that cannot stand alone does not fail
+ * where it was written — it fails on the node's first execution,
+ * inside a run the dispatcher opened, at whatever hour the
+ * schedule fired, with the executor attributing it to the
+ * workflow rather than to the library spliced into it. Refusing
+ * here means the artifact is never written, so there is nothing
+ * to deploy and nothing on a canvas to read the failure off. And
+ * nothing downstream repeats the check: `workflows/dist/` is
+ * gitignored, so no committed artifact's diff would show a
+ * surviving import, and the invariants suite reads a built tree
+ * that exists only because this function let it be written.
+ *
+ * Which dependencies count is settled by the scan rather than by
+ * the source, because a type-only import erases before the scan
+ * sees it. Measured on the transpiler the build uses:
+ * `import type { Bounds } from './bounds.js'` leaves an empty
+ * import list and no trace in the transpiled text, while
+ * `import { readFileSync } from 'node:fs'` survives in both. The
+ * two differ by one keyword and land on opposite sides of this
+ * function — a library may depend on as many types as it likes
+ * and still splice, and may not depend on one value. That is the
+ * lighter of the two fixes the message offers: where the
+ * dependency was only ever a type, adding the keyword is the
+ * whole change and the library keeps its shape.
+ *
+ * The limit is what a scan cannot see. Two of the three rules a
+ * spliceable library obeys leave evidence and are refused here, a
+ * dependency and a re-export; the third, reliance on module
+ * scope, leaves none. Measured the same way, `require(p)`, a
+ * dynamic `import(p)` and `import.meta.url` all scan with an
+ * empty import list and survive into the transpiled text
+ * unchanged, so a library reaching for one passes here and fails
+ * on the node exactly the way a surviving import would. No
+ * library is spliced yet, the first arriving later in this plan,
+ * so nothing has needed that check and this is not where it would
+ * go.
+ *
  * @param transpiled - The library with its types erased, as
  *   `transformSync` returned it.
  * @param scan - What the transpiler's scan reported for the same
