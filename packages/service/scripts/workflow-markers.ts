@@ -616,9 +616,8 @@ export interface LibScanImport {
  *
  * Only `imports` is read here. `exports` is carried because a scan
  * returns it and a caller passing one along should not have to take
- * it apart first; what a library DECLARES is decided over the
- * transpiled text by `stripDeclarationExports`, arriving later in
- * this stage.
+ * it apart first; what a library DECLARES is decided by
+ * {@link stripDeclarationExports}, over the transpiled text.
  */
 export interface LibScan {
   /** Every name the source exports, `default` included as a name. */
@@ -780,4 +779,71 @@ export function assertSpliceable(
       throw new SpliceableLibError(libPath, refusal.form);
     }
   }
+}
+
+/**
+ * A leading `export ` on one of the five spliceable declaration
+ * forms, anchored to the start of a line and to column one.
+ *
+ * Only the keyword is matched — the form behind it is a lookahead —
+ * so the declaration is never part of what gets replaced and cannot
+ * be reshaped by a replacement. What comes back differs from what
+ * went in by the keyword and the space after it, and by nothing
+ * else.
+ *
+ * Global, because a library declares as many names as it likes and
+ * every one of them carries its own keyword. Multiline and anchored
+ * for the reason the refusal roster is: `export` is an ordinary
+ * word, and a statement begins a line.
+ */
+const DECLARATION_EXPORT = /^export[ \t]+(?=(?:function|const|class|let|var)\b)/gmu;
+
+/**
+ * Strip the export keyword off every declaration a library exports,
+ * leaving the declaration itself untouched.
+ *
+ * The last thing done to a library body before it is pasted into a
+ * Code node, and the reason a build has a step here at all. A Code
+ * node is not a module, so `export` is a syntax error inside one —
+ * and the transpile does not remove it. Measured on the transpiler
+ * the build uses: `export function f(a: number) {}` comes back as
+ * `export function f(a) {}`, the types gone and the keyword intact.
+ * Transpiling makes a library runnable; this makes it pasteable.
+ *
+ * Runs after {@link assertSpliceable} and relies on it having run.
+ * The three re-export forms are statements in their own right, so
+ * no strip repairs them — this function leaves `export default`,
+ * `export {` and `export *` exactly as it found them, which in a
+ * build is a state no library reaches because the refusal is ahead
+ * of it. Called without that refusal in front, it hands back a body
+ * still carrying the form.
+ *
+ * Column one is what separates a declaration from a mention of one.
+ * The control the build keeps for that is a library holding a
+ * snippet inside a template literal: the snippet's own
+ * `export const` is indented, so it is left alone and the literal
+ * comes back holding what it was written to hold. The limit is the
+ * one the refusal roster carries too, and it is the caller's to
+ * avoid — an unindented `export const` on its own line inside a
+ * template literal reads as a declaration here, and the strip
+ * rewrites the text that literal was carrying without anything
+ * noticing.
+ *
+ * The five forms are the whole of what is spliceable, and a sixth
+ * is the standing gap. `export async function` declares a name the
+ * way the others do, but the word after `export ` is not one of the
+ * five: it is neither refused above nor stripped here, and it
+ * survives into a node body to fail on first execution. No library
+ * writes one today. What would catch it is the built-output case
+ * arriving later in this plan, which asserts the one spliced
+ * library carries no export keyword — for that library, and for no
+ * other.
+ *
+ * @param transpiled - A library with its types erased, already
+ *   accepted by {@link assertSpliceable}.
+ * @returns The same source with each declaration's leading export
+ *   keyword removed.
+ */
+export function stripDeclarationExports(transpiled: string): string {
+  return transpiled.replace(DECLARATION_EXPORT, '');
 }
