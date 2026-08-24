@@ -19,7 +19,7 @@ in `.claude/skills/` and are pointed to below.
 | `tests/` | Cross-cutting tests; `tests/live/` is the live suite (see Testing). Package-level tests are colocated (`lib/**/__tests__`, `src/**/*.test.ts`). |
 | `specs/` | TRACKED follow-up specs + index (`specs/README.md`) — only for work whose subject is already visible in the code (refactors, hardening of published code, tooling). |
 | `.specs/`, `.plans/` | UNTRACKED (gitignored) working areas — see "Plans and specs" below. |
-| `docs/` | Tracked guides (drizzle, rpc, sse). Generated output goes to gitignored `.docs/` (`bun run docs:generate`). |
+| `docs/` | Tracked guides (drizzle, rpc, sse, seeding). Generated output goes to gitignored `.docs/` (`bun run docs:generate`). |
 | `docs/architecture/` | The architecture doc set: the platform shape, the layout map, and the invariant register — indexed from `ARCHITECTURE.md` and numbered by reading order. See "Research pipeline" below. |
 
 ## Research pipeline
@@ -37,6 +37,11 @@ written down rather than inferred:
 - `docs/architecture/01-invariants.md` — the register of platform-wide
   invariants: what each one is, the artifact that fails when it stops
   holding, the phase that lands that artifact, and its status today.
+- `docs/SEEDING.md` — the seed-authoring guide: the shape of a file
+  under `data/`, the `"_readme"` header every one opens with, the
+  underscore-stripping convention, the natural key each concern is
+  upserted on, and the steps to add a domain. It sits outside
+  `docs/architecture/`, so `ARCHITECTURE.md` does not index it.
 - `.specs/2026-08-19-research-pipeline-port.md` — the approved parent
   design the port runs from, in seven phases. Untracked on purpose
   (see "Plans and specs" below), so it sits on the machine doing the
