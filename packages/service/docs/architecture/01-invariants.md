@@ -2,10 +2,10 @@
 
 An invariant here is a property of the pipeline as a whole rather than
 of any one file: something that has to hold across every workflow, every
-model call, or every tracked file at once. This document is the register
-of them — what each one is, the artifact that fails when it stops being
-true, the phase that lands that artifact, and whether it is enforced
-today.
+model call, every stored row, or every tracked file at once. This
+document is the register of them — what each one is, the artifact that
+fails when it stops being true, the phase that lands that artifact, and
+whether it is enforced today.
 
 The design the register comes from is
 `.specs/2026-08-19-research-pipeline-port.md`. Its §5 fixes the set
@@ -119,6 +119,47 @@ leaves no diff to review, and it binds only the writer it sits in.
 Until the service and its UI take approvals over, they are recorded
 through a small CLI (phase 2) — which is a client of the constraint,
 not a substitute for it.
+
+### A hash and a depth cap are properties of a set, not of a row
+
+Two of the schema rows state a property of a whole collection rather
+than of any row in it. One row per distinct item is the shape of the
+corpus; a taxonomy one level deep is the shape of a domain. Neither is a
+fact a writer can settle from the row in its hand — the first is about
+every hash already stored, the second about the parent above the row and
+the children below it — so each is a rule the database holds or nothing
+does. `docs/architecture/02-schema.md` carries the mechanism of both;
+what the register adds is why the property is worth a row.
+
+The depth cap rests on the same argument as the approval gate above it.
+Rows reach `categories` from the seed script, from hand-written SQL
+inside workflow nodes, and from an operator at a psql prompt, and a
+check written into one of those binds only that one.
+`categories_enforce_depth()` refuses the write whoever makes it: a row
+whose parent is itself a child, a row given a parent while it already
+has children, and a row whose parent belongs to another domain.
+
+The hash pair needs a different argument, because what it prevents is
+silent rather than merely unenforced. NOT NULL and UNIQUE are one
+mechanism on `documents.hash` and not two constraints sharing a column:
+NULL conflicts with nothing, so a nullable member would leave
+`documents_hash_unique` reading as a key while the
+`ON CONFLICT DO NOTHING` that lands a repeat capture never fires. The
+insert proceeds, the statement reports success, and the corpus grows by
+a copy per pass — the first symptom being a count somewhere downstream
+rather than an error anywhere.
+
+The two rows name different artifacts, and drizzle-kit's snapshot
+decides that rather than taste. A NOT NULL and a UNIQUE are modelled
+under `drizzle/meta/`, so the pair is declared in a schema module and
+generated from it, and the static-SQL scan is a real tie between two
+tracked copies of one rule. A trigger is modelled nowhere, so it is
+hand-written, and that scan is then evidence about the file and about
+nothing else — a database the migration never reached reads exactly like
+one where the guard stands. That is why the depth row alone names a live
+file. Its `Implemented` still rests on the static scan, which the
+default suite runs; `tests/live/schema.live.test.ts` self-skips without
+`AR_LIVE_DATABASE_URL`, and the cell says opt-in for that reason.
 
 ### The three de-origination rows hold from the first commit
 
