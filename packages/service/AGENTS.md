@@ -13,8 +13,8 @@ in `.claude/skills/` and are pointed to below.
 | `src/sources/` | Source adapters: the `SourceAdapter` contract (`fetch` → `parse` → `toCanonical`, with I/O confined to the first step) and the adapters that satisfy it from phase 4 onward, push capture included. |
 | `src/exports/` | Export renderers, one per format a subscription can be rendered into (phase 6). A renderer returns artifacts and never dispatches them — the email format renders a draft and stops there. |
 | `workflows/` | n8n workflow sources in `workflows/src/`, one JSON file per workflow (phase 3 onward); the roster and the build rules are in `workflows/src/README.md`. Build output goes to the gitignored `workflows/dist/` and `workflows/dist-external/`, and is never hand-edited. |
-| `data/` | Seed files only, applied to the database by `scripts/seed.ts` (phase 2) — nothing under it is read at runtime. See `data/README.md`. |
-| `scripts/` | Operator entry points run by hand: seed, approve, workflow build/deploy, stack lifecycle. `scripts/README.md` names each script and the phase it arrives in. |
+| `data/` | Seed files only, applied to the database by `scripts/seed.ts` — nothing under it is read at runtime. The five JSON files here seed one worked example domain and stay domain-neutral; real subject matter reaches the database through an operator's own seeds. See `data/README.md`. |
+| `scripts/` | Operator entry points run by hand. `seed.ts` (`bun run db:seed`) and `approve.ts` (`bun run approve`) have landed; workflow build/deploy arrive in phase 3, the stack-lifecycle scripts in phase 7. `scripts/README.md` names every script and the phase each arrives in. |
 | `tools/ralph/` (umbrella root) | The agent task loop: `plan` (spec → PLAN/PREREQUISITES), `start` (tracker loop, `--plan`, `--start-at`), `usage`. |
 | `tests/` | Cross-cutting tests; `tests/live/` is the live suite (see Testing). Package-level tests are colocated (`lib/**/__tests__`, `src/**/*.test.ts`). |
 | `specs/` | TRACKED follow-up specs + index (`specs/README.md`) — only for work whose subject is already visible in the code (refactors, hardening of published code, tooling). |
