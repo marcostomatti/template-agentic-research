@@ -106,10 +106,12 @@ red package never masks another and a single run gives the whole picture.
   TRAP: `@ar/web`'s `test` script is a placeholder `echo`, so its code-0
   line is not evidence of a passing suite. "Every package suite passes"
   means two real suites plus one placeholder — report it that way.
-- `@ar/service` reporting 3 skipped tests is the expected steady state: the
+- `@ar/service` reporting skipped tests is the expected steady state: the
   live suite self-skipping without `AR_LIVE_DATABASE_URL`. A run with zero
   skipped means the live database leaked into the default suite, not that
-  something improved.
+  something improved. The count is not the check — it moves with every
+  case added under `tests/live/`, so compare it against HEAD's own run
+  rather than against a number quoted here or in a plan.
 
 ## Workflow
 

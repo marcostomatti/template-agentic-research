@@ -2,16 +2,18 @@
 
 An invariant here is a property of the pipeline as a whole rather than
 of any one file: something that has to hold across every workflow, every
-model call, or every tracked file at once. This document is the register
-of them — what each one is, the artifact that fails when it stops being
-true, the phase that lands that artifact, and whether it is enforced
-today.
+model call, every stored row, or every tracked file at once. This
+document is the register of them — what each one is, the artifact that
+fails when it stops being true, the phase that lands that artifact, and
+whether it is enforced today.
 
 The design the register comes from is
 `.specs/2026-08-19-research-pipeline-port.md`. Its §5 fixes the set
 below, with the hostname row carried from the migration-hygiene rules
-in §6 and registered here alongside the rest; phase numbers throughout
-refer to the 7-phase sequencing in that design, §7.
+in §6, the category-depth row from the schema-v2 table roster in §2,
+and the hash-dedupe row from the locked core vocabulary in §1, all
+registered here alongside the rest; phase numbers throughout refer to
+the 7-phase sequencing in that design, §7.
 
 ## The register
 
@@ -21,7 +23,9 @@ refer to the 7-phase sequencing in that design, §7.
 | A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
 | Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
 | Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/`, over workflows built from `workflows/src/` | 3 | Pending |
-| Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated SQL under `drizzle/`, read by `tests/invariants/` | 2 | Pending |
+| Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
+| A category is a root or the child of a root, and nothing deeper | A trigger in the hand-written migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts`, with the opt-in `tests/live/schema.live.test.ts` watching a database refuse the write | 2 | Implemented |
+| Every document carries a hash, and no two carry the same one | The NOT NULL and UNIQUE pair on `documents.hash` in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
 | No naming from the project this pipeline was ported from survives in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No vault path appears in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No real hostname appears in a tracked file | `tests/invariants/naming.test.ts` | 1 | Implemented |
@@ -36,8 +40,8 @@ is still a reservation.
 
 ### A row is written before the artifact that enforces it
 
-Five of the eight rows are pending, and the register is written that way
-on purpose: a property is recorded once it is decided, not once somebody
+Several of the rows are pending, and the register is written that way on
+purpose: a property is recorded once it is decided, not once somebody
 gets around to checking it.
 
 Filling the table the other way round — adding a row when its
@@ -49,7 +53,8 @@ written down which phase that is.
 
 ### The suite is the spine, and later phases extend it
 
-Phase 1 opened `tests/invariants/` with the naming invariant. Phase 3
+Phase 1 opened `tests/invariants/` with the naming invariant, and
+phase 2 added the static-SQL scan over `drizzle/` beside it. Phase 3
 lands the rest of the spine next to the build system that produces the
 artifacts those assertions read — before most of the behaviour they
 guard exists — and each later phase adds its assertions to that same
@@ -115,9 +120,50 @@ Until the service and its UI take approvals over, they are recorded
 through a small CLI (phase 2) — which is a client of the constraint,
 not a substitute for it.
 
+### A hash and a depth cap are properties of a set, not of a row
+
+Two of the schema rows state a property of a whole collection rather
+than of any row in it. One row per distinct item is the shape of the
+corpus; a taxonomy one level deep is the shape of a domain. Neither is a
+fact a writer can settle from the row in its hand — the first is about
+every hash already stored, the second about the parent above the row and
+the children below it — so each is a rule the database holds or nothing
+does. `docs/architecture/02-schema.md` carries the mechanism of both;
+what the register adds is why the property is worth a row.
+
+The depth cap rests on the same argument as the approval gate above it.
+Rows reach `categories` from the seed script, from hand-written SQL
+inside workflow nodes, and from an operator at a psql prompt, and a
+check written into one of those binds only that one.
+`categories_enforce_depth()` refuses the write whoever makes it: a row
+whose parent is itself a child, a row given a parent while it already
+has children, and a row whose parent belongs to another domain.
+
+The hash pair needs a different argument, because what it prevents is
+silent rather than merely unenforced. NOT NULL and UNIQUE are one
+mechanism on `documents.hash` and not two constraints sharing a column:
+NULL conflicts with nothing, so a nullable member would leave
+`documents_hash_unique` reading as a key while the
+`ON CONFLICT DO NOTHING` that lands a repeat capture never fires. The
+insert proceeds, the statement reports success, and the corpus grows by
+a copy per pass — the first symptom being a count somewhere downstream
+rather than an error anywhere.
+
+The two rows name different artifacts, and drizzle-kit's snapshot
+decides that rather than taste. A NOT NULL and a UNIQUE are modelled
+under `drizzle/meta/`, so the pair is declared in a schema module and
+generated from it, and the static-SQL scan is a real tie between two
+tracked copies of one rule. A trigger is modelled nowhere, so it is
+hand-written, and that scan is then evidence about the file and about
+nothing else — a database the migration never reached reads exactly like
+one where the guard stands. That is why the depth row alone names a live
+file. Its `Implemented` still rests on the static scan, which the
+default suite runs; `tests/live/schema.live.test.ts` self-skips without
+`AR_LIVE_DATABASE_URL`, and the cell says opt-in for that reason.
+
 ### The three de-origination rows hold from the first commit
 
-They are the only rows enforced today, and they could be enforced this
+They were the first rows to be enforced, and they could be enforced that
 early because what they constrain is tracked text — which exists from
 the first commit — rather than behaviour no phase has landed yet.
 `tests/invariants/naming.test.ts` walks the package's declared scan

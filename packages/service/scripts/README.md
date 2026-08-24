@@ -2,8 +2,8 @@
 
 This directory holds the commands an operator runs by hand: seeding,
 approving, building and deploying workflows, standing the stack up, and
-tearing it down again. It is empty today — phase 1 lands the layout and
-the roster below, and the first script arrives in phase 2.
+tearing it down again. Phase 1 landed the layout and the roster below;
+phase 2 is filling it, starting with `seed.ts`.
 
 Phase numbers throughout refer to the 7-phase sequencing in the parent
 design, `.specs/2026-08-19-research-pipeline-port.md` §7.
@@ -12,8 +12,8 @@ design, `.specs/2026-08-19-research-pipeline-port.md` §7.
 
 | Script | Arrives in | Role |
 | --- | --- | --- |
-| `seed.ts` | phase 2 | Applies the seed files in `data/` to the database. The only code path that reads that directory. |
-| `approve.ts` | phase 2 | CLI over the database approval gate, so a pending row can be approved before the service or UI exists to do it. |
+| `seed.ts` | phase 2 — landed | `bun run db:seed`. Validates every seed file in `data/` before a connection is opened, then applies the bundle in one transaction and reports created, updated and unchanged per concern. The only code path that takes a value out of that directory. `seed-schemas.ts` and `seed-apply.ts` are the shape half and the write half beneath it, not entry points of their own. |
+| `approve.ts` | phase 2 — landed | `bun run approve`. Lists the rows waiting on a ruling and approves or rejects one by id, a client of `research_pool_approval_check` rather than a substitute for it. The whole operator surface until the API and UI take approvals over. |
 | `build-workflows.ts` | phase 3 | Reads every source in `workflows/src/`, resolves its markers (transpile-and-splice libs, bake settings), writes `workflows/dist/`. |
 | `deploy-external.ts` | phase 3 | Uploads built workflows to an existing n8n over its public REST API — no Docker, no shell on the target host. |
 | `activate-workflows.sh` | phase 3 | Activates imported workflows on a local instance, where activation goes through the CLI rather than the API. |
@@ -46,25 +46,47 @@ The split is worth keeping deliberate: a shell script that grows a
 non-trivial decision has quietly become untestable, and that is the point
 to move the decision into a `.ts` module the shell calls.
 
-## `tsconfig.json` must widen `include` when the first `.ts` script lands
+## `tsconfig.json` and `lint` both cover `scripts`
 
 `packages/service/tsconfig.json` reads
-`"include": ["src", "lib", "tests", "*.ts", "*.mjs"]`. `scripts` is not
-in it, and the `*.ts` entry matches only files sitting directly in the
-package root — a glob segment does not cross a directory separator. Every
-`.ts` file added to this directory is therefore invisible to
-`bun run check-types` until `scripts` joins that array.
+`"include": ["src", "lib", "tests", "scripts", "*.ts", "*.mjs"]`. The
+`scripts` entry is load-bearing rather than decorative: the `*.ts` entry
+beside it matches only files sitting directly in the package root — a glob
+segment does not cross a directory separator — so without it every `.ts`
+file added here would be invisible to `bun run check-types`.
 
-Nothing is broken today, because phase 1 adds no script. The debt falls
-due in **phase 2**, with `scripts/seed.ts` — the first `.ts` file here —
-and widening `include` belongs to that task rather than to a follow-up.
-The failure it prevents is the quiet kind: a type error in an unchecked
-script does not turn `check-types:all` red, so the suite keeps reporting
-a clean result over a file it never looked at.
+Phase 2 widened it, ahead of `scripts/seed.ts`, the first `.ts` file to
+land here. The failure it prevents is the quiet kind: a type error in an
+unchecked script does not turn `check-types:all` red, so the suite keeps
+reporting a clean result over a file it never looked at.
 
-The package's `lint` script (`eslint src lib tests`) has the same gap.
-Whether this directory joins that target is a separate call, taken when
-there is a script here to lint.
+The package's `lint` script was widened with it, and now reads
+`eslint src lib tests scripts` (`lint:fix` likewise). The reason is the
+same one, one gate over: an unlinted `.ts` file makes a green `lint:all` a
+statement about files it never read.
+
+Both widenings were then proved by reading rather than assumed.
+`tsc -p tsconfig.json --showConfig` echoes the `include` array as tsc
+parsed it, which is the half answerable before any `.ts` file exists;
+`tsc --noEmit --listFilesOnly` names every file in the program, and every
+`.ts` file in this directory appears in it (four at the close of phase 2),
+while the by-design `**/*.test.ts` exclusion still counts zero.
+
+`eslint scripts -f json` reports one file more for this directory: the
+same scripts plus this README, because `eslint.base.mjs` lints markdown
+wherever a target reaches it. Run it from inside the package — from the
+repo root the leaf config never applies, and eslint reports the path
+ignored while still exiting 0, which reads exactly like a clean lint of a
+file it never opened.
+
+A listing says what a gate read, never what it would catch, and the two
+catch disjoint things. A scratch `scripts/__gate-probe.ts` holding one
+type error makes `bun run check-types` exit 2 naming the file and the
+line, and lints at zero errors and zero warnings in the same second,
+because the type-aware `project` setting in `eslint.base.mjs` is commented
+out. So a green `lint` here is no evidence about types and a green
+`check-types` is none about style: a directory is covered only once both
+reports name it.
 
 ## Files added here are scanned
 

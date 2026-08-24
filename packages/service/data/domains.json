@@ -1,0 +1,56 @@
+{
+  "_readme": [
+    "SEED FILE. `scripts/seed.ts` is the only code path that opens this",
+    "directory, and nothing here is read at runtime: Postgres is the",
+    "single source of truth once a row lands, so an edit below changes",
+    "nothing until the next seed pass applies it.",
+    "",
+    "Keys beginning with an underscore are stripped by the loader before",
+    "anything is validated or written, which is what lets a seed file",
+    "carry this header at all. A seed is usually met on its own, in a",
+    "diff or an editor tab, where nothing about the content says which",
+    "path owns it.",
+    "",
+    "This file seeds `domains`. A domain is upserted by `slug`, so a",
+    "second seed pass updates the same row rather than adding one; the",
+    "slug is the only key here that is not safe to rename.",
+    "",
+    "`settings` is the DomainSettings payload declared in",
+    "`src/db/schema/domains.ts`. Every member of it is optional and an",
+    "absent member means the pipeline's own default applies, so a domain",
+    "configures only what it wants to differ. `findingsDisplayName` is",
+    "left out below for exactly that reason, and the example is complete",
+    "without it.",
+    "",
+    "`example-tech-radar` is a worked example rather than a deployment.",
+    "It exists to show the shape of a domain and stays neutral about the",
+    "subject: the weights, the fields and the terms are illustrative,",
+    "not a recommendation. Real subject matter belongs to whoever",
+    "operates an instance and reaches the database through their own",
+    "seeds."
+  ],
+  "domains": [
+    {
+      "slug": "example-tech-radar",
+      "name": "Example Tech Radar",
+      "settings": {
+        "scoringWeights": {
+          "termMatch": 3,
+          "sourceReliability": 2,
+          "recency": 1.5,
+          "entityInterest": 1
+        },
+        "verdictVocabulary": ["avoid", "caution", "neutral", "interested"],
+        "fieldContract": {
+          "summary": { "type": "string", "required": true },
+          "maturity": { "type": "string" },
+          "firstSeenAt": { "type": "datetime" },
+          "mentions": { "type": "number" },
+          "isOpenSource": { "type": "boolean" },
+          "tags": { "type": "list" },
+          "links": { "type": "object" }
+        }
+      }
+    }
+  ]
+}

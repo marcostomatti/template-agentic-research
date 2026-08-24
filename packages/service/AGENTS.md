@@ -13,13 +13,13 @@ in `.claude/skills/` and are pointed to below.
 | `src/sources/` | Source adapters: the `SourceAdapter` contract (`fetch` → `parse` → `toCanonical`, with I/O confined to the first step) and the adapters that satisfy it from phase 4 onward, push capture included. |
 | `src/exports/` | Export renderers, one per format a subscription can be rendered into (phase 6). A renderer returns artifacts and never dispatches them — the email format renders a draft and stops there. |
 | `workflows/` | n8n workflow sources in `workflows/src/`, one JSON file per workflow (phase 3 onward); the roster and the build rules are in `workflows/src/README.md`. Build output goes to the gitignored `workflows/dist/` and `workflows/dist-external/`, and is never hand-edited. |
-| `data/` | Seed files only, applied to the database by `scripts/seed.ts` (phase 2) — nothing under it is read at runtime. See `data/README.md`. |
-| `scripts/` | Operator entry points run by hand: seed, approve, workflow build/deploy, stack lifecycle. `scripts/README.md` names each script and the phase it arrives in. |
+| `data/` | Seed files only, applied to the database by `scripts/seed.ts` — nothing under it is read at runtime. The five JSON files here seed one worked example domain and stay domain-neutral; real subject matter reaches the database through an operator's own seeds. See `data/README.md`. |
+| `scripts/` | Operator entry points run by hand. `seed.ts` (`bun run db:seed`) and `approve.ts` (`bun run approve`) have landed; workflow build/deploy arrive in phase 3, the stack-lifecycle scripts in phase 7. `scripts/README.md` names every script and the phase each arrives in. |
 | `tools/ralph/` (umbrella root) | The agent task loop: `plan` (spec → PLAN/PREREQUISITES), `start` (tracker loop, `--plan`, `--start-at`), `usage`. |
 | `tests/` | Cross-cutting tests; `tests/live/` is the live suite (see Testing). Package-level tests are colocated (`lib/**/__tests__`, `src/**/*.test.ts`). |
 | `specs/` | TRACKED follow-up specs + index (`specs/README.md`) — only for work whose subject is already visible in the code (refactors, hardening of published code, tooling). |
 | `.specs/`, `.plans/` | UNTRACKED (gitignored) working areas — see "Plans and specs" below. |
-| `docs/` | Tracked guides (drizzle, rpc, sse). Generated output goes to gitignored `.docs/` (`bun run docs:generate`). |
+| `docs/` | Tracked guides (drizzle, rpc, sse, seeding). Generated output goes to gitignored `.docs/` (`bun run docs:generate`). |
 | `docs/architecture/` | The architecture doc set: the platform shape, the layout map, and the invariant register — indexed from `ARCHITECTURE.md` and numbered by reading order. See "Research pipeline" below. |
 
 ## Research pipeline
@@ -37,6 +37,11 @@ written down rather than inferred:
 - `docs/architecture/01-invariants.md` — the register of platform-wide
   invariants: what each one is, the artifact that fails when it stops
   holding, the phase that lands that artifact, and its status today.
+- `docs/SEEDING.md` — the seed-authoring guide: the shape of a file
+  under `data/`, the `"_readme"` header every one opens with, the
+  underscore-stripping convention, the natural key each concern is
+  upserted on, and the steps to add a domain. It sits outside
+  `docs/architecture/`, so `ARCHITECTURE.md` does not index it.
 - `.specs/2026-08-19-research-pipeline-port.md` — the approved parent
   design the port runs from, in seven phases. Untracked on purpose
   (see "Plans and specs" below), so it sits on the machine doing the
@@ -60,6 +65,18 @@ Two rules bind every phase of that port:
 - **Dependencies**: anything with a lifecycle (db, redis, cron, future
   queues) is a `createDependency` passed to `createService({ dependencies })`
   — started in order, stopped in reverse, visible to `/_control`.
+- **Schema**: tables live one concern per file under `src/db/schema/`, and
+  `src/db/schema.ts` is a pure barrel of
+  `export * from './schema/<x>.js';` lines. A new module there is only
+  half-added until its barrel line lands: without it drizzle-kit never
+  sees the table (so no migration is generated) and `drizzle({ schema })`
+  cannot resolve a relation it was never handed — both fail silently, not
+  loudly. Add the line when the FILE is created, even if its first commit
+  defines only a helper. `values.ts`
+  is the deliberate exception: it declares the closed value sets and no
+  table, so siblings import it directly and it stays out of the barrel.
+  Three consumers pin the barrel's path (`drizzle.config.ts`,
+  `src/db/index.ts`, `tests/live/live-postgres.ts`) — never move it.
 - **Errors**: throw `AppError` subclasses (`lib/errors`) or let Zod errors
   bubble — the registered handler maps them to typed JSON responses. Express
   4 does NOT auto-forward async route errors: wrap async handlers in
@@ -102,12 +119,43 @@ logic in a plain module beside the test — the same code inlined into the
 `.test.ts` gets no tsc gate at all.
 
 A new directory under `src` needs no config change (tsconfig `include`
-already covers `src`, the `lint` script covers `src lib tests`, and vitest
-discovers tests). Directories OUTSIDE those roots — `scripts/`, `workflows/`,
-`data/`, `docs/` — are covered by no lint or type-check target today. Prove
-coverage rather than assuming it: `tsc --noEmit --listFilesOnly` and
-`eslint <path> -f json` both report what they actually read (see the
-`prove-gate-coverage-read-only` skill).
+already covers `src`, the `lint` script covers `src lib tests scripts`,
+and vitest discovers tests). `scripts/` used to be asymmetric — listed by
+tsconfig `include`, unnamed by the `lint` script — and phase 2 closed the
+gap, so a `.ts` file there is both type-checked and linted. The
+directories outside every root — `workflows/`, `data/`, `docs/` — are
+covered by no lint or type-check target today. Prove coverage rather than
+assuming it: `tsc --noEmit --listFilesOnly` and `eslint <path> -f json` both
+report what they actually read (see the `prove-gate-coverage-read-only`
+skill).
+
+Markdown and JSON are gated unevenly here, and the map is worth knowing
+before calling a prose edit verified. The naming invariant's scan roots
+carry no extension filter, so they reach three READMEs —
+`workflows/src/`, `data/` and `scripts/` — plus everything generated
+under `drizzle/`, meta snapshots included. ESLint's `**/*.md` block
+reaches a markdown file only where a lint target names its directory,
+which today is `scripts/README.md` alone, and it checks document
+STRUCTURE only: no width, no link target, no reference label. Everything
+else — this file, `ARCHITECTURE.md`, all of `docs/`, and `package.json` —
+is read by NO gate at all, so a green `test:all` says nothing about it.
+Verify those by deriving each claim from the artifact it describes (parse
+the roster out of the prose, compare it against the barrel or the
+directory) rather than by reading the doc and agreeing with it.
+
+Neither `max-len` nor `max-lines` exists in any config, so the ~800-line
+file cap and the hand-maintained comment wrapping are review-quality
+conventions that turn no gate red. `scripts/seed.ts` and
+`scripts/approve.ts` are both over the cap today, and the seam each wants
+is recorded here rather than in the file: split the LOADER out of
+`seed.ts` into `scripts/seed-load.ts` (no import cycle, and it leaves
+`seed.ts` a thin entry point — moving `runSeedCli` out instead does cycle,
+since the guard must stay in the file `bun scripts/seed.ts` runs), and
+move `formatPendingTable` / `formatRuling` / `PENDING_COLUMNS` out of
+`approve.ts` into `scripts/approve-render.ts`, re-exported from it. Both
+follow the `seed-schemas.ts` / `seed-apply.ts` precedent — a bare
+`export * from './<x>.js';` beside the normal import — and a move of that
+size lands as its OWN refactor commit, never alongside new behaviour.
 
 ## Testing — isolated vs live (CRITICAL)
 
@@ -128,6 +176,13 @@ hour. The rules:
    but `ar_live`). Never widen the truncate list implicitly.
 5. Clean up after live runs: `stress:stop` removes only the stress
    containers. Leave no long-lived processes or scheduled jobs behind.
+   `db:stop` is NOT its counterpart: it is `docker compose down`, which
+   acts on the whole PROJECT regardless of profile, so running it while
+   the live container is up takes `postgres-live` with it. The pair is
+   asymmetric by construction — `db:start` is per-service
+   (`up -d postgres`) while `db:stop` is per-project and also removes the
+   project network. Read the script body rather than inferring the
+   counterpart from the name.
 6. `fileParallelism: false` lives in `vitest.config.ts`, not on a script
    flag, so exported env vars can't re-parallelize the live files.
 

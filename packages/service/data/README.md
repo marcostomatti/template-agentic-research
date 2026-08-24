@@ -2,9 +2,13 @@
 
 Every file in this directory is a **seed**: input applied once to the
 database by `scripts/seed.ts` at setup. Nothing here is a config file, a
-fixture, or a lookup table the running service consults. The directory is
-empty of seed content today — phase 2 lands `scripts/seed.ts`, the first
-worked example, and the seed-authoring guide (`docs/SEEDING.md`).
+fixture, or a lookup table the running service consults. What sits here
+seeds one worked example domain: `domains.json` for the domain row,
+`personas.json` for the roles each run speaks as, `categories.json` and
+`terms.json` for the taxonomy underneath it, and `topics.json` for the
+standing subject it wants looked into. Phase 2 landed those files,
+`scripts/seed.ts`, and the seed-authoring guide `docs/SEEDING.md`, which
+fixes the format each of them is written in.
 
 Phase numbers throughout refer to the 7-phase sequencing in the parent
 design, `.specs/2026-08-19-research-pipeline-port.md` §7.
@@ -40,18 +44,19 @@ diff or an editor tab, with no directory listing and no README in view,
 and its content alone gives no hint of which path owns it. The header is
 what stops a file from being mistaken for live config and wired into a
 reader, and what tells a contributor adding a file here which rules it
-inherits. The exact header format is fixed by `docs/SEEDING.md` in
-phase 2, alongside the seed format itself.
+inherits. `docs/SEEDING.md` fixes the exact format: what the header key is
+called, the two paragraphs every file opens with, and what each file adds
+after them.
 
 ## Seed content stays domain-neutral
 
 This platform is domain-parameterized: the subject a deployment researches
 is data, not code. Seeds tracked in this repo therefore carry structure —
 the shape of a domain, its sources, its criteria — and never a particular
-subject's vocabulary. The worked example that arrives in phase 2 exists to
-show the shape and is written as a neutral illustration; real subject
-matter belongs to whoever operates an instance, and reaches the database
-through their own seeds.
+subject's vocabulary. The worked example here exists to show the shape and
+is written as a neutral illustration; real subject matter belongs to
+whoever operates an instance, and reaches the database through their own
+seeds.
 
 Two consequences worth stating plainly:
 
@@ -61,5 +66,10 @@ Two consequences worth stating plainly:
   those belong in the untracked environment, never in a tracked file.
 
 This directory is one of the scan roots of the naming invariant
-(`tests/invariants/naming.test.ts`), so the first two rules are enforced
-by the default test suite rather than left to review.
+(`tests/invariants/naming.test.ts`), so the origin's own names — its
+prefix, its repository, the host it ran under, the note-store paths — are
+refused by the default test suite rather than left to review. That needle
+set is fixed and holds no subject's vocabulary and no hostname but that
+one, so the rest of both rules above is held by review. `docs/SEEDING.md`
+§"`data/` is scanned for origin naming" states the split as it reaches
+somebody writing a file.

@@ -8,6 +8,20 @@
       "when": 1787148670731,
       "tag": "0000_talented_proteus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787264828688,
+      "tag": "0001_lethal_paibok",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787265417342,
+      "tag": "0002_category_depth_guard",
+      "breakpoints": true
     }
   ]
 }

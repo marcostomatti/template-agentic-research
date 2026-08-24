@@ -27,6 +27,9 @@
  * under test may itself use transactions, and nesting turns its COMMIT into
  * a savepoint release with different visibility rules.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
@@ -40,8 +43,48 @@ export const describeLivePg: (name: string, fn: () => void) => void = LIVE_DATAB
   ? describe
   : describe.skip;
 
-/** Tables the suite is allowed to truncate — a deliberate, literal list. */
-const TABLES = ['users'];
+/**
+ * Tables the suite is allowed to truncate — a deliberate, literal list,
+ * hand-maintained to hold one entry per table in `src/db/schema/`.
+ *
+ * Growing it from a single entry to all of them did not widen the blast
+ * radius: what bounds the damage is the database this runs against, not
+ * the number of tables named here. `assertLiveDatabase` still opens both
+ * destructive helpers below, so against any database but `ar_live` it
+ * throws before a statement is issued and this list is never read. A name
+ * added here changes what a live run resets between its own cases, and
+ * nothing else.
+ *
+ * Two things that scoping does not cover, so neither is read into it. The
+ * guard compares `current_database()` and knows nothing about which server
+ * holds it, so a second database named `ar_live` would pass. And it binds
+ * the helpers below rather than SQL a case issues for itself on the pool
+ * `createLivePool` hands it.
+ */
+const TABLES = [
+  'benchmark_cases',
+  'briefings',
+  'categories',
+  'connectors',
+  'criteria',
+  'documents',
+  'domains',
+  'entities',
+  'entity_research',
+  'export_subscriptions',
+  'finding_labels',
+  'finding_sightings',
+  'findings',
+  'ingested_files',
+  'llm_calls',
+  'personas',
+  'research_pool',
+  'runs',
+  'sources',
+  'terms',
+  'topics',
+  'users',
+];
 
 const LIVE_DB_NAME = 'ar_live';
 
@@ -84,6 +127,94 @@ export async function applyMigrations(pool: Pool): Promise<void> {
     await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]).catch(() => {});
     client.release();
   }
+}
+
+/**
+ * One entry of `drizzle/meta/_journal.json` — the file that decides
+ * which migrations the migrator runs, and in what order.
+ */
+export interface MigrationJournalEntry {
+  /** The migration's file stem, without the `.sql` extension. */
+  readonly tag: string;
+
+  /**
+   * The millisecond stamp drizzle-kit wrote into the entry, and the
+   * value its migrator stores as `created_at` on applying it.
+   *
+   * The only key the journal and the ledger share. The ledger keeps no
+   * name, so a row there is attributable to a migration through this
+   * and through nothing else.
+   */
+  readonly when: number;
+}
+
+const MIGRATION_JOURNAL = fileURLToPath(
+  new URL('../../drizzle/meta/_journal.json', import.meta.url),
+);
+
+/**
+ * The migrations the journal names, in the order it names them.
+ *
+ * Resolved from this file's own location rather than the working
+ * directory, the way `tests/invariants/schema-sql.ts` resolves the
+ * same directory. `applyMigrations` above hands the migrator a
+ * cwd-relative `./drizzle`, which is right only while the suite is
+ * started from the package; a reader keyed the same way would inherit
+ * that for no gain.
+ *
+ * Throws rather than returning an empty list when the journal names
+ * nothing. A comparison against `[]` passes for a database that has
+ * applied no migration at all, which is the one answer a case
+ * asserting they were applied must not accept.
+ *
+ * @param journalPath - Journal to read. Defaults to this package's
+ * own; a caller passes one of its own only to reach the refusal
+ * above, which is otherwise reachable only by emptying the package.
+ * @returns The journal's entries, in journal order.
+ */
+export function readMigrationJournal(
+  journalPath: string = MIGRATION_JOURNAL,
+): readonly MigrationJournalEntry[] {
+  const parsed: unknown = JSON.parse(readFileSync(journalPath, 'utf8'));
+  const { entries = [] } = parsed as { entries?: readonly MigrationJournalEntry[] };
+
+  if (entries.length === 0) {
+    throw new Error(
+      `[live-postgres] ${journalPath} names no migration — a comparison against nothing would pass for any database.`,
+    );
+  }
+
+  return entries;
+}
+
+/**
+ * The migrations this database records as applied, named, in the order
+ * the migrator applied them.
+ *
+ * Reads drizzle's own ledger — schema `drizzle`, table
+ * `__drizzle_migrations`. Both are the migrator's defaults and
+ * `applyMigrations` above overrides neither, so they are where it
+ * writes; a drizzle that moved them fails this query loudly rather
+ * than reporting an empty ledger.
+ *
+ * The ledger stores a stamp and no name, so each row is named back
+ * through `readMigrationJournal`. A row whose stamp the journal does
+ * not carry comes back as `unrecognized(<stamp>)` rather than being
+ * dropped — a migration applied here and since removed from the
+ * journal is a difference worth reporting, not one worth hiding.
+ *
+ * @param pool - Pool to read the ledger through.
+ * @returns One tag per ledger row, in application order.
+ */
+export async function readAppliedMigrationTags(pool: Pool): Promise<readonly string[]> {
+  const tagByWhen = new Map(
+    readMigrationJournal().map((entry): [number, string] => [entry.when, entry.tag]),
+  );
+  const { rows } = await pool.query<{ created_at: string | null }>(
+    'SELECT "created_at" FROM drizzle."__drizzle_migrations" ORDER BY "id"',
+  );
+
+  return rows.map((row) => tagByWhen.get(Number(row.created_at)) ?? `unrecognized(${row.created_at})`);
 }
 
 /** Truncates the suite's tables between cases. */
