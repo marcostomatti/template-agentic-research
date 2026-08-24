@@ -38,14 +38,16 @@
  * one where the rule holds. Only a refused write tells them apart.
  *
  * Each refusal is pinned twice. The SQLSTATE is the class a caller
- * programs against, and it is shared: every rule below raises
- * `check_violation`, so a case asserting the code alone passes on a
+ * programs against, and it names no rule of its own: the depth cap
+ * and the approval gate both answer `check_violation`, and the hash
+ * key answers `unique_violation` alongside every other unique key on
+ * its table, so a case asserting the code alone passes on a
  * neighbouring rule. The second pin is what names WHICH rule refused,
- * and which field carries it follows from the mechanism. A CHECK puts
- * its own constraint name on the error. A trigger's RAISE leaves that
- * field empty, so the depth cases pin the message it raises instead —
- * and they have to, since that guard refuses from three separate
- * branches and two of them share a HINT.
+ * and which field carries it follows from the mechanism. A CHECK and
+ * a unique key both put their own constraint name on the error. A
+ * trigger's RAISE leaves that field empty, so the depth cases pin the
+ * message it raises instead — and they have to, since that guard
+ * refuses from three separate branches and two of them share a HINT.
  *
  * An accepted write sits beside each set of refusals, and it is what
  * says where a rule stops. A guard that refused every category, or one
@@ -60,13 +62,26 @@
  * rejected, aimed at a row that differs only in carrying an approval,
  * so accepting it is what pins that refusal to the row's state rather
  * than to the statement — which a refusal on its own cannot say.
+ *
+ * The hash key is read from both ends inside one case, because a
+ * repeat capture meets it both ways: refused where nothing absorbs
+ * it, and absorbed where the insert carries `ON CONFLICT DO NOTHING`,
+ * which leaves the corpus as the first capture left it.
+ *
+ * What that pair does not reach is what the NOT NULL under the key
+ * buys. Two non-null hashes conflict whichever way the column is
+ * declared, so nothing it asserts would move were the hash nullable —
+ * the defect that would cause appears only among rows whose hash is
+ * absent, and these writes produce none. A control table shaped that
+ * way, standing beside the real one, is what reproduces it, and it
+ * lands here later in this phase.
  */
 import type { Pool } from 'pg';
 
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 
-import { categories, domains, researchPool } from '../../src/db/schema.js';
+import { categories, documents, domains, researchPool } from '../../src/db/schema.js';
 
 import {
   applyMigrations,
@@ -85,16 +100,20 @@ import {
  * read off its `cause`.
  */
 interface DriverError {
-  /** Postgres SQLSTATE. `23514` for a check violation. */
+  /**
+   * Postgres SQLSTATE. `23514` for a check violation, `23505` for a
+   * unique one.
+   */
   readonly code?: string;
 
   /** The server's own text, which for a trigger is its RAISE. */
   readonly message?: string;
 
   /**
-   * The constraint the refusal came from. A CHECK names itself
-   * here; a trigger's RAISE leaves it undefined, which is why the
-   * depth cases pin `message` and the approval case pins this.
+   * The constraint the refusal came from. A CHECK and a unique key
+   * both name themselves here; a trigger's RAISE leaves it
+   * undefined, which is why the depth cases pin `message` where the
+   * approval and hash cases pin this.
    */
   readonly constraint?: string;
 }
@@ -133,6 +152,39 @@ const ROOT_WITH_CHILD_KEY = 'root-with-a-child';
  * accepted.
  */
 const ADMITTED_ROOT_KEY = 'a-root-of-its-own';
+
+/**
+ * The content hash both captures carry, and the whole of what makes
+ * the second one a repeat.
+ *
+ * Spelled once and used across three writes — the capture that lands,
+ * the repeat Postgres refuses, and the repeat the conflict clause
+ * absorbs — because a repeat capture differing in its hash is not a
+ * repeat at all. Nothing converts or derives it, so the three cannot
+ * be written apart.
+ */
+const REPEATED_HASH = 'sha256:0f9d2c6b4a17e35810c2f4d9b6e0a7c3';
+
+/**
+ * The body of the capture that lands, and the one the corpus must
+ * still hold at the end.
+ *
+ * It is what says the surviving row is the FIRST capture rather than
+ * the repeat written over it: `ON CONFLICT DO UPDATE` is one word
+ * from the clause under test and would have left
+ * `REPEAT_CAPTURE_BODY` here instead.
+ */
+const FIRST_CAPTURE_BODY = 'The item as it first reached the corpus.';
+
+/**
+ * The body both repeat writes carry, and the one that must never be
+ * stored.
+ *
+ * Different from the capture above on purpose. Two identical bodies
+ * would leave the closing assertion passing whether the repeat was
+ * absorbed or written over the row it conflicted with.
+ */
+const REPEAT_CAPTURE_BODY = 'The same item, reaching the corpus again.';
 
 describeLivePg('schema migrations (live Postgres)', () => {
   let pool: Pool;
@@ -442,5 +494,90 @@ describeLivePg('schema migrations (live Postgres)', () => {
     // admitted: `approved_at` still where the approval put it,
     // `researched_at` now beside it.
     expect(closed).toStrictEqual([{ approvedAt, researchedAt }]);
+  });
+
+  it('refuses a second document under a stored hash, and DO NOTHING adds no row', async () => {
+    // One row per distinct item is `documents_hash_unique`'s doing,
+    // and these are the two ways a repeat capture meets it. Content
+    // reaching the corpus twice is not a second item — a second source
+    // carries it, a poll overlaps the one before it, a file is handed
+    // in again — and deduplicating on the content itself absorbs all
+    // three without any reader having to know which happened.
+    //
+    // The first capture below is the near-miss the case rests on. The
+    // same statement shape is accepted under a hash the corpus does
+    // not hold and refused under one it does, so what goes red here is
+    // the repeat rather than the act of storing a document.
+    //
+    // The constraint name is the second pin for a reason present on
+    // this table rather than a future one. `documents_pkey` answers
+    // the same SQLSTATE, so an insert supplying a key the sequence
+    // already issued reads from here exactly like a repeated hash
+    // while saying nothing whatever about the corpus.
+    const [domain] = await db.insert(domains)
+      .values({ slug: 'hash-dedupe', name: 'Hash dedupe' })
+      .returning({ id: domains.id });
+    const captured = await db.insert(documents)
+      .values({ domainId: domain.id, hash: REPEATED_HASH, body: FIRST_CAPTURE_BODY })
+      .returning({ hash: documents.hash });
+
+    // The capture the two writes below repeat, read back rather than
+    // assumed. Read as the whole returned list for the reason the
+    // approval case records: destructuring an empty one yields
+    // undefined and the case dies on a property access instead of on
+    // an assertion.
+    expect(captured).toStrictEqual([{ hash: REPEATED_HASH }]);
+
+    const failure = await db.insert(documents)
+      .values({ domainId: domain.id, hash: REPEATED_HASH, body: REPEAT_CAPTURE_BODY })
+      .then(() => null, (thrown: unknown) => thrown);
+
+    // Both halves sit on the cause for the reason the depth cases
+    // record. The constraint name is what separates this key from
+    // `documents_pkey` above it, and unlike the text a trigger raises
+    // it is a name this repository chose — named explicitly on the
+    // column so the static-SQL invariant suite could grep for it, so
+    // it moves only in a diff.
+    expect(failure).toBeInstanceOf(Error);
+    const { cause } = failure as { cause?: DriverError };
+    expect(cause?.code).toBe('23505');
+    expect(cause?.constraint).toBe('documents_hash_unique');
+
+    // The write a repeat capture actually makes. Naming the target
+    // rather than leaving the clause bare is what keeps it narrow: a
+    // conflict on any OTHER key of this table is then raised rather
+    // than swallowed, so the clause absorbs the repetition capture is
+    // allowed to have and nothing else.
+    //
+    // An empty RETURNING is the statement's own account of itself, and
+    // it is what says the clause fired. Had it not fired the insert
+    // would have proceeded and the row would be in that list — which
+    // is exactly what a nullable hash would cost, since NULL conflicts
+    // with nothing, another NULL included.
+    const absorbed = await db.insert(documents)
+      .values({ domainId: domain.id, hash: REPEATED_HASH, body: REPEAT_CAPTURE_BODY })
+      .onConflictDoNothing({ target: documents.hash })
+      .returning({ hash: documents.hash });
+
+    expect(absorbed).toStrictEqual([]);
+
+    const stored = await db.select({ hash: documents.hash, body: documents.body })
+      .from(documents);
+
+    // The corpus read back, which is the claim in its own terms rather
+    // than in the statement's: one item, one row. `resetTables`
+    // truncated the table before this case, so this list is all of it.
+    //
+    // The body is the half RETURNING cannot give. It says the row that
+    // survived is the capture that landed first and not a repeat
+    // written over it — which is what `ON CONFLICT DO UPDATE`, one
+    // word from the clause above, would have left here instead.
+    expect(stored).toStrictEqual([{ hash: REPEATED_HASH, body: FIRST_CAPTURE_BODY }]);
+
+    // What this case does not say is what the NOT NULL under the key
+    // buys. Both writes carry a hash, and two non-null hashes conflict
+    // whichever way the column is declared, so every assertion here
+    // would read the same were it nullable. Only the control table the
+    // module header describes reaches that.
   });
 });
