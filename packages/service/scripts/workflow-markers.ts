@@ -109,6 +109,35 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * A ceiling on the work one pass starts, not on the work waiting:
    * rows past the cap stay due, because claiming is what moves a
    * row's `next_run_at`, and the following tick takes them.
+   *
+   * The cap bounds a pass by itself, with no reference to how many
+   * rows came due — worth stating because the number due is nothing
+   * anyone chooses. A dispatcher left off for a day, an operator
+   * enabling a batch of rows in one sitting, a seed writing
+   * `next_run_at` in the past: each leaves a backlog the next tick
+   * would otherwise start all of at once. Under the cap that tick
+   * starts this many, and the rest drain over the ticks after it.
+   *
+   * Applied twice, and the two applications do not defend the same
+   * thing. Each claim statement in `ar-dispatch` carries it as a SQL
+   * `LIMIT`; the Code node downstream applies it again over the
+   * merged claims, through `capBatch` in `src/lib/schedule.ts` —
+   * all three arriving later in this phase. The duplication is
+   * there because a `LIMIT` reads as paging. Whoever next tunes
+   * that query — adding a filter, changing the ordering, folding
+   * in a join — sees a performance knob rather than the only thing
+   * standing between one pass and the whole backlog, and it is one
+   * edit from being gone.
+   *
+   * Only the second application survives such an edit, and it is
+   * worth being exact about what that leaves. The Code node bounds
+   * what is INVOKED, which is what costs money once phase 6 puts
+   * model calls behind the dispatch. It cannot bound what was
+   * claimed: a claim has already moved `next_run_at`, so rows a
+   * vanished `LIMIT` let through would be rescheduled without ever
+   * being run — skipped silently until they next come due. The
+   * second copy holds the spending line; it does not make the claim
+   * query safe to leave unbounded.
    */
   AR_DISPATCH_BATCH_CAP: '25',
 };
