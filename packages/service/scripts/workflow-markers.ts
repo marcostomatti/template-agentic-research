@@ -141,3 +141,101 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    */
   AR_DISPATCH_BATCH_CAP: '25',
 };
+
+/**
+ * The name shape a dotenv line must carry for `parseDotenv` to read
+ * its value: the environment-variable grammar of a letter or
+ * underscore followed by letters, digits and underscores.
+ *
+ * Anchored at both ends, so a key with a stray space, a dash or a
+ * leading digit fails it whole rather than matching a prefix.
+ */
+const DOTENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * Read one dotenv value, with quoting deciding where it ends.
+ *
+ * The two cases end differently, which is the whole of what quoting
+ * buys an operator here. A quoted value ends at its closing quote
+ * and anything after that is commentary, so a `#` INSIDE the quotes
+ * survives — which is what makes a fragment, a colour or a comment
+ * character writable at all. An unquoted value ends at the first
+ * whitespace-preceded `#`, so `a#b` stays whole while `a # b`
+ * becomes `a`.
+ *
+ * An opening quote with no closing one is read as unquoted rather
+ * than reported, so the quote character stays in the value. That is
+ * the shell's own answer to an unbalanced quote turned into
+ * something a build can carry on past, and it is visible in the
+ * resolved value rather than silent.
+ *
+ * Nothing is unescaped. A `\n` in a value is a backslash and an
+ * `n`, as it is inside the shell's single quotes.
+ *
+ * @param raw - Everything after the first `=`, already trimmed.
+ * @returns The value the line declares.
+ */
+function dotenvValue(raw: string): string {
+  const quote = raw.startsWith('\'') || raw.startsWith('"')
+    ? raw.slice(0, 1)
+    : '';
+
+  const close = quote === ''
+    ? -1
+    : raw.indexOf(quote, 1);
+
+  return close > 0
+    ? raw.slice(1, close)
+    : raw.replace(/\s+#.*$/, '');
+}
+
+/**
+ * Read dotenv-style text into the settings it declares.
+ *
+ * The grammar is the one a shell reading the same file with
+ * `set -a; . ./.env` would accept, and matching that is the point
+ * rather than a convenience: an operator's `.env` is a file they
+ * also source by hand, so a build reading it differently would
+ * resolve a marker to a value they cannot reproduce at a prompt.
+ * One `KEY=VALUE` per line, an optional `export ` prefix, blank and
+ * `#` comment lines skipped, surrounding quotes stripped, and a
+ * trailing ` #` comment dropped from an unquoted value.
+ *
+ * A line this cannot read is skipped rather than refused, and the
+ * leniency is bounded on purpose: nothing here decides whether a
+ * setting resolved. `ENV_DEFAULTS` stands behind every name, and a
+ * name no source answers for fails the build by itself, so a line
+ * dropped here costs a default rather than a blank. Refusing the
+ * file instead would let a comment form or a shell-ism this grammar
+ * does not cover — an operator's `.env` is not written for this
+ * parser — stop a build over a line no marker reads.
+ *
+ * What that skips is every line without an `=` past its first
+ * character, and every key outside `DOTENV_KEY`. A key IS trimmed
+ * before it is matched, so `KEY = value` is read; a key holding a
+ * space is not.
+ *
+ * @param text - The contents of a `.env`-style file.
+ * @returns Every setting the text declares, a later line for the
+ *   same key overriding an earlier one.
+ */
+export function parseDotenv(text: string): Record<string, string> {
+  const settings: Record<string, string> = {};
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim().replace(/^export\s+/, '');
+    const equals = line.indexOf('=');
+
+    if (line === '' || line.startsWith('#') || equals <= 0) {
+      continue;
+    }
+
+    const key = line.slice(0, equals).trim();
+
+    if (DOTENV_KEY.test(key)) {
+      settings[key] = dotenvValue(line.slice(equals + 1).trim());
+    }
+  }
+
+  return settings;
+}
