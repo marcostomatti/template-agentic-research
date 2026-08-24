@@ -1020,6 +1020,40 @@ const REEXPORT_CASES: readonly ReexportCase[] = [
 const STAR_SAMPLE = sampleById(REFUSED_LIB_SAMPLES, 'refused-star');
 
 /**
+ * The default sample, read out here for the control below rather
+ * than for a claim of its own.
+ *
+ * What the control needs from it is the phrase: the two libraries
+ * carry the same text and are judged differently, so the form this
+ * sample is refused under is where that text is spelled. Written
+ * again beside the control it would be a second spelling, and a
+ * control carrying a phrase the rule no longer fires on is accepted
+ * by a rule that had stopped firing on anything.
+ */
+const DEFAULT_SAMPLE = sampleById(REFUSED_LIB_SAMPLES, 'refused-default');
+
+/**
+ * The library ACCEPTED here: one whose body carries the phrase
+ * {@link DEFAULT_SAMPLE} is refused for, inside a string literal.
+ *
+ * The near miss the default rule is likeliest to be written wrongly
+ * for. `export` is an ordinary word, and a library quoting the
+ * splice rule — in a message, a comment, a snippet it hands to a
+ * reader — carries the text without carrying the form. A rule
+ * matching the phrase anywhere in the transpiled text refuses this
+ * source at build time, under a form the file never used, for a
+ * library that declares one function and nothing else.
+ *
+ * A control rather than a claim about the strip: nothing is removed
+ * from this library, and what it says is where the rule above may
+ * NOT fire.
+ */
+const STRING_LITERAL_SAMPLE = sampleById(
+  LIB_CONTROL_SAMPLES,
+  'control-export-text-in-string',
+);
+
+/**
  * The form `assertSpliceable` refused a sample under, or `null`
  * where it accepted one.
  *
@@ -1107,6 +1141,41 @@ describe('assertSpliceable — a library exporting in a refused form', () => {
       .map((sample) => sample.id);
 
     expect(refused).toEqual([]);
+  });
+
+  // The guard the control rests on, and the one thing about that
+  // sample a case cannot read off the function. Accepting a library
+  // is what this function does for almost everything handed to it,
+  // so the case below says something only while this source really
+  // carries the phrase the default rule fires on — and carries it
+  // nowhere a statement can begin.
+  //
+  // Read by blanking the quoted literals rather than by anchoring a
+  // regex to the start of a line. The rule's own test is the anchor,
+  // and a guard written that way would be the rule restated: it
+  // would move with the rule, and would agree with a rule that had
+  // moved wrongly.
+  it('is asked about a library quoting the phrase in a literal', () => {
+    const outsideLiterals = STRING_LITERAL_SAMPLE.transpiled
+      .replace(/"[^"]*"/gu, '""');
+
+    expect(STRING_LITERAL_SAMPLE.transpiled)
+      .toContain(DEFAULT_SAMPLE.refusedForm);
+    expect(outsideLiterals).not.toContain(DEFAULT_SAMPLE.refusedForm);
+  });
+
+  // The control itself, and the near miss that gives the claim above
+  // it its edge: this source and `refused-default` carry the same
+  // phrase, and are told apart by where it sits. A rule refusing on
+  // the text alone passes every case in this section and fails here
+  // — which is the whole of what a false-positive control is for,
+  // since a roster of refusals can only ever say that something is
+  // refused.
+  //
+  // The form is read back rather than the throw, so a failure names
+  // the rule that fired wrongly instead of reporting that one did.
+  it('accepts a library carrying the phrase inside a string', () => {
+    expect(refusedFormOf(STRING_LITERAL_SAMPLE)).toBeNull();
   });
 
   for (const entry of REEXPORT_CASES) {
