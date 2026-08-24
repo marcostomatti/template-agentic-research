@@ -33,3 +33,62 @@
  * runtime consults, and would leave a developer's own environment one
  * import away from the generated output.
  */
+
+/**
+ * What every `__ENVVAR:<NAME>__` marker resolves to when no other
+ * source answers for the name.
+ *
+ * This table is the whole of what the default build reads. Settings
+ * resolution is opt-in, so a build handed neither an environment nor
+ * a `.env` path consults these values and nothing else, and every
+ * setting a workflow source may name has an entry here. A name with
+ * no entry resolves only while a caller supplies one, and fails the
+ * build otherwise rather than baking an empty string into a node
+ * parameter.
+ *
+ * The values are strings because an environment variable is one: a
+ * marker resolves to text wherever it sits, and a parameter wanting
+ * a number parses it on the far side of the build. Nothing here is
+ * read by the running service, which is why none of it belongs in
+ * the zod schema in `src/config.ts`.
+ */
+export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
+  /**
+   * The stamp a built workflow carries on its canvas, answering
+   * which checkout the artifact in front of an operator was
+   * generated from.
+   *
+   * `dev` is the fallback rather than the usual value: the entry
+   * point arriving with this module resolves the git short commit
+   * and supplies it, and this is what a build with no commit to
+   * name — an unpacked tarball, an image with no git binary — is
+   * stamped with instead.
+   */
+  AR_BUILD_TAG: 'dev',
+
+  /**
+   * How often `ar-dispatch` wakes up, as the cron expression its
+   * schedule trigger carries.
+   *
+   * A tick rate, not a schedule. No row's timing is written here:
+   * what a tick does is claim the schedulable rows whose own
+   * `next_run_at` has already passed, so `interval_seconds` on the
+   * row decides when it comes due and this decides how soon
+   * afterwards anything notices. That makes the expression the floor
+   * on how precise every schedule in the system can be — a row
+   * asking for five minutes gets whatever this grants.
+   *
+   * Five fields, matching the form the schedule trigger's
+   * `cronExpression` field takes.
+   */
+  AR_DISPATCH_CRON: '0 * * * *',
+
+  /**
+   * The most schedulable rows a single `ar-dispatch` tick claims.
+   *
+   * A ceiling on the work one pass starts, not on the work waiting:
+   * rows past the cap stay due, because claiming is what moves a
+   * row's `next_run_at`, and the following tick takes them.
+   */
+  AR_DISPATCH_BATCH_CAP: '25',
+};
