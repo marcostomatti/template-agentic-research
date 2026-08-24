@@ -33,6 +33,7 @@
  * runtime consults, and would leave a developer's own environment one
  * import away from the generated output.
  */
+import { readFileSync, statSync } from 'node:fs';
 
 /**
  * What every `__ENVVAR:<NAME>__` marker resolves to when no other
@@ -238,4 +239,46 @@ export function parseDotenv(text: string): Record<string, string> {
   }
 
   return settings;
+}
+
+/**
+ * Read a `.env` file into the settings it declares.
+ *
+ * A missing file is not an error, and that is the whole reason a
+ * path is read through here rather than by a `readFileSync` at the
+ * call site. A `.env` is optional in the strong sense: the default
+ * build names no file at all, and `ENV_DEFAULTS` stands behind
+ * every `__ENVVAR:<NAME>__` a workflow source may carry, so a build
+ * with nothing to read still resolves every setting and writes the
+ * same artifact. An absent file costs an override that was never
+ * offered, never a value.
+ *
+ * A path naming nothing and no path at all are the same answer for
+ * the same reason, which is why both come back empty rather than
+ * one of them being the caller's problem.
+ *
+ * Absent is the only failure answered this way. A path naming
+ * something that exists and cannot be read — a directory, a file
+ * the build may not open — throws, because that is an operator
+ * asking for a file and not getting it. Folding that into the empty
+ * object would hand back the defaults under a build that was told
+ * to override them, and a build stamping placeholder settings into
+ * a deploy artifact is the outcome this whole opt-in shape exists
+ * to make visible.
+ *
+ * @param path - Path to a `.env`-style file, or `null` when the
+ *   build names none.
+ * @returns Every setting the file declares, empty when there is no
+ *   file to read.
+ */
+export function readEnvFile(path: string | null): Record<string, string> {
+  if (path === null) {
+    return {};
+  }
+
+  if (statSync(path, { throwIfNoEntry: false }) === undefined) {
+    return {};
+  }
+
+  return parseDotenv(readFileSync(path, 'utf8'));
 }
