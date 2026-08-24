@@ -10,8 +10,9 @@ today.
 The design the register comes from is
 `.specs/2026-08-19-research-pipeline-port.md`. Its §5 fixes the set
 below, with the hostname row carried from the migration-hygiene rules
-in §6 and registered here alongside the rest; phase numbers throughout
-refer to the 7-phase sequencing in that design, §7.
+in §6 and the category-depth row from the schema-v2 table roster in §2,
+both registered here alongside the rest; phase numbers throughout refer
+to the 7-phase sequencing in that design, §7.
 
 ## The register
 
@@ -22,6 +23,7 @@ refer to the 7-phase sequencing in that design, §7.
 | Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
 | Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/`, over workflows built from `workflows/src/` | 3 | Pending |
 | Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
+| A category is a root or the child of a root, and nothing deeper | A trigger in the hand-written migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts`, with the opt-in `tests/live/schema.live.test.ts` watching a database refuse the write | 2 | Implemented |
 | No naming from the project this pipeline was ported from survives in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No vault path appears in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No real hostname appears in a tracked file | `tests/invariants/naming.test.ts` | 1 | Implemented |
