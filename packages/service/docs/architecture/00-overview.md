@@ -98,9 +98,9 @@ Paths are relative to `packages/service`.
 | `src/routes/`, `src/mcp/` | The API surface itself — HTTP routes and MCP tools over the schema. |
 | `workflows/src/` | n8n workflow sources, one JSON file per workflow (phase 3 onward). See `workflows/src/README.md`. |
 | `workflows/dist/`, `workflows/dist-external/` | Build output. Gitignored, and never hand-edited. |
-| `scripts/` | Operator entry points: seed, approve, build, deploy, stack lifecycle. See `scripts/README.md`. |
+| `scripts/` | Operator entry points: `seed.ts` applies the `data/` bundle, `approve.ts` lists the rows waiting on a ruling and approves or rejects one. Workflow build and deploy arrive in phase 3, the stack-lifecycle scripts in phase 7. See `scripts/README.md`. |
 | `drizzle/` | Generated migration SQL — the single migration engine, for executor and API alike. |
-| `data/` | Seed files only, applied by `scripts/seed.ts`; nothing here is read at runtime. See `data/README.md`. |
+| `data/` | Seed files only, applied by `scripts/seed.ts`; nothing here is read at runtime. `domains.json`, `personas.json`, `categories.json`, `terms.json` and `topics.json` seed one worked example domain. See `data/README.md`. |
 | `tests/` | Cross-cutting tests, including the invariant suite under `tests/invariants/`. |
 | `docs/architecture/` | This document set. |
 
