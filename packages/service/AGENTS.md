@@ -65,6 +65,18 @@ Two rules bind every phase of that port:
 - **Dependencies**: anything with a lifecycle (db, redis, cron, future
   queues) is a `createDependency` passed to `createService({ dependencies })`
   — started in order, stopped in reverse, visible to `/_control`.
+- **Schema**: tables live one concern per file under `src/db/schema/`, and
+  `src/db/schema.ts` is a pure barrel of
+  `export * from './schema/<x>.js';` lines. A new module there is only
+  half-added until its barrel line lands: without it drizzle-kit never
+  sees the table (so no migration is generated) and `drizzle({ schema })`
+  cannot resolve a relation it was never handed — both fail silently, not
+  loudly. Add the line when the FILE is created, even if its first commit
+  defines only a helper. `values.ts`
+  is the deliberate exception: it declares the closed value sets and no
+  table, so siblings import it directly and it stays out of the barrel.
+  Three consumers pin the barrel's path (`drizzle.config.ts`,
+  `src/db/index.ts`, `tests/live/live-postgres.ts`) — never move it.
 - **Errors**: throw `AppError` subclasses (`lib/errors`) or let Zod errors
   bubble — the registered handler maps them to typed JSON responses. Express
   4 does NOT auto-forward async route errors: wrap async handlers in
@@ -117,6 +129,34 @@ assuming it: `tsc --noEmit --listFilesOnly` and `eslint <path> -f json` both
 report what they actually read (see the `prove-gate-coverage-read-only`
 skill).
 
+Markdown and JSON are gated unevenly here, and the map is worth knowing
+before calling a prose edit verified. The naming invariant's scan roots
+carry no extension filter, so they reach three READMEs —
+`workflows/src/`, `data/` and `scripts/` — plus everything generated
+under `drizzle/`, meta snapshots included. ESLint's `**/*.md` block
+reaches a markdown file only where a lint target names its directory,
+which today is `scripts/README.md` alone, and it checks document
+STRUCTURE only: no width, no link target, no reference label. Everything
+else — this file, `ARCHITECTURE.md`, all of `docs/`, and `package.json` —
+is read by NO gate at all, so a green `test:all` says nothing about it.
+Verify those by deriving each claim from the artifact it describes (parse
+the roster out of the prose, compare it against the barrel or the
+directory) rather than by reading the doc and agreeing with it.
+
+Neither `max-len` nor `max-lines` exists in any config, so the ~800-line
+file cap and the hand-maintained comment wrapping are review-quality
+conventions that turn no gate red. `scripts/seed.ts` and
+`scripts/approve.ts` are both over the cap today, and the seam each wants
+is recorded here rather than in the file: split the LOADER out of
+`seed.ts` into `scripts/seed-load.ts` (no import cycle, and it leaves
+`seed.ts` a thin entry point — moving `runSeedCli` out instead does cycle,
+since the guard must stay in the file `bun scripts/seed.ts` runs), and
+move `formatPendingTable` / `formatRuling` / `PENDING_COLUMNS` out of
+`approve.ts` into `scripts/approve-render.ts`, re-exported from it. Both
+follow the `seed-schemas.ts` / `seed-apply.ts` precedent — a bare
+`export * from './<x>.js';` beside the normal import — and a move of that
+size lands as its OWN refactor commit, never alongside new behaviour.
+
 ## Testing — isolated vs live (CRITICAL)
 
 The default suite is FULLY ISOLATED: no db, no network, no credentials.
@@ -136,6 +176,13 @@ hour. The rules:
    but `ar_live`). Never widen the truncate list implicitly.
 5. Clean up after live runs: `stress:stop` removes only the stress
    containers. Leave no long-lived processes or scheduled jobs behind.
+   `db:stop` is NOT its counterpart: it is `docker compose down`, which
+   acts on the whole PROJECT regardless of profile, so running it while
+   the live container is up takes `postgres-live` with it. The pair is
+   asymmetric by construction — `db:start` is per-service
+   (`up -d postgres`) while `db:stop` is per-project and also removes the
+   project network. Read the script body rather than inferring the
+   counterpart from the name.
 6. `fileParallelism: false` lives in `vitest.config.ts`, not on a script
    flag, so exported env vars can't re-parallelize the live files.
 
