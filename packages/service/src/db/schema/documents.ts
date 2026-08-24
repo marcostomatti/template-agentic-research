@@ -97,13 +97,13 @@ export const documents = pgTable('documents', {
    * The live suite proves the property instead of arguing it, and
    * proves it against a control table, because the obvious assertion
    * does not bite: two inserts of one non-null hash conflict whether
-   * or not this column is NOT NULL. `tests/live/schema.live.test.ts`,
-   * later in this phase, therefore stands a temporary table with a
-   * nullable hash under the same UNIQUE key beside the real one and
-   * requires it to accept two NULL-hash rows — the defect
-   * reproducing beside the constraint holding, which is what makes
-   * the assertion on this column evidence rather than a claim that
-   * would pass either way.
+   * or not this column is NOT NULL. `tests/live/schema.live.test.ts`
+   * therefore copies this table into a temporary one, drops the NOT
+   * NULL off the copy, and hands the same write to both: the corpus
+   * refuses it, the copy takes it twice — the defect reproducing
+   * beside the constraint holding, which is what makes the assertion
+   * on this column evidence rather than a claim that would pass either
+   * way.
    *
    * The constraint is named rather than left to drizzle's derivation
    * so the static-SQL invariant suite can assert it is present by

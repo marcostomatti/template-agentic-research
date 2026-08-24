@@ -158,9 +158,9 @@ The first symptom is a count somewhere downstream.
 Because the defect appears only among rows whose key member is
 absent, the obvious assertion cannot see it: two inserts of one
 non-null hash conflict whether or not the column is NOT NULL. The
-live suite, later in this phase, therefore stands a control table
-with a nullable hash under the same unique key beside the real one
-and requires it to accept two NULL-hash rows — the defect
+live suite therefore copies `documents` into a temporary table,
+drops the NOT NULL off the copy, and hands the same write to both:
+the corpus refuses it, the copy takes it twice — the defect
 reproducing next to the constraint holding.
 
 `ingested_files.path_hash` is the other half of the same job rather

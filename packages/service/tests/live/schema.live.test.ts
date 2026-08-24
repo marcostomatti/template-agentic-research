@@ -43,11 +43,15 @@
  * key answers `unique_violation` alongside every other unique key on
  * its table, so a case asserting the code alone passes on a
  * neighbouring rule. The second pin is what names WHICH rule refused,
- * and which field carries it follows from the mechanism. A CHECK and
- * a unique key both put their own constraint name on the error. A
+ * and which field carries it follows from the mechanism. A CHECK and a
+ * unique key both put their own constraint name on the error. A
  * trigger's RAISE leaves that field empty, so the depth cases pin the
  * message it raises instead — and they have to, since that guard
- * refuses from three separate branches and two of them share a HINT.
+ * refuses from three separate branches and two of them share a HINT. A
+ * NOT NULL names neither: it belongs to the column rather than to a
+ * row of `pg_constraint`, so the case that meets one pins the COLUMN
+ * the server reports, which is what separates it from every other NOT
+ * NULL on that table answering the same code.
  *
  * An accepted write sits beside each set of refusals, and it is what
  * says where a rule stops. A guard that refused every category, or one
@@ -72,13 +76,20 @@
  * buys. Two non-null hashes conflict whichever way the column is
  * declared, so nothing it asserts would move were the hash nullable —
  * the defect that would cause appears only among rows whose hash is
- * absent, and these writes produce none. A control table shaped that
- * way, standing beside the real one, is what reproduces it, and it
- * lands here later in this phase.
+ * absent, and these writes produce none.
+ *
+ * The case after it produces some. It copies `documents` into a
+ * temporary table, drops that one declaration off the copy, and hands
+ * the same write to both: the corpus refuses it, the control takes it
+ * twice. Neither half carries the claim alone — a refusal names no
+ * key, and two rows in a scratch table say nothing about the corpus —
+ * so what is being read is the pairing, and the only thing between
+ * them is the NOT NULL.
  */
+import type { SQL } from 'drizzle-orm';
 import type { Pool } from 'pg';
 
-import { eq } from 'drizzle-orm';
+import { eq, getTableName, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 
 import { categories, documents, domains, researchPool } from '../../src/db/schema.js';
@@ -102,7 +113,7 @@ import {
 interface DriverError {
   /**
    * Postgres SQLSTATE. `23514` for a check violation, `23505` for a
-   * unique one.
+   * unique one, `23502` for a not-null one.
    */
   readonly code?: string;
 
@@ -116,6 +127,16 @@ interface DriverError {
    * approval and hash cases pin this.
    */
   readonly constraint?: string;
+
+  /**
+   * The column a NOT NULL refusal names, and the field the third
+   * mechanism here reports itself through. A NOT NULL is a property of
+   * the column rather than a row of `pg_constraint`, so it leaves
+   * `constraint` undefined the way a trigger does — and unlike a
+   * trigger it says which column in a field of its own, rather than
+   * only inside prose.
+   */
+  readonly column?: string;
 }
 
 /**
@@ -157,11 +178,17 @@ const ADMITTED_ROOT_KEY = 'a-root-of-its-own';
  * The content hash both captures carry, and the whole of what makes
  * the second one a repeat.
  *
- * Spelled once and used across three writes — the capture that lands,
- * the repeat Postgres refuses, and the repeat the conflict clause
- * absorbs — because a repeat capture differing in its hash is not a
- * repeat at all. Nothing converts or derives it, so the three cannot
- * be written apart.
+ * Spelled once and used across three writes against the corpus — the
+ * capture that lands, the repeat Postgres refuses, and the repeat the
+ * conflict clause absorbs — because a repeat capture differing in its
+ * hash is not a repeat at all. Nothing converts or derives it, so the
+ * three cannot be written apart.
+ *
+ * The control case reuses it for a fourth write and a fifth, where it
+ * is doing something else: a repeat the copied key absorbs is what
+ * says that key came across LIVE, so the hashless rows beside it
+ * escaped a constraint the table really carries rather than one the
+ * copy quietly lost.
  */
 const REPEATED_HASH = 'sha256:0f9d2c6b4a17e35810c2f4d9b6e0a7c3';
 
@@ -173,18 +200,81 @@ const REPEATED_HASH = 'sha256:0f9d2c6b4a17e35810c2f4d9b6e0a7c3';
  * the repeat written over it: `ON CONFLICT DO UPDATE` is one word
  * from the clause under test and would have left
  * `REPEAT_CAPTURE_BODY` here instead.
+ *
+ * The control case opens with it too, which is what makes the two
+ * lists readable side by side: the corpus ends holding this body and
+ * nothing else, the control ends holding it with the repeat stored
+ * beneath it.
  */
 const FIRST_CAPTURE_BODY = 'The item as it first reached the corpus.';
 
 /**
- * The body both repeat writes carry, and the one that must never be
- * stored.
+ * The body every repeat write carries, and the one the CORPUS must
+ * never hold.
  *
  * Different from the capture above on purpose. Two identical bodies
  * would leave the closing assertion passing whether the repeat was
  * absorbed or written over the row it conflicted with.
+ *
+ * The control table does hold it, and that is the defect rather than
+ * a second meaning for the constant: same write, same conflict
+ * clause, one declaration different, and a row the corpus has no way
+ * to grow.
  */
 const REPEAT_CAPTURE_BODY = 'The same item, reaching the corpus again.';
+
+/**
+ * The control table: `documents` with one declaration taken off it.
+ *
+ * Copied rather than written out, so `LIKE ... INCLUDING ALL` is what
+ * carries the unique key across and no hand-typed CREATE TABLE has to
+ * agree with the schema about what that key is. The case then removes
+ * the NOT NULL in a single ALTER, and that ALTER is the whole of the
+ * difference it reports.
+ *
+ * TEMP and `ON COMMIT DROP`, so it lives inside one transaction on one
+ * connection and the commit takes it away again. `resetTables` is
+ * never told about it and does not need to be: it is in no schema, so
+ * nothing but the case standing it up can reach it.
+ */
+const NULLABLE_HASH_CONTROL = 'documents_nullable_hash';
+
+/**
+ * The write a repeat capture makes, aimed at a table by name.
+ *
+ * One builder rather than a statement per call site, because the case
+ * using it is a comparison and its halves have to be the same write:
+ * the corpus and a copy of the corpus, handed statements differing in
+ * nothing but the table they name. Written out twice they can drift,
+ * and two statements compared against each other report nothing about
+ * either table.
+ *
+ * Raw SQL rather than `db.insert(documents)` because the row under
+ * test is one the schema-typed builder cannot express — `hash` is
+ * `string` in its insert type, so a NULL there is unwritable in
+ * TypeScript. That is a hint rather than the rule: the types stop this
+ * repository writing the row, and the NOT NULL is what stops every
+ * other writer.
+ *
+ * @param table - Table to insert into, quoted as an identifier.
+ *
+ * @param domainId - Domain the row belongs to.
+ *
+ * @param hash - Content hash, or null for the row under test.
+ *
+ * @param body - Captured text, which is what tells two rows sharing an
+ * absent hash apart once both have landed.
+ *
+ * @returns The insert, carrying the conflict clause a repeat capture
+ * arrives with.
+ */
+function captureWrite(table: string, domainId: number, hash: string | null, body: string): SQL {
+  return sql`
+    insert into ${sql.identifier(table)} ("domain_id", "hash", "body")
+    values (${domainId}, ${hash}, ${body})
+    on conflict ("hash") do nothing
+  `;
+}
 
 describeLivePg('schema migrations (live Postgres)', () => {
   let pool: Pool;
@@ -577,7 +667,128 @@ describeLivePg('schema migrations (live Postgres)', () => {
     // What this case does not say is what the NOT NULL under the key
     // buys. Both writes carry a hash, and two non-null hashes conflict
     // whichever way the column is declared, so every assertion here
-    // would read the same were it nullable. Only the control table the
-    // module header describes reaches that.
+    // would read the same were it nullable. Only the case below, which
+    // hands this same write to a copy of this table with that
+    // declaration dropped, reaches that.
+  });
+
+  it('refuses a document with no hash, where a control without it takes two', async () => {
+    // What the NOT NULL under `documents_hash_unique` buys, read as
+    // the difference between two tables rather than as a property of
+    // one. The case above puts a hash on every write, and every
+    // assertion in it would read the same were the column nullable:
+    // two non-null hashes conflict either way. The defect a nullable
+    // key member causes lives entirely among rows whose member is
+    // ABSENT, so reaching it needs a table that will store such a row,
+    // and `documents` is precisely the table that will not.
+    //
+    // Hence the copy. `LIKE ... INCLUDING ALL` carries the unique key,
+    // the CHECK and the defaults across without a hand-typed CREATE
+    // TABLE having to agree with the schema about any of them; it
+    // carries no foreign key, which is why these rows need no source
+    // and answer to no domain of their own. One ALTER then drops the
+    // NOT NULL, and that ALTER is the entire hypothesis — whatever the
+    // two tables do differently below is what it bought.
+    const [domain] = await db.insert(domains)
+      .values({ slug: 'hash-not-null', name: 'Hash NOT NULL' })
+      .returning({ id: domains.id });
+
+    const hashless = captureWrite(getTableName(documents), domain.id, null, FIRST_CAPTURE_BODY);
+    const refused = await db.execute(hashless)
+      .then(() => null, (thrown: unknown) => thrown);
+
+    // The corpus half. `ON CONFLICT DO NOTHING` absorbs a conflict and
+    // nothing besides, so it never reaches a row the table refuses to
+    // form — which is worth reading first, since that clause is the
+    // whole of what keeps the nullable case below silent.
+    //
+    // The second pin is the COLUMN rather than a constraint name, for
+    // the reason the module header records, and it is earned rather
+    // than decorative: `domain_id`, `body`, `captured_at` and
+    // `parse_status` are NOT NULL on this table too and answer the
+    // same 23502, so a case pinned on the code alone passes on a write
+    // that merely forgot the body.
+    expect(refused).toBeInstanceOf(Error);
+    const { cause } = refused as { cause?: DriverError };
+    expect(cause?.code).toBe('23502');
+    expect(cause?.column).toBe('hash');
+
+    const control = await db.transaction(async (tx) => {
+      // One transaction because a temporary table belongs to a
+      // SESSION, and the pool is free to answer each statement from a
+      // different connection — the CREATE landing on one and the
+      // INSERT after it on another, which reports as the table not
+      // existing. `ON COMMIT DROP` closes it out at the other end: the
+      // commit leaves the database as `resetTables` left it, the copy
+      // gone and no row written outside it.
+      await tx.execute(sql`
+        create temp table ${sql.identifier(NULLABLE_HASH_CONTROL)}
+          (like ${documents} including all) on commit drop
+      `);
+      await tx.execute(sql`
+        alter table ${sql.identifier(NULLABLE_HASH_CONTROL)}
+          alter column "hash" drop not null
+      `);
+
+      const write = async (hash: string | null, body: string): Promise<void> => {
+        await tx.execute(captureWrite(NULLABLE_HASH_CONTROL, domain.id, hash, body));
+      };
+
+      // The write the corpus just refused, twice over. Neither carries
+      // a hash, so each is the row `documents` would not form, and the
+      // pair is a repeat capture in the only sense the pipeline has:
+      // the same item reaching it again.
+      await write(null, FIRST_CAPTURE_BODY);
+      await write(null, REPEAT_CAPTURE_BODY);
+
+      // Then the near-miss that says the rows above escaped a
+      // constraint really there. A copy carrying no unique key takes
+      // hashless rows too, and the assertion below cannot tell that
+      // from the defect. What rules it out today is the conflict
+      // clause naming its target: `on conflict ("hash")` against a
+      // table with no such key is refused outright, 42P10, on the
+      // first write of all.
+      //
+      // That refusal is one edit from going quiet, though — leave the
+      // clause bare and the same keyless copy takes all four rows
+      // without a word. So this pair carries one hash between them,
+      // and the second being absorbed is what says the key came across
+      // live, whatever the clause does.
+      await write(REPEATED_HASH, FIRST_CAPTURE_BODY);
+      await write(REPEATED_HASH, REPEAT_CAPTURE_BODY);
+
+      const { rows } = await tx.execute(sql`
+        select "hash", "body" from ${sql.identifier(NULLABLE_HASH_CONTROL)} order by "id"
+      `);
+
+      return rows;
+    });
+
+    // Three rows, and which three is the finding. The first two are
+    // one write repeated against a key that admits it: NULL conflicts
+    // with nothing, another NULL included, so the conflict clause
+    // never fires and the second body is stored beside the first — the
+    // copy per pass, arriving with nothing raised and nothing logged.
+    // The third is that same statement shape under a hash, absorbed on
+    // its repeat, which is the key doing its work for every row that
+    // has a value to be compared.
+    //
+    // `REPEAT_CAPTURE_BODY` is in this list and absent from the
+    // corpus's, one case above. That is what the NOT NULL buys, in the
+    // only terms a reader downstream would ever meet it in: a row that
+    // should not be there.
+    //
+    // What the pairing does not say is that the copy behaves like the
+    // corpus in general — it is a scratch table with no foreign key
+    // and no writers, and nothing here is a claim about it. The claim
+    // is the single ALTER between the two, which is also why the
+    // control is taken at run time rather than declared: a change to
+    // `documents` moves it too, and the third row is what says the
+    // copy still carries the key the corpus deduplicates on.
+    expect(control).toStrictEqual([
+      { hash: null, body: FIRST_CAPTURE_BODY },
+      { hash: null, body: REPEAT_CAPTURE_BODY },
+      { hash: REPEATED_HASH, body: FIRST_CAPTURE_BODY },
+    ]);
   });
 });
