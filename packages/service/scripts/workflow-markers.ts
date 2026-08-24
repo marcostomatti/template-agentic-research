@@ -333,6 +333,40 @@ export interface EnvSourceOptions {
  * resolves against the table alone, and neither an environment nor
  * a file is read unless a caller passes one.
  *
+ * Opt-in because the alternative poisons the artifact. The obvious
+ * order — environment, then a `.env`, then a default, always on —
+ * makes every build absorb whatever the developer running it
+ * happens to have exported, and a `.env` naming a host on their own
+ * network lands in `workflows/dist/` as a node parameter. That is a
+ * build one machine can reproduce and no other, from sources saying
+ * nothing about the difference. Reaching for `process.env` anywhere
+ * on this path is the single edit that turns it back on, which is
+ * why nothing in this module does.
+ *
+ * The usual tripwire for that is missing here, which is why the
+ * opt-in carries the whole defence rather than backing one up.
+ * Where generated output is committed, a poisoned artifact surfaces
+ * as a rebuild-and-diff failure — loud, if confusing, since its fix
+ * hint is to re-run the generator and the generator produces the
+ * same wrong file again. `workflows/dist/` is gitignored, so there
+ * is no diff to fail. A locally-flavoured artifact simply is the
+ * build: the one the workflow invariants read, and the one every
+ * later phase is judged against.
+ *
+ * One caller passes an environment on purpose. The deploy build
+ * arriving later in this phase hands `process.env` and a `.env`
+ * path through these options, and writes to
+ * `workflows/dist-external/` rather than to `workflows/dist/` — a
+ * separate directory rather than a flag on the same one, so the
+ * artifact that absorbed an environment and the artifact that could
+ * not are never the same file.
+ *
+ * The failure this shape is set against is written up in
+ * `~/.claude/skills/codegen-env-defaults-not-process-env/SKILL.md`,
+ * a user-level skill rather than one vendored under `.claude/`
+ * here — which is why the argument is carried above rather than
+ * left to the link.
+ *
  * A chain rather than one merged object, because the sources are
  * walked rather than layered. Which entries count as answers is
  * the resolver's rule, and merging here would settle that question
