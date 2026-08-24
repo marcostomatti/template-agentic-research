@@ -78,6 +78,26 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * on how precise every schedule in the system can be — a row
    * asking for five minutes gets whatever this grants.
    *
+   * Hourly rather than quarter-hourly, and the floor argument above
+   * is why that needed deciding rather than defaulting. A tick is not
+   * free: the dispatcher exists to invoke the downstream workflows,
+   * and from phase 6 those make paid model calls, so four ticks an
+   * hour is four times the spend for the same rows coming due. A
+   * schedule is acquired cheaply — one expression, in one field, on
+   * one trigger — and then charged once per tick for as long as
+   * nobody looks at it, which is the asymmetry this default is set
+   * against. Nothing a tick reaches today makes such a call; the
+   * targets arrive in phases 5 and 6. Choosing the cadence before
+   * the first bill rather than after it is the point.
+   *
+   * A rate, not a ceiling. Ticking hourly bounds how often spending
+   * can start and says nothing about what one pass costs:
+   * `AR_DISPATCH_BATCH_CAP` below bounds the rows a pass claims, and
+   * the per-run ceilings the model-holding workflows carry from
+   * phase 6 bound what each claimed row spends. An operator wanting
+   * finer timing changes one value here, and takes on the bill that
+   * comes with it.
+   *
    * Five fields, matching the form the schedule trigger's
    * `cronExpression` field takes.
    */
