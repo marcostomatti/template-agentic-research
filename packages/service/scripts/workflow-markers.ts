@@ -590,3 +590,124 @@ export class SpliceableLibError extends Error {
     this.form = form;
   }
 }
+
+/**
+ * One dependency a transpiler scan reports.
+ */
+export interface LibScanImport {
+  /**
+   * The form the dependency is written in, `import-statement` for a
+   * static import.
+   */
+  readonly kind: string;
+
+  /** The specifier, exactly as the source wrote it. */
+  readonly path: string;
+}
+
+/**
+ * What a transpiler scan answers about one library source.
+ *
+ * The shape `Bun.Transpiler.scan` returns, declared structurally
+ * rather than taken from bun's own types — so nothing on the
+ * resolution path depends on which bun types are installed, and a
+ * case hands over a recorded answer instead of building a
+ * transpiler it cannot reach from a vitest worker.
+ *
+ * Only `imports` is read here. `exports` is carried because a scan
+ * returns it and a caller passing one along should not have to take
+ * it apart first; what a library DECLARES is decided over the
+ * transpiled text by `stripDeclarationExports`, arriving later in
+ * this stage.
+ */
+export interface LibScan {
+  /** Every name the source exports, `default` included as a name. */
+  readonly exports: readonly string[];
+
+  /**
+   * Every dependency left once type-only imports have erased. A
+   * re-export counts as one: `export * from './x.js'` scans as an
+   * import statement, being a dependency wearing an export keyword.
+   */
+  readonly imports: readonly LibScanImport[];
+}
+
+/** A transpiled library, with what the scan said about it. */
+interface TranspiledLib {
+  /** The library with its types erased and its exports kept. */
+  readonly transpiled: string;
+
+  /** What the transpiler's scan reported for it. */
+  readonly scan: LibScan;
+}
+
+/** One form a library is refused for. */
+interface SpliceRefusal {
+  /**
+   * The form the refusal names, carried onto
+   * {@link SpliceableLibError.form} so a case asserts on which rule
+   * caught the library rather than only that something did.
+   */
+  readonly form: string;
+
+  /** Whether a library in this state carries the form. */
+  readonly refuses: (lib: TranspiledLib) => boolean;
+}
+
+/**
+ * The forms a library is refused for, in the order they are tried.
+ *
+ * A roster rather than a run of conditions because the order is a
+ * decision rather than an accident: the first entry that matches
+ * settles what the refusal NAMES, and one library can carry two
+ * forms at once. The remaining entries — the re-export forms a
+ * leading keyword cannot be stripped from — arrive next in this
+ * stage, ahead of this one.
+ *
+ * A dependency is the entry here. A Code node is not a module: it
+ * resolves no specifier, so an import that survived the transpile
+ * fails on the node's first execution rather than at build time,
+ * which is what this refusal moves. The scan is the authority for
+ * it rather than the text, because a type-only import erases before
+ * the scan sees it — so a library depending on nothing but types is
+ * spliceable and reads, in its source, exactly like one that is
+ * not.
+ */
+const SPLICE_REFUSALS: readonly SpliceRefusal[] = [
+  {
+    form: 'import',
+    refuses: ({ scan }) => scan.imports.length > 0,
+  },
+];
+
+/**
+ * Refuse a library that cannot stand alone in a Code node.
+ *
+ * Returns nothing when the library is spliceable, which is every
+ * case the build carries on from. The refusal is the whole output:
+ * a library reaching this point has already been read and
+ * transpiled, and what remains is whether pasting it into a node
+ * body would produce something that runs.
+ *
+ * @param transpiled - The library with its types erased, as
+ *   `transformSync` returned it.
+ * @param scan - What the transpiler's scan reported for the same
+ *   source.
+ * @param libPath - The library as the `__INLINE:<path>__` marker
+ *   named it, so the refusal points at a file rather than at a
+ *   fragment of text.
+ * @throws SpliceableLibError When the library carries a form a Code
+ *   node cannot run — today, a dependency that survived the
+ *   transpile.
+ */
+export function assertSpliceable(
+  transpiled: string,
+  scan: LibScan,
+  libPath: string,
+): void {
+  for (const refusal of SPLICE_REFUSALS) {
+    if (refusal.refuses({ transpiled, scan })) {
+      throw new SpliceableLibError(libPath, refusal.form);
+    }
+  }
+}
