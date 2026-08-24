@@ -33,11 +33,11 @@
  * holds the tallies that pass returns and the row counts either side
  * of it against what the files carry.
  *
- * Two guards sit ahead of each case's comparisons and neither is
- * decoration. No file schema carries a non-empty floor, so a `data/`
- * whose every file held an empty list loads clean and a pass over it
- * creates nothing — against an expectation derived from those same
- * files, which expects nothing. The roster count in front of that
+ * Two guards sit ahead of the comparisons in both of those cases and
+ * neither is decoration. No file schema carries a non-empty floor, so
+ * a `data/` whose every file held an empty list loads clean and a pass
+ * over it creates nothing — against an expectation derived from those
+ * same files, which expects nothing. The roster count in front of that
  * guard is what keeps it honest: an emptied roster leaves it nothing
  * to filter, and an empty list equals an empty list whatever the files
  * hold.
@@ -51,14 +51,39 @@
  * an identity between two row counts is satisfied by two zeros, so the
  * count taken after the first pass is held against the rows the bundle
  * carries before the repeat is asked for.
+ *
+ * Every one of those comparisons is over a count, though, and a count
+ * cannot see inside a row: a pass that created each row the bundle
+ * names and left every payload empty satisfies the tallies and the row
+ * counts alike. The third case reads a payload back — the verdict
+ * vocabulary `data/domains.json` states for `example-tech-radar` — and
+ * holds it against `DEFAULT_VERDICT_VOCABULARY` in
+ * `src/db/schema/values.ts` rather than against the file the pass was
+ * handed, so its two sides are two artifacts and not one file compared
+ * with itself. Nothing in the database holds either to the other:
+ * `finding_labels.verdict` carries no CHECK, deliberately, because the
+ * ladder is a per-domain setting a domain is entitled to rename.
+ *
+ * Three decisions in it are worth naming. The constant is a
+ * `readonly string[]` with no floor under it and the seed writes the
+ * same four out by hand, so a list emptied on both sides compares
+ * equal and the non-empty guard in front is the only thing between
+ * that state and a green case. The slug is written out rather than
+ * read off the bundle, since read off it makes the case about
+ * whichever domain the bundle happens to carry. And the row is read
+ * back under that slug before its vocabulary is: the example renamed
+ * across `data/` loads clean and seeds under the new slug, which
+ * otherwise leaves the comparison with nothing to read and reports as
+ * the setting having gone missing, where what moved is the row.
  */
 import type { SeedBundle, SeedRowCounts } from '../../scripts/seed.js';
 import type { Pool } from 'pg';
 
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 
 import { applySeedBundle, loadSeedBundle, SEED_ROSTER } from '../../scripts/seed.js';
+import { DEFAULT_VERDICT_VOCABULARY } from '../../src/db/schema/values.js';
 import { categories, domains, personas, terms, topics } from '../../src/db/schema.js';
 
 import {
@@ -77,6 +102,17 @@ import {
  * to it is one this file covers rather than one it never hears about.
  */
 const SEED_CONCERNS = Object.keys(SEED_ROSTER) as (keyof typeof SEED_ROSTER)[];
+
+/**
+ * The domain `data/domains.json` seeds, written out here rather than
+ * read off the bundle.
+ *
+ * Read off, the case below asks about whichever domain the bundle
+ * happens to carry. Written out, it asks about the worked example this
+ * package ships — the same row today, and a claim that survives a
+ * second domain being seeded beside it.
+ */
+const EXAMPLE_DOMAIN_SLUG = 'example-tech-radar';
 
 /**
  * What the seeded tables hold before a first pass: no rows, a concern
@@ -310,5 +346,43 @@ describeLivePg('seed apply pass (live Postgres)', () => {
     // rewrote every row in place, which moves each `updated_at` and no
     // count anywhere.
     expect(await storedRowCounts(db)).toStrictEqual(afterFirst);
+  });
+
+  it('stores the default verdict vocabulary in the example domain settings', async () => {
+    // The constant the comparison below is against, held to having
+    // members. It is a `readonly string[]` with no floor under it and
+    // the seed writes the same four out by hand, so a list emptied on
+    // both sides compares equal, and every assertion after this one
+    // then holds for a domain configured with no verdicts at all.
+    expect(DEFAULT_VERDICT_VOCABULARY.length).toBeGreaterThan(0);
+
+    await applySeedBundle(db, loadSeedBundle());
+
+    // Read back as lists rather than as a row, so the count comes with
+    // each member: a domain the pass never wrote reports as a list
+    // that came back empty, where a destructured row would yield
+    // undefined and die on a property access instead of on a claim.
+    const stored = await db.select({
+      slug: domains.slug,
+      settings: domains.settings,
+    })
+      .from(domains)
+      .where(eq(domains.slug, EXAMPLE_DOMAIN_SLUG));
+
+    // The precondition first. The example renamed across `data/` loads
+    // clean and seeds a domain under the new slug, which leaves the
+    // vocabulary below read off nothing — and reddens that comparison
+    // as the setting having gone missing, where what moved is the row.
+    // The wrong diagnosis, in the one place a reader would act on it.
+    expect(stored.map((row) => row.slug)).toStrictEqual([EXAMPLE_DOMAIN_SLUG]);
+
+    // Two artifacts, neither derived from the other: the stored list
+    // came out of `data/domains.json` through the pass, the
+    // expectation out of `src/db/schema/values.ts`, and the seed is
+    // held to the constant nowhere else. Compared in ORDER, which
+    // `toStrictEqual` over two arrays does, because a vocabulary is a
+    // ladder rather than a set.
+    expect(stored.map((row) => row.settings.verdictVocabulary))
+      .toStrictEqual([DEFAULT_VERDICT_VOCABULARY]);
   });
 });
