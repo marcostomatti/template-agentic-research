@@ -47,13 +47,19 @@
  * and they have to, since that guard refuses from three separate
  * branches and two of them share a HINT.
  *
- * The accepted write beside them is what says where the guard stops. A
- * rule that refused every category, or one that silently dropped what
- * it was handed, reddens those two in their SETUP rather than in an
- * assertion, where a rejected query and a missing row both read as a
- * broken test and not as a finding. So the shape a taxonomy is mostly
- * made of is asserted on its own rather than left standing as their
- * precondition.
+ * An accepted write sits beside each set of refusals, and it is what
+ * says where a rule stops. A guard that refused every category, or one
+ * that silently dropped what it was handed, reddens the depth cases in
+ * their SETUP rather than in an assertion, where a rejected query and
+ * a missing row both read as a broken test and not as a finding. So
+ * the shape a taxonomy is mostly made of is asserted on its own rather
+ * than left standing as their precondition.
+ *
+ * The approval pair's accepted write answers a second question the
+ * depth one cannot. It is the same UPDATE its refusal watched
+ * rejected, aimed at a row that differs only in carrying an approval,
+ * so accepting it is what pins that refusal to the row's state rather
+ * than to the statement — which a refusal on its own cannot say.
  */
 import type { Pool } from 'pg';
 
@@ -365,5 +371,76 @@ describeLivePg('schema migrations (live Postgres)', () => {
     const { cause } = failure as { cause?: DriverError };
     expect(cause?.code).toBe('23514');
     expect(cause?.constraint).toBe('research_pool_approval_check');
+  });
+
+  it('accepts stamping researched_at once approved_at is set', async () => {
+    // Where `research_pool_approval_check` stops — and, unlike the
+    // root-category case above, a state-removal control as well. This
+    // is the identical UPDATE the case before it watched refused,
+    // aimed at a row differing only in carrying an approval, so
+    // accepting it here is what pins that refusal to the row's STATE
+    // rather than to the act of writing the column. A rule refusing
+    // every write of `researched_at` whatever else the row held would
+    // have reddened nothing above.
+    //
+    // The approval is a separate UPDATE rather than a column set at
+    // the insert, so the two cases differ by one statement instead of
+    // by how the row arrived. The CHECK reads the whole NEW row on
+    // every write either way, so what it admits here is the pair it
+    // refused above with one member filled in.
+    //
+    // The returned row is the assertion for the reason the
+    // root-category case records, though not for its mechanism: no
+    // CHECK cancels a write in silence, but an UPDATE whose WHERE
+    // matches nothing resolves exactly like one that wrote, so
+    // awaiting the call passes over a setup that never landed. Both
+    // timestamps come back because the state admitted is the pair
+    // rather than either half of it.
+    //
+    // What it does not say is that the constraint is installed, for
+    // that case's reason about its own guard: a table carrying no such
+    // rule takes this pair too. Only the refusal above tells the two
+    // apart.
+    const [domain] = await db.insert(domains)
+      .values({ slug: 'approval-gate-closed', name: 'Approval gate (closed)' })
+      .returning({ id: domains.id });
+    const [queued] = await db.insert(researchPool)
+      .values({ domainId: domain.id })
+      .returning({ id: researchPool.id });
+
+    // Two distinct instants rather than one reused clock reading. Each
+    // column is read back to the value its OWN statement wrote, so a
+    // write landing in the wrong column fails here instead of
+    // matching.
+    const approvedAt = new Date('2026-03-01T09:00:00.000Z');
+    const researchedAt = new Date('2026-03-02T09:00:00.000Z');
+
+    const approved = await db.update(researchPool)
+      .set({ approvedAt })
+      .where(eq(researchPool.id, queued.id))
+      .returning({ approvedAt: researchPool.approvedAt });
+
+    // The approval, read back rather than assumed. An UPDATE matching
+    // no row resolves like one that wrote, so without this the close
+    // below runs against a row still open and is refused — a red
+    // reporting the CHECK as gone when what failed was this statement.
+    // Read as the whole returned list for the same reason:
+    // destructuring an empty one yields undefined and the case dies on
+    // a property access instead of on an assertion.
+    expect(approved).toStrictEqual([{ approvedAt }]);
+
+    const closed = await db.update(researchPool)
+      .set({ researchedAt })
+      .where(eq(researchPool.id, queued.id))
+      .returning({
+        approvedAt: researchPool.approvedAt,
+        researchedAt: researchPool.researchedAt,
+      });
+
+    // One row, holding both stamps. The count says the UPDATE reached
+    // the row rather than none, and the pair is the state the CHECK
+    // admitted: `approved_at` still where the approval put it,
+    // `researched_at` now beside it.
+    expect(closed).toStrictEqual([{ approvedAt, researchedAt }]);
   });
 });
