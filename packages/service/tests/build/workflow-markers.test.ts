@@ -117,7 +117,7 @@
  * still transpiles and still splices, so the build has no second
  * chance to notice.
  *
- * The last three subjects are the whole marker pass rather than
+ * The last four subjects are the whole marker pass rather than
  * one rule inside it. `resolveMarkers` is what a build hands a
  * parsed source to, so each of them hands over a template — a
  * source-shaped object with the marker buried where a node buries
@@ -141,13 +141,13 @@
  * resolve. Reading that library's body back is the single case
  * there that reddens for a pass refusing whatever it is handed.
  *
- * The last is a library marker naming a path outside the directory
- * the build inlines from: one absolute, one walking out with a `..`
- * segment. Both are that same live marker with an escape written in
- * front of the path, so the prefix is the whole of what parts a
- * refused marker from a resolved one — and resolving the path with
- * nothing in front of it is what says the section is not simply
- * refusing whatever it is handed.
+ * The second is a library marker naming a path outside the
+ * directory the build inlines from: one absolute, one walking out
+ * with a `..` segment. Both are that same live marker with an
+ * escape written in front of the path, so the prefix is the whole
+ * of what parts a refused marker from a resolved one — and
+ * resolving the path with nothing in front of it is what says the
+ * section is not simply refusing whatever it is handed.
  *
  * Those refusals are read as the class and its two fields, and not
  * for the reason the retired ones are. Nothing further on re-checks
@@ -165,9 +165,9 @@
  * directory and asks whether it stayed underneath — beside the
  * accepted path, which does.
  *
- * The last of the three is the walk underneath all of it, and the
- * only subject here that reads what the pass RETURNED rather than
- * what it refused. Its template is the multi-depth one out of
+ * The third is the walk underneath all of it, and the first of
+ * the two here that read what the pass RETURNED rather than what
+ * it refused. Its template is the multi-depth one out of
  * `marker-fixtures.ts`: markers at four depths, the deepest of
  * them under two arrays, beside values carrying no marker at all.
  * A pass that resolved the shallow markers and never descended
@@ -181,6 +181,26 @@
  * null walked as an object, a number handed to a string function:
  * neither touches a marker either, so the values carrying none are
  * read back whole.
+ *
+ * The last is the ORDER the pass runs its two replacements in,
+ * which every case above is silent about. It runs over that same
+ * multi-depth template, at the one site writing a library marker
+ * and a setting marker at once. The library inlined there brings
+ * a setting marker of its own, and the workflow source writes
+ * none for that setting — so a resolved value for it in the
+ * spliced body arrived through the library and could have
+ * arrived no other way. Nothing re-scans what a replacement
+ * inserts, so what answers such a marker is not nesting but
+ * sequence: run the two passes the other way round and it is
+ * still standing.
+ *
+ * Its guard is about the fixtures rather than about the pass,
+ * and has to be. The claim is that a marker stopped being there,
+ * and a library that never carried one satisfies that reading
+ * whole. The chain it resolves against answers that setting with
+ * a value no `ENV_DEFAULTS` entry carries, since the table
+ * stands at the foot of every chain and would otherwise resolve
+ * the marker just as convincingly.
  */
 import type { LibSample, MarkerSite } from './marker-fixtures.js';
 import type { EnvSource, LibLoader } from '../../scripts/workflow-markers.js';
@@ -1947,7 +1967,7 @@ const TEMPLATE_LIB_SAMPLE = sampleById(
 );
 
 /**
- * The loader every call in this section is made with.
+ * The loader the calls in the two sections below are made with.
  *
  * A second one beside {@link FIXTURE_LOADER} rather than a widening
  * of it: the template below inlines a different library, and a
@@ -2251,5 +2271,225 @@ describe('resolveMarkers — a marker buried under arrays and objects', () => {
     ));
 
     expect(inertValuesIn(resolveMarkerTemplate())).toEqual(recorded);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A setting marker a library brought in with it
+// ---------------------------------------------------------------------------
+
+/**
+ * The site the marker roster carries under one id.
+ *
+ * A lookup rather than a path written out here, for the reason
+ * {@link sampleById} is one: what a case reads back is then the
+ * site the roster in `marker-fixtures.ts` declares. A path copied
+ * out would go on reading a string after a node had been inserted
+ * above it, and would report whatever it found in its place.
+ *
+ * @param id - The site wanted out of the roster.
+ * @returns The site carrying that id.
+ */
+function siteById(id: string): MarkerSite {
+  const site = MARKER_TEMPLATE_SITES.find((candidate) => candidate.id === id);
+
+  if (site === undefined) {
+    const held = MARKER_TEMPLATE_SITES.map((entry) => entry.id).join(', ');
+
+    throw new Error(
+      `No site in marker-fixtures.ts carries the id ${JSON.stringify(id)}. `
+      + `The roster holds: ${held}.`,
+    );
+  }
+
+  return site;
+}
+
+/**
+ * The one site in the template writing both marker kinds at once.
+ *
+ * Its string inlines a library and writes a setting marker beside
+ * it, which is what makes it the only place in the template where
+ * the order of the two replacements leaves a trace.
+ */
+const SPLICE_ORDER_SITE = siteById('both-marker-kinds');
+
+/**
+ * The setting the library brings in with it.
+ *
+ * Spelled here and tied to the library body by the guard below
+ * rather than read off a fixture field, because no field carries
+ * it: that tie is the whole of what says the two are about one
+ * marker.
+ */
+const SPLICED_SETTING = 'AR_BUILD_TAG';
+
+/** The marker form {@link SPLICED_SETTING} is written in. */
+const SPLICED_MARKER = `__ENVVAR:${SPLICED_SETTING}__`;
+
+/**
+ * What the chain below answers {@link SPLICED_SETTING} with.
+ *
+ * A value `ENV_DEFAULTS` does not carry, because the table stands
+ * at the foot of that chain: a pass reading it rather than the
+ * source in front of it resolves this marker either way, and the
+ * value is the only thing telling the two apart.
+ */
+const SPLICED_SETTING_VALUE = 'tag-the-library-brought';
+
+/**
+ * The setting the workflow source writes at that same site.
+ *
+ * One contested name to each side, so the resolved body says which
+ * of the two wrote each value in it and no case has to take that
+ * on trust.
+ */
+const SOURCE_SETTING = 'AR_DISPATCH_BATCH_CAP';
+
+/** The marker form {@link SOURCE_SETTING} is written in. */
+const SOURCE_MARKER = `__ENVVAR:${SOURCE_SETTING}__`;
+
+/** What the chain below answers {@link SOURCE_SETTING} with. */
+const SOURCE_SETTING_VALUE = 'cap-the-source-wrote';
+
+/**
+ * The chain this section resolves against.
+ *
+ * One source carrying the two contested names, with `ENV_DEFAULTS`
+ * behind it for every other marker the template writes. A chain
+ * holding those two alone would refuse the template at the first
+ * setting neither of them names, before either was reached.
+ */
+const SPLICE_ORDER_CHAIN: readonly EnvSource[] = [
+  {
+    [SPLICED_SETTING]: SPLICED_SETTING_VALUE,
+    [SOURCE_SETTING]: SOURCE_SETTING_VALUE,
+  },
+  ENV_DEFAULTS,
+];
+
+/**
+ * The library's one declaration, assigning whatever is handed in.
+ *
+ * The body the fixtures record and the body this section expects
+ * are that same declaration, apart in nothing but what sits
+ * between the quotes — so it is written once and the guard below
+ * reads the recorded one back through it. A library re-measured
+ * into some other shape fails there, rather than leaving the
+ * claim quoting a splice no build makes.
+ *
+ * Written out rather than derived from the recorded body by
+ * replacing the marker in it, for the reason that body is written
+ * out in `marker-fixtures.ts`: a derived one would be the
+ * replacement under test restated, and would agree with it
+ * whatever it became.
+ *
+ * @param value - What the declaration assigns.
+ * @returns The declaration, newline-terminated.
+ */
+function libBodyAssigning(value: string): string {
+  return `const BUILD_TAG = "${value}";\n`;
+}
+
+/**
+ * Run the whole marker pass over the template, against the chain
+ * this section contests.
+ *
+ * A second call beside {@link resolveMarkerTemplate} rather than a
+ * parameter on it. Handing a chain over is the whole of what this
+ * section is about, and resolving with none is as much of what the
+ * section above is about.
+ *
+ * @returns The template, with every marker the pass recognizes
+ *   replaced.
+ */
+function resolveAgainstContestedChain(): unknown {
+  return resolveMarkers(markerTemplate(), {
+    loadLib: TEMPLATE_LOADER,
+    sources: SPLICE_ORDER_CHAIN,
+  });
+}
+
+/**
+ * The node body at {@link SPLICE_ORDER_SITE}, out of whichever
+ * tree is handed over.
+ *
+ * @param root - The tree to read, a fresh template or a resolved
+ *   one.
+ * @returns The string that site holds.
+ */
+function splicedBodyIn(root: unknown): string {
+  return String(valueAtPath(root, SPLICE_ORDER_SITE.path));
+}
+
+describe('resolveMarkers — a setting marker a library brought in', () => {
+  // The fixture guard, and the three things about this pair that
+  // no claim below can read off the pass. Every line of it reads
+  // the fixtures and the shipped table and none of it calls the
+  // pass, so it stands where it is whichever order the two
+  // replacements turn out to run in.
+  //
+  // The library first. The claim below is that a setting marker
+  // stopped being there, and a library body that never carried
+  // one satisfies that reading exactly as a resolved body does.
+  // Read as the whole body rather than as a count, so a library
+  // re-measured into a different declaration fails here instead
+  // of leaving the claim quoting text no splice produces.
+  //
+  // Then the workflow source, which must write no marker for that
+  // setting itself. It writes one for a different setting, and
+  // that is the point of contesting two names: were they one
+  // name, a resolved value in the spliced body would say nothing
+  // about which of the two put it there.
+  //
+  // Last the value the chain answers with, held apart from what
+  // `ENV_DEFAULTS` carries. The table is the foot of that chain,
+  // so a pass reading it rather than the source in front of it
+  // resolves the marker either way.
+  it('is asked about a library bringing a marker the source does not', () => {
+    const carried = splicedBodyIn(markerTemplate());
+
+    expect(TEMPLATE_LIB_SAMPLE.stripped).toBe(libBodyAssigning(SPLICED_MARKER));
+    expect(occurrencesIn(carried, SPLICED_MARKER)).toBe(0);
+    expect(carried).toContain(SOURCE_MARKER);
+    expect(ENV_DEFAULTS[SPLICED_SETTING]).not.toBe(SPLICED_SETTING_VALUE);
+  });
+
+  // The claim, and the only thing in this file about the order the
+  // pass runs its two replacements in. Nothing re-scans what a
+  // replacement inserts, so what answers a marker sitting inside a
+  // library body is not nesting but sequence: settings resolution
+  // walks the string inlining returned.
+  //
+  // Read as the resolved declaration rather than as an absence.
+  // The site writes no marker for this setting, so a pass that
+  // resolved nothing at all leaves a body carrying none either,
+  // and a case reading only that the marker had gone is green for
+  // it — while a body holding the declaration with the value in
+  // it can have got there no way but through the splice.
+  //
+  // Run the two the other way round and the marker is still
+  // standing: settings resolution sees the source's own string,
+  // which does not carry it, and the library is spliced in
+  // afterwards with its marker intact.
+  it('resolves a setting marker written inside a library body', () => {
+    const spliced = splicedBodyIn(resolveAgainstContestedChain());
+
+    expect(spliced).toContain(libBodyAssigning(SPLICED_SETTING_VALUE));
+    expect(occurrencesIn(spliced, SPLICED_MARKER)).toBe(0);
+  });
+
+  // The sibling that says what a failure above is about, and the
+  // reason it is a case of its own rather than a line inside that
+  // one. It resolves the marker the workflow source wrote at the
+  // same site, out of the same chain and in the same call, so it
+  // holds under the ordering the claim exists to refuse. The two
+  // failing together says settings resolution stopped somewhere
+  // rather than that the two replacements ran the wrong way round.
+  it('answers the marker the source wrote from that same chain', () => {
+    const spliced = splicedBodyIn(resolveAgainstContestedChain());
+
+    expect(spliced).toContain(SOURCE_SETTING_VALUE);
+    expect(occurrencesIn(spliced, SOURCE_MARKER)).toBe(0);
   });
 });
