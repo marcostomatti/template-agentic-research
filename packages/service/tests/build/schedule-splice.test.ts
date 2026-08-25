@@ -2,16 +2,22 @@
  * What a build makes of a LIBRARY. One workflow source whose node
  * body writes `__INLINE:schedule.ts__`, put through the command an
  * operator runs, over a tree carrying the package's own `src/lib/`.
- * Two things are read back off the artifact: the clamp's body is in
- * the node, and the module boundary it was declared behind is not.
+ * Two things are read back off the artifact — the clamp's body is
+ * in the node, and the module boundary it was declared behind is
+ * not — and a third is RUN rather than read: the spliced copy,
+ * constructed with `new Function` and handed the globals a Code
+ * node is given, answers the rows of the shared case table exactly
+ * as the copy this suite imports does.
  *
  * The rules underneath a splice are claimed elsewhere and against
  * arguments alone — `workflow-markers.test.ts` drives the refusal
  * and the strip over recorded transpiler output, and
- * `schedule.test.ts` drives the clamp over a case table. What is
- * left to this file is the one seam neither reaches: a real
- * transpile of a real library, inlined at a real marker, landing in
- * a node body.
+ * `schedule.test.ts` drives the imported clamp over the same rows
+ * in `tests/lib/schedule-cases.ts` that the `new Function` section
+ * here drives the spliced one over. What is left to this file is
+ * the one seam neither reaches: a real transpile of a real library,
+ * inlined at a real marker, landing in a node body and running
+ * there.
  *
  * A spawned command rather than a `buildAll` call, and the LAUNCHER
  * decides that rather than a preference between two shapes. The
@@ -42,13 +48,13 @@
  * package builds no library at all and a fixture tree is the only
  * place one is put through the shipped command.
  *
- * The two claims are one subject read from both ends, and neither
- * stands alone. A node body that came back empty carries no export
- * keyword either, so the strip claim rests on the body claim beside
- * it; and a body that arrived with its keywords on is a body that
- * reached the node, so the body claim would hold for a build that
- * had skipped the strip entirely. What each rules out is the other
- * one passing for the wrong reason.
+ * The two claims read off the artifact are one subject read from
+ * both ends, and neither stands alone. A node body that came back
+ * empty carries no export keyword either, so the strip claim rests
+ * on the body claim beside it; and a body that arrived with its
+ * keywords on is a body that reached the node, so the body claim
+ * would hold for a build that had skipped the strip entirely. What
+ * each rules out is the other one passing for the wrong reason.
  *
  * What the export detector cannot tell apart is a keyword from the
  * same word inside a string literal or a comment. Neither is
@@ -65,10 +71,43 @@
  * through its escaping, and a workflow's own prose — a sticky note,
  * a node name — would answer for the node body it is not.
  *
- * What a node makes of that body, driving the spliced copy through
- * `new Function` against the same case table the imported copy is
- * driven over, arrives later in this stage.
+ * The `new Function` section is what a node MAKES of that body.
+ * Reading the artifact says the clamp is in the node; running it
+ * says the build did not change what the clamp does on the way
+ * there. That is the whole of what the comparison can say, and it
+ * is worth being exact about: the two copies come from one file, so
+ * they cannot disagree about the RULE. What sits between them is
+ * the transpile and the strip, and a row they part on is a build
+ * that rewrote the arithmetic rather than a library that drifted.
+ * Whether the answers are the RIGHT ones is a different question,
+ * and `tests/lib/schedule.test.ts` is where the table's recorded
+ * column is what the imported copy is held against.
+ *
+ * That section carries two guards, one for each way agreement can
+ * be had cheaply. Two copies that both returned their first
+ * argument agree on every row of a table that clamps nothing, so
+ * the first guard reads the imported copy and asks that these rows
+ * include ones it raises, ones it lowers and ones it leaves alone.
+ * A node handed a recorded answer could read one back rather than
+ * call anything, so the second asks what the items carry: a
+ * proposal, the bounds to judge it against, and nothing else.
+ *
+ * What the run comes nearest to without reaching is the third rule
+ * a spliceable library obeys — that nothing may rely on module
+ * scope, which `assertSpliceable` cannot see. Measured inside a
+ * worker of this package, `new Function` supplies neither `require`
+ * nor `module`, exactly as a Code node does not: an `import.meta`
+ * is refused when the function is CONSTRUCTED, whether or not a row
+ * ever reaches that line, while a `require` raises only when its
+ * line is reached, so a row exercising that path is what would see
+ * it. Module-level STATE is invisible in both contexts and stays
+ * so — it lives as long as the worker that imported the library
+ * here and as long as one execution there, and nothing reports the
+ * difference.
  */
+import type { IntervalBounds } from '../../src/lib/schedule.js';
+import type { ClampCase } from '../lib/schedule-cases.js';
+
 import { spawnSync } from 'node:child_process';
 import {
   cpSync,
@@ -83,6 +122,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterAll, describe, expect, it } from 'vitest';
+
+import { clampIntervalSeconds } from '../../src/lib/schedule.js';
+import { CLAMP_CASES } from '../lib/schedule-cases.js';
 
 import { valueAtPath } from './marker-fixtures.js';
 
@@ -210,14 +252,39 @@ const BODY_SITE: readonly (string | number)[] = [
 ];
 
 /**
+ * The lines the fixture's node body writes under the marker: a Code
+ * node's own work, over the library the marker put above it.
+ *
+ * Reads the items the node was handed, clamps each row's proposal
+ * against the bounds that row carries, and emits the answer beside
+ * the id it came in with. Written against `$input` and against the
+ * fields {@link CLAIMED_ROW_FIELDS} names and nothing else — the
+ * case table's recorded answer is not among them, so there is no
+ * column here for a body to read back instead of computing.
+ *
+ * A `const` rather than lines inside the source builder, so
+ * {@link runSplicedNode} and the claims it serves can name the same
+ * text this is written as.
+ */
+const NODE_WORK = [
+  'return $input.all().map((item) => ({',
+  '  json: {',
+  '    id: item.json.id,',
+  `    answer: ${CLAMP_NAME}(item.json.intervalSeconds, item.json.bounds),`,
+  '  },',
+  '}));',
+].join('\n');
+
+/**
  * A source-shaped object whose one node body opens with a marker.
  *
  * Shaped like a workflow source without being one: the build reads
  * no node type and no connection, so what matters is that a string
- * sits where a node body sits. What follows the marker is a
- * `return`, because that is what a Code node holding a library
- * actually looks like — the library is spliced in above the lines
- * that call it.
+ * sits where a node body sits. What follows the marker is
+ * {@link NODE_WORK}, because that is what a Code node holding a
+ * library actually looks like — the library is spliced in above the
+ * lines that call it, and those lines are what
+ * {@link runSplicedNode} drives.
  *
  * @param marker - The library marker to open the body with.
  * @returns A fresh object carrying it at {@link BODY_SITE}.
@@ -228,7 +295,7 @@ function sourceInlining(marker: string): Record<string, unknown> {
     nodes: [
       {
         name: 'Bound the batch',
-        parameters: { jsCode: `${marker}\n\nreturn [];\n` },
+        parameters: { jsCode: `${marker}\n\n${NODE_WORK}\n` },
       },
     ],
   };
@@ -479,5 +546,240 @@ describe('bun scripts/build-workflows.ts — a source inlining a library', () =>
   // prose cannot answer for it in either direction.
   it('carries no export keyword into that body', () => {
     expect(EXPORT_KEYWORD.test(splicedBodyOf(SPLICE_RUN))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a node makes of the body it was handed
+// ---------------------------------------------------------------------------
+
+/**
+ * The fields of a claimed row the fixture's node body is given, and
+ * the whole of them.
+ *
+ * The case table's recorded answer is deliberately outside this
+ * roster. A body reading a recorded column rather than calling the
+ * spliced clamp would agree with the imported copy word for word,
+ * and keeping the column out of the node's reach rules that out by
+ * construction instead of by a check somebody has to remember.
+ */
+const CLAIMED_ROW_FIELDS = ['bounds', 'id', 'intervalSeconds'] as const;
+
+/** The column a node handed one of these rows must never see. */
+const RECORDED_ANSWER_FIELD = 'expected';
+
+/** One item the harness hands over, wrapped as an executor does. */
+interface ClaimedRowItem {
+  readonly json: {
+    readonly bounds: IntervalBounds;
+    readonly id: string;
+    readonly intervalSeconds: number;
+  };
+}
+
+/** One item {@link NODE_WORK} emits: a row id and its answer. */
+interface AnsweredItem {
+  readonly json: {
+    readonly answer: unknown;
+    readonly id: string;
+  };
+}
+
+/** Sorted copy, so an equality is over members rather than order. */
+function sorted(names: readonly string[]): readonly string[] {
+  return [...names].sort();
+}
+
+/**
+ * The rows a case drives, wrapped the way an executor hands items to
+ * a node.
+ *
+ * Projected down to {@link CLAIMED_ROW_FIELDS} rather than passed
+ * whole. `bounds` arrives as the object {@link clampIntervalSeconds}
+ * takes rather than as the two columns a claimed row carries
+ * separately, which is the one place these items are shaped for the
+ * function instead of for the row — the projection the dispatcher
+ * does is its own business and no part of what this file claims.
+ *
+ * @param rows - The case-table rows to hand over.
+ * @returns One item per row, in the order given.
+ */
+function claimedRowItems(rows: readonly ClampCase[]): readonly ClaimedRowItem[] {
+  return rows.map((testCase) => ({
+    json: {
+      bounds: testCase.bounds,
+      id: testCase.id,
+      intervalSeconds: testCase.intervalSeconds,
+    },
+  }));
+}
+
+/**
+ * Run a node body the way an executor would: the globals a Code node
+ * is given, the items it was handed, and whatever it returned.
+ *
+ * `new Function` rather than an import, because the subject is a
+ * string inside an artifact rather than a module — which is also the
+ * context it is judged in. Nothing is passed in for `require` or
+ * `module`, for the reason a Code node supplies neither: measured
+ * inside a worker of this package, a body reaching for either finds
+ * nothing on the scope around it, so a library that had come to rely
+ * on module scope fails here rather than on an instance.
+ *
+ * `$input` is stubbed with the rows the caller is driving. `$` is
+ * stubbed to REFUSE: this body reads no other node, so a call
+ * reaching it is a body that grew a dependency nobody meant it to
+ * have, and a stub answering with an empty list would let that pass
+ * as a node with nothing to say.
+ *
+ * @param body - A node body, as an artifact carries it.
+ * @param items - The items to hand the node.
+ * @returns Whatever the body returned, unread.
+ */
+function runSplicedNode(body: string, items: readonly ClaimedRowItem[]): unknown {
+  const input = { all: (): readonly ClaimedRowItem[] => items };
+  const other = (node: string): never => {
+    throw new Error(
+      `The node body read the output of ${node}, which this harness `
+      + 'does not stage. The body it is given reads its own input and '
+      + 'nothing else — either that body grew a dependency, or the '
+      + 'wrong one was read off the artifact.',
+    );
+  };
+
+  return new Function('$input', '$', body)(input, other);
+}
+
+/**
+ * The answers a run's emitted items carry, keyed by the row id each
+ * came in with.
+ *
+ * A map rather than a list, so a comparison is one expression over
+ * two whole maps: it fails on a missing row as well as on a wrong
+ * number, and prints the pair. What it cannot do is fail for holding
+ * no rows at all, which is what the guards this serves are for.
+ *
+ * A body that returned something other than a list is refused here
+ * by name. Left to fall through, it would fail as a property access
+ * on whatever it was, naming neither the node nor the run.
+ *
+ * @param emitted - Whatever {@link runSplicedNode} returned.
+ * @returns One answer per emitted item, keyed by id.
+ */
+function answersById(emitted: unknown): Record<string, unknown> {
+  if (!Array.isArray(emitted)) {
+    throw new Error(
+      `The node body returned ${typeof emitted} rather than a list of `
+      + 'items. A Code node emits items — either the body read off the '
+      + 'artifact was not the one this file writes, or the splice put '
+      + 'something ahead of it.',
+    );
+  }
+
+  const items = emitted as readonly AnsweredItem[];
+
+  return Object.fromEntries(items.map((item) => [item.json.id, item.json.answer]));
+}
+
+/**
+ * What the imported copy answers, keyed the same way.
+ *
+ * @param rows - The rows to drive it over.
+ * @returns One answer per row, keyed by id.
+ */
+function importedAnswers(rows: readonly ClampCase[]): Record<string, number> {
+  return Object.fromEntries(rows.map((testCase) => [
+    testCase.id,
+    clampIntervalSeconds(testCase.intervalSeconds, testCase.bounds),
+  ]));
+}
+
+/** What a clamp can do to a proposal, and the whole of it. */
+const CLAMP_OUTCOMES = ['left alone', 'lowered', 'raised'] as const;
+
+/**
+ * Which of {@link CLAMP_OUTCOMES} the imported copy does to a row.
+ *
+ * Read off the imported function rather than off the table's
+ * recorded column, because the imported copy is what the claim
+ * compares against: what makes that comparison worth making is that
+ * this side moves some of these rows, and a reading of a column
+ * neither side of the claim consults would not say so.
+ *
+ * Total over every row, so a row the clamp leaves alone names its
+ * own shape rather than being absorbed into one of the other two.
+ *
+ * @param testCase - The row to judge.
+ * @returns What the imported copy does to its proposal.
+ */
+function clampOutcome(testCase: ClampCase): string {
+  const answer = clampIntervalSeconds(testCase.intervalSeconds, testCase.bounds);
+
+  if (answer > testCase.intervalSeconds) {
+    return 'raised';
+  }
+
+  return answer < testCase.intervalSeconds
+    ? 'lowered'
+    : 'left alone';
+}
+
+describe('new Function — the spliced clamp a Code node would run', () => {
+  // The guard the comparison in this section rests on, and the one
+  // it cannot do without: two copies that both returned their first
+  // argument agree on every row of a table that clamps nothing, so
+  // agreement is a claim only where the copy agreed with does
+  // something.
+  //
+  // Set equality against a declared roster rather than a count. The
+  // table carries more rows than there are outcomes, so the covered
+  // list is deduped first — three rows all sitting in one outcome
+  // would satisfy a count while leaving two thirds of the rule
+  // unexercised.
+  it('is compared against a copy that raises rows, lowers rows and leaves rows', () => {
+    const covered = [...new Set(CLAMP_CASES.map(clampOutcome))];
+
+    expect(sorted(covered)).toEqual(sorted([...CLAMP_OUTCOMES]));
+  });
+
+  // The second guard, and what says the node COMPUTED rather than
+  // read something back. The items it is handed carry a proposal and
+  // the bounds to judge it against, and no recorded answer — so a
+  // body that had reached for one would find nothing there.
+  //
+  // Both halves are asserted and neither implies the other: the
+  // first fails for an item shaped some other way, the second for a
+  // roster widened to admit the recorded column. It also cannot pass
+  // over no items, since an empty table leaves the field list empty
+  // and the roster is not.
+  it('hands the node a claimed row and never its recorded answer', () => {
+    const fields = [...new Set(
+      claimedRowItems(CLAMP_CASES).flatMap((item) => Object.keys(item.json)),
+    )];
+
+    expect(sorted(fields)).toEqual(sorted([...CLAIMED_ROW_FIELDS]));
+    expect(fields).not.toContain(RECORDED_ANSWER_FIELD);
+  });
+
+  // The claim. The body is the one the build wrote, constructed with
+  // `new Function` and driven over the same rows the imported copy
+  // is driven over in `tests/lib/schedule.test.ts`, and every answer
+  // is held against what that copy returns for the same row.
+  //
+  // Compared as two whole maps in one expression, so a row the node
+  // never answered for fails on the key rather than going unread.
+  //
+  // What a disagreement would mean is narrow and worth being exact
+  // about: the two copies come from one file, so they cannot differ
+  // about the RULE. What sits between them is the transpile and the
+  // strip, and a row they part on is a build that rewrote the
+  // arithmetic on the way into the node.
+  it('answers every row exactly as the imported copy does', () => {
+    const emitted = runSplicedNode(
+      splicedBodyOf(SPLICE_RUN),
+      claimedRowItems(CLAMP_CASES),
+    );
+
+    expect(answersById(emitted)).toEqual(importedAnswers(CLAMP_CASES));
   });
 });

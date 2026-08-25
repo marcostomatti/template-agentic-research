@@ -11,12 +11,15 @@
  * the same statement that claims it and so has no function to call.
  * Two expressions of one rule agree until the day they do not, and
  * driving both over the same rows is the only thing that would say
- * so. `tests/lib/schedule.test.ts` reads this table today. The other
- * two readers arrive later in this plan:
- * `tests/build/schedule-splice.test.ts`, which drives the spliced
- * copy a Code node runs, and
- * `tests/live/schedule-clamp.live.test.ts`, which drives the SQL
- * against a real Postgres.
+ * so. Two files read this table today: `tests/lib/schedule.test.ts`,
+ * which drives the imported function and holds each answer against
+ * the `expected` column, and `tests/build/schedule-splice.test.ts`,
+ * which drives the copy a Code node runs — spliced by the shipped
+ * build and constructed with `new Function` — and holds it against
+ * the imported one row for row. The third reader arrives later in
+ * this plan: `tests/live/schedule-clamp.live.test.ts`, which drives
+ * the SQL against a real Postgres, and it is the only one of the
+ * three that reads an expression written separately from this one.
  *
  * `expected` is written out per row rather than computed. A computed
  * one would be `clampIntervalSeconds` reimplemented, and a case

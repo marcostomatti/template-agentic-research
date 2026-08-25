@@ -62,9 +62,12 @@
  * {@link capBatch} therefore take everything they read as an argument
  * and keep nothing between calls. `tests/build/schedule-splice.test.ts`
  * is the nearest thing to a check on that: it puts this library through
- * the shipped build today, and the case driving the spliced copy through
- * `new Function` — which refuses an `import.meta` outright, and reaches
- * anything else only by calling it — arrives later in this stage.
+ * the shipped build and then through `new Function`, which supplies no
+ * `require` and no `module` exactly as a Code node does not. An
+ * `import.meta` is refused when that function is CONSTRUCTED, whether
+ * or not a case ever reaches the line; a `require` raises only when its
+ * line is reached, so a case table exercising that path is what would
+ * see it; and module-level state stays invisible in both contexts.
  *
  * `src/lib/` is this package's pipeline half; the framework `lib/` at the
  * package root is the fork-style copy of the service template and stays

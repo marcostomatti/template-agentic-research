@@ -758,9 +758,13 @@ const SPLICE_REFUSALS: readonly SpliceRefusal[] = [
  * library is spliced today, `src/lib/schedule.ts`, and only in
  * the tree `tests/build/schedule-splice.test.ts` builds: no
  * workflow source names a library until `ar-dispatch` lands. It
- * satisfies that third rule by hand rather than by anything
- * checking it, so nothing has needed such a check and this is
- * not where it would go.
+ * satisfies that third rule by hand, and the nearest thing to a
+ * check on it is downstream rather than here: that same file
+ * runs the spliced body under `new Function`, which supplies no
+ * `require` and no `module` and refuses an `import.meta` at
+ * construction. Reliance on module STATE gets past even that,
+ * so no complete check exists and this is still not where one
+ * would go.
  *
  * @param transpiled - The library with its types erased, as
  *   `transformSync` returned it.
