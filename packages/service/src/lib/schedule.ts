@@ -131,3 +131,49 @@ export function clampIntervalSeconds(
     ? floored
     : Math.min(floored, bounds.maxIntervalSeconds);
 }
+
+/**
+ * Take at most `cap` items off the front of a batch.
+ *
+ * The order handed in is the order kept, and the tail is what goes.
+ * `ar-dispatch` claims oldest-due first, so the rows past the cap are
+ * the least overdue ones and a capped pass is the front of the queue
+ * rather than a sample of it. The batch comes back as a new array
+ * whether or not the cap bit, so nothing a caller still holds is
+ * trimmed underneath it.
+ *
+ * A cap that is not a positive integer is refused rather than handed
+ * to `slice`, which has a plausible-looking answer for every one of
+ * them and reports none. `0` and `NaN` both come back empty, which is
+ * indistinguishable from a tick with no work due. A negative counts
+ * from the far end, so it drops that many and carries the rest — a
+ * bound that grows with the backlog it was meant to hold back. A
+ * fraction truncates, so the pass runs at a cap nobody wrote. And
+ * `Infinity` carries the lot, which is the one outcome this function
+ * exists to make impossible. None of those is exotic: the cap reaches
+ * a Code node as resolved setting text, and `Number` turns an
+ * unparseable one into `NaN` and an empty one into `0`.
+ *
+ * The refusal is a plain `Error` carrying the value it was handed
+ * rather than a class of its own. This function is spliced into a
+ * Code node, where a throw reaches an operator as its message and a
+ * constructor name crosses nothing — so the message is the whole of
+ * what gets read, and it is what a caller pins.
+ *
+ * @param items - The batch to bound, in the order it should be taken.
+ * @param cap - The most items one pass may carry.
+ * @returns A new array holding the first `cap` items at most.
+ * @throws {Error} When `cap` is not a positive integer.
+ */
+export function capBatch<T>(items: readonly T[], cap: number): T[] {
+  if (!Number.isInteger(cap) || cap <= 0) {
+    throw new Error(
+      `[schedule] batch cap must be a positive integer, not ${cap}. ` +
+      'Either AR_DISPATCH_BATCH_CAP holds a value that is not one, ' +
+      'or the text it resolved to reached here without being parsed ' +
+      'into a number.',
+    );
+  }
+
+  return items.slice(0, cap);
+}
