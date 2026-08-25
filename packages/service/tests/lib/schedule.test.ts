@@ -1,6 +1,7 @@
 /**
  * The scheduling arithmetic `ar-dispatch` applies to a row it has
- * claimed, driven over the case table beside this file.
+ * claimed: the clamp, driven over the case table beside this file,
+ * and the batch cap, driven over a roster declared inside it.
  *
  * What is covered is `clampIntervalSeconds` over a row that carries
  * no bounds at all — nothing is refused, and what comes back is what
@@ -10,8 +11,11 @@
  * `src/lib/schedule.ts` states the first pair in one breath, and the
  * rest as a contract rather than a consequence: the floor is applied
  * first and the ceiling second, and a bound the proposal does not
- * reach leaves it alone. Everything `capBatch` owes arrives later in
- * this plan.
+ * reach leaves it alone. `capBatch` is the file's second subject,
+ * and what is covered of it here is the refusal alone: a cap that
+ * is not a positive integer is turned away rather than handed on
+ * to `slice`. What it does with a cap it takes — the batch that
+ * comes back — arrives next in this plan.
  *
  * The unbounded section carries a limit, and it belongs in front of
  * its cases rather than behind them: both of its claims hold for a
@@ -41,17 +45,28 @@
  * and the sections before them are what make that an ordering
  * rather than a preference for the smaller number.
  *
- * The rows are imported rather than written here because the same
- * ones drive the SQL expression the dispatcher carries and the
+ * The cap section carries a limit of that shape one more time, and
+ * its is the starkest of the four: every claim in it is satisfied
+ * in full by a function that refuses whatever it is handed.
+ * Nothing a roster of refusals can say parts those two, so the
+ * section closes on a guard instead — one cap the rule must take,
+ * a single step from the zero it turns away — and the claims above
+ * that guard are worth exactly what it is.
+ *
+ * The clamp rows are imported rather than written here because the
+ * same ones drive the SQL expression the dispatcher carries and the
  * spliced copy a Code node runs. That makes the table a second thing
  * worth guarding: a claim written as a walk over a roster passes
- * when the roster is empty, and every claim here is such a walk.
+ * when the roster is empty, and every claim here is such a walk. The
+ * cap roster is declared in this file instead, since nothing else
+ * reads it and so it has nowhere to drift to — but it is walked the
+ * same way, and it carries a guard of its own for the same reason.
  */
 import type { ClampCase } from './schedule-cases.js';
 
 import { describe, expect, it } from 'vitest';
 
-import { clampIntervalSeconds } from '../../src/lib/schedule.js';
+import { capBatch, clampIntervalSeconds } from '../../src/lib/schedule.js';
 
 import {
   CAPPED_CLAMP_CASES,
@@ -232,7 +247,7 @@ function byId(
  * The crossed group carries bounds too and is deliberately not here:
  * every claim these three stand behind is about a bound the rule can
  * honour, and a row where it cannot honour both is a different
- * question with its own sections at the end of this file.
+ * question, with sections of its own after the three these serve.
  */
 const BOUNDED_GROUPS: Readonly<Record<string, readonly ClampCase[]>> = {
   floored: FLOORED_CLAMP_CASES,
@@ -572,5 +587,242 @@ describe('clampIntervalSeconds — a row whose two bounds cross', () => {
     );
 
     expect(answered).toEqual(byId(CROSSED_BOUND_CLAMP_CASES, (testCase) => testCase.bounds.maxIntervalSeconds));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reading the cap roster
+// ---------------------------------------------------------------------------
+
+/**
+ * One cap the rule turns away: the value, and what handing it on
+ * to `slice` would have done to a pass instead.
+ *
+ * Declared in this file rather than beside the clamp rows, which
+ * are shared with the SQL expression the dispatcher carries and
+ * with the spliced copy a Code node runs, and are guarded as a
+ * fixture in their own right for it. A cap is refused by one
+ * function in one place, so this roster has nowhere to drift to.
+ */
+interface RefusedCap {
+  /**
+   * Stable id, and what a failure names. Every claim in the cap
+   * section filters the roster and prints the ids left standing,
+   * so an offending cap is named rather than counted.
+   */
+  readonly id: string;
+
+  /**
+   * What the row stands for, which here is the answer `slice`
+   * gives for this cap — measured rather than reasoned about,
+   * since what it does with each of them is the whole of why the
+   * rule refuses instead of passing the value through.
+   */
+  readonly standsFor: string;
+
+  /** The cap itself, as a resolved setting would reach the rule. */
+  readonly cap: number;
+}
+
+/**
+ * The caps `capBatch` refuses, one row per shape of wrong.
+ *
+ * Five rows for three shapes, because `not an integer` is three
+ * separate failures and `slice` answers each of them differently:
+ * a fraction truncates to a cap nobody wrote, `NaN` comes back
+ * empty, and an infinite one carries the whole backlog. None is
+ * exotic — a cap reaches a Code node as resolved setting text, and
+ * `Number` turns an unparseable one into `NaN` and an empty one
+ * into `0`.
+ *
+ * Those answers are not themselves distinct: measured over
+ * {@link CLAIMED_BATCH}, `0` and `NaN` both come back empty. So
+ * the roster is keyed on the shape of the cap rather than on what
+ * `slice` would have produced, and {@link REFUSED_CAP_SHAPES} is
+ * what a guard holds it against.
+ */
+const REFUSED_CAPS: readonly RefusedCap[] = [
+  {
+    id: 'cap-zero',
+    standsFor: 'a cap slice answers with an empty batch',
+    cap: 0,
+  },
+  {
+    id: 'cap-negative',
+    standsFor: 'a cap slice counts from the far end of the batch',
+    cap: -1,
+  },
+  {
+    id: 'cap-fraction',
+    standsFor: 'a cap slice truncates to a whole number nobody wrote',
+    cap: 2.5,
+  },
+  {
+    id: 'cap-not-a-number',
+    standsFor: 'the cap an unparseable setting resolves to',
+    cap: Number.NaN,
+  },
+  {
+    id: 'cap-infinite',
+    standsFor: 'a cap slice takes the whole backlog under',
+    cap: Number.POSITIVE_INFINITY,
+  },
+];
+
+/**
+ * The shapes of cap the rule turns away, declared so a guard can
+ * assert set equality against them rather than count rows.
+ *
+ * A count passes for five rows all holding a fraction, which
+ * exercises one comparison five times while reading as coverage of
+ * everything the rule refuses.
+ */
+const REFUSED_CAP_SHAPES = ['zero', 'negative', 'a fraction', 'not a number', 'infinite'] as const;
+
+/**
+ * Which of {@link REFUSED_CAP_SHAPES} a cap has, or a sixth answer
+ * for one the rule would take.
+ *
+ * Total over every number rather than narrowed to the roster, so a
+ * cap that reached the roster without the property names its own
+ * shape in the failure instead of being read as a duplicate of
+ * whichever row it happened to resemble. That sixth answer is the
+ * one which cannot appear in the declared roster, so it is what a
+ * wrongly rostered cap comes back as.
+ *
+ * `NaN` is asked about ahead of finiteness because it is not
+ * finite either, and a fraction is what the last pair leaves over
+ * rather than a comparison of its own.
+ */
+function capShape(cap: number): string {
+  if (Number.isInteger(cap) && cap > 0) {
+    return 'a positive integer';
+  }
+
+  if (Number.isNaN(cap)) {
+    return 'not a number';
+  }
+
+  if (!Number.isFinite(cap)) {
+    return 'infinite';
+  }
+
+  if (cap === 0) {
+    return 'zero';
+  }
+
+  return Number.isInteger(cap)
+    ? 'negative'
+    : 'a fraction';
+}
+
+/**
+ * The batch every call in the cap section is made with.
+ *
+ * Four items rather than none, so that what `slice` would have
+ * answered for a refused cap is a prefix of a real list rather
+ * than nothing having been there to take. No claim in this section
+ * reads it — a cap is refused before the batch is touched at all —
+ * so the length is carried for the section arriving next in this
+ * plan, where what comes back is the subject.
+ */
+const CLAIMED_BATCH = ['claim-1', 'claim-2', 'claim-3', 'claim-4'] as const;
+
+/**
+ * The message `capBatch` refused a cap with, or null when it took
+ * the cap and answered.
+ *
+ * A reader rather than a helper that throws, for the reason
+ * {@link isRefused} is a predicate: a claim can filter the whole
+ * roster and name every cap that was not turned away, where a
+ * throwing helper cannot be called from inside a filter at all and
+ * a claim built on one stops at the first offender.
+ *
+ * Anything that is not an `Error` is rethrown rather than reported
+ * as a refusal. The rule throws a plain `Error` by design — it is
+ * spliced into a Code node, where a throw reaches an operator as
+ * its message and a constructor name crosses nothing — so the
+ * message is all there is to pin it by, and a reader taking
+ * whatever was thrown would report a `TypeError` raised inside
+ * `slice` as the refusal under test.
+ */
+function refusalFor(cap: number): string | null {
+  try {
+    capBatch(CLAIMED_BATCH, cap);
+
+    return null;
+  } catch (cause) {
+    if (!(cause instanceof Error)) {
+      throw cause;
+    }
+
+    return cause.message;
+  }
+}
+
+/** Whether a cap's refusal quotes the value it was handed. */
+function refusalNamesItsCap(refused: RefusedCap): boolean {
+  const message = refusalFor(refused.cap);
+
+  return message !== null && message.includes(String(refused.cap));
+}
+
+// ---------------------------------------------------------------------------
+// A cap the rule will not take
+// ---------------------------------------------------------------------------
+
+describe('capBatch — a cap that is not a positive integer', () => {
+  // The roster guard the clamp groups carry, aimed at this roster.
+  // Every claim here is a walk over it, and a walk over no rows
+  // names no offender and passes. Set equality over derived shapes
+  // rather than a count, since five rows all holding a fraction
+  // would exercise one comparison five times while reading as
+  // coverage of everything the rule refuses.
+  it('holds one cap for each shape the rule turns away', () => {
+    const covered = REFUSED_CAPS.map((refused) => capShape(refused.cap));
+
+    expect(sorted(covered)).toEqual(sorted(REFUSED_CAP_SHAPES));
+  });
+
+  // Filtered rather than asserted per row, so a failure names
+  // every cap that got through instead of stopping at the first.
+  // This is the opposite of what the clamp beside it claims: that
+  // rule answers whatever it is handed, and this one turns a cap
+  // away rather than passing it to `slice`, which has a
+  // plausible-looking answer for every value in the roster and
+  // reports none of them.
+  it('refuses every one of them', () => {
+    const taken = REFUSED_CAPS
+      .filter((refused) => refusalFor(refused.cap) === null)
+      .map((refused) => refused.id);
+
+    expect(taken).toEqual([]);
+  });
+
+  // Not a second reading of the claim above it. The refusal is a
+  // plain `Error`, so there is no class to pin it by and a bare
+  // `it threw` is green for any failure on the path — including a
+  // `TypeError` out of `slice` over an items argument that was
+  // never a list. The value quoted in the message is what parts
+  // this refusal from those, and it is also the whole of what an
+  // operator reading it on a canvas is given to work with.
+  it('names the cap it was handed in every refusal', () => {
+    const silent = REFUSED_CAPS
+      .filter((refused) => !refusalNamesItsCap(refused))
+      .map((refused) => refused.id);
+
+    expect(silent).toEqual([]);
+  });
+
+  // The guard the three claims above rest on, and the only case in
+  // this section that moves when the rule refuses EVERYTHING: a
+  // section of nothing but refusals is fully green for a function
+  // that turns away whatever it is handed, and no roster of
+  // refusals can say otherwise. A cap of 1 rather than a
+  // comfortable one, because it is a single step from the zero the
+  // roster refuses — a guard built on a cap nobody would question
+  // says nothing about where the rule is keyed.
+  it('takes the smallest cap it admits', () => {
+    expect(refusalFor(1)).toBeNull();
   });
 });
