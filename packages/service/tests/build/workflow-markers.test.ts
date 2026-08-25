@@ -73,21 +73,22 @@
  * order would be restating the claim rather than standing behind
  * it.
  *
- * The last subject is not a settings rule at all, and sits here
- * because it belongs to the same module: which libraries the build
- * will paste into a Code node. `assertSpliceable` judges a library
- * a transpiler has already been over, so its cases hand it a
- * recorded transpile-and-scan pair out of `marker-fixtures.ts` —
- * the same reason the settings cases run on arguments, a vitest
- * worker having no `Bun.Transpiler` to produce a fresh one with.
+ * The last two subjects are not settings rules at all, and sit
+ * here because they belong to the same module: which libraries the
+ * build will paste into a Code node, and what it takes off one
+ * before pasting it. Both judge a library a transpiler has already
+ * been over, so their cases hand over a recorded transpile out of
+ * `marker-fixtures.ts` — the same reason the settings cases run on
+ * arguments, a vitest worker having no `Bun.Transpiler` to produce
+ * a fresh one with.
  *
- * Its refusals need a guard the settings ones do not. The whole
- * output of that function is a throw, so every refusal case ever
- * written for it is satisfied by a version refusing whatever it is
- * handed, and a section of nothing but refusals reads green under
- * one. Each refused sample is asked beside the nearest library
- * that must be ACCEPTED, and the two differ by the thing the rule
- * is about.
+ * The refusals `assertSpliceable` makes need a guard the settings
+ * ones do not. The whole output of that function is a throw, so
+ * every refusal case ever written for it is satisfied by a version
+ * refusing whatever it is handed, and a section of nothing but
+ * refusals reads green under one. Each refused sample is asked
+ * beside the nearest library that must be ACCEPTED, and the two
+ * differ by the thing the rule is about.
  *
  * The forms refused for how a library DECLARES its names need one
  * thing the dependency form does not: the refusal has to say WHICH
@@ -96,6 +97,25 @@
  * keyword, and is measured to be both — so a case reading only that
  * something was thrown is covered by whichever rule reached it
  * first, and would stay green with the star rule deleted outright.
+ *
+ * The strip is the other half of that pair, and its cases read the
+ * way the refusals cannot: it returns a value, so each compares a
+ * whole body against a recorded `stripped` and reddens for a strip
+ * taking too little as readily as for one taking too much. What
+ * the recording cannot supply is a reason to believe there was
+ * anything to take — a sample still carrying its keyword after the
+ * strip was recorded would be satisfied by a function handing its
+ * argument straight back — so a guard reads that off the fixtures
+ * before any of the five forms is asked.
+ *
+ * Its control is the mirror of the string-literal one above and
+ * catches the opposite mistake. A library declaring a template
+ * literal that itself shows an indented `export const` carries two
+ * of them, and only the one at column one is a declaration: a
+ * replacement matching the phrase anywhere takes both, and hands
+ * back a literal holding a snippet nobody wrote. That library
+ * still transpiles and still splices, so the build has no second
+ * chance to notice.
  */
 import type { LibSample } from './marker-fixtures.js';
 import type { EnvSource } from '../../scripts/workflow-markers.js';
@@ -115,6 +135,7 @@ import {
   parseDotenv,
   readEnvFile,
   resolveEnvVar,
+  stripDeclarationExports,
 } from '../../scripts/workflow-markers.js';
 
 import {
@@ -1191,4 +1212,164 @@ describe('assertSpliceable — a library exporting in a refused form', () => {
       expect(refusedFormOf(sample)).toBe(entry.form);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Taking the keyword off a declaration the build accepted
+// ---------------------------------------------------------------------------
+
+/** One spliceable declaration form, paired to its planted sample. */
+interface DeclarationCase {
+  /** The form whose leading keyword has to come off. */
+  readonly form: string;
+
+  /** The sample in `SPLICEABLE_LIB_SAMPLES` standing for it. */
+  readonly id: string;
+}
+
+/**
+ * The five forms a leading `export ` is taken off, each paired to
+ * the library planted for it.
+ *
+ * Written out here rather than read off the samples, for the reason
+ * the refused forms are, and a guard below asserts the two agree: a
+ * fixture re-labelled to match whatever the build had started doing
+ * would carry this table along with it, leaving five cases passing
+ * about a rule nobody chose.
+ */
+const DECLARATION_CASES: readonly DeclarationCase[] = [
+  { form: 'export function', id: 'spliceable-function' },
+  { form: 'export const', id: 'spliceable-const' },
+  { form: 'export class', id: 'spliceable-class' },
+  { form: 'export let', id: 'spliceable-let' },
+  { form: 'export var', id: 'spliceable-var' },
+];
+
+/**
+ * The library kept for the other half of the rule: one declaring a
+ * template literal that itself holds an indented `export const`.
+ *
+ * The near miss the strip is likeliest to be written wrongly for.
+ * `export` is an ordinary word, and a library showing a snippet to
+ * whoever reads it carries the phrase without carrying the form. A
+ * replacement matching that phrase anywhere takes the snippet's
+ * keyword too, and the literal comes back holding something it was
+ * never written to hold — for a library that still transpiles,
+ * still splices, and reads wrongly only to whoever the snippet was
+ * for.
+ *
+ * Its `stripped` field pins both halves in one comparison: the
+ * declaration's own keyword gone, the literal's left where it was.
+ */
+const TEMPLATE_LITERAL_SAMPLE = sampleById(
+  LIB_CONTROL_SAMPLES,
+  'control-export-in-template-literal',
+);
+
+/**
+ * How many times a phrase occurs in a text.
+ *
+ * Counting rather than matching, because the guard reading it is
+ * about there being TWO of something and one of them moving.
+ * `toContain` cannot tell one occurrence from two, and a
+ * line-anchored regex would be the rule under test restated — it
+ * would move with the rule, and would agree with one that had moved
+ * wrongly.
+ *
+ * @param text - The text to count in.
+ * @param phrase - The phrase to count, matched literally.
+ * @returns How many times it occurs.
+ */
+function occurrencesIn(text: string, phrase: string): number {
+  return text.split(phrase).length - 1;
+}
+
+describe('stripDeclarationExports — the keyword on a declaration', () => {
+  // The coverage guard. These five are every sample the spliceable
+  // roster carries, so a sixth planted there with no case beside it
+  // fails rather than going untested — which is how a form added to
+  // the build's own regex arrives.
+  it('reaches every spliceable sample the fixture roster carries', () => {
+    const reached = DECLARATION_CASES.map((entry) => entry.id).sort();
+    const planted = SPLICEABLE_LIB_SAMPLES.map((sample) => sample.id).sort();
+
+    expect(reached).toEqual(planted);
+  });
+
+  // The pairing, asserted rather than assumed. Each claim below
+  // names a form in its own title and takes the sample from this
+  // table, so a sample re-labelled to stand for a different form
+  // would leave a case passing under a name that had stopped
+  // describing it.
+  it('pairs each sample to the form the fixture says it stands for', () => {
+    const planted = DECLARATION_CASES.map(
+      (entry) => sampleById(SPLICEABLE_LIB_SAMPLES, entry.id).standsFor,
+    );
+
+    expect(planted).toEqual(DECLARATION_CASES.map((entry) => entry.form));
+  });
+
+  // The guard the five claims rest on. Each compares against a
+  // recorded `stripped`, and a sample whose recording still carried
+  // the keyword would be satisfied by a function handing its
+  // argument straight back. Read with `startsWith` rather than the
+  // anchored regex the rule uses, so it says the fixture has a
+  // keyword to lose rather than restating how the rule finds one.
+  it('is asked about samples that carry a keyword to lose', () => {
+    const planted = SPLICEABLE_LIB_SAMPLES.map((sample) => sample.id);
+    const carrying = SPLICEABLE_LIB_SAMPLES
+      .filter((sample) => sample.transpiled.startsWith('export '))
+      .map((sample) => sample.id);
+    const losing = SPLICEABLE_LIB_SAMPLES
+      .filter((sample) => !sample.stripped.startsWith('export '))
+      .map((sample) => sample.id);
+
+    expect(carrying).toEqual(planted);
+    expect(losing).toEqual(planted);
+  });
+
+  for (const entry of DECLARATION_CASES) {
+    // The whole body compared, not the first line: the keyword and
+    // the space after it are the only difference the strip is
+    // allowed to make, so a replacement reshaping the declaration
+    // behind it fails here as readily as one that removed nothing.
+    it(`strips the keyword off ${entry.form}`, () => {
+      const sample = sampleById(SPLICEABLE_LIB_SAMPLES, entry.id);
+
+      expect(stripDeclarationExports(sample.transpiled)).toBe(sample.stripped);
+    });
+  }
+
+  // The guard the control rests on, and the one thing about that
+  // sample no case can read off the function: leaving a body alone
+  // is most of what the strip does, so the case below says something
+  // only while this library really carries a second `export const`,
+  // inside its literal, indented.
+  //
+  // Read by blanking the literal and counting, rather than by
+  // anchoring a regex to the start of a line. The rule's own test is
+  // the anchor, and a guard written that way would be the rule
+  // restated. Two occurrences whole and one with the literal blanked
+  // puts the second inside it; the space in front of one puts it off
+  // column one, which is what saves it.
+  it('is asked about a literal holding an indented export of its own', () => {
+    const blanked = TEMPLATE_LITERAL_SAMPLE.transpiled
+      .replace(/`[^`]*`/gu, '``');
+
+    expect(occurrencesIn(TEMPLATE_LITERAL_SAMPLE.transpiled, 'export const'))
+      .toBe(2);
+    expect(occurrencesIn(blanked, 'export const')).toBe(1);
+    expect(TEMPLATE_LITERAL_SAMPLE.transpiled).toContain(' export const');
+  });
+
+  // The control itself, and the near miss that gives the five claims
+  // above their edge: this library carries the same phrase twice and
+  // the two are told apart by where they sit. An unanchored strip
+  // passes every case above and fails here, which is the whole of
+  // what a false-positive control is for — a roster of strips can
+  // only ever say that something was removed.
+  it('leaves an indented export inside a template literal intact', () => {
+    expect(stripDeclarationExports(TEMPLATE_LITERAL_SAMPLE.transpiled))
+      .toBe(TEMPLATE_LITERAL_SAMPLE.stripped);
+  });
 });
