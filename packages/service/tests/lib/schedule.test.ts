@@ -4,12 +4,13 @@
  *
  * What is covered is `clampIntervalSeconds` over a row that carries
  * no bounds at all — nothing is refused, and what comes back is what
- * was handed in — and over a row where one of the two bounds has
- * something to say. `src/lib/schedule.ts` states the first pair in
- * one breath, and the second as a contract rather than a
- * consequence: the floor is applied first and the ceiling second,
- * and a bound the proposal does not reach leaves it alone. Two
- * bounds that CROSS, and everything `capBatch` owes, arrive later in
+ * was handed in — over a row where one of the two bounds has
+ * something to say, and over a row whose two bounds CROSS, where
+ * neither can be honoured without breaking the other.
+ * `src/lib/schedule.ts` states the first pair in one breath, and the
+ * rest as a contract rather than a consequence: the floor is applied
+ * first and the ceiling second, and a bound the proposal does not
+ * reach leaves it alone. Everything `capBatch` owes arrives later in
  * this plan.
  *
  * The unbounded section carries a limit, and it belongs in front of
@@ -28,6 +29,18 @@
  * only thing that parts the two is a row whose floor the proposal
  * already clears.
  *
+ * The crossed sections carry a limit of the same shape, and it is
+ * what makes this file worth reading whole rather than section by
+ * section: "the answer is the ceiling" is satisfied in full by a
+ * rule that answers with the LOWER of a row's two bounds, which is
+ * the ceiling exactly when they cross. What refutes that rule is
+ * the capped group, where the ceiling sits above the floor and
+ * still wins, and the inert rows carrying both bounds with it —
+ * measured, and the crossed claim stays green for it. So the
+ * crossed sections pin WHICH bound answers a contradictory row,
+ * and the sections before them are what make that an ordering
+ * rather than a preference for the smaller number.
+ *
  * The rows are imported rather than written here because the same
  * ones drive the SQL expression the dispatcher carries and the
  * spliced copy a Code node runs. That makes the table a second thing
@@ -43,6 +56,7 @@ import { clampIntervalSeconds } from '../../src/lib/schedule.js';
 import {
   CAPPED_CLAMP_CASES,
   CLAMP_CASES,
+  CROSSED_BOUND_CLAMP_CASES,
   FLOORED_CLAMP_CASES,
   INERT_BOUND_CLAMP_CASES,
   UNBOUNDED_CLAMP_CASES,
@@ -71,15 +85,71 @@ function carriesNoBounds(testCase: ClampCase): boolean {
  * is what keeps them a partition rather than three overlapping
  * questions. Bounds that CROSS put the proposal under the floor and
  * over the ceiling at the same time, so a row carrying them would
- * answer to two predicates and break both membership guards. The
- * group describing those rows arrives later in this plan; until it
- * does, this clause is what says the guards are silent about them
- * on purpose rather than by luck.
+ * answer to two predicates and break both membership guards.
+ * {@link hasCrossedBounds} is this same clause negated, which is
+ * what makes the five groups a partition by construction: the four
+ * that agree are silent about a crossed row because they all ask
+ * this, and the fifth takes exactly what they leave.
  */
 function boundsAgree(testCase: ClampCase): boolean {
   const { minIntervalSeconds: floor, maxIntervalSeconds: ceiling } = testCase.bounds;
 
   return floor === null || ceiling === null || floor <= ceiling;
+}
+
+/**
+ * Whether a case's two bounds contradict each other: a floor above
+ * the row's own ceiling, so no interval satisfies both.
+ *
+ * The negation of {@link boundsAgree} and nothing more. Written as
+ * a comparison of its own it would be a second reading of the same
+ * rule, free to drift from the four predicates that exclude these
+ * rows — and the drift would surface as a row belonging to two
+ * groups or to none, which is the failure the membership guards are
+ * there to catch rather than to cause.
+ */
+function hasCrossedBounds(testCase: ClampCase): boolean {
+  return !boundsAgree(testCase);
+}
+
+/**
+ * The three places a proposal can sit against a pair of crossed
+ * bounds, and what the crossed rows are chosen to cover.
+ *
+ * A declared roster so a guard can assert set equality against it:
+ * a count alone would pass for three rows all sitting in one place,
+ * and that is the shape that exercises one comparison three times
+ * while reading as a full group.
+ */
+const CROSSED_PROPOSAL_POSITIONS = ['under both', 'between them', 'over both'] as const;
+
+/**
+ * Which of {@link CROSSED_PROPOSAL_POSITIONS} a case's proposal
+ * occupies, or a fourth answer for a row whose bounds do not cross
+ * at all.
+ *
+ * Total over every row rather than narrowed to the crossed group,
+ * so a row that reached the group without the property names its
+ * own shape in the failure instead of being read as a duplicate of
+ * whichever place it happened to resemble. The two null tests
+ * repeat {@link boundsAgree}'s clause because narrowing does not
+ * survive a call, and they are what let this function's own
+ * comparisons read two numbers rather than two nullable ones.
+ */
+function proposalPosition(testCase: ClampCase): string {
+  const { minIntervalSeconds: floor, maxIntervalSeconds: ceiling } = testCase.bounds;
+
+  if (floor === null || ceiling === null || floor <= ceiling) {
+    return 'bounds do not cross';
+  }
+
+  if (testCase.intervalSeconds < ceiling) {
+    return 'under both';
+  }
+
+  return testCase.intervalSeconds > floor
+    ? 'over both'
+    : 'between them';
 }
 
 /** Whether a case's proposal sits under a floor its row declares. */
@@ -155,9 +225,14 @@ function byId(
 }
 
 /**
- * The three bounded groups by name, so a guard asking one question
- * of all of them is a single expression rather than three copies of
- * it that can drift apart.
+ * The three groups whose bounds AGREE, by name, so a guard asking
+ * one question of all of them is a single expression rather than
+ * three copies of it that can drift apart.
+ *
+ * The crossed group carries bounds too and is deliberately not here:
+ * every claim these three stand behind is about a bound the rule can
+ * honour, and a row where it cannot honour both is a different
+ * question with its own sections at the end of this file.
  */
 const BOUNDED_GROUPS: Readonly<Record<string, readonly ClampCase[]>> = {
   floored: FLOORED_CLAMP_CASES,
@@ -166,9 +241,9 @@ const BOUNDED_GROUPS: Readonly<Record<string, readonly ClampCase[]>> = {
 };
 
 /**
- * Every row carrying a bound, derived from the roster rather than
- * listed a second time, so a group reaching one of the two and not
- * the other is not a thing that can happen.
+ * Every row carrying bounds that agree, derived from the roster
+ * rather than listed a second time, so a group reaching one of the
+ * two and not the other is not a thing that can happen.
  */
 const BOUNDED_CLAMP_CASES: readonly ClampCase[] = Object.values(BOUNDED_GROUPS).flat();
 
@@ -328,11 +403,13 @@ describe('clamp case table — the rows carrying a bound', () => {
 
   // The one guard in this section that is not about a claim this
   // file makes. A floor with no ceiling is the only shape in the
-  // table that the SQL expression `ar-dispatch` carries can answer
+  // table that an expression standing a MISSING bound in can answer
   // differently from `clampIntervalSeconds`, so a floored group that
   // lost that row would leave the live comparison green against an
   // expression whose floors do nothing — and no run of this file
   // would say so, since every claim it makes is green either way.
+  // The crossed section carries the other half of that job, for an
+  // expression that applies the two bounds in the wrong ORDER.
   it('raises at least one row that declares no ceiling at all', () => {
     const openTopped = FLOORED_CLAMP_CASES
       .filter((testCase) => testCase.bounds.maxIntervalSeconds === null)
@@ -397,5 +474,103 @@ describe('clampIntervalSeconds — a row carrying a bound', () => {
     );
 
     expect(answered).toEqual(byId(INERT_BOUND_CLAMP_CASES, (testCase) => testCase.intervalSeconds));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The table, where the two bounds contradict each other
+// ---------------------------------------------------------------------------
+
+describe('clamp case table — the rows whose two bounds cross', () => {
+  // The membership guard the other four groups carry, aimed at the
+  // property `boundsAgree` was written to exclude. It fails in both
+  // directions for the reason theirs do, and it is what closes the
+  // partition: a crossed row appended to the table and to no group
+  // is reached by no claim in this file, and every claim here is a
+  // walk over a declared roster.
+  it('is exactly the rows in the table whose two bounds cross', () => {
+    const declared = CROSSED_BOUND_CLAMP_CASES.map((testCase) => testCase.id);
+    const crossed = CLAMP_CASES.filter(hasCrossedBounds).map((testCase) => testCase.id);
+
+    expect(sorted(declared)).toEqual(sorted(crossed));
+  });
+
+  // Distinctness asked the way this group's claims need it. The
+  // other groups ask only that their proposals differ; here it is
+  // the proposal's PLACE against the crossed pair that varies the
+  // arithmetic, and three rows all sitting beneath both bounds
+  // would exercise one comparison three times while reading as a
+  // full group. Set equality against the roster rather than a
+  // count, so a row landing on a place another row already covers
+  // is named rather than absorbed.
+  it('holds one row for each place a proposal can sit against them', () => {
+    const covered = CROSSED_BOUND_CLAMP_CASES.map(proposalPosition);
+    const proposed = CROSSED_BOUND_CLAMP_CASES.map((testCase) => testCase.intervalSeconds);
+
+    expect(sorted(covered)).toEqual(sorted(CROSSED_PROPOSAL_POSITIONS));
+    expect(new Set(proposed).size).toBe(proposed.length);
+  });
+
+  // The job the other groups' recorded-answer guards do, once more.
+  // The files driving the SQL twin and the spliced copy read
+  // `expected` and never see the bounds, so this is what says the
+  // column those two are judged by carries the property this file
+  // proves the function has.
+  it('records the ceiling as the answer for every one', () => {
+    expect(byId(CROSSED_BOUND_CLAMP_CASES, (testCase) => testCase.expected))
+      .toEqual(byId(CROSSED_BOUND_CLAMP_CASES, (testCase) => testCase.bounds.maxIntervalSeconds));
+  });
+
+  // The fixture guard the other groups have no need of. Every claim
+  // in the crossed sections compares an answer against the ceiling,
+  // and a row PROPOSING its own ceiling satisfies that comparison
+  // for an identity rule as readily as for the clamp — so it would
+  // sit in the group fully green while saying nothing, and no other
+  // case here would report it. Named per offending row rather than
+  // counted, since the repair is to move that row's proposal.
+  it('proposes an interval no row already sits on its ceiling with', () => {
+    const onTheCeiling = CROSSED_BOUND_CLAMP_CASES
+      .filter((testCase) => testCase.intervalSeconds === testCase.bounds.maxIntervalSeconds)
+      .map((testCase) => testCase.id);
+
+    expect(onTheCeiling).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A row whose floor sits above its own ceiling
+// ---------------------------------------------------------------------------
+
+describe('clampIntervalSeconds — a row whose two bounds cross', () => {
+  // The refusal claim at its strongest. A floor above a ceiling is
+  // the one input in this table that is not merely unusual but
+  // self-contradictory, and it is what a rule that VALIDATED rather
+  // than clamped would refuse first — `src/lib/schedule.ts` claims
+  // the opposite outright, that every input has an answer. Nothing
+  // upstream refuses such a row either: no CHECK relates the two
+  // columns, so the pair reaches the clamp exactly as written.
+  it('refuses none of them', () => {
+    const refused = CROSSED_BOUND_CLAMP_CASES.filter(isRefused).map((testCase) => testCase.id);
+
+    expect(refused).toEqual([]);
+  });
+
+  // The claim these two sections exist for, and the only one in the
+  // file whose content is an ORDER rather than a value. Both bounds
+  // are live for every row here, so applying the ceiling second is
+  // what makes the answer the ceiling and applying it first would
+  // make it the floor — two different numbers for each of the three
+  // rows, neither of them the proposal. Asserted against the
+  // ceiling the row carries rather than against `expected`, for the
+  // reason the other claims are: the recorded column is tied to
+  // this property by a guard of its own, which reddens separately
+  // when the two part.
+  it('answers each with the ceiling rather than the floor', () => {
+    const answered = byId(
+      CROSSED_BOUND_CLAMP_CASES,
+      (testCase) => clampIntervalSeconds(testCase.intervalSeconds, testCase.bounds),
+    );
+
+    expect(answered).toEqual(byId(CROSSED_BOUND_CLAMP_CASES, (testCase) => testCase.bounds.maxIntervalSeconds));
   });
 });
