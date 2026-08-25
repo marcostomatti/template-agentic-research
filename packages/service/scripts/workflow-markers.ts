@@ -847,3 +847,86 @@ const DECLARATION_EXPORT = /^export[ \t]+(?=(?:function|const|class|let|var)\b)/
 export function stripDeclarationExports(transpiled: string): string {
   return transpiled.replace(DECLARATION_EXPORT, '');
 }
+
+/**
+ * The library-inlining marker, as regex source rather than a
+ * compiled `RegExp`.
+ *
+ * `__INLINE:<path>__`, in any string of a workflow source, names a
+ * library under the build's lib directory and is replaced by that
+ * library's splice-ready body. The one capture is the path, which
+ * is what the loader is handed.
+ *
+ * Source rather than an instance for the reason
+ * `tests/invariants/naming-patterns.ts` keeps its needles that way:
+ * replacement is global, a global `RegExp` carries `lastIndex` from
+ * one call into the next, and a single shared instance therefore
+ * resolves the markers in one string and skips them in the next.
+ * Each caller compiles its own. The survival check arriving later
+ * in this stage wants a non-global instance over this same grammar,
+ * which is the second reason — two flag sets, one pattern, and no
+ * second copy of it to keep in step.
+ *
+ * The character class is written out the way `DOTENV_KEY` above
+ * writes its own, rather than as a shorthand escape, so the source
+ * carries no backslash at all: what is written here is what
+ * compiles, with no doubling to get wrong in between.
+ *
+ * The forward slash in that class is deliberate and is not used
+ * yet. Every library sits directly under the lib directory today,
+ * but phase 4 lands a wave of them under `src/lib/sources/`, and a
+ * class without the separator would simply not match that marker.
+ * Nothing would replace it, and it would fail the build as a marker
+ * that survived the pass — naming neither the file it wanted nor
+ * the directory it was looked for in. The dot is in the class for a
+ * plainer reason: a library is named with its extension.
+ *
+ * What the class admits is not what the build accepts. A slash and
+ * a dot also spell an absolute path and a `..` segment, so this
+ * matches `__INLINE:/etc/x.ts__` and hands the path on; the path
+ * refusal arriving next in this stage is what names it. The split
+ * is the point rather than an oversight. A marker the grammar
+ * misses is reported as a malformed marker, while one the grammar
+ * takes and the path rule refuses is reported as a path pointing
+ * outside the lib directory, and only the second says which edit
+ * fixes it.
+ *
+ * The retired forms are not hits for this pattern: `__INLINE_JSON`
+ * and `__INLINE_YAML` carry an underscore where this wants its
+ * colon. Refusing those is a rule of its own rather than a case
+ * this one falls through to.
+ */
+export const LIB_MARKER = '__INLINE:([A-Za-z0-9_./-]+)__';
+
+/**
+ * The build-setting marker, as regex source rather than a compiled
+ * `RegExp`.
+ *
+ * `__ENVVAR:<NAME>__`, in any string of a workflow source, names a
+ * build setting and is replaced by whatever the settings chain
+ * resolves it to — {@link ENV_DEFAULTS} alone in the default build.
+ * The one capture is the bare name, which is the form
+ * {@link resolveEnvVar} takes.
+ *
+ * Source rather than an instance for the reasons
+ * {@link LIB_MARKER} carries.
+ *
+ * The name grammar is the environment-variable one `DOTENV_KEY`
+ * spells anchored: a letter or underscore, then letters, digits and
+ * underscores. The two are written out separately rather than one
+ * derived from the other by stripping the anchors off a shared
+ * source, because that derivation would be the load-bearing part
+ * and nothing would fail if it stopped being right. Written twice,
+ * a name a `.env` can hold but a marker cannot is a difference a
+ * case can pin.
+ *
+ * Holding the grammar here, rather than capturing anything up to
+ * the closing underscores, is what turns a mistyped name into a
+ * refusal that names it. `__ENVVAR:AR-BUILD-TAG__` is not a hit, so
+ * nothing replaces it and it reaches the serialized output intact,
+ * where the survival check arriving later in this stage refuses it.
+ * A class wide enough to capture it would instead send a name no
+ * source can hold into settings resolution, which reports an
+ * unresolved setting: true, and about the wrong thing.
+ */
+export const ENV_MARKER = '__ENVVAR:([A-Za-z_][A-Za-z0-9_]*)__';
