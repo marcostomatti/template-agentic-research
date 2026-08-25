@@ -661,6 +661,34 @@ interface SpawnedBuild extends FixtureTree {
  * Plant a package tree, spawn the build over it, and answer with
  * where it wrote and how it went.
  *
+ * A spawned command rather than a `buildAll` call, and it is the
+ * LAUNCHER that decides that rather than a preference between two
+ * shapes. The build's library splice reaches for `Bun.Transpiler`,
+ * which a vitest worker does not have: measured in this package's
+ * own workers, `Bun` is an object carrying `serve` and nothing
+ * else, `Bun.Transpiler` is `undefined`, and `bunTranspiler()`
+ * refuses there with `TranspilerUnavailableError`. A case already
+ * inside a worker cannot relaunch itself, so a subprocess is the
+ * only shape left to it.
+ *
+ * The other half of the reason is what a call would leave out. The
+ * two sections driving `buildAll` in this process hand it
+ * {@link FIXTURE_LOADER} in place of a loader over a real
+ * transpiler, which is the arrangement a worker permits and not
+ * the one that writes `workflows/dist/`: the shipped path builds a
+ * transpiler whether or not the tree holds a source to splice,
+ * picks its settings chain off the command line, and names its two
+ * directories and its stamp root off the entry point instead of
+ * taking any of them as arguments. Two in-process runs would agree
+ * byte for byte about a build this file had supplied half of.
+ *
+ * What the spawn does not buy belongs in the same breath:
+ * {@link SPAWN_SOURCES} writes settings markers and no library
+ * marker, so the transpiler each run builds goes unused and no
+ * spliced body is among the bytes compared. What a rebuild makes
+ * of an edited library is a subject of its own, arriving later in
+ * this stage.
+ *
  * The command takes no directories: it names `workflows/src/` and
  * `workflows/dist/` beside the entry point it was launched from. So
  * a build is pointed somewhere else by being given a tree to name —
