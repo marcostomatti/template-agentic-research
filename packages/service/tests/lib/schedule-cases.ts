@@ -119,12 +119,140 @@ export const UNBOUNDED_CLAMP_CASES: readonly ClampCase[] = [
 ];
 
 /**
+ * The rows a floor raises: the proposal sits under the row's own
+ * `min_interval_seconds`, so the answer is the floor.
+ *
+ * Both rows carry that one property and differ only in whether a
+ * ceiling is filled in as well, which is not cosmetic. A row with a
+ * floor and nothing above it is the only shape in this whole table
+ * that the SQL twin can answer differently from
+ * `clampIntervalSeconds`: stand the missing ceiling in with
+ * `COALESCE(max_interval_seconds, interval_seconds)` and `LEAST`
+ * caps the floored value straight back down to the proposal, so the
+ * floor does nothing at all for exactly the rows that carry one and
+ * no ceiling. Every other combination of bounds agrees under that
+ * form too, which is why the live comparison rests on this row and
+ * on no other.
+ */
+export const FLOORED_CLAMP_CASES: readonly ClampCase[] = [
+  {
+    id: 'floored-no-ceiling',
+    standsFor: 'a floor with no ceiling, the row the SQL twin parts on',
+    intervalSeconds: 60,
+    bounds: { minIntervalSeconds: 900, maxIntervalSeconds: null },
+    expected: 900,
+  },
+  {
+    id: 'floored-under-a-ceiling',
+    standsFor: 'a floor that bites with a ceiling well above it',
+    intervalSeconds: 120,
+    bounds: { minIntervalSeconds: 600, maxIntervalSeconds: 86_400 },
+    expected: 600,
+  },
+];
+
+/**
+ * The rows a ceiling lowers: the proposal sits over the row's own
+ * `max_interval_seconds`, so the answer is the ceiling.
+ *
+ * One of the two carries a floor as well, and it is what says the
+ * answer is the CEILING rather than merely whichever bound the rule
+ * reached first: a clamp answering with the first bound it found
+ * would give 600 there, which is neither the proposal nor the
+ * recorded answer.
+ */
+export const CAPPED_CLAMP_CASES: readonly ClampCase[] = [
+  {
+    id: 'capped-no-floor',
+    standsFor: 'a ceiling with no floor, and a proposal well past it',
+    intervalSeconds: 604_800,
+    bounds: { minIntervalSeconds: null, maxIntervalSeconds: 86_400 },
+    expected: 86_400,
+  },
+  {
+    id: 'capped-over-a-floor',
+    standsFor: 'a ceiling that bites with a floor well below it',
+    intervalSeconds: 172_800,
+    bounds: { minIntervalSeconds: 600, maxIntervalSeconds: 86_400 },
+    expected: 86_400,
+  },
+];
+
+/**
+ * The rows carrying a bound with nothing to do: the proposal already
+ * sits inside every bound the row declares, so the answer is the
+ * proposal.
+ *
+ * A group of its own rather than a detail of the floored and capped
+ * groups, because it is the whole of what parts "raised to the
+ * floor" from "answered with the floor whenever the row carries
+ * one". The second reading satisfies every row in the floored group
+ * and is wrong for every row here, and the same holds for the
+ * ceiling — so without these rows both of those claims stay green
+ * for a rule that reads the bound columns and never compares them to
+ * anything.
+ *
+ * Two rows sit exactly ON a bound rather than inside it, which is
+ * where a strict comparison parts from a non-strict one.
+ * `clampIntervalSeconds` is written with `Math.max` and `Math.min`,
+ * so an equal bound is inert by construction and those two rows cost
+ * the TypeScript side nothing. They are carried for the other two
+ * readers, where the same rule is written out again and nothing
+ * makes the two comparisons agree by construction.
+ */
+export const INERT_BOUND_CLAMP_CASES: readonly ClampCase[] = [
+  {
+    id: 'inert-above-the-floor',
+    standsFor: 'a floor the proposal already clears',
+    intervalSeconds: 3600,
+    bounds: { minIntervalSeconds: 900, maxIntervalSeconds: null },
+    expected: 3600,
+  },
+  {
+    id: 'inert-under-the-ceiling',
+    standsFor: 'a ceiling the proposal is already inside',
+    intervalSeconds: 1800,
+    bounds: { minIntervalSeconds: null, maxIntervalSeconds: 86_400 },
+    expected: 1800,
+  },
+  {
+    id: 'inert-between-both',
+    standsFor: 'a proposal sitting between a floor and a ceiling',
+    intervalSeconds: 7200,
+    bounds: { minIntervalSeconds: 900, maxIntervalSeconds: 86_400 },
+    expected: 7200,
+  },
+  {
+    id: 'inert-on-the-floor',
+    standsFor: 'a proposal sitting exactly on the floor',
+    intervalSeconds: 900,
+    bounds: { minIntervalSeconds: 900, maxIntervalSeconds: 86_400 },
+    expected: 900,
+  },
+  {
+    id: 'inert-on-the-ceiling',
+    standsFor: 'a proposal sitting exactly on the ceiling',
+    intervalSeconds: 86_400,
+    bounds: { minIntervalSeconds: 600, maxIntervalSeconds: 86_400 },
+    expected: 86_400,
+  },
+];
+
+/**
  * The whole table, and what a reader driving every row takes.
  *
  * Composed from the groups rather than written out a second time, so
  * a row cannot end up in the table and outside the group that
- * describes it, or the other way round. The unbounded rows are the
- * only group so far; the rows carrying a floor, a ceiling and two
- * bounds that cross arrive later in this plan.
+ * describes it, or the other way round. The four groups split the
+ * rows by what the bounds DO rather than by which columns are
+ * filled: nothing to clamp against, a floor raising the proposal, a
+ * ceiling lowering it, and a bound that never reaches it. The rows
+ * whose two bounds CROSS are the shape none of the four describes,
+ * and they arrive later in this plan.
  */
-export const CLAMP_CASES: readonly ClampCase[] = [...UNBOUNDED_CLAMP_CASES];
+export const CLAMP_CASES: readonly ClampCase[] = [
+  ...UNBOUNDED_CLAMP_CASES,
+  ...FLOORED_CLAMP_CASES,
+  ...CAPPED_CLAMP_CASES,
+  ...INERT_BOUND_CLAMP_CASES,
+];
