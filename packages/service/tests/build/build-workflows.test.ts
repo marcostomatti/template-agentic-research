@@ -1,6 +1,7 @@
 /**
  * What a build makes of a source TREE: the tree it refuses over a
- * marker nothing reads, and the near miss of that tree it builds.
+ * marker nothing reads, the near miss of that tree it builds, and
+ * the tree that is not there at all.
  *
  * The rules underneath a build are claimed next door, in
  * `workflow-markers.test.ts`, against arguments alone — a chain of
@@ -15,40 +16,57 @@
  * every check that reads it, and with a stand-in loader it would
  * rebuild it into something no build produces.
  *
- * The claim here is one marker form and what a build does with it. A
- * marker whose name the grammar cannot read is a hit for nothing: no
- * rule replaces it, no rule refuses it, and it reaches the
- * serialized artifact as the characters the source wrote. What
+ * The first subject is one marker form and what a build does with
+ * it. A marker whose name the grammar cannot read is a hit for
+ * nothing: no rule replaces it, no rule refuses it, and it reaches
+ * the serialized artifact as the characters the source wrote. What
  * refuses it there is the survival check over that output, which
  * names the form and leaves no file behind.
  *
- * Nothing stands behind that check, which is what parts these cases
- * from the refusal cases next door. Those pin a class because a
- * build carrying a retired form fails either way, and only the class
- * says which of two rules caught it. Here the class is pinned
- * because a build fails other ways that arrive as an `Error` — a
- * source that is not JSON, a directory that cannot be listed — and
- * because of one failure that is nearly this one. A WELL-FORMED
- * marker naming a setting no source answers for is refused back at
- * resolution, under a different class, naming the setting. That
- * reading is what the guards below rule out: this refusal is about
- * the characters of the marker, and no chain and no defaults table
- * is the edit behind it.
+ * Nothing stands behind that check, which is what parts that
+ * section from the refusal cases next door. Those pin a class
+ * because a build carrying a retired form fails either way, and
+ * only the class says which of two rules caught it. Here the class
+ * is pinned because a build fails other ways that arrive as an
+ * `Error` — a source that is not JSON, a directory that cannot be
+ * listed — and because of one failure that is nearly this one. A
+ * WELL-FORMED marker naming a setting no source answers for is
+ * refused back at resolution, under a different class, naming the
+ * setting. That reading is what its guards rule out: this refusal
+ * is about the characters of the marker, and no chain and no
+ * defaults table is the edit behind it.
  *
- * So the two trees differ by one character class inside one marker
- * and by nothing else. The unreadable one is what the claims are
- * made over; the readable one is the accept guard, and the only case
- * here that moves when a build refuses whatever it is handed — a
- * section of nothing but refusals reads green under such a build.
+ * So those two trees differ by one character class inside one
+ * marker and by nothing else. The unreadable one is what the claims
+ * are made over; the readable one is the accept guard, and the only
+ * case in that section that moves when a build refuses whatever it
+ * is handed — a section of nothing but refusals reads green under
+ * such a build.
  *
  * What the refusal cannot say is WHERE. The form is the whole of it,
  * with no file name and no site beside it, and the recovery is a
  * `git grep` for that form across the source tree — not across the
  * output, since a refused build wrote none.
  *
- * The rest of what a build owes — an empty tree, two runs compared
- * byte for byte, the one value allowed to move with the checkout —
- * arrives later in this stage.
+ * The second subject is a source directory that is not there.
+ * Nothing to build is an ordinary state of a tree rather than a
+ * failure, so a build over one answers with an empty list and stops
+ * before its output directory is touched. Both halves of that are
+ * claimed, because neither says much alone: an empty answer is what
+ * a build that had stopped reading its argument would give too, and
+ * an unwritten output directory says nothing about a build that
+ * writes none.
+ *
+ * Nothing to build has two shapes — a source directory that is
+ * absent, and one that is there holding no `*.json` — and one
+ * answer between them. Only the first is claimed here, and nothing
+ * a case reads off a build parts it from the second, so the fixture
+ * guard is what says which of the two the tree is.
+ *
+ * The rest of what a build owes — two runs compared byte for byte,
+ * the one value allowed to move with the checkout, and what a
+ * rebuild picks up from an edited library — arrives later in this
+ * stage.
  */
 import type { EnvSource, LibLoader } from '../../scripts/workflow-markers.js';
 
@@ -57,6 +75,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -250,6 +269,36 @@ const UNREAD_TREE = treeCarrying('unread-marker', UNREAD_MARKER);
 const READ_TREE = treeCarrying('read-marker', READ_MARKER);
 
 /**
+ * A pair of directories where neither half was ever written.
+ *
+ * Declared rather than built, which is the whole of what makes it
+ * the tree that is not there: {@link treeCarrying} exists to write
+ * a source directory, so a tree with none cannot come from it.
+ *
+ * The names still hang off {@link FIXTURE_ROOT}, so a build that
+ * created either of them leaves it inside the directory `afterAll`
+ * removes rather than somewhere nothing sweeps.
+ */
+const ABSENT_TREE: FixtureTree = {
+  sourceDir: join(FIXTURE_ROOT, 'absent-source', 'src'),
+  outDir: join(FIXTURE_ROOT, 'absent-source', 'dist'),
+};
+
+/**
+ * The near miss of {@link ABSENT_TREE}: the same pair with a source
+ * directory written under it.
+ *
+ * Its own tree rather than one of the two above, so the case
+ * reading it neither depends on another having run first nor
+ * rebuilds a tree those cases read.
+ *
+ * Which marker its source carries is not this tree's subject — it
+ * takes the readable one so that a build over it gets as far as
+ * writing, which is the half being guarded.
+ */
+const PRESENT_TREE = treeCarrying('present-source', READ_MARKER);
+
+/**
  * The loader every build below is made with.
  *
  * It answers for nothing and says so. No source in this file writes
@@ -297,6 +346,23 @@ function artifactIn(tree: FixtureTree, file: string): unknown {
   const parsed: unknown = JSON.parse(readFileSync(join(tree.outDir, file), 'utf8'));
 
   return parsed;
+}
+
+/**
+ * Whether anything sits at a path.
+ *
+ * The package's own way of asking, from
+ * `tests/invariants/schema-sql.ts` and from `buildAll` itself: a
+ * stat that answers rather than throws when nothing is there. What
+ * it buys over a stat in a `try` is that a path which cannot be
+ * reached for some other reason still raises, instead of being
+ * folded into the same `false` as one that is simply absent.
+ *
+ * @param path - The path to ask about.
+ * @returns Whether something is there.
+ */
+function existsAt(path: string): boolean {
+  return statSync(path, { throwIfNoEntry: false }) !== undefined;
 }
 
 /**
@@ -373,10 +439,10 @@ describe('buildAll — a source carrying a marker form nothing reads', () => {
     expect(grammar.test(READ_MARKER)).toBe(true);
   });
 
-  // The accept guard, and the only case here that moves when a build
-  // refuses whatever it is handed. Every claim below reads a
-  // refusal, and a section of nothing but refusals is green under
-  // such a build.
+  // The accept guard, and the only case in this section that moves
+  // when a build refuses whatever it is handed. Every claim here
+  // reads a refusal, and a section of nothing but refusals is green
+  // under such a build.
   //
   // The near miss is one character class inside one marker, so a
   // rule keyed on the form rather than on the name refuses the
@@ -424,5 +490,62 @@ describe('buildAll — a source carrying a marker form nothing reads', () => {
     const refusal = survivingRefusalOf(() => buildTree(UNREAD_TREE));
 
     expect(refusal.message).toContain(SURVIVING_FORM);
+  });
+});
+
+describe('buildAll — a source directory that is not there', () => {
+  // The fixture guard, and the one no claim in this section can
+  // supply. Nothing to build has two shapes — a directory that is
+  // absent, and one that is there holding no `*.json` — reached
+  // through two branches that answer alike, so what a case reads
+  // off a build is the same for both. This says the tree under
+  // test is the first of them, and says it of the near miss too:
+  // paired here rather than left to a second case, since a guard
+  // over the absent half alone could not tell a fixture root that
+  // had gone missing entirely from one written as intended.
+  it('is asked about a source directory that is not there', () => {
+    expect(existsAt(ABSENT_TREE.sourceDir)).toBe(false);
+    expect(existsAt(PRESENT_TREE.sourceDir)).toBe(true);
+  });
+
+  // The first claim: nothing to build is an ordinary state of a
+  // tree and not a failure, so a build over one answers rather
+  // than refuses. What the answer costs is that it cannot name a
+  // wrong path — a source directory assembled badly reads exactly
+  // like one holding nothing — and the empty list is where that
+  // silence begins.
+  it('reports nothing built', () => {
+    expect(buildTree(ABSENT_TREE)).toEqual([]);
+  });
+
+  // The second claim, and a separate one because a build can
+  // report nothing while still having touched the disk: an output
+  // directory created before the sources are counted would leave
+  // the claim above green and this one red. What it pins is that
+  // a build finding nothing leaves the disk as it stands rather
+  // than an empty directory behind it — which is what a reader of
+  // that directory is later entitled to assume, since nothing
+  // downstream can tell an empty output from one a build made.
+  it('writes nothing where its output would go', () => {
+    buildTree(ABSENT_TREE);
+
+    expect(existsAt(ABSENT_TREE.outDir)).toBe(false);
+  });
+
+  // The accept guard, and the only case in this section that moves
+  // when a build reports nothing and writes nothing whatever it is
+  // handed. Both claims here read an absence, and a pair of absence
+  // claims is green under such a build.
+  //
+  // The near miss is the source directory and nothing else, so a
+  // build that had stopped reading its argument fails here and
+  // nowhere else. The output directory is read before as well as
+  // after, since `treeCarrying` names one and creates none: read
+  // only afterwards, the guard would hold for a directory the
+  // fixture had made rather than one this build did.
+  it('builds and writes over the same pair with a source there', () => {
+    expect(existsAt(PRESENT_TREE.outDir)).toBe(false);
+    expect(buildTree(PRESENT_TREE)).toEqual([SOURCE_FILE]);
+    expect(existsAt(PRESENT_TREE.outDir)).toBe(true);
   });
 });
