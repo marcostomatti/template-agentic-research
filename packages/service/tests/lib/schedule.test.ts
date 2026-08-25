@@ -1,7 +1,7 @@
 /**
  * The scheduling arithmetic `ar-dispatch` applies to a row it has
  * claimed: the clamp, driven over the case table beside this file,
- * and the batch cap, driven over a roster declared inside it.
+ * and the batch cap, driven over two rosters declared inside it.
  *
  * What is covered is `clampIntervalSeconds` over a row that carries
  * no bounds at all — nothing is refused, and what comes back is what
@@ -12,10 +12,11 @@
  * rest as a contract rather than a consequence: the floor is applied
  * first and the ceiling second, and a bound the proposal does not
  * reach leaves it alone. `capBatch` is the file's second subject,
- * and what is covered of it here is the refusal alone: a cap that
- * is not a positive integer is turned away rather than handed on
- * to `slice`. What it does with a cap it takes — the batch that
- * comes back — arrives next in this plan.
+ * and both halves of it are covered: a cap that is not a positive
+ * integer is turned away rather than handed on to `slice`, and a
+ * cap it takes bounds the batch that comes back — the whole of
+ * that batch where it fits under the cap, and exactly `cap` items
+ * off the front of it where it does not.
  *
  * The unbounded section carries a limit, and it belongs in front of
  * its cases rather than behind them: both of its claims hold for a
@@ -45,22 +46,37 @@
  * and the sections before them are what make that an ordering
  * rather than a preference for the smaller number.
  *
- * The cap section carries a limit of that shape one more time, and
- * its is the starkest of the four: every claim in it is satisfied
- * in full by a function that refuses whatever it is handed.
- * Nothing a roster of refusals can say parts those two, so the
- * section closes on a guard instead — one cap the rule must take,
- * a single step from the zero it turns away — and the claims above
- * that guard are worth exactly what it is.
+ * The cap refusal section carries a limit of that shape one more
+ * time, and its is the starkest of the four: every claim in it is
+ * satisfied in full by a function that refuses whatever it is
+ * handed. Nothing a roster of refusals can say parts those two, so
+ * that section closes on a guard instead — one cap the rule must
+ * take, a single step from the zero it turns away. The section
+ * after it is what stops that guard being the whole of the
+ * evidence: every claim there is over a cap the rule took and a
+ * batch it came back with, so a rule refusing everything reddens
+ * the lot of them rather than one line.
+ *
+ * That last section carries a limit of its own, and it is not the
+ * shape of the four above: nothing in it is satisfied by a
+ * degenerate rule, since a cap that never bit, one that took the
+ * back of the batch and one that handed the caller its own list
+ * are each reported by a case of their own. What it does not
+ * reach is a second batch. Every call there is made with the same
+ * four claims and only the cap moves, so a rule keyed to that one
+ * length would answer all of it — and nothing later in this plan
+ * varies the batch, since the readers arriving for the clamp
+ * table drive rows rather than lists.
  *
  * The clamp rows are imported rather than written here because the
  * same ones drive the SQL expression the dispatcher carries and the
  * spliced copy a Code node runs. That makes the table a second thing
  * worth guarding: a claim written as a walk over a roster passes
- * when the roster is empty, and every claim here is such a walk. The
- * cap roster is declared in this file instead, since nothing else
- * reads it and so it has nowhere to drift to — but it is walked the
- * same way, and it carries a guard of its own for the same reason.
+ * when the roster is empty, and every claim here is such a walk.
+ * Both cap rosters are declared in this file instead, since nothing
+ * else reads them and so they have nowhere to drift to — but each is
+ * walked the same way, and each carries a guard of its own for the
+ * same reason.
  */
 import type { ClampCase } from './schedule-cases.js';
 
@@ -570,8 +586,9 @@ describe('clampIntervalSeconds — a row whose two bounds cross', () => {
     expect(refused).toEqual([]);
   });
 
-  // The claim these two sections exist for, and the only one in the
-  // file whose content is an ORDER rather than a value. Both bounds
+  // The claim these two sections exist for, and the only one in
+  // the file whose content is the ORDER two rules are applied in
+  // rather than a value. Both bounds
   // are live for every row here, so applying the ceiling second is
   // what makes the answer the ceiling and applying it first would
   // make it the floor — two different numbers for each of the three
@@ -591,7 +608,7 @@ describe('clampIntervalSeconds — a row whose two bounds cross', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Reading the cap roster
+// Reading the caps the rule turns away
 // ---------------------------------------------------------------------------
 
 /**
@@ -690,6 +707,11 @@ const REFUSED_CAP_SHAPES = ['zero', 'negative', 'a fraction', 'not a number', 'i
  * one which cannot appear in the declared roster, so it is what a
  * wrongly rostered cap comes back as.
  *
+ * That sixth answer is what {@link capReach} asks this function
+ * for, so a cap rostered among the ones the rule TAKES is placed
+ * by its shape rather than by an arithmetic against the batch that
+ * would never be reached for it.
+ *
  * `NaN` is asked about ahead of finiteness because it is not
  * finite either, and a fraction is what the last pair leaves over
  * rather than a comparison of its own.
@@ -717,14 +739,17 @@ function capShape(cap: number): string {
 }
 
 /**
- * The batch every call in the cap section is made with.
+ * The batch every call in both cap sections is made with.
  *
  * Four items rather than none, so that what `slice` would have
  * answered for a refused cap is a prefix of a real list rather
- * than nothing having been there to take. No claim in this section
- * reads it — a cap is refused before the batch is touched at all —
- * so the length is carried for the section arriving next in this
- * plan, where what comes back is the subject.
+ * than nothing having been there to take. No claim in the refusal
+ * section reads it — a cap is refused before the batch is touched
+ * at all — and the length is carried for the section after that
+ * one, where what comes back IS the subject: four items leave room
+ * for a cap falling short of the batch, one the batch sits exactly
+ * on and one the batch fits under, with the front of an answer
+ * distinguishable from the back in all three.
  */
 const CLAIMED_BATCH = ['claim-1', 'claim-2', 'claim-3', 'claim-4'] as const;
 
@@ -824,5 +849,300 @@ describe('capBatch — a cap that is not a positive integer', () => {
   // says nothing about where the rule is keyed.
   it('takes the smallest cap it admits', () => {
     expect(refusalFor(1)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reading the caps the rule takes
+// ---------------------------------------------------------------------------
+
+/**
+ * One cap the rule takes: the value, and where it falls against
+ * the batch it is applied to.
+ *
+ * Declared in this file beside {@link REFUSED_CAPS} and for the
+ * same reason — a cap is taken or turned away by one function in
+ * one place, so neither roster has anywhere to drift to.
+ *
+ * No recorded answer per row, which is where this parts from the
+ * clamp table next door. That table records one because the SQL
+ * twin and the spliced copy read `expected` and cannot call the
+ * function at all; here every claim calls it, so a batch written
+ * out beside each row would be `capBatch` reimplemented with no
+ * second reader to serve.
+ */
+interface TakenCap {
+  /**
+   * Stable id, and what a failure names. Every claim in this
+   * section filters a roster and prints the ids left standing, so
+   * an offending cap is named rather than counted.
+   */
+  readonly id: string;
+
+  /**
+   * What the row stands for, which here is where the cap falls
+   * against a batch of four claims and what a pass carrying it
+   * would leave behind.
+   */
+  readonly standsFor: string;
+
+  /** The cap itself, as a resolved setting would reach the rule. */
+  readonly cap: number;
+}
+
+/**
+ * The caps `capBatch` takes, one row per place a cap can fall
+ * against {@link CLAIMED_BATCH}.
+ *
+ * Five rows for three places, because two of the three are worth
+ * more than a row each. A cap of 1 is the smallest the rule
+ * admits and a single step from the zero it turns away; a cap of
+ * 25 is what `ENV_DEFAULTS.AR_DISPATCH_BATCH_CAP` in
+ * `scripts/workflow-markers.ts` ships, and it stands for the
+ * ordinary tick — the claim query's own `LIMIT` has already held,
+ * and this call does nothing at all.
+ *
+ * The row the batch sits exactly on is the one an off-by-one
+ * moves, and it is the only place in the roster where both of the
+ * section's claims are true of one row. A cap read one short
+ * there drops a claim that was inside the bound; a cap read one
+ * long is invisible on every other row.
+ */
+const TAKEN_CAPS: readonly TakenCap[] = [
+  {
+    id: 'cap-of-one',
+    standsFor: 'the smallest cap the rule admits, a step from zero',
+    cap: 1,
+  },
+  {
+    id: 'cap-one-under-the-batch',
+    standsFor: 'a cap leaving one claim for the tick after this one',
+    cap: 3,
+  },
+  {
+    id: 'cap-on-the-batch',
+    standsFor: 'a cap the batch sits exactly on, where both claims meet',
+    cap: 4,
+  },
+  {
+    id: 'cap-one-over-the-batch',
+    standsFor: 'the nearest cap with nothing to take off the batch',
+    cap: 5,
+  },
+  {
+    id: 'cap-the-shipped-default',
+    standsFor: 'the cap AR_DISPATCH_BATCH_CAP ships, inert on this batch',
+    cap: 25,
+  },
+];
+
+/**
+ * The places a cap can fall against the batch, declared so a
+ * guard can assert set equality against them rather than count
+ * rows.
+ *
+ * A count passes for five rows all falling short of the batch,
+ * which exercises one comparison five times while reading as
+ * coverage of everything a cap can do to one.
+ */
+const CAP_REACHES = [
+  'shorter than the batch',
+  'exactly the batch',
+  'longer than the batch',
+] as const;
+
+/**
+ * Which of {@link CAP_REACHES} a cap occupies against
+ * {@link CLAIMED_BATCH}, or a fourth answer for one the rule
+ * turns away.
+ *
+ * Total over every number rather than narrowed to the roster, for
+ * the reason {@link capShape} is: a cap that reached the roster
+ * without the property names its own shape in the failure instead
+ * of being read as a duplicate of whichever row it resembled.
+ * That fourth answer is the one which cannot appear in
+ * {@link CAP_REACHES}, so it is what a wrongly rostered cap comes
+ * back as.
+ *
+ * It asks {@link capShape} first rather than comparing lengths of
+ * its own, so a cap belonging in {@link REFUSED_CAPS} is reported
+ * as one instead of being placed by an arithmetic the rule never
+ * reaches for it.
+ */
+function capReach(cap: number): string {
+  if (capShape(cap) !== 'a positive integer') {
+    return 'a cap the rule turns away';
+  }
+
+  if (cap < CLAIMED_BATCH.length) {
+    return 'shorter than the batch';
+  }
+
+  return cap > CLAIMED_BATCH.length
+    ? 'longer than the batch'
+    : 'exactly the batch';
+}
+
+/** Whether the batch is longer than a cap, so its tail goes. */
+function capBites(taken: TakenCap): boolean {
+  return taken.cap < CLAIMED_BATCH.length;
+}
+
+/**
+ * Whether the batch fits under a cap, so nothing is taken off it.
+ *
+ * The negation of {@link capBites} rather than a comparison of
+ * its own, so the two cannot come to overlap or to leave a cap
+ * between them however the roster is edited. The cap the batch
+ * sits exactly on is here, where the whole batch coming back is
+ * the stronger of the two things true of it.
+ */
+function batchFitsUnderCap(taken: TakenCap): boolean {
+  return !capBites(taken);
+}
+
+/** The batch `capBatch` came back with for a cap it took. */
+function answerFor(cap: number): readonly string[] {
+  return capBatch(CLAIMED_BATCH, cap);
+}
+
+/**
+ * Whether a cap's answer sits at the head of the batch, item for
+ * item.
+ *
+ * An index walk rather than a slice held against the answer, so
+ * the guard is not the rule under test written out a second time:
+ * a `slice` on this side would agree with a `slice` on that one
+ * however either came to be edited.
+ */
+function answerStartsTheBatch(taken: TakenCap): boolean {
+  return answerFor(taken.cap).every((item, index) => item === CLAIMED_BATCH[index]);
+}
+
+/**
+ * One reading per rostered cap, keyed by id, so a comparison is a
+ * single expression over two whole maps.
+ *
+ * {@link byId} aimed at this roster, with the same argument for
+ * the shape — comparing the maps fails on a missing key as well
+ * as on a wrong value, and prints the pair — and the same limit,
+ * that it cannot fail for holding no keys at all.
+ */
+function byCap<V>(
+  caps: readonly TakenCap[],
+  read: (taken: TakenCap) => V,
+): Record<string, V> {
+  return Object.fromEntries(caps.map((taken) => [taken.id, read(taken)]));
+}
+
+/** The rostered caps the batch is longer than, so its tail goes. */
+const CAPS_THAT_BITE: readonly TakenCap[] = TAKEN_CAPS.filter(capBites);
+
+/** The rostered caps the whole batch fits under. */
+const CAPS_THE_BATCH_FITS_UNDER: readonly TakenCap[] = TAKEN_CAPS.filter(batchFitsUnderCap);
+
+// ---------------------------------------------------------------------------
+// A cap the rule takes
+// ---------------------------------------------------------------------------
+
+describe('capBatch — a cap that is a positive integer', () => {
+  // The roster guard every section before this one carries, aimed
+  // at this roster. Each claim here walks it or one of the two
+  // groups drawn from it, and a walk over no rows names no
+  // offender and passes — so this is also what stands behind both
+  // groups holding anything at all: lose the caps that fall short
+  // and 'shorter than the batch' goes missing, lose the rest and
+  // the other two do. Set equality over the DISTINCT places
+  // rather than one label per row, since the roster carries more
+  // rows than there are places to fall; distinctness over the
+  // caps beside it, since two rows holding one cap are a single
+  // datum asserted twice.
+  it('holds a cap for every place one can fall against the batch', () => {
+    const covered = TAKEN_CAPS.map((taken) => capReach(taken.cap));
+    const rostered = TAKEN_CAPS.map((taken) => taken.cap);
+
+    expect(sorted([...new Set(covered)])).toEqual(sorted(CAP_REACHES));
+    expect(new Set(rostered).size).toBe(rostered.length);
+  });
+
+  // The fixture guard both claims rest on, and it is about the
+  // batch rather than the roster. A batch of one item makes "the
+  // whole batch" and "the first item" the same answer, and a
+  // batch whose items repeat makes its front indistinguishable
+  // from its back — either leaves every claim here green for a
+  // rule that took the wrong items or the wrong number of them.
+  it('is driven over a batch of more than one item, no two alike', () => {
+    expect(CLAIMED_BATCH.length).toBeGreaterThan(1);
+    expect(new Set(CLAIMED_BATCH).size).toBe(CLAIMED_BATCH.length);
+  });
+
+  // Filtered rather than asserted per row, so a failure names
+  // every cap that was turned away instead of stopping at the
+  // first. The mirror of the refusal section's own claim, and
+  // what says the two rosters do not overlap: a cap belonging
+  // over there is reported here as a refusal rather than as a
+  // row that quietly answered nothing.
+  it('refuses none of them', () => {
+    const refused = TAKEN_CAPS
+      .filter((taken) => refusalFor(taken.cap) !== null)
+      .map((taken) => taken.id);
+
+    expect(refused).toEqual([]);
+  });
+
+  // The first of the two claims this section exists for.
+  // Asserted against the batch itself rather than against an
+  // answer written down beside the row, which is what makes it a
+  // claim about the list that was handed in: a cap the batch fits
+  // under has nothing to take, so what comes back is everything
+  // that went in.
+  it('answers with the whole batch for every cap it fits under', () => {
+    const answered = byCap(CAPS_THE_BATCH_FITS_UNDER, (taken) => answerFor(taken.cap));
+
+    expect(answered).toEqual(byCap(CAPS_THE_BATCH_FITS_UNDER, () => CLAIMED_BATCH));
+  });
+
+  // The second, asserted against the cap the row carries for the
+  // same reason. A batch longer than its cap is bounded to
+  // exactly that many however much came due, and the rows past it
+  // are not dropped: nothing has claimed them, so they stay due
+  // and the tick after this one takes them.
+  it('answers with exactly cap items for every cap that bites', () => {
+    const counted = byCap(CAPS_THAT_BITE, (taken) => answerFor(taken.cap).length);
+
+    expect(counted).toEqual(byCap(CAPS_THAT_BITE, (taken) => taken.cap));
+  });
+
+  // What parts the claim above it from a count. Exactly `cap`
+  // items is satisfied in full by a rule taking the LAST `cap` of
+  // the batch, or any `cap` of them in any order, and neither is
+  // a bounded pass at the front of the queue — `ar-dispatch`
+  // claims oldest-due first, so which end goes is the difference
+  // between a capped pass and a sample of one. Walked over the
+  // whole roster rather than over the biting group, since a cap
+  // that took nothing off the batch can still hand it back in the
+  // wrong order.
+  it('takes those items off the front of the batch, never the back', () => {
+    const strayed = TAKEN_CAPS
+      .filter((taken) => !answerStartsTheBatch(taken))
+      .map((taken) => taken.id);
+
+    expect(strayed).toEqual([]);
+  });
+
+  // What parts the whole-batch claim from a rule handing the
+  // caller its own list straight back. That rule satisfies the
+  // claim in full — the two are equal item for item — and
+  // `src/lib/schedule.ts` says the opposite outright: the batch
+  // comes back as a new array whether or not the cap bit, so
+  // nothing a caller still holds is trimmed underneath it.
+  // `Object.is` rather than a comparison of contents, since the
+  // contents are what the claim already read.
+  it('answers with a new array rather than the batch it was handed', () => {
+    const shared = TAKEN_CAPS
+      .filter((taken) => Object.is(answerFor(taken.cap), CLAIMED_BATCH))
+      .map((taken) => taken.id);
+
+    expect(shared).toEqual([]);
   });
 });
