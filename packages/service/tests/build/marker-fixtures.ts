@@ -8,8 +8,8 @@
  *
  * A shared module rather than literals inside one suite, because
  * three files want the same samples — the marker cases beside this
- * file, which read it now, and the build cases driving a build over
- * a fixture tree and the splice case that spawns a real build, both
+ * file and the build cases driving a build over a fixture tree,
+ * which read it now, and the splice case that spawns a real build,
  * still to come in this stage. Sharing is also what makes a roster
  * assertable: a case can ask whether every refused form was reached,
  * which is a question no inline literal answers. `tsconfig.json`
