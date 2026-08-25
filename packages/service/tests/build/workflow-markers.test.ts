@@ -73,14 +73,14 @@
  * order would be restating the claim rather than standing behind
  * it.
  *
- * The last two subjects are not settings rules at all, and sit
- * here because they belong to the same module: which libraries the
- * build will paste into a Code node, and what it takes off one
- * before pasting it. Both judge a library a transpiler has already
- * been over, so their cases hand over a recorded transpile out of
- * `marker-fixtures.ts` — the same reason the settings cases run on
- * arguments, a vitest worker having no `Bun.Transpiler` to produce
- * a fresh one with.
+ * The subjects after them are not settings rules at all, and sit
+ * here because they belong to the same module. Two of them are
+ * about a library: which ones the build will paste into a Code
+ * node, and what it takes off one before pasting it. Both judge a
+ * library a transpiler has already been over, so their cases hand
+ * over a recorded transpile out of `marker-fixtures.ts` — the same
+ * reason the settings cases run on arguments, a vitest worker
+ * having no `Bun.Transpiler` to produce a fresh one with.
  *
  * The refusals `assertSpliceable` makes need a guard the settings
  * ones do not. The whole output of that function is a throw, so
@@ -116,9 +116,30 @@
  * back a literal holding a snippet nobody wrote. That library
  * still transpiles and still splices, so the build has no second
  * chance to notice.
+ *
+ * The last subject is the whole marker pass rather than one rule
+ * inside it, asked about the two marker forms the build no longer
+ * resolves. `resolveMarkers` is what a build hands a parsed source
+ * to, so its cases hand over a template — a source-shaped object
+ * with the marker buried where a node buries a body — and each
+ * template carries one retired form on its own. One rule refuses
+ * both and names the first it finds, so a template carrying both
+ * would be refused under one of them while saying nothing about
+ * the other.
+ *
+ * Neither of those cases may read the throw. A retired form left
+ * standing reaches the serialized artifact and the survival check
+ * refuses it there, so a build carrying one fails either way, and
+ * only the class and the form say which rule caught it. Their
+ * guard is the live inline form the two are near misses of:
+ * `__INLINE:` and `__INLINE_JSON:` part company only in the
+ * characters between `INLINE` and the colon, so a refusal keyed on
+ * the shared prefix takes the one marker the build exists to
+ * resolve. Reading that library's body back is the single case
+ * here that reddens for a pass refusing whatever it is handed.
  */
 import type { LibSample } from './marker-fixtures.js';
-import type { EnvSource } from '../../scripts/workflow-markers.js';
+import type { EnvSource, LibLoader } from '../../scripts/workflow-markers.js';
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -128,6 +149,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import {
   ENV_DEFAULTS,
+  RetiredMarkerError,
   SpliceableLibError,
   UnresolvedSettingError,
   assertSpliceable,
@@ -135,6 +157,7 @@ import {
   parseDotenv,
   readEnvFile,
   resolveEnvVar,
+  resolveMarkers,
   stripDeclarationExports,
 } from '../../scripts/workflow-markers.js';
 
@@ -142,6 +165,7 @@ import {
   LIB_CONTROL_SAMPLES,
   REFUSED_LIB_SAMPLES,
   SPLICEABLE_LIB_SAMPLES,
+  valueAtPath,
 } from './marker-fixtures.js';
 
 // ---------------------------------------------------------------------------
@@ -1372,4 +1396,269 @@ describe('stripDeclarationExports — the keyword on a declaration', () => {
     expect(stripDeclarationExports(TEMPLATE_LITERAL_SAMPLE.transpiled))
       .toBe(TEMPLATE_LITERAL_SAMPLE.stripped);
   });
+});
+
+// ---------------------------------------------------------------------------
+// A source carrying a marker form the build no longer resolves
+// ---------------------------------------------------------------------------
+
+/** One retired marker form, paired to a marker written in it. */
+interface RetiredCase {
+  /** The form the refusal has to name. */
+  readonly form: string;
+
+  /** A whole marker in that form, as a source would write one. */
+  readonly marker: string;
+}
+
+/**
+ * The two forms the build refuses rather than resolves, each with a
+ * marker written in it and in neither of the others.
+ *
+ * One rule refuses both and names the first form it finds, so a
+ * template carrying both would be refused under one of them and say
+ * nothing about the other. Each marker is kept to one form for that
+ * reason, and the guard below asserts it rather than leaving it to
+ * the eye.
+ *
+ * The file names are invented and nothing reads them. A retired form
+ * is refused on the form alone — there is no capture to take a name
+ * out of, and no file is opened — so what they are for is to make
+ * each of these a whole marker rather than a bare prefix, which is
+ * how a workflow source would have carried one.
+ */
+const RETIRED_CASES: readonly RetiredCase[] = [
+  { form: '__INLINE_JSON', marker: '__INLINE_JSON:taxonomy.json__' },
+  { form: '__INLINE_YAML', marker: '__INLINE_YAML:digest-rules.yaml__' },
+];
+
+/**
+ * The library the accepting template inlines, and the body the
+ * loader below hands back for it.
+ *
+ * Its own dependency is a type and erases before the transpile, so
+ * the recorded body is a plain function carrying no marker of any
+ * kind. Nothing read back out of it can be mistaken for a marker the
+ * pass left standing.
+ */
+const LIVE_LIB_SAMPLE = sampleById(
+  LIB_CONTROL_SAMPLES,
+  'control-type-only-import',
+);
+
+/**
+ * The marker the accepting template carries: the live inline form,
+ * which is what both retired forms are near misses of.
+ *
+ * `__INLINE:` and `__INLINE_JSON:` part company only in the
+ * characters between `INLINE` and the colon, so a refusal keyed on
+ * the shared prefix takes this one too — and this is the marker the
+ * build exists to resolve.
+ */
+const LIVE_MARKER = `__INLINE:${LIVE_LIB_SAMPLE.path}__`;
+
+/**
+ * Where every template below buries its marker.
+ *
+ * A node parameter rather than a top-level value, so the walk has to
+ * descend to reach it. Depth is its own subject and no case here
+ * claims anything about it, but a refusal read off a string the walk
+ * never reached would be no refusal at all.
+ */
+const MARKER_SITE: readonly (string | number)[] = [
+  'nodes',
+  0,
+  'parameters',
+  'jsCode',
+];
+
+/**
+ * A source-shaped template carrying one marker and nothing else.
+ *
+ * One builder for all three inputs, so the accepting template and
+ * the two refused ones differ by the marker and by nothing else.
+ * Written out three times they could drift into differing somewhere
+ * the rule is not about, and the control would stop being a near
+ * miss of the things it stands beside.
+ *
+ * A function rather than a constant, for the reason the template in
+ * `marker-fixtures.ts` is one: a case resolving in place would hand
+ * the next one a template with nothing left to find, and that case
+ * would pass by finding nothing.
+ *
+ * @param marker - The marker to bury at {@link MARKER_SITE}.
+ * @returns A fresh template carrying it there.
+ */
+function templateCarrying(marker: string): Record<string, unknown> {
+  return {
+    name: 'AR Marker Pass Fixture',
+    nodes: [
+      {
+        name: 'Read settings',
+        parameters: { jsCode: `// build\n${marker}\n` },
+      },
+    ],
+  };
+}
+
+/**
+ * The loader every call below is made with.
+ *
+ * It answers for one library and refuses anything else rather than
+ * handing back a body for it. A loader answering whatever it was
+ * asked would turn a marker resolved against the wrong path into a
+ * pass — and these refusals are about markers no loader should be
+ * asked about at all, so a call reaching it is a failure that has to
+ * say so.
+ *
+ * @param libPath - The path a library marker named.
+ * @returns The recorded body of the one library it answers for.
+ */
+const FIXTURE_LOADER: LibLoader = (libPath) => {
+  if (libPath !== LIVE_LIB_SAMPLE.path) {
+    throw new Error(
+      `The fixture loader was asked for ${JSON.stringify(libPath)}, and `
+      + `answers only for ${JSON.stringify(LIVE_LIB_SAMPLE.path)}.`,
+    );
+  }
+
+  return LIVE_LIB_SAMPLE.stripped;
+};
+
+/**
+ * Run the whole marker pass over a template carrying one marker.
+ *
+ * No settings chain is handed over, so the pass falls back to the
+ * one a default build resolves against. Nothing here carries a
+ * setting marker for it to answer: the library inlined declares a
+ * plain function, and the surrounding template is prose.
+ *
+ * @param marker - The marker to bury in the template.
+ * @returns Whatever the pass returned for it.
+ */
+function resolveTemplateCarrying(marker: string): unknown {
+  return resolveMarkers(templateCarrying(marker), { loadLib: FIXTURE_LOADER });
+}
+
+/**
+ * The {@link RetiredMarkerError} a call refused with.
+ *
+ * A third helper beside {@link refusalOf} and
+ * {@link spliceRefusalOf}, rather than one taking a class, for the
+ * reason the second was written: pinning a named class is the point
+ * of all three, and a helper handed the class to expect would let a
+ * case pin whatever it happened to pass. Anything else thrown is
+ * rethrown, so a pass failing some other way — a path escaping the
+ * library directory, a setting no source answers for — fails the
+ * cases below with that error rather than passing them.
+ *
+ * A call that RETURNED is its own failure and says so with what it
+ * returned. Reading a field off a refusal that never happened would
+ * otherwise fail on a property of `undefined`, naming neither what
+ * was expected nor what occurred.
+ *
+ * @param resolve - The call under test, passed unmade so what it
+ *   throws lands here.
+ * @returns The refusal it threw.
+ */
+function retiredRefusalOf(resolve: () => unknown): RetiredMarkerError {
+  let resolved: unknown;
+
+  try {
+    resolved = resolve();
+  } catch (thrown) {
+    if (thrown instanceof RetiredMarkerError) {
+      return thrown;
+    }
+
+    throw thrown;
+  }
+
+  throw new Error(
+    `resolveMarkers resolved to ${JSON.stringify(resolved)} where a `
+    + 'refusal was expected.',
+  );
+}
+
+describe('resolveMarkers — a marker form the build no longer resolves', () => {
+  // The fixture guard, and the two things about these templates no
+  // case can read off the pass. Each is refused under the first form
+  // its string carries, so a marker carrying both would prove
+  // nothing about the second, and a marker carrying neither would
+  // leave every case below about whatever the pass does with
+  // ordinary text. The second expectation is the other half: a
+  // template that buried nothing at the site is refused by no rule
+  // at all.
+  it('is asked about templates burying one retired form apiece', () => {
+    const carried = RETIRED_CASES.map((entry) => RETIRED_CASES
+      .filter((other) => entry.marker.includes(other.form))
+      .map((other) => other.form));
+    const buried = RETIRED_CASES.filter((entry) => String(
+      valueAtPath(templateCarrying(entry.marker), MARKER_SITE),
+    ).includes(entry.marker));
+
+    expect(carried).toEqual(RETIRED_CASES.map((entry) => [entry.form]));
+    expect(buried).toEqual(RETIRED_CASES);
+  });
+
+  // The guard the refusals rest on, and the only case here that
+  // moves when the pass refuses whatever it is handed. Every claim
+  // below reads a refusal, and a section of nothing but refusals is
+  // green under such a version.
+  //
+  // The near miss is the live inline form: it differs from both
+  // retired ones only in the characters between `INLINE` and the
+  // colon, so a rule keyed on the shared prefix refuses the one
+  // marker the build exists to resolve, and fails here and nowhere
+  // else. The library body is read back rather than the return, so a
+  // pass quietly resolving the marker to nothing fails here too —
+  // and the expected value is the same template built around the
+  // body, which keeps the comparison from spelling a second copy of
+  // either.
+  it('resolves the live inline form the retired ones sit beside', () => {
+    const resolved = resolveTemplateCarrying(LIVE_MARKER);
+    const spliced = templateCarrying(LIVE_LIB_SAMPLE.stripped);
+
+    expect(valueAtPath(resolved, MARKER_SITE))
+      .toBe(valueAtPath(spliced, MARKER_SITE));
+  });
+
+  for (const entry of RETIRED_CASES) {
+    // The class rather than the throw, and here that is the whole of
+    // what a case can say by refusing. A retired marker left
+    // standing reaches the serialized artifact and the survival
+    // check refuses it there, so a build carrying one fails either
+    // way: what this rule adds is a message about the marker rather
+    // than about the output it survived into, and the class is what
+    // says which of the two caught it.
+    it(`throws RetiredMarkerError for a template carrying ${entry.form}`, () => {
+      expect(() => resolveTemplateCarrying(entry.marker))
+        .toThrow(RetiredMarkerError);
+    });
+
+    // Which form was found, carried as a field so a case says which
+    // of the two it was about without parsing a sentence it did not
+    // write. One rule refuses both and names the first it reaches,
+    // so a case reading only the throw is covered by whichever form
+    // the roster happens to try first — and would stay green with
+    // the other dropped from that roster outright.
+    it(`names ${entry.form} as the form it refused for`, () => {
+      const refusal = retiredRefusalOf(
+        () => resolveTemplateCarrying(entry.marker),
+      );
+
+      expect(refusal.form).toBe(entry.form);
+    });
+
+    // The same form in the sentence an operator actually reads,
+    // since a build refusing on a terminal prints the message and
+    // none of the fields.
+    it(`names ${entry.form} in the message`, () => {
+      const refusal = retiredRefusalOf(
+        () => resolveTemplateCarrying(entry.marker),
+      );
+
+      expect(refusal.message).toContain(entry.form);
+    });
+  }
 });
