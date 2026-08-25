@@ -1,8 +1,9 @@
 /**
  * What a build makes of a source TREE: the tree it refuses over a
  * marker nothing reads, the near miss of that tree it builds, the
- * tree that is not there at all, and one tree built twice by the
- * command an operator runs.
+ * tree that is not there at all, and one roster of sources put
+ * through the command an operator runs — twice over unchanged, and
+ * once more with a stamp handed in.
  *
  * The rules underneath a build are claimed next door, in
  * `workflow-markers.test.ts`, against arguments alone — a chain of
@@ -10,8 +11,8 @@
  * this file is the half no argument reaches: the listing, the
  * per-file read, the mkdir and the write. `buildAll` takes both
  * directories as parameters so that a case can move the tree, and
- * moving it is how every section here but the last one runs. The
- * last hands the same problem to a spawned build, which is handed
+ * moving it is how the first two sections here run. The two after
+ * them hand the same problem to a spawned build, which is handed
  * no directories at all and names its own beside the entry point it
  * was launched from — so it is moved by being given a package tree
  * to name rather than by an argument.
@@ -78,8 +79,8 @@
  * input rather than a diff, so nothing downstream would report a
  * build that quietly wrote something else the second time —
  * `workflows/dist/` is gitignored, and the comparison this section
- * makes is the only place two builds of one tree are ever held
- * against each other.
+ * makes is the only one holding two builds of one tree against
+ * each other with nothing varied between them.
  *
  * Which is also what makes the section's guards the load-bearing
  * half. Two directories that agree perfectly is what a pair of runs
@@ -89,9 +90,23 @@
  * one artifact per source, and that a marker pass ran over the
  * bytes being compared.
  *
- * The rest of what a build owes — the one value allowed to move
- * with the checkout, and what a rebuild picks up from an edited
- * library — arrives later in this stage.
+ * The fourth subject is the one value that is allowed to move.
+ * Two runs of one tree agreeing byte for byte says nothing about
+ * WHICH bytes a build may change between trees, and the answer is
+ * one: the stamp, which the checkout supplies. So the same roster
+ * is built a third time with a stamp handed in, and the artifacts
+ * are read for the pair — the file whose source names the stamp
+ * carries what was handed in, and every other file is the bytes
+ * the run handed nothing wrote.
+ *
+ * Handed in through the deploy build, because that is the only way
+ * there is. The default build resolves `ENV_DEFAULTS` alone and
+ * reads no environment, so `--external` is not a second thing
+ * varied beside the stamp: it is how a stamp reaches the shipped
+ * command at all.
+ *
+ * What a rebuild picks up from an edited library arrives later in
+ * this stage.
  */
 import type { EnvSource, LibLoader } from '../../scripts/workflow-markers.js';
 
@@ -108,6 +123,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import { afterAll, describe, expect, it } from 'vitest';
@@ -589,7 +605,7 @@ describe('buildAll — a source directory that is not there', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The package trees a spawned build is given to name
+// The trees a spawned build names, and what it is given with them
 // ---------------------------------------------------------------------------
 
 /** One source a spawned build is pointed at, and what it names. */
@@ -609,6 +625,10 @@ interface SpawnSource {
  * different settings on purpose: with one value between them, a
  * build writing either artifact's text under both names would
  * satisfy the comparison as readily as a correct one.
+ *
+ * The split carries a second load. One of the two names the stamp
+ * and the other does not, which is what parts the value a checkout
+ * is allowed to move from the values it is not.
  */
 const SPAWN_SOURCES: readonly SpawnSource[] = [
   { file: 'ar-fixture-stamp.json', setting: 'AR_BUILD_TAG' },
@@ -624,6 +644,85 @@ const SPAWN_SOURCES: readonly SpawnSource[] = [
  * old thing.
  */
 const SPAWNED_ARTIFACTS = SPAWN_SOURCES.map((source) => source.file).sort();
+
+/**
+ * The setting a stamp is handed in as.
+ *
+ * The one name in {@link SPAWN_SOURCES} whose value a build is
+ * entitled to move: `gitBuildTag` answers it out of a checkout,
+ * so an artifact built at one commit and an artifact built at the
+ * next differ here and are meant to. Every other setting resolves
+ * to the same text until the table or an environment is edited.
+ *
+ * The same name {@link READ_SETTING} spells, for a different
+ * reason — there a marker mistypes it, here it is the value that
+ * moves — and spelled twice rather than shared, so an edit made
+ * for one section's fixture cannot move the other's.
+ */
+const STAMP_SETTING = 'AR_BUILD_TAG';
+
+/** The sources whose marker names {@link STAMP_SETTING}. */
+const STAMPED_SOURCES = SPAWN_SOURCES.filter(
+  (source) => source.setting === STAMP_SETTING,
+);
+
+/** The sources whose marker names anything else. */
+const UNSTAMPED_SOURCES = SPAWN_SOURCES.filter(
+  (source) => source.setting !== STAMP_SETTING,
+);
+
+/**
+ * The stamp {@link INJECTED_RUN} is handed.
+ *
+ * Neither answer a build makes for itself. `ENV_DEFAULTS` carries
+ * `dev` for this name, and a tree under the temporary root is no
+ * checkout, so the build's own git call answers `dev` too — a
+ * value neither of them can produce is what makes an artifact
+ * carrying it evidence that the stamp handed in is the one that
+ * landed.
+ */
+const INJECTED_TAG = 'tag-handed-to-the-deploy-build';
+
+/**
+ * The argument that asks for the deploy build.
+ *
+ * Spelled here rather than imported, since the build declares it
+ * privately — and for the reason {@link SURVIVING_FORM} is spelled
+ * too: an expected value taken from the module under test agrees
+ * with that module however it changes.
+ */
+const EXTERNAL_FLAG = '--external';
+
+/**
+ * The environment a spawned build is given.
+ *
+ * Every name {@link ENV_DEFAULTS} carries is taken out of it, and
+ * the stamp, where there is one, is put back. `PATH` and whatever
+ * else a launcher needs is left where it is: what is stripped is
+ * the table's own names and nothing besides.
+ *
+ * Given to every run rather than to the one that reads an
+ * environment, so no two runs differ in anything but the stamp. A
+ * developer with `AR_DISPATCH_CRON` exported would otherwise move
+ * an artifact that two runs are compared over, for a reason no
+ * case in this file is about.
+ *
+ * @param stamp - The stamp to hand in, or `null` for a run handed
+ *   none.
+ * @returns The environment to spawn that run with.
+ */
+function spawnEnv(stamp: string | null): Record<string, string | undefined> {
+  const settingNames = Object.keys(ENV_DEFAULTS);
+  const carried = Object.entries(process.env).filter(
+    ([name]) => !settingNames.includes(name),
+  );
+
+  return Object.fromEntries(
+    stamp === null
+      ? carried
+      : [...carried, [STAMP_SETTING, stamp]],
+  );
+}
 
 /**
  * The package's own `scripts/`, resolved from this file's location
@@ -701,15 +800,34 @@ interface SpawnedBuild extends FixtureTree {
  * directory. A build that had it the other way round would answer
  * the same here and differently everywhere else.
  *
+ * A run handed a stamp is the deploy build, and those are one
+ * thing rather than two. The default build resolves `ENV_DEFAULTS`
+ * alone and reads no environment at all, so {@link EXTERNAL_FLAG}
+ * is not a second knob turned beside the stamp — it is the whole
+ * of how a stamp reaches the shipped command. It moves where the
+ * artifacts land as well, into `workflows/dist-external/`, which
+ * is the same opt-in rule from its other side: an artifact that
+ * absorbed an environment and one that could not never share a
+ * name.
+ *
  * @param name - The subdirectory of {@link FIXTURE_ROOT} to plant
  *   the tree under, so no two runs share a source or an output.
+ * @param stamp - The stamp to hand the build, or `null` for a run
+ *   handed none. A stamp asks for the deploy build.
  * @returns Where that run read and wrote, and how it went.
  */
-function spawnedBuild(name: string): SpawnedBuild {
+function spawnedBuild(name: string, stamp: string | null = null): SpawnedBuild {
   const root = join(FIXTURE_ROOT, name);
+  const external = stamp !== null;
   const tree: FixtureTree = {
     sourceDir: join(root, 'workflows', 'src'),
-    outDir: join(root, 'workflows', 'dist'),
+    outDir: join(
+      root,
+      'workflows',
+      external
+        ? 'dist-external'
+        : 'dist',
+    ),
   };
 
   mkdirSync(tree.sourceDir, { recursive: true });
@@ -724,10 +842,14 @@ function spawnedBuild(name: string): SpawnedBuild {
     );
   }
 
-  const run = spawnSync('bun', [join(root, 'scripts', ENTRY_FILE)], {
-    cwd: root,
-    encoding: 'utf8',
-  });
+  const entry = join(root, 'scripts', ENTRY_FILE);
+  const run = spawnSync(
+    'bun',
+    external
+      ? [entry, EXTERNAL_FLAG]
+      : [entry],
+    { cwd: root, encoding: 'utf8', env: spawnEnv(stamp) },
+  );
 
   return {
     ...tree,
@@ -737,11 +859,17 @@ function spawnedBuild(name: string): SpawnedBuild {
   };
 }
 
-/** The first of two runs over one roster of sources. */
+/**
+ * The first of two runs over one roster of sources, and the run
+ * handed no stamp that {@link INJECTED_RUN} is held against.
+ */
 const FIRST_RUN = spawnedBuild('first-run');
 
 /** The second, over a tree differing only in where it sits. */
 const SECOND_RUN = spawnedBuild('second-run');
+
+/** The same roster again, with {@link INJECTED_TAG} handed in. */
+const INJECTED_RUN = spawnedBuild('injected-stamp', INJECTED_TAG);
 
 /**
  * Every artifact a run wrote, as the bytes it wrote them as.
@@ -758,6 +886,26 @@ function artifactBytesOf(run: SpawnedBuild): Record<string, Uint8Array> {
     readdirSync(run.outDir)
       .sort()
       .map((file) => [file, readFileSync(join(run.outDir, file))]),
+  );
+}
+
+/**
+ * The bytes of the artifacts whose sources name no stamp.
+ *
+ * Read by name off {@link UNSTAMPED_SOURCES} rather than by
+ * listing the directory, so two runs are held against the same
+ * roster of names either way and a run that wrote one of them
+ * fails on the read — naming the path — rather than on a record
+ * that came back shorter.
+ *
+ * @param run - The run whose artifacts to read.
+ * @returns Those artifacts, keyed by file name.
+ */
+function unstampedBytesOf(run: SpawnedBuild): Record<string, Uint8Array> {
+  return Object.fromEntries(
+    UNSTAMPED_SOURCES.map(
+      (source) => [source.file, readFileSync(join(run.outDir, source.file))],
+    ),
   );
 }
 
@@ -860,5 +1008,83 @@ describe('bun scripts/build-workflows.ts — one roster, two runs', () => {
   // one machine's build directory to every instance.
   it('writes byte-identical artifacts into both directories', () => {
     expect(artifactBytesOf(SECOND_RUN)).toEqual(artifactBytesOf(FIRST_RUN));
+  });
+});
+
+describe('bun scripts/build-workflows.ts --external — a stamp handed in', () => {
+  // The fixture guard both claims here rest on, and the half
+  // neither of them can supply: the roster carries a source naming
+  // the stamp AND a source naming something else. With only the
+  // first, the byte comparison would hold two empty records
+  // against each other; with only the second, nothing in the tree
+  // would carry a stamp at all.
+  it('plants a source naming the stamp and a source naming another', () => {
+    expect(STAMPED_SOURCES).not.toEqual([]);
+    expect(UNSTAMPED_SOURCES).not.toEqual([]);
+  });
+
+  // The second guard: the stamp handed in is a value no build
+  // makes for itself. `ENV_DEFAULTS` answers `dev` for this name,
+  // and a fixture tree is no checkout, so the build's own git call
+  // answers `dev` too. Which of the two supplied it is not
+  // knowable from here — so what is read is the run handed
+  // nothing, and that covers whichever it was.
+  it('hands in a stamp no unstamped build resolves to', () => {
+    const injected = valueAtPath(sourceCarrying(INJECTED_TAG), MARKER_SITE);
+    const handedNothing = STAMPED_SOURCES.map(
+      (source) => valueAtPath(artifactIn(FIRST_RUN, source.file), MARKER_SITE),
+    );
+
+    expect(INJECTED_TAG).not.toBe(ENV_DEFAULTS[STAMP_SETTING]);
+    expect(handedNothing).not.toContain(injected);
+  });
+
+  // The launch guard. A command that never ran leaves no output
+  // directory at all, so every read below it would fail naming a
+  // path rather than the run that never wrote one — which is why
+  // the status is carried as the string the spawn built, printing
+  // whatever the run had to say for itself.
+  it('runs to completion with a stamp in its environment', () => {
+    expect(INJECTED_RUN.launch).toBe(LAUNCH_OK);
+  });
+
+  // The roster guard: this run built the whole tree rather than
+  // the one artifact the claim below reads. A build stopping after
+  // the source it found a stamp for would satisfy that claim
+  // outright.
+  it('writes one artifact per source', () => {
+    expect(Object.keys(artifactBytesOf(INJECTED_RUN))).toEqual(SPAWNED_ARTIFACTS);
+  });
+
+  // The first claim: the stamp a build is handed is the stamp its
+  // artifacts carry. Read at the marker site out of the file on
+  // disk rather than off the line the build printed — a build
+  // reporting one stamp and writing another is the failure the
+  // shipped command reads its own chain back to avoid, and a case
+  // trusting that report could not see it.
+  it('writes the stamp it was handed into the artifact naming it', () => {
+    const expected = STAMPED_SOURCES.map(
+      () => valueAtPath(sourceCarrying(INJECTED_TAG), MARKER_SITE),
+    );
+    const written = STAMPED_SOURCES.map(
+      (source) => valueAtPath(artifactIn(INJECTED_RUN, source.file), MARKER_SITE),
+    );
+
+    expect(written).toEqual(expected);
+  });
+
+  // The second claim, and the half that makes the stamp the ONLY
+  // value that moves: every artifact whose source names another
+  // setting is the bytes the run handed nothing wrote. Two things
+  // were varied between these two runs — the stamp, and the build
+  // mode that is the only way to hand one in — and this is what
+  // says neither of them reached a file the stamp does not name.
+  //
+  // Held as one record against another rather than as a walk with
+  // an expectation inside it. What that leaves is a roster which
+  // could be empty, and ruling that out is the fixture guard's
+  // job rather than this case's.
+  it('leaves every artifact naming another setting byte-identical', () => {
+    expect(unstampedBytesOf(INJECTED_RUN)).toEqual(unstampedBytesOf(FIRST_RUN));
   });
 });
