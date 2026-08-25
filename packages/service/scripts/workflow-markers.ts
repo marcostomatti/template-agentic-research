@@ -1590,8 +1590,9 @@ export interface ResolveMarkersOptions {
  * malformed around a good name matches nothing, and neither does
  * one written as an object key. Those reach the serialized output
  * and are refused there. This resolves what it recognizes; what
- * it did not recognize is the survival check's to report, from
- * the other end of the same build.
+ * it did not recognize is the survival check's to name, as
+ * {@link SurvivingMarkerError}, from the other end of the same
+ * build.
  *
  * Whatever the loader throws comes through untouched — a path
  * naming no file, a library that cannot stand alone in a Code
@@ -1622,4 +1623,92 @@ export function resolveMarkers(
 
     return resolveEnvString(inlineLibString(text, loadLib), sources);
   });
+}
+
+/**
+ * Thrown when a built artifact still carries marker text:
+ * `__INLINE:`, `__ENVVAR:`, or one of the retired inline forms.
+ *
+ * The last thing a build does with an artifact, and the only one
+ * of its refusals read over the serialized TEXT rather than over
+ * a value. {@link resolveMarkers} replaces every marker it
+ * recognizes and says nothing about the rest; this reads the
+ * output back and refuses an artifact that would put marker
+ * characters on an instance where a value belonged.
+ *
+ * Three ways a marker gets that far, and this is the only thing
+ * that catches any of them — the roster is what the check is for
+ * rather than a second opinion on work already done. A retired
+ * form written inside a LIBRARY body is spliced in as it stands,
+ * because replacement never re-scans what it inserted. A marker
+ * written as an object KEY is not reached at all, because
+ * {@link mapStrings} walks values. A marker malformed around a
+ * good name is a hit for no grammar, so nothing replaced it and
+ * nothing refused it. Each reaches serialization intact, and each
+ * reads as an ordinary string until this looks at it.
+ *
+ * What it does not reach belongs beside that roster, because the
+ * name invites the wider claim. Two markers written with nothing
+ * between them are read as one, and the text left standing has
+ * had its opening underscores eaten: `INLINE:b.ts__` carries no
+ * form to match, so this is silent about it. What refuses that is
+ * the loader, handed a path no library sits at.
+ *
+ * A distinct class rather than a bare `Error`, so a case covering
+ * the check can pin the refusal to it. The other ways writing an
+ * artifact fails arrive as something else — a source that is not
+ * JSON as whatever `JSON.parse` raises, an output directory that
+ * cannot be written as whatever `writeFileSync` throws — and an
+ * assertion accepting any `Error` would pass for either of them.
+ *
+ * Nothing stands behind this one, which is what separates it from
+ * every refusal ahead of it. {@link RetiredMarkerError} and
+ * {@link MarkerPathError} each have this check underneath them:
+ * delete either rule and the build still fails, further along and
+ * with a message about an artifact rather than about the marker.
+ * Delete this one and the build reports success, writes the file,
+ * and the marker text reaches an instance. So a case here is not
+ * asserting which of two rules caught something — it is the whole
+ * of what says a built artifact is resolved.
+ *
+ * The form is a field as well as part of the message, so a case
+ * asserts on which form survived rather than parsing prose it did
+ * not write. The three ways one survives are different mistakes
+ * with different edits behind them, and a sample planted for one
+ * is only covered if the refusal named that form.
+ *
+ * What the form cannot say is WHERE in the artifact it survived.
+ * A key, a library body and a misspelt name all report the same
+ * text, and a `grep` for the form over the artifact is what turns
+ * it back into a site.
+ */
+export class SurvivingMarkerError extends Error {
+  /**
+   * The marker form found in the serialized output: `__INLINE:`,
+   * `__ENVVAR:`, or a retired `__INLINE_JSON` / `__INLINE_YAML`.
+   *
+   * The form alone. The check reads text with no marker parse
+   * behind it, so there is no captured name or path to carry
+   * beside it — a form that survived is by definition one nothing
+   * managed to read.
+   */
+  readonly form: string;
+
+  /**
+   * @param form - The marker form found in the serialized output.
+   */
+  constructor(form: string) {
+    super(
+      `${form} survived into the built artifact, so a node would ` +
+      'read the marker text where its value belonged. Resolution ' +
+      'replaces only what it recognizes: a marker written as an ' +
+      'object key is not reached by a walk over values, a retired ' +
+      'form inside a library body is spliced in as it stands, and ' +
+      'a marker malformed around its name is a hit for no ' +
+      'grammar. Fix the marker where the workflow source or the ' +
+      'library wrote it — nothing after this point resolves it.',
+    );
+    this.name = this.constructor.name;
+    this.form = form;
+  }
 }
