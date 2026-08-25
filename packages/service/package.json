@@ -17,6 +17,7 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src lib tests scripts",
     "lint:fix": "eslint src lib tests scripts --fix",
+    "pretest": "bun scripts/build-workflows.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:live": "AR_LIVE_DATABASE_URL=postgresql://ar:ar@localhost:5433/ar_live vitest run tests/live",
