@@ -1681,6 +1681,33 @@ export function resolveMarkers(
  * A key, a library body and a misspelt name all report the same
  * text, and a `grep` for the form over the artifact is what turns
  * it back into a site.
+ *
+ * For an `__ENVVAR:` form the reading to rule out first is the
+ * tempting one: it is never a setting left unresolved. A
+ * well-formed marker whose name no source in the chain answers
+ * for is refused back at resolution, by
+ * {@link UnresolvedSettingError}, which names the setting and
+ * never lets an artifact be written at all. So neither
+ * `ENV_DEFAULTS` nor a `.env` is the edit behind a refusal here.
+ * What is left is a name the marker grammar does not admit — a
+ * hyphen, a dot, a leading digit — or a well-formed marker
+ * sitting in a key, per the roster above. Both are edits to the
+ * characters a workflow source wrote.
+ *
+ * Which is what refusing the artifact buys, because how loudly
+ * the literal text would have failed depends entirely on the
+ * parameter it landed in, and this check cannot see that. A cron
+ * field takes five fields and refuses a string that is not them.
+ * A workflow id names no workflow, which the dispatcher arriving
+ * later in this phase routes to an error branch. A URL takes
+ * `__ENVVAR:AR-BUILD-TAG__` for one more path segment, reads on
+ * a canvas as a URL with an odd tail, and says nothing until a
+ * request is finally made — on an instance, a deploy away from
+ * the checkout holding the source and the one wrong character.
+ * No setting in {@link ENV_DEFAULTS} supplies a URL today, which
+ * is the reason this is written over the form alone rather than
+ * keyed to a site: the table is not closed, and the quiet site is
+ * the one it has to cover.
  */
 export class SurvivingMarkerError extends Error {
   /**
