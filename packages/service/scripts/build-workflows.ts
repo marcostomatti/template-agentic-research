@@ -52,6 +52,7 @@
 
 import type { LibLoader, LibScan } from './workflow-markers.js';
 
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -318,4 +319,112 @@ export function loadLib(
 
     return stripDeclarationExports(transpiled);
   };
+}
+
+/**
+ * The stamp a build with no commit to name carries.
+ *
+ * Deliberately the same text `ENV_DEFAULTS.AR_BUILD_TAG` holds, so
+ * the two ways an artifact ends up unstamped agree on what an
+ * operator reads: a build that asked git and got no answer supplies
+ * this, and a build that resolved the setting from nowhere at all
+ * falls through to that table and finds the same word. Nothing ties
+ * them but this sentence. Reading the table from here answers
+ * `string | undefined` under `noUncheckedIndexedAccess`, measured,
+ * so a fallback would have to sit behind the lookup — a second
+ * literal rather than one fewer.
+ */
+const NO_COMMIT_BUILD_TAG = 'dev';
+
+/**
+ * What git printed, or `null` when git could not be asked.
+ *
+ * The two outcomes a caller has to tell apart are empty output and
+ * no output at all: `git status --porcelain` prints nothing for a
+ * clean tree, and prints nothing when the command never ran. The
+ * empty string is the first of those and `null` is the second, so
+ * neither reading can be mistaken for the other.
+ *
+ * Every way the call can fail collapses into that `null`, which is
+ * a swallow written on purpose and is why it is confined to this
+ * helper rather than spread across its callers. Measured over the
+ * conditions a build actually meets: a missing git binary and a
+ * `root` that does not exist both come back with no `status` at
+ * all and an `ENOENT` in `error`, a directory that is not a
+ * checkout exits 128, and a checkout with nothing committed yet
+ * exits 128 as well. None of the four is distinguished here,
+ * because none of them changes what a caller does about it.
+ *
+ * The `catch` covers none of those — every one is reported in the
+ * result object rather than raised — and is here so that not
+ * throwing is a property of this function rather than an inherited
+ * promise from `spawnSync`.
+ *
+ * @param root - The directory to ask git from.
+ * @param args - The git subcommand and the arguments it takes.
+ * @returns The trimmed standard output when git exited cleanly,
+ *   and `null` for every other outcome.
+ */
+function gitOutput(root: string, args: string[]): string | null {
+  try {
+    const git = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+
+    return git.status === 0
+      ? (git.stdout ?? '').trim()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The stamp a built workflow carries, naming the checkout it was
+ * generated from.
+ *
+ * Three answers, and which one comes back is the whole of what the
+ * stamp says. A bare short commit means every input the build read
+ * sits at that commit. That same commit with `-dirty` behind it
+ * means something in the tree does not, so the commit locates the
+ * artifact without describing it. {@link NO_COMMIT_BUILD_TAG}
+ * means there was no commit to name at all — no git binary, a
+ * directory that is not a checkout, or a checkout with nothing
+ * committed yet.
+ *
+ * Cleanliness is asked of the whole repository rather than of
+ * `root`. `git status --porcelain` reports the working tree entire
+ * whatever directory it is run from, measured, and untracked files
+ * count toward its answer. Both are the wanted reading here: the
+ * build splices libraries out of `src/lib/` and reads sources out
+ * of `workflows/src/`, and a file untracked at either is one the
+ * commit cannot account for.
+ *
+ * A status that cannot be answered reads as `-dirty` rather than
+ * as clean. The absence of that suffix is a claim about the tree,
+ * and a build that could not run `git status` has no grounds for
+ * making one; a suffix nobody can rule out costs a reader a second
+ * look, which is the cheaper of the two mistakes. That case is
+ * reachable rather than theoretical: measured, a corrupt index
+ * exits `git status` 128 while `git rev-parse` still names the
+ * commit, and the stamp comes back as the commit with `-dirty`
+ * behind it.
+ *
+ * A commit that comes back empty is treated as no commit at all,
+ * for the same reason: the alternative is a stamp reading `-dirty`
+ * with nothing in front of it, which names neither a commit nor
+ * the absence of one.
+ *
+ * @param root - A directory inside the checkout to ask git from.
+ * @returns The short commit, that commit with `-dirty` behind it,
+ *   or {@link NO_COMMIT_BUILD_TAG}.
+ */
+export function gitBuildTag(root: string): string {
+  const commit = gitOutput(root, ['rev-parse', '--short', 'HEAD']);
+
+  if (commit === null || commit === '') {
+    return NO_COMMIT_BUILD_TAG;
+  }
+
+  return gitOutput(root, ['status', '--porcelain']) === ''
+    ? commit
+    : `${commit}-dirty`;
 }
