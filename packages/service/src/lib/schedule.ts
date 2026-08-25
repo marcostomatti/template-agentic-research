@@ -60,10 +60,11 @@
  * long as the one execution that ran the spliced copy, and neither
  * context reports the difference. {@link clampIntervalSeconds} and
  * {@link capBatch} therefore take everything they read as an argument
- * and keep nothing between calls. `tests/build/schedule-splice.test.ts`,
- * arriving later in this plan, is the nearest thing to a check on that:
- * it drives the spliced copy through `new Function`, which refuses an
- * `import.meta` outright, and reaches anything else only by calling it.
+ * and keep nothing between calls. `tests/build/schedule-splice.test.ts`
+ * is the nearest thing to a check on that: it puts this library through
+ * the shipped build today, and the case driving the spliced copy through
+ * `new Function` — which refuses an `import.meta` outright, and reaches
+ * anything else only by calling it — arrives later in this stage.
  *
  * `src/lib/` is this package's pipeline half; the framework `lib/` at the
  * package root is the fork-style copy of the service template and stays

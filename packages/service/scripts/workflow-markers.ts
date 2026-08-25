@@ -754,10 +754,13 @@ const SPLICE_REFUSALS: readonly SpliceRefusal[] = [
  * dynamic `import(p)` and `import.meta.url` all scan with an
  * empty import list and survive into the transpiled text
  * unchanged, so a library reaching for one passes here and fails
- * on the node exactly the way a surviving import would. No
- * library is spliced yet, the first arriving later in this plan,
- * so nothing has needed that check and this is not where it would
- * go.
+ * on the node exactly the way a surviving import would. One
+ * library is spliced today, `src/lib/schedule.ts`, and only in
+ * the tree `tests/build/schedule-splice.test.ts` builds: no
+ * workflow source names a library until `ar-dispatch` lands. It
+ * satisfies that third rule by hand rather than by anything
+ * checking it, so nothing has needed such a check and this is
+ * not where it would go.
  *
  * @param transpiled - The library with its types erased, as
  *   `transformSync` returned it.
@@ -835,10 +838,10 @@ const DECLARATION_EXPORT = /^export[ \t]+(?=(?:function|const|class|let|var)\b)/
  * way the others do, but the word after `export ` is not one of the
  * five: it is neither refused above nor stripped here, and it
  * survives into a node body to fail on first execution. No library
- * writes one today. What would catch it is the built-output case
- * arriving later in this plan, which asserts the one spliced
- * library carries no export keyword — for that library, and for no
- * other.
+ * writes one today. What catches it is the built-output case in
+ * `tests/build/schedule-splice.test.ts`, which asserts the one
+ * spliced library carries no export keyword — for that library,
+ * and for no other.
  *
  * @param transpiled - A library with its types erased, already
  *   accepted by {@link assertSpliceable}.
