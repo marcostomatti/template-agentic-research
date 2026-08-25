@@ -12,6 +12,14 @@
  * every rule decidable without a filesystem or a transpiler can be
  * driven without either.
  *
+ * That split is by subject rather than by purity, which is worth
+ * saying because the per-file transform sits on this side and
+ * needs neither. A MARKER is next door; an ARTIFACT is here, and
+ * the refusal that reads one back is a claim about output rather
+ * than about a marker. It stays drivable outside a bun process
+ * regardless, because both of the transform's dependencies — the
+ * loader and the settings chain — arrive as parameters.
+ *
  * `workflows/dist/` is generated, and a run rewrites it in full. The
  * build is unconditional rather than only-when-absent, and the two
  * answers differ over exactly one case — a dist built from older
@@ -50,13 +58,23 @@
  * edit that actually fixes it.
  */
 
-import type { LibLoader, LibScan } from './workflow-markers.js';
+import type {
+  LibLoader,
+  LibScan,
+  ResolveMarkersOptions,
+} from './workflow-markers.js';
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { assertSpliceable, stripDeclarationExports } from './workflow-markers.js';
+import {
+  SURVIVING_MARKER_FORMS,
+  SurvivingMarkerError,
+  assertSpliceable,
+  resolveMarkers,
+  stripDeclarationExports,
+} from './workflow-markers.js';
 
 /**
  * Thrown when the process running the build has no
@@ -499,4 +517,128 @@ export function gitBuildTag(root: string): string {
   return gitOutput(root, ['status', '--porcelain']) === ''
     ? commit
     : `${commit}-dirty`;
+}
+
+/**
+ * The indentation every built artifact is written at.
+ *
+ * Fixed here rather than read off the source it was built from,
+ * so how an artifact is shaped is a property of the build and not
+ * of whoever hand-wrote the file that produced it. Two builds of
+ * two differently-formatted sources come back formatted alike,
+ * which is what lets a comparison between two artifacts be about
+ * their content.
+ *
+ * Indented at all because a generated file is still READ. Every
+ * refusal on this path names a form and leaves a `git grep` to
+ * turn it back into a site, an instance rejecting an import names
+ * a node, and the determinism check is a comparison between two
+ * files. One line of JSON answers none of those legibly.
+ */
+const ARTIFACT_INDENT = 2;
+
+/**
+ * Refuse an artifact whose text still carries marker text.
+ *
+ * Read over the serialized bytes rather than over the value they
+ * came from, and that is the only vantage from which the three
+ * ways a marker gets this far are visible at once —
+ * {@link SurvivingMarkerError} carries the roster and what each
+ * one costs. A second walk over the value would see what
+ * {@link resolveMarkers} already saw, which is markers in object
+ * values and nothing else.
+ *
+ * Roster order decides which form is named when an artifact
+ * carries more than one, and it is {@link SURVIVING_MARKER_FORMS}
+ * that settles that order rather than this loop.
+ *
+ * @param serialized - The artifact as it would be written.
+ * @throws SurvivingMarkerError When the text carries a marker
+ *   form, naming the first of them in roster order.
+ */
+function assertNoSurvivingMarker(serialized: string): void {
+  for (const form of SURVIVING_MARKER_FORMS) {
+    if (serialized.includes(form)) {
+      throw new SurvivingMarkerError(form);
+    }
+  }
+}
+
+/**
+ * Build one workflow artifact out of one workflow source.
+ *
+ * Parse the source, resolve every marker it carries, serialize
+ * what comes back, and refuse it if marker text survived. That is
+ * the whole transform from a file under `workflows/src/` to the
+ * file of the same name under `workflows/dist/`, minus the
+ * directory listing, the read and the write — which belong to the
+ * directory build arriving next in this stage.
+ *
+ * Text in and text out, which is a decision rather than a
+ * convenience. The survival check has to read the artifact as it
+ * will be written, and that text does not exist until something
+ * serializes it. Taking a parsed value would leave serializing to
+ * the caller and make the check a step a caller could skip;
+ * handing a parsed value back would put the same choice at the
+ * other end. Doing both here is what makes the bytes that were
+ * checked and the bytes that get written the same bytes.
+ *
+ * The trailing newline is appended unconditionally, so the
+ * artifact is a text file by the ordinary convention — a last
+ * line that ends, and a line-oriented reader that sees it whole.
+ * Unconditional matters as much as present: a newline added only
+ * when one was missing would be a second thing two builds could
+ * differ over.
+ *
+ * Nothing here reads a clock, a counter or an ambient
+ * environment, so one source text and one set of options produce
+ * one artifact, byte for byte. Member order comes from the parse
+ * and from the rebuild {@link resolveMarkers} walks with, both
+ * functions of the input alone, and the indent is
+ * {@link ARTIFACT_INDENT} rather than anything read off the
+ * source. This is where that fixity gets spent:
+ * {@link gitBuildTag} argues why a label is the only value
+ * allowed to move and why a per-run one would be wrong, and this
+ * is the function whose output the comparison it describes
+ * compares.
+ *
+ * Both of its refusals reach a caller as they were raised. A
+ * source that is not JSON comes back as whatever `JSON.parse`
+ * throws, and every refusal the marker pass carries — a retired
+ * form, a path outside the library directory, a setting no source
+ * answers for, a library a Code node could not run — comes back
+ * as the class {@link resolveMarkers} documents.
+ *
+ * What none of them can name is the FILE. This is handed text and
+ * has no name to give, so a `SyntaxError` about position 412
+ * belongs to whichever source the caller opened, and it is the
+ * caller that holds it. The same is true of the marker refusals,
+ * which say so from their own end.
+ *
+ * The check runs last, over the value that is about to be
+ * returned, which makes it a contract on the return rather than a
+ * step in the middle: nothing this function hands back carries
+ * marker text. Nothing downstream looks again.
+ *
+ * @param templateJson - One workflow source, as it was read.
+ * @param options - The loader every library marker is resolved
+ *   through, and the chain every setting marker is resolved
+ *   against. The marker pass's own options, unwidened, because
+ *   this adds nothing to them and a second type would be a copy
+ *   to keep in step.
+ * @returns The artifact: the resolved source, indented, with a
+ *   trailing newline.
+ * @throws SurvivingMarkerError When marker text survived into the
+ *   serialized artifact.
+ */
+export function buildTemplate(
+  templateJson: string,
+  options: ResolveMarkersOptions,
+): string {
+  const resolved = resolveMarkers(JSON.parse(templateJson), options);
+  const serialized = `${JSON.stringify(resolved, null, ARTIFACT_INDENT)}\n`;
+
+  assertNoSurvivingMarker(serialized);
+
+  return serialized;
 }

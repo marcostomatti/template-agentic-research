@@ -417,8 +417,8 @@ export function envSources(options: EnvSourceOptions = {}): readonly EnvSource[]
  * carries the marker form, is resolved against the chain, and
  * fails with this. Something the marker form never matches is not
  * a marker to resolve at all, and survives the pass into the
- * serialized output instead — refused there rather than here, by a
- * check arriving later in this stage.
+ * serialized output instead — refused there rather than here, as
+ * {@link SurvivingMarkerError}.
  *
  * What the message cannot name is the file the marker came out of.
  * Resolution walks strings already parsed out of their source, so
@@ -862,10 +862,16 @@ export function stripDeclarationExports(transpiled: string): string {
  * replacement is global, a global `RegExp` carries `lastIndex` from
  * one call into the next, and a single shared instance therefore
  * resolves the markers in one string and skips them in the next.
- * Each caller compiles its own. The survival check arriving later
- * in this stage wants a non-global instance over this same grammar,
- * which is the second reason — two flag sets, one pattern, and no
- * second copy of it to keep in step.
+ * Each caller compiles its own, and today {@link inlineLibString}
+ * is the only one.
+ *
+ * The survival check over a built artifact is not a second caller,
+ * which is worth saying because its subject invites the
+ * assumption. It walks {@link SURVIVING_MARKER_FORMS} — the bare
+ * `__INLINE:` prefix — rather than this grammar, because a marker
+ * that reached an artifact is ordinarily one this pattern did not
+ * match. A check compiled over it would be blind to exactly the
+ * input it exists for.
  *
  * The character class is written out the way `DOTENV_KEY` above
  * writes its own, rather than as a shorthand escape, so the source
@@ -925,7 +931,8 @@ export const LIB_MARKER = '__INLINE:([A-Za-z0-9_./-]+)__';
  * the closing underscores, is what turns a mistyped name into a
  * refusal that names it. `__ENVVAR:AR-BUILD-TAG__` is not a hit, so
  * nothing replaces it and it reaches the serialized output intact,
- * where the survival check arriving later in this stage refuses it.
+ * where the survival check over the built artifact refuses it,
+ * naming the `__ENVVAR:` form.
  * A class wide enough to capture it would instead send a name no
  * source can hold into settings resolution, which reports an
  * unresolved setting: true, and about the wrong thing.
@@ -1105,8 +1112,8 @@ export function assertMarkerPath(libPath: string): void {
  * `__INLINE_JSON:<file>__` where the value belonged, on an
  * instance, while the build that produced it reported success.
  * That silent pass-through is what this refusal is set against —
- * not the survival check arriving later in this stage, which
- * reads the same text from the other end of the same build.
+ * not the survival check over the built artifact, which reads the
+ * same text from the other end of the same build.
  *
  * A distinct class rather than a bare `Error`, so a case covering
  * the retirement can pin the refusal to it. Every other way the
@@ -1119,10 +1126,10 @@ export function assertMarkerPath(libPath: string): void {
  * It would also pass with this rule missing entirely, which is the
  * reading that matters here and the one a `toThrow` cannot make.
  * An unresolved marker reaches the serialized artifact intact, and
- * the survival check arriving later in this stage refuses it there
- * — so a build carrying a retired marker fails either way, and
- * only the class and the form say which rule caught it. Refusing
- * at resolution is what turns that into a message about the marker
+ * the survival check over that artifact refuses it there — so a
+ * build carrying a retired marker fails either way, and only the
+ * class and the form say which rule caught it. Refusing at
+ * resolution is what turns that into a message about the marker
  * rather than about the output it survived into.
  *
  * The form is a field as well as part of the message, so a case
@@ -1191,8 +1198,8 @@ export class RetiredMarkerError extends Error {
  * rather than to the content, and it can land on a key already
  * there, which is a collision a walk has no way to report. Such a
  * marker is not silently kept either — it reaches the serialized
- * output intact, and the survival check arriving later in this
- * stage refuses it there, naming the form.
+ * output intact, and the survival check over the built artifact
+ * refuses it there, naming the form.
  *
  * The order the branches are tried in is the substance of this
  * function rather than a formatting choice, because each way of
@@ -1624,6 +1631,47 @@ export function resolveMarkers(
     return resolveEnvString(inlineLibString(text, loadLib), sources);
   });
 }
+
+/**
+ * Every marker form a built artifact is refused for carrying.
+ *
+ * The roster the survival check walks, and the whole of what
+ * {@link SurvivingMarkerError} can name. Four entries: the two
+ * live forms this module's grammars are built on, and the two
+ * retired ones no source may write at all.
+ *
+ * Forms rather than grammars, which is the substance of the
+ * roster rather than a shortcut. A marker that reaches an
+ * artifact is by definition one the pass did not resolve, and the
+ * commonest reason is that no grammar matched it —
+ * `__ENVVAR:AR-BUILD-TAG__` is not a hit for {@link ENV_MARKER},
+ * which is exactly why nothing replaced it. A check compiled over
+ * those same grammars would miss the input it exists for, and
+ * report a clean artifact carrying the marker text somebody
+ * typed. {@link RETIRED_MARKER_FORMS} is matched by prefix for
+ * the same reason, one step earlier in the build.
+ *
+ * The two live forms are written out here rather than derived
+ * from {@link LIB_MARKER} and {@link ENV_MARKER} by stripping the
+ * capture off their sources, for the reason {@link ENV_MARKER}
+ * gives for writing its own name grammar out a second time: the
+ * derivation would become the load-bearing part, and nothing
+ * would fail if it stopped being right. Written out, a form that
+ * has drifted from the grammar it mirrors is a difference a case
+ * can pin.
+ *
+ * The order settles what an artifact carrying several is refused
+ * under, since the first found is the one named. The retired
+ * forms lead because they name a different edit — the value they
+ * once inlined belongs in `domains.settings` now, which is a
+ * change to where config lives — where the two live forms name a
+ * character to fix in the marker itself.
+ */
+export const SURVIVING_MARKER_FORMS: readonly string[] = [
+  ...RETIRED_MARKER_FORMS,
+  '__INLINE:',
+  '__ENVVAR:',
+];
 
 /**
  * Thrown when a built artifact still carries marker text:
