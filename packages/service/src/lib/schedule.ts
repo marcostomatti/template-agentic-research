@@ -160,6 +160,48 @@ export function clampIntervalSeconds(
  * constructor name crosses nothing — so the message is the whole of
  * what gets read, and it is what a caller pins.
  *
+ * This is the SECOND place the cap is applied, and on an ordinary tick
+ * it does nothing at all. The dispatcher arriving later in this phase
+ * claims through a SQL `LIMIT` carrying the same setting, so the batch
+ * reaching this function is already inside the cap and what comes back
+ * is what was handed in. Being inert is the point rather than a reason
+ * to drop the call: a `LIMIT` reads as a paging knob, and whoever next
+ * tunes that query — adding a filter, changing the ordering, folding in
+ * a join — is looking at a performance detail rather than at the only
+ * thing standing between one pass and the whole backlog. It is one edit
+ * from being gone, and nothing about that edit looks like a spending
+ * decision. `ENV_DEFAULTS.AR_DISPATCH_BATCH_CAP` in
+ * `scripts/workflow-markers.ts` carries the other half of that
+ * argument: what the surviving copy still bounds, and what it cannot
+ * get back.
+ *
+ * The system this ports from bounded such a pass nowhere, and what
+ * that cost is the reason this function is here rather than a
+ * comment on the query. A workflow holding its own schedule trigger
+ * read every pending row a pass found and put each one through model
+ * chains unconditionally — no cap on the batch, no gate in front of
+ * the calls — so what a tick spent was settled by however many rows
+ * happened to be sitting there, at a call per row and then one per
+ * chain over it. What was sitting there was a test fixture a smoke
+ * script had staged into the live input folder and never swept, so
+ * every tick found the same rows again. It ran unattended in a
+ * container nobody remembered was up, spent a month's model budget
+ * in about forty minutes, and recorded each of those runs as a
+ * success; the first anybody heard of it was a billing warning from
+ * the provider. `docs/architecture/01-invariants.md` draws four
+ * separate spending properties out of that failure, and this
+ * function stands behind one of them: a run without an explicit
+ * ceiling scales with its input, so one pass over an unusually large
+ * batch makes as many calls as it found rows.
+ *
+ * What a short answer from here does NOT say is that the claim was
+ * bounded. This function is handed a list, never the statement that
+ * produced it, so a `LIMIT` that held and a `LIMIT` removed on a
+ * tick with little due look identical from inside it — a pass coming
+ * back under the cap is evidence about the backlog and about nothing
+ * else. The call earns its line on the day those two part company,
+ * which is the day nobody is looking.
+ *
  * @param items - The batch to bound, in the order it should be taken.
  * @param cap - The most items one pass may carry.
  * @returns A new array holding the first `cap` items at most.
