@@ -20,7 +20,9 @@
  * regardless, because both of the transform's dependencies — the
  * loader and the settings chain — arrive as parameters.
  *
- * `workflows/dist/` is generated, and a run rewrites it in full. The
+ * `workflows/dist/` is generated, and a run rewrites every artifact
+ * in it while sweeping none away — what a source no longer produces
+ * stays where it lies, which is {@link buildAll}'s to explain. The
  * build is unconditional rather than only-when-absent, and the two
  * answers differ over exactly one case — a dist built from older
  * sources — where rebuilding is the answer wanted anyway. The build
@@ -65,7 +67,13 @@ import type {
 } from './workflow-markers.js';
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import {
@@ -571,8 +579,8 @@ function assertNoSurvivingMarker(serialized: string): void {
  * what comes back, and refuse it if marker text survived. That is
  * the whole transform from a file under `workflows/src/` to the
  * file of the same name under `workflows/dist/`, minus the
- * directory listing, the read and the write — which belong to the
- * directory build arriving next in this stage.
+ * directory listing, the read and the write — which belong to
+ * {@link buildAll}, the directory build one level up.
  *
  * Text in and text out, which is a decision rather than a
  * convenience. The survival check has to read the artifact as it
@@ -641,4 +649,114 @@ export function buildTemplate(
   assertNoSurvivingMarker(serialized);
 
   return serialized;
+}
+
+/**
+ * Where a build reads its sources from and writes its artifacts
+ * to, alongside how it resolves the markers it finds in between.
+ *
+ * The marker pass's own options with two directories added, so
+ * everything {@link buildTemplate} is handed per file arrives
+ * here once for the whole tree.
+ */
+export interface BuildAllOptions extends ResolveMarkersOptions {
+  /**
+   * The directory `*.json` workflow sources are read out of,
+   * `workflows/src/` in a real build.
+   */
+  readonly sourceDir: string;
+
+  /**
+   * The directory one artifact per source is written into,
+   * `workflows/dist/` in a real build and
+   * `workflows/dist-external/` in the deploy build arriving later
+   * in this stage.
+   */
+  readonly outDir: string;
+}
+
+/**
+ * Build every workflow source under one directory.
+ *
+ * The whole of what a build does to a tree: read every `*.json`
+ * in `sourceDir`, put each through {@link buildTemplate}, and
+ * write what comes back into `outDir` under the same file name.
+ *
+ * Sorted, for the reason `tests/invariants/naming-patterns.ts`
+ * gives for its own walk: `readdirSync` answers in directory
+ * order, stable on one machine and arbitrary across them, so an
+ * unsorted list would leave the names this returns — and any
+ * report built from them — differing between machines that hold
+ * identical trees.
+ *
+ * The top level only. A workflow source is a file directly under
+ * `workflows/src/`, so a directory found beside one is passed
+ * over rather than descended into, and `*.json` rather than
+ * everything is what lets the `README.md` carrying the workflow
+ * roster sit with the sources it describes.
+ *
+ * A `sourceDir` that is not there at all is nothing to build, and
+ * comes back as an empty list. Anything else that cannot be
+ * listed arrives as `readdirSync` raised it — a path naming a
+ * file rather than a directory is `ENOTDIR`, and names that path.
+ *
+ * Every artifact is built before any is written, so a source the
+ * marker pass refuses leaves `outDir` as it stands rather than
+ * half of this run's output over half of the last one's. Nothing
+ * downstream could tell that mixture from a clean build: what
+ * reads the directory sees file names, never the run that put
+ * them there.
+ *
+ * `outDir` is created, parents and all, once there is something
+ * to write. Both it and its deploy sibling are gitignored, so a
+ * fresh clone has neither, and a build requiring one to exist
+ * already would fail on every first checkout.
+ *
+ * Nothing is swept. An artifact whose source has since been
+ * renamed or deleted is written over by nothing and removed by
+ * nothing, so it stays where it is and reads to everything
+ * downstream as a built workflow. `workflows/src/` is the whole
+ * input to a build; it is not the whole of what a reader of
+ * `outDir` finds.
+ *
+ * Every refusal reaches a caller as {@link buildTemplate} raised
+ * it, with the file name left off. This function holds that name
+ * and does not attach it: wrapping would put a build error in
+ * front of the class each case pins — a retired form, a path
+ * outside the library directory, a setting no source answers for,
+ * a marker that survived. What a `SyntaxError` about position 412
+ * costs instead is a `git grep` across `sourceDir`, which is the
+ * recovery every refusal on this path already documents.
+ *
+ * @param options - Where to read, where to write, and how to
+ *   resolve the markers in between.
+ * @returns The file names written, sorted, one per source built.
+ */
+export function buildAll(options: BuildAllOptions): readonly string[] {
+  const { sourceDir, outDir } = options;
+
+  if (statSync(sourceDir, { throwIfNoEntry: false }) === undefined) {
+    return [];
+  }
+
+  const artifacts = readdirSync(sourceDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right))
+    .map((file) => ({
+      file,
+      text: buildTemplate(readFileSync(join(sourceDir, file), 'utf8'), options),
+    }));
+
+  if (artifacts.length === 0) {
+    return [];
+  }
+
+  mkdirSync(outDir, { recursive: true });
+
+  for (const { file, text } of artifacts) {
+    writeFileSync(join(outDir, file), text);
+  }
+
+  return artifacts.map((artifact) => artifact.file);
 }
