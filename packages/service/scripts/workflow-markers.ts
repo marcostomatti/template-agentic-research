@@ -883,8 +883,8 @@ export function stripDeclarationExports(transpiled: string): string {
  *
  * What the class admits is not what the build accepts. A slash and
  * a dot also spell an absolute path and a `..` segment, so this
- * matches `__INLINE:/etc/x.ts__` and hands the path on; the path
- * refusal arriving next in this stage is what names it. The split
+ * matches `__INLINE:/etc/x.ts__` and hands the path on;
+ * {@link assertMarkerPath} is what names it. The split
  * is the point rather than an oversight. A marker the grammar
  * misses is reported as a malformed marker, while one the grammar
  * takes and the path rule refuses is reported as a path pointing
@@ -930,3 +930,135 @@ export const LIB_MARKER = '__INLINE:([A-Za-z0-9_./-]+)__';
  * unresolved setting: true, and about the wrong thing.
  */
 export const ENV_MARKER = '__ENVVAR:([A-Za-z_][A-Za-z0-9_]*)__';
+
+/**
+ * Thrown when an `__INLINE:<path>__` marker names a file outside
+ * the library directory the build inlines from.
+ *
+ * A marker names a library under that directory, and the directory
+ * is the whole of what may be inlined. A path escaping it is
+ * refused here rather than read: an absolute path names a file
+ * chosen without reference to the tree the build was pointed at,
+ * and a `..` segment walks out of that tree. Either one would put
+ * the contents of an arbitrary file into a node body, and the
+ * artifact would carry them onto every instance it is deployed to.
+ *
+ * A distinct class rather than a bare `Error`, so a case covering
+ * the path rule can pin the refusal to it. The other ways an
+ * inline fails arrive as something else: a path naming no file
+ * comes back as whatever `readFileSync` throws, a source the
+ * transpiler rejects as whatever it raises, and a library that
+ * cannot stand alone in a node as {@link SpliceableLibError}. An
+ * assertion accepting any `Error` would pass for all of those, and
+ * would pass with this rule missing entirely.
+ *
+ * Both values are fields as well as parts of the message, so a case
+ * asserts on which rule caught the path rather than parsing prose
+ * it did not write. One path can break both rules at once —
+ * `/etc/../x.ts` is absolute AND carries a segment — and a sample
+ * paired to the form it stands for is only covered if the refusal
+ * named that form.
+ *
+ * What the message cannot name is the workflow source whose marker
+ * wrote the path. Resolution walks strings already parsed out of
+ * their source, so the path is the whole of what it has to hand,
+ * and a `git grep` for the marker form across `workflows/src/` is
+ * what turns it back into a caller.
+ */
+export class MarkerPathError extends Error {
+  /**
+   * The path the marker named, exactly as the marker wrote it —
+   * unresolved, and never joined to the library directory.
+   */
+  readonly libPath: string;
+
+  /**
+   * The rule that caught it: `an absolute path` or `a .. segment`.
+   * Worded as the object of the message rather than as a label, so
+   * the refusal reads as one sentence.
+   */
+  readonly form: string;
+
+  /**
+   * @param libPath - The path the marker named.
+   * @param form - The rule it is refused under.
+   */
+  constructor(libPath: string, form: string) {
+    super(
+      `__INLINE:${libPath}__ names ${form}, which points outside ` +
+      'the library directory the build inlines from. A marker ' +
+      'names a file inside that directory, written relative to ' +
+      'it. Either rewrite the path relative to the library ' +
+      'directory, or move the library into it — a file outside it ' +
+      'is not inlined under any spelling.',
+    );
+    this.name = this.constructor.name;
+    this.libPath = libPath;
+    this.form = form;
+  }
+}
+
+/**
+ * Refuse a marker path that points outside the library directory.
+ *
+ * Returns nothing when the path stays inside, which is every case
+ * the build carries on from. The check runs before the file is
+ * opened, so a refused path is never read and never transpiled.
+ *
+ * The rule is syntactic on purpose, and the function is handed the
+ * path alone rather than the directory it would be resolved
+ * against. It judges what the marker NAMES rather than where the
+ * name would land, so `a/../b.ts` resolves back inside the
+ * directory and is refused anyway. That is the stricter reading
+ * and the deliberate one: a path walking out of the tree and back
+ * in is not one anybody meant to write, and a rule that resolved
+ * first would need the directory handed to it for a question that
+ * does not depend on which directory it is.
+ *
+ * A forward slash is the only separator tested, which is complete
+ * for what {@link LIB_MARKER} admits. Its path class carries no
+ * backslash and no colon, so no marker can spell a Windows-style
+ * traversal or a drive letter, and the only absolute form the
+ * grammar can produce is a leading slash.
+ *
+ * The `..` test is over segments rather than over the text, so a
+ * file named `bounds..ts` is left alone. A substring test would
+ * refuse it, and the refusal would name a traversal in a path that
+ * has none.
+ *
+ * The order the two rules are tried in is a decision rather than
+ * an accident. A path can carry both — `/etc/../x.ts` is absolute
+ * and has a segment — and absolute is tried first, so such a path
+ * is reported as an absolute path. That is the half a reader acts
+ * on: dropping the segment leaves the marker pointing at the same
+ * file, while dropping the leading slash is the edit that moves it
+ * back under the directory.
+ *
+ * Why this rule owns the rejection rather than the grammar, from
+ * the vantage of somebody writing a marker: a path the grammar
+ * missed would simply not be replaced, and the survived-the-pass
+ * check downstream would report a marker it could not read —
+ * naming neither the file wanted nor the directory looked in, and
+ * reading as a typo. Refused here, the message says which edit
+ * moves the path back inside.
+ *
+ * The limit is everything below the text. Nothing here touches the
+ * filesystem, so a path that stays inside the directory by every
+ * spelling and resolves through a symlink to somewhere else passes
+ * this check and is read. No library is symlinked today, and this
+ * is not where that would be caught.
+ *
+ * @param libPath - The path an `__INLINE:<path>__` marker named,
+ *   as its capture gave it.
+ * @throws MarkerPathError When the path is absolute or carries a
+ *   `..` segment.
+ */
+export function assertMarkerPath(libPath: string): void {
+  if (libPath.startsWith('/')) {
+    throw new MarkerPathError(libPath, 'an absolute path');
+  }
+
+  if (libPath.split('/').includes('..')) {
+    throw new MarkerPathError(libPath, 'a .. segment');
+  }
+}
