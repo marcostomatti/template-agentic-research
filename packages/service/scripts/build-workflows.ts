@@ -37,9 +37,8 @@
  * report that it went missing, because where generated output is
  * committed a stale or edited artifact surfaces as a dirty tree and
  * here there is nothing to dirty. The reviewed artifact is the source
- * file, and the same rule covers the sibling
- * `workflows/dist-external/` the deploy build writes, which arrives
- * later in this stage.
+ * file, and the same rule covers the sibling artifact directory the
+ * `--external` build writes, `workflows/dist-external/`.
  *
  * The transpile step requires bun as the LAUNCHER, which is a
  * stronger claim than a dependency. `Bun.Transpiler` exists only
@@ -61,6 +60,7 @@
  */
 
 import type {
+  EnvSourceOptions,
   LibLoader,
   LibScan,
   ResolveMarkersOptions,
@@ -75,11 +75,20 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 import {
+  ENV_DEFAULTS,
+  MarkerPathError,
+  RetiredMarkerError,
   SURVIVING_MARKER_FORMS,
+  SpliceableLibError,
   SurvivingMarkerError,
+  UnresolvedSettingError,
   assertSpliceable,
+  envSources,
+  resolveEnvVar,
   resolveMarkers,
   stripDeclarationExports,
 } from './workflow-markers.js';
@@ -483,11 +492,12 @@ function gitOutput(root: string, args: string[]): string | null {
  * libraries their markers inline, and `ENV_DEFAULTS` in this
  * package's own source. Nothing reads a clock, nothing is
  * randomized, and settings resolve from that table rather than
- * from an ambient environment unless a caller opts in — the deploy
- * build arriving later in this stage is the one that does, and it
- * writes to a sibling directory rather than to `workflows/dist/`.
- * So two runs over one unchanged tree write byte-identical files,
- * and this is the single value that could say otherwise.
+ * from an ambient environment unless a caller opts in —
+ * {@link runBuildCli}'s `--external` build is the one that does,
+ * and it writes to a sibling directory rather than to
+ * `workflows/dist/`. So two runs over one unchanged tree write
+ * byte-identical files, and this is the single value that could
+ * say otherwise.
  *
  * Identical within one tree, different across commits, and both
  * halves want reading exactly. The stamp is keyed to the state of
@@ -669,8 +679,7 @@ export interface BuildAllOptions extends ResolveMarkersOptions {
   /**
    * The directory one artifact per source is written into,
    * `workflows/dist/` in a real build and
-   * `workflows/dist-external/` in the deploy build arriving later
-   * in this stage.
+   * `workflows/dist-external/` in the `--external` deploy build.
    */
   readonly outDir: string;
 }
@@ -762,8 +771,8 @@ export interface BuildAllOptions extends ResolveMarkersOptions {
  *
  * Both directories are parameters, and this function names no
  * default for either. `workflows/src/` and `workflows/dist/`
- * reach it from the CLI block arriving later in this stage, and
- * nothing here knows those paths.
+ * reach it from {@link runBuildCli}, and nothing here knows those
+ * paths.
  *
  * That is what lets a case drive a real build over a fixture
  * tree — a source directory under `mkdtempSync`, an output
@@ -822,4 +831,266 @@ export function buildAll(options: BuildAllOptions): readonly string[] {
   }
 
   return artifacts.map((artifact) => artifact.file);
+}
+
+/**
+ * This package's own root, resolved from this file's location
+ * rather than from the working directory.
+ *
+ * Every path below hangs off it. One built from the working
+ * directory would name this tree only while the process was
+ * started from the package, and `scripts/seed.ts` resolves the
+ * seed directory it ships the same way for the same reason.
+ *
+ * Absolute is also what {@link gitBuildTag} needs of a root: the
+ * argument is handed over as a `cwd`, so an empty or relative one
+ * answers about whatever checkout the process happened to start
+ * in rather than about this one.
+ */
+const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+/**
+ * Where every build reads its workflow sources from.
+ *
+ * One directory for both builds: what a build READS is the same
+ * tree either way, and `--external` moves only where artifacts
+ * land and what their settings resolve against.
+ */
+const WORKFLOW_SOURCE_DIR = join(PACKAGE_ROOT, 'workflows', 'src');
+
+/**
+ * Where the default build writes, and the directory every check
+ * over built output reads.
+ */
+const WORKFLOW_DIST_DIR = join(PACKAGE_ROOT, 'workflows', 'dist');
+
+/**
+ * Where the `--external` build writes.
+ *
+ * A separate directory rather than a flag on the same one, so an
+ * artifact that absorbed an environment and one that could not
+ * are never the same file. Both are gitignored.
+ */
+const WORKFLOW_EXTERNAL_DIST_DIR = join(
+  PACKAGE_ROOT,
+  'workflows',
+  'dist-external',
+);
+
+/**
+ * The directory a `__INLINE:<path>__` marker names a library
+ * inside.
+ *
+ * `src/lib/` is this package's pipeline half, and the first
+ * library lands in it later in this phase — so a build today
+ * resolves no library marker and never opens this directory.
+ */
+const LIB_DIR = join(PACKAGE_ROOT, 'src', 'lib');
+
+/**
+ * The `.env` the `--external` build reads settings from, and the
+ * default build names not at all.
+ */
+const ENV_FILE = join(PACKAGE_ROOT, '.env');
+
+/** The argument that asks for the deploy build. */
+const EXTERNAL_FLAG = '--external';
+
+/**
+ * The setting the build stamp resolves through.
+ *
+ * Named here because the build both SUPPLIES it and reads it back
+ * — supplies the checkout's own answer behind every other source,
+ * and reads what the chain made of that to report the stamp the
+ * artifacts actually carry.
+ */
+const BUILD_TAG_SETTING = 'AR_BUILD_TAG';
+
+/**
+ * Everything `--external` moves, gathered so that it moves
+ * together.
+ *
+ * The output directory and the settings sources are one decision
+ * rather than two. A build resolving an operator's environment
+ * into `workflows/dist/` is what the opt-in settings chain exists
+ * to prevent, and a build writing defaults into
+ * `workflows/dist-external/` is a deploy artifact carrying
+ * placeholders — putting the pair in one value is what leaves no
+ * way to ask for half of it.
+ */
+interface BuildTarget {
+  /** The directory this build's artifacts are written into. */
+  readonly outDir: string;
+
+  /**
+   * The sources this build resolves settings against, above the
+   * defaults table every build stands on.
+   */
+  readonly settings: EnvSourceOptions;
+
+  /**
+   * How the line the build prints names those sources, so which
+   * of the two resolutions ran is read rather than inferred from
+   * the output directory.
+   */
+  readonly settingsOrigin: string;
+}
+
+/**
+ * Pick where a build writes and what it resolves settings
+ * against.
+ *
+ * @param external - Whether the command line carried
+ *   {@link EXTERNAL_FLAG}.
+ * @returns The target that flag selects.
+ */
+function buildTarget(external: boolean): BuildTarget {
+  return external
+    ? {
+      outDir: WORKFLOW_EXTERNAL_DIST_DIR,
+      settings: { env: process.env, envFile: ENV_FILE },
+      settingsOrigin: `the environment and ${ENV_FILE}`,
+    }
+    : {
+      outDir: WORKFLOW_DIST_DIR,
+      settings: {},
+      settingsOrigin: 'ENV_DEFAULTS alone',
+    };
+}
+
+/**
+ * One build end to end: pick the target, build every source
+ * under `workflows/src/`, and report what was written.
+ *
+ * This is where the directories {@link buildAll} takes as
+ * parameters get their real values, and the only place in the
+ * build that names them.
+ *
+ * The stamp is resolved once per build and put in front of
+ * `ENV_DEFAULTS` rather than in front of the whole chain, so
+ * `AR_BUILD_TAG` keeps the precedence every other setting has:
+ * the table's own entry is the fallback for a caller supplying no
+ * stamp, this supplies the one the checkout answers with, and an
+ * operator's environment still overrides it in a deploy build.
+ *
+ * Which is why the stamp is reported by reading it back OUT of
+ * the chain rather than by printing what git answered. The two
+ * part company exactly where the override happens, and a line
+ * naming a commit the artifacts do not carry would be worse than
+ * no line at all.
+ *
+ * A transpiler is constructed whether or not the tree holds a
+ * source to splice, so a build launched under the wrong runtime
+ * says so rather than reporting that there was nothing to do.
+ *
+ * Every other refusal reaches a caller as {@link buildAll} raised
+ * it, unwrapped and naming no file. {@link BUILD_REFUSALS} is the
+ * roster the block below reports as a message rather than as a
+ * stack.
+ *
+ * @param argv - The arguments after the script name. Defaults to
+ *   `process.argv.slice(2)`, which is what a launcher leaves; a
+ *   caller passing its own is what makes the deploy build
+ *   reachable without a command line.
+ * @returns The file names written, sorted, one per source built.
+ * @throws TranspilerUnavailableError When the process running the
+ *   build is not one bun launched.
+ */
+export function runBuildCli(
+  argv: readonly string[] = process.argv.slice(2),
+): readonly string[] {
+  const target = buildTarget(argv.includes(EXTERNAL_FLAG));
+  const sources = envSources({
+    ...target.settings,
+    envDefaults: {
+      ...ENV_DEFAULTS,
+      [BUILD_TAG_SETTING]: gitBuildTag(PACKAGE_ROOT),
+    },
+  });
+  const built = buildAll({
+    sourceDir: WORKFLOW_SOURCE_DIR,
+    outDir: target.outDir,
+    loadLib: loadLib(LIB_DIR, bunTranspiler()),
+    sources,
+  });
+
+  for (const file of built) {
+    console.log(`built ${join(target.outDir, file)}`);
+  }
+
+  console.log(
+    built.length === 0
+      ? `nothing to build: no workflow source in ${WORKFLOW_SOURCE_DIR}`
+      : `${built.length} built, stamped ${resolveEnvVar(BUILD_TAG_SETTING, sources)}`
+        + `, settings from ${target.settingsOrigin}`,
+  );
+
+  return built;
+}
+
+/**
+ * Every refusal a build raises on purpose.
+ *
+ * A roster rather than a chain of `instanceof` tests, because the
+ * set is what matters and it spans two modules: the launcher
+ * refusal is declared here and the marker refusals next door.
+ * Each is a report an operator acts on, which is what separates
+ * them from a `SyntaxError` out of `JSON.parse` or an `ENOENT`
+ * out of a read — those are unexpected here, and a stack is what
+ * a reader needs of them.
+ */
+const BUILD_REFUSALS = [
+  MarkerPathError,
+  RetiredMarkerError,
+  SpliceableLibError,
+  SurvivingMarkerError,
+  TranspilerUnavailableError,
+  UnresolvedSettingError,
+];
+
+/**
+ * Whether a caught value is one of the build's own refusals.
+ *
+ * @param cause - What the build threw.
+ * @returns Whether its message is the whole report.
+ */
+function isBuildRefusal(cause: unknown): cause is Error {
+  return BUILD_REFUSALS.some((refusal) => cause instanceof refusal);
+}
+
+/**
+ * Whether this file is what the process was started with, rather
+ * than something another module imported.
+ *
+ * `import.meta.url` is a `file:` URL where `process.argv[1]` is a
+ * path, so comparing the two as they come is false however the
+ * process was started, and the block below would silently never
+ * run. `fileURLToPath` is what makes the comparison able to hold
+ * at all. `scripts/seed.ts` and `scripts/approve.ts` carry the
+ * same guard.
+ *
+ * Worth asking because this module is both a command and a
+ * library: `bun scripts/build-workflows.ts` writes a dist, while
+ * a test importing {@link buildAll} or {@link buildTemplate} gets
+ * the exports and no build.
+ */
+const INVOKED_AS_CLI = process.argv[1] !== undefined
+  && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (INVOKED_AS_CLI) {
+  try {
+    runBuildCli();
+  } catch (cause) {
+    // Each of the build's own refusals is already a report — the
+    // form, the path or the setting that failed, and which edit
+    // fixes it — so a stack above it buries the thing worth
+    // reading. Anything else is unexpected, and there the stack
+    // is what a reader needs.
+    process.exitCode = 1;
+    console.error(
+      isBuildRefusal(cause)
+        ? cause.message
+        : cause,
+    );
+  }
 }

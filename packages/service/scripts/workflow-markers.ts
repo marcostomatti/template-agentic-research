@@ -59,11 +59,11 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * which checkout the artifact in front of an operator was
    * generated from.
    *
-   * `dev` is the fallback rather than the usual value: the entry
-   * point arriving with this module resolves the git short commit
-   * and supplies it, and this is what a build with no commit to
-   * name — an unpacked tarball, an image with no git binary — is
-   * stamped with instead.
+   * `dev` is the fallback rather than the usual value:
+   * `scripts/build-workflows.ts` resolves the git short commit and
+   * supplies it in front of this table, and this is what a build
+   * with no commit to name — an unpacked tarball, an image with no
+   * git binary — is stamped with instead.
    */
   AR_BUILD_TAG: 'dev',
 
@@ -353,9 +353,9 @@ export interface EnvSourceOptions {
  * build: the one the workflow invariants read, and the one every
  * later phase is judged against.
  *
- * One caller passes an environment on purpose. The deploy build
- * arriving later in this phase hands `process.env` and a `.env`
- * path through these options, and writes to
+ * One caller passes an environment on purpose. The `--external`
+ * deploy build in `scripts/build-workflows.ts` hands `process.env`
+ * and a `.env` path through these options, and writes to
  * `workflows/dist-external/` rather than to `workflows/dist/` — a
  * separate directory rather than a flag on the same one, so the
  * artifact that absorbed an environment and the artifact that could
