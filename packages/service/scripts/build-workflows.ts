@@ -129,6 +129,41 @@ export class TranspilerUnavailableError extends Error {
  * importing this file, including the parts of the build that need
  * no transpiler at all.
  *
+ * The check is on the `Transpiler` PROPERTY rather than on the
+ * `Bun` global, and that is not a defensive flourish: the obvious
+ * `typeof Bun === 'undefined'` is measurably wrong here.
+ * `tests/helpers/bun-polyfill.ts` is a setup file in
+ * `vitest.config.ts`, so every worker in this package starts with
+ * a partial `Bun` global already installed — one carrying `serve`
+ * and nothing else, put there so the MCP transport and the health
+ * server have something to listen on. Measured inside a worker:
+ * `typeof Bun` is `'object'`, `Object.keys(Bun)` is `['serve']`,
+ * and `Bun.Transpiler` is `undefined`.
+ *
+ * So the obvious guard does not fire, the constructor is reached
+ * anyway, and what comes back is `TypeError: Bun.Transpiler is
+ * not a constructor` — the same failure
+ * {@link TranspilerUnavailableError} records for a build carrying
+ * NO guard at all, measured with the wrong guard written and
+ * with none. For the one launcher that has a partial global,
+ * writing that check and writing nothing end in the identical
+ * place, and only one of the two looks like a guard on the way
+ * there.
+ *
+ * What makes the wrong check convincing is that it is right
+ * twice. Under node the global is genuinely absent and it fires;
+ * under bun the global is whole and it does not. It is wrong for
+ * exactly one launcher, and that launcher is the one this refusal
+ * exists for — a worker is where the build gets reached by
+ * accident, and the only place relaunching is not the edit.
+ *
+ * An identity check discriminates too: measured,
+ * `process.versions.bun` is `1.3.14` under bun and absent in a
+ * worker. It answers a different question, though — who launched
+ * the process, rather than whether the constructor the next line
+ * calls is there to be called. Only the property answers the
+ * second, which is the one being asked.
+ *
  * @returns A transpiler over the `ts` loader.
  * @throws TranspilerUnavailableError When the process running the
  *   build has no `Bun.Transpiler` to construct.
