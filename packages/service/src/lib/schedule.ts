@@ -26,6 +26,45 @@
  * form a Code node cannot run rather than writing an artifact that fails
  * when the node is next reached.
  *
+ * Three rules are the whole of what dual-context costs a file here,
+ * and the first two are about what a library says at its edges. No
+ * value import: a dependency that survives the transpile has nothing
+ * to resolve it on a node. A type-only import is not one, since
+ * `import type` erases before the build reads the source at all, and
+ * an `interface`, a `type` alias and a generic signature erase with
+ * it — the rule costs a library no type surface whatever. Declaration
+ * forms only for exports: `export function`, `export const`,
+ * `export class`, `export let` and `export var` have the keyword
+ * taken off and reach the node as the declarations they already were,
+ * while `export {`, `export default` and `export *` name a module
+ * boundary that will not be there and that no strip can repair.
+ *
+ * The third rule is that nothing may rely on module scope, and it is
+ * the one the paragraph above does not reach. `assertSpliceable` in
+ * `scripts/workflow-markers.ts` refuses the first two, so a library
+ * breaking either is never built into an artifact at all; this one it
+ * cannot see. Measured on the transpiler the build uses, `require(p)`,
+ * an `import(p)` whose specifier is a variable, `import.meta.url` and
+ * a top-level `let` all scan with an empty import list and survive the
+ * transpile unchanged, which is to say they are indistinguishable from
+ * this file. Only a dynamic `import()` written against a literal
+ * specifier is caught, and then as a dependency rather than as what it
+ * is.
+ *
+ * So the third rule is satisfied rather than checked, and what it
+ * costs to break splits in two. A reach for something only a module
+ * has fails loudly on the node — `require` raises a `ReferenceError`
+ * when the line is reached, `import.meta` will not parse there at
+ * all. Module-level STATE fails quietly instead: a counter or a memo
+ * lives as long as the process that imported this file, and only as
+ * long as the one execution that ran the spliced copy, and neither
+ * context reports the difference. {@link clampIntervalSeconds} and
+ * {@link capBatch} therefore take everything they read as an argument
+ * and keep nothing between calls. `tests/build/schedule-splice.test.ts`,
+ * arriving later in this plan, is the nearest thing to a check on that:
+ * it drives the spliced copy through `new Function`, which refuses an
+ * `import.meta` outright, and reaches anything else only by calling it.
+ *
  * `src/lib/` is this package's pipeline half; the framework `lib/` at the
  * package root is the fork-style copy of the service template and stays
  * reserved for it. The two are never merged, and
