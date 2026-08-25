@@ -1170,12 +1170,11 @@ export class RetiredMarkerError extends Error {
  * The walk the marker rules are carried by. Each of those rules is
  * about ONE string — a library marker replaced by a library body in
  * {@link inlineLibString}, a setting marker replaced by its value in
- * the rule arriving next in this stage — and this is what reaches
- * every string a workflow source buries one in. That split is the
- * point rather than tidiness: a case over either rule hands it a
- * string and reads a string back, with no tree to build and no depth
- * to get right, and the depths are proven once here instead of once
- * per rule.
+ * {@link resolveEnvString} — and this is what reaches every string a
+ * workflow source buries one in. That split is the point rather than
+ * tidiness: a case over either rule hands it a string and reads a
+ * string back, with no tree to build and no depth to get right, and
+ * the depths are proven once here instead of once per rule.
  *
  * What counts as a marker is not decided here. `fn` is handed every
  * string, the great majority of which carry nothing to replace, and
@@ -1376,4 +1375,93 @@ export function inlineLibString(
 
     return loadLib(libPath);
   });
+}
+
+/**
+ * Replace every `__ENVVAR:<NAME>__` in one string with what the
+ * settings chain resolves that name to.
+ *
+ * The sibling of {@link inlineLibString}, and one string rather than
+ * a tree for the same reason: {@link mapStrings} is what reaches the
+ * strings a workflow source buries markers in, and this is what one
+ * of those strings has done to it. A case hands this a string and a
+ * chain and reads a string back, with no filesystem and no
+ * transpiler anywhere in the run.
+ *
+ * Every marker in the string, not the first. A node parameter
+ * reading two settings writes two markers, and a sticky note naming
+ * the build stamp twice is the ordinary case rather than a contrived
+ * one. The pattern is compiled here rather than shared, for the
+ * reason {@link ENV_MARKER} is a source string: a global instance
+ * carries `lastIndex` out of one call and into the next, so the call
+ * that skips a marker is the one after the call that resolved one.
+ *
+ * What bounds that claim is {@link ENV_MARKER}'s name class, and it
+ * is the bound {@link inlineLibString} carries for its path class.
+ * The class admits `_` and the quantifier is greedy, so two markers
+ * with nothing between them are read as one: measured,
+ * `__ENVVAR:A____ENVVAR:B__` captures the name `A__` and leaves
+ * `ENVVAR:B__` standing. Every separator a node parameter actually
+ * puts between two settings ends the class — a space, a quote, a
+ * comma, a newline — and a mis-read fails loudly, because the name
+ * captured wears the trailing underscores of the first marker and no
+ * source is written to answer for one. It is named here because the
+ * survival check is not what would catch it: the text left behind
+ * has had its opening underscores eaten, so it is no longer a
+ * marker.
+ *
+ * The chain is handed down rather than defaulted twice.
+ * {@link resolveEnvVar} carries a default of its own and it is never
+ * reached from here — whatever this was given goes to every marker
+ * in the string, so one string resolves against one chain instead of
+ * against a chain built per marker.
+ *
+ * The replacement is a function, and that is load-bearing rather
+ * than a style, for the reason {@link inlineLibString} states: a
+ * string replacement gives `$` a meaning, so `$&`, `$1` and `$'`
+ * would be read out of the value standing in for the marker rather
+ * than left in it. A library body is full of `$` and a setting value
+ * usually is not, which makes the exposure here smaller rather than
+ * absent — the deploy build resolves settings out of an operator's
+ * environment, and nothing on this path judges what those hold.
+ *
+ * A marker in what a setting resolved to is not resolved.
+ * Replacement reads the string it was given and text standing in for
+ * a match is not scanned again, so a value that is itself a marker
+ * reaches the serialized output intact and is refused there as a
+ * marker that survived the pass. What DOES resolve is a marker
+ * written inside a library body, and not because anything is
+ * re-scanned: inlining runs first, and this pass walks the string
+ * inlining returned.
+ *
+ * The refusal comes through untouched. A name no source answers for
+ * arrives as {@link UnresolvedSettingError} naming the setting, and
+ * nothing is wrapped — a wrapper would add a class saying only
+ * `while resolving` to a message that already names the setting and
+ * the two edits that fix it. A marker MALFORMED around a good name
+ * is not this rule's to report: `__ENVVAR:AR-BUILD-TAG__` is not a
+ * hit for the grammar, nothing replaces it, and the survival check
+ * refuses it over the serialized output instead.
+ *
+ * @param value - One string out of a workflow source, carrying a
+ *   marker or not.
+ * @param sources - The chain to walk, highest precedence first.
+ *   Defaults to `envSources()` — `ENV_DEFAULTS` behind two empty
+ *   objects, which is the default build's chain and the safe one to
+ *   inherit.
+ * @returns The string with every marker replaced, and the string
+ *   itself when it carries none.
+ * @throws UnresolvedSettingError When a marker names a setting no
+ *   source in the chain answers for.
+ */
+export function resolveEnvString(
+  value: string,
+  sources: readonly EnvSource[] = envSources(),
+): string {
+  const marker = new RegExp(ENV_MARKER, 'gu');
+
+  return value.replace(
+    marker,
+    (_match: string, name: string) => resolveEnvVar(name, sources),
+  );
 }
