@@ -49,3 +49,98 @@
  * source; the other names the command to run instead, which is the
  * edit that actually fixes it.
  */
+
+/**
+ * Thrown when the process running the build has no
+ * `Bun.Transpiler` to splice a library with.
+ *
+ * A transpiler comes from the LAUNCHER rather than from the
+ * manifest, which is the whole of why this refusal exists.
+ * `Bun.Transpiler` is a property of a global that only a process
+ * bun is running has, so a bun on PATH, a bun in `packageManager`
+ * and a bun that installed the dependencies all say nothing about
+ * whether this process can reach one.
+ *
+ * A distinct class rather than a bare `Error`, so a case covering
+ * the launcher can pin the refusal to it. Every other way the
+ * splice fails arrives as something else: a library file that
+ * cannot be read comes back as whatever `readFileSync` throws, a
+ * source the transpiler rejects as whatever it raises, and a
+ * library that cannot stand alone in a Code node as
+ * `SpliceableLibError`. An assertion accepting any `Error` would
+ * pass for all of those.
+ *
+ * With this refusal missing the build still fails, so the class is
+ * about the message rather than about the outcome. What it fails
+ * on instead, measured either side of deleting the guard, is
+ * `ReferenceError: Bun is not defined` under a launcher with no
+ * global and `TypeError: Bun.Transpiler is not a constructor`
+ * under one carrying a partial one. Both name a symbol, both are
+ * raised from the line that reached for it, and neither is the
+ * line anybody edits. This one names the command to run in its
+ * place.
+ */
+export class TranspilerUnavailableError extends Error {
+  /**
+   * What stood where the constructor should have been, worded as
+   * the object of the message rather than as a label, so the
+   * refusal reads as one sentence.
+   *
+   * Two values, and they are two launchers wanting two different
+   * edits. No `Bun` global at all is a process bun never touched —
+   * node, or a runner over node — and the edit is to run the
+   * command under bun. A `Bun` global carrying no `Transpiler` is
+   * a vitest worker, where relaunching is not on offer at all and
+   * the edit is to spawn the build as a subprocess instead.
+   */
+  readonly observed: string;
+
+  /**
+   * @param observed - What the build found in place of the
+   *   transpiler constructor.
+   */
+  constructor(observed: string) {
+    super(
+      `The library splice needs Bun.Transpiler, and ${observed}. ` +
+      'A transpiler comes from the launcher rather than from the ' +
+      'manifest: run the build as `bun scripts/build-workflows.ts` ' +
+      'and not under another runtime. From a vitest worker, where ' +
+      'relaunching is not on offer, spawn that command as a ' +
+      'subprocess rather than building in process.',
+    );
+    this.name = this.constructor.name;
+    this.observed = observed;
+  }
+}
+
+/**
+ * Build the transpiler the library splice runs on.
+ *
+ * The `ts` loader, because every library a marker inlines is a
+ * TypeScript source under `src/lib/` — a directory the first
+ * library lands in later in this phase. What comes back has the
+ * types erased and the export keywords still on it, which is why
+ * a splice is more than a transpile — taking those off is
+ * `stripDeclarationExports`, next door in `workflow-markers.ts`.
+ *
+ * A function rather than one transpiler built when this module
+ * loads. Construction is what fails when the launcher is wrong,
+ * and at module scope that failure would land on anything
+ * importing this file, including the parts of the build that need
+ * no transpiler at all.
+ *
+ * @returns A transpiler over the `ts` loader.
+ * @throws TranspilerUnavailableError When the process running the
+ *   build has no `Bun.Transpiler` to construct.
+ */
+export function bunTranspiler(): Bun.Transpiler {
+  if (typeof globalThis.Bun?.Transpiler !== 'function') {
+    throw new TranspilerUnavailableError(
+      typeof globalThis.Bun === 'undefined'
+        ? 'this process has no Bun global at all'
+        : 'the Bun global this process has carries no Transpiler',
+    );
+  }
+
+  return new Bun.Transpiler({ loader: 'ts' });
+}
