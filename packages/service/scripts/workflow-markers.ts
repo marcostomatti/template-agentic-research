@@ -1075,6 +1075,39 @@ export function assertMarkerPath(libPath: string): void {
  * name, and the message says where the value it wanted is read
  * from now.
  *
+ * Both retired because the configuration they carried moved into
+ * the database, not because inlining a file was a mistake. The
+ * JSON form baked in curated repo content, on the reasoning that
+ * repo content is not runtime state and that reading it from a
+ * node costs a round trip on a hot path. The YAML form converted
+ * an operator-editable file at build time precisely so that no
+ * committed JSON twin could drift from the hand-edited original.
+ * Both arguments still hold for what they were about, and neither
+ * form was config-in-code by accident.
+ *
+ * What ended them is that a value inlined at build time is one
+ * value for every domain the artifact reaches, and this pipeline
+ * runs the same workflows for as many domains as there are rows.
+ * The destination is `domains.settings`, the jsonb payload on the
+ * domains row: every member optional, `{}` a complete value, an
+ * absent member meaning the pipeline's own default applies, read
+ * per-domain at run time. Changing a value there is a row edit
+ * rather than a rebuild and a redeploy of every workflow that
+ * happened to inline it, and that is the whole of the argument
+ * for the move. It is a change of where the configuration lives
+ * rather than the removal of something that was wrong.
+ *
+ * Refusing by name is what keeps the marker's own text out of a
+ * node body. A retired form is not a marker to a build that does
+ * not know it: it matches no grammar, so nothing replaces it and
+ * nothing reports it, and it is written into the artifact as the
+ * literal characters somebody typed. The node then reads
+ * `__INLINE_JSON:<file>__` where the value belonged, on an
+ * instance, while the build that produced it reported success.
+ * That silent pass-through is what this refusal is set against —
+ * not the survival check arriving later in this stage, which
+ * reads the same text from the other end of the same build.
+ *
  * A distinct class rather than a bare `Error`, so a case covering
  * the retirement can pin the refusal to it. Every other way the
  * marker pass fails arrives as something else — a path escaping
