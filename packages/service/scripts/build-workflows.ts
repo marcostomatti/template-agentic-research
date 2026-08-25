@@ -50,6 +50,13 @@
  * edit that actually fixes it.
  */
 
+import type { LibLoader, LibScan } from './workflow-markers.js';
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { assertSpliceable, stripDeclarationExports } from './workflow-markers.js';
+
 /**
  * Thrown when the process running the build has no
  * `Bun.Transpiler` to splice a library with.
@@ -178,4 +185,137 @@ export function bunTranspiler(): Bun.Transpiler {
   }
 
   return new Bun.Transpiler({ loader: 'ts' });
+}
+
+/**
+ * The slice of `Bun.Transpiler` the library splice reaches for:
+ * two questions asked of one source.
+ *
+ * Structural rather than the class itself, and that is a
+ * requirement rather than a courtesy. A vitest worker has no
+ * `Bun.Transpiler` to construct, so a parameter naming the class
+ * would leave {@link loadLib} drivable from a real build alone,
+ * and every rule behind it reachable only through a subprocess.
+ * Named by shape, the same loader takes a stand-in answering out
+ * of recorded output.
+ *
+ * `scan` answers with {@link LibScan}, which is the shape
+ * {@link assertSpliceable} judges, so what a transpiler reports
+ * about a library reaches the refusal without being taken apart
+ * on the way.
+ *
+ * `tests/build/marker-fixtures.ts` declares these same two
+ * members for its own stand-in rather than importing them from
+ * here, so that the fixtures can answer for a transpiler without
+ * depending on which bun types are installed. The two are tied by
+ * assignment and nothing else, and no type checker reads that
+ * seam: the only files handing a stand-in over are `*.test.ts`,
+ * which `tsconfig.json` excludes from the program. A third member
+ * added here would leave the stand-in short of it, and the first
+ * report would be a case failing on the call.
+ */
+export interface LibTranspiler {
+  /**
+   * Erase a source's types, leaving its export keywords on.
+   *
+   * @param source - The library as it was authored.
+   * @returns The same library as JavaScript.
+   */
+  transformSync(source: string): string;
+
+  /**
+   * Report what a source depends on and what it declares.
+   *
+   * @param source - The library as it was authored.
+   * @returns Its imports and its exported names.
+   */
+  scan(source: string): LibScan;
+}
+
+/**
+ * Build the loader a marker pass resolves `__INLINE:<path>__`
+ * through.
+ *
+ * Reads the library a marker named, erases its types, refuses it
+ * if a Code node could not run it, and hands back the body with
+ * its export keywords gone. That is the whole of what
+ * {@link LibLoader} promises, assembled in the one place able to
+ * promise it: every step needs something this module has and
+ * `workflow-markers.ts` deliberately has not — a directory to
+ * read from, and a transpiler only a bun process can construct.
+ *
+ * A factory rather than a function taking a third argument. The
+ * marker pass hands a loader one path and nothing else, because a
+ * marker names nothing else; the directory and the transpiler are
+ * the build's own, settled once per build, and threading them
+ * through `resolveMarkers` would put two of the build's decisions
+ * into a signature about markers. Closing over them also settles
+ * that one transpiler answers for every library in a build,
+ * rather than one being built per marker.
+ *
+ * The refusal runs before the strip, and holding that order is
+ * this function's job rather than a happy accident.
+ * {@link stripDeclarationExports} says it relies on the refusal
+ * being in front of it: the three re-export forms are statements
+ * in their own right, so the strip leaves them exactly as it
+ * found them, and a library carrying one comes back looking
+ * spliceable. Nothing further along would notice. The body would
+ * reach a node still wearing `export default` and fail on first
+ * execution, which is the failure the refusal exists to move to
+ * build time.
+ *
+ * Both questions are asked of the same text. `scan` reads the
+ * library as authored rather than the transpiled output, so the
+ * refusal judges the dependencies the author wrote while the
+ * strip runs over what the transpiler made of that same source.
+ * Measured across every sample in `tests/build/marker-fixtures.ts`
+ * the two texts report an identical import list, so this is about
+ * never letting the pair disagree rather than about a difference
+ * anything has seen.
+ *
+ * Nothing here is wrapped, which is the contract
+ * `inlineLibString` already states from the other side. A path
+ * naming no file comes back as whatever `readFileSync` raises,
+ * and so does a directory or a file the build may not read:
+ * measured, `ENOENT`, `EISDIR` and `EACCES`. The first and the
+ * last name the joined path; the middle one names no path at all,
+ * and is the one refusal on this path that leaves a reader
+ * nothing to look up. A `git grep` for the marker form across
+ * `workflows/src/` is what turns any of them back into the
+ * workflow source that asked, which is what `SpliceableLibError`
+ * says for the refusal it carries.
+ *
+ * The path is not judged here, and this is not a second guard.
+ * `assertMarkerPath` runs inside `inlineLibString` before a
+ * loader is called, so a path pointing outside the library
+ * directory never reaches this. Handed one directly, `join`
+ * simply resolves it: measured, a `..` segment is consumed rather
+ * than refused, so `../x.ts` against a library directory lands on
+ * a file beside that directory, and if that file reads and
+ * splices the build reports success. Which is why the path rule
+ * sits ahead of the loader rather than behind it — neither this
+ * nor anything downstream would report the escape.
+ *
+ * Nothing is cached. A source inlining one library at two markers
+ * reads it twice, and the next build reads every library again.
+ * Both are a handful of small files per run, and a cache would be
+ * the only thing in the build answering from before an edit.
+ *
+ * @param libDir - The directory a marker's path is relative to.
+ * @param transpiler - The transpiler every library is put
+ *   through, {@link bunTranspiler}'s in a real build.
+ * @returns A loader over that directory and that transpiler.
+ */
+export function loadLib(
+  libDir: string,
+  transpiler: LibTranspiler,
+): LibLoader {
+  return (libPath: string): string => {
+    const source = readFileSync(join(libDir, libPath), 'utf8');
+    const transpiled = transpiler.transformSync(source);
+
+    assertSpliceable(transpiled, transpiler.scan(source), libPath);
+
+    return stripDeclarationExports(transpiled);
+  };
 }
