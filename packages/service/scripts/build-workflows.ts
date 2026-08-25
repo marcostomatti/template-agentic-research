@@ -424,6 +424,20 @@ function gitOutput(root: string, args: string[]): string | null {
  * a note on that canvas, and that is the trade this function is
  * written to refuse.
  *
+ * That totality is over what git makes of `root`, and it is
+ * narrower than it sounds. `root` is handed over as a `cwd` and
+ * inherits like one: measured, an empty string resolves to the
+ * PROCESS's own cwd rather than to nowhere, and a relative root
+ * resolves against that same cwd. So a build launched from inside
+ * this checkout stamps the repository's own commit for an empty
+ * root, where the three roots just named all answer with the
+ * no-commit tag. Nothing throws either way, which is both the
+ * point and the cost: the one input this function cannot report
+ * is a root that reads as absent but resolves to a real checkout.
+ * A later caller treating the stamp as evidence that there is no
+ * checkout to be found therefore cannot hand it a possibly-empty
+ * string.
+ *
  * The swallow that buys it is confined to {@link gitOutput}, and
  * it is not the silent kind the package's error rule refuses: the
  * failure IS the value, and the value is printed where a reader
@@ -470,7 +484,8 @@ function gitOutput(root: string, args: string[]): string | null {
  * says this build is deterministic, and a per-run stamp would
  * leave that comparison with nothing to assert.
  *
- * @param root - A directory inside the checkout to ask git from.
+ * @param root - A directory inside the checkout to ask git from,
+ *   resolved as a `cwd` and so never safely empty or relative.
  * @returns The short commit, that commit with `-dirty` behind it,
  *   or {@link NO_COMMIT_BUILD_TAG}.
  */
