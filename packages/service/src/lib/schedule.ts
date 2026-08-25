@@ -36,3 +36,60 @@
  * where phase 4 puts the ported parsing libs — names a sibling pipeline
  * lib instead.
  */
+
+/**
+ * The bounds a schedulable row puts on its own interval, as the
+ * `min_interval_seconds` and `max_interval_seconds` columns carry them.
+ * A null bound is an absent one: that side of the range is unlimited.
+ *
+ * Named for the columns rather than for the sides, so a claimed row
+ * satisfies this as it stands and no renaming step sits between the
+ * query and the rule.
+ */
+export interface IntervalBounds {
+  /**
+   * The shortest interval this row may be run at, in seconds, or null
+   * for no floor.
+   */
+  readonly minIntervalSeconds: number | null;
+
+  /**
+   * The longest it may go between runs, in seconds, or null for no
+   * ceiling.
+   */
+  readonly maxIntervalSeconds: number | null;
+}
+
+/**
+ * Clamp a proposed interval into the bounds its own row carries.
+ *
+ * A null bound is skipped rather than stood in for, which is not the
+ * same thing: a missing ceiling leaves the floored value alone, where
+ * a ceiling taken to be the proposal itself would cap it back to what
+ * was handed in and leave the floor doing nothing. A row carrying
+ * neither bound gets back exactly what it was handed. Nothing here
+ * refuses a proposal either — every input has an answer, and where the
+ * bounds do not reach it that answer is the proposal itself.
+ *
+ * The floor is applied first and the ceiling second, so bounds that
+ * cross — a floor above the ceiling, which nothing refuses on the way
+ * into the row — resolve to the ceiling. That is the contract rather
+ * than a consequence of reading one column before the other, and it is
+ * what a caller can rely on for a row whose two bounds disagree.
+ *
+ * @param intervalSeconds - The interval being proposed, in seconds.
+ * @param bounds - The row's own floor and ceiling.
+ * @returns The proposal, moved no further than the bounds require.
+ */
+export function clampIntervalSeconds(
+  intervalSeconds: number,
+  bounds: IntervalBounds,
+): number {
+  const floored = bounds.minIntervalSeconds === null
+    ? intervalSeconds
+    : Math.max(intervalSeconds, bounds.minIntervalSeconds);
+
+  return bounds.maxIntervalSeconds === null
+    ? floored
+    : Math.min(floored, bounds.maxIntervalSeconds);
+}

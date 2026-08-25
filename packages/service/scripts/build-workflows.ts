@@ -160,11 +160,11 @@ export class TranspilerUnavailableError extends Error {
  * Build the transpiler the library splice runs on.
  *
  * The `ts` loader, because every library a marker inlines is a
- * TypeScript source under `src/lib/` — a directory the first
- * library lands in later in this phase. What comes back has the
- * types erased and the export keywords still on it, which is why
- * a splice is more than a transpile — taking those off is
- * `stripDeclarationExports`, next door in `workflow-markers.ts`.
+ * TypeScript source under `src/lib/`, where the first of them —
+ * `schedule.ts` — now sits. What comes back has the types erased and
+ * the export keywords still on it, which is why a splice is more than
+ * a transpile — taking those off is `stripDeclarationExports`, next
+ * door in `workflow-markers.ts`.
  *
  * A function rather than one transpiler built when this module
  * loads. Construction is what fails when the launcher is wrong,
@@ -881,9 +881,11 @@ const WORKFLOW_EXTERNAL_DIST_DIR = join(
  * The directory a `__INLINE:<path>__` marker names a library
  * inside.
  *
- * `src/lib/` is this package's pipeline half, and the first
- * library lands in it later in this phase — so a build today
- * resolves no library marker and never opens this directory.
+ * `src/lib/` is this package's pipeline half, and it holds its
+ * first library, `schedule.ts`. No workflow source names it in a
+ * marker yet — `workflows/src/` holds no workflow at all until
+ * `ar-dispatch` lands — so a build today resolves no library
+ * marker and never opens this directory.
  */
 const LIB_DIR = join(PACKAGE_ROOT, 'src', 'lib');
 
