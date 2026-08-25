@@ -1073,6 +1073,34 @@ function isBuildRefusal(cause: unknown): cause is Error {
  * library: `bun scripts/build-workflows.ts` writes a dist, while
  * a test importing {@link buildAll} or {@link buildTemplate} gets
  * the exports and no build.
+ *
+ * What holds that pair together is a LOCATION rule, and it is the
+ * half a reader is likeliest to tidy away: the guard has to stay
+ * in the file that command names. `import.meta.url` is lexical to
+ * the module it is written in, so a guard moved into a shared
+ * helper compares that HELPER's path against `process.argv[1]`
+ * and answers false in every process — measured, as an exported
+ * const and as a function alike. The one extraction that survives
+ * is a helper taking `import.meta.url` as an ARGUMENT, evaluated
+ * at the call site. This package took three copies of two lines
+ * instead, here and in the two scripts named above.
+ *
+ * Worth a paragraph because moving it fails silently, and lands
+ * on the same observable the unconverted comparison above does —
+ * two wrong forms, one outcome, and only one of them looks like a
+ * mistake. Measured: a run whose guard never holds prints nothing
+ * and exits 0, which is exactly what importing this module by
+ * path does, while a build over an empty source tree prints one
+ * line saying so. Nothing downstream parts them either — the
+ * un-run build writes no artifact, `workflows/dist/` is
+ * gitignored, and so there is no diff for one to go missing from.
+ * The tell is the absence of every line, not an error.
+ *
+ * The rule is written up in
+ * `~/.claude/skills/esm-dual-purpose-cli-module/SKILL.md`, a
+ * user-level skill rather than one vendored under `.claude/`
+ * here, which is why the argument is carried above rather than
+ * left to the link.
  */
 const INVOKED_AS_CLI = process.argv[1] !== undefined
   && fileURLToPath(import.meta.url) === process.argv[1];
