@@ -413,6 +413,63 @@ function gitOutput(root: string, args: string[]): string | null {
  * with nothing in front of it, which names neither a commit nor
  * the absence of one.
  *
+ * Nothing here throws, for any root, and that is a contract rather
+ * than an accident of the two calls behind it. Measured over what
+ * a build can be handed: a directory that is not a checkout, one
+ * that does not exist, and a path naming a file rather than a
+ * directory all come back with a stamp. The reason is what a stamp
+ * IS — a label, read by an operator off a canvas and by nothing in
+ * a running workflow. A build that refused to write an artifact
+ * because git could not be asked would have stopped a deploy over
+ * a note on that canvas, and that is the trade this function is
+ * written to refuse.
+ *
+ * The swallow that buys it is confined to {@link gitOutput}, and
+ * it is not the silent kind the package's error rule refuses: the
+ * failure IS the value, and the value is printed where a reader
+ * looks for it. `dev` is no more a commit than a blank line is a
+ * sentence. Two things it does not buy, both worth knowing before
+ * leaning on a stamp. It does not say which of the three states
+ * produced it — the distinction is gone by the time the string
+ * comes back, and no caller can ask afterwards. And it refuses
+ * nothing: the refusal a stamp this forgiving warrants belongs to
+ * the deploy path, which stops on a dirty TREE rather than on the
+ * label it produced, and which arrives later in this plan.
+ *
+ * This is also the one value in the build permitted to move with
+ * anything but the sources, which is the second half of why a
+ * label is worth this much prose. Everything else an artifact is
+ * made of is fixed by the tree: the workflow sources, the
+ * libraries their markers inline, and `ENV_DEFAULTS` in this
+ * package's own source. Nothing reads a clock, nothing is
+ * randomized, and settings resolve from that table rather than
+ * from an ambient environment unless a caller opts in — the deploy
+ * build arriving later in this stage is the one that does, and it
+ * writes to a sibling directory rather than to `workflows/dist/`.
+ * So two runs over one unchanged tree write byte-identical files,
+ * and this is the single value that could say otherwise.
+ *
+ * Identical within one tree, different across commits, and both
+ * halves want reading exactly. The stamp is keyed to the state of
+ * the repository rather than to what the build read, so an edit to
+ * a file no build ever opens flips the suffix: standing still
+ * means the tree, not the sources. Across commits it moves whether
+ * or not anything the build reads moved with it, which is what
+ * makes one artifact distinguishable from another at all. The
+ * direction that does NOT hold is the one an operator is likeliest
+ * to want: `-dirty` is one text for every uncommitted state, so
+ * two artifacts built from two different trees at one commit carry
+ * the same stamp while differing in content. It says an artifact
+ * is unaccounted for, never what is in it.
+ *
+ * Which is why the obvious stamp is the wrong one. A build
+ * timestamp or a generated id reads just as usefully on a canvas
+ * and moves on every run, and with `workflows/dist/` gitignored
+ * there is no committed artifact to rebuild and diff — a
+ * comparison between two builds of one tree is the whole of what
+ * says this build is deterministic, and a per-run stamp would
+ * leave that comparison with nothing to assert.
+ *
  * @param root - A directory inside the checkout to ask git from.
  * @returns The short commit, that commit with `-dirty` behind it,
  *   or {@link NO_COMMIT_BUILD_TAG}.
