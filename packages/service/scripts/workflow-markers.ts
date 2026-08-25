@@ -1163,3 +1163,97 @@ export class RetiredMarkerError extends Error {
     this.form = form;
   }
 }
+
+/**
+ * Apply a function to every string a parsed JSON value holds.
+ *
+ * The walk the marker rules are carried by. Each of those rules is
+ * about ONE string — a library marker replaced by a library body, a
+ * setting marker replaced by its value, both arriving next in this
+ * stage — and this is what reaches every string a workflow source
+ * buries one in. That split is the point rather than tidiness: a
+ * case over either rule hands it a string and reads a string back,
+ * with no tree to build and no depth to get right, and the depths
+ * are proven once here instead of once per rule.
+ *
+ * What counts as a marker is not decided here. `fn` is handed every
+ * string, the great majority of which carry nothing to replace, and
+ * returns whatever should stand in that string's place. A rule with
+ * no work to do returns what it was given.
+ *
+ * The tree is rebuilt rather than edited. Every object and every
+ * array comes back new and the value handed in is left as it was,
+ * so a caller holding a parsed source can still say what it started
+ * with after resolution has run over it.
+ *
+ * Object VALUES only. A key is a string too, and one carrying a
+ * marker is not reached: replacing a key is a change to the shape
+ * rather than to the content, and it can land on a key already
+ * there, which is a collision a walk has no way to report. Such a
+ * marker is not silently kept either — it reaches the serialized
+ * output intact, and the survival check arriving later in this
+ * stage refuses it there, naming the form.
+ *
+ * The order the branches are tried in is the substance of this
+ * function rather than a formatting choice, because each way of
+ * getting it wrong leaves every marker correctly resolved and shows
+ * up nowhere in a case asserting the markers resolved. `typeof
+ * null` reports `object`, so a null reaching the object branch is
+ * walked as one and comes back `{}`. `typeof []` reports `object`
+ * as well, so an array rebuilt from its entries comes back an
+ * object keyed `"0"` and `"1"`. A number or a boolean handed to a
+ * string function comes back as text. What those cost is a workflow
+ * whose markers are all resolved and whose `active` flag is now the
+ * string `"false"`.
+ *
+ * Member order survives the rebuild. `Object.entries` visits an
+ * object's own keys in the order `JSON.stringify` will serialize
+ * them, and rebuilding from that order preserves it. The build's
+ * output is compared byte for byte between runs, so a walk that
+ * reordered members would read as a build that is not deterministic
+ * rather than as a walk that is not stable.
+ *
+ * `unknown` in and `unknown` out rather than a generic handing the
+ * caller its own type back. The shape genuinely is preserved — a
+ * string for a string, an array of the same length, an object with
+ * the same keys — but nothing in the body proves it, and a
+ * `<T>(value: T) => T` signature buys that claim with a cast that
+ * would hold for whatever the body became. Both callers are on the
+ * resolution path and want a JSON value rather than a named shape.
+ *
+ * The limit is the input contract, and it is not checked. A finite
+ * tree is assumed: `JSON.parse` cannot produce a cycle, and every
+ * caller here hands over what it parsed. A hand-built object
+ * referring to itself recurses until the stack ends.
+ *
+ * @param value - A parsed JSON value, of any of the shapes
+ *   `JSON.parse` produces.
+ * @param fn - Applied to every string in that value, returning what
+ *   stands in its place.
+ * @returns A new value of the same shape, with every string
+ *   replaced by what `fn` returned for it.
+ */
+export function mapStrings(
+  value: unknown,
+  fn: (text: string) => string,
+): unknown {
+  if (typeof value === 'string') {
+    return fn(value);
+  }
+
+  if (Array.isArray(value)) {
+    const elements: readonly unknown[] = value;
+
+    return elements.map((element) => mapStrings(element, fn));
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    const members = Object.entries(value as Record<string, unknown>);
+
+    return Object.fromEntries(members.map(
+      ([key, member]) => [key, mapStrings(member, fn)],
+    ));
+  }
+
+  return value;
+}
