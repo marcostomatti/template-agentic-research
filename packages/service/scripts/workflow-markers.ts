@@ -1465,3 +1465,161 @@ export function resolveEnvString(
     (_match: string, name: string) => resolveEnvVar(name, sources),
   );
 }
+
+/**
+ * The marker forms a source may no longer carry, in the order
+ * they are tried.
+ *
+ * The form alone rather than the whole marker shape. A retired
+ * marker is not a marker to the live grammar — {@link LIB_MARKER}
+ * wants a colon straight after `INLINE`, so `__INLINE_JSON:` is
+ * not a hit for it — and there is no capture to read a file name
+ * out of. Nothing here needs one: what the refusal names is the
+ * form, and {@link RetiredMarkerError} carries only that. Matching
+ * the prefix also reaches a form written wrongly around a good
+ * file name, which a shape-matching rule would leave to the
+ * survival check to report as text nothing could read.
+ *
+ * The order settles what a string carrying both is refused under.
+ * One rule refuses both forms and the first found is the one
+ * named, so a case pairing a sample to a form plants that form on
+ * its own.
+ */
+const RETIRED_MARKER_FORMS: readonly string[] = [
+  '__INLINE_JSON',
+  '__INLINE_YAML',
+];
+
+/**
+ * Refuse a string carrying either retired marker form.
+ *
+ * Read over the string as the source wrote it, before anything is
+ * inlined or resolved, so a source carrying one is refused without
+ * a library ever being opened.
+ *
+ * @param value - One string out of a workflow source.
+ * @throws RetiredMarkerError When the string carries a retired
+ *   form, naming the first of them in roster order.
+ */
+function assertNoRetiredMarker(value: string): void {
+  for (const form of RETIRED_MARKER_FORMS) {
+    if (value.includes(form)) {
+      throw new RetiredMarkerError(form);
+    }
+  }
+}
+
+/** What {@link resolveMarkers} resolves a source against. */
+export interface ResolveMarkersOptions {
+  /**
+   * Handed every library marker's path, returning that library's
+   * splice-ready body. Required, because a loader cannot be
+   * defaulted: reading and transpiling a library needs a real bun
+   * process, and this module deliberately has none.
+   */
+  readonly loadLib: LibLoader;
+
+  /**
+   * The settings chain to walk, highest precedence first.
+   * Defaults to `envSources()` — {@link ENV_DEFAULTS} behind two
+   * empty objects, which is the default build's chain and the one
+   * a caller inherits by saying nothing.
+   */
+  readonly sources?: readonly EnvSource[];
+}
+
+/**
+ * Resolve every marker a parsed workflow source carries.
+ *
+ * The whole marker pass in one call, and what a build hands a
+ * parsed source to: every library inlined, every setting
+ * resolved, every retired form refused. The rules underneath are
+ * each about one string — {@link inlineLibString},
+ * {@link resolveEnvString} — and {@link mapStrings} is what
+ * reaches the strings a source buries them in.
+ *
+ * One walk, three steps per string, rather than a walk per rule.
+ * The order those steps run in is the substance of this function,
+ * and each of the two orderings is load-bearing.
+ *
+ * The retired refusal runs first, over the string as the source
+ * wrote it. A source carrying `__INLINE_JSON` or `__INLINE_YAML`
+ * is refused before a library is opened or a setting is read,
+ * which is {@link assertMarkerPath}'s ordering one level up: the
+ * refusal is about what a source WROTE, and doing the work first
+ * would change only how much had happened before it failed.
+ *
+ * Inlining runs before settings resolution, and that ordering is
+ * the reason the two are separate passes at all. A library may
+ * carry a setting marker of its own — a build stamp written into
+ * a constant is the ordinary case — and replacement does not
+ * re-scan what it inserted. What resolves such a marker is not
+ * nesting but sequence: settings resolution walks the string
+ * inlining returned, so a marker inside a library body resolves
+ * exactly as if the workflow source had written it there. Run the
+ * two the other way round and that marker reaches the artifact
+ * intact.
+ *
+ * The reverse does not resolve, and is not meant to. A library
+ * marker inside a library body, or inside a value a setting
+ * resolved to, is text this pass has already gone past: it
+ * survives into the serialized output, and the survival check
+ * refuses it there. Nesting is one level deep, in one direction.
+ *
+ * Reading the source's own string leaves the retired refusal a
+ * limit worth stating: a retired form written inside a LIBRARY
+ * body is not reached here. It is spliced in as it stands and
+ * survives into the serialized output, where the survival check
+ * names it — a message about an artifact rather than about the
+ * library that wrote it.
+ *
+ * One chain for the whole value. `sources` is resolved once,
+ * before the walk starts, and the same array reaches every
+ * string. A chain built per string would read the `.env` off disk
+ * once per string carrying a marker, and could answer two of them
+ * from different contents of one file.
+ *
+ * The value handed in is left as it was. {@link mapStrings}
+ * rebuilds every object and array it walks, so a caller holding a
+ * parsed source can still say what it started with after this has
+ * run over it.
+ *
+ * Nothing here says resolution finished. A marker that matched no
+ * grammar is still in the value this returns: a name misspelt
+ * inside a well-formed marker fails loudly, but a marker
+ * malformed around a good name matches nothing, and neither does
+ * one written as an object key. Those reach the serialized output
+ * and are refused there. This resolves what it recognizes; what
+ * it did not recognize is the survival check's to report, from
+ * the other end of the same build.
+ *
+ * Whatever the loader throws comes through untouched — a path
+ * naming no file, a library that cannot stand alone in a Code
+ * node. Nothing on this path wraps it.
+ *
+ * @param value - A parsed workflow source, or any value
+ *   `JSON.parse` produces.
+ * @param options - The loader every library marker is resolved
+ *   through, and the chain every setting marker is resolved
+ *   against.
+ * @returns A new value of the same shape, with every marker this
+ *   pass recognizes replaced.
+ * @throws RetiredMarkerError When a string carries a retired
+ *   marker form.
+ * @throws MarkerPathError When a library marker names a path
+ *   outside the library directory.
+ * @throws UnresolvedSettingError When a setting marker names a
+ *   setting no source in the chain answers for.
+ */
+export function resolveMarkers(
+  value: unknown,
+  options: ResolveMarkersOptions,
+): unknown {
+  const { loadLib, sources = envSources() } = options;
+
+  return mapStrings(value, (text) => {
+    assertNoRetiredMarker(text);
+
+    return resolveEnvString(inlineLibString(text, loadLib), sources);
+  });
+}
