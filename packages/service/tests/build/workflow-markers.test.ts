@@ -117,12 +117,13 @@
  * still transpiles and still splices, so the build has no second
  * chance to notice.
  *
- * The last two subjects are the whole marker pass rather than one
- * rule inside it. `resolveMarkers` is what a build hands a parsed
- * source to, so both hand over a template — a source-shaped object
- * with the marker buried where a node buries a body — and one
- * builder makes every one of them, so a refused template and the
- * resolved one it stands beside differ by the marker alone.
+ * The last three subjects are the whole marker pass rather than
+ * one rule inside it. `resolveMarkers` is what a build hands a
+ * parsed source to, so each of them hands over a template — a
+ * source-shaped object with the marker buried where a node buries
+ * a body. The two refusals share one builder for theirs, so a
+ * refused template and the resolved one it stands beside differ by
+ * the marker alone.
  *
  * The first is the two marker forms the build no longer resolves,
  * one form to a template. One rule refuses both and names the first
@@ -163,8 +164,25 @@
  * the guard reading that property resolves each path from a
  * directory and asks whether it stayed underneath — beside the
  * accepted path, which does.
+ *
+ * The last of the three is the walk underneath all of it, and the
+ * only subject here that reads what the pass RETURNED rather than
+ * what it refused. Its template is the multi-depth one out of
+ * `marker-fixtures.ts`: markers at four depths, the deepest of
+ * them under two arrays, beside values carrying no marker at all.
+ * A pass that resolved the shallow markers and never descended
+ * leaves the deep ones standing, and each site says so under its
+ * own name.
+ *
+ * Two ways of getting that walk wrong are invisible to those
+ * sites, and each has a case of its own. An array rebuilt as an
+ * object keyed `"0"` answers to the same path its elements always
+ * did, so the container under every marker is read back by kind. A
+ * null walked as an object, a number handed to a string function:
+ * neither touches a marker either, so the values carrying none are
+ * read back whole.
  */
-import type { LibSample } from './marker-fixtures.js';
+import type { LibSample, MarkerSite } from './marker-fixtures.js';
 import type { EnvSource, LibLoader } from '../../scripts/workflow-markers.js';
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -190,8 +208,11 @@ import {
 
 import {
   LIB_CONTROL_SAMPLES,
+  MARKER_TEMPLATE_INERT_SITES,
+  MARKER_TEMPLATE_SITES,
   REFUSED_LIB_SAMPLES,
   SPLICEABLE_LIB_SAMPLES,
+  markerTemplate,
   valueAtPath,
 } from './marker-fixtures.js';
 
@@ -1320,12 +1341,13 @@ const TEMPLATE_LITERAL_SAMPLE = sampleById(
 /**
  * How many times a phrase occurs in a text.
  *
- * Counting rather than matching, because the guard reading it is
- * about there being TWO of something and one of them moving.
- * `toContain` cannot tell one occurrence from two, and a
- * line-anchored regex would be the rule under test restated — it
- * would move with the rule, and would agree with one that had moved
- * wrongly.
+ * Counting rather than matching, because the guards reading it are
+ * about there being TWO of something: a phrase the strip has to
+ * leave where it sits, and a marker the marker pass has to replace
+ * in both the places one string wrote it. `toContain` cannot tell
+ * one occurrence from two, and a line-anchored regex would be the
+ * strip restated — it would move with the rule, and would agree
+ * with one that had moved wrongly.
  *
  * @param text - The text to count in.
  * @param phrase - The phrase to count, matched literally.
@@ -1490,12 +1512,15 @@ const LIVE_LIB_SAMPLE = sampleById(
 const LIVE_MARKER = `__INLINE:${LIVE_LIB_SAMPLE.path}__`;
 
 /**
- * Where every template below buries its marker.
+ * Where every template in the two refusal sections below buries its
+ * marker.
  *
  * A node parameter rather than a top-level value, so the walk has to
- * descend to reach it. Depth is its own subject and no case here
- * claims anything about it, but a refusal read off a string the walk
- * never reached would be no refusal at all.
+ * descend to reach it. Depth is its own subject, claimed at the foot
+ * of this file over the multi-depth template in
+ * `marker-fixtures.ts`, and no case here says anything about it —
+ * but a refusal read off a string the walk never reached would be no
+ * refusal at all.
  */
 const MARKER_SITE: readonly (string | number)[] = [
   'nodes',
@@ -1507,11 +1532,11 @@ const MARKER_SITE: readonly (string | number)[] = [
 /**
  * A source-shaped template carrying one marker and nothing else.
  *
- * One builder for every input below, so an accepting template and a
- * refused one differ by the marker and by nothing else. Written out
- * one per case they could drift into differing somewhere the rule
- * is not about, and a control would stop being a near miss of the
- * things it stands beside.
+ * One builder for every input in the two refusal sections below, so
+ * an accepting template and a refused one differ by the marker and
+ * by nothing else. Written out one per case they could drift into
+ * differing somewhere the rule is not about, and a control would
+ * stop being a near miss of the things it stands beside.
  *
  * A function rather than a constant, for the reason the template in
  * `marker-fixtures.ts` is one: a case resolving in place would hand
@@ -1534,7 +1559,8 @@ function templateCarrying(marker: string): Record<string, unknown> {
 }
 
 /**
- * The loader every call below is made with.
+ * The loader the calls in the two refusal sections below are made
+ * with.
  *
  * It answers for one library and refuses anything else rather than
  * handing back a body for it. A loader answering whatever it was
@@ -1899,4 +1925,331 @@ describe('resolveMarkers — a library marker leaving the directory', () => {
       expect(refusal.message).toContain(libMarkerNaming(entry.libPath));
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// A marker buried under the arrays and objects a source nests
+// ---------------------------------------------------------------------------
+
+/**
+ * The library the multi-depth template inlines, and the body the
+ * loader below hands back for it.
+ *
+ * The one fixture sample whose path carries a subdirectory, which
+ * is what a workflow source names when it inlines a library out of
+ * a directory under the one the build reads. Its body declares a
+ * constant and nothing else, so the site holding it stays short
+ * enough to read whole.
+ */
+const TEMPLATE_LIB_SAMPLE = sampleById(
+  LIB_CONTROL_SAMPLES,
+  'control-setting-marker-in-lib',
+);
+
+/**
+ * The loader every call in this section is made with.
+ *
+ * A second one beside {@link FIXTURE_LOADER} rather than a widening
+ * of it: the template below inlines a different library, and a
+ * loader answering for both would leave each section accepting a
+ * path it has nothing to do with.
+ *
+ * It refuses every other path for the reason that one does. Nothing
+ * here is about a library that cannot be found, so a call arriving
+ * with anything else is a failure that has to say so rather than a
+ * body handed back for whatever was asked.
+ *
+ * @param libPath - The path a library marker named.
+ * @returns The recorded body of the one library it answers for.
+ */
+const TEMPLATE_LOADER: LibLoader = (libPath) => {
+  if (libPath !== TEMPLATE_LIB_SAMPLE.path) {
+    throw new Error(
+      `The template loader was asked for ${JSON.stringify(libPath)}, and `
+      + `answers only for ${JSON.stringify(TEMPLATE_LIB_SAMPLE.path)}.`,
+    );
+  }
+
+  return TEMPLATE_LIB_SAMPLE.stripped;
+};
+
+/**
+ * Run the whole marker pass over the multi-depth template.
+ *
+ * A fresh template per call, which is what its builder is a
+ * function for: a case resolving one in place would hand the next
+ * a tree with nothing left in it to find, and that case would pass
+ * by finding nothing.
+ *
+ * No settings chain is handed over, so the pass falls back to the
+ * one a default build resolves against. Every setting marker in
+ * the template names an `ENV_DEFAULTS` entry, which is what lets
+ * the whole tree resolve with no environment and no `.env` behind
+ * it.
+ *
+ * @returns The template, with every marker the pass recognizes
+ *   replaced.
+ */
+function resolveMarkerTemplate(): unknown {
+  return resolveMarkers(markerTemplate(), { loadLib: TEMPLATE_LOADER });
+}
+
+/** How often each marker of one site occurs, keyed by marker. */
+type MarkerTally = Readonly<Record<string, number>>;
+
+/**
+ * The markers one site records, each named once.
+ *
+ * The roster lists repeats, because one site carries the same
+ * marker twice and how often it does is part of what it records. A
+ * tally wants that marker as one key rather than as two.
+ *
+ * @param site - The site to read.
+ * @returns Its markers, deduplicated and in roster order.
+ */
+function distinctMarkersOf(site: MarkerSite): readonly string[] {
+  return [...new Set(site.markers)];
+}
+
+/**
+ * How often the roster says each of a site's markers sits there.
+ *
+ * @param site - The site to read.
+ * @returns Its markers, each paired to how often it records it.
+ */
+function recordedTallyOf(site: MarkerSite): MarkerTally {
+  return Object.fromEntries(distinctMarkersOf(site).map(
+    (marker): [string, number] => [
+      marker,
+      site.markers.filter((other) => other === marker).length,
+    ],
+  ));
+}
+
+/**
+ * How often each of a site's markers really occurs in the value at
+ * it, in whichever tree is handed over.
+ *
+ * Counted rather than tested for, so the site carrying one marker
+ * twice says which of two things happened to it: a replacement
+ * stopping at the first occurrence leaves a count of one, and
+ * `toContain` reads that exactly as it reads two.
+ *
+ * @param root - The tree to read, a fresh template or a resolved
+ *   one.
+ * @param site - The site to read in it.
+ * @returns Its markers, each paired to how often it occurs there.
+ */
+function markerTallyAt(root: unknown, site: MarkerSite): MarkerTally {
+  const text = String(valueAtPath(root, site.path));
+
+  return Object.fromEntries(distinctMarkersOf(site).map(
+    (marker): [string, number] => [marker, occurrencesIn(text, marker)],
+  ));
+}
+
+/** One container a site's path passes through on its way down. */
+interface ContainerHop {
+  /** The site whose path passes through it. */
+  readonly site: string;
+
+  /** The path to the container itself, from the tree root. */
+  readonly path: readonly (string | number)[];
+
+  /** What the step taken out of it says it has to be. */
+  readonly kind: string;
+}
+
+/**
+ * Every container one site's path descends through, and what each
+ * has to be for the step out of it to mean what the path meant.
+ *
+ * Read off the path rather than declared beside it: a numeric step
+ * can only be taken out of an array and a named one out of an
+ * object, so the roster's own paths say which containers the
+ * template nests, and no second list can drift from them.
+ *
+ * @param site - The site whose path to walk.
+ * @returns One entry per step, the last of them the container the
+ *   marker itself sits in.
+ */
+function containerHopsOf(site: MarkerSite): readonly ContainerHop[] {
+  return site.path.map((step, index) => ({
+    site: site.id,
+    path: site.path.slice(0, index),
+    kind: typeof step === 'number'
+      ? 'an array'
+      : 'an object',
+  }));
+}
+
+/** Every container every site descends through, in roster order. */
+const CONTAINER_HOPS: readonly ContainerHop[] = MARKER_TEMPLATE_SITES
+  .flatMap(containerHopsOf);
+
+/**
+ * What the value at a path is, told apart the way the walk under
+ * test has to tell them apart.
+ *
+ * `typeof` reports `object` for an array and for `null` alike,
+ * which is the confusion the branch order inside the walk exists to
+ * avoid, so this asks `Array.isArray` first for the same reason.
+ *
+ * @param root - The tree to read.
+ * @param path - The path to the value in it.
+ * @returns `an array`, `an object`, or what it turned out to be
+ *   instead.
+ */
+function kindAt(root: unknown, path: readonly (string | number)[]): string {
+  const value = valueAtPath(root, path);
+
+  if (Array.isArray(value)) {
+    return 'an array';
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    return 'an object';
+  }
+
+  return `neither, but ${JSON.stringify(value)}`;
+}
+
+/**
+ * Every container in a tree that came back as something other than
+ * what the path through it takes it for.
+ *
+ * A list of sentences rather than a count or a boolean, so a
+ * failure names every container that changed shape and what each
+ * changed into. An array rebuilt as an object still answers to the
+ * numeric step that reached it, so nothing read at the far end of
+ * such a path reports this.
+ *
+ * @param root - The tree to read, a fresh template or a resolved
+ *   one.
+ * @returns One sentence per mismatched container, empty when every
+ *   one of them held.
+ */
+function miskindedIn(root: unknown): readonly string[] {
+  return CONTAINER_HOPS
+    .filter((hop) => kindAt(root, hop.path) !== hop.kind)
+    .map((hop) => `${hop.site} at [${hop.path.join(', ')}]: `
+      + `${kindAt(root, hop.path)} where the path takes it for `
+      + `${hop.kind}`);
+}
+
+/**
+ * What every value the template carries no marker in reads as, kept
+ * beside the id of the site it was read from.
+ *
+ * @param root - The tree to read, a fresh template or a resolved
+ *   one.
+ * @returns Each inert site's value, keyed by that site's id.
+ */
+function inertValuesIn(root: unknown): Readonly<Record<string, unknown>> {
+  return Object.fromEntries(MARKER_TEMPLATE_INERT_SITES.map(
+    (site): [string, unknown] => [site.id, valueAtPath(root, site.path)],
+  ));
+}
+
+describe('resolveMarkers — a marker buried under arrays and objects', () => {
+  // The fixture guard, and the four things about this template no
+  // case below can read off the pass.
+  //
+  // The markers first: every claim below is that a marker stopped
+  // being there, and a site that never carried one satisfies that
+  // reading exactly as a resolved one does. Counted rather than
+  // found, because the roster records one site carrying its marker
+  // twice and a claim about a global replacement is only a claim
+  // while the second occurrence is really written.
+  //
+  // Then the containers, which are what makes any of it a claim
+  // about depth. The kinds are read off the paths, so the first
+  // expectation is that those paths cross both — a roster of
+  // top-level sites would prove the walk descends into nothing.
+  // The second is that the template really nests them that way: an
+  // object keyed `"0"` answers a numeric step just as an array
+  // does, so a path alone says nothing about what it walked.
+  //
+  // Last the values carrying no marker, which the control at the
+  // foot of this section reads back. It compares them against the
+  // roster, and this is what says the roster describes the tree
+  // that control resolves.
+  it('is asked about markers buried under both kinds of container', () => {
+    const template = markerTemplate();
+    const carried = Object.fromEntries(MARKER_TEMPLATE_SITES.map(
+      (site): [string, MarkerTally] => [site.id, markerTallyAt(template, site)],
+    ));
+    const recorded = Object.fromEntries(MARKER_TEMPLATE_SITES.map(
+      (site): [string, MarkerTally] => [site.id, recordedTallyOf(site)],
+    ));
+    const inert = Object.fromEntries(MARKER_TEMPLATE_INERT_SITES.map(
+      (site): [string, unknown] => [site.id, site.value],
+    ));
+
+    expect(carried).toEqual(recorded);
+    expect(new Set(CONTAINER_HOPS.map((hop) => hop.kind)))
+      .toEqual(new Set(['an array', 'an object']));
+    expect(miskindedIn(template)).toEqual([]);
+    expect(inertValuesIn(template)).toEqual(inert);
+  });
+
+  for (const site of MARKER_TEMPLATE_SITES) {
+    // One site per way a source buries a string, and the depth is
+    // the whole of what parts them: a walk descending into objects
+    // and not into arrays resolves the shallow ones and leaves the
+    // deep one exactly as it was written.
+    //
+    // Every marker the site records, counted to zero rather than
+    // tested for absence, so the site written with the same marker
+    // twice fails here for a replacement that took only the first.
+    //
+    // The markers counted are the site's own. A library inlined at
+    // one of them carries a setting marker of its own, resolved by
+    // a pass that runs after the inlining — a separate claim, made
+    // in the section that follows this one, and not one a case
+    // about depth may quietly stand on.
+    it(`resolves every marker at ${site.id} (depth ${site.path.length})`, () => {
+      const resolved = resolveMarkerTemplate();
+      const resolvedAway = Object.fromEntries(distinctMarkersOf(site).map(
+        (marker): [string, number] => [marker, 0],
+      ));
+
+      expect(markerTallyAt(resolved, site)).toEqual(resolvedAway);
+    });
+  }
+
+  // What the sites above cannot report, and the reason the walk's
+  // branch order is a subject at all. `Array.isArray` is the only
+  // thing separating an array from an object here, and a walk that
+  // rebuilt one as the other leaves every marker in it correctly
+  // resolved and every path to those markers still walkable — the
+  // elements answer to `"0"` and `"1"` either way.
+  //
+  // Read as kinds rather than as a whole tree compared against a
+  // recorded one, because the resolved tree differs from the
+  // template everywhere a marker sat, which is the point of it.
+  it('hands back the containers it was given, of the same kinds', () => {
+    expect(miskindedIn(resolveMarkerTemplate())).toEqual([]);
+  });
+
+  // The other half of that, and the mirror of the claims above: a
+  // walk reaches every string in the tree, and most of what it
+  // reaches carries nothing to replace. A rule handed one of those
+  // has to give it back as it stands, and a value that is not a
+  // string at all has to be left where a string rule cannot reach
+  // it.
+  //
+  // Each of these is a way that goes wrong while every marker still
+  // resolves. `typeof null` reports `object`, so a null walked as
+  // one comes back `{}`. A number or a boolean handed to a string
+  // function comes back as text. An empty array rebuilt from its
+  // entries comes back an empty object. None of them touches a
+  // marker, and none of them shows up anywhere else in this file.
+  it('leaves every value carrying no marker as it found it', () => {
+    const recorded = Object.fromEntries(MARKER_TEMPLATE_INERT_SITES.map(
+      (site): [string, unknown] => [site.id, site.value],
+    ));
+
+    expect(inertValuesIn(resolveMarkerTemplate())).toEqual(recorded);
+  });
 });
