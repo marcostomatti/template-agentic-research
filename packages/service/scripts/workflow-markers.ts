@@ -893,8 +893,9 @@ export function stripDeclarationExports(transpiled: string): string {
  *
  * The retired forms are not hits for this pattern: `__INLINE_JSON`
  * and `__INLINE_YAML` carry an underscore where this wants its
- * colon. Refusing those is a rule of its own rather than a case
- * this one falls through to.
+ * colon. Refusing those is a rule of its own, reported as
+ * {@link RetiredMarkerError}, rather than a case this one falls
+ * through to.
  */
 export const LIB_MARKER = '__INLINE:([A-Za-z0-9_./-]+)__';
 
@@ -1060,5 +1061,72 @@ export function assertMarkerPath(libPath: string): void {
 
   if (libPath.split('/').includes('..')) {
     throw new MarkerPathError(libPath, 'a .. segment');
+  }
+}
+
+/**
+ * Thrown when a workflow source carries a marker form the build no
+ * longer resolves: `__INLINE_JSON:<file>__` or
+ * `__INLINE_YAML:<file>__`.
+ *
+ * Both once named a file in the build's own tree and inlined it
+ * into a node body as a JSON literal. Neither is resolved here and
+ * neither is passed through: a source carrying one is refused by
+ * name, and the message says where the value it wanted is read
+ * from now.
+ *
+ * A distinct class rather than a bare `Error`, so a case covering
+ * the retirement can pin the refusal to it. Every other way the
+ * marker pass fails arrives as something else — a path escaping
+ * the library directory as {@link MarkerPathError}, a library that
+ * cannot stand alone in a node as {@link SpliceableLibError}, a
+ * name no source resolves as {@link UnresolvedSettingError} — and
+ * an assertion accepting any `Error` would pass for all of them.
+ *
+ * It would also pass with this rule missing entirely, which is the
+ * reading that matters here and the one a `toThrow` cannot make.
+ * An unresolved marker reaches the serialized artifact intact, and
+ * the survival check arriving later in this stage refuses it there
+ * — so a build carrying a retired marker fails either way, and
+ * only the class and the form say which rule caught it. Refusing
+ * at resolution is what turns that into a message about the marker
+ * rather than about the output it survived into.
+ *
+ * The form is a field as well as part of the message, so a case
+ * asserts on which of the two was found rather than parsing prose
+ * it did not write. They retired together and one rule refuses
+ * both, but they are separate forms, and a sample paired to one is
+ * only covered if the refusal named that one.
+ *
+ * What the message cannot name is the workflow source the marker
+ * was written in. Resolution walks strings already parsed out of
+ * their source, so the form is the whole of what it has to hand,
+ * and a `git grep` for it across `workflows/src/` is what turns it
+ * back into a caller.
+ */
+export class RetiredMarkerError extends Error {
+  /**
+   * The retired form the source carried: `__INLINE_JSON` or
+   * `__INLINE_YAML`, without the file name or the closing
+   * underscores.
+   */
+  readonly form: string;
+
+  /**
+   * @param form - The retired marker form the source carried.
+   */
+  constructor(form: string) {
+    super(
+      `${form} is a retired marker form. Configuration the ` +
+      'pipeline reads lives in the database, on the ' +
+      'domains.settings payload of the domain a run is for, ' +
+      'rather than in a file baked into a node body at build ' +
+      'time. Either drop the marker and have the node read the ' +
+      'value from that payload, or — when the value is the same ' +
+      'for every domain — express it as __ENVVAR:<NAME>__ and ' +
+      'declare that name in the build defaults table.',
+    );
+    this.name = this.constructor.name;
+    this.form = form;
   }
 }
