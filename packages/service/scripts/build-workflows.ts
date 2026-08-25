@@ -700,6 +700,38 @@ export interface BuildAllOptions extends ResolveMarkersOptions {
  * listed arrives as `readdirSync` raised it — a path naming a
  * file rather than a directory is `ENOTDIR`, and names that path.
  *
+ * That is the reverse of the split the sibling reader in
+ * `tests/invariants/schema-sql.ts` makes, and the difference is
+ * the job rather than the idiom. That reader folds absent,
+ * not-a-directory and empty into one refusal, because a suite
+ * asserting over no migrations passes by finding nothing, so an
+ * empty result is the thing it exists to refuse. A build has no
+ * such stake: nothing to build is an ordinary state of a tree,
+ * and it is this package's state as this lands, since
+ * `workflows/src/` carries a README and no workflow source yet.
+ *
+ * Nothing to build has two shapes and one answer — a `sourceDir`
+ * that is absent, and one that is there holding no `*.json`. Both
+ * come back as an empty list, and both stop before `outDir` is
+ * touched, so a build that finds nothing leaves the disk as it
+ * was rather than an empty directory behind it.
+ *
+ * What the empty answer costs is that a wrong path and an empty
+ * tree read alike. `sourceDir` is a path like any other: a
+ * relative one resolves against the process's cwd, and an empty
+ * string reads as absent rather than as that cwd, so a caller
+ * that assembled the path wrongly is told nothing was built and
+ * not that nothing was found. Folding the unlistable cases in too
+ * would widen that silence to a `sourceDir` naming a file, which
+ * `ENOTDIR` names outright — leaving them raised keeps the one
+ * case that says which edit fixes it. What stands behind the
+ * silence is not this function: the reader over `workflows/dist/`
+ * arriving later in this phase refuses a directory holding no
+ * workflow, which is where a build of nothing surfaces. Nothing
+ * sweeping `outDir` leaves that backstop a hole — an artifact an
+ * earlier run wrote satisfies it on behalf of a run that wrote
+ * nothing.
+ *
  * Every artifact is built before any is written, so a source the
  * marker pass refuses leaves `outDir` as it stands rather than
  * half of this run's output over half of the last one's. Nothing
@@ -727,6 +759,37 @@ export interface BuildAllOptions extends ResolveMarkersOptions {
  * a marker that survived. What a `SyntaxError` about position 412
  * costs instead is a `git grep` across `sourceDir`, which is the
  * recovery every refusal on this path already documents.
+ *
+ * Both directories are parameters, and this function names no
+ * default for either. `workflows/src/` and `workflows/dist/`
+ * reach it from the CLI block arriving later in this stage, and
+ * nothing here knows those paths.
+ *
+ * That is what lets a case drive a real build over a fixture
+ * tree — a source directory under `mkdtempSync`, an output
+ * directory beside it — and reach the half of a build no injected
+ * dependency does. {@link buildTemplate}'s loader and settings
+ * chain already put the transform within reach of a test; the
+ * listing, the sort, the per-file read, the mkdir, the writes and
+ * the sweeping that does not happen are reachable only by moving
+ * the tree. Moving it is also what keeps such a case off the tree
+ * the rest of the suite reads: pointed at the real pair it would
+ * rebuild `workflows/dist/` underneath every check over it, and
+ * with a stand-in loader it would rebuild it into something no
+ * build produces. The same parameter carries the determinism
+ * check, which has nowhere else to stand — `workflows/dist/` is
+ * gitignored, so no committed artifact exists to rebuild and diff
+ * against, and two builds of one tree into two temporary output
+ * directories is what is left of the comparison.
+ *
+ * A parameter moves the tree, not the process. The library splice
+ * still reaches for a transpiler that exists only inside a bun
+ * process, so a case running in-process drives this with a
+ * stand-in loader and one that must exercise the real transpiler
+ * spawns this file instead. A fixture tree also says nothing
+ * about which tree a real build reads: the two paths that make it
+ * the real build are the launcher's to get right, and no case
+ * over a temporary directory ever sees them.
  *
  * @param options - Where to read, where to write, and how to
  *   resolve the markers in between.
