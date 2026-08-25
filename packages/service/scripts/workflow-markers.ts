@@ -1168,13 +1168,14 @@ export class RetiredMarkerError extends Error {
  * Apply a function to every string a parsed JSON value holds.
  *
  * The walk the marker rules are carried by. Each of those rules is
- * about ONE string — a library marker replaced by a library body, a
- * setting marker replaced by its value, both arriving next in this
- * stage — and this is what reaches every string a workflow source
- * buries one in. That split is the point rather than tidiness: a
- * case over either rule hands it a string and reads a string back,
- * with no tree to build and no depth to get right, and the depths
- * are proven once here instead of once per rule.
+ * about ONE string — a library marker replaced by a library body in
+ * {@link inlineLibString}, a setting marker replaced by its value in
+ * the rule arriving next in this stage — and this is what reaches
+ * every string a workflow source buries one in. That split is the
+ * point rather than tidiness: a case over either rule hands it a
+ * string and reads a string back, with no tree to build and no depth
+ * to get right, and the depths are proven once here instead of once
+ * per rule.
  *
  * What counts as a marker is not decided here. `fn` is handed every
  * string, the great majority of which carry nothing to replace, and
@@ -1256,4 +1257,123 @@ export function mapStrings(
   }
 
   return value;
+}
+
+/**
+ * What {@link inlineLibString} hands a library path to, and takes a
+ * splice-ready body back from.
+ *
+ * Everything done to a library before it can stand in a Code node
+ * happens behind this: reading the file, erasing its types,
+ * refusing a form a node cannot run, and taking the export keyword
+ * off what is left. What comes back is the body as it will appear
+ * in the artifact.
+ *
+ * A function rather than the directory to read from, because that
+ * work needs `Bun.Transpiler` and the default suite's process has
+ * none. Behind a parameter, the transpiler is the caller's problem
+ * and the marker rule is exercised with a lookup.
+ *
+ * @param libPath - The path a marker named, relative to the
+ *   library directory and already accepted by
+ *   {@link assertMarkerPath}.
+ * @returns The library's body, ready to be spliced as it stands.
+ */
+export type LibLoader = (libPath: string) => string;
+
+/**
+ * Replace every `__INLINE:<path>__` in one string with the library
+ * body the loader returns for it.
+ *
+ * One string rather than a tree. {@link mapStrings} is what reaches
+ * the strings a workflow source buries markers in, and this is what
+ * one of those strings has done to it — so a case hands this a
+ * string and a lookup and reads a string back, with no filesystem
+ * and no transpiler anywhere in the run.
+ *
+ * Every marker in the string, not the first. A node body inlining
+ * two libraries writes two markers, and a replacement stopping at
+ * one would leave the second to the survival check, reported as a
+ * marker nothing could read rather than as a library nothing
+ * inlined. The pattern is compiled here rather than shared, for
+ * the reason {@link LIB_MARKER} is a source string: a global
+ * instance carries `lastIndex` out of one call and into the next,
+ * so the call that skips a marker is the one after the call that
+ * resolved one.
+ *
+ * What bounds that claim is {@link LIB_MARKER}'s path class, and it
+ * was measured rather than assumed. The class admits `_` and the
+ * quantifier is greedy, so two markers with nothing but path
+ * characters between them are read as one: `__INLINE:a.ts__` run
+ * straight into `__INLINE:b.ts__` captures the path `a.ts__` and
+ * leaves the rest of the text standing. Every separator a node body
+ * actually puts between two inlines ends the class — a newline, a
+ * space, a semicolon, a quote — and a mis-read fails loudly, since
+ * the loader is handed a path no library sits at. It is named here
+ * because the survival check is not what would catch it: the text
+ * left behind has had its opening underscores eaten, so it is no
+ * longer a marker.
+ *
+ * The path is judged before the loader sees it.
+ * {@link assertMarkerPath} runs first, so a path pointing outside
+ * the library directory is never opened, never transpiled and
+ * never spliced. That ordering is the rule rather than a
+ * precaution: the refusal is about what a marker NAMES, and
+ * reading the file to find out would be the thing it exists to
+ * prevent.
+ *
+ * The replacement is a function, and that is load-bearing rather
+ * than a style. A string replacement gives `$` a meaning — `$&`
+ * stands for the match, `$1` for a capture, `$'` for everything
+ * after the match — and a library body is full of `$`. `$('Tick')`,
+ * the ordinary way one Code node reads another's output, is a `$`
+ * against a quote, exactly the third of those, so a string
+ * replacement would splice the rest of the node parameter into the
+ * library in its place. A function's return value is inserted as it
+ * stands, whatever it carries.
+ *
+ * A marker in what the loader returned is not resolved. Replacement
+ * reads the string it was given, and text standing in for a match
+ * is not scanned again, so a library carrying an `__INLINE:` marker
+ * of its own reaches the serialized output intact and is refused
+ * there as a marker that survived the pass. Nesting is not
+ * supported and nothing pretends otherwise. A SETTING marker inside
+ * a library body is the opposite case and does resolve: settings
+ * resolution runs afterwards, over the string this returned, so a
+ * `__ENVVAR:` marker written inside a library resolves as if the
+ * workflow source had written it. That is the whole reason inlining
+ * goes first.
+ *
+ * Nothing here judges what came back. A loader returning an empty
+ * string, or text still wearing an export keyword, is spliced
+ * exactly as handed over. Every rule about what a library may be
+ * lives behind {@link LibLoader}, and this side of the parameter
+ * cannot tell a body that will run from one that will not.
+ *
+ * Whatever the loader throws comes through untouched — a path
+ * naming no file as whatever `readFileSync` raises, a library that
+ * cannot stand alone as {@link SpliceableLibError}. Nothing is
+ * wrapped: a wrapper would add a class saying only `while inlining`
+ * to a message that already names the file.
+ *
+ * @param value - One string out of a workflow source, carrying a
+ *   marker or not.
+ * @param loadLib - Handed each marker's path, returning the
+ *   library's splice-ready body.
+ * @returns The string with every marker replaced, and the string
+ *   itself when it carries none.
+ * @throws MarkerPathError When a marker names a path outside the
+ *   library directory.
+ */
+export function inlineLibString(
+  value: string,
+  loadLib: LibLoader,
+): string {
+  const marker = new RegExp(LIB_MARKER, 'gu');
+
+  return value.replace(marker, (_match: string, libPath: string) => {
+    assertMarkerPath(libPath);
+
+    return loadLib(libPath);
+  });
 }
