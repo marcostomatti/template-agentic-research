@@ -117,15 +117,17 @@
  * still transpiles and still splices, so the build has no second
  * chance to notice.
  *
- * The last subject is the whole marker pass rather than one rule
- * inside it, asked about the two marker forms the build no longer
- * resolves. `resolveMarkers` is what a build hands a parsed source
- * to, so its cases hand over a template — a source-shaped object
- * with the marker buried where a node buries a body — and each
- * template carries one retired form on its own. One rule refuses
- * both and names the first it finds, so a template carrying both
- * would be refused under one of them while saying nothing about
- * the other.
+ * The last two subjects are the whole marker pass rather than one
+ * rule inside it. `resolveMarkers` is what a build hands a parsed
+ * source to, so both hand over a template — a source-shaped object
+ * with the marker buried where a node buries a body — and one
+ * builder makes every one of them, so a refused template and the
+ * resolved one it stands beside differ by the marker alone.
+ *
+ * The first is the two marker forms the build no longer resolves,
+ * one form to a template. One rule refuses both and names the first
+ * it finds, so a template carrying both would be refused under one
+ * of them while saying nothing about the other.
  *
  * Neither of those cases may read the throw. A retired form left
  * standing reaches the serialized artifact and the survival check
@@ -136,19 +138,44 @@
  * characters between `INLINE` and the colon, so a refusal keyed on
  * the shared prefix takes the one marker the build exists to
  * resolve. Reading that library's body back is the single case
- * here that reddens for a pass refusing whatever it is handed.
+ * there that reddens for a pass refusing whatever it is handed.
+ *
+ * The last is a library marker naming a path outside the directory
+ * the build inlines from: one absolute, one walking out with a `..`
+ * segment. Both are that same live marker with an escape written in
+ * front of the path, so the prefix is the whole of what parts a
+ * refused marker from a resolved one — and resolving the path with
+ * nothing in front of it is what says the section is not simply
+ * refusing whatever it is handed.
+ *
+ * Those refusals are read as the class and its two fields, and not
+ * for the reason the retired ones are. Nothing further on re-checks
+ * a path: one the rule let through is replaced by whatever the
+ * loader returned, leaving no marker for the survival check to
+ * find. What such a path meets next is the loader, and the fixture
+ * one here answers for a single library and refuses every other
+ * path — so a rule gone missing reddens those cases with a bare
+ * `Error` rather than passing them, and the class is what tells the
+ * two apart.
+ *
+ * What no refusal there can say is that a path pointed OUTSIDE
+ * anything. The rule reports the form it matched, which is text, so
+ * the guard reading that property resolves each path from a
+ * directory and asks whether it stayed underneath — beside the
+ * accepted path, which does.
  */
 import type { LibSample } from './marker-fixtures.js';
 import type { EnvSource, LibLoader } from '../../scripts/workflow-markers.js';
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
 import {
   ENV_DEFAULTS,
+  MarkerPathError,
   RetiredMarkerError,
   SpliceableLibError,
   UnresolvedSettingError,
@@ -1433,7 +1460,7 @@ const RETIRED_CASES: readonly RetiredCase[] = [
 ];
 
 /**
- * The library the accepting template inlines, and the body the
+ * The library the accepting templates inline, and the body the
  * loader below hands back for it.
  *
  * Its own dependency is a type and erases before the transpile, so
@@ -1454,6 +1481,11 @@ const LIVE_LIB_SAMPLE = sampleById(
  * characters between `INLINE` and the colon, so a refusal keyed on
  * the shared prefix takes this one too — and this is the marker the
  * build exists to resolve.
+ *
+ * The section after those is a near miss of a different kind: both
+ * of its refused markers are this one with an escape written in
+ * front of the path, so the prefix is the whole of what parts them
+ * from it.
  */
 const LIVE_MARKER = `__INLINE:${LIVE_LIB_SAMPLE.path}__`;
 
@@ -1475,11 +1507,11 @@ const MARKER_SITE: readonly (string | number)[] = [
 /**
  * A source-shaped template carrying one marker and nothing else.
  *
- * One builder for all three inputs, so the accepting template and
- * the two refused ones differ by the marker and by nothing else.
- * Written out three times they could drift into differing somewhere
- * the rule is not about, and the control would stop being a near
- * miss of the things it stands beside.
+ * One builder for every input below, so an accepting template and a
+ * refused one differ by the marker and by nothing else. Written out
+ * one per case they could drift into differing somewhere the rule
+ * is not about, and a control would stop being a near miss of the
+ * things it stands beside.
  *
  * A function rather than a constant, for the reason the template in
  * `marker-fixtures.ts` is one: a case resolving in place would hand
@@ -1659,6 +1691,212 @@ describe('resolveMarkers — a marker form the build no longer resolves', () => 
       );
 
       expect(refusal.message).toContain(entry.form);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// A library marker naming a path outside the directory it inlines from
+// ---------------------------------------------------------------------------
+
+/** One way out of the library directory, paired to a path taking it. */
+interface MarkerPathCase {
+  /** The form the refusal has to name. */
+  readonly form: string;
+
+  /** A path leaving that way, as a marker would write one. */
+  readonly libPath: string;
+}
+
+/**
+ * The two ways out of the library directory the rule tells apart,
+ * each written as the accepted library's own path with one escape in
+ * front of it.
+ *
+ * Built off that path rather than spelled beside it, so a refused
+ * marker and the resolved one it stands next to differ by the prefix
+ * and by nothing else. Written out, the two could drift into
+ * differing somewhere the rule is not about, and a case would be
+ * covered by a path refused for some other reason entirely.
+ *
+ * Each path takes exactly one way out, and that is structural rather
+ * than asserted: it is the accepted path with a single prefix in
+ * front, so the one carrying `../` has no leading slash and the one
+ * carrying `/` has no segment. It matters because one rule catches
+ * both and tries absolute first — `/lib/../x.ts` breaks both and is
+ * reported as absolute — so a path breaking both would say nothing
+ * about the segment while a case claimed it had.
+ */
+const MARKER_PATH_CASES: readonly MarkerPathCase[] = [
+  { form: 'an absolute path', libPath: `/${LIVE_LIB_SAMPLE.path}` },
+  { form: 'a .. segment', libPath: `../${LIVE_LIB_SAMPLE.path}` },
+];
+
+/**
+ * A directory to judge those paths against, and one no build reads.
+ *
+ * The rule under test is handed no directory at all: it judges what
+ * a marker NAMES rather than where the name would land, so none of
+ * these paths is ever joined to anything. The guard below needs one
+ * anyway, because what it reads is whether a path resolved from a
+ * directory stays underneath it — a mechanism the rule does not use,
+ * which is the point of it. The value is arbitrary.
+ */
+const NOTIONAL_LIB_DIR = '/build/lib';
+
+/**
+ * The whole marker one of these paths is written inside.
+ *
+ * Built from the path rather than carried beside it on the roster,
+ * so the path a case reads off a refusal and the path the marker
+ * wrote are provably one string. Spelled twice, a marker could name
+ * one path while the entry expected another, and the field claim
+ * would be about a path nothing had asked for.
+ *
+ * @param libPath - The path the marker names.
+ * @returns The marker, as a workflow source would write it.
+ */
+function libMarkerNaming(libPath: string): string {
+  return `__INLINE:${libPath}__`;
+}
+
+/**
+ * The {@link MarkerPathError} a call refused with.
+ *
+ * A fourth helper beside {@link refusalOf}, {@link spliceRefusalOf}
+ * and {@link retiredRefusalOf} rather than one taking a class, for
+ * the reason the later two were written: pinning a named class is
+ * the point of all of them, and a helper handed the class to expect
+ * would let a case pin whatever it happened to pass.
+ *
+ * What it rethrows is what makes this section redden for a rule that
+ * had gone missing rather than pass. A path the rule let through is
+ * handed straight on to the loader, and {@link FIXTURE_LOADER}
+ * answers for one library and refuses every other path — a refusal
+ * that is not this class, so it arrives here and goes back out.
+ *
+ * A call that RETURNED is its own failure and says so with what it
+ * returned, for the reason {@link retiredRefusalOf} gives.
+ *
+ * @param resolve - The call under test, passed unmade so what it
+ *   throws lands here.
+ * @returns The refusal it threw.
+ */
+function markerPathRefusalOf(resolve: () => unknown): MarkerPathError {
+  let resolved: unknown;
+
+  try {
+    resolved = resolve();
+  } catch (thrown) {
+    if (thrown instanceof MarkerPathError) {
+      return thrown;
+    }
+
+    throw thrown;
+  }
+
+  throw new Error(
+    `resolveMarkers resolved to ${JSON.stringify(resolved)} where a `
+    + 'refusal was expected.',
+  );
+}
+
+describe('resolveMarkers — a library marker leaving the directory', () => {
+  // The fixture guard, and the half of these paths no case can read
+  // off the pass. Every claim below is about a path that points
+  // outside the library directory, and nothing in a refusal says it
+  // does — the rule reports the form it matched, which a path
+  // pointing nowhere in particular would match just as well.
+  //
+  // So the property is read here instead, by resolving each path
+  // from a directory and asking whether it stayed underneath. That
+  // is not how the rule judges them, which is what keeps the guard
+  // from moving with a rule that moved wrongly. The accepted path is
+  // resolved beside them for the same reason a control exists at
+  // all: with nothing landing inside, landing outside says nothing.
+  it('is asked about paths that resolve outside a directory', () => {
+    const escaping = MARKER_PATH_CASES.filter((entry) => !resolve(
+      NOTIONAL_LIB_DIR,
+      entry.libPath,
+    ).startsWith(`${NOTIONAL_LIB_DIR}/`));
+    const inside = resolve(NOTIONAL_LIB_DIR, LIVE_LIB_SAMPLE.path);
+    const forms = new Set(MARKER_PATH_CASES.map((entry) => entry.form));
+
+    expect(escaping).toEqual(MARKER_PATH_CASES);
+    expect(inside.startsWith(`${NOTIONAL_LIB_DIR}/`)).toBe(true);
+    expect(forms.size).toBe(MARKER_PATH_CASES.length);
+  });
+
+  // The guard the refusals rest on, and the only case here that
+  // moves when the pass refuses whatever it is handed. Every claim
+  // below reads a refusal, and a section of nothing but refusals is
+  // green under such a version.
+  //
+  // The near miss is the same library path with nothing in front of
+  // it: both refused markers are this one plus a prefix, so a rule
+  // reaching for the separator rather than for where it sits refuses
+  // the marker the build exists to resolve, and fails here and
+  // nowhere else. The library body is read back rather than the
+  // return, so a pass quietly resolving the marker to nothing fails
+  // here too.
+  it('resolves that same path with no escape in front of it', () => {
+    const resolved = resolveTemplateCarrying(LIVE_MARKER);
+    const spliced = templateCarrying(LIVE_LIB_SAMPLE.stripped);
+
+    expect(valueAtPath(resolved, MARKER_SITE))
+      .toBe(valueAtPath(spliced, MARKER_SITE));
+  });
+
+  for (const entry of MARKER_PATH_CASES) {
+    // The class rather than the throw. A path refused here is never
+    // opened, so what a case would otherwise be reading is the
+    // loader's own refusal at being asked for a library it does not
+    // answer for — a different rule, one line further on, arriving
+    // as a bare `Error`.
+    it(`throws MarkerPathError for a marker naming ${entry.form}`, () => {
+      expect(() => resolveTemplateCarrying(libMarkerNaming(entry.libPath)))
+        .toThrow(MarkerPathError);
+    });
+
+    // Which of the two rules caught the path, carried as a field so
+    // a case says what it was about without parsing a sentence it
+    // did not write. One rule catches both and names the first it
+    // reaches, so a case reading only the throw is covered by
+    // whichever way out is tried first — and would stay green with
+    // the other rule dropped outright.
+    it(`names ${entry.form} as the form it refused for`, () => {
+      const refusal = markerPathRefusalOf(
+        () => resolveTemplateCarrying(libMarkerNaming(entry.libPath)),
+      );
+
+      expect(refusal.form).toBe(entry.form);
+    });
+
+    // The path as the marker wrote it, unresolved and never joined
+    // to the library directory. It is the field a reader turns back
+    // into the source that wrote it, and the one thing here a build
+    // would have needed a directory to produce — a refusal naming a
+    // path resolved against one would be about a file rather than
+    // about the characters a marker carried.
+    it(`carries ${entry.libPath} as a field on the refusal`, () => {
+      const refusal = markerPathRefusalOf(
+        () => resolveTemplateCarrying(libMarkerNaming(entry.libPath)),
+      );
+
+      expect(refusal.libPath).toBe(entry.libPath);
+    });
+
+    // The same path in the sentence an operator actually reads,
+    // since a build refusing on a terminal prints the message and
+    // none of the fields. In the marker form rather than bare,
+    // which is what turns the refusal into a `git grep` over
+    // `workflows/src/` for the source the marker was written in.
+    it(`names ${entry.libPath} in the message, as a marker`, () => {
+      const refusal = markerPathRefusalOf(
+        () => resolveTemplateCarrying(libMarkerNaming(entry.libPath)),
+      );
+
+      expect(refusal.message).toContain(libMarkerNaming(entry.libPath));
     });
   }
 });
