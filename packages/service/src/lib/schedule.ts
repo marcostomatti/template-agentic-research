@@ -77,6 +77,44 @@ export interface IntervalBounds {
  * than a consequence of reading one column before the other, and it is
  * what a caller can rely on for a row whose two bounds disagree.
  *
+ * The rule is expressed twice on purpose, and the second copy is SQL.
+ * `ar-dispatch` claims a row and moves its `next_run_at` forward in
+ * one statement — the claim holds its lock until the reschedule is
+ * written — so the clamp there is an expression over the bound columns
+ * rather than a call into this function. The expression arriving with
+ * the dispatcher later in this phase is `LEAST(max_interval_seconds,
+ * GREATEST(min_interval_seconds, interval_seconds))`, which skips a
+ * null bound the way this function does: `LEAST` and `GREATEST` are
+ * documented to ignore a NULL argument outright. Standing a missing
+ * bound in with `COALESCE(max_interval_seconds, interval_seconds)` is
+ * the shape to avoid rather than belt and braces over a null-safe one —
+ * it caps the floored value straight back down to the proposal, so the
+ * floor does nothing at all for exactly the rows carrying a floor and
+ * no ceiling.
+ *
+ * A case table is what holds the two together. The same rows drive this
+ * function in `tests/lib/schedule.test.ts` and the SQL expression in
+ * `tests/live/schedule-clamp.live.test.ts`, which asserts the two agree
+ * row for row against a real Postgres — the only seam in this package
+ * reading both sides, and the only place the null handling above is
+ * evidence rather than a reading of the Postgres manual. Both files
+ * arrive later in this plan, and the live one self-skips without
+ * `AR_LIVE_DATABASE_URL`: a default suite run exercises this function
+ * alone and says nothing about the expression it is meant to agree
+ * with. The row carrying that comparison is a floor with no ceiling,
+ * since every other combination of bounds agrees under the COALESCE
+ * form too.
+ *
+ * What the bounds bound is a PROPOSAL. No CHECK relates the two
+ * columns to `interval_seconds` or to `next_run_at`, so calling this is
+ * the whole of the enforcement: a hand-written UPDATE at a psql prompt,
+ * a seeded row or a workflow node writing a due time directly is taken
+ * as it stands, and the row then sits outside its own bounds with
+ * nothing to report it. A value that came back from here is therefore a
+ * claim about that value and not about the row afterwards — the agent
+ * path stays inside the limits a person set for as long as the writers
+ * on it keep asking.
+ *
  * @param intervalSeconds - The interval being proposed, in seconds.
  * @param bounds - The row's own floor and ceiling.
  * @returns The proposal, moved no further than the bounds require.
