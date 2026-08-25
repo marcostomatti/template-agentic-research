@@ -632,6 +632,35 @@ function claimedRowItems(rows: readonly ClampCase[]): readonly ClaimedRowItem[] 
  * have, and a stub answering with an empty list would let that pass
  * as a node with nothing to say.
  *
+ * The shape is written up in
+ * `~/.claude/skills/n8n-code-node-offline-verify/SKILL.md`, a
+ * user-level skill rather than one vendored under `.claude/` here,
+ * which is why the argument is carried above rather than left to
+ * the link. What is taken from it is the core of the technique: the
+ * body comes off a BUILT artifact rather than out of a source, so
+ * what runs is what the splice produced rather than what a library
+ * said before one.
+ *
+ * What is deliberately left is the transform. That harness rewrites
+ * the body before running it, blanking the `typeof require` and
+ * `typeof module` guards a library written for two contexts
+ * carries, and its own warning is that a harness rewriting source
+ * is itself code that can be wrong, whose bugs are then reported
+ * against the library it was pointed at. No library here writes
+ * such a guard: the build takes the export keyword off a
+ * declaration and leaves the rest alone, so there is nothing to
+ * neutralize and the body runs exactly as the artifact carries it.
+ * `Buffer` is left unpassed for a smaller reason — measured inside
+ * a worker of this package, a `new Function` body reports it as a
+ * function without being handed one, and this body reaches for
+ * none of it anyway.
+ *
+ * The `$` stub is where the two shapes disagree outright. That one
+ * stages the nodes a body names, so that a node left unstaged
+ * answers the way an un-run one does; this one refuses the call
+ * instead, because the body it is given names none and a body that
+ * had grown one is the thing worth hearing about.
+ *
  * @param body - A node body, as an artifact carries it.
  * @param items - The items to hand the node.
  * @returns Whatever the body returned, unread.
@@ -683,6 +712,29 @@ function answersById(emitted: unknown): Record<string, unknown> {
 
 /**
  * What the imported copy answers, keyed the same way.
+ *
+ * This is the whole of the side the spliced copy is held against,
+ * and the rows' own recorded column is no part of it. Reading that
+ * column here would be this file claiming the answers are RIGHT,
+ * which is `tests/lib/schedule.test.ts`'s claim over those same
+ * rows. What is claimed here is only that the two copies agree.
+ *
+ * That split is why `tests/lib/schedule-cases.ts` is a shared module
+ * rather than a table written into each file. The two claims are
+ * halves of one thing — the spliced copy answers as the imported one
+ * does, and the imported one answers what its row says it owes — and
+ * they compose only while both are over the same rows. A copy of the
+ * table here would let them drift apart with nothing to report it: a
+ * row added over there to exercise a relation would never be
+ * spliced, and a row added here would be agreed upon with nothing
+ * saying the agreed answer was the right one. One module makes every
+ * row reach both, and ids rather than positions are what tie a row
+ * to the same row on the other side.
+ *
+ * What sharing the rows does not do is make the two claims one. Each
+ * is asserted in its own file and reddens alone, and which of the
+ * two does is what parts a rule answering wrongly from a build that
+ * rewrote it on the way into the node.
  *
  * @param rows - The rows to drive it over.
  * @returns One answer per row, keyed by id.
