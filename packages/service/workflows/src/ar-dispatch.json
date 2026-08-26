@@ -61,6 +61,17 @@
       }
     },
     {
+      "id": "merge-claims",
+      "name": "Merge Claims",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [440, 0],
+      "notes": "Append, so what leaves here is the two claim branches concatenated: nothing is dropped, added or rewritten, and a table with nothing due never holds the tick, append needing data from only one input to continue. What it does not pass on is which branch an item came in on, which is what unit_kind stands in for downstream. A tick claiming nothing does not arrive as nothing: a Postgres node whose statement is not a SELECT emits one success item when it returns no rows, so an empty tick reaches here as two items carrying no unit_kind. Dropping them belongs to the Code node, keyed on the absent unit_kind rather than on a branch.",
+      "parameters": {
+        "mode": "append"
+      }
+    },
+    {
       "id": "build-stamp",
       "name": "Build Stamp",
       "type": "n8n-nodes-base.stickyNote",
@@ -79,6 +90,20 @@
         [
           { "node": "Claim Due Topics", "type": "main", "index": 0 },
           { "node": "Claim Due Export Subscriptions", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Claim Due Topics": {
+      "main": [
+        [
+          { "node": "Merge Claims", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Claim Due Export Subscriptions": {
+      "main": [
+        [
+          { "node": "Merge Claims", "type": "main", "index": 1 }
         ]
       ]
     }

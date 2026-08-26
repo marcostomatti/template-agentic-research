@@ -1305,11 +1305,14 @@ interface NoQuerySample {
  */
 const NO_QUERY_SAMPLES: readonly NoQuerySample[] = [
   // The member left out rather than written empty, which is what
-  // a hand-authored source does for a node running on defaults:
-  // `workflows/src/*.json` is written by hand, so a node that
-  // changed nothing carries no `parameters` at all. The reader
-  // answers before it indexes anything, and without the test
-  // that gets it there this read raises rather than answering.
+  // a hand-authored source allows: `workflows/src/*.json`
+  // carries only what its author wrote, so a node changing
+  // nothing can be written with no `parameters` at all. No node
+  // in this port is that shape — `ar-dispatch`'s Merge node
+  // writes its mode out although append is the default — so this
+  // is planted rather than read off the tree. The reader answers
+  // before it indexes anything, and without the test that gets
+  // it there this read raises rather than answering.
   {
     label: 'a node whose source left the member out',
     holds: 'no parameters member',

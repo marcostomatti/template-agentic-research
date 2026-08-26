@@ -10,14 +10,15 @@
  * forward in the same statement that claims it. A second node beside it
  * does the same over `export_subscriptions`, so both schedulable tables
  * are claimed and rescheduled by one statement shape. That reschedule is
- * {@link clampIntervalSeconds} written as SQL. What arrives later in this
- * stage is the rest of a tick: that cap applied a second time over the two
- * branches' claims once merged. The arithmetic behind all of it lives here
- * and nothing around it. The columns it reads are the schedulable set
- * declared in `src/db/schema/scheduling.ts`, and it reads them as values
- * handed in — no I/O, no clock, no database handle. A rule reaching for
- * one of those could neither be spliced into a node nor be tested without
- * the thing it reached for.
+ * {@link clampIntervalSeconds} written as SQL. A Merge node behind the
+ * pair hands both branches' claims on as one stream. What arrives later in
+ * this stage is the rest of a tick: that cap applied a second time over
+ * that stream. The arithmetic behind all of it lives here and nothing
+ * around it. The columns it reads are the schedulable set declared in
+ * `src/db/schema/scheduling.ts`, and it reads them as values handed in —
+ * no I/O, no clock, no database handle. A rule reaching for one of those
+ * could neither be spliced into a node nor be tested without the thing it
+ * reached for.
  *
  * Dual-context is what shapes the file. A workflow source writing
  * `__INLINE:schedule.ts__` has this module transpiled and spliced into its
