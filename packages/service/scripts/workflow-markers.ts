@@ -122,14 +122,15 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * Applied twice, and the two applications do not defend the same
    * thing. Each claim statement in `ar-dispatch` carries it as a SQL
    * `LIMIT`; the Code node downstream applies it again over the
-   * merged claims, through `capBatch` in `src/lib/schedule.ts`.
-   * The rule that second application runs has landed; the dispatcher
-   * carrying both applications arrives later in this phase. The
-   * duplication is there because a `LIMIT` reads as paging. Whoever
-   * next tunes that query — adding a filter, changing the ordering,
-   * folding in a join — sees a performance knob rather than the only
-   * thing standing between one pass and the whole backlog, and it is
-   * one edit from being gone.
+   * merged claims, through `capBatch` in `src/lib/schedule.ts`. The
+   * rule that second application runs has landed, and so has the
+   * `topics` claim carrying the first; the dispatcher carrying every
+   * application of it arrives later in this phase. The duplication
+   * is there because a `LIMIT` reads as paging. Whoever next tunes
+   * that query — adding a filter, changing the ordering, folding in
+   * a join — sees a performance knob rather than the only thing
+   * standing between one pass and the whole backlog, and it is one
+   * edit from being gone.
    *
    * Only the second application survives such an edit, and it is
    * worth being exact about what that leaves. The Code node bounds

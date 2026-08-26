@@ -4,15 +4,18 @@
  * claimed, expressed as TypeScript.
  *
  * The dispatcher holds the only schedule trigger in the system, and
- * carries it already — it wakes on its own cron. What arrives later in
- * this stage is the rest of a tick: the nodes that claim the rows that
- * are enabled and whose `next_run_at` has passed, move each one forward,
- * and bound how many one pass carries. The arithmetic behind those last
- * two decisions lives here and nothing around it. The columns it reads
- * are the schedulable set declared in `src/db/schema/scheduling.ts`, and
- * it reads them as values handed in — no I/O, no clock, no database
- * handle. A rule reaching for one of those could neither be spliced into
- * a node nor be tested without the thing it reached for.
+ * carries it already — it wakes on its own cron, and one node behind that
+ * takes the `topics` rows that are enabled and whose `next_run_at` has
+ * passed, oldest first and capped by a `LIMIT`. What arrives later in
+ * this stage is the rest of a tick: the same claim over
+ * `export_subscriptions`, the write that moves each claimed row forward,
+ * and that cap applied a second time over the claims once merged. The
+ * arithmetic behind those last two decisions lives here and nothing
+ * around it. The columns it reads are the schedulable set declared in
+ * `src/db/schema/scheduling.ts`, and it reads them as values handed in —
+ * no I/O, no clock, no database handle. A rule reaching for one of those
+ * could neither be spliced into a node nor be tested without the thing it
+ * reached for.
  *
  * Dual-context is what shapes the file. A workflow source writing
  * `__INLINE:schedule.ts__` has this module transpiled and spliced into its
@@ -207,17 +210,18 @@ export function clampIntervalSeconds(
  * what gets read, and it is what a caller pins.
  *
  * This is the SECOND place the cap is applied, and on an ordinary tick
- * it does nothing at all. The dispatcher arriving later in this phase
- * claims through a SQL `LIMIT` carrying the same setting, so the batch
- * reaching this function is already inside the cap and what comes back
- * is what was handed in. Being inert is the point rather than a reason
- * to drop the call: a `LIMIT` reads as a paging knob, and whoever next
- * tunes that query — adding a filter, changing the ordering, folding in
- * a join — is looking at a performance detail rather than at the only
- * thing standing between one pass and the whole backlog. It is one edit
- * from being gone, and nothing about that edit looks like a spending
- * decision. `ENV_DEFAULTS.AR_DISPATCH_BATCH_CAP` in
- * `scripts/workflow-markers.ts` carries the other half of that
+ * it does nothing at all. The dispatcher's claim over `topics` already
+ * carries a SQL `LIMIT` over the same setting, and the claim over
+ * `export_subscriptions` arriving later in this stage carries its own,
+ * so the batch reaching this function is already inside the cap and
+ * what comes back is what was handed in. Being inert is the point
+ * rather than a reason to drop the call: a `LIMIT` reads as a paging
+ * knob, and whoever next tunes that query — adding a filter, changing
+ * the ordering, folding in a join — is looking at a performance detail
+ * rather than at the only thing standing between one pass and the whole
+ * backlog. It is one edit from being gone, and nothing about that edit
+ * looks like a spending decision. `ENV_DEFAULTS.AR_DISPATCH_BATCH_CAP`
+ * in `scripts/workflow-markers.ts` carries the other half of that
  * argument: what the surviving copy still bounds, and what it cannot
  * get back.
  *

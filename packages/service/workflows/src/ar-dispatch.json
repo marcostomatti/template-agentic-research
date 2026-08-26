@@ -25,6 +25,24 @@
       }
     },
     {
+      "id": "claim-due-topics",
+      "name": "Claim Due Topics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, -100],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH due AS (\n  SELECT id\n  FROM topics\n  WHERE enabled\n    AND next_run_at <= now()\n  ORDER BY next_run_at\n  LIMIT __ENVVAR:AR_DISPATCH_BATCH_CAP__\n  FOR UPDATE SKIP LOCKED\n)\nSELECT id FROM due",
+        "options": {}
+      }
+    },
+    {
       "id": "build-stamp",
       "name": "Build Stamp",
       "type": "n8n-nodes-base.stickyNote",
