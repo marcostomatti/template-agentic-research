@@ -139,9 +139,9 @@ export const DIST_DIR = fileURLToPath(
  * real tree an empty read reddens there too — naming the
  * workflows it went looking for, the way the static-SQL roster
  * reports a missing constraint and never a missing migration.
- * Every other check in that suite is an absence check and passes
- * over nothing at all, and a caller driving a fixture tree of its
- * own has no roster case in front of it. So this refusal is what
+ * Most of that suite is absence checks, which pass over nothing
+ * at all, and a caller driving a fixture tree of its own has no
+ * roster case in front of it. So this refusal is what
  * makes the failure name the edit, rather than the only thing
  * that fails.
  */
@@ -199,6 +199,40 @@ export class EmptyDistDirectoryError extends Error {
  * the read, the way `schema-sql.ts` raises on the first empty
  * migration. One named file is enough to reach the source
  * directory holding the rest.
+ *
+ * This is the refusal the absence assertions need most, and the
+ * quietest one to go without. A workflow carrying no node
+ * satisfies every check of the shape `no node of type X` — no
+ * send-capable node, no model node without a ceiling in front
+ * of it — because each asks its question of a list that is
+ * empty. They are not weak checks. They are the right checks
+ * handed nothing to run over, and a pass is what they report
+ * either way.
+ *
+ * Nothing in a green run parts the two. The artifact parses, so
+ * it is counted among the workflows read, and a roster held
+ * against the file names is answered by it. The cases are one
+ * per property rather than one per node, so the names, the
+ * counts and the ticks are what a healthy tree prints. Nothing
+ * moved, and no case is left to name what is not there.
+ *
+ * What parts them is a check that must FIND something, and
+ * which workflows have one is a matter of what a roster happens
+ * to name rather than a property of the build. `ar-dispatch`
+ * gets two later in this plan — the schedule trigger has to
+ * live in it, and `dispatch-sql.ts` reads statements off its
+ * nodes by name — while a workflow no roster names carries
+ * absence checks alone, and a fixture tree a caller passes in
+ * has none in front of it at all.
+ *
+ * Both of those checks read what this file hands back, so with
+ * the refusal in place neither ever meets an empty workflow, and
+ * that ordering is the point rather than a side effect. A
+ * schedule-trigger case failing over an empty `ar-dispatch`
+ * reports a trigger that is not present — one node to go and
+ * add — when what the file holds is no node at all. Which of
+ * the two says which edit fixes it is the whole reason this
+ * refusal runs first.
  */
 export class EmptyWorkflowError extends Error {
   /** Name of the empty artifact, relative to `directory`. */
