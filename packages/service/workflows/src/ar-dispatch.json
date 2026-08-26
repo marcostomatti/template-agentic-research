@@ -23,6 +23,18 @@
           ]
         }
       }
+    },
+    {
+      "id": "build-stamp",
+      "name": "Build Stamp",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-440, -400],
+      "parameters": {
+        "width": 400,
+        "height": 280,
+        "content": "## Build Stamp\n\n**__ENVVAR:AR_BUILD_TAG__**\n\nThe git short commit `scripts/build-workflows.ts` resolved when it wrote this artifact. A stamp that does not match the commit you deployed means the instance is running an older import.\n\n`dev` is a build with no commit to name, and a `-dirty` suffix a tree carrying uncommitted changes. Neither is an older import."
+      }
     }
   ],
   "connections": {}
