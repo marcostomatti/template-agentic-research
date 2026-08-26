@@ -8,10 +8,11 @@
  * A check over built output is a sweep: walk the nodes
  * `workflow-dist.ts` hands back, flag the ones a rule names,
  * report every offender. What decides which nodes are flagged is
- * a node type string, and the rosters here are where those
- * strings live — one {@link NodeTypeRule} per type, carrying the
- * string, a stable id, and the reason that type is one the suite
- * names.
+ * a node type string, and this file is where those strings live —
+ * mostly one {@link NodeTypeRule} per type, carrying the string,
+ * a stable id, and the reason that type is one the suite names,
+ * and a bare constant where a rule has no siblings to be told
+ * apart from.
  *
  * Data rather than a regex alternation or a predicate written
  * into the sweep, and what the difference buys is a question a
@@ -54,11 +55,11 @@
  * behind them are argued, and the register there is what says
  * which phase owns each.
  *
- * The entry shape, the send roster and the matcher over it are
- * what have landed. The schedule-trigger type, the model-node
- * prefix, a matcher over each of those, and the reader that
- * pulls a node's SQL off its parsed parameters arrive next in
- * this stage.
+ * The entry shape, the send roster and its matcher, and the
+ * schedule-trigger type and its matcher are what have landed. The
+ * model-node prefix, a matcher over it, and the reader that pulls
+ * a node's SQL off its parsed parameters arrive next in this
+ * stage.
  */
 
 /**
@@ -135,10 +136,13 @@ export interface NodeTypeRule {
    *
    * Whole is what makes an entry pairable: a case plants a node
    * of exactly this type and there is no question which entry it
-   * stands for. A rule whose subject is a namespace rather than
-   * a type is not an entry of this shape, which is why the
+   * stands for. A rule whose subject is a namespace rather than a
+   * type is not an entry of this shape, which is why the
    * model-node one arriving next in this stage is a constant of
-   * its own.
+   * its own. Nor is a rule with no siblings:
+   * {@link SCHEDULE_TRIGGER_TYPE} is a whole type and would fit
+   * here, and stands outside because a set of one has nothing to
+   * tell apart.
    *
    * Data and not a comparison. How a node's type is held against
    * this belongs to the matcher over the roster, which for the
@@ -387,4 +391,110 @@ export function isSendCapable(type: string): boolean {
   const folded = type.toLowerCase();
 
   return SEND_NODE_TYPES.some((rule) => rule.type.toLowerCase() === folded);
+}
+
+/**
+ * The node type that puts a workflow on a clock, and the one type
+ * this port permits a single instance of.
+ *
+ * Scheduling here is a database row rather than a trigger. A
+ * thing becomes schedulable by carrying a due time, and what
+ * fires it is `ar-dispatch` claiming that row when it comes due —
+ * so one trigger serves the whole system, and making a second
+ * thing schedulable is an INSERT. `workflows/src/README.md`
+ * states that as a constraint over the workflow set, and
+ * `docs/architecture/01-invariants.md` argues what its absence
+ * costs and names the phase that enforces it.
+ *
+ * A bare constant and not a {@link NodeTypeRule}, for a different
+ * reason from the model-node prefix: that one's subject is a
+ * namespace, while this is a whole type and would sit in a roster
+ * without complaint. What it has no use for is the roster. A set
+ * of one has no entries to tell apart, a sample paired to it says
+ * only what the constant already spells, and
+ * {@link NodeTypeRule.reason} exists to say what an entry reaches
+ * that its neighbours do not — which is not a question a lone
+ * entry can answer.
+ *
+ * That it is a set of one was measured rather than assumed. The
+ * published node registry marks the capability itself: a node
+ * description's `group` carries `schedule` beside `trigger`, and
+ * of the 438 types `n8n-nodes-base` 2.15.1 registers, exactly one
+ * visible type carries it.
+ *
+ * Which is what a workflow's other triggers are not, and that
+ * distinction is the whole content of a check standing on this
+ * constant. A manual trigger (`n8n-nodes-base.manualTrigger`), a
+ * webhook (`n8n-nodes-base.webhook`) and an execute-workflow
+ * trigger (`n8n-nodes-base.executeWorkflowTrigger`) are every one
+ * of them legitimate, and none of the three is a schedule. Each
+ * starts a run and none of them decides WHEN one starts: an
+ * operator clicking decides, an inbound request decides, a
+ * calling workflow decides. All three carry `group: ['trigger']`
+ * with no `schedule` beside it.
+ *
+ * The third is the one that would go wrong quietly. The roster in
+ * `workflows/src/README.md` reserves `ar-dispatch` to invoke the
+ * other workflows through an Execute Workflow node, so every
+ * workflow it reaches carries an execute-workflow trigger by
+ * design. A check reading `this workflow has a trigger` as `this
+ * workflow has a schedule` would flag exactly the workflows the
+ * dispatcher exists to call, and would begin doing so in a phase
+ * that added no schedule at all.
+ *
+ * That is also why the subject is this type rather than the shape
+ * of a name. 102 of the 438 registered types end in `Trigger`,
+ * the manual and execute-workflow ones among them, and exactly
+ * one of the 102 carries `schedule` in its group — so a suffix is
+ * a needle that reads as precise and matches 101 nodes that start
+ * nothing on a clock.
+ *
+ * The limit is the hidden pair. `cron` and `interval` carry
+ * `schedule` in their group too — they are the predecessors this
+ * type replaced — and `hidden: true` keeps them out of the node
+ * panel, so nobody reaches for one on purpose while an imported
+ * workflow carrying one still loads and still fires. A workflow
+ * written with either holds a schedule this constant does not
+ * name, and a count over it comes back one short. What answers
+ * that is an entry per type, which is to say this becoming a
+ * roster after all: worth doing when a workflow arrives from
+ * somewhere other than `workflows/src/`, and not before.
+ */
+export const SCHEDULE_TRIGGER_TYPE = 'n8n-nodes-base.scheduleTrigger';
+
+/**
+ * Whether `type` is {@link SCHEDULE_TRIGGER_TYPE}, compared
+ * without regard to case.
+ *
+ * A type string rather than a node, and folded rather than exact,
+ * for the reasons {@link isSendCapable} gives: the constant stays
+ * askable with no tree in front of the answer, and the fold
+ * widens onto misspellings of the one type rather than onto a
+ * type something else would have to name.
+ *
+ * Where the two part is what a miss costs. {@link isSendCapable}
+ * feeds an absence check, so a send node it failed to recognise
+ * prints the same nothing a clean tree prints and no assertion
+ * over the sweep can tell those apart. This one feeds a count
+ * that has to come out at exactly one, and both directions of a
+ * mistake are loud there: recognise too little and the count is
+ * zero, too much and it is two. So the fold buys less here than
+ * it does next door, and the constant is asked for more — a check
+ * that must FIND something says so when it is pointed at the
+ * wrong string.
+ *
+ * A node left disabled answers the same as an enabled one, as it
+ * does next door, and the reading is not the same one. For
+ * {@link SEND_NODE_TYPES} that is the intended answer: the
+ * property is that the capability is ABSENT from a workflow, and
+ * a toggle is one edit from being switched back. Here it is a
+ * limit worth naming — a workflow whose only schedule trigger is
+ * disabled satisfies a count of one while firing on nothing, and
+ * neither this answer nor a count over it parts that tree from a
+ * running one. What would answer it reads the node's own
+ * `disabled` member, which is a fact about a tree rather than
+ * about a type and belongs wherever that check lives.
+ */
+export function isScheduleTrigger(type: string): boolean {
+  return type.toLowerCase() === SCHEDULE_TRIGGER_TYPE.toLowerCase();
 }
