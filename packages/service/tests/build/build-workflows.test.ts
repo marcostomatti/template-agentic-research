@@ -2,8 +2,9 @@
  * What a build makes of a source TREE: the tree it refuses over a
  * marker nothing reads, the near miss of that tree it builds, the
  * tree that is not there at all, and one roster of sources put
- * through the command an operator runs — twice over unchanged, and
- * once more with a stamp handed in.
+ * through the command an operator runs — twice over unchanged,
+ * once more with a stamp handed in, and once over a tree whose
+ * library moved under an artifact already written.
  *
  * The rules underneath a build are claimed next door, in
  * `workflow-markers.test.ts`, against arguments alone — a chain of
@@ -105,8 +106,25 @@
  * varied beside the stamp: it is how a stamp reaches the shipped
  * command at all.
  *
- * What a rebuild picks up from an edited library arrives later in
- * this stage.
+ * The fifth subject is the one input a build does not hold still.
+ * A library is reached through a marker rather than written out,
+ * so what a source says about one is a name, and what an artifact
+ * carries is whatever that name resolved to when the build ran. So
+ * one tree is built, its library rewritten underneath the artifact
+ * that build wrote, and the output directory read at both moments
+ * — before anything rebuilds it, and after.
+ *
+ * Both halves are claimed, because each is empty without the
+ * other. An artifact that did not move says nothing where none was
+ * written, and two runs that never happened leave the same pair of
+ * empty directories to compare; a rebuild carrying the edit says
+ * nothing where the text it looks for was there all along. So that
+ * section rests on a roster guard naming what the first build
+ * wrote and on a fixture guard reading both editions off the path
+ * the build resolves the marker to.
+ *
+ * It is also the only section here whose source writes a library
+ * marker, and so the only one whose build reaches a splice at all.
  */
 import type { EnvSource, LibLoader } from '../../scripts/workflow-markers.js';
 
@@ -223,7 +241,7 @@ interface FixtureTree {
 const SOURCE_FILE = 'ar-fixture.json';
 
 /**
- * Where every source below buries its marker.
+ * Where every source in this file buries its marker.
  *
  * A node parameter rather than a top-level value, so the walk under
  * the build has to descend to reach it. Depth is not this file's
@@ -241,11 +259,17 @@ const MARKER_SITE: readonly (string | number)[] = [
 /**
  * A source-shaped object carrying one string at {@link MARKER_SITE}.
  *
- * One builder for every source this file plants and for the
- * expected artifact, so a refused source, an accepted source and
- * the value read back differ by that one string and by nothing
- * else. Written out per case they could drift into differing where
- * the build is not about.
+ * One builder for every source that buries a SETTINGS marker, and
+ * for the expected artifact besides, so a refused source, an
+ * accepted source and the value read back differ by that one
+ * string and by nothing else. Written out per case they could
+ * drift into differing where the build is not about.
+ *
+ * The one source this file plants that it does not build is
+ * {@link sourceInlining}'s, which writes a library marker. That
+ * one belongs at the head of a node body rather than inside the
+ * quoted literal this builder wraps its value in, which is the
+ * whole of why it is a builder of its own.
  *
  * Shaped like a workflow source without being one. The build reads
  * no node type and no connection, so what matters here is that a
@@ -350,15 +374,19 @@ const PRESENT_TREE = treeCarrying('present-source', READ_MARKER);
 /**
  * The loader every {@link buildTree} call is made with.
  *
- * It answers for nothing and says so. No source in this file writes
- * a library marker, so a call reaching it is a build resolving
- * something these cases never planted — a failure that has to name
- * itself rather than hand back a body and let a case pass on it.
+ * It answers for nothing and says so. No source the two in-process
+ * sections plant writes a library marker, so a call reaching it is
+ * a build resolving something they never planted — a failure that
+ * has to name itself rather than hand back a body and let a case
+ * pass on it.
  *
- * That no source writes one is what the spawned builds rest on too.
- * They are made with the real loader, over a library directory a
- * fixture tree does not have, so a source reaching for a library
- * would fail on the tree rather than on the marker.
+ * The spawned builds draw the same split tree by tree rather than
+ * loader by loader, being made with the real one.
+ * {@link SPAWN_SOURCES} writes no library marker and its trees
+ * carry no library directory, so a source reaching for one there
+ * would fail on the tree. {@link REBUILD_TREE} is the tree that
+ * does carry one, and the section over it is where a spliced body
+ * is read.
  *
  * @param libPath - The path a library marker named.
  * @returns Nothing: every call is a failure.
@@ -366,13 +394,13 @@ const PRESENT_TREE = treeCarrying('present-source', READ_MARKER);
 const FIXTURE_LOADER: LibLoader = (libPath) => {
   throw new Error(
     `The fixture loader was asked for ${JSON.stringify(libPath)}, and `
-    + 'no source in this file writes a library marker.',
+    + 'no source the in-process sections plant writes a library marker.',
   );
 };
 
 /**
  * Build one fixture tree, with the loader and the chain the two
- * sections below share.
+ * in-process sections share.
  *
  * @param tree - The tree to build.
  * @returns The file names written.
@@ -785,8 +813,9 @@ interface SpawnedBuild extends FixtureTree {
  * {@link SPAWN_SOURCES} writes settings markers and no library
  * marker, so the transpiler each run builds goes unused and no
  * spliced body is among the bytes compared. What a rebuild makes
- * of an edited library is a subject of its own, arriving later in
- * this stage.
+ * of an edited library is a subject of its own, claimed over
+ * {@link REBUILD_TREE}, which carries a library for its source to
+ * name.
  *
  * The command takes no directories: it names `workflows/src/` and
  * `workflows/dist/` beside the entry point it was launched from. So
@@ -1086,5 +1115,405 @@ describe('bun scripts/build-workflows.ts --external — a stamp handed in', () =
   // job rather than this case's.
   it('leaves every artifact naming another setting byte-identical', () => {
     expect(unstampedBytesOf(INJECTED_RUN)).toEqual(unstampedBytesOf(FIRST_RUN));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The tree whose library is edited under an artifact already written
+// ---------------------------------------------------------------------------
+
+/** The library the source in this section inlines. */
+const LIB_FILE = 'ar-fixture-lib.ts';
+
+/** The marker naming it, in the form a workflow source writes. */
+const LIBRARY_MARKER = `__INLINE:${LIB_FILE}__`;
+
+/** The one function that library declares. */
+const LIB_FUNCTION = 'fixtureLibraryEdition';
+
+/**
+ * The text the library returns before the edit.
+ *
+ * A text rather than a rule: what the library DOES is not this
+ * section's subject, and a node body carrying this string is a body
+ * carrying the library that declared it. Spelled to be unique to
+ * this file, so a body holding it holds it because a library put it
+ * there.
+ */
+const FIRST_EDITION = 'library-text-the-first-build-read';
+
+/**
+ * The text the same library returns after the edit.
+ *
+ * Different from {@link FIRST_EDITION}, and a guard says so: a
+ * rebuild carrying one of the two is evidence about the edit only
+ * where the other is what it carried before.
+ */
+const SECOND_EDITION = 'library-text-written-after-that-build';
+
+/**
+ * The library, written around one of those two editions.
+ *
+ * One builder for both, so the text a build reads and the text an
+ * edit leaves behind differ in that one string and in nothing else.
+ * A declaration-form export and no import of any kind, which is the
+ * whole of what `assertSpliceable` asks of a library: one it refused
+ * would fail the runs below on the build rather than on anything
+ * this section is about.
+ *
+ * @param edition - The text the declared function returns.
+ * @returns The library source, as a file.
+ */
+function libraryDeclaring(edition: string): string {
+  return [
+    `export function ${LIB_FUNCTION}(): string {`,
+    `  return '${edition}';`,
+    '}',
+    '',
+  ].join('\n');
+}
+
+/** The name this section's source is written as, and its artifact. */
+const REBUILD_SOURCE_FILE = 'ar-rebuild-fixture.json';
+
+/**
+ * The line the fixture's node body writes under the marker: a Code
+ * node's own work, over the library the marker put above it.
+ *
+ * Nothing constructs or runs this body. The claims here read it as
+ * text, and `schedule-splice.test.ts` is where a spliced body is
+ * handed the globals a node is given and driven.
+ */
+const NODE_WORK = `return [{ json: { tag: ${LIB_FUNCTION}() } }];`;
+
+/**
+ * A source-shaped object whose one node body opens with a library
+ * marker.
+ *
+ * A second source builder rather than a call to
+ * {@link sourceCarrying}, which buries its string inside a quoted
+ * literal — the shape a settings value belongs in and a library does
+ * not. What follows the marker is {@link NODE_WORK}, because that is
+ * what a Code node holding a library looks like: the library spliced
+ * in above the line that calls it.
+ *
+ * @param marker - The library marker to open the body with.
+ * @returns A fresh object carrying it at {@link MARKER_SITE}.
+ */
+function sourceInlining(marker: string): Record<string, unknown> {
+  return {
+    name: 'AR Rebuild Fixture',
+    nodes: [
+      {
+        name: 'Read the library',
+        parameters: { jsCode: `${marker}\n\n${NODE_WORK}\n` },
+      },
+    ],
+  };
+}
+
+/** One tree a build can be run over more than once. */
+interface EditableTree extends FixtureTree {
+  /** The tree's own root, which a build is launched from inside. */
+  readonly root: string;
+
+  /** The directory a build resolves the library marker against. */
+  readonly libDir: string;
+}
+
+/**
+ * Write the library into a tree, over whatever is there.
+ *
+ * One call plants the first edition and makes the edit, so the edit
+ * is a library file rewritten rather than a second arrangement —
+ * which is exactly what an operator changing a library does.
+ *
+ * @param tree - The tree whose library directory to write into.
+ * @param edition - The text the library is to return.
+ */
+function editLibrary(tree: EditableTree, edition: string): void {
+  writeFileSync(join(tree.libDir, LIB_FILE), libraryDeclaring(edition));
+}
+
+/**
+ * The library as it sits on disk.
+ *
+ * Read back rather than taken from what was written, so the fixture
+ * guard is about a file a build could open rather than about a call
+ * this file made.
+ *
+ * @param tree - The tree whose library to read.
+ * @returns The library source.
+ */
+function libraryTextOf(tree: EditableTree): string {
+  return readFileSync(join(tree.libDir, LIB_FILE), 'utf8');
+}
+
+/**
+ * Plant a package tree around a library of this file's own, and
+ * answer with where a build over it reads and writes.
+ *
+ * The tree {@link spawnedBuild} plants with one directory more: the
+ * command names `src/lib/` beside its entry point as well, so a tree
+ * whose source writes a library marker has to carry one.
+ *
+ * The library is planted rather than copied out of the package's own
+ * `src/lib/`, which is where this section and
+ * `schedule-splice.test.ts` part company. That file copies the
+ * shipped library because the shipped library IS its subject —
+ * whether what this package ships is something a Code node could
+ * run. Here the subject is the artifact, and what the library says
+ * matters only in that one build read one text and the next read
+ * another.
+ *
+ * Nothing is built here. A build is a call of its own because two of
+ * them run over this one tree with an edit between, and the whole of
+ * the claim is what sits either side of it.
+ *
+ * @param name - The subdirectory of {@link FIXTURE_ROOT} to plant
+ *   the tree under.
+ * @param edition - The text the planted library returns.
+ * @returns Where a build over that tree reads and writes.
+ */
+function plantEditableTree(name: string, edition: string): EditableTree {
+  const root = join(FIXTURE_ROOT, name);
+  const tree: EditableTree = {
+    root,
+    sourceDir: join(root, 'workflows', 'src'),
+    outDir: join(root, 'workflows', 'dist'),
+    libDir: join(root, 'src', 'lib'),
+  };
+
+  mkdirSync(tree.sourceDir, { recursive: true });
+  mkdirSync(tree.libDir, { recursive: true });
+  cpSync(PACKAGE_SCRIPTS_DIR, join(root, 'scripts'), { recursive: true });
+  writeFileSync(
+    join(tree.sourceDir, REBUILD_SOURCE_FILE),
+    `${JSON.stringify(sourceInlining(LIBRARY_MARKER), null, 2)}\n`,
+  );
+  editLibrary(tree, edition);
+
+  return tree;
+}
+
+/**
+ * Spawn the shipped command over a tree, and answer with how it
+ * went.
+ *
+ * {@link spawnedBuild} plants and runs in one call, which is what a
+ * run over a fresh tree wants. This one only runs: the two runs here
+ * are over ONE tree, and what parts them is the edit between rather
+ * than the tree beneath.
+ *
+ * Handed {@link spawnEnv}'s environment like every other run in this
+ * file, though nothing in this tree reads one — the default build
+ * resolves `ENV_DEFAULTS` alone, and this source writes a library
+ * marker and no settings marker for an environment to answer.
+ *
+ * @param tree - The tree to build.
+ * @returns `exit 0` for a run that completed, and otherwise the
+ *   status beside everything the run had to say.
+ */
+function rebuildOver(tree: EditableTree): string {
+  const run = spawnSync(
+    'bun',
+    [join(tree.root, 'scripts', ENTRY_FILE)],
+    { cwd: tree.root, encoding: 'utf8', env: spawnEnv(null) },
+  );
+
+  return run.status === 0
+    ? LAUNCH_OK
+    : `exit ${String(run.status)}: ${run.error?.message ?? ''}${run.stderr}`;
+}
+
+/**
+ * Every artifact in an output directory, keyed by name.
+ *
+ * Total over a directory that is not there, unlike
+ * {@link artifactBytesOf}, and where each is read from is the
+ * reason. That one is called from inside a case, where a build
+ * that never wrote should fail naming the path; this one is called
+ * between an edit and a rebuild, where no case is standing and a
+ * throw would take the whole file down before the launch guard
+ * could say why.
+ *
+ * What being total costs is that an absent directory and a build
+ * that wrote nothing come back alike, and two empty records compare
+ * equal. The roster guard is what rules that out rather than
+ * anything here.
+ *
+ * Read as text rather than as bytes, since these same artifacts are
+ * what a node body is parsed out of below. Nothing is given up for
+ * it: a decode is lossless over the UTF-8 JSON a build writes, so
+ * the indentation and the trailing newline are still inside the
+ * comparison.
+ *
+ * @param outDir - The output directory to read.
+ * @returns The artifacts, keyed by file name.
+ */
+function artifactTextsUnder(outDir: string): Record<string, string> {
+  if (!existsAt(outDir)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    readdirSync(outDir)
+      .sort()
+      .map((file) => [file, readFileSync(join(outDir, file), 'utf8')]),
+  );
+}
+
+/**
+ * The node body one snapshot's artifact carries.
+ *
+ * Parsed and walked to {@link MARKER_SITE}, so what a case reads is
+ * the string a node would be handed rather than the JSON escaping
+ * around it. Two things are reported rather than coerced: a snapshot
+ * holding no artifact of that name, and a site holding anything but
+ * a string. `String(undefined)` carries neither edition, so a
+ * snapshot with nothing in it would satisfy the absence claim below
+ * outright.
+ *
+ * @param artifacts - The snapshot to read.
+ * @returns The node body its artifact carries.
+ */
+function bodyIn(artifacts: Record<string, string>): string {
+  const text = artifacts[REBUILD_SOURCE_FILE];
+
+  if (text === undefined) {
+    throw new Error(
+      `No ${REBUILD_SOURCE_FILE} among `
+      + `${JSON.stringify(Object.keys(artifacts))}: the run that was to `
+      + 'write it left this snapshot as it stands.',
+    );
+  }
+
+  const parsed: unknown = JSON.parse(text);
+  const body: unknown = valueAtPath(parsed, MARKER_SITE);
+
+  if (typeof body !== 'string') {
+    throw new Error(
+      `The node body at [${MARKER_SITE.join(', ')}] came back as `
+      + `${typeof body} rather than a string. The artifact and the `
+      + 'site naming it have drifted apart — fix whichever moved.',
+    );
+  }
+
+  return body;
+}
+
+/**
+ * The tree the section below runs over, planted with the first
+ * edition of its library.
+ *
+ * What follows is a sequence rather than a set of fixtures, and it
+ * runs out here because one of its readings has nowhere else to
+ * happen: the state of an output directory at a moment between an
+ * edit and a rebuild, which no case can be standing at. Every case
+ * below reads what was recorded here rather than a disk that has
+ * moved on.
+ */
+const REBUILD_TREE = plantEditableTree('edited-library', FIRST_EDITION);
+
+/** The library the first build resolved the marker against. */
+const LIBRARY_AS_BUILT = libraryTextOf(REBUILD_TREE);
+
+/** How that build went. */
+const FIRST_LAUNCH = rebuildOver(REBUILD_TREE);
+
+/** What it left in the output directory. */
+const BUILT_ARTIFACTS = artifactTextsUnder(REBUILD_TREE.outDir);
+
+// The edit itself: the library rewritten while the artifact that
+// build wrote is still sitting where it wrote it.
+editLibrary(REBUILD_TREE, SECOND_EDITION);
+
+/** The library as the edit leaves it. */
+const EDITED_LIBRARY = libraryTextOf(REBUILD_TREE);
+
+/** The same output directory, read again with no build between. */
+const ARTIFACTS_AFTER_THE_EDIT = artifactTextsUnder(REBUILD_TREE.outDir);
+
+/** How the build run after the edit went. */
+const SECOND_LAUNCH = rebuildOver(REBUILD_TREE);
+
+/** What that run left in the same output directory. */
+const REBUILT_ARTIFACTS = artifactTextsUnder(REBUILD_TREE.outDir);
+
+describe('bun scripts/build-workflows.ts — a library edited after a build', () => {
+  // The launch guard, and the case that has to come first: two runs
+  // over one tree, both of which have to have happened for anything
+  // here to be about a build at all. A command that never ran leaves
+  // no output directory, and the reader above answers for one of
+  // those with an empty record rather than a throw — so without
+  // this, a pair of runs that never happened would satisfy the
+  // unchanged claim perfectly.
+  it('runs to completion before the edit and again after it', () => {
+    expect(FIRST_LAUNCH).toBe(LAUNCH_OK);
+    expect(SECOND_LAUNCH).toBe(LAUNCH_OK);
+  });
+
+  // The fixture guard for the edit, read off the disk a build reads
+  // rather than off the call that wrote it. Both editions are read
+  // at the path the build resolves the marker to, and held against
+  // each other as well: an edit writing the same text twice would
+  // leave the unchanged claim green for the wrong reason, and one
+  // writing somewhere else would leave the rebuild nothing to pick
+  // up.
+  it('rewrites the library the build resolves its marker against', () => {
+    expect(LIBRARY_AS_BUILT).toBe(libraryDeclaring(FIRST_EDITION));
+    expect(EDITED_LIBRARY).toBe(libraryDeclaring(SECOND_EDITION));
+    expect(EDITED_LIBRARY).not.toBe(LIBRARY_AS_BUILT);
+  });
+
+  // The roster guard, and the half the unchanged claim rests on
+  // rather than supplies for itself: two empty snapshots compare
+  // equal, so what says that claim is about an artifact at all is
+  // that the first build wrote one — named, and carrying the
+  // library it read.
+  //
+  // The body half is also where the splice is proven to have
+  // happened. A marker left unresolved is refused by the survival
+  // check and fails the launch guard above, so what is left for
+  // this to catch is an artifact written from something other than
+  // the file the marker named.
+  it('writes one artifact carrying the library that build read', () => {
+    expect(Object.keys(BUILT_ARTIFACTS)).toEqual([REBUILD_SOURCE_FILE]);
+    expect(bodyIn(BUILT_ARTIFACTS)).toContain(FIRST_EDITION);
+  });
+
+  // The first claim, and the property a reader of `workflows/dist/`
+  // is owed: an artifact is a copy taken when a build ran rather
+  // than a view of the files that made it. The library moved under
+  // it and it did not move. What that rules out is an artifact
+  // still POINTING at what it was built from — a body written to
+  // reach for the library when the node runs would answer
+  // differently the moment the file changed, and would read exactly
+  // like this one until then.
+  //
+  // Held as one snapshot against another rather than as a walk with
+  // an expectation inside it. What that leaves is a pair of empty
+  // records comparing equal, and the roster guard above is what
+  // rules it out rather than this case.
+  it('leaves that artifact as it was while nothing rebuilds it', () => {
+    expect(ARTIFACTS_AFTER_THE_EDIT).toEqual(BUILT_ARTIFACTS);
+  });
+
+  // The second claim: running the same command again is the whole
+  // of what carries an edit across. Nothing had to be asked of the
+  // build for that — it caches no library and reads no artifact
+  // back, so a rebuild is a first build over an input that moved.
+  it('carries the edit into the artifact once it is run again', () => {
+    expect(bodyIn(REBUILT_ARTIFACTS)).toContain(SECOND_EDITION);
+  });
+
+  // The third, and the half saying the rebuild REPLACED the body
+  // rather than adding to it: nothing of the library the first
+  // build read is left. An absence over produced text is worth what
+  // the presence beside it is worth, and this detector is proven
+  // live by the roster guard above, which reads this same text out
+  // of the artifact the first build wrote.
+  it('leaves nothing of the library the first build read', () => {
+    expect(bodyIn(REBUILT_ARTIFACTS)).not.toContain(FIRST_EDITION);
   });
 });
