@@ -27,7 +27,10 @@
  * matcher takes the one member of it that decides, so the read of
  * `type` happens at the call site and is written that way here.
  * Each plant carries a name for the same reason and no claim reads
- * it. The type is the one thing that moves from case to case.
+ * it. Across the first two subjects the type is the one thing that
+ * moves from case to case, and the model control is where that
+ * stops: what makes it a near miss is a member that is not its
+ * type, which is the whole of what a type-keyed matcher is for.
  *
  * Which is one half of the send subject, and cannot stand alone.
  * Every accepting claim holds for a matcher answering yes to
@@ -55,8 +58,8 @@
  * loads. That string was read off a published node registry, a
  * measurement no case repeats — a copy here would put two
  * unchecked spellings where there is one. A control is the one
- * place this file writes a node type out, and what it writes is a
- * type the subject it stands beside does not name.
+ * place this file spells a node type out whole, and what it spells
+ * is a type the subject it stands beside does not name.
  *
  * The schedule matcher is the second subject and takes both
  * halves for different reasons. Its subject is a constant rather
@@ -70,9 +73,33 @@
  * plant does not: it reads that constant and compares it with
  * itself.
  *
- * The remaining matcher and the reader that pulls a node's SQL
- * off its parsed parameters are what this file gains next, each
- * with a section of its own.
+ * The model matcher is the third subject, and the first whose
+ * subject is a namespace rather than a type. A node planted under
+ * it carries the constant AND a suffix the constant does not, so
+ * the accepting claim is not the subject compared with itself the
+ * way the two before it are: it says the matcher tests a prefix
+ * and not an equality, which no plant next door can say about its
+ * own.
+ *
+ * One near miss stands beside it where the two before have three,
+ * and it is nearer than any of them — a Code node whose body names
+ * a model and whose type does not. The controls before it are
+ * types some widening of the matcher reaches; this is a node no
+ * widening of a type-keyed rule reaches, and what flags it is a
+ * rule keyed to what the artifact spells, which is a rule a cost
+ * guard could plausibly have been written as.
+ *
+ * A prefix pays for the two controls it does without. An emptied
+ * constant leaves an equality matching nothing and a prefix
+ * matching everything, so where the schedule section needs a guard
+ * to report it, here the refusal reddens on it directly. What is
+ * left for a guard is the near miss itself: a control whose body
+ * names nothing the planted type names is refused forever, for a
+ * reason that has nothing to do with the namespace it was standing
+ * next to.
+ *
+ * The reader that pulls a node's SQL off its parsed parameters is
+ * what this file gains next, with a section of its own.
  */
 import type { BuiltWorkflowNode } from './workflow-dist.js';
 import type { NodeTypeRule } from './workflow-rosters.js';
@@ -80,8 +107,10 @@ import type { NodeTypeRule } from './workflow-rosters.js';
 import { describe, expect, it } from 'vitest';
 
 import {
+  MODEL_NODE_TYPE_PREFIX,
   SCHEDULE_TRIGGER_TYPE,
   SEND_NODE_TYPES,
+  isModelNode,
   isScheduleTrigger,
   isSendCapable,
 } from './workflow-rosters.js';
@@ -797,4 +826,266 @@ describe('isScheduleTrigger — the one type it names', () => {
       expect(isScheduleTrigger(node.type)).toBe(false);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// The node planted for the model matcher, and the near miss
+// ---------------------------------------------------------------------------
+
+/**
+ * The vendor name {@link MODEL_PLANT}'s type carries and
+ * {@link CODE_BODY_CONTROL}'s body names, asserted carried by both
+ * before either node is asserted about.
+ *
+ * {@link SendControl.shared} and {@link TriggerControl.shared} a
+ * third time, pointed somewhere neither of those is. There the
+ * fragment is text two TYPES share, and a control carrying it is a
+ * type some widening of the matcher would reach. Here it is text a
+ * type shares with another node's BODY, and what it stands against
+ * is not a widening of this matcher at all — it is the rule this
+ * suite could have been written as instead, one keyed to what an
+ * artifact spells rather than to what a node is.
+ *
+ * Written out rather than read off either side, which is the whole
+ * of what makes the guard a comparison. Built from the planted
+ * type the body half would move with it, and built from the body
+ * the type half would. Three spellings, and the guard is what ties
+ * them.
+ *
+ * A vendor rather than a model identifier, because the half that
+ * has to hold is that the planted TYPE carries this text too, and
+ * a language-model type names its vendor. The identifier a call
+ * names sits in a parameter on that node and nowhere in what the
+ * node is.
+ */
+const MODEL_VENDOR_FRAGMENT = 'Anthropic';
+
+/**
+ * The node planted for {@link isModelNode} to flag.
+ *
+ * One node, and a constant rather than a builder, for the reason
+ * {@link SCHEDULE_PLANT} is one: the subject is not a roster, so
+ * there is no entry to key a sample to, no id for a case to be
+ * named by, and nothing a second plant could differ from.
+ *
+ * Where it parts from that one is that this subject is a PREFIX. A
+ * type under it is {@link MODEL_NODE_TYPE_PREFIX} and a suffix the
+ * constant does not carry, so the suffix is spelled here and the
+ * plant is not the subject compared with itself the way the two
+ * before it are. What the accepting claim says for it is that the
+ * matcher tests a prefix rather than an equality — which neither
+ * sibling plant can say about its own matcher, both subjects there
+ * being whole types.
+ *
+ * The whole type is one a stock instance registers, read off the
+ * published registry the constant was measured against: of the 111
+ * types `@n8n/n8n-nodes-langchain` 2.15.1 carries, twenty sit
+ * under this prefix and this is one of them. The prefix by itself
+ * is not among the 111, so a plant spelling only the constant
+ * would carry a type nothing can load — the thing
+ * {@link SendControl.type} refuses on the other side of the file,
+ * met here from the accepting side.
+ *
+ * Named for what the node does rather than for the type it
+ * carries, as every node planted here is.
+ */
+const MODEL_PLANT: BuiltWorkflowNode = {
+  name: 'Answer From The Model',
+  type: `${MODEL_NODE_TYPE_PREFIX}ChatAnthropic`,
+};
+
+/**
+ * The node {@link isModelNode} must leave alone: a Code node whose
+ * body names a model and whose type does not.
+ *
+ * One control where the two subjects before this have three, and
+ * not for want of a second. The controls there are types some
+ * widening of the matcher reaches, and there are several because
+ * there are several widenings to stand against. This is a node no
+ * widening of a type-keyed rule reaches, so there is no second
+ * distance for another control to sit at.
+ *
+ * What it stands against instead is a rule this suite could
+ * plausibly have been written as. An artifact is one JSON
+ * document, so a phrase searched for across it is answered alike
+ * by a sticky note, a node's name, a comment inside a Code body
+ * and the type of some other node — {@link queryParametersOf}
+ * argues that where it is made. A cost guard written that way
+ * flags this node and asks it for a ceiling it has no call to
+ * spend under, while the workflow that does spend goes on being
+ * judged by whichever of its nodes happened to spell the word.
+ *
+ * Read off the published registry rather than assumed, and this is
+ * where the key the other controls lean on runs out: the Code node
+ * declares `group: ['transform']`, and so does the language-model
+ * node planted beside it. A rule keyed to what a node is FOR tells
+ * two of the send controls from the send entries and walks into
+ * the third; here it tells these two apart not at all. What does
+ * part them is the connection one makes and the other does not —
+ * the model node declares an `ai_languageModel` output and carries
+ * the provider credential, and the Code node carries a script.
+ *
+ * The body is the one member any claim in this file reads beyond
+ * `name` and `type`, and carrying it is the whole of why this node
+ * is planted rather than its type asked about directly. `jsCode`
+ * is the parameter that holds it, the way `query` holds a
+ * statement, and {@link codeBodyOf} is what reads it back.
+ *
+ * Named for what the node does rather than for the type it
+ * carries, so the name is not a member either rule could have been
+ * reading, and what parts the two rules is `type` against that
+ * body.
+ */
+const CODE_BODY_CONTROL: BuiltWorkflowNode = {
+  name: 'Shape The Prompt',
+  type: 'n8n-nodes-base.code',
+  parameters: {
+    jsCode:
+      '// Assembles the prompt text and the ceiling an Anthropic ' +
+      'chat model is to answer under. Nothing here calls one.\n' +
+      'return $input.all();',
+  },
+};
+
+/**
+ * The JavaScript a planted Code node carries, read off the
+ * parameter that holds it.
+ *
+ * Refuses rather than coercing, which is what keeps the guard
+ * standing on it a guard. `String(undefined)` is `'undefined'`, a
+ * string carrying no vendor name, so a coerced read would fail
+ * that guard exactly the way a body edited away from the plant
+ * does — sending a reader to compare two spellings of a word where
+ * one of the two has nowhere left to put it. The refusal names the
+ * node instead.
+ *
+ * Read off the parsed parameter rather than the node's text for
+ * the reason {@link queryParametersOf} reads a statement off one:
+ * a claim about a body is a claim about the node that runs it.
+ * `jsCode` is the parameter, measured on the published registry
+ * the types were — the Code node opens it in a code editor the way
+ * the Postgres node opens `query` in a SQL one.
+ *
+ * A plain `Error` rather than a class, the split {@link entryFor}
+ * already draws: a class is what lets a case pin a cause, and no
+ * case here drives a Code node carrying no body.
+ */
+function codeBodyOf(node: BuiltWorkflowNode): string {
+  const parameters = node.parameters;
+  const body =
+    typeof parameters === 'object' && parameters !== null
+      ? (parameters as Record<string, unknown>).jsCode
+      : undefined;
+
+  if (typeof body !== 'string') {
+    throw new Error(
+      `The node planted as '${node.name}' carries no string ` +
+      '`jsCode` parameter, so there is no body to read a model ' +
+      'name out of and nothing for the guard over it to compare. ' +
+      'The control that declares one is in this file.',
+    );
+  }
+
+  return body;
+}
+
+/**
+ * Which halves of the near miss no longer hold, by name.
+ *
+ * Three of them, and each alone is satisfied by a drift another is
+ * what reports — {@link sharesFragmentWithRoster}'s reasoning with
+ * a third half, which is the one the body brings. The control's
+ * body has to name the vendor, or a rule keyed to an artifact's
+ * text would never have reached this node and the refusal is about
+ * nothing. The planted type has to carry it too, or the word in
+ * that body is one this section's own subject does not use. And
+ * the control's type must NOT carry it, or the vendor sits in both
+ * members at once and the case stops being about which of the two
+ * the matcher reads.
+ *
+ * Reported by name rather than as one answer, so a failure says
+ * which of the three moved. Folded on both sides of each
+ * comparison, and read by containment where the matcher reads a
+ * folded prefix, so a guard testing the fixture the way the rule
+ * tests a type is not what stands behind these.
+ *
+ * What no half of it reaches is {@link MODEL_NODE_TYPE_PREFIX}
+ * emptied out, and that is the prefix paying for the controls it
+ * does without. An equality over an emptied constant matches
+ * nothing and needs a guard to report it, which is what the
+ * schedule section's guard is for; a prefix over one matches
+ * everything, and the refusal asserted here reddens on it
+ * directly.
+ */
+function modelFixtureDrift(): readonly string[] {
+  const fragment = MODEL_VENDOR_FRAGMENT.toLowerCase();
+  const body = codeBodyOf(CODE_BODY_CONTROL).toLowerCase();
+  const halves = [
+    {
+      holds: body.includes(fragment),
+      name: 'the control body names it',
+    },
+    {
+      holds: MODEL_PLANT.type.toLowerCase().includes(fragment),
+      name: 'the planted type carries it',
+    },
+    {
+      holds: !CODE_BODY_CONTROL.type.toLowerCase().includes(fragment),
+      name: 'the control type does not carry it',
+    },
+  ];
+
+  return halves.filter((half) => !half.holds).map((half) => half.name);
+}
+
+describe('isModelNode — the namespace it names', () => {
+  // The accept claim, and the one plant in this file whose type is
+  // not its subject spelled back. `MODEL_NODE_TYPE_PREFIX` names a
+  // namespace, so a node under it carries the constant and a
+  // suffix, and what an answer of yes says here is that the
+  // matcher tests a prefix rather than an equality over the whole
+  // string.
+  //
+  // The type is read off the planted node rather than passed
+  // straight from the constant, because that read is where a sweep
+  // meets the matcher: `nodesMatching` hands a predicate a whole
+  // node, and the predicate is what narrows it to the one member
+  // that decides.
+  //
+  // Nothing generates this case, so it cannot go quiet the way a
+  // roster-driven one can and needs no non-empty guard in front of
+  // it. What it does need is the refusal it is asserted beside: on
+  // its own it holds for a matcher answering yes to whatever it is
+  // handed, which for a prefix is what an emptied constant leaves.
+  it('flags a planted node under the namespace', () => {
+    expect(isModelNode(MODEL_PLANT.type)).toBe(true);
+  });
+
+  // The fixture guard, and the only case in this block that holds
+  // the two planted nodes against each other. A refusal cannot say
+  // whether the body it passed over named anything this namespace
+  // names, so this is what stands between a control and a Code
+  // node carrying an arbitrary comment.
+  //
+  // Reported by name rather than counted, so a failure says which
+  // half of the near miss moved.
+  it('names a vendor in the control body that only the planted type carries', () => {
+    expect(modelFixtureDrift()).toEqual([]);
+  });
+
+  // The refusal, and with the plant asserted beside it the whole
+  // of what parts a live matcher from one answering yes to
+  // everything: a matcher recognising nothing reddens the plant,
+  // and one recognising everything reddens this. Neither is given
+  // an accept control of its own — each is the other's.
+  //
+  // A node rather than a type string, as everywhere else here, and
+  // it earns more: this is the one node in the file carrying a
+  // member beyond `name` and `type`, and that member is what a
+  // rule keyed to an artifact's text would have flagged it on. The
+  // matcher is handed the type all the same, which is the reading
+  // the claim is about.
+  it('does not flag a Code node whose body names a model', () => {
+    expect(isModelNode(CODE_BODY_CONTROL.type)).toBe(false);
+  });
 });
