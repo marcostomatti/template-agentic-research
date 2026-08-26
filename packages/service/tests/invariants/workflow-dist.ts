@@ -53,13 +53,14 @@
  * that what it was handed is what the sources produced.
  *
  * {@link DIST_DIR}, {@link EmptyDistDirectoryError} and
- * {@link EmptyWorkflowError} are here. The walk that raises both
- * refusals arrives later in this stage; the assertions over the
- * real tree arrive after `ar-dispatch` does, since
- * `workflows/src/` names no workflow until then and
- * `workflows/dist/` is therefore not a directory that exists. The
- * cases over this file drive fixture trees of their own for that
- * reason.
+ * {@link EmptyWorkflowError} are here, and so is
+ * {@link BuiltWorkflow}, the shape a read hands back. The walk
+ * that raises both refusals and builds that shape arrives later
+ * in this stage; the assertions over the real tree arrive after
+ * `ar-dispatch` does, since `workflows/src/` names no workflow
+ * until then and `workflows/dist/` is therefore not a directory
+ * that exists. The cases over this file drive fixture trees of
+ * their own for that reason.
  */
 
 import { fileURLToPath } from 'node:url';
@@ -263,4 +264,158 @@ export class EmptyWorkflowError extends Error {
     this.file = file;
     this.directory = directory;
   }
+}
+
+/**
+ * One built workflow, as the checks over the built tree read it.
+ *
+ * Parsed, and never the file's text. Every property the workflow
+ * invariants assert is a property of NODES — no send-capable type
+ * anywhere, exactly one schedule trigger and it in `ar-dispatch`,
+ * a model node with no retry in front of it, a claim statement
+ * that takes its rows the way the dispatcher has to — and a check
+ * keyed to the artifact's text cannot tell where the text it
+ * matched was sitting. A type name reads the same in a node's
+ * `type` member, in a display name, in a sticky note, and inside
+ * a Code node's body.
+ *
+ * That is not a hypothetical here. The prose most likely to name
+ * a checked thing is the prose explaining the check, and
+ * `ar-dispatch` arrives later in this plan carrying sticky notes
+ * about the very properties this suite asserts: that it holds
+ * the only schedule trigger in the system, and what happens when
+ * a workflow it invokes is not there yet. A search over text
+ * finds those sentences. A parse does not — a node type is a
+ * member or it is not, and a note is a string in a member
+ * nothing asks about.
+ *
+ * So this shape hands out the parse and not the bytes. There is
+ * no text member to grep, which is most of the enforcement: the
+ * easy wrong path is not on offer. It is not a fence —
+ * {@link DIST_DIR} is exported and `readFileSync` is one import
+ * away — so the rule the header states, that the invariants
+ * assert over what this file hands them, stays a convention this
+ * shape makes cheap to keep rather than one it can force.
+ *
+ * The one check in this suite with a reason to read a whole
+ * artifact serializes {@link BuiltWorkflow.parsed} rather than
+ * opening the file. It arrives later in this plan and sweeps
+ * for forbidden names, which is the other half of the split
+ * `schema-sql.ts` states about its own directory: a constraint
+ * is only real where the migrator will run it, while a
+ * forbidden name is worth reporting wherever it is stored — an
+ * envelope, a sticky note, a spliced library body. Serializing
+ * costs that sweep the artifact's formatting, which nothing
+ * asserts, and buys it the same tree the node-level checks read.
+ */
+export interface BuiltWorkflow {
+  /**
+   * Name of the artifact, relative to the directory it was read
+   * from — the name {@link EmptyWorkflowError.file} carries too.
+   *
+   * Half of what a failure prints. A node type on its own says
+   * that some tree broke the property; this says which file to
+   * open, and since the build writes one artifact per source
+   * under the source's own name, it names the file to edit.
+   */
+  readonly file: string;
+
+  /**
+   * The whole artifact, parsed.
+   *
+   * A `Record<string, unknown>` rather than a declared workflow
+   * shape. The envelope carries whatever the n8n format puts
+   * there — `connections`, `settings`, `meta`, `tags` — and
+   * declaring that here would give a format this repo does not
+   * own a second home in it. Narrowing a member where it is read
+   * costs the one case reading it a line and keeps the rest of
+   * the format out of this file.
+   *
+   * {@link BuiltWorkflow.nodes} is this object's own `nodes`
+   * member rather than a copy of it, so the two cannot come
+   * apart.
+   */
+  readonly parsed: Record<string, unknown>;
+
+  /**
+   * Every node the workflow carries, in the artifact's order.
+   *
+   * Never empty: a workflow holding no node is refused under
+   * {@link EmptyWorkflowError} rather than handed back, since a
+   * list with nothing in it answers `no such node` to every
+   * question asked of it.
+   */
+  readonly nodes: readonly BuiltWorkflowNode[];
+
+  /**
+   * The `type` of every node, in {@link BuiltWorkflow.nodes}
+   * order, so `nodeTypes[i]` is `nodes[i].type`.
+   *
+   * A list and not a set. One case asserts a COUNT — exactly one
+   * schedule trigger across every built workflow — so a deduped
+   * list would read a workflow carrying two triggers as one
+   * carrying one, which is the invariant itself rather than an
+   * edge of it.
+   *
+   * It answers whether and how many, never which: the node it
+   * came off is gone from it, so a failure that has to name an
+   * offender walks {@link BuiltWorkflow.nodes} instead. The index
+   * tie above is the way back from one to the other.
+   */
+  readonly nodeTypes: readonly string[];
+}
+
+/**
+ * One node of a built workflow, cut down to what the checks over
+ * it read.
+ *
+ * Two members are named because every roster in the suite keys on
+ * one of them: {@link BuiltWorkflowNode.type} for the send,
+ * trigger and model rosters, and {@link BuiltWorkflowNode.name}
+ * for the statements read off `ar-dispatch` by node name later in
+ * this plan. Everything else stays reachable as `unknown` —
+ * `parameters` holds the SQL a Postgres node runs and the body a
+ * Code node runs, `onError` decides where a failure goes,
+ * `retryOnFail` is a cost guard — narrowed by whichever helper
+ * reads it rather than declared once here, since which members a
+ * node has depends on the kind of node it is.
+ *
+ * Hand-declared, and the parse proves none of it. `JSON.parse`
+ * hands back `unknown`, no schema is checked on the way in, and
+ * nothing in the format forces either named member to be a
+ * string. A cast is the only way in — measured: `tsc` refuses a
+ * parsed value assigned to this shape without one — so the cast
+ * is where the declaration gets asserted, and the walk arriving
+ * next in this stage is what has to earn it rather than assert
+ * it and carry on. A node a case plants by hand is checked only
+ * where it is declared in a plain `.ts` module: a `*.test.ts`
+ * sits outside the program `tsc` reads.
+ *
+ * Which of the two members it gets wrong decides how loud being
+ * wrong is. A `name` that is not a string surfaces in a failure
+ * message, where a reader can see it. A `type` that is not one
+ * surfaces nowhere at all: it matches no roster entry, so every
+ * check of the shape `no node of type X` passes — which is
+ * {@link EmptyWorkflowError}'s vacuity again, one node further
+ * down.
+ */
+export interface BuiltWorkflowNode {
+  /**
+   * The node's name on the canvas, and the half of a failure
+   * that says which node to open.
+   */
+  readonly name: string;
+
+  /**
+   * The node type an instance loads, fully qualified.
+   *
+   * What the rosters match, and the reason they match here
+   * rather than over text: this member is what decides which
+   * code runs, and a type named anywhere else in the artifact
+   * decides nothing.
+   */
+  readonly type: string;
+
+  /** Everything else the node carries, narrowed where it is read. */
+  readonly [key: string]: unknown;
 }
