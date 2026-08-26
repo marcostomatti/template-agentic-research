@@ -194,6 +194,31 @@ export interface NodeTypeRule {
  * sweep would have caught them and could have been paired with
  * nothing. The matcher that holds a node type against these
  * entries arrives next in this stage.
+ *
+ * None of the eight is a hit for any needle in
+ * `naming-patterns.ts`, which was checked rather than assumed.
+ * Checking is what the case calls for: `tests/` sits outside that
+ * file's scan roots, so nothing in the suite ever reads this one
+ * for a forbidden name, and a green run says nothing either way.
+ * The check was a one-off pass over every member of every entry,
+ * run with the matcher first proven live against its own needles
+ * — the header's argument about paired samples, one sweep along,
+ * since a zero out of a matcher that could never have matched
+ * reads exactly like a clean one.
+ *
+ * So each type string is written out whole, with none of the
+ * split-across-a-join treatment `naming-patterns.ts` gives its
+ * needles and the suite beside it gives its samples. What a join
+ * would cost is the one check these strings have: they were read
+ * off a published registry, and a reader repeats that only by
+ * holding the entry against it. No case can — pairing a sample to
+ * an entry plants exactly what the roster declares, so the suite
+ * compares these strings against themselves. The controls in
+ * `naming-patterns.test.ts` are literals for a neighbouring
+ * reason, but theirs is a property of strings picked to sit near
+ * a needle, and this is a measurement over strings picked for
+ * what they send. It covers the eight that landed and nothing
+ * past them, so an entry added later owes the same pass.
  */
 export const SEND_NODE_TYPES: readonly NodeTypeRule[] = [
   {
