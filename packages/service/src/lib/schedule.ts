@@ -3,16 +3,16 @@
  * Scheduling arithmetic — the rules `ar-dispatch` applies to a row it has
  * claimed, expressed as TypeScript.
  *
- * The dispatcher arrives later in this phase and holds the only schedule
- * trigger in the system: it wakes on its own cron, claims the rows that
- * are enabled and whose `next_run_at` has passed, moves each one forward,
- * and bounds how many it carries through a single pass. The arithmetic
- * behind those last two decisions lives here and nothing around it. The
- * columns it reads are the schedulable set declared in
- * `src/db/schema/scheduling.ts`, and it reads them as values handed in —
- * no I/O, no clock, no database handle. A rule reaching for one of those
- * could neither be spliced into a node nor be tested without the thing it
- * reached for.
+ * The dispatcher holds the only schedule trigger in the system, and
+ * carries it already — it wakes on its own cron. What arrives later in
+ * this stage is the rest of a tick: the nodes that claim the rows that
+ * are enabled and whose `next_run_at` has passed, move each one forward,
+ * and bound how many one pass carries. The arithmetic behind those last
+ * two decisions lives here and nothing around it. The columns it reads
+ * are the schedulable set declared in `src/db/schema/scheduling.ts`, and
+ * it reads them as values handed in — no I/O, no clock, no database
+ * handle. A rule reaching for one of those could neither be spliced into
+ * a node nor be tested without the thing it reached for.
  *
  * Dual-context is what shapes the file. A workflow source writing
  * `__INLINE:schedule.ts__` has this module transpiled and spliced into its

@@ -6,6 +6,24 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "nodes": [],
+  "nodes": [
+    {
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "__ENVVAR:AR_DISPATCH_CRON__"
+            }
+          ]
+        }
+      }
+    }
+  ],
   "connections": {}
 }
