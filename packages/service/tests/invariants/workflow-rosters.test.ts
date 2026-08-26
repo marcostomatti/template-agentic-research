@@ -1,16 +1,16 @@
 /**
- * A node planted in front of a node-type matcher, which is what
- * parts a live matcher from an empty tree.
+ * A node planted in front of a rule `workflow-rosters.ts`
+ * declares, which is what parts a live rule from an empty tree.
  *
- * These matchers feed sweeps over built output, and those sweeps
- * are mostly absence checks: no send-capable node anywhere in the
- * tree. A sweep of that shape reports the same nothing for a tree
- * carrying no such node as for a matcher that would not have
- * recognised one, and no assertion over what it handed back parts
- * the two. `workflow-rosters.ts` argues that where the rosters
- * are. What a case adds is the half a sweep cannot reach: a type
- * put in front of a matcher on purpose, where an answer of yes is
- * the matcher's own and not the tree's.
+ * Three of the four rules are matchers over a node type, and they
+ * feed sweeps over built output that are mostly absence checks: no
+ * send-capable node anywhere in the tree. A sweep of that shape
+ * reports the same nothing for a tree carrying no such node as for
+ * a matcher that would not have recognised one, and no assertion
+ * over what it handed back parts the two. `workflow-rosters.ts`
+ * argues that where the rosters are. What a case adds is the half
+ * a sweep cannot reach: a node put in front of a rule on purpose,
+ * where the answer is the rule's own and not the tree's.
  *
  * The send roster is the subject with several entries, and several
  * is what makes it pairable. One node is planted per
@@ -31,6 +31,9 @@
  * moves from case to case, and the model control is where that
  * stops: what makes it a near miss is a member that is not its
  * type, which is the whole of what a type-keyed matcher is for.
+ * By the fourth subject the type has stopped moving altogether and
+ * `parameters` is what does, that subject reading a member rather
+ * than matching one.
  *
  * Which is one half of the send subject, and cannot stand alone.
  * Every accepting claim holds for a matcher answering yes to
@@ -99,7 +102,33 @@
  * next to.
  *
  * The reader that pulls a node's SQL off its parsed parameters is
- * what this file gains next, with a section of its own.
+ * the fourth subject, and the first that is not a matcher at all.
+ * It answers with a text rather than with yes or no, so the two
+ * halves the three before it are built from arrive in another
+ * shape: the accepting claim is a statement handed back whole, and
+ * standing opposite it are four nodes carrying no query, one per
+ * shape of `parameters` that reaches the empty answer.
+ *
+ * Those four and the plant are still each other's control the way
+ * a plant and a near miss are. A read answering nothing whatever
+ * it is handed satisfies all four and reddens the accept; a read
+ * answering with whatever member it reaches satisfies the accept
+ * and reddens all four. What neither of those reaches is a read
+ * keyed to whether there is a STATEMENT rather than to whether
+ * there is a member, and what parts those is one node more: a
+ * `query` that is there and blank, the parameter's own default,
+ * which comes back as one empty text rather than as nothing. It is
+ * the only case in this file a read of that shape reddens, and it
+ * reddens alongside the accept for a read answering nothing —
+ * which is why it is a case and not a fifth entry in the roster.
+ *
+ * A Postgres node stands in two sections of this file for two
+ * reasons — among the send controls as the type sitting furthest
+ * from anything that sends, and here as the node a statement is
+ * read off — and neither claim is about the other. That is what a
+ * rule keyed to a parameter rather than to a type buys, and it is
+ * the reason this subject's near misses are parameter shapes where
+ * every subject before it has types.
  */
 import type { BuiltWorkflowNode } from './workflow-dist.js';
 import type { NodeTypeRule } from './workflow-rosters.js';
@@ -113,6 +142,7 @@ import {
   isModelNode,
   isScheduleTrigger,
   isSendCapable,
+  queryParametersOf,
 } from './workflow-rosters.js';
 
 // ---------------------------------------------------------------------------
@@ -1087,5 +1117,531 @@ describe('isModelNode — the namespace it names', () => {
   // the claim is about.
   it('does not flag a Code node whose body names a model', () => {
     expect(isModelNode(CODE_BODY_CONTROL.type)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The node planted for the query reader, and the nodes carrying none
+// ---------------------------------------------------------------------------
+
+/**
+ * The statement the planted Postgres node carries, and what the
+ * accepting claim holds an answer against.
+ *
+ * Declared here and read into the plant rather than spelled in
+ * both places, which is what makes the claim a reading rather
+ * than two copies of one string agreeing. {@link plantedNode}
+ * takes its type off an entry for the same reason.
+ *
+ * Fixture SQL and not a statement `ar-dispatch` carries. What is
+ * asserted here is the reading; the properties a real statement
+ * has to satisfy are held against the workflow that runs it, by
+ * a roster `workflow-rosters.ts` names and this file does not.
+ */
+const POSTGRES_STATEMENT =
+  'SELECT id, next_run_at FROM topics ORDER BY next_run_at';
+
+/**
+ * The values that statement is parameterized with, carried
+ * because the node's own editor labels them Query Parameters.
+ *
+ * The collision {@link queryParametersOf} names. A check asking
+ * where a statement's VALUES come from reads this member, and
+ * the reader under test answers nothing about it. Planted on the
+ * accepting node rather than beside it, so an answer of one text
+ * is a read that passed over a member sitting next to the one it
+ * took, rather than one with nothing to pass over.
+ */
+const POSTGRES_REPLACEMENT = '900';
+
+/**
+ * The node planted for {@link queryParametersOf} to read a
+ * statement off.
+ *
+ * One node, and a constant rather than a builder, for the reason
+ * {@link SCHEDULE_PLANT} is one: the subject is not a roster, so
+ * there is no entry to key a sample to and nothing a second
+ * plant could differ from.
+ *
+ * Where it parts from every plant before it is which member is
+ * under test. Those three are read for their `type` and carry
+ * nothing else; this one is read for a parameter, and its type
+ * is the member no claim in this section touches. That type
+ * stands furthest out among the send controls, and the two
+ * readings are worth taking together: a Postgres node is the one
+ * this suite must never flag as sending and the one it has to
+ * read a statement off.
+ *
+ * `operation` and `options` are carried alongside the statement
+ * so an answer of one text is not the only text there was to
+ * hand back. What the guard over the plant asserts is that
+ * neither of them carries the statement, which is what a reader
+ * keyed to some other member would have to pass.
+ *
+ * Named for what the node does rather than for the type it
+ * carries, as every node planted in this file is.
+ */
+const POSTGRES_PLANT: BuiltWorkflowNode = {
+  name: 'Claim The Due Rows',
+  type: 'n8n-nodes-base.postgres',
+  parameters: {
+    operation: 'executeQuery',
+    query: POSTGRES_STATEMENT,
+    options: { queryReplacement: POSTGRES_REPLACEMENT },
+  },
+};
+
+/**
+ * Every shape a node's `parameters` can leave, named apart.
+ *
+ * Five, where {@link queryParametersOf} resolves two: it hands
+ * back a statement or nothing, and four of these five are the
+ * nothing. Naming them apart is what lets a planted node say
+ * which of the four it stands for, and lets a guard report one
+ * nobody planted a node for — the failure a roster of data
+ * exists to make reportable, and the one an answer of `[]`
+ * cannot, an unreached shape having nothing to be named by.
+ */
+const PARAMETER_SHAPES = [
+  'no parameters member',
+  'a parameters member that is not an object',
+  'a parameters object carrying no query',
+  'a query that is not a string',
+  'a query that is a string',
+] as const;
+
+/**
+ * Which of {@link PARAMETER_SHAPES} `node` leaves.
+ *
+ * Not an independent mechanism, and worth saying so rather than
+ * leaving to be discovered: it reads the same two members
+ * {@link queryParametersOf} reads, in the same order. Where it
+ * differs is resolution — five answers where the reader has two
+ * — and what it stands behind is the fixture rather than the
+ * rule. A sample edited into carrying a statement names itself
+ * here, where the claim over it reddens saying only that
+ * something came back.
+ *
+ * Total over every node, so a fixture belonging in another entry
+ * reports the shape it actually leaves instead of being placed
+ * by whichever test happened to reach it first.
+ */
+function parameterShapeOf(node: BuiltWorkflowNode): string {
+  const parameters = node.parameters;
+
+  if (parameters === undefined) {
+    return 'no parameters member';
+  }
+
+  if (typeof parameters !== 'object' || parameters === null) {
+    return 'a parameters member that is not an object';
+  }
+
+  const query = (parameters as Record<string, unknown>).query;
+
+  if (query === undefined) {
+    return 'a parameters object carrying no query';
+  }
+
+  return typeof query === 'string'
+    ? 'a query that is a string'
+    : 'a query that is not a string';
+}
+
+/** One node {@link queryParametersOf} must answer nothing for. */
+interface NoQuerySample {
+  /**
+   * What the node carries, in prose, and the name of its case.
+   *
+   * Prose for the reason {@link SendControl.label} gives: a node
+   * standing for no roster entry has nothing to refer back to,
+   * and what a reddening case owes a reader is which node the
+   * read reached into.
+   */
+  readonly label: string;
+
+  /**
+   * Which of {@link PARAMETER_SHAPES} this entry stands for,
+   * declared here and read back by {@link parameterShapeOf}.
+   *
+   * Declared rather than derived, which is what makes the guard
+   * over it a comparison instead of a value held against itself.
+   * Two entries swapped into each other's shape leave the set of
+   * labels whole, so the coverage guard reads clean while both
+   * stand for something other than what they say; the pairs are
+   * what report that.
+   */
+  readonly holds: string;
+
+  /**
+   * The node itself, carrying its own name, type and parameters.
+   *
+   * A whole node rather than a name and a type handed to a
+   * builder, which is what every roster before this one carries.
+   * There the type is the one thing that moves and the rest is
+   * assembled around it; here what moves is `parameters`, in
+   * four shapes sharing no structure, so a builder would take
+   * the whole of what differs as an argument and hand it
+   * straight back.
+   */
+  readonly node: BuiltWorkflowNode;
+}
+
+/**
+ * One node per shape of `parameters` that reaches the empty
+ * answer, in the order the reader tests for them.
+ *
+ * Four rather than the one a node carrying no query suggests,
+ * because four shapes of `parameters` reach that answer and an
+ * answer of `[]` is the same nothing whichever one did. A single
+ * sample covers one and leaves the other three standing on a
+ * test no case reaches — the shape of the vacuity this whole
+ * file exists against, met inside one function instead of
+ * across a tree.
+ *
+ * Reader order rather than sorted, so the roster reads down the
+ * function. Nothing depends on it: the coverage guard compares
+ * sorted labels and each case stands alone.
+ */
+const NO_QUERY_SAMPLES: readonly NoQuerySample[] = [
+  // The member left out rather than written empty, which is what
+  // a hand-authored source does for a node running on defaults:
+  // `workflows/src/*.json` is written by hand, so a node that
+  // changed nothing carries no `parameters` at all. The reader
+  // answers before it indexes anything, and without the test
+  // that gets it there this read raises rather than answering.
+  {
+    label: 'a node whose source left the member out',
+    holds: 'no parameters member',
+    node: { name: 'Merge The Branches', type: 'n8n-nodes-base.merge' },
+  },
+  // The malformed direction, and the one value the `typeof` half
+  // of that same test does not reach: `typeof null` reports
+  // `object`, so what catches this is the null test written
+  // beside it, and without that test this read raises too. Two
+  // samples for one line of the reader, because the line is two
+  // tests and each is the only thing standing under its own.
+  {
+    label: 'a node whose parameters member is null',
+    holds: 'a parameters member that is not an object',
+    node: {
+      name: 'Explain The Claim',
+      type: 'n8n-nodes-base.stickyNote',
+      parameters: null,
+    },
+  },
+  // The near miss the reader's own argument turns on: the type
+  // the plant carries, in an operation that runs no statement at
+  // all. A read keyed to a database node type answers this one
+  // with something; keyed to the parameter it answers nothing,
+  // which is the split `queryParametersOf` says it is for.
+  {
+    label: 'a Postgres node in an operation that runs no query',
+    holds: 'a parameters object carrying no query',
+    node: {
+      name: 'Read The Enabled Rows',
+      type: 'n8n-nodes-base.postgres',
+      parameters: {
+        operation: 'select',
+        schema: 'public',
+        table: 'topics',
+        options: {},
+      },
+    },
+  },
+  // The malformed artifact the reader names, planted with a
+  // statement one level in rather than as a bare number: a read
+  // that coerced would hand back the object's own text, and one
+  // that dug for a statement would find this one. So the answer
+  // of nothing is a refusal rather than a coincidence of there
+  // being no text to reach.
+  {
+    label: 'a node whose query is not a string',
+    holds: 'a query that is not a string',
+    node: {
+      name: 'Open The Run Row',
+      type: 'n8n-nodes-base.postgres',
+      parameters: {
+        operation: 'executeQuery',
+        query: { statement: 'SELECT 1' },
+      },
+    },
+  },
+];
+
+/**
+ * The node that parts a `query` nobody has written a statement
+ * into from a node carrying no `query` at all.
+ *
+ * This section's near miss, and it sits on the other side of the
+ * answer from every control before it. Those are nodes a matcher
+ * must not flag; this is a node the reader must answer WITH
+ * something — one empty text, the empty string being what the
+ * parameter holds before anybody types into it, and a string
+ * being a string. {@link queryParametersOf} settles that where
+ * it is made.
+ *
+ * What it stands against is a read keyed to whether there is a
+ * STATEMENT rather than to whether there is a member. Such a
+ * read answers nothing here and satisfies all four claims above
+ * it, so this is the only case anywhere in this file that parts
+ * it from the one under test.
+ */
+const BLANK_QUERY_CONTROL: BuiltWorkflowNode = {
+  name: 'Run The Empty Query',
+  type: 'n8n-nodes-base.postgres',
+  parameters: { operation: 'executeQuery', query: '', options: {} },
+};
+
+/**
+ * Every node this section declares a parameter shape for, the
+ * two that are not samples included.
+ *
+ * The plant and the blank-query control are what the four
+ * samples stand next to, and a section resting on them owes a
+ * line saying each still carries what it was planted to carry.
+ * Both declare a string `query`, which is the shape no sample
+ * has.
+ *
+ * Neither is caught by its own claim going quiet: a plant
+ * emptied out reddens the accept, and a control emptied out
+ * reddens the case beside it. What no claim catches is a fixture
+ * emptied AND the claim over it rewritten in the same diff to
+ * expect what it now answers — two edits that agree with each
+ * other, where a section quietly stops having an accepting node
+ * in it at all.
+ */
+const SHAPE_DECLARATIONS: readonly NoQuerySample[] = [
+  ...NO_QUERY_SAMPLES,
+  {
+    label: 'the plant a statement is read off',
+    holds: 'a query that is a string',
+    node: POSTGRES_PLANT,
+  },
+  {
+    label: 'the control whose query is there and blank',
+    holds: 'a query that is a string',
+    node: BLANK_QUERY_CONTROL,
+  },
+];
+
+/**
+ * The planted node's parameters, refused rather than coerced.
+ *
+ * The refusal names the node rather than leaving the guard
+ * below to report symptoms, which is the reason
+ * {@link codeBodyOf} refuses a body. Coerced to an empty record,
+ * a plant that had lost its `parameters` fails two of that
+ * guard's four halves and names neither the member nor the node
+ * — sending a reader to look for a second parameter and a set of
+ * values when what is missing is the object both sat in.
+ *
+ * A plain `Error` rather than a class, the split
+ * {@link entryFor} already draws: a class is what lets a case
+ * pin a cause, and no case here drives a plant short of its
+ * parameters.
+ */
+function plantParameters(): Record<string, unknown> {
+  const parameters = POSTGRES_PLANT.parameters;
+
+  if (typeof parameters !== 'object' || parameters === null) {
+    throw new Error(
+      `The node planted as '${POSTGRES_PLANT.name}' carries no ` +
+      '`parameters` object, so there is no statement to read and ' +
+      'nothing for the guard over it to compare. The plant that ' +
+      'declares one is in this file.',
+    );
+  }
+
+  return parameters as Record<string, unknown>;
+}
+
+/**
+ * Which halves of the plant no longer hold, by name.
+ *
+ * Four, and each alone is satisfied by a drift another is what
+ * reports — {@link modelFixtureDrift}'s reasoning aimed at one
+ * node rather than at two. The statement has to be more than a
+ * blank, or the accepting claim is satisfied by a read that
+ * found the parameter's own default and by one that found the
+ * member, which are different readings. A second parameter has
+ * to carry text of its own, or an answer of one text is the only
+ * text there was. Nothing but `query` may carry the statement,
+ * or a read keyed to another member passes. And the values the
+ * statement is parameterized with have to be there, or the
+ * member whose own label collides with the reader's name is one
+ * the answer was never asked to pass over.
+ *
+ * Reported by name rather than as one answer, so a failure says
+ * which of the four moved. None of them reads
+ * {@link queryParametersOf}: what an answer cannot say is
+ * whether the fixture it was taken off ever stood for anything.
+ */
+function statementDrift(): readonly string[] {
+  const parameters = plantParameters();
+  const others = Object.entries(parameters).filter(
+    ([member]) => member !== 'query',
+  );
+  const elsewhere = [
+    POSTGRES_PLANT.name,
+    POSTGRES_PLANT.type,
+    ...others.map(([, value]) => JSON.stringify(value)),
+  ];
+  const options = parameters.options;
+  const replacement =
+    typeof options === 'object' && options !== null
+      ? (options as Record<string, unknown>).queryReplacement
+      : undefined;
+  const halves = [
+    {
+      holds: POSTGRES_STATEMENT.trim() !== '',
+      name: 'the plant carries a statement rather than a blank',
+    },
+    {
+      holds: others.some(
+        ([, value]) => typeof value === 'string' && value !== '',
+      ),
+      name: 'a second parameter carries text of its own',
+    },
+    {
+      holds: !elsewhere.some((text) => text.includes(POSTGRES_STATEMENT)),
+      name: 'nothing but the query parameter carries the statement',
+    },
+    {
+      holds: replacement === POSTGRES_REPLACEMENT,
+      name: 'the values it is parameterized with are there too',
+    },
+  ];
+
+  return halves.filter((half) => !half.holds).map((half) => half.name);
+}
+
+describe('queryParametersOf — the statement a node runs', () => {
+  // The accept claim. The statement comes back off the node the
+  // reader was handed, held against the constant that node was
+  // built from rather than against a second spelling of it.
+  //
+  // The whole node goes over, and here that is the reader's own
+  // signature rather than a call-site read the way it is for the
+  // three matchers beside it: they take the member that decides and
+  // leave the read to `nodesMatching`, and this takes the node
+  // because which member carries a statement is the thing it
+  // knows and a sweep does not.
+  //
+  // Nothing generates this case, so it cannot go quiet the way a
+  // roster-driven one can and needs no non-empty guard in front
+  // of it. What it does need is the nodes carrying none asserted
+  // beside it: on its own it holds for a read answering with
+  // whatever member it reached.
+  it('returns the statement a Postgres node carries', () => {
+    expect(queryParametersOf(POSTGRES_PLANT)).toEqual([POSTGRES_STATEMENT]);
+  });
+
+  // The fixture guard behind that claim, and the one case here
+  // that holds the plant's own members against each other rather
+  // than asking the reader anything. An answer cannot say whether
+  // the text it handed back was the only place that text sat, nor
+  // whether it was a statement at all rather than the blank the
+  // parameter defaults to.
+  //
+  // Reported by name rather than counted, so a failure says
+  // which half of the plant moved.
+  it('carries a statement nothing else in the plant carries', () => {
+    expect(statementDrift()).toEqual([]);
+  });
+
+  // In front of the loop rather than left to it, for the reason
+  // every roster-driven block here has one of these: the cases
+  // after it are generated from this roster, and an empty roster
+  // generates none of them.
+  //
+  // What it covers is narrower than that, and worth stating rather
+  // than leaving a reader to take the sibling's reach on trust.
+  // This roster is held against a second one in this same file, so
+  // emptying it alone reddens the coverage guard over the shapes as
+  // well. The one drift only this reaches is both of them emptied
+  // together: no case generated, and one empty list equal to the
+  // other, which no comparison between two rosters can ever report.
+  it('declares at least one node carrying no query', () => {
+    expect(NO_QUERY_SAMPLES.length).toBeGreaterThan(0);
+  });
+
+  // The coverage guard, and this block's answer to the
+  // distinctness one its siblings carry. Four samples leaving
+  // one parameter shape would print four ticks over one test,
+  // and a shape nobody planted a node for would go unasserted
+  // with nothing to say so — the two failures are one comparison
+  // apart, and this reports both.
+  //
+  // Sorted lists rather than sets, so a label short and a label
+  // twice each name themselves in the diff. Held against the
+  // full roster minus the one shape a statement leaves, so a
+  // fifth shape named in `PARAMETER_SHAPES` is unreached rather
+  // than unnoticed.
+  it('plants a node for every shape that carries no query', () => {
+    const planted = NO_QUERY_SAMPLES
+      .map((sample) => parameterShapeOf(sample.node))
+      .sort();
+    const carryingNone = PARAMETER_SHAPES
+      .filter((shape) => shape !== 'a query that is a string')
+      .sort();
+
+    expect(planted).toEqual(carryingNone);
+  });
+
+  // The fixture guard for the roster, and the drift the coverage
+  // guard cannot report: a sample rewritten into another shape
+  // still lands on some label, so the set stays whole while the
+  // entry stands for something other than what it says.
+  //
+  // Asserted as `<label>: <shape>` pairs rather than as two
+  // lists, so the diff names the entry that drifted instead of
+  // reporting that two lists differ. Over every node this
+  // section declares a shape for, the plant and the blank-query
+  // control included, which is where an emptied plant reddens.
+  it('leaves the parameter shape each of them declares', () => {
+    const declared = SHAPE_DECLARATIONS.map(
+      (entry) => `${entry.label}: ${entry.holds}`,
+    );
+    const left = SHAPE_DECLARATIONS.map(
+      (entry) => `${entry.label}: ${parameterShapeOf(entry.node)}`,
+    );
+
+    expect(left).toEqual(declared);
+  });
+
+  for (const sample of NO_QUERY_SAMPLES) {
+    // The node goes over whole, as it does for the accept claim,
+    // and an empty list is the answer rather than nothing at
+    // all: `queryParametersOf` hands back a list either way so a
+    // sweep flattens without asking which it got, which is a
+    // property a case asserting `undefined` would quietly drop.
+    //
+    // No run-time coverage guard stands behind these, which the
+    // send plants have and this block does not need. There the
+    // cases and the entries were two rosters, so one equality
+    // reported drift in both directions; here the loop and the
+    // roster are one list, and a sample nobody ran is a sample
+    // somebody deleted, which is a thing a diff shows and a
+    // suite cannot.
+    it(`returns nothing for ${sample.label}`, () => {
+      expect(queryParametersOf(sample.node)).toEqual([]);
+    });
+  }
+
+  // The near miss, and the one node in this block the reader
+  // must answer WITH something. A `query` that is there and
+  // blank is a string, so it comes back as one empty text, and
+  // what that parts is a read keyed to whether there is a member
+  // from one keyed to whether there is a statement. The second
+  // answers nothing here and satisfies every absence claim in
+  // this block.
+  //
+  // An empty text inside a list rather than an empty list, which
+  // is the whole of the distinction and reads as a typo without
+  // it: one is a node running a statement nobody has written,
+  // the other a node with no statement to write.
+  it('returns one empty text for a query that is there and blank', () => {
+    expect(queryParametersOf(BLANK_QUERY_CONTROL)).toEqual(['']);
   });
 });
