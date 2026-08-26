@@ -56,9 +56,21 @@
  * measurement no case repeats — a copy here would put two
  * unchecked spellings where there is one. A control is the one
  * place this file writes a node type out, and what it writes is a
- * type the roster does not carry.
+ * type the subject it stands beside does not name.
  *
- * The other two matchers and the reader that pulls a node's SQL
+ * The schedule matcher is the second subject and takes both
+ * halves for different reasons. Its subject is a constant rather
+ * than a roster, so there is nothing to pair: one node is
+ * planted, no id joins it to anything, and the coverage guard the
+ * send plants stand on has no second list to be held against.
+ * What is left standing behind that one plant is the refusals it
+ * is asserted beside — three legitimate triggers, each a
+ * different widening away — and a guard tying those back to the
+ * constant, which is where a constant emptied out reddens. The
+ * plant does not: it reads that constant and compares it with
+ * itself.
+ *
+ * The remaining matcher and the reader that pulls a node's SQL
  * off its parsed parameters are what this file gains next, each
  * with a section of its own.
  */
@@ -67,7 +79,12 @@ import type { NodeTypeRule } from './workflow-rosters.js';
 
 import { describe, expect, it } from 'vitest';
 
-import { SEND_NODE_TYPES, isSendCapable } from './workflow-rosters.js';
+import {
+  SCHEDULE_TRIGGER_TYPE,
+  SEND_NODE_TYPES,
+  isScheduleTrigger,
+  isSendCapable,
+} from './workflow-rosters.js';
 
 // ---------------------------------------------------------------------------
 // The nodes planted against the send roster
@@ -493,6 +510,291 @@ describe('isSendCapable — the types it must leave alone', () => {
       const node = plantedControl(control);
 
       expect(isSendCapable(node.type)).toBe(false);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// The trigger planted for the schedule matcher, and the near misses
+// ---------------------------------------------------------------------------
+
+/**
+ * The node planted for {@link isScheduleTrigger} to flag.
+ *
+ * One node, and a constant rather than a builder, because
+ * {@link SCHEDULE_TRIGGER_TYPE} is one type and not a roster:
+ * there is no entry to key a sample to, no id for a case to be
+ * named by, and nothing a second sample could differ from. The
+ * pairing the send plants carry, and the coverage guard that
+ * stands on it, have no second list here to be held against.
+ *
+ * The type is read off the constant for the reason
+ * {@link plantedNode} reads its own off an entry, and the same
+ * limit comes with it: what this compares is the constant against
+ * itself. It says the matcher reads that constant, and says
+ * nothing about whether the string the constant carries is the
+ * one an instance loads. That measurement was taken against a
+ * published node registry where the constant is declared, and no
+ * case repeats it.
+ *
+ * Named for what the trigger does rather than for the type it
+ * carries, as the send plants are, so `type` is the only member
+ * the matcher could have been answering about.
+ */
+const SCHEDULE_PLANT: BuiltWorkflowNode = {
+  name: 'Fire On The Clock',
+  type: SCHEDULE_TRIGGER_TYPE,
+};
+
+/**
+ * One legitimate trigger type {@link isScheduleTrigger} must not
+ * flag.
+ *
+ * {@link SendControl}'s shape written again rather than reused,
+ * because {@link TriggerControl.shared} does not mean the same
+ * thing twice. There it is held against a roster, where any entry
+ * may turn out to be the one carrying the fragment; here there is
+ * a single string to hold it against, so the guard reading it is
+ * a comparison with the subject itself and says more for being
+ * one.
+ */
+interface TriggerControl {
+  /**
+   * What the type is, in prose, and the name of its case.
+   *
+   * Prose for the reason {@link SendControl.label} gives: a
+   * control stands for no entry and so has nothing to refer back
+   * to, and what a reddening case owes a reader is which
+   * legitimate trigger the matcher reached for.
+   */
+  readonly label: string;
+
+  /**
+   * The name the planted node carries, distinct per control.
+   *
+   * No claim reads it, and it is here for the reason
+   * {@link SendSample.node} gives. Each names what starts the run
+   * rather than what the node is, so nothing but `type` is a
+   * member the matcher could have been recognising.
+   */
+  readonly node: string;
+
+  /**
+   * The node type asserted to come back unflagged.
+   *
+   * Written out, which is the whole of what makes a control one:
+   * the plant reads {@link SCHEDULE_TRIGGER_TYPE}, so a near miss
+   * has to come from outside it.
+   *
+   * All three are registered by a stock instance and all three
+   * declare `group: ['trigger']` with no `schedule` beside it,
+   * read off the same published registry the constant was. A
+   * control naming a type nothing can load would be a near miss
+   * of nothing, and one whose group did carry `schedule` would
+   * not be a control at all — it would be a type the constant is
+   * wrong to have left out.
+   */
+  readonly type: string;
+
+  /**
+   * The text {@link TriggerControl.type} shares with
+   * {@link SCHEDULE_TRIGGER_TYPE}, asserted carried by both before
+   * the type is asserted clean.
+   *
+   * The one thing a refusing answer cannot check about itself,
+   * for the reason {@link SendControl.shared} gives: a control
+   * edited into a string the subject has nothing in common with
+   * comes back unflagged forever, green and about nothing.
+   *
+   * Both halves are asserted, and here the second is what a
+   * hollowed-out constant reddens. The plant cannot — it reads
+   * that constant and compares it with itself, so a constant
+   * emptied to nothing at all is a type the matcher still answers
+   * yes to.
+   *
+   * Read by containment where the matcher reads a folded
+   * equality, so the guard is not the rule written a second time,
+   * and folded on both sides all the same: a change of case is
+   * one the matcher is built to tolerate, and a guard reddening
+   * for it would be reporting the fold rather than a drift.
+   */
+  readonly shared: string;
+}
+
+/**
+ * The trigger types the schedule matcher must leave alone, one
+ * per widening it would take to reach one.
+ *
+ * Each of the three starts a run and none of them decides WHEN
+ * one starts, which {@link SCHEDULE_TRIGGER_TYPE} argues at
+ * length. What the three add to that is a widening apiece.
+ *
+ * Two stand against the shape of a name. Of the 438 types the
+ * published registry carries, 102 end in `Trigger` and exactly
+ * one of the 102 starts anything on a clock — so a rule keyed to
+ * the suffix reads as precise and reaches 101 nodes that start
+ * nothing, these two among them.
+ *
+ * The remaining one shares nothing with the constant but the
+ * package every node on a stock instance carries, so what it
+ * stands against is the widening that reaches everything.
+ *
+ * The execute-workflow one is the expensive false positive
+ * rather than merely a third widening. `workflows/src/README.md`
+ * reserves `ar-dispatch` to invoke the other workflows, so every
+ * workflow it reaches carries one of these by design: a matcher
+ * reading `has a trigger` as `has a schedule` would flag exactly
+ * the workflows the dispatcher exists to call, and a count that
+ * has to come out at one would come out at however many there
+ * are.
+ *
+ * What no control here reaches is a matcher too NARROW. Three
+ * registered types carry the schedule capability and the
+ * constant names one of them; the other two are hidden, which
+ * keeps them out of the node panel and not out of a workflow
+ * that already carries one. A tree written with either holds a
+ * schedule this matcher does not name, and neither a control nor
+ * a plant reading the constant can report it. The constant is
+ * where that gap is argued and where the entry per type that
+ * would close it belongs.
+ */
+const TRIGGER_CONTROLS: readonly TriggerControl[] = [
+  // The trigger an operator fires by hand, and the one a
+  // workflow carries while it is still being written. Read off
+  // the node definition rather than assumed: it declares
+  // `group: ['trigger']` and nothing beside it, and what decides
+  // when it runs is somebody clicking.
+  {
+    label: 'a manual trigger',
+    node: 'Start On A Click',
+    type: 'n8n-nodes-base.manualTrigger',
+    shared: 'Trigger',
+  },
+  // The one that shares least with the constant, and the one
+  // whose run is decided furthest away — an inbound request,
+  // from a caller this side never sees. It is also the only one
+  // of the three carrying no suffix to be caught by, which is
+  // why the fragment it declares is the package.
+  {
+    label: 'a webhook',
+    node: 'Start On A Request',
+    type: 'n8n-nodes-base.webhook',
+    shared: 'n8n-nodes-base.',
+  },
+  // The one every workflow the dispatcher reaches is to carry,
+  // and so the false positive that would spread rather than sit
+  // still. A calling workflow decides when it runs, which is a
+  // decision made somewhere a schedule is not.
+  {
+    label: 'an execute-workflow trigger',
+    node: 'Start On A Call',
+    type: 'n8n-nodes-base.executeWorkflowTrigger',
+    shared: 'Trigger',
+  },
+];
+
+/**
+ * That control as a node, carrying its own name and its own type.
+ *
+ * Written beside {@link plantedControl} rather than folded into
+ * it, for the reason that one was written beside
+ * {@link plantedNode}: where the type comes from is the whole
+ * difference between a plant and a control, and a builder shared
+ * across subjects would leave each section reading its own
+ * difference off another section's signature.
+ */
+function plantedTriggerControl(
+  control: TriggerControl,
+): BuiltWorkflowNode {
+  return { name: control.node, type: control.type };
+}
+
+/**
+ * Whether `control` still carries the fragment it shares with
+ * {@link SCHEDULE_TRIGGER_TYPE}, and whether that constant still
+ * carries it too.
+ *
+ * Both halves, for the reason {@link sharesFragmentWithRoster}
+ * gives: each alone is satisfied by a drift the other is what
+ * reports, and neither shows in what {@link isScheduleTrigger}
+ * hands back for a control, which is a refusal either way.
+ */
+function sharesFragmentWithScheduleType(control: TriggerControl): boolean {
+  const fragment = control.shared.toLowerCase();
+
+  return control.type.toLowerCase().includes(fragment)
+    && SCHEDULE_TRIGGER_TYPE.toLowerCase().includes(fragment);
+}
+
+describe('isScheduleTrigger — the one type it names', () => {
+  // The accept claim. The type is read off the planted node
+  // rather than passed straight from the constant, because that
+  // read is where a sweep meets the matcher: `nodesMatching`
+  // hands a predicate a whole node, and the predicate is what
+  // narrows it to the one member that decides.
+  //
+  // Nothing generates this case, so it cannot go quiet the way a
+  // roster-driven one can and needs no non-empty guard in front
+  // of it. What it does need is the refusals it is asserted
+  // beside: on its own it holds for a matcher answering yes to
+  // whatever it is handed.
+  it('flags a planted schedule trigger', () => {
+    expect(isScheduleTrigger(SCHEDULE_PLANT.type)).toBe(true);
+  });
+
+  // In front of the loop rather than left to it, for the reason
+  // the send controls have one of these: every case after it is
+  // generated from this roster, and an empty roster generates
+  // none of them while leaving the block green. What would be
+  // left is the plant, and the plant alone is satisfied by a
+  // matcher that flags whatever it is handed.
+  it('declares at least one trigger type to leave alone', () => {
+    expect(TRIGGER_CONTROLS.length).toBeGreaterThan(0);
+  });
+
+  // Three controls spelling one type would print three ticks
+  // over one comparison, which is the send plants' own hazard
+  // read backwards. Sorted lists rather than a count of distinct
+  // types, so the diff names the type two of them share.
+  it('names a distinct type for each of them', () => {
+    const named = TRIGGER_CONTROLS.map(
+      (control) => plantedTriggerControl(control).type,
+    );
+
+    expect([...new Set(named)].sort()).toEqual([...named].sort());
+  });
+
+  // The fixture guard, and the only case in this block that
+  // holds a written-out type against the constant. A refusal
+  // cannot say whether the type it refused was ever near that
+  // constant, so this is what stands between a control and an
+  // arbitrary string — and it is where a constant emptied out or
+  // pointed at another type reddens, the plant being green for
+  // either.
+  //
+  // Reported by label rather than counted, so a failure names
+  // the control that drifted.
+  it('shares a fragment with the type the constant names', () => {
+    const adrift = TRIGGER_CONTROLS
+      .filter((control) => !sharesFragmentWithScheduleType(control))
+      .map((control) => control.label);
+
+    expect(adrift).toEqual([]);
+  });
+
+  for (const control of TRIGGER_CONTROLS) {
+    // The type is read off the planted node for the reason the
+    // plant's own claim reads it that way.
+    //
+    // No run-time coverage guard stands behind these, and none
+    // stands behind the plant either. Here the loop and the
+    // roster are one list and the plant is one case, so a
+    // control nobody ran is a control somebody deleted, which is
+    // a thing a diff shows and a suite cannot.
+    it(`does not flag ${control.label}`, () => {
+      const node = plantedTriggerControl(control);
+
+      expect(isScheduleTrigger(node.type)).toBe(false);
     });
   }
 });
