@@ -60,11 +60,10 @@
  * one helper over that shape rather than over the tree, and it
  * sits here because naming every offender is what an absence
  * check owes a reader once it has been handed something to look
- * at. The assertions over the real tree arrive after
- * `ar-dispatch` does, since `workflows/src/` names no workflow
- * until then and `workflows/dist/` is therefore not a directory
- * that exists. The cases over this file drive fixture trees of
- * their own for that reason.
+ * at. The assertions over the real tree arrive later in this
+ * plan. The cases over this file drive fixture trees of their
+ * own, which is what keeps both refusals reachable whatever the
+ * built tree happens to hold.
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -124,13 +123,13 @@ export const DIST_DIR = fileURLToPath(
  * because no edit turns on it: all three are answered by running
  * the build, and the message names it.
  *
- * The absent shape is the one this package hands out today.
+ * The absent shape is what a tree nothing has built hands out.
  * `buildAll` in `scripts/build-workflows.ts` takes the reverse
  * split — absent is its empty answer, and only a path it cannot
- * list raises — and it stops before touching its output directory
- * when there is nothing to write. `workflows/src/` names no
- * workflow until `ar-dispatch`, so `workflows/dist/` is not a
- * directory that exists rather than an empty one.
+ * list raises — and it stops before touching its output
+ * directory when there is nothing to write, so a package with no
+ * source to build leaves no `workflows/dist/` behind rather than
+ * an empty one.
  *
  * A distinct class rather than a bare `Error`, so a case covering
  * this path can pin the failure to this cause. A read that got

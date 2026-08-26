@@ -19,13 +19,13 @@
  * to name rather than by an argument.
  *
  * A temporary tree rather than the package's own, whichever way a
- * build is reached. Pointed at `workflows/src/` a case would
- * rebuild `workflows/dist/` underneath every check that reads it,
- * and with a stand-in loader it would rebuild it into something no
- * build produces. The package's own tree is also no fixture: it
- * holds no workflow source until `ar-dispatch` lands, so a build
- * over it today writes nothing and two runs of it compare equal by
- * having produced nothing to compare.
+ * build is reached. Pointed at `workflows/src/` a case would rebuild
+ * `workflows/dist/` underneath every check that reads it, and with a
+ * stand-in loader it would rebuild it into something no build
+ * produces. The package's own tree is also no fixture: what it holds
+ * moves with the plan — `ar-dispatch` landed in it and grows a node
+ * per task — so a case driving it would assert how far the work has
+ * got rather than what a build does.
  *
  * The first subject is one marker form and what a build does with
  * it. A marker whose name the grammar cannot read is a hit for

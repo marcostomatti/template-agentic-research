@@ -52,14 +52,13 @@
  * here asserts one.
  *
  * All of it drives a fixture tree and none of it reads the tree this
- * package builds. `workflows/src/` names no workflow until
- * `ar-dispatch`, so `workflows/dist/` is not a directory that exists
- * and the refusal is what the package's own tree yields today — which
- * would make a case calling `loadBuiltWorkflows` with no argument an
- * assertion about how far the plan has got rather than about the
- * reader. The directory parameter is there for exactly this: it keeps
- * the refusals reachable from a tree a caller controls, now while the
- * real one is absent and later once it is a healthy one.
+ * package builds. What that tree holds moves with the plan —
+ * `ar-dispatch` landed in `workflows/src/` and grows a node per task —
+ * so a case calling `loadBuiltWorkflows` with no argument would assert
+ * how far the work has got rather than anything about the reader. The
+ * directory parameter is there for exactly this: it keeps both
+ * refusals reachable from a tree a caller controls, whatever the real
+ * one happens to hold.
  *
  * One axis stands still throughout the second of the two refusal
  * sections, and nothing later in this stage moves it: every tree it

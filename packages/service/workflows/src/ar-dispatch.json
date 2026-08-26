@@ -1,0 +1,11 @@
+{
+  "id": "ar-dispatch",
+  "name": "AR Dispatch",
+  "active": false,
+  "versionId": "00000000-0000-4000-8000-00000000ad01",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [],
+  "connections": {}
+}

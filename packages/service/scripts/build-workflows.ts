@@ -716,8 +716,8 @@ export interface BuildAllOptions extends ResolveMarkersOptions {
  * asserting over no migrations passes by finding nothing, so an
  * empty result is the thing it exists to refuse. A build has no
  * such stake: nothing to build is an ordinary state of a tree,
- * and it is this package's state as this lands, since
- * `workflows/src/` carries a README and no workflow source yet.
+ * and it was this package's own state until `ar-dispatch` landed
+ * in `workflows/src/`.
  *
  * Nothing to build has two shapes and one answer — a `sourceDir`
  * that is absent, and one that is there holding no `*.json`. Both
@@ -883,9 +883,10 @@ const WORKFLOW_EXTERNAL_DIST_DIR = join(
  *
  * `src/lib/` is this package's pipeline half, and it holds its
  * first library, `schedule.ts`. No workflow source names it in a
- * marker yet — `workflows/src/` holds no workflow at all until
- * `ar-dispatch` lands — so a build today resolves no library
- * marker and never opens this directory.
+ * marker yet — `ar-dispatch` is the one source `workflows/src/`
+ * holds, and the Code node that writes the marker arrives later
+ * in this stage — so a build today resolves no library marker
+ * and never opens this directory.
  */
 const LIB_DIR = join(PACKAGE_ROOT, 'src', 'lib');
 

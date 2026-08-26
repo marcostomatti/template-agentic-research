@@ -824,8 +824,8 @@ const SPLICE_REFUSALS: readonly SpliceRefusal[] = [
  * whole change and the library keeps its shape.
  *
  * The limit is what a scan cannot see. Two of the three rules a
- * spliceable library obeys leave evidence and are refused here, a
- * dependency and a re-export; the third, reliance on module
+ * spliceable library obeys leave evidence and are refused here,
+ * a dependency and a re-export; the third, reliance on module
  * scope, leaves none. Measured the same way, `require(p)`, a
  * dynamic `import(p)` and `import.meta.url` all scan with an
  * empty import list and survive into the transpiled text
@@ -833,14 +833,14 @@ const SPLICE_REFUSALS: readonly SpliceRefusal[] = [
  * on the node exactly the way a surviving import would. One
  * library is spliced today, `src/lib/schedule.ts`, and only in
  * the tree `tests/build/schedule-splice.test.ts` builds: no
- * workflow source names a library until `ar-dispatch` lands. It
- * satisfies that third rule by hand, and the nearest thing to a
- * check on it is downstream rather than here: that same file
- * runs the spliced body under `new Function`, which supplies no
- * `require` and no `module` and refuses an `import.meta` at
- * construction. Reliance on module STATE gets past even that,
- * so no complete check exists and this is still not where one
- * would go.
+ * workflow source names a library until `ar-dispatch`'s Code
+ * node lands. It satisfies that third rule by hand, and the
+ * nearest thing to a check on it is downstream rather than here:
+ * that same file runs the spliced body under `new Function`,
+ * which supplies no `require` and no `module` and refuses an
+ * `import.meta` at construction. Reliance on module STATE gets
+ * past even that, so no complete check exists and this is still
+ * not where one would go.
  *
  * @param transpiled - The library with its types erased, as
  *   `transformSync` returned it.

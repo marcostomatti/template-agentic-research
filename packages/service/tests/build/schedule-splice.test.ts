@@ -44,9 +44,9 @@
  * question worth asking is whether the library this package ships
  * and this suite imports is one a Code node could run. Nothing else
  * asks it. `workflows/src/` holds no source writing this marker
- * until `ar-dispatch` lands later in this phase, so until then the
- * package builds no library at all and a fixture tree is the only
- * place one is put through the shipped command.
+ * until `ar-dispatch`'s Code node lands later in this stage, so
+ * until then the package builds no library at all and a fixture tree
+ * is the only place one is put through the shipped command.
  *
  * The two claims read off the artifact are one subject read from
  * both ends, and neither stands alone. A node body that came back
