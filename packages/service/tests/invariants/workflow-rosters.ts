@@ -157,25 +157,43 @@ export interface NodeTypeRule {
  * is where that is argued and where the register says which
  * phase owns it; the roster here is the set the check reads.
  *
- * Three entries, carried from the origin, and three rather than
- * one because sending is a capability several unrelated node
- * types reach — a hosted provider API, a provider-agnostic send
- * node, a transport addressed directly. Named as one thing it
- * would have to be a pattern over the word `mail`, which flags
- * the read-only intake nodes beside it and is the kind of needle
- * somebody eventually deletes. So each route is an entry, and
- * each {@link NodeTypeRule.reason} says what its route reaches
- * that the entries beside it do not.
+ * Eight entries, and several rather than one because sending is a
+ * capability unrelated node types reach by unrelated routes.
+ * Three came from the origin and are all mail — a hosted provider
+ * API, a provider-agnostic send node, a transport addressed
+ * directly. Named as one thing they would have to be a pattern
+ * over the word `mail`, which flags the read-only intake nodes
+ * beside them and is the kind of needle somebody eventually
+ * deletes. So each route is an entry, and its own
+ * {@link NodeTypeRule.reason} says what that route reaches that
+ * the entries beside it do not.
+ *
+ * The five beside them are the other send routes a stock instance
+ * already carries, nothing installed: a delivery API with no
+ * mailbox behind it, chat into a workspace room, chat through a
+ * webhook URL that is its own credential, a bot to a personal
+ * device, and the telephone network. Their type strings were read
+ * off the published node registry rather than carried across,
+ * because the origin swept with substrings and a substring is not
+ * a type — the third of its three names a transport that the
+ * registry lists as a credential and not as a node at all.
+ *
+ * Deliberately out: the further vendors of a route already named.
+ * A second hosted mail provider, a fourth chat platform and a
+ * second text-message gateway each add a name and no reach, and a
+ * roster admitting them is one that grew by resemblance, which is
+ * exactly what {@link NodeTypeRule.reason} is there to refuse.
+ * That bound is worth stating rather than implying — a workflow
+ * reaching for one of those vendors is a MISS here, and the
+ * answer to a miss is an entry carrying the reach it adds.
  *
  * Whole type strings rather than the substring alternation the
  * origin swept with, for the reason {@link NodeTypeRule.type}
- * gives: a whole type is pairable and a pattern is not. The cost
- * is this set at its own limit — a node spelling one of these
- * capabilities some other way is a MISS here where a substring
- * sweep would have caught it. Widening the roster is the answer
- * it has for that, and the other send-capable types an operator
- * can reach for on a stock instance arrive next in this stage,
- * alongside the matcher that holds a node type against them.
+ * gives: a whole type is pairable and a pattern is not. The
+ * unnamed vendors are what that choice costs, since a substring
+ * sweep would have caught them and could have been paired with
+ * nothing. The matcher that holds a node type against these
+ * entries arrives next in this stage.
  */
 export const SEND_NODE_TYPES: readonly NodeTypeRule[] = [
   {
@@ -218,5 +236,71 @@ export const SEND_NODE_TYPES: readonly NodeTypeRule[] = [
       'provider account stands behind it, so there is nothing ' +
       'to disable from outside the workflow once it is wired.',
     type: 'n8n-nodes-base.smtp',
+  },
+  // Read off the node definition rather than assumed: the
+  // recipient field is documented as a comma-separated list, the
+  // sender is free text on the node, and the delivery-time option
+  // hands the message to the provider to release later. Each of
+  // the three is a clause the reason turns on.
+  {
+    id: 'mail-delivery-api',
+    reason:
+      'Sends mail through a delivery API with no mailbox behind ' +
+      'it: the sender address is a field on the node rather ' +
+      'than an account somebody signs into, and the recipient ' +
+      'field takes a list. What it reaches that the others do ' +
+      'not is a send that leaves no sent copy anywhere, ' +
+      'addresses many at once, and can be deferred at the ' +
+      'provider so the message goes out after the run that ' +
+      'wrote it has finished.',
+    type: 'n8n-nodes-base.sendGrid',
+  },
+  {
+    id: 'chat-workspace',
+    reason:
+      'Posts into a workspace room rather than to an addressee. ' +
+      'What it reaches that the others do not is an audience ' +
+      'nothing in the workflow enumerated: the destination is a ' +
+      'channel, who reads it is administered elsewhere, and one ' +
+      'token reaches every channel the app was added to.',
+    type: 'n8n-nodes-base.slack',
+  },
+  // Read off the node implementation rather than assumed: in the
+  // webhook mode the stored credential carries the whole
+  // destination URL, and that URL REPLACES the API base the other
+  // modes call. So the credential is the address rather than
+  // proof of an identity at one, which is what the reason turns
+  // on.
+  {
+    id: 'chat-webhook',
+    reason:
+      'Posts through a webhook URL that is itself the ' +
+      'credential. What it reaches that the others do not is a ' +
+      'destination anybody holding one string can post to: no ' +
+      'account stands behind the send, nothing records who made ' +
+      'it, and closing it means rotating a URL rather than ' +
+      'disabling a user.',
+    type: 'n8n-nodes-base.discord',
+  },
+  {
+    id: 'chat-personal',
+    reason:
+      'Sends as a bot to a chat id, which is the whole of the ' +
+      'addressing. What it reaches that the others do not is a ' +
+      'personal device with no directory in front of it: no ' +
+      'workspace to belong to, no mailbox to hold the message, ' +
+      'and nobody administering who can be written to.',
+    type: 'n8n-nodes-base.telegram',
+  },
+  {
+    id: 'phone-network',
+    reason:
+      'Puts the message on the telephone network, as a text or ' +
+      'a placed call to a number. What it reaches that the ' +
+      'others do not is a route off the internet altogether: it ' +
+      'is metered per message, so a batch spends as it goes, ' +
+      'and no mail or chat administrator can see it, let alone ' +
+      'stop it.',
+    type: 'n8n-nodes-base.twilio',
   },
 ];
