@@ -163,6 +163,31 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * pull adapters, dedupe, gate, document through to a finding. That
    * is the work a topic coming due asks for, which is why the id is
    * the default here rather than something an operator supplies.
+   *
+   * Neither id names a workflow that exists. The roster delivers
+   * `ar-ingest` in phase 5 and `ar-digest` in phase 6, so the
+   * dispatcher landing in this phase resolves a correct id, addresses
+   * it, and finds nothing behind it on the instance. That is the
+   * expected state for both settings rather than a misconfiguration:
+   * the value is right and the target has not been built.
+   *
+   * A target that is not there is routed, not raised. The dispatcher
+   * invokes through an Execute Workflow node, and that node carries a
+   * second output for its own failures — so the claimed row takes the
+   * error branch, the node behind it closes that row's run as failed
+   * naming the target it could not reach, and the tick carries on.
+   * Both shapes either side of that are worse. Letting the failure
+   * propagate would take a whole pass down over a workflow nobody
+   * expected to be there yet; continuing on the REGULAR output would
+   * close the run as a success, which is how a dispatch that never
+   * happened comes to read like one that did.
+   *
+   * So a run reading failed against an absent target is the accurate
+   * record until those phases land, not noise to be suppressed. What
+   * the error branch does not buy is a retry: claiming and
+   * rescheduling are one statement, so the row's `next_run_at` moved
+   * before the dispatch was attempted, and a row whose target is
+   * missing waits its whole interval before anything tries it again.
    */
   AR_TOPIC_WORKFLOW_ID: 'ar-ingest',
 
@@ -180,6 +205,17 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * subscriptions the dispatcher schedules. A subscription coming due
    * asks for its export to be rendered, which is that workflow's own
    * work.
+   *
+   * Its target arrives a phase later than the other half's —
+   * `ar-ingest` in phase 5, `ar-digest` in phase 6 — so the two ids
+   * stop naming absent workflows at different times. Phase 5 is the
+   * window where that shows: a claimed topic reaches a workflow that
+   * exists while a claimed subscription still reaches nothing, and
+   * one tick records successes and failures side by side for a reason
+   * that is nobody's mistake. The error branch described under
+   * `AR_TOPIC_WORKFLOW_ID` is what keeps those two outcomes readable
+   * apart on the `runs` rows rather than letting the second read as a
+   * fault in the first.
    */
   AR_EXPORT_WORKFLOW_ID: 'ar-digest',
 };
