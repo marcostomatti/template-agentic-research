@@ -73,5 +73,14 @@
       }
     }
   ],
-  "connections": {}
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          { "node": "Claim Due Topics", "type": "main", "index": 0 },
+          { "node": "Claim Due Export Subscriptions", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  }
 }
