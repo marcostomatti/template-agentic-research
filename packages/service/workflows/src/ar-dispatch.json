@@ -43,6 +43,24 @@
       }
     },
     {
+      "id": "claim-due-export-subscriptions",
+      "name": "Claim Due Export Subscriptions",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, 100],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH due AS (\n  SELECT id\n  FROM export_subscriptions\n  WHERE enabled\n    AND next_run_at <= now()\n  ORDER BY next_run_at\n  LIMIT __ENVVAR:AR_DISPATCH_BATCH_CAP__\n  FOR UPDATE SKIP LOCKED\n)\n-- The same statement as Claim Due Topics, against the other schedulable table. One\n-- dispatcher reads both the same way, so the two arguments that shape it are written\n-- out on that node and are not repeated here: why the claim and the reschedule are\n-- folded into one statement, and why the clamp skips a null bound rather than\n-- standing it in with COALESCE. What differs is the table, and the projection below.\n\n-- The cap is per claim and not per tick. This LIMIT and the one on Claim Due Topics\n-- read one setting, so a tick finding both tables backlogged claims up to twice it,\n-- and both claims have already moved next_run_at on every row they took. So the\n-- second application of the cap, over the merged stream, is a choice about which\n-- claimed rows are RUN and not a re-check of a batch already inside the cap. What it\n-- leaves behind was rescheduled without being dispatched, and comes round again a\n-- whole interval later. capBatch in src/lib/schedule.ts carries the rest of that\n-- argument.\nUPDATE export_subscriptions AS s\nSET next_run_at = now() + make_interval(secs => LEAST(\n  s.max_interval_seconds,\n  GREATEST(s.min_interval_seconds, s.interval_seconds)\n))\nFROM due\nWHERE s.id = due.id\n-- The five columns Claim Due Topics answers in, plus one of this branch's own.\n-- export_subscriptions carries no name, so the label is the format, which is what the\n-- row renders. It does not identify the row: a domain may take one format at two\n-- destinations, and connector_id is what tells those apart. That column rides on this\n-- branch alone, so nothing past the merge may read one off an arbitrary claimed unit.\n-- unit_kind is 'export' rather than this table's own singular because it names the\n-- dispatch the row asks for, and pairs with AR_EXPORT_WORKFLOW_ID the way 'topic'\n-- pairs with AR_TOPIC_WORKFLOW_ID.\nRETURNING\n  s.id,\n  s.domain_id,\n  'export'::text AS unit_kind,\n  s.format AS name,\n  s.next_run_at,\n  s.connector_id",
+        "options": {}
+      }
+    },
+    {
       "id": "build-stamp",
       "name": "Build Stamp",
       "type": "n8n-nodes-base.stickyNote",

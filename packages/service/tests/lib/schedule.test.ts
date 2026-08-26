@@ -898,9 +898,12 @@ interface TakenCap {
  * more than a row each. A cap of 1 is the smallest the rule
  * admits and a single step from the zero it turns away; a cap of
  * 25 is what `ENV_DEFAULTS.AR_DISPATCH_BATCH_CAP` in
- * `scripts/workflow-markers.ts` ships, and it stands for the
- * ordinary tick — the claim query's own `LIMIT` has already held,
- * and this call does nothing at all.
+ * `scripts/workflow-markers.ts` ships, and it stands for a tick
+ * whose two claims came in under it between them, where each
+ * claim query's own `LIMIT` has already held and this call does
+ * nothing at all. That is not every tick: the dispatcher's
+ * `LIMIT` is per claim, so two backlogged tables hand this
+ * function twice the cap.
  *
  * The row the batch sits exactly on is the one an off-by-one
  * moves, and it is the only place in the roster where both of the

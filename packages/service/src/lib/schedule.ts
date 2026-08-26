@@ -7,16 +7,17 @@
  * carries it already — it wakes on its own cron, and one node behind that
  * takes the `topics` rows that are enabled and whose `next_run_at` has
  * passed, oldest first and capped by a `LIMIT`, moving each row it takes
- * forward in the same statement that claims it. That reschedule is
+ * forward in the same statement that claims it. A second node beside it
+ * does the same over `export_subscriptions`, so both schedulable tables
+ * are claimed and rescheduled by one statement shape. That reschedule is
  * {@link clampIntervalSeconds} written as SQL. What arrives later in this
- * stage is the rest of a tick: the same claim and the same reschedule over
- * `export_subscriptions`, and that cap applied a second time over the
- * claims once merged. The arithmetic behind both of those lives here and
- * nothing around it. The columns it reads are the schedulable set declared
- * in `src/db/schema/scheduling.ts`, and it reads them as values handed in
- * — no I/O, no clock, no database handle. A rule reaching for one of those
- * could neither be spliced into a node nor be tested without the thing it
- * reached for.
+ * stage is the rest of a tick: that cap applied a second time over the two
+ * branches' claims once merged. The arithmetic behind all of it lives here
+ * and nothing around it. The columns it reads are the schedulable set
+ * declared in `src/db/schema/scheduling.ts`, and it reads them as values
+ * handed in — no I/O, no clock, no database handle. A rule reaching for
+ * one of those could neither be spliced into a node nor be tested without
+ * the thing it reached for.
  *
  * Dual-context is what shapes the file. A workflow source writing
  * `__INLINE:schedule.ts__` has this module transpiled and spliced into its
@@ -128,9 +129,9 @@ export interface IntervalBounds {
  * `ar-dispatch` claims a row and moves its `next_run_at` forward in one
  * statement — the claim holds its lock until the reschedule is written
  * — so the clamp there is an expression over the bound columns rather
- * than a call into this function. The expression the `topics` claim
- * carries today, and that the export claim arriving later in this stage
- * repeats, is `LEAST(max_interval_seconds,
+ * than a call into this function. The expression both of the
+ * dispatcher's claims carry, over `topics` and over
+ * `export_subscriptions`, is `LEAST(max_interval_seconds,
  * GREATEST(min_interval_seconds, interval_seconds))`, which skips a
  * null bound the way this function does: `LEAST` and `GREATEST` are
  * documented to ignore a NULL argument outright. Standing a missing
@@ -211,21 +212,26 @@ export function clampIntervalSeconds(
  * constructor name crosses nothing — so the message is the whole of
  * what gets read, and it is what a caller pins.
  *
- * This is the SECOND place the cap is applied, and on an ordinary tick
- * it does nothing at all. The dispatcher's claim over `topics` already
- * carries a SQL `LIMIT` over the same setting, and the claim over
- * `export_subscriptions` arriving later in this stage carries its own,
- * so the batch reaching this function is already inside the cap and
- * what comes back is what was handed in. Being inert is the point
- * rather than a reason to drop the call: a `LIMIT` reads as a paging
- * knob, and whoever next tunes that query — adding a filter, changing
- * the ordering, folding in a join — is looking at a performance detail
- * rather than at the only thing standing between one pass and the whole
- * backlog. It is one edit from being gone, and nothing about that edit
- * looks like a spending decision. `ENV_DEFAULTS.AR_DISPATCH_BATCH_CAP`
- * in `scripts/workflow-markers.ts` carries the other half of that
- * argument: what the surviving copy still bounds, and what it cannot
- * get back.
+ * This is the SECOND place the cap is applied, and it is not the
+ * re-check of an already-capped batch it reads as. Each of the
+ * dispatcher's two claims carries a SQL `LIMIT` over this setting, one
+ * over `topics` and one over `export_subscriptions`, and the two are
+ * separate branches merged before their rows reach here — so the
+ * `LIMIT` bounds a branch and this call bounds the tick. A pass finding
+ * both tables backlogged hands this function twice the cap and gets the
+ * cap back, and what it drops was CLAIMED: its `next_run_at` moved
+ * before anything looked at it, so it waits a whole interval rather
+ * than being taken by the tick after this one. The call is inert only
+ * where the two branches together come in under the cap. It would still
+ * be worth making if it never were anything else: a `LIMIT` reads as a
+ * paging knob, and whoever next tunes that query — adding a filter,
+ * changing the ordering, folding in a join — is looking at a
+ * performance detail rather than at the only thing standing between one
+ * pass and the whole backlog. It is one edit from being gone, and
+ * nothing about that edit looks like a spending decision.
+ * `ENV_DEFAULTS.AR_DISPATCH_BATCH_CAP` in `scripts/workflow-markers.ts`
+ * carries the other half of that argument: what the surviving copy
+ * still bounds, and what it cannot get back.
  *
  * The system this ports from bounded such a pass nowhere, and what
  * that cost is the reason this function is here rather than a

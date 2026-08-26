@@ -105,7 +105,8 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
   AR_DISPATCH_CRON: '0 * * * *',
 
   /**
-   * The most schedulable rows a single `ar-dispatch` tick claims.
+   * The most schedulable rows one `ar-dispatch` claim takes, and
+   * the most one tick dispatches.
    *
    * A ceiling on the work one pass starts, not on the work waiting:
    * rows past the cap stay due, because claiming is what moves a
@@ -119,18 +120,20 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * would otherwise start all of at once. Under the cap that tick
    * starts this many, and the rest drain over the ticks after it.
    *
-   * Applied twice, and the two applications do not defend the same
-   * thing. Each claim statement in `ar-dispatch` carries it as a SQL
-   * `LIMIT`; the Code node downstream applies it again over the
-   * merged claims, through `capBatch` in `src/lib/schedule.ts`. The
-   * rule that second application runs has landed, and so has the
-   * `topics` claim carrying the first; the dispatcher carrying every
-   * application of it arrives later in this phase. The duplication
-   * is there because a `LIMIT` reads as paging. Whoever next tunes
-   * that query — adding a filter, changing the ordering, folding in
-   * a join — sees a performance knob rather than the only thing
-   * standing between one pass and the whole backlog, and it is one
-   * edit from being gone.
+   * Applied in two places, and they do not defend the same thing.
+   * Each of the two claim statements in `ar-dispatch` carries it as
+   * a SQL `LIMIT`; the Code node downstream applies it again over
+   * the merged claims, through `capBatch` in `src/lib/schedule.ts`.
+   * Both claims have landed, and so has the rule the second
+   * application runs; the Code node itself arrives later in this
+   * phase. Note what two claims make of the first place: the `LIMIT`
+   * bounds a BRANCH, so a tick finding both tables backlogged claims
+   * twice this number and the second place is what brings it back
+   * down. The duplication is there because a `LIMIT` reads as
+   * paging. Whoever next tunes that query — adding a filter,
+   * changing the ordering, folding in a join — sees a performance
+   * knob rather than the only thing standing between one pass and
+   * the whole backlog, and it is one edit from being gone.
    *
    * Only the second application survives such an edit, and it is
    * worth being exact about what that leaves. The Code node bounds
@@ -140,7 +143,10 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * vanished `LIMIT` let through would be rescheduled without ever
    * being run — skipped silently until they next come due. The
    * second copy holds the spending line; it does not make the claim
-   * query safe to leave unbounded.
+   * query safe to leave unbounded. That is not only what a vanished
+   * `LIMIT` would cost, either: with both of them in place, a tick
+   * over two backlogged tables already claims rows the Code node
+   * then drops, and each of those waits its whole interval.
    */
   AR_DISPATCH_BATCH_CAP: '25',
 
