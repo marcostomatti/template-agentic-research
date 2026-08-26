@@ -1012,8 +1012,8 @@ describe('loadBuiltWorkflows — a built workflow with no node in it', () => {
  * A fixture type rather than one the node rosters name, for the
  * reason {@link WORKFLOW_FILE} carries a fixture name. `nodesMatching`
  * reads no type at all — the predicate is the caller's — so a real
- * send-capable type here would read as an assertion about the send
- * roster, which arrives later in this plan in a file of its own and
+ * send-capable type here would read as an assertion about
+ * `SEND_NODE_TYPES`, which now lives in `workflow-rosters.ts` and
  * keys on this same member.
  */
 const OFFENDING_TYPE = 'ar-fixture.offending';

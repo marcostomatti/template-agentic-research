@@ -54,10 +54,10 @@
  * behind them are argued, and the register there is what says
  * which phase owns each.
  *
- * The entry shape is what has landed. The send roster, the
+ * The entry shape and the send roster are what have landed. The
  * schedule-trigger type, the model-node prefix, a matcher over
- * each, and the reader that pulls a node's SQL off its parsed
- * parameters arrive next in this stage.
+ * each roster, and the reader that pulls a node's SQL off its
+ * parsed parameters arrive next in this stage.
  */
 
 /**
@@ -146,3 +146,77 @@ export interface NodeTypeRule {
    */
   readonly type: string;
 }
+
+/**
+ * The node types that can put a message on the wire, and which
+ * no built workflow may hold.
+ *
+ * The property is this port at its least negotiable: the
+ * pipeline reads, scores, stores and renders, and the one thing
+ * it must never do is send. `docs/architecture/01-invariants.md`
+ * is where that is argued and where the register says which
+ * phase owns it; the roster here is the set the check reads.
+ *
+ * Three entries, carried from the origin, and three rather than
+ * one because sending is a capability several unrelated node
+ * types reach — a hosted provider API, a provider-agnostic send
+ * node, a transport addressed directly. Named as one thing it
+ * would have to be a pattern over the word `mail`, which flags
+ * the read-only intake nodes beside it and is the kind of needle
+ * somebody eventually deletes. So each route is an entry, and
+ * each {@link NodeTypeRule.reason} says what its route reaches
+ * that the entries beside it do not.
+ *
+ * Whole type strings rather than the substring alternation the
+ * origin swept with, for the reason {@link NodeTypeRule.type}
+ * gives: a whole type is pairable and a pattern is not. The cost
+ * is this set at its own limit — a node spelling one of these
+ * capabilities some other way is a MISS here where a substring
+ * sweep would have caught it. Widening the roster is the answer
+ * it has for that, and the other send-capable types an operator
+ * can reach for on a stock instance arrive next in this stage,
+ * alongside the matcher that holds a node type against them.
+ */
+export const SEND_NODE_TYPES: readonly NodeTypeRule[] = [
+  {
+    id: 'mail-provider',
+    reason:
+      'Sends through a hosted provider API on an account ' +
+      'credential. What it reaches that the others do not is a ' +
+      'route speaking no mail protocol at all: the call is ' +
+      'ordinary HTTPS to the provider, and the address it goes ' +
+      'out from belongs to whoever owns the account.',
+    type: 'n8n-nodes-base.gmail',
+  },
+  {
+    id: 'mail-send-generic',
+    reason:
+      'The provider-agnostic send node, and the shortest route ' +
+      'from a workflow to an outbound message: one node, one ' +
+      'credential, a recipient. What it reaches that the others ' +
+      'do not is a send nobody had to integrate first, which is ' +
+      'why it is the entry a workflow acquires by accident.',
+    type: 'n8n-nodes-base.emailSend',
+  },
+  // Carried on the origin's reasoning rather than on a node this
+  // repository can point at: none of the node types
+  // `n8n-nodes-base` registers is spelled for the transport,
+  // which is reached instead through the `smtp` CREDENTIAL on the
+  // `mail-send-generic` entry. Read off the package registry
+  // rather than assumed. So the entry matches nothing a stock
+  // instance can load today, and it is kept for two reasons: the
+  // string is what a node spelling the transport itself would
+  // carry, and a denylist pruned of whatever currently matches
+  // nothing is one that shrinks toward the nodes somebody
+  // happened to install.
+  {
+    id: 'mail-transport',
+    reason:
+      'A mail transport addressed as a node type of its own ' +
+      'rather than through a credential on a send node. What it ' +
+      'reaches that the others do not is a host and a port: no ' +
+      'provider account stands behind it, so there is nothing ' +
+      'to disable from outside the workflow once it is wired.',
+    type: 'n8n-nodes-base.smtp',
+  },
+];
