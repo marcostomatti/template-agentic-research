@@ -56,11 +56,15 @@
  * {@link EmptyWorkflowError} are here, and so is
  * {@link BuiltWorkflow}, the shape a read hands back.
  * {@link loadBuiltWorkflows} is the walk that raises both
- * refusals and builds that shape. The assertions over the real
- * tree arrive after `ar-dispatch` does, since `workflows/src/`
- * names no workflow until then and `workflows/dist/` is
- * therefore not a directory that exists. The cases over this
- * file drive fixture trees of their own for that reason.
+ * refusals and builds that shape. {@link nodesMatching} is the
+ * one helper over that shape rather than over the tree, and it
+ * sits here because naming every offender is what an absence
+ * check owes a reader once it has been handed something to look
+ * at. The assertions over the real tree arrive after
+ * `ar-dispatch` does, since `workflows/src/` names no workflow
+ * until then and `workflows/dist/` is therefore not a directory
+ * that exists. The cases over this file drive fixture trees of
+ * their own for that reason.
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -364,8 +368,9 @@ export interface BuiltWorkflow {
    *
    * It answers whether and how many, never which: the node it
    * came off is gone from it, so a failure that has to name an
-   * offender walks {@link BuiltWorkflow.nodes} instead. The index
-   * tie above is the way back from one to the other.
+   * offender walks {@link BuiltWorkflow.nodes} instead, which is
+   * the whole of what {@link nodesMatching} does. The index tie
+   * above is the way back from one to the other.
    */
   readonly nodeTypes: readonly string[];
 }
@@ -567,8 +572,9 @@ function readBuiltWorkflow(
  * the light of another. What the sort buys is a report that
  * reads the same on every machine — `readdirSync` returns
  * directory order, stable on one machine and arbitrary across
- * them — and the order is what a failure lists its offenders in
- * and what a roster case holds its expectations against.
+ * them — and the order is the order {@link nodesMatching} lists
+ * offenders in and the order a roster case holds its
+ * expectations against.
  *
  * The two refusals run at the two levels
  * {@link EmptyDistDirectoryError} and {@link EmptyWorkflowError}
@@ -617,4 +623,74 @@ export function loadBuiltWorkflows(
   }
 
   return files.map((file) => readBuiltWorkflow(file, directory));
+}
+
+/**
+ * Every node in `workflows` the predicate answers for, one label
+ * per node, as `<file>:<node name>`.
+ *
+ * What a failing absence check prints. Most of what this suite
+ * asserts has the shape `no node of type X` — no send-capable
+ * node anywhere, no model node without a ceiling in front of it
+ * — and a report naming only the first offender turns one edit
+ * into as many runs as there are offenders, each finding the
+ * next. `findForbiddenMatches` in `naming-patterns.ts` collects
+ * rather than stops for the same reason, and states it the same
+ * way: a hit collapsed into another quietly survives the fix
+ * made for that one.
+ *
+ * A label where that sibling hands back a record, and what
+ * decides it is what a caller does with the answer rather than
+ * taste. A forbidden name must not be echoed into a CI log, so
+ * its matcher reports an id and leaves the text where it was
+ * found. A node name and an artifact name are the two things a
+ * reader needs and neither is a thing to keep out of a log, so
+ * here the label IS the report: a case holding the answer
+ * against an empty array prints the whole list on the way past
+ * and builds no message of its own.
+ *
+ * `<file>:<node name>` reads the way `<file>:<line>` reads in an
+ * editor, in a stack trace and in `grep -n` output, and it names
+ * the edit rather than the artifact — `buildAll` writes each
+ * artifact under its source's own name, so the file half is the
+ * source to open under `workflows/src/`. It is a label to READ
+ * and never one to split: nothing stops a node name carrying a
+ * colon of its own.
+ *
+ * The predicate reads a node and not the workflow around it.
+ * Every roster in this suite keys on {@link BuiltWorkflowNode}'s
+ * own members, and a caller after one workflow's nodes hands
+ * over that one workflow rather than asking a predicate to work
+ * out which it is standing in.
+ *
+ * Order is the order it was handed — workflows as given, nodes
+ * in the artifact's own order. Over {@link loadBuiltWorkflows}'s
+ * answer that is sorted by file name, so the list a failure
+ * prints reads the same on every machine.
+ *
+ * What it does not do is refuse, and that is the half worth
+ * saying out loud. An empty answer is the PASSING answer for
+ * every absence check reading it, so a walk of this shape is
+ * worth exactly what it was handed. Over
+ * {@link loadBuiltWorkflows}'s answer it was handed something
+ * worth asserting over, because both refusals ran one level up
+ * and neither an empty tree nor an empty workflow survives
+ * them. Over a list a caller assembled by hand nothing separates
+ * an empty answer from a walk that had nothing to look at, and
+ * nothing here reports the difference.
+ *
+ * @param workflows - Built workflows to walk, ordinarily the
+ * whole of what {@link loadBuiltWorkflows} returned.
+ * @param predicate - Answers whether a node is one the caller is
+ * collecting. Called once per node, in order.
+ * @returns One `<file>:<node name>` label per matching node,
+ * empty when nothing matched.
+ */
+export function nodesMatching(
+  workflows: readonly BuiltWorkflow[],
+  predicate: (node: BuiltWorkflowNode) => boolean,
+): readonly string[] {
+  return workflows.flatMap((workflow) => workflow.nodes
+    .filter((node) => predicate(node))
+    .map((node) => `${workflow.file}:${node.name}`));
 }
