@@ -6,14 +6,15 @@
  * The dispatcher holds the only schedule trigger in the system, and
  * carries it already — it wakes on its own cron, and one node behind that
  * takes the `topics` rows that are enabled and whose `next_run_at` has
- * passed, oldest first and capped by a `LIMIT`. What arrives later in
- * this stage is the rest of a tick: the same claim over
- * `export_subscriptions`, the write that moves each claimed row forward,
- * and that cap applied a second time over the claims once merged. The
- * arithmetic behind those last two decisions lives here and nothing
- * around it. The columns it reads are the schedulable set declared in
- * `src/db/schema/scheduling.ts`, and it reads them as values handed in —
- * no I/O, no clock, no database handle. A rule reaching for one of those
+ * passed, oldest first and capped by a `LIMIT`, moving each row it takes
+ * forward in the same statement that claims it. That reschedule is
+ * {@link clampIntervalSeconds} written as SQL. What arrives later in this
+ * stage is the rest of a tick: the same claim and the same reschedule over
+ * `export_subscriptions`, and that cap applied a second time over the
+ * claims once merged. The arithmetic behind both of those lives here and
+ * nothing around it. The columns it reads are the schedulable set declared
+ * in `src/db/schema/scheduling.ts`, and it reads them as values handed in
+ * — no I/O, no clock, no database handle. A rule reaching for one of those
  * could neither be spliced into a node nor be tested without the thing it
  * reached for.
  *
@@ -124,11 +125,12 @@ export interface IntervalBounds {
  * what a caller can rely on for a row whose two bounds disagree.
  *
  * The rule is expressed twice on purpose, and the second copy is SQL.
- * `ar-dispatch` claims a row and moves its `next_run_at` forward in
- * one statement — the claim holds its lock until the reschedule is
- * written — so the clamp there is an expression over the bound columns
- * rather than a call into this function. The expression arriving with
- * the dispatcher later in this phase is `LEAST(max_interval_seconds,
+ * `ar-dispatch` claims a row and moves its `next_run_at` forward in one
+ * statement — the claim holds its lock until the reschedule is written
+ * — so the clamp there is an expression over the bound columns rather
+ * than a call into this function. The expression the `topics` claim
+ * carries today, and that the export claim arriving later in this stage
+ * repeats, is `LEAST(max_interval_seconds,
  * GREATEST(min_interval_seconds, interval_seconds))`, which skips a
  * null bound the way this function does: `LEAST` and `GREATEST` are
  * documented to ignore a NULL argument outright. Standing a missing

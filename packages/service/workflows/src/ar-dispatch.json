@@ -38,7 +38,7 @@
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH due AS (\n  SELECT id\n  FROM topics\n  WHERE enabled\n    AND next_run_at <= now()\n  ORDER BY next_run_at\n  LIMIT __ENVVAR:AR_DISPATCH_BATCH_CAP__\n  FOR UPDATE SKIP LOCKED\n)\nSELECT id FROM due",
+        "query": "WITH due AS (\n  SELECT id\n  FROM topics\n  WHERE enabled\n    AND next_run_at <= now()\n  ORDER BY next_run_at\n  LIMIT __ENVVAR:AR_DISPATCH_BATCH_CAP__\n  FOR UPDATE SKIP LOCKED\n)\n-- LEAST and GREATEST ignore a NULL argument, so a bound the row does not carry is\n-- skipped rather than stood in with COALESCE, which would cap a floored interval back\n-- to the proposal and leave the floor doing nothing. clampIntervalSeconds in\n-- src/lib/schedule.ts is this same rule as TypeScript, and argues both in full.\nUPDATE topics AS t\nSET next_run_at = now() + make_interval(secs => LEAST(\n  t.max_interval_seconds,\n  GREATEST(t.min_interval_seconds, t.interval_seconds)\n))\nFROM due\nWHERE t.id = due.id\nRETURNING t.id",
         "options": {}
       }
     },
