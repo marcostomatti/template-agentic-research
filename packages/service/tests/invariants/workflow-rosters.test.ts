@@ -29,26 +29,38 @@
  * Each plant carries a name for the same reason and no claim reads
  * it. The type is the one thing that moves from case to case.
  *
- * Two limits, both about what an accepting answer is worth.
+ * Which is one half of the send subject, and cannot stand alone.
+ * Every accepting claim holds for a matcher answering yes to
+ * whatever it is handed, so plants cannot part a live matcher from
+ * an indiscriminate one. What parts them is a near miss asserted
+ * beside them — a type the matcher must NOT reach — and the second
+ * half is three of those: the read-only mail-intake trigger, a
+ * plain HTTP request node, and a Postgres node.
  *
- * Every claim here holds for a matcher answering yes to whatever
- * it is handed. Accepted samples alone cannot part a live matcher
- * from an indiscriminate one, and what can is a near miss — a type
- * the matcher must NOT reach, asserted beside them. Until that
- * lands, a plant is worth what a plant is worth and no more.
+ * The two halves stand behind each other, and each is the other's
+ * control. A matcher recognising nothing satisfies all three
+ * refusals while reddening all eight plants; a matcher recognising
+ * everything satisfies all eight plants while reddening all three
+ * refusals. So the refusals are given no accept control of their
+ * own — the plants are one, whole — and the guard tying a control
+ * to the roster reads the roster the plants come off, which is
+ * what leaves an emptied roster reddening on both sides.
  *
- * And a planted node carries the type its entry declares, read off
- * that entry rather than written out a second time. So what a case
+ * The limit that outlives both is what a plant is made of. A
+ * planted node carries the type its entry declares, read off that
+ * entry rather than written out a second time. So what a plant
  * compares is the roster against itself: it says the matcher reads
  * the roster and reaches every entry in it, and says nothing about
  * whether the string an entry carries is the one an instance
  * loads. That string was read off a published node registry, a
  * measurement no case repeats — a copy here would put two
- * unchecked spellings where there is one.
+ * unchecked spellings where there is one. A control is the one
+ * place this file writes a node type out, and what it writes is a
+ * type the roster does not carry.
  *
- * The near-miss control is the next thing this file gains. The
- * other two matchers and the reader that pulls a node's SQL off
- * its parsed parameters follow it, each with a section of its own.
+ * The other two matchers and the reader that pulls a node's SQL
+ * off its parsed parameters are what this file gains next, each
+ * with a section of its own.
  */
 import type { BuiltWorkflowNode } from './workflow-dist.js';
 import type { NodeTypeRule } from './workflow-rosters.js';
@@ -258,4 +270,229 @@ describe('isSendCapable — a node planted for every entry', () => {
 
     expect(planted).toEqual(declared);
   });
+});
+
+// ---------------------------------------------------------------------------
+// The nodes planted for the send matcher to leave alone
+// ---------------------------------------------------------------------------
+
+/** One legitimate node type {@link isSendCapable} must not flag. */
+interface SendControl {
+  /**
+   * What the type is, in prose, and the name of its case.
+   *
+   * Prose rather than the id a plant is named by, because a
+   * control stands for no entry and so has nothing to refer back
+   * to. What a reddening case owes a reader is which legitimate
+   * node the matcher reached for.
+   */
+  readonly label: string;
+
+  /**
+   * The name the planted node carries, distinct per control.
+   *
+   * No claim reads it, and it is here for the reason
+   * {@link SendSample.node} gives.
+   */
+  readonly node: string;
+
+  /**
+   * The node type asserted to come back unflagged.
+   *
+   * Written out here, which is the one thing a plant never does
+   * and the whole of what makes a control one: a plant reads its
+   * type off the entry it stands for, so the roster is compared
+   * with itself, and a near miss has to come from outside it.
+   *
+   * Each of the three was read off the same published node
+   * registry the entries were, and each is a type a stock instance
+   * registers. A control naming a type nothing can load would be a
+   * near miss of nothing.
+   */
+  readonly type: string;
+
+  /**
+   * The text {@link type} shares with a type {@link SEND_NODE_TYPES}
+   * declares, asserted carried by both before the type is asserted
+   * clean.
+   *
+   * The one thing a refusing answer cannot check about itself. A
+   * control edited into a string the roster has nothing in common
+   * with comes back unflagged forever, for a reason that has
+   * nothing to do with the entries it was standing next to —
+   * green, and an assertion over an arbitrary name.
+   *
+   * Held against the roster rather than spelled out a second time
+   * beside it, so the fragment the two share is provably one
+   * fragment. And read by containment rather than by the folded
+   * equality {@link isSendCapable} runs, so a guard testing the
+   * roster the way the rule does is not what stands behind these.
+   *
+   * How much it says shrinks as a control sits further out. For
+   * the mail trigger it reaches the word the roster declined to
+   * sweep on; for the other two it is the package every node on a
+   * stock instance carries, which is the widening that reaches
+   * everything.
+   */
+  readonly shared: string;
+}
+
+/**
+ * The types the send matcher must leave alone, one per widening it
+ * would take to reach one.
+ *
+ * Three, each sitting a different distance out. Nearest is a mail
+ * node that reads: {@link SEND_NODE_TYPES} names the pattern over
+ * the word `mail` it declined to be, and this is the node that
+ * pattern would have reached. Next is the node that can make the
+ * call a send node makes without being one — the `mail-provider`
+ * entry describes its own route as ordinary HTTPS to a provider,
+ * and this is the node that speaks nothing else. Furthest out is
+ * an ordinary database node, which is what `ar-dispatch` is mostly
+ * built from: a matcher reaching that one fails the send sweep
+ * over the workflow this phase delivers.
+ *
+ * None of the three is a near miss of a named entry's own
+ * spelling, which is the stronger shape and is not here. Measured
+ * on the published registry, four of the eight entries have a
+ * trigger node registered beside them under their own name —
+ * read-only intake, none of it sending — so the substring sweep
+ * this port declined would have flagged all four, where a folded
+ * whole-type match reaches none of them. An entry apiece is what
+ * would cover them, and until one lands the widening these three
+ * stand against is one this port already turned down rather than
+ * one it could still arrive at.
+ */
+const SEND_CONTROLS: readonly SendControl[] = [
+  // Read off the node definition rather than assumed: it declares
+  // `group: ['trigger']` and describes itself as firing when mail
+  // ARRIVES. No workflow in this port's roster carries one, so
+  // what it stands for is a rule keyed to the vocabulary of the
+  // capability rather than to the types that have it.
+  {
+    label: 'the read-only mail-intake trigger',
+    node: 'Read The Inbox',
+    type: 'n8n-nodes-base.emailReadImap',
+    shared: 'n8n-nodes-base.email',
+  },
+  // Read off the node definitions rather than assumed: this one
+  // declares `group: ['output']`, which is the group four of the
+  // eight entries declare too — `mail-send-generic`,
+  // `chat-workspace`, `chat-webhook` and `chat-personal` — so a
+  // rule keyed to what a node is FOR rather than to what it is
+  // reaches it directly. Reading over HTTP is the pipeline's own
+  // job, which is what makes this false positive expensive rather
+  // than merely wrong.
+  {
+    label: 'a plain HTTP request node',
+    node: 'Call The Endpoint',
+    type: 'n8n-nodes-base.httpRequest',
+    shared: 'n8n-nodes-base.',
+  },
+  // The furthest out, and the one of the three the pipeline
+  // itself runs on: claiming a due row, opening a run row and
+  // closing it are statements, and a statement is sent through a
+  // node of this type. It declares `group: ['input']`, which no
+  // entry in the roster declares, so nothing short of a rule
+  // keyed to the package itself reaches it — which is the
+  // widening that answers yes to everything.
+  {
+    label: 'a Postgres node',
+    node: 'Read The Rows',
+    type: 'n8n-nodes-base.postgres',
+    shared: 'n8n-nodes-base.',
+  },
+];
+
+/**
+ * That control as a node, carrying its own name and its own type.
+ *
+ * Declared as the shape a read hands a sweep for the reason
+ * {@link plantedNode} gives, and written beside that one rather
+ * than folded into it. Where the type comes from is the whole
+ * difference between a plant and a control, not a detail of how
+ * each is assembled.
+ */
+function plantedControl(control: SendControl): BuiltWorkflowNode {
+  return { name: control.node, type: control.type };
+}
+
+/**
+ * Whether `control` still carries the fragment it shares with
+ * {@link SEND_NODE_TYPES}, and whether that roster still carries
+ * it too.
+ *
+ * Both halves, because each alone is satisfied by a drift the
+ * other is what reports: a control edited away from the roster
+ * leaves the first false, and a roster emptied or rewritten leaves
+ * the second false. Neither shows in what {@link isSendCapable}
+ * hands back for a control, which is a refusal either way.
+ */
+function sharesFragmentWithRoster(control: SendControl): boolean {
+  const fragment = control.shared.toLowerCase();
+
+  return control.type.toLowerCase().includes(fragment)
+    && SEND_NODE_TYPES.some(
+      (rule) => rule.type.toLowerCase().includes(fragment),
+    );
+}
+
+describe('isSendCapable — the types it must leave alone', () => {
+  // In front of the loop for the reason the plants have one of
+  // these: every case after it is generated from this roster, and
+  // an empty roster generates none of them while leaving the block
+  // green. Asserted on the controls and not on `SEND_NODE_TYPES`,
+  // which the plants already stand on — what would go quiet here
+  // is this list, and the fragment guard is what ties the other
+  // one in.
+  it('declares at least one type to leave alone', () => {
+    expect(SEND_CONTROLS.length).toBeGreaterThan(0);
+  });
+
+  // Three controls spelling one type would print three ticks over
+  // one comparison, which is the plants' own hazard read
+  // backwards. Sorted lists rather than a count of distinct types,
+  // so the diff names the type two controls share.
+  it('names a distinct type for each of them', () => {
+    const named = SEND_CONTROLS.map(
+      (control) => plantedControl(control).type,
+    );
+
+    expect([...new Set(named)].sort()).toEqual([...named].sort());
+  });
+
+  // The fixture guard, and the only case in this block that reads
+  // the roster the plants come off. A refusal cannot say whether
+  // the type it refused was ever near that roster, so this is what
+  // stands between a control and an arbitrary string — and it is
+  // where an emptied `SEND_NODE_TYPES` reddens on this side of the
+  // file, the plants being what it reddens on the other.
+  //
+  // Reported by label rather than counted, so a failure names the
+  // control that drifted.
+  it('shares a fragment with a type the roster declares', () => {
+    const adrift = SEND_CONTROLS
+      .filter((control) => !sharesFragmentWithRoster(control))
+      .map((control) => control.label);
+
+    expect(adrift).toEqual([]);
+  });
+
+  for (const control of SEND_CONTROLS) {
+    // The type is read off the planted node rather than passed
+    // straight from the control, for the reason the plants give:
+    // that read is where a sweep meets the matcher.
+    //
+    // No run-time coverage guard stands behind these, which the
+    // plants have and this block does not need. There the cases
+    // and the entries were two rosters, so one equality reported
+    // drift in both directions; here the loop and the roster are
+    // one list, and a control nobody ran is a control somebody
+    // deleted, which is a thing a diff shows and a suite cannot.
+    it(`does not flag ${control.label}`, () => {
+      const node = plantedControl(control);
+
+      expect(isSendCapable(node.type)).toBe(false);
+    });
+  }
 });
