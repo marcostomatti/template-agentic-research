@@ -52,10 +52,52 @@
  * it is made. This file can say it was handed nothing. It cannot say
  * that what it was handed is what the sources produced.
  *
- * Nothing is exported yet. The directory constant, the two refusals
- * and the walk arrive next in this stage; the assertions over the
- * real tree arrive after `ar-dispatch` does, since `workflows/src/`
+ * {@link DIST_DIR} is the first export. The two refusals and the
+ * walk arrive next in this stage; the assertions over the real
+ * tree arrive after `ar-dispatch` does, since `workflows/src/`
  * names no workflow until then and `workflows/dist/` is therefore
  * not a directory that exists. The cases over this file drive
  * fixture trees of their own for that reason.
  */
+
+import { fileURLToPath } from 'node:url';
+
+/**
+ * The built tree the assertions over real output read, resolved
+ * from this file's own location rather than from the working
+ * directory.
+ *
+ * The walk arriving next takes a directory, so a case reaches the
+ * refusals over a fixture tree of its own. This constant is the
+ * one the assertions over the real tree are handed.
+ *
+ * `scripts/build-workflows.ts` writes here and resolves the same
+ * directory the same way, off its own `import.meta.url`. Neither
+ * constant can see the other — the writer's is module-private —
+ * so what ties the two is that both are keyed to where a file
+ * sits rather than to where a process was started.
+ *
+ * Keyed to the working directory it would agree with this under
+ * every launcher the verification order uses, which is what makes
+ * it worth spelling out rather than assuming. `bun run test`
+ * inside the package sits in the package, and so does the
+ * `bun run --filter '@ar/*' test` fan-out: that form runs each
+ * package script with that package as its cwd, not with the repo
+ * root. Both are measured, and neither would ever report the
+ * difference.
+ *
+ * The launcher that parts them is the repo-root form,
+ * `bun x vitest run --root packages/service`. Vitest resolves
+ * its config and its test paths against `--root` and leaves the
+ * process where it was started — measured: a worker's
+ * `process.cwd()` there is the repo root.
+ *
+ * A relative `workflows/dist` resolves under that root, which
+ * holds no `workflows/` at all, so the refusal arriving next
+ * would fire naming a directory nobody has built. Loud, and
+ * pointed at the wrong edit: it reads as a build that did not
+ * run, when what moved was the launcher.
+ */
+export const DIST_DIR = fileURLToPath(
+  new URL('../../workflows/dist', import.meta.url),
+);
