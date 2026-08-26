@@ -68,8 +68,14 @@
  * whole read, is not something those cases part from its being raised
  * on the only one.
  *
- * The walk that names offending nodes is a separate subject with cases
- * of its own, arriving later in this stage.
+ * The walk that names offending nodes is a separate subject with a
+ * section of its own. What it is asked there is whether a report names
+ * every offender or the first one, so its tree carries two in one
+ * artifact with a node passed over between them, and a third in an
+ * artifact of its own with a clean artifact sorted in between. Only
+ * half the order it prints in is that section's: inside an artifact
+ * the order is the artifact's own, and across artifacts it is the
+ * order the read handed over, which the order case pins instead.
  */
 import {
   mkdirSync,
@@ -87,6 +93,7 @@ import {
   EmptyDistDirectoryError,
   EmptyWorkflowError,
   loadBuiltWorkflows,
+  nodesMatching,
 } from './workflow-dist.js';
 
 // ---------------------------------------------------------------------------
@@ -234,8 +241,8 @@ interface OrderedWorkflow {
  * by byte, and the letter half of that holds in every locale: a
  * difference of base letter is a primary difference in the root
  * collation each one inherits, where case is a weaker one that never
- * gets to overturn it. So the sorted answer below is not any listing
- * order this file has been able to produce.
+ * gets to overturn it. So the answer in {@link ORDERED_LABELS} is not
+ * any listing order this file has been able to produce.
  *
  * What no fixture can decide is which order a filesystem lists in, and
  * one that lists in sorted order leaves the case unable to part a read
@@ -730,10 +737,13 @@ const EXERCISED_WORKFLOW_IDS = new Set<string>();
 
 describe('loadBuiltWorkflows — a tree with workflows in it', () => {
   // The control both refusal sections rest on, and the only case in
-  // this file that tells a read refusing what it should from one
+  // this file written to tell a read refusing what it should from one
   // refusing whatever it is handed. Every case about a refusal is
   // satisfied by a reader that throws unconditionally; this is what is
-  // not.
+  // not. Other cases read a populated tree too and redden alongside it
+  // — measured, the sort case and the walk's two — but none of them is
+  // a near miss of anything refused, so none says which refusal it was
+  // that stopped working.
   //
   // It is a near miss of the shapes it stands behind rather than any
   // healthy tree, and it is one for each section by a different
@@ -989,5 +999,300 @@ describe('loadBuiltWorkflows — a built workflow with no node in it', () => {
     const declared = EMPTY_WORKFLOW_SHAPES.map((shape) => shape.id).sort();
 
     expect(exercised).toEqual(declared);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A tree with offending nodes across it
+// ---------------------------------------------------------------------------
+
+/**
+ * The node type the walk's cases collect on.
+ *
+ * A fixture type rather than one the node rosters name, for the
+ * reason {@link WORKFLOW_FILE} carries a fixture name. `nodesMatching`
+ * reads no type at all — the predicate is the caller's — so a real
+ * send-capable type here would read as an assertion about the send
+ * roster, which arrives later in this plan in a file of its own and
+ * keys on this same member.
+ */
+const OFFENDING_TYPE = 'ar-fixture.offending';
+
+/** Whether a node of this type is one the walk's cases collect. */
+function isOffendingType(type: string): boolean {
+  return type === OFFENDING_TYPE;
+}
+
+/** One node of an artifact in the tree the walk's cases read. */
+interface OffenderNode {
+  /**
+   * Distinct across the whole tree, so a label names one node and an
+   * answer held against a literal cannot be satisfied by the wrong
+   * one.
+   */
+  readonly name: string;
+
+  /**
+   * {@link OFFENDING_TYPE} for a node the predicate collects, and
+   * {@link FIXTURE_NODE}'s type for one it passes over.
+   */
+  readonly type: string;
+}
+
+/** One artifact of that tree. */
+interface OffenderWorkflow {
+  /**
+   * Artifact name, and the half of a label that says which source to
+   * open.
+   *
+   * Named the way an artifact is and by nothing the roster reserves,
+   * for the reason {@link WORKFLOW_FILE} is.
+   */
+  readonly file: string;
+
+  /** Its nodes, in the order the artifact carries them. */
+  readonly nodes: readonly OffenderNode[];
+}
+
+/**
+ * The tree the walk's cases read.
+ *
+ * A collector's fixture has more to carry than one offender in one
+ * artifact, and that obvious tree parts none of what is worth
+ * parting: a walk stopping at the first match inside an artifact, one
+ * stopping at the first artifact that had a match, and one taking a
+ * slice off the front where a filter belongs all hand back the same
+ * answer over it. Each is a distinct way of naming one offender and
+ * calling the rest of the tree clean, and each needs a shape of its
+ * own to show up in. {@link OFFENDER_AXES} is the list of them,
+ * asserted rather than left to the reading of this roster.
+ */
+const OFFENDER_WORKFLOWS: readonly OffenderWorkflow[] = [
+  // Two offenders with a node the predicate passes over between them.
+  // The pair is what parts every offender in an artifact from the
+  // first one, and the node between them is what parts a filter from
+  // a slice taken off the front.
+  {
+    file: 'ar-first.json',
+    nodes: [
+      { name: 'Alpha Offender', type: OFFENDING_TYPE },
+      { name: 'Quiet Node', type: FIXTURE_NODE.type },
+      { name: 'Beta Offender', type: OFFENDING_TYPE },
+    ],
+  },
+  // Nothing to collect, and sorted between the two artifacts that
+  // have something. A walk that gave up on the first artifact
+  // yielding nothing would hand back what the artifact in front of
+  // this one held and call the one after it clean.
+  {
+    file: 'ar-second.json',
+    nodes: [{ name: 'Idle Node', type: FIXTURE_NODE.type }],
+  },
+  // The offender in a second artifact, which is what parts every
+  // artifact from the first one that had a match in it.
+  {
+    file: 'ar-third.json',
+    nodes: [{ name: 'Gamma Offender', type: OFFENDING_TYPE }],
+  },
+];
+
+/**
+ * What the walk has to name over that tree, written out by hand.
+ *
+ * A literal rather than {@link OFFENDER_WORKFLOWS} filtered inside
+ * the assertion, for the reason {@link ORDERED_LABELS} is one: a
+ * filter held against itself agrees whatever either of them does, and
+ * a filter is the thing under test.
+ *
+ * `<file>:<node name>`, with nothing between the halves — the walk's
+ * own form, which is not {@link orderedLabel}'s. That helper reads an
+ * artifact back for a case of this file's own and spaces the two; this
+ * list is what `nodesMatching` returns, so it is spelled the way the
+ * walk spells it.
+ *
+ * Three of the tree's five nodes, which is the other thing it pins. A
+ * walk handing back everything it was given answers with five, and one
+ * that never called the predicate answers with none.
+ */
+const OFFENDER_LABELS: readonly string[] = [
+  'ar-first.json:Alpha Offender',
+  'ar-first.json:Beta Offender',
+  'ar-third.json:Gamma Offender',
+];
+
+/** Every node of an artifact the predicate collects. */
+function offendersOf(workflow: OffenderWorkflow): readonly OffenderNode[] {
+  return workflow.nodes.filter((node) => isOffendingType(node.type));
+}
+
+/**
+ * Whether something passed over sits between two things collected, in
+ * the order given.
+ *
+ * Asked at both levels a slice can be taken at — over an artifact's
+ * nodes, and over the tree's artifacts — so the two axes reading it
+ * cannot drift into asking different questions.
+ */
+function passedOverBetween(collected: readonly boolean[]): boolean {
+  const first = collected.indexOf(true);
+  const last = collected.lastIndexOf(true);
+
+  return first !== -1 && collected.slice(first + 1, last).includes(false);
+}
+
+/**
+ * One distinction the tree draws, without which a claim over it would
+ * be about less than it reads as.
+ */
+interface OffenderAxis {
+  /** Stable, and what the fixture guard reports a gap by. */
+  readonly id: string;
+
+  /** Whether {@link OFFENDER_WORKFLOWS} still draws it. */
+  readonly holds: (workflows: readonly OffenderWorkflow[]) => boolean;
+}
+
+const OFFENDER_AXES: readonly OffenderAxis[] = [
+  // Without it, every offender in an artifact and the first one in it
+  // are the same answer.
+  {
+    id: 'two-in-one-artifact',
+    holds: (workflows) => workflows.some(
+      (workflow) => offendersOf(workflow).length > 1,
+    ),
+  },
+  // Without it, every artifact and the first artifact with a match in
+  // it are the same answer.
+  {
+    id: 'two-artifacts-with-one',
+    holds: (workflows) => workflows
+      .filter((workflow) => offendersOf(workflow).length > 0)
+      .length > 1,
+  },
+  // Without it, a filter over an artifact's nodes and a slice off the
+  // front of them are the same answer.
+  {
+    id: 'passed-over-between-nodes',
+    holds: (workflows) => workflows.some(
+      (workflow) => passedOverBetween(
+        workflow.nodes.map((node) => isOffendingType(node.type)),
+      ),
+    ),
+  },
+  // The same distinction one level up: without it, a walk that gave up
+  // on the first artifact holding nothing answers the same as one that
+  // read them all.
+  {
+    id: 'passed-over-between-artifacts',
+    holds: (workflows) => passedOverBetween(
+      workflows.map((workflow) => offendersOf(workflow).length > 0),
+    ),
+  },
+];
+
+/**
+ * That artifact's whole text, written the way `buildAll` writes one:
+ * two-space indentation and a trailing newline.
+ *
+ * Carries {@link WORKFLOW_NAME} the way every other fixture artifact
+ * does, so the only thing parting one artifact of this tree from
+ * another is its nodes.
+ */
+function offenderWorkflowJson(entry: OffenderWorkflow): string {
+  return `${JSON.stringify(
+    { name: WORKFLOW_NAME, nodes: entry.nodes },
+    null,
+    2,
+  )}\n`;
+}
+
+/**
+ * A fixture tree holding every {@link OFFENDER_WORKFLOWS} artifact and
+ * nothing else, written in roster order.
+ *
+ * Roster order is also the order the read sorts them into, which is
+ * deliberate and is the limit stated with the claim: the half of the
+ * walk's order that runs across artifacts is the read's doing, pinned
+ * by the sort case, and this tree is not written to test it twice.
+ */
+function makeOffenderTree(): string {
+  const distDir = makeFixtureDir();
+
+  for (const entry of OFFENDER_WORKFLOWS) {
+    writeFileSync(join(distDir, entry.file), offenderWorkflowJson(entry));
+  }
+
+  return distDir;
+}
+
+// ---------------------------------------------------------------------------
+// Every offending node across a tree
+// ---------------------------------------------------------------------------
+
+describe('nodesMatching — every offender across a tree', () => {
+  // What the claim after it takes on trust, and the whole of what
+  // makes that a claim about collecting rather than about matching.
+  // Every way of naming one offender and calling the rest of the tree
+  // clean is invisible over a tree with one offender in it, so a
+  // roster that drifted onto that shape would print a tick over a walk
+  // that stops at the first thing it finds.
+  //
+  // In front of the claim rather than after it, for the reason the
+  // same guard sits in front of each refusal loop: what is worth
+  // failing on first is the input. Held as ids, so a distinction the
+  // tree stopped drawing is named rather than counted.
+  //
+  // The order the read hands the artifacts over is asserted with
+  // them, because two of the axes are about what sits between what
+  // and the roster is read in the order it is DECLARED in. The walk
+  // sees the order the read chose, so a rename that moved the clean
+  // artifact to one end would leave those axes answering about a
+  // sequence nothing is ever handed — measured: renaming it reddens
+  // nothing without this. It ties the roster to the tree rather than
+  // asserting the sort, which the order case owns.
+  it('drives a tree drawing every distinction the claim needs', () => {
+    const drawn = OFFENDER_AXES
+      .filter((axis) => axis.holds(OFFENDER_WORKFLOWS))
+      .map((axis) => axis.id);
+
+    expect(drawn).toEqual(OFFENDER_AXES.map((axis) => axis.id));
+
+    const read = loadBuiltWorkflows(makeOffenderTree());
+
+    expect(read.map((workflow) => workflow.file))
+      .toEqual(OFFENDER_WORKFLOWS.map((entry) => entry.file));
+  });
+
+  // What a failing absence check over the built tree prints. A report
+  // naming one offender turns one edit into as many runs as there are
+  // offenders, each finding the next, so the walk has to reach past
+  // the first match inside an artifact and past the first artifact
+  // that had one.
+  //
+  // Held against a literal, so what came back is compared with what
+  // the tree was written to hold rather than with the tree filtered a
+  // second time.
+  //
+  // Read through `loadBuiltWorkflows` rather than assembled here.
+  // `BuiltWorkflow` is declared in a module `tsc` reads and a
+  // `*.test.ts` is not one, so nodes planted by hand are checked by
+  // nothing; read off disk they are the reader's own, and what the
+  // walk is asked about is the shape it is actually handed.
+  //
+  // The order it prints in is two halves and only one of them belongs
+  // to this case. Inside an artifact the order is the artifact's, and
+  // `Alpha Offender` before `Beta Offender` is asserted here. Across
+  // artifacts it is the order the read handed over, which the sort
+  // case pins instead — this tree is written in the order it sorts
+  // into, so nothing here would notice a read that stopped sorting.
+  it('names every offending node in every artifact', () => {
+    const read = loadBuiltWorkflows(makeOffenderTree());
+
+    const offenders = nodesMatching(
+      read,
+      (node) => isOffendingType(node.type),
+    );
+
+    expect(offenders).toEqual(OFFENDER_LABELS);
   });
 });
