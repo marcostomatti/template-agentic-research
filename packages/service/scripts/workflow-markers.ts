@@ -142,6 +142,46 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * query safe to leave unbounded.
    */
   AR_DISPATCH_BATCH_CAP: '25',
+
+  /**
+   * The workflow `ar-dispatch` invokes for a claimed `topics` row.
+   *
+   * One of a pair, and what picks between them is the KIND of the
+   * claimed row rather than anything written on the row itself: a
+   * topic is dispatched to this workflow, an export subscription to
+   * `AR_EXPORT_WORKFLOW_ID`. Neither stands in for the other. The
+   * dispatcher that reads both arrives later in this phase.
+   *
+   * An id and not a display name. The id is what an Execute Workflow
+   * node addresses, what the instance stores a workflow under, and
+   * under the one-file-per-workflow rule the roster in
+   * `workflows/src/README.md` states, the name of the source file as
+   * well — so the value here is one string standing in three places,
+   * and a rename is all three or none.
+   *
+   * `ar-ingest` is the id that roster reserves for the topic path:
+   * pull adapters, dedupe, gate, document through to a finding. That
+   * is the work a topic coming due asks for, which is why the id is
+   * the default here rather than something an operator supplies.
+   */
+  AR_TOPIC_WORKFLOW_ID: 'ar-ingest',
+
+  /**
+   * The workflow `ar-dispatch` invokes for a claimed
+   * `export_subscriptions` row.
+   *
+   * The other half of the pair `AR_TOPIC_WORKFLOW_ID` opens, on the
+   * same terms. Two entries rather than one because the two kinds of
+   * claimed row are two different workflows' work, and a single
+   * target would make the dispatcher the thing that told them apart.
+   *
+   * `ar-digest` is the id the roster in `workflows/src/README.md`
+   * reserves for the export path: digests, plus the export
+   * subscriptions the dispatcher schedules. A subscription coming due
+   * asks for its export to be rendered, which is that workflow's own
+   * work.
+   */
+  AR_EXPORT_WORKFLOW_ID: 'ar-digest',
 };
 
 /**
