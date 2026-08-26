@@ -34,6 +34,23 @@
  * establish, they establish about a read that returns workflows when
  * there are workflows to return.
  *
+ * That accepting read has a property of its own worth asserting, and it
+ * is the one every report built on it is printed in: the order.
+ * `readdirSync` answers in directory order, which is the filesystem's
+ * and not the same one twice across machines, so a read passing it
+ * through would list one tree two ways and leave no expectation anybody
+ * could write down. The order case drives a tree of several artifacts
+ * and holds what came back against an answer declared by hand.
+ *
+ * Its fixture is built so that answer is not one a listing hands over
+ * for free, which took measuring rather than assuming: `readdirSync`
+ * here lists in byte order, and over names written in one case that IS
+ * the sorted answer. So the artifacts are named to part the two — by
+ * letter and by byte in opposite directions — and written in a third
+ * order again, for a filesystem that lists in the order things arrive.
+ * What no fixture can settle is which order it is handed, so nothing
+ * here asserts one.
+ *
  * All of it drives a fixture tree and none of it reads the tree this
  * package builds. `workflows/src/` names no workflow until
  * `ar-dispatch`, so `workflows/dist/` is not a directory that exists
@@ -166,6 +183,151 @@ function makeFixtureDir(): string {
   FIXTURE_DIRS.push(directory);
 
   return directory;
+}
+
+// ---------------------------------------------------------------------------
+// A tree with several workflows in it
+// ---------------------------------------------------------------------------
+
+/** One artifact of the tree the order case reads. */
+interface OrderedWorkflow {
+  /**
+   * Artifact name, and the whole of what the read sorts on.
+   *
+   * Named the way an artifact is and by nothing the roster reserves,
+   * for the reason {@link WORKFLOW_FILE} is: a fixture borrowing a name
+   * the built tree will one day carry reads as an assertion about that
+   * workflow rather than about the reader.
+   */
+  readonly file: string;
+
+  /**
+   * The name of the one node it carries, distinct per artifact.
+   *
+   * There so the read is held against pairs rather than against a list
+   * of file names. The file half comes off the directory listing and
+   * this half comes out of the parse, so a pair ties each name the read
+   * hands back to the artifact it was opened from; a case reading names
+   * alone asserts only that the listing was sorted.
+   */
+  readonly node: string;
+}
+
+/**
+ * The artifacts the order case writes, in the order it writes them —
+ * which is not the order the read has to hand back.
+ *
+ * Out of order on purpose, and that is half of what makes the case
+ * about sorting rather than about the filesystem. On a filesystem
+ * listing in insertion order this IS what a read that dropped its sort
+ * would return.
+ *
+ * Their case is the other half, and it is there because the first half
+ * alone does not survive contact with this machine. `readdirSync` here
+ * lists in byte order — measured, not assumed — and over names written
+ * in one case that byte order IS the sorted answer, so a read handing
+ * back its listing would be handed the answer for free and the case
+ * would pass over a reader that never sorted at all.
+ *
+ * Base letters ordered one way and bytes the other is what keeps the
+ * two apart. `ar-Beta` sorts after `ar-alpha` by letter and before it
+ * by byte, and the letter half of that holds in every locale: a
+ * difference of base letter is a primary difference in the root
+ * collation each one inherits, where case is a weaker one that never
+ * gets to overturn it. So the sorted answer below is not any listing
+ * order this file has been able to produce.
+ *
+ * What no fixture can decide is which order a filesystem lists in, and
+ * one that lists in sorted order leaves the case unable to part a read
+ * that sorts from one that does not. Nothing here asserts a listing
+ * order, because the listing is not this code's to control — the two
+ * halves are what make the fixture worth reading on the filesystems
+ * that are.
+ *
+ * Several rather than two, because the answer a two-artifact tree has
+ * to hand back is one of only two orders and half the ways of getting
+ * there arrive at it by accident.
+ */
+const ORDERED_WORKFLOWS: readonly OrderedWorkflow[] = [
+  { file: 'ar-echo.json', node: 'Echo Node' },
+  { file: 'ar-Delta.json', node: 'Delta Node' },
+  { file: 'ar-alpha.json', node: 'Alpha Node' },
+  { file: 'ar-charlie.json', node: 'Charlie Node' },
+  { file: 'ar-Beta.json', node: 'Beta Node' },
+];
+
+/**
+ * What the read has to hand back, sorted by file name, written out by
+ * hand.
+ *
+ * A literal rather than {@link ORDERED_WORKFLOWS} sorted inside the
+ * assertion. Sorting the roster there would be the reader's own line
+ * copied next to it, and a sort held against itself agrees whatever
+ * either of them does.
+ *
+ * It is the reader's collating order and not a byte sort, which is the
+ * one thing this list pins beyond the sorting itself: `ar-Beta.json`
+ * sits after `ar-alpha.json` here and would sit in front of it under
+ * `[].sort()` with no comparator. Deliberate — an order that reads the
+ * same on every machine is what `loadBuiltWorkflows` documents its sort
+ * as buying, and a swap of comparator is a change to that answer rather
+ * than a refactor of it.
+ */
+const ORDERED_LABELS: readonly string[] = [
+  'ar-alpha.json: Alpha Node',
+  'ar-Beta.json: Beta Node',
+  'ar-charlie.json: Charlie Node',
+  'ar-Delta.json: Delta Node',
+  'ar-echo.json: Echo Node',
+];
+
+/**
+ * One roster entry as the order case reads an artifact back,
+ * `<file>: <node name>`.
+ *
+ * Shaped like an {@link ORDERED_LABELS} entry so the drift guard can
+ * hold the write order against the answer with neither derived from
+ * the other.
+ */
+function orderedLabel(entry: OrderedWorkflow): string {
+  return `${entry.file}: ${entry.node}`;
+}
+
+/**
+ * That entry as a built workflow, written the way `buildAll` writes
+ * one: two-space indentation and a trailing newline.
+ *
+ * Carries {@link WORKFLOW_NAME} and {@link FIXTURE_NODE}'s type the way
+ * every other fixture artifact does, so the only thing parting one
+ * artifact of this tree from another is the pair the case reads back.
+ */
+function orderedWorkflowJson(entry: OrderedWorkflow): string {
+  return `${JSON.stringify(
+    {
+      name: WORKFLOW_NAME,
+      nodes: [{ name: entry.node, type: FIXTURE_NODE.type }],
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+/**
+ * A fixture tree holding every {@link ORDERED_WORKFLOWS} artifact and
+ * nothing else, written in roster order.
+ *
+ * Written into the fixture root itself, the way the empty-workflow
+ * trees are: what this tree has to be is one a read gets all the way
+ * through, so the directory has to be there and hold artifacts.
+ */
+function makeOrderedTree(): string {
+  const distDir = makeFixtureDir();
+
+  for (const entry of ORDERED_WORKFLOWS) {
+    writeFileSync(join(distDir, entry.file), orderedWorkflowJson(entry));
+  }
+
+  return distDir;
 }
 
 // ---------------------------------------------------------------------------
@@ -602,6 +764,57 @@ describe('loadBuiltWorkflows — a tree with workflows in it', () => {
     expect(read).toEqual([
       { file: WORKFLOW_FILE, types: [FIXTURE_NODE.type] },
     ]);
+  });
+
+  // Half of what the order case takes on trust — the half a filesystem
+  // listing in insertion order runs into. Writing the artifacts out of
+  // order is what parts a read that sorts from one handing back the
+  // listing it was given there, so a roster whose write order had
+  // drifted onto the answer would leave the two indistinguishable on
+  // those machines while printing a tick.
+  //
+  // The other half is the naming, and it is not asserted anywhere: what
+  // makes `ar-Beta.json` sort after `ar-alpha.json` and list before it
+  // is a collation this file does not own. It is checked by mutation
+  // instead — dropping the reader's sort reddens the case below — which
+  // is the tool for a claim about an environment rather than about a
+  // value.
+  //
+  // Both halves in one case because they are one fact: the same
+  // artifacts, in a different order. Held as multisets first, so a
+  // roster that lost an entry or gained one fails here rather than in
+  // the case reading the tree, where it would read as the sort having
+  // gone wrong.
+  it('writes those artifacts in an order that is not the answer', () => {
+    const written = ORDERED_WORKFLOWS.map((entry) => orderedLabel(entry));
+
+    expect([...written].sort()).toEqual([...ORDERED_LABELS].sort());
+    expect(written).not.toEqual(ORDERED_LABELS);
+  });
+
+  // The order the read hands back, which is the order every report
+  // built on it prints in: `nodesMatching` lists offenders in it, and
+  // the roster case arriving later in this plan holds its expectations
+  // against it. `readdirSync` answers in directory order — stable on
+  // one machine, arbitrary across them — so a read passing that through
+  // would print one tree two ways on two machines, and no expectation
+  // could be written down at all.
+  //
+  // Asserted as `<file>: <node name>` pairs rather than as file names,
+  // so what comes back is tied to what was opened: the file half is the
+  // directory listing and the node half is the parse, and a list of
+  // names alone would be answered by a read that sorted a listing
+  // without opening anything under it.
+  it('hands back several artifacts sorted by file name', () => {
+    const distDir = makeOrderedTree();
+
+    const read = loadBuiltWorkflows(distDir).map((workflow) => {
+      const names = workflow.nodes.map((node) => node.name).join(', ');
+
+      return `${workflow.file}: ${names}`;
+    });
+
+    expect(read).toEqual(ORDERED_LABELS);
   });
 });
 
