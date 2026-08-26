@@ -14,7 +14,11 @@
  * and a bare constant where a roster would buy nothing:
  * {@link SCHEDULE_TRIGGER_TYPE}, a whole type with no siblings to
  * be told apart from, and {@link MODEL_NODE_TYPE_PREFIX}, which
- * names a namespace rather than a type at all.
+ * names a namespace rather than a type at all. Not every check
+ * over built output is a sweep of that shape, and the other kind
+ * is what {@link queryParametersOf} is here for: a property held
+ * against one node named by name, decided by a parameter that
+ * node carries rather than by the type it is.
  *
  * Data rather than a regex alternation or a predicate written
  * into the sweep, and what the difference buys is a question a
@@ -58,11 +62,15 @@
  * which phase owns each.
  *
  * The entry shape, the send roster and its matcher, the
- * schedule-trigger type and its matcher, and the model-node
- * prefix and its matcher are what have landed. The reader that
- * pulls a node's SQL off its parsed parameters arrives next in
- * this stage.
+ * schedule-trigger type and its matcher, the model-node prefix
+ * and its matcher, and the reader that pulls a node's SQL off its
+ * parsed parameters are what have landed. The roster of
+ * statements `ar-dispatch` must carry is a file of its own,
+ * arriving later in this stage, and reading that last one is how
+ * it reaches a statement at all.
  */
+
+import type { BuiltWorkflowNode } from './workflow-dist.js';
 
 /**
  * One node type the suite names, as a roster stores it.
@@ -77,9 +85,10 @@
  * outright. That is the opposite of `BuiltWorkflowNode` in
  * `workflow-dist.ts`, the shape these are matched against, which
  * arrives out of a `JSON.parse` and has to be earned by a walk.
- * Nothing in this module opens a file or reads a workflow — a
- * rule is a fact about a type, and whatever does the reading
- * lives beside it.
+ * Nothing in this module opens a file. The one function here that
+ * reads a node, {@link queryParametersOf}, is handed one rather
+ * than going looking — a rule is a fact about a type, and the
+ * reading a check does lives beside it.
  */
 export interface NodeTypeRule {
   /**
@@ -617,7 +626,7 @@ export const MODEL_NODE_TYPE_PREFIX = '@n8n/n8n-nodes-langchain.lm';
  * where the credential sits and where the call goes out.
  *
  * A node left disabled answers as an enabled one does, and the
- * reading is the third of three in this file. For
+ * reading is the third of four in this file. For
  * {@link SEND_NODE_TYPES} the property is that the capability is
  * ABSENT; for {@link SCHEDULE_TRIGGER_TYPE} a disabled trigger is
  * a limit, since a count of one is satisfied by a workflow firing
@@ -635,4 +644,92 @@ export const MODEL_NODE_TYPE_PREFIX = '@n8n/n8n-nodes-langchain.lm';
  */
 export function isModelNode(type: string): boolean {
   return type.toLowerCase().startsWith(MODEL_NODE_TYPE_PREFIX.toLowerCase());
+}
+
+/**
+ * The SQL `node` runs, read off the parameter that carries it —
+ * one text per query the node holds, and none for a node holding
+ * no query at all.
+ *
+ * A parsed parameter and not the artifact's text, which is the
+ * whole of what this exists for. An artifact is one JSON
+ * document, so a phrase searched for across it is answered alike
+ * by a sticky note's prose, a node's own name, a comment inside a
+ * Code body and the SQL of some other node — a property asserted
+ * that way holds whichever of them happens to spell it, and holds
+ * when the node it was about carries nothing. Read off the
+ * parameter, a claim about a statement is a claim about the node
+ * that runs it.
+ *
+ * `query` is that parameter, measured rather than assumed: of the
+ * fourteen node files in `n8n-nodes-base` 2.15.1 that open a
+ * parameter in a SQL editor, thirteen spell it `query`, the
+ * Postgres node's execute-query operation among them. Keyed to
+ * the parameter and not to the node type on purpose — the Merge
+ * node carries a `query` of its own in the mode that combines
+ * its inputs with SQL, so a read keyed to a database node type
+ * would pass over a statement that runs.
+ *
+ * The fourteenth spells it `sqlQuery`, and that is the one
+ * spelling this does not read. No workflow in this port carries
+ * such a node, and what the gap would cost splits by which check
+ * is reading: an entry pairing a property to a node named by name
+ * fails loudly and says which property went unsatisfied, while a
+ * sweep over query text passes having looked at nothing. The edit
+ * is a second name here, arriving with the node that needs one.
+ *
+ * Not the values a query is parameterized WITH, which sit in the
+ * node's options and which its own editor labels Query
+ * Parameters. The collision with the name here is worth stating
+ * rather than leaving to be discovered: a check asking where a
+ * statement's values come from reads that member, and this
+ * answers nothing about it.
+ *
+ * A list rather than one text or nothing, so a node carrying a
+ * query and a node carrying none are one shape at a call site: a
+ * sweep across every node in a tree flattens without filtering
+ * for absence first, and a second parameter name could be read
+ * without moving a caller. Most nodes answer empty, which is what
+ * a node that runs no SQL has to say.
+ *
+ * A `parameters` member that is absent or is not an object, and a
+ * `query` that is there but is not a string, answer empty too.
+ * The first two are ordinary — a sticky note carries no query —
+ * while the third is a malformed artifact, dropped quietly here
+ * and loud only downstream, and only for half of what reads this:
+ * a roster entry pairing a property to that node reports it
+ * unsatisfied and names it, an absence sweep passes having looked
+ * at nothing. `buildAll` cannot write one from a well-formed
+ * source, marker resolution rebuilding a parsed tree without
+ * changing the type of a member it resolved, so it is a source to
+ * fix rather than a path to cover. A `query` that is there and
+ * empty is none of those: it is a string, so it comes back as
+ * one, and it is what the parameter's own default holds before
+ * anybody writes a statement into it.
+ *
+ * A node left disabled answers as an enabled one does, the fourth
+ * reading of that in this file, and here it is a limit rather
+ * than the intended answer: a property required of `ar-dispatch`
+ * is satisfied by the SQL of a node that never runs, and nothing
+ * this hands back parts the two.
+ *
+ * The parameter name is no hit for any needle in
+ * `naming-patterns.ts`, checked the way {@link SEND_NODE_TYPES}
+ * records the method for its entries, and recorded because
+ * `tests/` sits outside those scan roots and nothing re-runs it.
+ */
+export function queryParametersOf(
+  node: BuiltWorkflowNode,
+): readonly string[] {
+  const parameters = node.parameters;
+
+  if (typeof parameters !== 'object' || parameters === null) {
+    return [];
+  }
+
+  const query = (parameters as Record<string, unknown>).query;
+
+  return typeof query === 'string'
+    ? [query]
+    : [];
 }
