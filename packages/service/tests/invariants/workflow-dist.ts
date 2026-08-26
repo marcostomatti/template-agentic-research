@@ -52,13 +52,14 @@
  * it is made. This file can say it was handed nothing. It cannot say
  * that what it was handed is what the sources produced.
  *
- * {@link DIST_DIR} and {@link EmptyDistDirectoryError} are here.
- * The second refusal and the walk that raises both arrive next in
- * this stage; the assertions over the real tree arrive after
- * `ar-dispatch` does, since `workflows/src/` names no workflow
- * until then and `workflows/dist/` is therefore not a directory
- * that exists. The cases over this file drive fixture trees of
- * their own for that reason.
+ * {@link DIST_DIR}, {@link EmptyDistDirectoryError} and
+ * {@link EmptyWorkflowError} are here. The walk that raises both
+ * refusals arrives later in this stage; the assertions over the
+ * real tree arrive after `ar-dispatch` does, since
+ * `workflows/src/` names no workflow until then and
+ * `workflows/dist/` is therefore not a directory that exists. The
+ * cases over this file drive fixture trees of their own for that
+ * reason.
  */
 
 import { fileURLToPath } from 'node:url';
@@ -124,11 +125,13 @@ export const DIST_DIR = fileURLToPath(
  * directory that exists rather than an empty one.
  *
  * A distinct class rather than a bare `Error`, so a case covering
- * this path can pin the failure to this cause. The rest of the
- * read arrives as `Error` too — a directory that cannot be
- * listed, an artifact that cannot be opened, a `SyntaxError` out
- * of `JSON.parse` — and an assertion taking any of those would
- * pass for a read that got further than this one ever does.
+ * this path can pin the failure to this cause. A read that got
+ * as far as opening an artifact refuses under
+ * {@link EmptyWorkflowError} instead, and everything else on the
+ * path arrives as `Error` — a directory that cannot be listed, an
+ * artifact that cannot be opened, a `SyntaxError` out of
+ * `JSON.parse`. An assertion taking any of those would pass for a
+ * read that got further than this one ever does.
  *
  * What stands behind it is one case rather than a suite. The
  * roster case arriving later in this plan holds the workflows
@@ -162,6 +165,68 @@ export class EmptyDistDirectoryError extends Error {
       'tree no build writes.',
     );
     this.name = this.constructor.name;
+    this.directory = directory;
+  }
+}
+
+/**
+ * Thrown when a built workflow carries no node.
+ *
+ * Covers a `nodes` array that is empty and an artifact with no
+ * `nodes` member at all. Both are one fact to a caller — the file
+ * parses, it is counted among the built workflows, and it holds
+ * nothing a node-level assertion can read — and nothing a case
+ * goes on to do turns on which of the two it was.
+ *
+ * The file name is carried because the edit is in the source of
+ * that name and not in the artifact. Marker resolution walks a
+ * parsed source and rebuilds it, adding no node and dropping
+ * none, and the write keeps the source's own file name — so an
+ * artifact holding no node was built from a source holding none,
+ * and a rebuild writes the same file again.
+ *
+ * A distinct class rather than a bare `Error`, so a case covering
+ * an empty workflow pins the failure here rather than to
+ * {@link EmptyDistDirectoryError}. The two answer one complaint
+ * at two levels — nothing built to read, against a built file
+ * with nothing in it — and an assertion taking either would pass
+ * for a read that opened no artifact at all. Everything else on
+ * the path arrives as `Error`: a directory that cannot be
+ * listed, an artifact that cannot be opened, a `SyntaxError` out
+ * of `JSON.parse`.
+ *
+ * Raised on the first such workflow rather than collected over
+ * the read, the way `schema-sql.ts` raises on the first empty
+ * migration. One named file is enough to reach the source
+ * directory holding the rest.
+ */
+export class EmptyWorkflowError extends Error {
+  /** Name of the empty artifact, relative to `directory`. */
+  readonly file: string;
+
+  /**
+   * Directory it was read from, carried because the same file
+   * name is populated or empty depending on which tree the
+   * reader was pointed at.
+   */
+  readonly directory: string;
+
+  /**
+   * @param file - Name of the empty artifact, relative to
+   * `directory`.
+   * @param directory - Directory it was read from.
+   */
+  constructor(file: string, directory: string) {
+    super(
+      `Built workflow '${file}' under ${directory} carries no ` +
+      'node. The build resolves markers over a parsed source and ' +
+      'rebuilds it without adding or dropping one, and the write ' +
+      'keeps the source name, so a rebuild produces this same ' +
+      'file again: the node belongs in the source of that name ' +
+      'under `workflows/src/`.',
+    );
+    this.name = this.constructor.name;
+    this.file = file;
     this.directory = directory;
   }
 }
