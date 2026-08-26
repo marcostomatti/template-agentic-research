@@ -9,8 +9,9 @@
  * `workflow-dist.ts` hands back, flag the ones a rule names,
  * report every offender. What decides which nodes are flagged is
  * a node type string, and the rosters here are where those
- * strings live — an entry per type, carrying the string, a stable
- * id, and the reason that type is one the suite names.
+ * strings live — one {@link NodeTypeRule} per type, carrying the
+ * string, a stable id, and the reason that type is one the suite
+ * names.
  *
  * Data rather than a regex alternation or a predicate written
  * into the sweep, and what the difference buys is a question a
@@ -53,8 +54,95 @@
  * behind them are argued, and the register there is what says
  * which phase owns each.
  *
- * The block lands alone. The send roster, the schedule-trigger
- * type, the model-node prefix, a matcher over each, and the
- * reader that pulls a node's SQL off its parsed parameters arrive
- * next in this stage.
+ * The entry shape is what has landed. The send roster, the
+ * schedule-trigger type, the model-node prefix, a matcher over
+ * each, and the reader that pulls a node's SQL off its parsed
+ * parameters arrive next in this stage.
  */
+
+/**
+ * One node type the suite names, as a roster stores it.
+ *
+ * Three members, and the split between them is what makes a
+ * roster askable: `type` is the string a node carries, `reason`
+ * is why that string is one the suite names, and `id` is what a
+ * failure and a case refer to the entry by.
+ *
+ * Declared here rather than parsed, so every entry is checked
+ * where it is written and one short of a member is refused
+ * outright. That is the opposite of `BuiltWorkflowNode` in
+ * `workflow-dist.ts`, the shape these are matched against, which
+ * arrives out of a `JSON.parse` and has to be earned by a walk.
+ * Nothing in this module opens a file or reads a workflow — a
+ * rule is a fact about a type, and whatever does the reading
+ * lives beside it.
+ */
+export interface NodeTypeRule {
+  /**
+   * Stable identifier, and what failure output names an entry by
+   * rather than the text a sweep matched.
+   *
+   * The two answer different questions. Matched text says what
+   * an artifact spelled; an id says which entry is at issue. And
+   * the failure this roster exists to make reportable is the one
+   * where there is no matched text at all — an entry nothing was
+   * ever planted for, caught by a guard holding the ids a run
+   * reached against the ids declared. A report assembled out of
+   * what a sweep matched can only ever list entries that fired,
+   * which is the half that was never in doubt.
+   *
+   * Not for the reason `ForbiddenPattern.id` in
+   * `naming-patterns.ts` is printable. That one keeps a banned
+   * name out of a CI log, whereas a node type is one of the more
+   * useful things to print; the offender sweeps leave it out for
+   * a reason of their own, `nodesMatching` reporting
+   * `<file>:<node name>` because that names the edit rather than
+   * the diagnosis.
+   *
+   * Stable through an edit to `type`, which is the member most
+   * likely to be corrected or widened later: a claim keyed to
+   * the string moves with it and a claim keyed to the id does
+   * not. Distinctness across a roster is convention rather than
+   * anything enforced here, and a guard comparing sets of ids
+   * reads two entries sharing one as a single entry covered.
+   */
+  readonly id: string;
+
+  /**
+   * Why this type is one the suite names, in the roster's own
+   * terms rather than as a description of the string.
+   *
+   * The header states why the set carries reasons at all: it
+   * bounds what the suite catches, and a reader weighing that
+   * bound is weighing why the named ones were named. What it
+   * asks of an individual entry is narrower than that. A roster
+   * of capabilities collects several routes to one capability,
+   * so a reason that repeats the capability says nothing about
+   * why there are several — what earns an entry is the reach it
+   * adds that the entries beside it do not have.
+   *
+   * Which is also the question an entry added later has to
+   * answer, and what stands between a roster and a list that
+   * grew by resemblance.
+   */
+  readonly reason: string;
+
+  /**
+   * The node type string, spelled the way a node's own `type`
+   * member spells it — fully qualified, and a whole type rather
+   * than a prefix or a pattern.
+   *
+   * Whole is what makes an entry pairable: a case plants a node
+   * of exactly this type and there is no question which entry it
+   * stands for. A rule whose subject is a namespace rather than
+   * a type is not an entry of this shape, which is why the
+   * model-node one arriving next in this stage is a constant of
+   * its own.
+   *
+   * Data and not a comparison. How a node's type is held against
+   * this belongs to the matcher over the roster, and keeping it
+   * out of the entry is what lets a case ask the roster a
+   * question without running a sweep at all.
+   */
+  readonly type: string;
+}
