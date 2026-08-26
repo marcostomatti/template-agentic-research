@@ -11,8 +11,10 @@
  * a node type string, and this file is where those strings live —
  * mostly one {@link NodeTypeRule} per type, carrying the string,
  * a stable id, and the reason that type is one the suite names,
- * and a bare constant where a rule has no siblings to be told
- * apart from.
+ * and a bare constant where a roster would buy nothing:
+ * {@link SCHEDULE_TRIGGER_TYPE}, a whole type with no siblings to
+ * be told apart from, and {@link MODEL_NODE_TYPE_PREFIX}, which
+ * names a namespace rather than a type at all.
  *
  * Data rather than a regex alternation or a predicate written
  * into the sweep, and what the difference buys is a question a
@@ -29,12 +31,12 @@
  * rosters are absence checks, and an absence check reports the
  * same nothing for a type no workflow carries as for a matcher
  * that would never have caught it. So the sweep over the real
- * tree cannot tell a live matcher from a dead one, and the
- * roster's own paired samples are the only thing that can. It
- * bites hardest on a roster whose subject is not in the tree at
- * all — the model one, which no built workflow carries a node for
- * yet — where the sweep runs across zero nodes and every claim
- * about it holds by having found nothing.
+ * tree cannot tell a live matcher from a dead one, and a sample
+ * planted against a matcher directly is the only thing that can.
+ * It bites hardest where the subject is not in the tree at all —
+ * {@link MODEL_NODE_TYPE_PREFIX}, which no built workflow carries
+ * a node under until phase 6 — where the sweep runs across zero
+ * nodes and every claim about it holds by having found nothing.
  *
  * Split from the assertions for the reason `naming-patterns.ts`
  * keeps its scan surface and its needle set apart from the
@@ -55,11 +57,11 @@
  * behind them are argued, and the register there is what says
  * which phase owns each.
  *
- * The entry shape, the send roster and its matcher, and the
- * schedule-trigger type and its matcher are what have landed. The
- * model-node prefix, a matcher over it, and the reader that pulls
- * a node's SQL off its parsed parameters arrive next in this
- * stage.
+ * The entry shape, the send roster and its matcher, the
+ * schedule-trigger type and its matcher, and the model-node
+ * prefix and its matcher are what have landed. The reader that
+ * pulls a node's SQL off its parsed parameters arrives next in
+ * this stage.
  */
 
 /**
@@ -137,12 +139,11 @@ export interface NodeTypeRule {
    * Whole is what makes an entry pairable: a case plants a node
    * of exactly this type and there is no question which entry it
    * stands for. A rule whose subject is a namespace rather than a
-   * type is not an entry of this shape, which is why the
-   * model-node one arriving next in this stage is a constant of
-   * its own. Nor is a rule with no siblings:
-   * {@link SCHEDULE_TRIGGER_TYPE} is a whole type and would fit
-   * here, and stands outside because a set of one has nothing to
-   * tell apart.
+   * type is not an entry of this shape, which is why
+   * {@link MODEL_NODE_TYPE_PREFIX} is a constant of its own. Nor
+   * is a rule with no siblings: {@link SCHEDULE_TRIGGER_TYPE} is
+   * a whole type and would fit here, and stands outside because a
+   * set of one has nothing to tell apart.
    *
    * Data and not a comparison. How a node's type is held against
    * this belongs to the matcher over the roster, which for the
@@ -407,11 +408,11 @@ export function isSendCapable(type: string): boolean {
  * costs and names the phase that enforces it.
  *
  * A bare constant and not a {@link NodeTypeRule}, for a different
- * reason from the model-node prefix: that one's subject is a
- * namespace, while this is a whole type and would sit in a roster
- * without complaint. What it has no use for is the roster. A set
- * of one has no entries to tell apart, a sample paired to it says
- * only what the constant already spells, and
+ * reason from {@link MODEL_NODE_TYPE_PREFIX}: that one's subject
+ * is a namespace, while this is a whole type and would sit in a
+ * roster without complaint. What it has no use for is the roster.
+ * A set of one has no entries to tell apart, a sample paired to
+ * it says only what the constant already spells, and
  * {@link NodeTypeRule.reason} exists to say what an entry reaches
  * that its neighbours do not — which is not a question a lone
  * entry can answer.
@@ -497,4 +498,141 @@ export const SCHEDULE_TRIGGER_TYPE = 'n8n-nodes-base.scheduleTrigger';
  */
 export function isScheduleTrigger(type: string): boolean {
   return type.toLowerCase() === SCHEDULE_TRIGGER_TYPE.toLowerCase();
+}
+
+/**
+ * The namespace every language-model node type sits under, and
+ * what the cost guards read to find the nodes that spend.
+ *
+ * A prefix and not a {@link NodeTypeRule} roster, because the
+ * subject IS the namespace. Twenty types carry it, and what parts
+ * them is which provider answers and through which of that
+ * provider's APIs — sixteen providers, five of the twenty
+ * speaking a completions API and fifteen a chat one, with four
+ * providers carrying both. None of that is what the node REACHES,
+ * which is the question {@link NodeTypeRule.reason} asks and the
+ * one no entry here could answer. {@link SEND_NODE_TYPES} names
+ * its routes for the mirror-image reason: there vendor is what it
+ * declines to enumerate and reach is what earns an entry, so a
+ * further vendor of a route already named adds a name and nothing
+ * else. Here vendor and API shape are the whole of the
+ * difference, and twenty entries differing by nothing else would
+ * be a list grown by resemblance with the resemblance written
+ * into every reason.
+ *
+ * The set was measured against the published node registry rather
+ * than carried across. `@n8n/n8n-nodes-langchain` 2.15.1
+ * registers 111 node types, all of them distinct; twenty carry
+ * this prefix, and every one of the twenty declares an
+ * `ai_languageModel` output. So over that package the prefix and
+ * the capability pick out exactly the same set, which is what
+ * makes this a name for the capability rather than a guess at it.
+ *
+ * The string is no hit for any needle in `naming-patterns.ts`,
+ * run the way {@link SEND_NODE_TYPES} records for its entries:
+ * the matcher proven live against its own five sources first,
+ * since a zero out of one that could never have matched reads
+ * exactly like a clean one. That block scopes its result to the
+ * eight that landed, so this one owes its own — and `tests/` sits
+ * outside those scan roots, which is what makes the record here
+ * the evidence rather than a note about a check something else
+ * repeats.
+ *
+ * No built workflow holds a node under it. The workflows that
+ * make model calls are `ar-research` and `ar-digest`, both phase
+ * 6, and the roster in `workflows/src/README.md` is what says so;
+ * phase 3 delivers `ar-dispatch` alone. Every assertion standing
+ * on this constant therefore runs across zero nodes today, and
+ * there are three of them failing empty in two different ways:
+ * the retry guard is a claim about every model node, so it holds
+ * over none of them, while the ledger-row and per-run-ceiling
+ * guards are claims about every workflow HOLDING one, so their
+ * antecedent is false and the implication holds. Three green
+ * cases and no evidence, until phase 6 puts a node in front of
+ * them.
+ *
+ * Which is the header's argument about paired samples aimed at
+ * the one subject where it is not a precaution. Planting a type
+ * under this prefix and asking {@link isModelNode} directly is
+ * the whole of what can say the matcher is live before then. A
+ * prefix pairs differently from a roster, though: a sample stands
+ * for the namespace rather than for an entry, so there is no set
+ * of ids to hold a run against, and what carries the weight
+ * instead is a near miss beside it — a type this must NOT reach.
+ *
+ * Three limits, all measured on the same registry, and they run
+ * in different directions. One registered type emits a
+ * language-model output and does not carry the prefix: a selector
+ * that routes between several models rather than calling one.
+ * That is not a miss worth an entry, since what it routes between
+ * are prefix-carrying nodes and a run's spend is still named by
+ * the nodes this reaches. One of the twenty is marked hidden,
+ * which is the limit that bit {@link SCHEDULE_TRIGGER_TYPE} and
+ * costs nothing here: hidden keeps a type out of the node panel,
+ * and a hidden type inside a namespace is still inside it.
+ *
+ * The gap that does cost something is outside the language-model
+ * namespace altogether. The same package registers four vendor
+ * action nodes, which sit on the main data path and are addressed
+ * like any other API node: they call a provider directly, emit an
+ * ordinary output, and carry neither this prefix nor a model
+ * connection of any kind. A workflow spending through one of
+ * those is a miss for all three guards. Closing it is a roster of
+ * whole types beside this constant rather than a wider prefix,
+ * since the four share a package and no namespace, and
+ * `docs/architecture/01-invariants.md` is where the property they
+ * would answer to is argued.
+ */
+export const MODEL_NODE_TYPE_PREFIX = '@n8n/n8n-nodes-langchain.lm';
+
+/**
+ * Whether `type` sits under {@link MODEL_NODE_TYPE_PREFIX},
+ * compared without regard to case.
+ *
+ * A type string rather than a node, and folded rather than exact,
+ * for the reasons {@link isSendCapable} gives. Where it parts
+ * from both matchers beside it is that this is a prefix test and
+ * not an equality: they ask whether a type IS a named string, and
+ * this asks whether it sits under one. So it answers for types
+ * nobody wrote down, including the ones a later release of the
+ * package registers — which is the point, since the constant's
+ * subject is a namespace the package adds to release by
+ * release.
+ *
+ * The fold is safe here for a reason worth measuring rather than
+ * inheriting from next door: the 111 qualified types the package
+ * registers are all distinct under a case fold, and the folded
+ * prefix picks out the same twenty the exact one does. Folding
+ * therefore widens onto misspellings of the namespace and onto
+ * nothing another check would have to name. `toLowerCase` and not
+ * the locale-aware sibling, for the reason {@link isSendCapable}
+ * gives at length.
+ *
+ * It reads a type and nothing else, and that clause earns more
+ * here than it does next door because the nearest wrong answer is
+ * close: a Code node whose body names a provider, a model or a
+ * prompt is not a model node. The body is a parameter, what this
+ * is about is the connection a node makes, and a script
+ * mentioning a model spends nothing. A node under this prefix is
+ * where the credential sits and where the call goes out.
+ *
+ * A node left disabled answers as an enabled one does, and the
+ * reading is the third of three in this file. For
+ * {@link SEND_NODE_TYPES} the property is that the capability is
+ * ABSENT; for {@link SCHEDULE_TRIGGER_TYPE} a disabled trigger is
+ * a limit, since a count of one is satisfied by a workflow firing
+ * on nothing. Here it errs safe on its own: a workflow holding a
+ * disabled model node still owes a ceiling and a ledger row,
+ * which is what a workflow one edit from spending should owe.
+ *
+ * What an answer means today is bounded by what the constant
+ * records. With no model node in any built workflow, a sweep
+ * composing this at the call site hands back an empty list
+ * whatever this function does, so a green run over the real tree
+ * is evidence about the tree and not about the matcher. Asking it
+ * directly is what leaves evidence — a planted type under the
+ * prefix, and a near miss beside it.
+ */
+export function isModelNode(type: string): boolean {
+  return type.toLowerCase().startsWith(MODEL_NODE_TYPE_PREFIX.toLowerCase());
 }
