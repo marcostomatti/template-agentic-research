@@ -52,12 +52,13 @@
  * it is made. This file can say it was handed nothing. It cannot say
  * that what it was handed is what the sources produced.
  *
- * {@link DIST_DIR} is the first export. The two refusals and the
- * walk arrive next in this stage; the assertions over the real
- * tree arrive after `ar-dispatch` does, since `workflows/src/`
- * names no workflow until then and `workflows/dist/` is therefore
- * not a directory that exists. The cases over this file drive
- * fixture trees of their own for that reason.
+ * {@link DIST_DIR} and {@link EmptyDistDirectoryError} are here.
+ * The second refusal and the walk that raises both arrive next in
+ * this stage; the assertions over the real tree arrive after
+ * `ar-dispatch` does, since `workflows/src/` names no workflow
+ * until then and `workflows/dist/` is therefore not a directory
+ * that exists. The cases over this file drive fixture trees of
+ * their own for that reason.
  */
 
 import { fileURLToPath } from 'node:url';
@@ -93,7 +94,7 @@ import { fileURLToPath } from 'node:url';
  * `process.cwd()` there is the repo root.
  *
  * A relative `workflows/dist` resolves under that root, which
- * holds no `workflows/` at all, so the refusal arriving next
+ * holds no `workflows/` at all, so {@link EmptyDistDirectoryError}
  * would fire naming a directory nobody has built. Loud, and
  * pointed at the wrong edit: it reads as a build that did not
  * run, when what moved was the launcher.
@@ -101,3 +102,66 @@ import { fileURLToPath } from 'node:url';
 export const DIST_DIR = fileURLToPath(
   new URL('../../workflows/dist', import.meta.url),
 );
+
+/**
+ * Thrown when a directory holds no built workflow to read.
+ *
+ * Covers a directory that is absent, one that is not a directory
+ * at all, and one that is there holding no `*.json`. All three
+ * mean the same thing to a caller — there is nothing built to
+ * assert over — and that is one fact worth reporting once, the
+ * way `schema-sql.ts` folds the same three into its own
+ * empty-directory refusal. Which of them it was is not carried,
+ * because no edit turns on it: all three are answered by running
+ * the build, and the message names it.
+ *
+ * The absent shape is the one this package hands out today.
+ * `buildAll` in `scripts/build-workflows.ts` takes the reverse
+ * split — absent is its empty answer, and only a path it cannot
+ * list raises — and it stops before touching its output directory
+ * when there is nothing to write. `workflows/src/` names no
+ * workflow until `ar-dispatch`, so `workflows/dist/` is not a
+ * directory that exists rather than an empty one.
+ *
+ * A distinct class rather than a bare `Error`, so a case covering
+ * this path can pin the failure to this cause. The rest of the
+ * read arrives as `Error` too — a directory that cannot be
+ * listed, an artifact that cannot be opened, a `SyntaxError` out
+ * of `JSON.parse` — and an assertion taking any of those would
+ * pass for a read that got further than this one ever does.
+ *
+ * What stands behind it is one case rather than a suite. The
+ * roster case arriving later in this plan holds the workflows
+ * this phase expects against what the read returned, so over the
+ * real tree an empty read reddens there too — naming the
+ * workflows it went looking for, the way the static-SQL roster
+ * reports a missing constraint and never a missing migration.
+ * Every other check in that suite is an absence check and passes
+ * over nothing at all, and a caller driving a fixture tree of its
+ * own has no roster case in front of it. So this refusal is what
+ * makes the failure name the edit, rather than the only thing
+ * that fails.
+ */
+export class EmptyDistDirectoryError extends Error {
+  /** Directory that yielded nothing, as the caller named it. */
+  readonly directory: string;
+
+  /**
+   * @param directory - Directory that was read, or that was not
+   * there to read.
+   */
+  constructor(directory: string) {
+    super(
+      `No .json artifact resolved under ${directory}. The workflow ` +
+      'invariants are mostly absence checks, so a read that comes ' +
+      'back with nothing leaves every one of them passing and the ' +
+      'run printing what a run over a clean tree prints: either ' +
+      'the build has not run — `bun run build:workflows` writes ' +
+      'this directory, and `pretest` runs it for the `test` ' +
+      'script and for no other — or the reader was pointed at a ' +
+      'tree no build writes.',
+    );
+    this.name = this.constructor.name;
+    this.directory = directory;
+  }
+}
