@@ -54,10 +54,11 @@
  * behind them are argued, and the register there is what says
  * which phase owns each.
  *
- * The entry shape and the send roster are what have landed. The
- * schedule-trigger type, the model-node prefix, a matcher over
- * each roster, and the reader that pulls a node's SQL off its
- * parsed parameters arrive next in this stage.
+ * The entry shape, the send roster and the matcher over it are
+ * what have landed. The schedule-trigger type, the model-node
+ * prefix, a matcher over each of those, and the reader that
+ * pulls a node's SQL off its parsed parameters arrive next in
+ * this stage.
  */
 
 /**
@@ -140,9 +141,10 @@ export interface NodeTypeRule {
    * its own.
    *
    * Data and not a comparison. How a node's type is held against
-   * this belongs to the matcher over the roster, and keeping it
-   * out of the entry is what lets a case ask the roster a
-   * question without running a sweep at all.
+   * this belongs to the matcher over the roster, which for the
+   * send one is {@link isSendCapable}, and keeping it out of the
+   * entry is what lets a case ask the roster a question without
+   * running a sweep at all.
    */
   readonly type: string;
 }
@@ -192,8 +194,9 @@ export interface NodeTypeRule {
  * gives: a whole type is pairable and a pattern is not. The
  * unnamed vendors are what that choice costs, since a substring
  * sweep would have caught them and could have been paired with
- * nothing. The matcher that holds a node type against these
- * entries arrives next in this stage.
+ * nothing. {@link isSendCapable} is what holds a node type
+ * against these entries, and it carries the case fold of that
+ * sweep forward without its substrings.
  *
  * None of the eight is a hit for any needle in
  * `naming-patterns.ts`, which was checked rather than assumed.
@@ -329,3 +332,59 @@ export const SEND_NODE_TYPES: readonly NodeTypeRule[] = [
     type: 'n8n-nodes-base.twilio',
   },
 ];
+
+/**
+ * Whether `type` is one of the node types
+ * {@link SEND_NODE_TYPES} names, compared without regard to case.
+ *
+ * A type string and not a node, which is the whole of what keeps
+ * the roster askable on its own: a case plants the string an
+ * entry declares and asks directly, with no tree, no artifact
+ * and no reader standing in front of the answer. A sweep over
+ * built output composes it at the call site instead, reading a
+ * node's own `type` member there — `nodesMatching` in
+ * `workflow-dist.ts` is shaped for exactly that, its predicate
+ * taking a whole node, and this answering for the one member of
+ * it that decides.
+ *
+ * So it reads a type and nothing else. A node left disabled
+ * carries the type an enabled one carries and answers the same
+ * here, which is the intended reading rather than a gap: what
+ * the roster stands for is that the capability is ABSENT from a
+ * workflow, not that it is switched off, and a toggle is one
+ * edit from being switched back.
+ *
+ * Case-insensitive because the origin swept case-insensitively,
+ * and the fold is the half of that sweep worth carrying —
+ * {@link SEND_NODE_TYPES} declines the other half, its
+ * substrings, and that half is not free to keep: measured, four
+ * of the eight entries have a trigger node registered beside
+ * them under their own name on a stock instance, each of which
+ * READS and none of which sends, so a substring sweep over
+ * these names flags every one of them.
+ *
+ * Whole strings are what make an entry pairable
+ * ({@link NodeTypeRule.type}), and exact and brittle arrive
+ * together: a sweep passing over a send node because one
+ * letter's case differed prints the same nothing a clean tree
+ * prints, and an absence check has no way to tell those two
+ * apart. The fold buys that back for nothing, measured rather
+ * than assumed — the 438 types the published node registry
+ * carries are all distinct under a case fold, so folding widens
+ * no entry onto a node another entry would have to name. What
+ * it widens onto is the misspellings of an entry's own type,
+ * which is the direction a denylist errs in safely.
+ *
+ * `toLowerCase` and not the locale-aware sibling, which is a
+ * live question here rather than a pedantic one: the reader next
+ * door sorts with `localeCompare` deliberately, so the habit is
+ * in the directory already. A fold is the one place it does not
+ * belong — measured, a Turkish fold of `gmaIl` lands on a
+ * dotless `ı` and misses the entry the plain fold reaches, which
+ * would leave this answer moving with the machine it ran on.
+ */
+export function isSendCapable(type: string): boolean {
+  const folded = type.toLowerCase();
+
+  return SEND_NODE_TYPES.some((rule) => rule.type.toLowerCase() === folded);
+}
