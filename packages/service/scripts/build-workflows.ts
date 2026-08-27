@@ -413,6 +413,42 @@ function gitOutput(root: string, args: string[]): string | null {
 }
 
 /**
+ * What `git status --porcelain` printed, or `null` when the status
+ * could not be answered.
+ *
+ * Three answers, and the two callers read them in opposite
+ * directions, which is why the argument for the READING sits at
+ * neither of them and the command itself is spelled once here. Empty
+ * is a clean tree. Non-empty is the listing of what is not committed.
+ * `null` is {@link gitOutput}'s no-answer, and it means the question
+ * was never put rather than that it came back negative.
+ *
+ * {@link gitBuildTag} folds the last two together, a tree it cannot
+ * vouch for being stamped `-dirty` either way; `assertCleanTree` in
+ * `deploy-external.ts` refuses both and tells them apart in what it
+ * says, because one asks an operator to commit something and the
+ * other asks them to find out why git could not be run. Neither of
+ * those readings is available here, and neither caller can state the
+ * relation between them.
+ *
+ * What is asked is the whole REPOSITORY and not `root`. Measured from
+ * this package's own subdirectory, `git status --porcelain` answers
+ * about a file planted at the repo root, and untracked files count
+ * toward that answer. {@link gitBuildTag} argues what the reading
+ * buys a stamp; a caller wanting a narrower one would need a pathspec
+ * rather than a directory.
+ *
+ * @param root - A directory inside the checkout to ask git from,
+ *   resolved as a `cwd` and so never safely empty or relative.
+ * @returns The trimmed listing, empty for a clean tree, and `null`
+ *   when the status could not be answered — which covers git
+ *   refusing as well as git never running.
+ */
+export function gitStatusPorcelain(root: string): string | null {
+  return gitOutput(root, ['status', '--porcelain']);
+}
+
+/**
  * The stamp a built workflow carries, naming the checkout it was
  * generated from.
  *
@@ -481,10 +517,13 @@ function gitOutput(root: string, args: string[]): string | null {
  * leaning on a stamp. It does not say which of the three states
  * produced it — the distinction is gone by the time the string
  * comes back, and no caller can ask afterwards. And it refuses
- * nothing: the refusal a stamp this forgiving warrants belongs to
- * the deploy path, which stops on a dirty TREE rather than on the
- * label it produced. `deploy-external.ts` has opened, and that
- * refusal arrives in it later in this plan.
+ * nothing, which is where `assertCleanTree` in
+ * `deploy-external.ts` came from: it stops a deploy on a dirty
+ * TREE rather than on the label this produced, and it parts the
+ * two states this folds together, since a tree with uncommitted
+ * work in it and a tree git could not be asked about want
+ * different things done. That refusal is the whole of what this
+ * one does not do.
  *
  * This is also the one value in the build permitted to move with
  * anything but the sources, which is the second half of why a
@@ -533,7 +572,7 @@ export function gitBuildTag(root: string): string {
     return NO_COMMIT_BUILD_TAG;
   }
 
-  return gitOutput(root, ['status', '--porcelain']) === ''
+  return gitStatusPorcelain(root) === ''
     ? commit
     : `${commit}-dirty`;
 }
