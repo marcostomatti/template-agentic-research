@@ -175,6 +175,18 @@
       }
     },
     {
+      "id": "failed-runs-expected",
+      "name": "Failed Runs Are Expected",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-440, 540],
+      "parameters": {
+        "width": 400,
+        "height": 720,
+        "content": "## Failed Runs Are Expected\n\nEvery run this workflow opens closes as failed today, and that record is accurate. Invoke Target Workflow addresses `ar-ingest` for a claimed topic and `ar-digest` for a claimed export subscription, and neither workflow is on this instance yet. The invocation finds nothing behind the id, the claimed unit takes the node's error output, and Close Run Failed writes its `runs` row as failed.\n\nThe ids are right and the targets have not been built. The tick itself does not fail: the failure is routed rather than raised, so the pass carries on and every other claimed unit is dispatched the same way. Each failed run carries an entry in `errors` naming the target that could not be reached, so the row says which workflow was missing rather than only that something went wrong.\n\nThis clears in two steps. `ar-ingest` arrives in phase 5 and `ar-digest` in phase 6, so there is a stretch where a claimed topic reaches a workflow that exists while a claimed export subscription still reaches nothing, and one tick writes successes and failures side by side for a reason that is nobody's mistake.\n\nNone of it is a fault to switch off. Setting Invoke Target Workflow to continue on its REGULAR output would hand a failed invocation to Close Run Succeeded, which is how a dispatch that never happened comes to read like one that did, and disabling a node here is lost on the next import anyway: the instance is a deploy target and never a source. The workflow is `workflows/src/ar-dispatch.json` and the two ids are in `scripts/workflow-markers.ts`."
+      }
+    },
+    {
       "id": "build-stamp",
       "name": "Build Stamp",
       "type": "n8n-nodes-base.stickyNote",

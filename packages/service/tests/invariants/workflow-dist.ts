@@ -289,14 +289,15 @@ export class EmptyWorkflowError extends Error {
  *
  * That is not a hypothetical here. The prose most likely to name a
  * checked thing is the prose explaining the check, and `ar-dispatch`
- * carries sticky notes for exactly that reason. One of the two it
- * holds today names the build stamp and no checked thing with it;
- * the other states the very property this suite asserts, that this
- * workflow holds the only schedule trigger in the system, and a
- * third arriving later in this plan is about what happens when a
- * workflow it invokes is not there yet. A search over text finds
- * those sentences. A parse does not — a node type is a member or it
- * is not, and a note is a string in a member nothing asks about.
+ * carries sticky notes for exactly that reason. One of the three it
+ * holds names the build stamp and no checked thing with it. Another
+ * states the very property this suite asserts, that this workflow
+ * holds the only schedule trigger in the system, and the remaining
+ * one spells the display names of the nodes either side of the
+ * invocation, so an artifact that had lost one of those nodes would
+ * still read as carrying it. A search over text finds those
+ * sentences. A parse does not — a node type is a member or it is
+ * not, and a note is a string in a member nothing asks about.
  *
  * So this shape hands out the parse and not the bytes. There is
  * no text member to grep, which is most of the enforcement: the
