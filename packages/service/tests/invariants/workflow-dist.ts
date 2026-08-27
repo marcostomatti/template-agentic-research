@@ -227,14 +227,14 @@ export class EmptyDistDirectoryError extends Error {
  * counts and the ticks are what a healthy tree prints. Nothing
  * moved, and no case is left to name what is not there.
  *
- * What parts them is a check that must FIND something, and
- * which workflows have one is a matter of what a roster happens
- * to name rather than a property of the build. `ar-dispatch`
- * gets two later in this plan — the schedule trigger has to
- * live in it, and `dispatch-sql.ts` reads statements off its
- * nodes by name — while a workflow no roster names carries
- * absence checks alone, and a fixture tree a caller passes in
- * has none in front of it at all.
+ * What parts them is a check that must FIND something, and which
+ * workflows have one is a matter of what a roster happens to name
+ * rather than a property of the build. `ar-dispatch` has one
+ * already, the system's one schedule trigger having to live in
+ * it, and gains a second later in this plan when
+ * `dispatch-sql.ts` reads statements off its nodes by name. A
+ * workflow no roster names carries absence checks alone, and a
+ * fixture tree a caller passes in has none in front of it at all.
  *
  * Both of those checks read what this file hands back, so with
  * the refusal in place neither ever meets an empty workflow, and

@@ -17,9 +17,10 @@
  * markers, and answers about a file no instance loads. The
  * properties are the roster this phase expects, the send-free rule,
  * the one schedule trigger, the guards in front of a model call, and
- * the forbidden names. The roster and the send-free rule stand here
- * today, beside the surface they all read; the rest arrive with
- * their own cases over the rest of this stage.
+ * the forbidden names. The roster, the send-free rule and the one
+ * schedule trigger stand here today, beside the surface they all
+ * read; the rest arrive with their own cases over the rest of this
+ * stage.
  *
  * That surface is PARSED nodes and never the artifact's text.
  * `loadBuiltWorkflows` hands over each artifact's own `nodes` array
@@ -60,7 +61,7 @@ import type { BuiltWorkflowNode } from './workflow-dist.js';
 import { describe, expect, it } from 'vitest';
 
 import { loadBuiltWorkflows, nodesMatching } from './workflow-dist.js';
-import { isSendCapable } from './workflow-rosters.js';
+import { isScheduleTrigger, isSendCapable } from './workflow-rosters.js';
 
 // ---------------------------------------------------------------------------
 // Built tree
@@ -133,6 +134,31 @@ const PHASE_3_WORKFLOW_IDS = ['ar-dispatch'] as const;
 function isSendCapableNode(node: BuiltWorkflowNode): boolean {
   return isSendCapable(node.type);
 }
+
+// ---------------------------------------------------------------------------
+// The one schedule trigger
+// ---------------------------------------------------------------------------
+
+/**
+ * The workflow the one schedule trigger belongs to, by id.
+ *
+ * Declared rather than read off {@link PHASE_3_WORKFLOW_IDS}, which
+ * spells the same id and today holds nothing else. The two are
+ * separate claims that coincide while the tree holds one workflow:
+ * that roster says which artifacts the build is expected to produce,
+ * this says which one of them schedules. Five more workflows arrive
+ * in phases 5 and 6 and none of them is a schedule, so the roster
+ * grows and this stays a set of one — which is the property itself,
+ * and is what a value derived from a list that grew with it would
+ * stop asserting.
+ *
+ * By id and never by file name, for the reason
+ * {@link PHASE_3_WORKFLOW_IDS} gives: a workflow is one file called
+ * `<workflow-id>.json`, so a file name is a derivation and an id is
+ * the thing to keep in step with the roster table in
+ * `workflows/src/README.md`.
+ */
+const SCHEDULE_TRIGGER_WORKFLOW_ID = 'ar-dispatch';
 
 describe('workflow invariants — built tree', () => {
   // The surface every check in this file reads, asserted where it
@@ -263,5 +289,51 @@ describe('workflow invariants — built tree', () => {
     const carried = BUILT_WORKFLOWS.flatMap((workflow) => workflow.nodeTypes);
 
     expect(swept).toEqual(carried);
+  });
+
+  // The one-trigger rule read over built output: one schedule
+  // trigger in the whole tree, and `ar-dispatch` is the workflow
+  // that carries it. `SCHEDULE_TRIGGER_TYPE` argues why the type is
+  // a set of one, and which of a workflow's other triggers are
+  // legitimate and start nothing on a clock.
+  //
+  // Unlike the send-free rule beside it, this one has to FIND
+  // something, which inverts what a wrong matcher costs: recognise
+  // too little and the list comes back empty, too much and it comes
+  // back one entry per node in the tree, and both redden. So it
+  // needs no coverage case of its own the way an absence check here
+  // does. A matcher or a walk that reached nothing answers with an
+  // empty list, and empty is the failing answer here rather than the
+  // passing one; the side it is held against is written down rather
+  // than read off the tree, so a build that produced no
+  // `ar-dispatch` at all reddens it too.
+  //
+  // Read off `nodeTypes` rather than through `nodesMatching`, for
+  // two reasons the reader gives itself. That list is kept undeduped
+  // for a count of exactly this shape, where a set would read a
+  // workflow carrying two triggers as one carrying one. And what a
+  // failure has to name here is the artifact and not the node, which
+  // the `<file>:<node name>` label gives up only by being split —
+  // which its own docs say never to do, nothing stopping a node name
+  // from carrying a colon.
+  //
+  // So one file name per trigger found, held against a list of one,
+  // which is both halves of the property in a single comparison. A
+  // second trigger prints as a second file name rather than as a
+  // number, and one in the wrong workflow prints the workflow to
+  // open.
+  //
+  // What it rests on and what it does not reach. That `nodeTypes` is
+  // the types the artifacts carry, index for index, is the surface
+  // case's claim rather than this one's. And a count of one is not a
+  // schedule that fires: a trigger left `disabled` is in the tree
+  // and on no clock, and neither the type nor a count over it parts
+  // that tree from a running one.
+  it('holds exactly one schedule trigger, and ar-dispatch carries it', () => {
+    const found = BUILT_WORKFLOWS.flatMap((workflow) => workflow.nodeTypes
+      .filter((type) => isScheduleTrigger(type))
+      .map(() => workflow.file));
+
+    expect(found).toEqual([`${SCHEDULE_TRIGGER_WORKFLOW_ID}.json`]);
   });
 });
