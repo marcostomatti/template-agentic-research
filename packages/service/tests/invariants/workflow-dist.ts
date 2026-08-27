@@ -230,14 +230,15 @@ export class EmptyDistDirectoryError extends Error {
  * moved, and no case is left to name what is not there.
  *
  * What parts them is a check that must FIND something, and which
- * workflows have one is a matter of what a roster happens to name
- * rather than a property of the build. `ar-dispatch` has
- * several: the system's one schedule trigger has to live in it,
- * and `dispatch-sql.ts` names a node of it per property the
- * dispatcher rests on, each entry held to the statement its node
- * runs. A workflow no roster names carries absence checks alone,
- * and a fixture tree a caller passes in has none in front of it
- * at all.
+ * workflows have one is a matter of what some check happens to name
+ * rather than a property of the build. `ar-dispatch` has several:
+ * the system's one schedule trigger has to live in it,
+ * `dispatch-sql.ts` names a node of it per property the dispatcher
+ * rests on, each entry held to the statement its node runs, and the
+ * suite reading that roster names its trigger and both its claims to
+ * hold the graph they sit in. A workflow nothing names carries
+ * absence checks alone, and a fixture tree a caller passes in has
+ * none in front of it at all.
  *
  * Every one of those checks reads what this file hands back, so
  * with the refusal in place none of them ever meets an empty
@@ -343,8 +344,10 @@ export interface BuiltWorkflow {
    * there — `connections`, `settings`, `meta`, `tags` — and
    * declaring that here would give a format this repo does not
    * own a second home in it. Narrowing a member where it is read
-   * costs the one case reading it a line and keeps the rest of
-   * the format out of this file.
+   * keeps the rest of the format out of this file, at whatever
+   * that narrowing costs whoever does it: a line for a member a
+   * case can test where it stands, a walk of its own for one
+   * shaped like a graph.
    *
    * {@link BuiltWorkflow.nodes} is this object's own `nodes`
    * member rather than a copy of it, so the two cannot come

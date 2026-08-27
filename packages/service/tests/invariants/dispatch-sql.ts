@@ -79,10 +79,12 @@
  * both claim statements, over the reschedule folded into each of
  * them, and over the row the dispatcher opens for a claimed unit.
  * `dispatch-sql.test.ts` holds every one of them against the node
- * it names, over the tree this package builds. What is left is
- * the rest of that suite, which reads the same workflow for
- * properties no statement carries — its wiring, and the setting
- * that decides where a failure goes.
+ * it names, over the tree this package builds, and reads the same
+ * workflow for properties no statement carries — the first of
+ * those has landed with them, both claims fed off the trigger
+ * rather than one behind the other. What is left is where a
+ * failure goes: the branch a failed invocation takes, and the
+ * setting that decides there is one to take.
  */
 
 import type { BuiltWorkflow } from './workflow-dist.js';

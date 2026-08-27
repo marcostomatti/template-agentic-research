@@ -17,41 +17,47 @@
  * node that invokes a target reaching a node that closes the run.
  * Two are absences: no statement parameterized from the items its
  * node was handed, and no node left to carry on down its regular
- * output after an error. The first two must-find checks have landed,
- * and the first of the absences with them; the two over this
- * workflow's wiring and the one over the setting that decides where
- * a failure goes arrive later in this stage.
+ * output after an error. Three of the four must-find checks have
+ * landed and the first of the absences with them. What is left reads
+ * this same workflow for where a failure goes: the branch a failed
+ * invocation takes, and the setting that decides there is one to
+ * take.
  *
- * What each of them reads is a parsed member, and for a statement
- * that means the `query` parameter its node carries and the
- * `options` member holding the values it is run with, rather than
- * the artifact's text. An artifact is one JSON document, so a phrase
- * looked for across it is answered alike by a sticky note, a display
- * name and the SQL of some other node — and this workflow is a poor
- * one to ask that way, spelling its own node names in its notes and
- * arguing its own properties inside its statements.
- * `queryParametersOf` and {@link queryValuesOf} are the two
- * readings, and `sqlWords` drops the prose out of what the first
- * hands back; none of the three is a thing a sweep over characters
- * can do.
+ * What each of them reads is a parsed member. For a statement that
+ * means the `query` parameter its node carries and the `options`
+ * member holding the values it is run with; for the wiring it means
+ * `connections`, which the format keys by the name of the node an
+ * edge leaves. Never the artifact's text. An artifact is one JSON
+ * document, so a phrase looked for across it is answered alike by a
+ * sticky note, a display name and the SQL of some other node — and
+ * this workflow is a poor one to ask that way, spelling its own node
+ * names in its notes and arguing its own properties inside its
+ * statements. `queryParametersOf` and {@link queryValuesOf} are the
+ * two readings over a statement, {@link inboundEdgeLabels} the one
+ * over the graph, and `sqlWords` drops the prose out of what the
+ * first hands back; none of the four is a thing a sweep over
+ * characters can do.
  *
  * The other half is what stops the file passing by finding nothing,
  * and the two kinds of check here want different answers to it. For
- * the ones that must FIND something the tree, the workflow and the
- * entry are each refused rather than answered. The tree is refused a
- * module away, `loadBuiltWorkflows` throwing on a `workflows/dist/`
- * that is absent, is not a directory or holds no `*.json`, and on
- * the first artifact carrying no node — both before a case runs, and
- * both naming the command that fills the tree. The workflow is
- * refused by {@link dispatchWorkflow}, every property here belonging
- * to that one workflow. An entry that could not fail, requiring
- * nothing or requiring a fragment holding no word, is refused where
- * its fragments are read rather than counted as an entry a run
- * reached. The hole none of those refusals reaches is the roster
- * going empty, which no assertion over a list of offenders can
- * report: emptied, there is no entry left to go unsatisfied and the
- * list comes back the same either way. {@link REACHED_RULE_IDS} and
- * the case holding it against the roster are what report that.
+ * the ones that must FIND something the tree and the workflow are
+ * refused rather than answered, and so is a roster entry that could
+ * not fail. The tree is refused a module away, `loadBuiltWorkflows`
+ * throwing on a `workflows/dist/` that is absent, is not a directory
+ * or holds no `*.json`, and on the first artifact carrying no node —
+ * both before a case runs, and both naming the command that fills
+ * the tree. The workflow is refused by {@link dispatchWorkflow},
+ * every property here belonging to that one workflow. An entry that
+ * could not fail, requiring nothing or requiring a fragment holding
+ * no word, is refused where its fragments are read rather than
+ * counted as an entry a run reached. The hole none of those refusals
+ * reaches is the roster going empty, which no assertion over a list
+ * of offenders can report: emptied, there is no entry left to go
+ * unsatisfied and the list comes back the same either way.
+ * {@link REACHED_RULE_IDS} and the case holding it against the
+ * roster are what report that. A property held against a written
+ * expectation instead has nothing behind it to go empty, which is
+ * why the wiring check ships no case of that kind.
  *
  * Which is why the tree is read at module scope rather than in a
  * case, the way `workflows.test.ts` and `naming.test.ts` resolve
@@ -419,6 +425,171 @@ const PER_ITEM_PLANT = plantedQueryNode('Open A Run Per Unit', {
   options: { queryReplacement: PER_ITEM_VALUES },
 });
 
+// ---------------------------------------------------------------------------
+// How a node is fed
+// ---------------------------------------------------------------------------
+
+/**
+ * The node names one output index of one connection is wired to.
+ *
+ * `connections` is the whole graph the n8n format carries and it is
+ * nested three deep: keyed by the name of the node an edge LEAVES,
+ * then by connection type, then an array indexed by OUTPUT index
+ * whose every entry is a list of objects naming a target node and
+ * the input it arrives at. This is the innermost of those three,
+ * reduced to the names.
+ *
+ * Everything walked here arrives out of a `JSON.parse` with no
+ * schema checked on the way in, so an entry that is not an array,
+ * one holding something that is not an object, and a target whose
+ * `node` is not a string are each passed over rather than refused.
+ * Quiet on purpose, and safe because of the direction the claim
+ * resting on it fails in: an edge that cannot be read is an edge not
+ * reported, and what is asserted over these names is that the edges
+ * they stand for are THERE.
+ */
+function targetNames(entries: unknown): readonly string[] {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+
+  const targets: readonly unknown[] = entries;
+  const names: string[] = [];
+
+  for (const target of targets) {
+    if (typeof target !== 'object' || target === null) {
+      continue;
+    }
+
+    const node = (target as Record<string, unknown>).node;
+
+    if (typeof node === 'string') {
+      names.push(node);
+    }
+  }
+
+  return names;
+}
+
+/**
+ * Every edge one source node has into `nodeName`, labelled
+ * `<source>:<type>[<output index>]`.
+ *
+ * One label per output the edge leaves by, so a node fed twice off
+ * two outputs of one source comes back as two labels rather than
+ * one. The index is worth carrying because a fan-out is several
+ * targets on ONE output: two claims sharing an output are one fire
+ * reaching both, the same two spread over two outputs are a
+ * different graph, and a label without the index could not tell them
+ * apart.
+ *
+ * A label to READ and never to split, the caution `nodesMatching`
+ * carries about its own: nothing stops a node name from holding a
+ * colon, and the name is the half a reader opens.
+ */
+function sourceEdgeLabels(
+  source: string,
+  byType: unknown,
+  nodeName: string,
+): readonly string[] {
+  if (typeof byType !== 'object' || byType === null) {
+    return [];
+  }
+
+  const labels: string[] = [];
+  const perType = Object.entries(byType as Record<string, unknown>);
+
+  for (const [type, value] of perType) {
+    if (!Array.isArray(value)) {
+      continue;
+    }
+
+    const outputs: readonly unknown[] = value;
+
+    for (let index = 0; index < outputs.length; index += 1) {
+      if (targetNames(outputs[index]).includes(nodeName)) {
+        labels.push(`${source}:${type}[${index}]`);
+      }
+    }
+  }
+
+  return labels;
+}
+
+/**
+ * Every edge in `workflow` that arrives at `nodeName`, sorted.
+ *
+ * What a claim about how a node is FED is made of. An n8n node runs
+ * once per input item, so how often it runs in a tick is settled by
+ * what is wired into it and by how many items each of those sources
+ * emits — which makes the edges ARRIVING at a node the thing to
+ * hold, and the edges leaving some other node the wrong end to hold
+ * it by.
+ *
+ * It is also what lets one comparison say both halves of `fed off
+ * the trigger rather than one behind the other`. Every path into a
+ * node, however long, ends in an edge into that node, so an arriving
+ * set holding the trigger and nothing else rules out a source at any
+ * distance exactly as it rules out an adjacent one.
+ *
+ * Sorted, so the answer does not move with the order `connections`
+ * happens to store its sources in. That order is editor-produced in
+ * the format's own exports and is no convention a hand-written
+ * source follows.
+ *
+ * A `connections` that is absent or is not an object answers empty,
+ * which is what an empty answer means here anyway: nothing is wired
+ * to that node.
+ */
+function inboundEdgeLabels(
+  workflow: BuiltWorkflow,
+  nodeName: string,
+): readonly string[] {
+  const connections = workflow.parsed.connections;
+
+  if (typeof connections !== 'object' || connections === null) {
+    return [];
+  }
+
+  const sources = Object.entries(connections as Record<string, unknown>);
+
+  return sources
+    .flatMap(([source, byType]) => sourceEdgeLabels(source, byType, nodeName))
+    .sort();
+}
+
+/**
+ * The node every branch of this workflow hangs off, by name.
+ *
+ * `connections` keys by node name, so this is both the name the
+ * graph is keyed by and the name a reader opens. Declared here and
+ * not read off `DISPATCH_SQL_RULES`, which names no node it has no
+ * statement to hold to — the trigger runs none, so nothing over
+ * there names it, and the wiring case is the only thing in this file
+ * that holds its name against the canvas.
+ *
+ * That it is a SCHEDULE trigger is a different claim with a home of
+ * its own: `workflows.test.ts` asserts there is exactly one in the
+ * whole built tree and that it lives in this workflow. What is
+ * asserted here is where the branches leave from.
+ */
+const TRIGGER_NODE_NAME = 'Schedule Trigger';
+
+/**
+ * The two nodes that claim a due row, by name, in the order the
+ * wiring case reports them.
+ *
+ * Declared apart from `DISPATCH_SQL_RULES` although every name here
+ * is one that roster carries too. They are two claims that coincide:
+ * the roster names a node because it runs a statement, this names
+ * one because it takes rows off the trigger, and a node gaining a
+ * statement or losing one is no reason for the wiring claim to move.
+ */
+const CLAIM_NODE_NAMES = [
+  'Claim Due Topics',
+  'Claim Due Export Subscriptions',
+] as const;
+
 describe('ar-dispatch invariants — built tree', () => {
   // Every entry in the roster held against the node it names, in the
   // one workflow the roster is scoped to. An entry that holds
@@ -623,6 +794,87 @@ describe('ar-dispatch invariants — built tree', () => {
       statementFromTheBatch: true,
       valuesFromOneItem: false,
       batchReadWrittenSomewhereInTheWorkflow: true,
+    });
+  });
+
+  // Both claims fed off the schedule trigger, and off nothing else,
+  // which is what keeps each of them to one run a tick.
+  //
+  // An n8n node runs once per INPUT item, and the schedule trigger
+  // emits exactly one item per fire — measured in the shipped node,
+  // which ends a tick by emitting a single-element array. So a claim
+  // wired to the trigger and to nothing else runs once. Chain the
+  // second claim behind the first and it runs once per row the first
+  // claimed, each run taking the cap afresh: a tick that claimed
+  // twenty topics would run the export claim twenty times, and every
+  // one of those runs claims and reschedules more subscriptions. The
+  // sweep over where a statement draws its values from holds the
+  // same multiplication from the other end; this is the half about
+  // the graph, and the two do not stand in for each other — values
+  // read per item are no help to a node that is run too often, and a
+  // node run once still writes the whole batch if that is what its
+  // values say.
+  //
+  // What is held is the set of edges ARRIVING at each claim rather
+  // than the set leaving the trigger, and one comparison then says
+  // both halves of the property. Carrying the trigger says the claim
+  // is fed by it. Carrying nothing else says no other node is, the
+  // sibling claim included — and since every path into a node ends
+  // in an edge into that node, that reaches a claim put behind the
+  // other at any distance and not only next to it.
+  //
+  // The names are held against the canvas in the same record, which
+  // is what parts a node that is gone from one that is wired
+  // wrongly: renamed, a claim reports no arriving edge at all, and a
+  // reader sent to look at a wire has a node to find first. It is
+  // also what makes this a claim about `nodes` and not about
+  // `connections` alone — an artifact whose graph is intact and
+  // whose node list is empty satisfies every edge held here.
+  // `loadBuiltWorkflows` refuses that artifact before a case runs,
+  // so the half cannot fire over this tree; take that refusal away
+  // and it is what reddens.
+  //
+  // Held against a written-down expectation rather than against an
+  // empty list, so nothing behind it can go quietly empty: a reader
+  // answering nothing and a reader answering every edge in the
+  // workflow both redden, which is the way round a must-find check
+  // fails and the reason it wants no coverage case of the kind an
+  // absence sweep needs. Both node names are written twice over,
+  // once to drive the read and once as what the read has to come
+  // back with, so neither spelling is compared with itself: a name
+  // wrong in one place disagrees with the other, and a name wrong in
+  // both is a name the canvas does not carry.
+  //
+  // What it does not say is how many items the trigger emits. That
+  // is a property of the node type, measured once against the
+  // published package and argued where the wiring was decided, and
+  // no artifact carries it.
+  it('feeds both claims off the schedule trigger and off nothing else', () => {
+    const workflow = dispatchWorkflow();
+    const onTheCanvas = new Set(workflow.nodes.map((node) => node.name));
+    const named = [TRIGGER_NODE_NAME, ...CLAIM_NODE_NAMES];
+
+    const wiring = {
+      namedNodesOnTheCanvas: named.filter((name) => onTheCanvas.has(name)),
+      claimsFedBy: CLAIM_NODE_NAMES.map((name) => ({
+        node: name,
+        from: inboundEdgeLabels(workflow, name),
+      })),
+    };
+
+    expect(wiring).toEqual({
+      namedNodesOnTheCanvas: [
+        'Schedule Trigger',
+        'Claim Due Topics',
+        'Claim Due Export Subscriptions',
+      ],
+      claimsFedBy: [
+        { node: 'Claim Due Topics', from: ['Schedule Trigger:main[0]'] },
+        {
+          node: 'Claim Due Export Subscriptions',
+          from: ['Schedule Trigger:main[0]'],
+        },
+      ],
     });
   });
 });
