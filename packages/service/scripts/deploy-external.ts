@@ -13,7 +13,9 @@
  * The sibling on the other side of that line is
  * `activate-workflows.sh`, which reaches a LOCAL instance through the
  * n8n CLI and so wants the container this one does without. It
- * arrives later in this stage, as does `audit-workflows.ts`.
+ * arrives later in this stage. `audit-workflows.ts` sits on this side
+ * of the same line and has opened, though what it reaches an instance
+ * with is its own command line, still to come.
  *
  * What it uploads is the `--external` build's output,
  * `workflows/dist-external/`, rather than `workflows/dist/`. That is
@@ -898,12 +900,13 @@ function remoteIdFor(
  * Arming a LOCAL instance is `activate-workflows.sh`, which goes
  * through the n8n CLI and arrives later in this stage.
  *
- * What it does not do is notice anything an instance holds that
- * this build did not produce. A workflow deployed off an older
- * checkout, under a name no source carries any more, is untouched
- * and unreported, because a deploy reads the listing to match on
- * and not to judge. Reading an instance back whole is
- * `audit-workflows.ts`, which arrives later in this stage.
+ * What it does not do is notice anything an instance holds that this
+ * build did not produce. A workflow deployed off an older checkout,
+ * under a name no source carries any more, is untouched and
+ * unreported, because a deploy reads the listing to match on and not
+ * to judge. Reading an instance back whole is `audit-workflows.ts`,
+ * which has opened; the command that does that reading arrives later
+ * in this stage.
  *
  * @param options - Where the checkout is, what to reach and how,
  *   and how to run the build.

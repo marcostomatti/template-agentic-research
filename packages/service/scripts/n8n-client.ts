@@ -34,14 +34,15 @@
  * activation going through the n8n CLI against a local container
  * rather than over HTTP. The first of those has opened and its
  * `deploy` calls in, listing what an instance holds and creating or
- * replacing each workflow against it; {@link activateWorkflow} is
- * the one of the four still waiting for a caller, arming being the
- * CLI path's job on a local instance and nothing a deploy does. The
- * other two commands arrive later in this stage. So
- * `n8n-workflow.ts` answers for three commands where this module
- * serves two, and what parts them is a transport rather than an
- * omission. The live seam under `tests/live/` arrives with them and
- * is no command at all.
+ * replacing each workflow against it; {@link activateWorkflow} is the
+ * one of the four still waiting for a caller, arming being the CLI
+ * path's job on a local instance and nothing a deploy does.
+ * `audit-workflows.ts` has opened since, with no call in it yet — the
+ * listing it wants arrives with its command line later in this stage,
+ * and so does `activate-workflows.sh`. So `n8n-workflow.ts` answers
+ * for three commands where this module serves two, and what parts
+ * them is a transport rather than an omission. The live seam under
+ * `tests/live/` arrives with them and is no command at all.
  *
  * {@link listWorkflows}, {@link createWorkflow},
  * {@link updateWorkflow} and {@link activateWorkflow} are those
