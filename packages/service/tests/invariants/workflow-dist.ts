@@ -60,10 +60,12 @@
  * one helper over that shape rather than over the tree, and it
  * sits here because naming every offender is what an absence
  * check owes a reader once it has been handed something to look
- * at. The assertions over the real tree arrive later in this
- * plan. The cases over this file drive fixture trees of their
- * own, which is what keeps both refusals reachable whatever the
- * built tree happens to hold.
+ * at. `workflows.test.ts` holds the assertions over the real
+ * tree and calls the walk at module scope; the properties it
+ * judges that tree by arrive over the rest of this stage. The
+ * cases over this file drive fixture trees of their own, which
+ * is what keeps both refusals reachable whatever the built tree
+ * happens to hold.
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
