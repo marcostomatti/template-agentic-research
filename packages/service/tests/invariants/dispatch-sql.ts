@@ -74,12 +74,12 @@
  * arrives later in this phase.
  *
  * The entry shape, the roster, the reduction a statement is
- * judged through, the reading that holds an entry against a node
- * and the entries over both claim statements are what have
- * landed. The rest — the reschedule folded into each claim, and
- * the row the dispatcher opens for a claimed unit — arrive next
- * in this stage, and the suite holding each entry against the
- * node it names arrives behind them.
+ * judged through, the reading that holds an entry against a node,
+ * and the entries over both claim statements and over the
+ * reschedule folded into each of them are what have landed. What
+ * is left is the row the dispatcher opens for a claimed unit,
+ * arriving next in this stage, and the suite holding each entry
+ * against the node it names behind it.
  */
 
 import type { BuiltWorkflow } from './workflow-dist.js';
@@ -236,18 +236,19 @@ export interface DispatchSqlRule {
  * that gives an enumerable roster its worth is over the roster
  * whole.
  *
- * None of the six is a hit for any needle in
+ * None of the eight is a hit for any needle in
  * `naming-patterns.ts`, checked the way `SEND_NODE_TYPES` next
  * door records checking its own: every member of every entry, run
  * with the matcher first proven live against its own needles.
  * Checking is what the case calls for, `tests/` sitting outside
  * that file's scan roots — nothing re-runs the pass, so this
- * sentence is the whole of what records it. It covers the six
+ * sentence is the whole of what records it. It covers the eight
  * that landed and nothing past them.
  *
- * The six over the two claim statements have landed. The
- * reschedule folded into each of them, and the row the dispatcher
- * opens for a claimed unit, arrive next in this stage.
+ * The six over the two claim statements have landed, and with
+ * them the two over the reschedule each of those statements folds
+ * in. The row the dispatcher opens for a claimed unit arrives
+ * next in this stage.
  */
 export const DISPATCH_SQL_RULES: readonly DispatchSqlRule[] = [
   // Three properties of one statement, so three entries held to
@@ -264,14 +265,17 @@ export const DISPATCH_SQL_RULES: readonly DispatchSqlRule[] = [
   // resolved to a number long before the suite reads the
   // statement, so the number is no steadier a thing to require.
   //
-  // Two of the six rest on the comment strip, and each is the
+  // Two of the eight rest on the comment strip, and each is the
   // property its own node argues in prose: this statement spells
   // `FOR UPDATE SKIP LOCKED` while saying why the reschedule is
   // folded into it, and `Claim Due Export Subscriptions` spells
   // `LIMIT` while saying that the cap is per claim. Take either
   // clause out and its entry does report the phrase missing, but
   // only because the reduction drops comments before it reads a
-  // word. Measured over the built statements.
+  // word. The other six do not, the two over the bound columns
+  // among them, no statement here naming a bound anywhere but in
+  // the expression that applies it. Measured over the built
+  // statements, entry by entry.
   {
     id: 'topic-claim-skips-locked',
     property:
@@ -334,6 +338,51 @@ export const DISPATCH_SQL_RULES: readonly DispatchSqlRule[] = [
       'the cap and not by the size of the backlog.',
     nodeName: 'Claim Due Export Subscriptions',
     requires: ['LIMIT'],
+  },
+  // The reschedule folded into each of those two statements, so
+  // two more entries and no third node to name. Claim and
+  // reschedule are one statement on purpose — the lock the claim
+  // takes has to hold until the new due time is written — which
+  // leaves each claim node carrying four properties at once, told
+  // apart by what they require rather than by where they are
+  // read.
+  //
+  // Each requires the two bound COLUMNS, both of them, and
+  // nothing of the expression over them. A reschedule that
+  // dropped the bounds names neither and is reported; one that
+  // floors and forgets to cap names one and is reported too,
+  // `requires` being all of its fragments rather than any. The
+  // column words are what the reduction leaves whole, so neither
+  // fragment is carried by the `interval_seconds` beside them.
+  //
+  // What an entry deliberately does not report is a clamp naming
+  // both columns and applying them wrongly, argued in the header
+  // and answered by `clampIntervalSeconds` in
+  // `src/lib/schedule.ts` with the live seam behind it. What it
+  // cannot report at all is WHERE in the statement a word sat: a
+  // bound column pulled into the claim's own SELECT and never
+  // used to move `next_run_at` would carry the fragment, the
+  // reduction being over one statement whole and a node running
+  // one.
+  {
+    id: 'topic-reschedule-clamped',
+    property:
+      'Moves a claimed topic to a due time one interval away, ' +
+      'with that interval held inside the bounds the row ' +
+      'carries, so a proposal made outside them is not what the ' +
+      'next tick waits on.',
+    nodeName: 'Claim Due Topics',
+    requires: ['min_interval_seconds', 'max_interval_seconds'],
+  },
+  {
+    id: 'export-reschedule-clamped',
+    property:
+      'Moves a claimed export subscription to a due time one ' +
+      'interval away, with that interval held inside the bounds ' +
+      'the row carries, so a proposal made outside them is not ' +
+      'what the next tick waits on.',
+    nodeName: 'Claim Due Export Subscriptions',
+    requires: ['min_interval_seconds', 'max_interval_seconds'],
   },
 ];
 
