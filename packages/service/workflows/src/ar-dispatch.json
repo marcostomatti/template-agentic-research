@@ -108,7 +108,7 @@
       "typeVersion": 1.3,
       "position": [1100, 0],
       "onError": "continueErrorOutput",
-      "notes": "Run once for each item is a requirement and not a tuning choice: the once mode resolves ONE workflow id, from the first input item, and sends every claimed unit to it, which would put every export subscription through the topic workflow. The id is read off Plan Dispatch rather than $json because the Postgres node in front replaces an item's json with its own RETURNING projection, leaving a run id and nothing of the claimed unit; pairedItem carries the lineage that far. Waiting for the sub-workflow is the default written out, a run closed by outcome needing one: without it a unit reaches the success output as soon as its sub-execution starts. onError puts a failure on a second output the executor appends here; continuing on the REGULAR output would hand a failed invocation to whatever closes the run as succeeded.",
+      "notes": "Run once for each item is a requirement and not a tuning choice: the once mode resolves ONE workflow id, from the first input item, and sends every claimed unit to it, which would put every export subscription through the topic workflow. The id is read off Plan Dispatch rather than $json because the Postgres node in front replaces an item's json with its own RETURNING projection, leaving a run id and nothing of the claimed unit; pairedItem carries the lineage that far. Waiting for the sub-workflow is the default written out, a run closed by outcome needing one: without it a unit reaches the success output as soon as its sub-execution starts. onError puts a failure on a second output the executor appends here; continuing on the REGULAR output would hand a failed invocation to Close Run Succeeded.",
       "parameters": {
         "source": "database",
         "workflowId": {
@@ -139,6 +139,26 @@
         "query": "UPDATE runs\n-- Closes the run Open Run opened for this unit, on the output the executor appends\n-- when Invoke Target Workflow fails. Every unit reaching that node already has a row\n-- here, so this statement finishes one and never writes one: a row exists for what\n-- the tick dispatched, and this branch settles how it went.\n\n-- failed rather than partial, because the run's whole work was the one invocation.\n-- partial is the member for a pass that produced real work and a real failure at\n-- once, and no such split is available here: a unit is dispatched or it is not.\n\n-- status and finished_at are set together because nothing in the schema holds them\n-- together. src/db/schema/runs.ts records that a row saying failed with no finish, or\n-- carrying a finish while still saying running, is storable, and that only the writer\n-- pairs them. This statement is that writer for the rows this workflow opens.\n\n-- The entry is APPENDED and not written over. runs.errors is one entry per failure\n-- defaulting to an empty list, and this row's id does not stay inside this workflow:\n-- Open Run's projection is the item Invoke Target Workflow forwards to the target, so\n-- a target that recorded its own failure against this run before failing has entries\n-- here already. Assigning a fresh list would drop them and leave the dispatcher's\n-- account of the failure standing as the whole of it.\n\n-- The entry names the target that could not be invoked and the executor's own\n-- message. A null target is an answer rather than a missing one: Plan Dispatch passes\n-- on a unit whose kind it has no entry for carrying a null where an id belongs, and\n-- that unit and one carrying a good id with no workflow behind it fail onto this same\n-- branch. The route cannot tell those apart and the stored entry can, a JSON null\n-- naming the routing miss where a string names the id that had nothing behind it.\n\n-- Both jsonb parameters are handed over as JSON TEXT rather than as bare values, and\n-- that is what makes the statement safe rather than what makes it tidy. A query\n-- parameter is split on commas unless it parses as JSON on its own, and an executor's\n-- message routinely carries one, so a bare message would arrive as two values and the\n-- statement would be refused for a parameter count it never asked for. Stringifying\n-- makes every possible answer parse, so each is taken whole. It carries the null too,\n-- which reaches jsonb as a null and not as a string spelling one. The run id needs no\n-- wrapper for the narrower reason that a number already parses as JSON.\nSET\n  status = 'failed',\n  finished_at = now(),\n  errors = errors || jsonb_build_array(jsonb_build_object(\n    'node', 'Invoke Target Workflow',\n    'target_workflow_id', $2::jsonb,\n    'error', $3::jsonb\n  ))\nWHERE id = $1::bigint",
         "options": {
           "queryReplacement": "={{ $('Open Run').item.json.run_id }}, {{ JSON.stringify($('Plan Dispatch').item.json.target_workflow_id ?? null) }}, {{ JSON.stringify($json.error ?? null) }}"
+        }
+      }
+    },
+    {
+      "id": "close-run-succeeded",
+      "name": "Close Run Succeeded",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1320, -100],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE runs\n-- Closes the run Open Run opened for this unit, on the output Invoke Target Workflow\n-- takes when its invocation returns. Close Run Failed is the same statement on that\n-- node's other output, and the two arguments the pair shares are written out there\n-- rather than repeated here: why a row always exists for this to finish and never to\n-- write, and why status and finished_at have to be set together.\n\n-- ok is what a finished pass with nothing to report carries. RUN_STATUSES in\n-- src/db/schema/values.ts holds no member spelled succeeded, and ok rather than\n-- partial follows Close Run Failed's reason for failed rather than partial: from this\n-- workflow's side the run's whole work was the one invocation, and a unit is either\n-- dispatched or it is not.\n\n-- What that reading leaves open is a question about the row rather than about this\n-- statement. The run id Open Run returned is the item Invoke Target Workflow forwards\n-- to the target, so a target can write entries into this row's errors and still\n-- return. This statement does not read that column, so such a run closes ok while\n-- carrying the entries that make partial the accurate member, a pairing\n-- src/db/schema/runs.ts records as storable and leaves entirely to the writer. This\n-- writer takes the invocation's outcome as the whole answer. Nothing reaches the case\n-- yet, no target existing until phase 5, which is the phase that has to choose\n-- between reading errors here and holding every target to reporting its own status.\n\n-- The run id is read off Open Run rather than off $json, for a different reason than\n-- the same read has on the failed branch. Invoke Target Workflow waits for the\n-- sub-workflow, so what arrives here is the TARGET's output and neither the claimed\n-- unit nor the run row survives the invocation. What does survive is pairedItem, set\n-- to the input index on every item forwarded, and that is the whole of what makes\n-- $('Open Run').item resolve here.\n\n-- Two honest limits, both of them counts rather than values, and both settled by the\n-- target's contract rather than by anything here. The first is that this node runs\n-- once per item on the success output, which is not once per dispatched unit: the\n-- items are whatever the target returned, so a target answering with three items\n-- closes one run three times. The repeats cost nothing past the writes. They agree on\n-- the status, and they agree on the finish as well, a node execution sending its\n-- whole batch as one query string and Postgres running that as one transaction, which\n-- is what fixes now() across it.\n\n-- That same fixing is worth reading the other way, because it says what the column\n-- holds. Every run this node closes in a tick carries one finish, and it is the time\n-- the dispatcher closed them rather than the time any target stopped working.\n\n-- The second limit is the other end of the count. A target answering with NO items\n-- puts nothing on this output at all, so its run is never closed: it keeps the\n-- running status Open Run left it at, which src/db/schema/runs.ts records as the\n-- member no writer reports and which nothing here can age out, a row whose pass died\n-- reading exactly like one still working. Phase 5 writes the first target and is\n-- where both limits stop being hypothetical.\nSET\n  status = 'ok',\n  finished_at = now()\nWHERE id = $1::bigint",
+        "options": {
+          "queryReplacement": "={{ $('Open Run').item.json.run_id }}"
         }
       }
     },
@@ -201,7 +221,9 @@
     },
     "Invoke Target Workflow": {
       "main": [
-        [],
+        [
+          { "node": "Close Run Succeeded", "type": "main", "index": 0 }
+        ],
         [
           { "node": "Close Run Failed", "type": "main", "index": 0 }
         ]

@@ -19,11 +19,11 @@
  * is the step that spends all of it, invoking the workflow each unit was
  * routed to and taking a second output when that fails. A Postgres node on
  * that second output closes the run as failed, with an entry naming the
- * target it could not invoke; the node on the success output arrives later
- * in this stage. The arithmetic behind all of it lives here and nothing
- * around it. The columns it reads are the schedulable set declared in
- * `src/db/schema/scheduling.ts`, and it reads them as values handed in —
- * no I/O, no clock, no database handle. A rule reaching for one of those
+ * target it could not invoke, and a second one on the success output
+ * closes it as finished. The arithmetic behind all of it lives here and
+ * nothing around it. The columns it reads are the schedulable set declared
+ * in `src/db/schema/scheduling.ts`, and it reads them as values handed in
+ * — no I/O, no clock, no database handle. A rule reaching for one of those
  * could neither be spliced into a node nor be tested without the thing it
  * reached for.
  *
