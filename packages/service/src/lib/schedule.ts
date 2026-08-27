@@ -17,14 +17,15 @@
  * the workflow its kind asks for. A Postgres node behind it opens a `runs`
  * row against every one of them, and an Execute Workflow node behind that
  * is the step that spends all of it, invoking the workflow each unit was
- * routed to and taking a second output when that fails. What arrives later
- * in this stage is the pair of nodes on those two outputs, each closing a
- * run row on whichever way the invocation went. The arithmetic behind all
- * of it lives here and nothing around it. The columns it reads are the
- * schedulable set declared in `src/db/schema/scheduling.ts`, and it reads
- * them as values handed in — no I/O, no clock, no database handle. A rule
- * reaching for one of those could neither be spliced into a node nor be
- * tested without the thing it reached for.
+ * routed to and taking a second output when that fails. A Postgres node on
+ * that second output closes the run as failed, with an entry naming the
+ * target it could not invoke; the node on the success output arrives later
+ * in this stage. The arithmetic behind all of it lives here and nothing
+ * around it. The columns it reads are the schedulable set declared in
+ * `src/db/schema/scheduling.ts`, and it reads them as values handed in —
+ * no I/O, no clock, no database handle. A rule reaching for one of those
+ * could neither be spliced into a node nor be tested without the thing it
+ * reached for.
  *
  * Dual-context is what shapes the file. A workflow source writing
  * `__INLINE:schedule.ts__` has this module transpiled and spliced into its
