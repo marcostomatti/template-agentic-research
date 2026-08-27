@@ -17,26 +17,33 @@
  * node that invokes a target reaching a node that closes the run.
  * Two are absences: no statement parameterized from the items its
  * node was handed, and no node left to carry on down its regular
- * output after an error. All four must-find checks have landed and
- * the first of the absences with them. What is left is the second:
- * the setting read here off the one node that has a failure to
- * route, read there off every node in the workflow.
+ * output after an error. All six have landed, and each absence ships
+ * a case behind it saying its rule would have named an offender had
+ * there been one and would have named nothing else — eight cases
+ * over the six properties. The setting a node carries about its own
+ * failure is read twice over, and the two readings are two claims:
+ * once off the one node that has a failure to route, as the half of
+ * that branch a reading of the graph cannot see, and once off every
+ * node in the workflow, which is what reaches the nodes that have
+ * none.
  *
  * What each of them reads is a parsed member. For a statement that
  * means the `query` parameter its node carries and the `options`
  * member holding the values it is run with; for the wiring it means
  * `connections`, which the format keys by the name of the node an
- * edge leaves, and the `onError` member of the node a second output
- * is appended to. Never the artifact's text. An artifact is one JSON
- * document, so a phrase looked for across it is answered alike by a
- * sticky note, a display name and the SQL of some other node — and
- * this workflow is a poor one to ask that way, spelling its own node
- * names in its notes and arguing its own properties inside its
- * statements. `queryParametersOf` and {@link queryValuesOf} are the
- * two readings over a statement, {@link inboundEdgeLabels} the one
- * over the graph, and `sqlWords` drops the prose out of what the
- * first hands back; none of the four is a thing a sweep over
- * characters can do.
+ * edge leaves; and for what a node does with its own failure it
+ * means `onError`, read off the node a second output is appended to
+ * and off every node besides. Never the artifact's text. An artifact
+ * is one JSON document, so a phrase looked for across it is answered
+ * alike by a sticky note, a display name and the SQL of some other
+ * node — and this workflow is a poor one to ask that way, spelling
+ * its own node names in its notes and arguing its own properties
+ * inside its statements. `queryParametersOf` and
+ * {@link queryValuesOf} are the two readings over a statement,
+ * {@link inboundEdgeLabels} the one over the graph,
+ * {@link continuesPastAnError} the one over a node's own setting,
+ * and `sqlWords` drops the prose out of what the first hands back;
+ * none of the five is a thing a sweep over characters can do.
  *
  * The other half is what stops the file passing by finding nothing,
  * and the two kinds of check here want different answers to it. For
@@ -70,10 +77,10 @@
  * reports what a clean workflow reports, and no refusal in front of
  * it helps: an input worth asserting over is exactly what leaves
  * nothing to find. So an absence here ships the nodes that say its
- * rule fires, the near miss that says it fires on the right thing,
- * and, where the rule is keyed to a phrase, one reading of the
- * artifact whole that says the phrase it looks for is written in
- * this workflow at all.
+ * rule fires, a near miss per widening the rule has to survive, and
+ * one reading of the workflow itself saying that the thing the rule
+ * looks for — a phrase in a statement, a member on a node — is
+ * written in it at all.
  */
 import type { BuiltWorkflow, BuiltWorkflowNode } from './workflow-dist.js';
 
@@ -614,6 +621,165 @@ const INVOKING_NODE_NAME = 'Invoke Target Workflow';
  */
 const FAILURE_CLOSING_NODE_NAME = 'Close Run Failed';
 
+// ---------------------------------------------------------------------------
+// What a node does with its own failure
+// ---------------------------------------------------------------------------
+
+/**
+ * The `onError` value that hands a failed node's own input on down
+ * the output every ordinary edge leaves by.
+ *
+ * Measured in `n8n-core` 2.15.0, where the whole of it happens. The
+ * executor admits two values that let a pass carry on past a node
+ * that threw, and under either of them it puts that node's INPUT
+ * items on an output as though the node had produced them; this is
+ * the one that puts them on output 0. It then clears the error at
+ * the top of the next node's turn, so the pass reaches the end with
+ * nothing left to report and the execution is recorded as a success.
+ * The failure is in that node's own run data and nowhere else.
+ *
+ * Which is what turns a write that did not happen into one that
+ * reads as though it did. Every statement this workflow runs writes:
+ * two claim a due row and reschedule it in the same statement, one
+ * opens the `runs` row that attributes the schedule, two close a run
+ * by outcome. Set `Open Run` to this and a failed insert hands the
+ * units it was given straight on to `Invoke Target Workflow`, which
+ * dispatches every one of them against a run row that was never
+ * opened, and the tick comes back green. Nothing counts rows written
+ * against items received, so the first sign of it is a table that
+ * stopped growing.
+ *
+ * The setting is argued in three places in this package already, two
+ * of them on this workflow's own canvas, and all three argue it at
+ * `Invoke Target Workflow`, where what it would cost is a failed
+ * dispatch handed to the node that closes a run as succeeded. Those
+ * are about the one node that has a failure to route. The nodes that
+ * have none are where the cost is a lost write, and for them there
+ * is no clause in a statement and no edge in the graph to read
+ * instead: a sweep over the member is the whole of what says
+ * anything about them.
+ *
+ * An absent setting is neither this nor an omission. The same
+ * reading falls back to a legacy boolean when `onError` is missing
+ * and that boolean defaults to false, so a node carrying nothing
+ * stops the pass — which is why all but one of this workflow's nodes
+ * carry nothing, and why the rule is keyed to a value rather than to
+ * the member being written. The retry guard in `workflows.test.ts`
+ * is the other way round and says so: there absent and the refused
+ * value behave alike, so that rule is deliberately stricter than the
+ * executor.
+ *
+ * It is a habit diverged from rather than a gap filled. In the
+ * workflow set this port draws from every one of the 76 nodes that
+ * carry the setting at all carries this value, and not one carries
+ * the value that routes a failure — measured over its built output —
+ * which is the mechanism under the incident `src/lib/schedule.ts`
+ * records, where a pass spent a month of model budget in about forty
+ * minutes and recorded every run of it as a success.
+ *
+ * Spelled here for the rule and again in each of the plants, so the
+ * value and the nodes it has to fire on are two spellings of it
+ * rather than one compared with itself. That is the split
+ * {@link BATCH_VALUES} draws in this file, and for its reason.
+ */
+const CONTINUE_ON_REGULAR_OUTPUT = 'continueRegularOutput';
+
+/**
+ * Whether `node` is set to carry on down its regular output when it
+ * fails.
+ *
+ * A parsed member, and the member the executor reads. A value
+ * spelled in a display name, in a sticky note or inside a
+ * statement's prose decides nothing, and this workflow spells a good
+ * deal in all three.
+ *
+ * What it does not read is `continueOnFail`, the boolean the
+ * executor still falls back to when `onError` is absent. A node
+ * carrying `continueOnFail: true` and no `onError` carries on down
+ * its regular output exactly as one carrying
+ * {@link CONTINUE_ON_REGULAR_OUTPUT} does, and nothing here sees it
+ * — measured in the same reading. So the rule is narrower than the
+ * property it stands for, and what it covers is the member a source
+ * written today spells: the boolean is what the format wrote before
+ * the setting existed, and no source under `workflows/src/` carries
+ * one. The edit is a second read arriving with the first source that
+ * does.
+ *
+ * A node left `disabled` answers as an enabled one does, the reading
+ * the rosters next door record of their own matchers. Here it is the
+ * intended answer rather than a limit: what is asserted is that no
+ * source carries the setting, and switching a node off is lost on
+ * the next import anyway, the instance being a deploy target and
+ * never a source.
+ */
+function continuesPastAnError(node: BuiltWorkflowNode): boolean {
+  return node.onError === CONTINUE_ON_REGULAR_OUTPUT;
+}
+
+/**
+ * A node that writes a row, planted under `name` with its `onError`
+ * set to `setting`.
+ *
+ * Built on {@link plantedQueryNode} so a plant carries a statement
+ * and an operation beside the setting under test: a rule reading
+ * some other member has something to find and still has to answer
+ * the way its plant declares. The statement is also what the
+ * argument is about — what this setting costs is a write that did
+ * not happen, so a plant with nothing to write would stand for a
+ * node with nothing to lose.
+ *
+ * Named for what the node does rather than for the value it carries,
+ * as every node planted in this suite is.
+ */
+function plantedWritingNode(
+  name: string,
+  setting: string,
+): BuiltWorkflowNode {
+  return {
+    ...plantedQueryNode(name, { query: PER_ITEM_STATEMENT }),
+    onError: setting,
+  };
+}
+
+/**
+ * A writing node set to carry on down its regular output, which is
+ * the one shape the sweep has to name.
+ */
+const CARRY_ON_PLANT = plantedWritingNode(
+  'Write A Row And Carry On',
+  'continueRegularOutput',
+);
+
+/**
+ * A writing node set to put its failures on a second output.
+ *
+ * The near miss for a rule keyed to the member rather than to what
+ * is in it, and the closest one there is: it is the other value the
+ * executor lets a pass carry on under, and it is what
+ * `Invoke Target Workflow` is set to, so a rule reading the member
+ * alone reports this workflow's own branch as an offender.
+ */
+const ROUTE_FAILURE_PLANT = plantedWritingNode(
+  'Write A Row And Route Its Failure',
+  'continueErrorOutput',
+);
+
+/**
+ * A writing node set to stop the pass, which is the third value the
+ * setting admits: measured in `n8n-workflow` 2.15.0, whose schema
+ * for the member is an enum of exactly these three.
+ *
+ * The near miss for a rule keyed to anything but the routing value.
+ * Stopping is the loud outcome and the one an absent setting behaves
+ * as, so a rule flagging it would refuse a workflow that fails
+ * safely — and no node here carries it, which leaves the case behind
+ * this one the only thing that would report a rule that flagged it.
+ */
+const STOP_THE_PASS_PLANT = plantedWritingNode(
+  'Write A Row And Stop',
+  'stopWorkflow',
+);
+
 describe('ar-dispatch invariants — built tree', () => {
   // Every entry in the roster held against the node it names, in the
   // one workflow the roster is scoped to. An entry that holds
@@ -926,11 +1092,12 @@ describe('ar-dispatch invariants — built tree', () => {
   // closes the run. Take the setting away and the edge is still
   // written in `connections`, still legal, and wired to an output
   // the executor never builds — so a reading of the graph alone
-  // passes over a workflow that drops every failure it has. The
-  // setting is read here off the one node with a failure to route;
-  // the value that would leave a node carrying on down its regular
-  // output instead is a sweep over every node in the workflow, and a
-  // check of its own.
+  // passes over a workflow that drops every failure it has. What is
+  // read here is that this one node routes its failures somewhere;
+  // that no node anywhere in the workflow is set to the other
+  // continuing value, the one that carries on down its regular
+  // output, is swept over every node by the last two cases in this
+  // file.
   //
   // What is held of the edge is the set arriving at
   // `Close Run Failed` rather than the set leaving the invocation,
@@ -958,22 +1125,25 @@ describe('ar-dispatch invariants — built tree', () => {
   // the way round a must-find check fails and the reason it wants no
   // coverage case of the kind an absence sweep needs.
   //
-  // Measured, seven legs. `inboundEdgeLabels` answering nothing, and
-  // answering every edge in the workflow, each redden this case and
-  // the wiring case above — both read it, and they are the only two
-  // legs that move a second case in this file. The other five redden
-  // this one alone, one per edit the property is about and none of
-  // them reachable by mutating a module: the setting dropped from
-  // the invocation, which leaves the edge written and wired to an
-  // output the executor never builds; the error output wired
-  // nowhere; the two closers swapped across the two outputs; the
-  // closing node's `parameters` emptied, so the branch ends in a
-  // node running no statement; and that node renamed in `nodes`
-  // alone, which moves the canvas half and the arriving set
-  // together. A tree with no artifact in it is none of the seven: it
-  // reports no case at all, `loadBuiltWorkflows` refusing before any
-  // of them runs, and only the class in the run log says which
-  // refusal it was.
+  // Measured, seven legs. Three move a second case in this file.
+  // `inboundEdgeLabels` answering nothing, and answering every edge
+  // in the workflow, each redden this case and the wiring case
+  // above, both of them reading it. The setting dropped from the
+  // invocation reddens this case and the setting sweep at the end of
+  // the file, which is the same fact read twice: with the member
+  // gone the edge is still written in `connections`, still legal,
+  // and wired to an output the executor never builds, while the
+  // sweep's own guard loses the one node that says it reads a member
+  // this workflow carries. The other four redden this one alone, one
+  // per edit the property is about and none of them reachable by
+  // mutating a module: the error output wired nowhere; the two
+  // closers swapped across the two outputs; the closing node's
+  // `parameters` emptied, so the branch ends in a node running no
+  // statement; and that node renamed in `nodes` alone, which moves
+  // the canvas half and the arriving set together. A tree with no
+  // artifact in it is none of the seven: it reports no case at all,
+  // `loadBuiltWorkflows` refusing before any of them runs, and only
+  // the class in the run log says which refusal it was.
   it('routes a failed invocation to the node that closes its run', () => {
     const workflow = dispatchWorkflow();
     const onTheCanvas = new Set(workflow.nodes.map((node) => node.name));
@@ -1001,6 +1171,119 @@ describe('ar-dispatch invariants — built tree', () => {
       onErrorAtTheInvocation: 'continueErrorOutput',
       failuresArriveFrom: ['Invoke Target Workflow:main[1]'],
       theBranchRunsAStatement: true,
+    });
+  });
+
+  // The rule that keeps a failure a failure: no node in
+  // `ar-dispatch` is set to carry on down its regular output after
+  // one.
+  //
+  // What the setting does is measured and argued on the constant
+  // this reads. What it costs is a write that did not happen
+  // reported as one that did. The executor hands a failed node's own
+  // input to the node behind it, clears the error, and records the
+  // pass as a success, so a failed `Open Run` dispatches every unit
+  // it was handed against a run row that does not exist and the tick
+  // comes back green.
+  //
+  // It is the second reading this file takes of how this workflow
+  // handles a failure, and the one that is about every node. The
+  // case above holds the invocation's failures to the node that
+  // closes their run, reading the setting off that one node because
+  // that is the node with a failure to route. This reads the same
+  // member off all of them, which is the only reading in this suite
+  // that reaches the nodes nobody wrote a branch for.
+  //
+  // Held against an empty array rather than counted, because the
+  // answer is already the report: `nodesMatching` labels every
+  // offender `<file>:<node name>`, which names the source to open
+  // under `workflows/src/` and the node inside it.
+  //
+  // An empty answer is also the passing answer, so what this is
+  // worth is what its input, its walk and its matcher are worth. The
+  // input is refused twice over, once for the tree and once for the
+  // workflow, both argued at the head of this file. The walk is
+  // `nodesMatching`, which refuses nothing and is worth what it was
+  // handed; that it reaches every node it was handed is asserted of
+  // the same walk by the sweep-coverage case in `workflows.test.ts`.
+  // The matcher, and that this workflow carries the member it reads
+  // at all, are what the case behind this one stands behind.
+  it('leaves no node carrying on down its regular output', () => {
+    const flagged = nodesMatching(
+      [dispatchWorkflow()],
+      continuesPastAnError,
+    );
+
+    expect(flagged).toEqual([]);
+  });
+
+  // The half an empty list cannot say: that the rule behind it would
+  // have named an offender had there been one, and that it would
+  // have named nothing else.
+  //
+  // Four halves in one record, so a failure names which of them
+  // moved rather than reporting that the guard broke.
+  //
+  // The first says the rule fires. Its plant spells the value out
+  // rather than reading the constant the rule reads, so the two are
+  // two spellings of it: emptied or misspelled, the constant leaves
+  // this half red while the claim above goes on passing over a
+  // workflow whose nodes carry nothing it would match.
+  //
+  // The two behind it are near misses, one per widening, and each is
+  // a value the executor admits. The routing value stands against a
+  // rule keyed to the member rather than to what is in it, and it is
+  // what the one node in this workflow that carries the setting is
+  // set to, so that widening reddens the claim above as well. The
+  // stopping value stands against a rule keyed to anything but the
+  // routing one: it stops the pass, which is the loud outcome and
+  // the one an absent setting behaves as, and no node here carries
+  // it, so nothing but this half would report a rule that flagged
+  // it.
+  //
+  // The fourth is about the workflow rather than the rule. The
+  // member this reads IS written in `ar-dispatch`, on the node that
+  // routes its failures, so the empty list above is a rule reading a
+  // member the workflow uses rather than one nothing carries. It
+  // asks only that something carries it, which is what parts it from
+  // the case above: that one holds a named node to a named value as
+  // part of the branch it describes, and this asks whether the sweep
+  // had anything to look at.
+  //
+  // Measured, eight legs, each naming the half it is about. A
+  // matcher recognising nothing reddens the first half alone and
+  // leaves the claim above green, which is the vacuity this case
+  // exists for; recognising everything reddens the claim and this
+  // together. Emptying the constant, and moving the plant's value
+  // off the one the rule reads, each redden the first half alone
+  // with the claim green, which is what the two spellings are for.
+  // Widening to the stopping value reddens the third half alone, and
+  // widening to the routing value reddens the second half and the
+  // claim together — the difference between a widening no node here
+  // would meet and one this workflow's own branch already meets. Two
+  // are edits to the built artifact rather than to a module: a node
+  // planted carrying the value reddens the claim alone, and the
+  // setting dropped from `Invoke Target Workflow` reddens the fourth
+  // half alongside the routing case above. A tree with no artifact
+  // in it is none of the eight: it reports no case at all, and only
+  // the class in the run log says which refusal it was.
+  it('flags the setting that carries on and nothing beside it', () => {
+    const workflow = dispatchWorkflow();
+    const detector = {
+      carriesOnDownTheRegularOutput: continuesPastAnError(CARRY_ON_PLANT),
+      routesTheFailureToASecondOutput:
+        continuesPastAnError(ROUTE_FAILURE_PLANT),
+      stopsThePassInstead: continuesPastAnError(STOP_THE_PASS_PLANT),
+      theSettingIsWrittenSomewhereInThisWorkflow: workflow.nodes.some(
+        (node) => node.onError !== undefined,
+      ),
+    };
+
+    expect(detector).toEqual({
+      carriesOnDownTheRegularOutput: true,
+      routesTheFailureToASecondOutput: false,
+      stopsThePassInstead: false,
+      theSettingIsWrittenSomewhereInThisWorkflow: true,
     });
   });
 });

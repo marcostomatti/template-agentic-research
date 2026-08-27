@@ -80,11 +80,11 @@
  * them, and over the row the dispatcher opens for a claimed unit.
  * `dispatch-sql.test.ts` holds every one of them against the node
  * it names, over the tree this package builds, and reads the same
- * workflow for properties no statement carries — both claims fed
- * off the trigger rather than one behind the other, and a failed
- * invocation reaching the node that closes its run. What is left
- * is the setting read there off the one node with a failure to
- * route, held over every node in the workflow.
+ * workflow for three properties no statement carries — both
+ * claims fed off the trigger rather than one behind the other, a
+ * failed invocation reaching the node that closes its run, and no
+ * node anywhere in it left to carry on down its regular output
+ * after a failure.
  */
 
 import type { BuiltWorkflow } from './workflow-dist.js';
