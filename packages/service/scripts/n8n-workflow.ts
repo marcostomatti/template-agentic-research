@@ -21,7 +21,8 @@
  * same line `workflow-markers.ts` draws against `build-workflows.ts`
  * with a different dependency on the far side — there a transpiler
  * and a directory tree, here a running instance and the key to reach
- * it. That half is `n8n-client.ts`, arriving later in this stage.
+ * it. That half is `n8n-client.ts`, whose calls arrive next in this
+ * stage.
  *
  * The payoff is the package's isolated and live test split. The
  * default suite touches no external service, so a rule answerable
