@@ -235,10 +235,10 @@ export class EmptyDistDirectoryError extends Error {
  * the system's one schedule trigger has to live in it,
  * `dispatch-sql.ts` names a node of it per property the dispatcher
  * rests on, each entry held to the statement its node runs, and the
- * suite reading that roster names its trigger and both its claims to
- * hold the graph they sit in. A workflow nothing names carries
- * absence checks alone, and a fixture tree a caller passes in has
- * none in front of it at all.
+ * suite reading that roster holds nodes it names against the wiring
+ * they sit in. A workflow nothing names carries absence checks
+ * alone, and a fixture tree a caller passes in has none in front of
+ * it at all.
  *
  * Every one of those checks reads what this file hands back, so
  * with the refusal in place none of them ever meets an empty

@@ -17,17 +17,17 @@
  * node that invokes a target reaching a node that closes the run.
  * Two are absences: no statement parameterized from the items its
  * node was handed, and no node left to carry on down its regular
- * output after an error. Three of the four must-find checks have
- * landed and the first of the absences with them. What is left reads
- * this same workflow for where a failure goes: the branch a failed
- * invocation takes, and the setting that decides there is one to
- * take.
+ * output after an error. All four must-find checks have landed and
+ * the first of the absences with them. What is left is the second:
+ * the setting read here off the one node that has a failure to
+ * route, read there off every node in the workflow.
  *
  * What each of them reads is a parsed member. For a statement that
  * means the `query` parameter its node carries and the `options`
  * member holding the values it is run with; for the wiring it means
  * `connections`, which the format keys by the name of the node an
- * edge leaves. Never the artifact's text. An artifact is one JSON
+ * edge leaves, and the `onError` member of the node a second output
+ * is appended to. Never the artifact's text. An artifact is one JSON
  * document, so a phrase looked for across it is answered alike by a
  * sticky note, a display name and the SQL of some other node — and
  * this workflow is a poor one to ask that way, spelling its own node
@@ -590,6 +590,30 @@ const CLAIM_NODE_NAMES = [
   'Claim Due Export Subscriptions',
 ] as const;
 
+/**
+ * The node that hands a claimed unit to the workflow its kind routes
+ * to, by name.
+ *
+ * Declared here rather than read off `DISPATCH_SQL_RULES`, which
+ * names no node it has no statement to hold to. This one runs none:
+ * it invokes a workflow rather than a query. What is held of it here
+ * is where its failures go, and the setting that gives it anywhere
+ * to send them.
+ */
+const INVOKING_NODE_NAME = 'Invoke Target Workflow';
+
+/**
+ * The node a failed invocation reaches, by name.
+ *
+ * Unlike the node in front of it this one does run a statement, and
+ * no entry in `DISPATCH_SQL_RULES` names it. What that statement
+ * writes — a run closed as failed, with the target it could not
+ * reach named in the row's own list of errors — is argued in its own
+ * prose and held to nothing. All this case reads of it is that it
+ * runs one at all.
+ */
+const FAILURE_CLOSING_NODE_NAME = 'Close Run Failed';
+
 describe('ar-dispatch invariants — built tree', () => {
   // Every entry in the roster held against the node it names, in the
   // one workflow the roster is scoped to. An entry that holds
@@ -875,6 +899,108 @@ describe('ar-dispatch invariants — built tree', () => {
           from: ['Schedule Trigger:main[0]'],
         },
       ],
+    });
+  });
+
+  // Where a failed invocation goes, which is the half of a dispatch
+  // this file otherwise reads nothing of.
+  //
+  // `Invoke Target Workflow` hands each claimed unit to the workflow
+  // its kind routes to, and neither of those workflows exists yet:
+  // the id resolves and nothing on the instance answers to it, so
+  // every unit this node is handed fails. They arrive one at a time,
+  // one target in phase 5 and the other in phase 6, so through phase
+  // 5 a tick records successes and failures side by side. That is
+  // the accurate record rather than a fault to suppress, and what
+  // makes it a record at all is that the failure has somewhere to
+  // go. A node that fails and routes its failure nowhere drops the
+  // item, so the row `Open Run` opened for that unit keeps the
+  // status it was opened with and nothing ever closes it — a run
+  // left running for a dispatch that finished.
+  //
+  // Two things have to hold for the branch to exist and neither
+  // implies the other, which is why both are in the record. The node
+  // carries `onError` set to the value that appends a second output
+  // for its own failures, which is what makes an output index of 1
+  // an output at all; and an edge leaves that output for a node that
+  // closes the run. Take the setting away and the edge is still
+  // written in `connections`, still legal, and wired to an output
+  // the executor never builds — so a reading of the graph alone
+  // passes over a workflow that drops every failure it has. The
+  // setting is read here off the one node with a failure to route;
+  // the value that would leave a node carrying on down its regular
+  // output instead is a sweep over every node in the workflow, and a
+  // check of its own.
+  //
+  // What is held of the edge is the set arriving at
+  // `Close Run Failed` rather than the set leaving the invocation,
+  // the reading the wiring case above uses and for its reason: an
+  // arriving set holding the error output alone says both that
+  // failures reach this node and that nothing else feeds it, so a
+  // second stream closing runs as failed for a reason nobody wired
+  // is reported too.
+  //
+  // The last half says the branch ends in something that writes.
+  // `queryParametersOf` answers empty for a node running no
+  // statement, so a branch re-wired to a sticky note, or to a node
+  // that only passes items on, would read as a failure recorded
+  // where nothing records it. What it does not say is which
+  // statement or what it writes: no entry in `DISPATCH_SQL_RULES`
+  // names this node, so the row being closed as failed with the
+  // target named in it is asserted nowhere.
+  //
+  // The names are held against the canvas in the same record for the
+  // reason the wiring case above gives, and this case inherits both
+  // halves of it: it parts a node that is gone from one that is
+  // wired wrongly, and it keeps this a claim about `nodes` rather
+  // than about `connections` alone. Held against a written-down
+  // expectation, so nothing behind it can go quietly empty, which is
+  // the way round a must-find check fails and the reason it wants no
+  // coverage case of the kind an absence sweep needs.
+  //
+  // Measured, seven legs. `inboundEdgeLabels` answering nothing, and
+  // answering every edge in the workflow, each redden this case and
+  // the wiring case above — both read it, and they are the only two
+  // legs that move a second case in this file. The other five redden
+  // this one alone, one per edit the property is about and none of
+  // them reachable by mutating a module: the setting dropped from
+  // the invocation, which leaves the edge written and wired to an
+  // output the executor never builds; the error output wired
+  // nowhere; the two closers swapped across the two outputs; the
+  // closing node's `parameters` emptied, so the branch ends in a
+  // node running no statement; and that node renamed in `nodes`
+  // alone, which moves the canvas half and the arriving set
+  // together. A tree with no artifact in it is none of the seven: it
+  // reports no case at all, `loadBuiltWorkflows` refusing before any
+  // of them runs, and only the class in the run log says which
+  // refusal it was.
+  it('routes a failed invocation to the node that closes its run', () => {
+    const workflow = dispatchWorkflow();
+    const onTheCanvas = new Set(workflow.nodes.map((node) => node.name));
+    const named = [INVOKING_NODE_NAME, FAILURE_CLOSING_NODE_NAME];
+    const invoking = workflow.nodes.find(
+      (node) => node.name === INVOKING_NODE_NAME,
+    );
+    const closing = workflow.nodes.find(
+      (node) => node.name === FAILURE_CLOSING_NODE_NAME,
+    );
+
+    const routing = {
+      namedNodesOnTheCanvas: named.filter((name) => onTheCanvas.has(name)),
+      onErrorAtTheInvocation: invoking?.onError,
+      failuresArriveFrom: inboundEdgeLabels(
+        workflow,
+        FAILURE_CLOSING_NODE_NAME,
+      ),
+      theBranchRunsAStatement:
+        closing !== undefined && queryParametersOf(closing).length > 0,
+    };
+
+    expect(routing).toEqual({
+      namedNodesOnTheCanvas: ['Invoke Target Workflow', 'Close Run Failed'],
+      onErrorAtTheInvocation: 'continueErrorOutput',
+      failuresArriveFrom: ['Invoke Target Workflow:main[1]'],
+      theBranchRunsAStatement: true,
     });
   });
 });
