@@ -17,9 +17,8 @@
  * markers, and answers about a file no instance loads. The
  * properties are the roster this phase expects, the send-free rule,
  * the one schedule trigger, the guards in front of a model call, and
- * the forbidden names. All but the last stand here today, beside the
- * surface they all read; the forbidden-name sweep arrives with its
- * own case over the rest of this stage.
+ * the forbidden names. All five stand here, beside the surface they
+ * all read.
  *
  * That surface is PARSED nodes and never the artifact's text.
  * `loadBuiltWorkflows` hands over each artifact's own `nodes` array
@@ -55,10 +54,12 @@
  * assert about them, that failure belongs to the file, and the
  * refusal already names the edit.
  */
+import type { ForbiddenMatch } from './naming-patterns.js';
 import type { BuiltWorkflow, BuiltWorkflowNode } from './workflow-dist.js';
 
 import { describe, expect, it } from 'vitest';
 
+import { findForbiddenMatches } from './naming-patterns.js';
 import { loadBuiltWorkflows, nodesMatching } from './workflow-dist.js';
 import {
   isModelNode,
@@ -890,6 +891,39 @@ const CEILING_SAMPLES: readonly CeilingSample[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// The forbidden names
+// ---------------------------------------------------------------------------
+
+/**
+ * One hit, in the form the failure list prints it.
+ *
+ * The shape `naming.test.ts` prints, and for its reasons: the
+ * pattern id says which needle fired and the location says where,
+ * which is everything needed to go and read the rest — and the
+ * matched text is exactly what an assertion message must not carry,
+ * a failure list reaching CI logs and terminal scrollback being the
+ * one place nobody can go and remove it.
+ *
+ * What the location means here is a line of the SERIALIZATION and
+ * never a line of a source. Two steps stand between: the artifact
+ * is built from a file under `workflows/src/`, and the text swept
+ * is that artifact parsed and written back out. Today the two
+ * agree line for line — measured, `buildTemplate` indents by two
+ * and this does too, so the serialization is the artifact's own
+ * bytes short of its trailing newline — and nothing here rests on
+ * that, `workflow-dist.ts` saying of this sweep that serializing
+ * costs it the artifact's formatting and nothing asserts it. The
+ * step that genuinely cannot be walked back is a name inside a
+ * spliced library body: JSON escapes the newlines, so the whole
+ * body is one line of the serialization and the number names the
+ * member carrying it rather than the line of `src/lib/` it came
+ * from.
+ */
+function formatForbiddenMatch(match: ForbiddenMatch): string {
+  return `${match.filePath}:${match.lineNumber} — ${match.patternId}`;
+}
+
 describe('workflow invariants — built tree', () => {
   // The surface every check in this file reads, asserted where it
   // is used rather than taken on trust. `loadBuiltWorkflows` refuses
@@ -1321,5 +1355,68 @@ describe('workflow invariants — built tree', () => {
     }));
 
     expect(read).toEqual(declared);
+  });
+
+  // The de-origination rule read over built output: not one of the
+  // five names `naming-patterns.ts` refuses, in any artifact this
+  // package produces. That module declares them, assembled from
+  // fragments so it does not itself carry the strings it exists to
+  // reject, and argues each one's legitimate near-neighbours.
+  // `docs/architecture/01-invariants.md` argues what a name reaching
+  // a deployed artifact costs.
+  //
+  // The one check in this file whose subject is the artifact's
+  // characters rather than a member, and the only one entitled to
+  // be. Everywhere else the file's own header states the rule: a
+  // node type spelled in a sticky note decides nothing, so text is
+  // the wrong surface to read it off. A forbidden name has no such
+  // distinction to draw — it is worth reporting wherever it is
+  // stored, in a workflow's display name, in a sticky note, in a SQL
+  // comment or inside a spliced library body — so this one sweeps
+  // everything, and `BuiltWorkflow.parsed` is what it sweeps.
+  //
+  // Serialized from the parse rather than read off disk, which
+  // `workflow-dist.ts` puts as the shape's one concession: there is
+  // no text member to grep, so a check with a reason to read the
+  // whole artifact writes the parse back out. What that buys is that
+  // this sweep and every node-level check above it are reading one
+  // tree, read once, refused together when it is empty. What it
+  // costs is the artifact's formatting, which nothing here asserts.
+  //
+  // Held against an empty array rather than counted, for the reason
+  // the send-free case gives: the answer is already the report. Each
+  // hit names its own artifact and line, so a failure prints every
+  // one of them rather than a number to go chasing.
+  //
+  // An empty answer is the passing answer, so what this is worth is
+  // what its input and its needles are worth, and neither is covered
+  // here. The input is covered a module away, `loadBuiltWorkflows`
+  // refusing an absent tree, one holding no `*.json` and an artifact
+  // carrying no node, all three before a case runs; the tie from
+  // `parsed` to the nodes those refusals counted is the surface case
+  // at the head of this block. The needles are covered in
+  // `naming-patterns.test.ts`, over planted samples and the
+  // false-positive controls each entry's near-neighbours need.
+  //
+  // Measured, four legs. Emptying `FORBIDDEN_PATTERNS` reddens
+  // nothing here, which is what running a clean sweep means and why
+  // the matcher is proven next door rather than by this case.
+  // Planting the origin prefix into the envelope's `name` reddens
+  // it, naming the artifact and the line. Planting the project name
+  // into a spliced Code-node body reddens it too, at the line
+  // carrying that body — the leg that says the sweep reaches the
+  // half of an artifact its own source under `workflows/src/` does
+  // not hold. Sweeping `nodes` in place of `parsed` keeps the
+  // second and loses the first, which is why the subject is the
+  // whole envelope.
+  it('holds no forbidden name in any built workflow', () => {
+    const found = BUILT_WORKFLOWS.flatMap((workflow) => {
+      const serialized = JSON.stringify(workflow.parsed, null, 2);
+
+      return findForbiddenMatches(serialized, workflow.file)
+        .map(formatForbiddenMatch);
+    });
+
+    expect(found).toEqual([]);
   });
 });

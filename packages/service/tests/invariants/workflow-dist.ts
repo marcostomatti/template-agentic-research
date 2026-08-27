@@ -311,7 +311,7 @@ export class EmptyWorkflowError extends Error {
  *
  * The one check in this suite with a reason to read a whole
  * artifact serializes {@link BuiltWorkflow.parsed} rather than
- * opening the file. It arrives later in this plan and sweeps
+ * opening the file. It sits in `workflows.test.ts` and sweeps
  * for forbidden names, which is the other half of the split
  * `schema-sql.ts` states about its own directory: a constraint
  * is only real where the migrator will run it, while a
