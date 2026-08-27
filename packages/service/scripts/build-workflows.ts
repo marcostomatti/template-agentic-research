@@ -483,7 +483,8 @@ function gitOutput(root: string, args: string[]): string | null {
  * comes back, and no caller can ask afterwards. And it refuses
  * nothing: the refusal a stamp this forgiving warrants belongs to
  * the deploy path, which stops on a dirty TREE rather than on the
- * label it produced, and which arrives later in this plan.
+ * label it produced. `deploy-external.ts` has opened, and that
+ * refusal arrives in it later in this plan.
  *
  * This is also the one value in the build permitted to move with
  * anything but the sources, which is the second half of why a

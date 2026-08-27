@@ -28,14 +28,16 @@
  * incident behind it rather than a preference of style.
  *
  * Two of the three instance-facing commands in this directory call
- * in, and all three arrive later in this stage. `deploy-external.ts`
- * uploads built artifacts and `audit-workflows.ts` reads back what an
- * instance is holding, both over the API; `activate-workflows.sh` is
- * the one that does not, activation going through the n8n CLI against
- * a local container rather than over HTTP. So `n8n-workflow.ts`
- * answers for three commands where this module serves two, and what
- * parts them is a transport rather than an omission. The live seam
- * under `tests/live/` arrives with them and is no command at all.
+ * in. `deploy-external.ts` uploads built artifacts and
+ * `audit-workflows.ts` reads back what an instance is holding, both
+ * over the API; `activate-workflows.sh` is the one that does not,
+ * activation going through the n8n CLI against a local container
+ * rather than over HTTP. The first of those has opened, and the calls
+ * into this module arrive with its deploy; the other two arrive later
+ * in this stage. So `n8n-workflow.ts` answers for three commands
+ * where this module serves two, and what parts them is a transport
+ * rather than an omission. The live seam under `tests/live/` arrives
+ * with them and is no command at all.
  *
  * {@link listWorkflows}, {@link createWorkflow},
  * {@link updateWorkflow} and {@link activateWorkflow} are those
