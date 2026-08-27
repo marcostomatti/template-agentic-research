@@ -32,12 +32,16 @@
  * `audit-workflows.ts` reads back what an instance is holding, both
  * over the API; `activate-workflows.sh` is the one that does not,
  * activation going through the n8n CLI against a local container
- * rather than over HTTP. The first of those has opened, and the calls
- * into this module arrive with its deploy; the other two arrive later
- * in this stage. So `n8n-workflow.ts` answers for three commands
- * where this module serves two, and what parts them is a transport
- * rather than an omission. The live seam under `tests/live/` arrives
- * with them and is no command at all.
+ * rather than over HTTP. The first of those has opened and its
+ * `deploy` calls in, listing what an instance holds and creating or
+ * replacing each workflow against it; {@link activateWorkflow} is
+ * the one of the four still waiting for a caller, arming being the
+ * CLI path's job on a local instance and nothing a deploy does. The
+ * other two commands arrive later in this stage. So
+ * `n8n-workflow.ts` answers for three commands where this module
+ * serves two, and what parts them is a transport rather than an
+ * omission. The live seam under `tests/live/` arrives with them and
+ * is no command at all.
  *
  * {@link listWorkflows}, {@link createWorkflow},
  * {@link updateWorkflow} and {@link activateWorkflow} are those
@@ -562,11 +566,15 @@ function pageOf(endpoint: string, body: unknown): WorkflowPage {
  * Every one of them, which is what the cursor loop is for. The route
  * pages, and its `limit` maxes out at {@link PAGE_LIMIT}: a single
  * request answers with a page and a cursor, and stopping at the first
- * page would be a cap nothing reports. An audit is what makes that
- * concrete: a verdict over the whole of what an instance holds, taken
- * from a page-sized answer, reports every workflow past the first
- * page as missing and leaves every stray among them unnamed — both
- * silently, and both in the direction that reads as a clean instance.
+ * page would be a cap nothing reports. Both readings this list is for
+ * make that concrete and the deploy makes it worst. An audit taking a
+ * verdict over the whole of an instance from a page-sized answer
+ * reports every workflow past the first page as missing and leaves
+ * every stray among them unnamed, both silently and both in the
+ * direction that reads as a clean instance. A deploy matching on a
+ * name against the same answer finds no workflow it already put there
+ * and CREATES a second one, which is the state its upsert then
+ * refuses on every run after.
  *
  * No name filter, though the route has one, and that is measured
  * rather than an omission. Its handler builds the filter as

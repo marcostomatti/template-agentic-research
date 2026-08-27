@@ -76,23 +76,38 @@
  * reply that is not a success, and `toApiWorkflow` in
  * `n8n-workflow.ts` cuts a built artifact down to the members the API
  * accepts; this module is the sequence those are steps in. `deploy`
- * runs that sequence and `runDeployCli` is the command line over it,
- * guarded so that importing this module runs none of it, and both
- * arrive next in this stage.
+ * runs that sequence, and `runDeployCli`, the command line over it,
+ * arrives next in this stage guarded so that importing this module
+ * runs none of it.
  *
  * The two refusals that sequence is worth having in front of it are
- * here already. `assertCleanTree` refuses a tree no commit accounts
- * for, and `requireInstance` refuses a deploy with no instance
- * configured to send one to. Neither reads the other, so which of
- * them a deploy meets first is `deploy`'s to settle; what they share
- * is that both answer before anything is built and before any
+ * `assertCleanTree`, which refuses a tree no commit accounts for,
+ * and `requireInstance`, which refuses a deploy with no instance
+ * configured to send one to. Neither reads the other, and what they
+ * share is that both answer before anything is built and before any
  * request is made, which is the whole of what makes a refusal here
  * free.
+ *
+ * The order they run in is `deploy`'s and not either of theirs.
+ * `requireInstance` goes first because it is the one that ANSWERS
+ * with something, the instance every call afterwards is made
+ * against, so it is the first step of the sequence rather than a
+ * check in front of one. What that costs is that an operator whose
+ * environment names no instance AND whose tree is dirty is told
+ * about the first of those and finds the second on the next run;
+ * what it does not cost is anything spent, both being decided
+ * before a build has run.
  */
 
-import type { HttpFetch, N8nInstance } from './n8n-client.js';
+import type { HttpFetch, N8nInstance, RemoteWorkflow } from './n8n-client.js';
+import type { ApiWorkflow, BuiltArtifact } from './n8n-workflow.js';
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { gitStatusPorcelain } from './build-workflows.js';
+import { createWorkflow, listWorkflows, updateWorkflow } from './n8n-client.js';
+import { toApiWorkflow } from './n8n-workflow.js';
 
 /**
  * Why a deploy cares about a stamp, appended to both branches of
@@ -107,10 +122,13 @@ import { gitStatusPorcelain } from './build-workflows.js';
  * identical stamp while differing in content.
  *
  * It reaches that one class and no further. The file's other
- * refusal, {@link UnconfiguredInstanceError}, says nothing about a
- * stamp and should not: nothing has been built when it fires, a
- * deploy with nowhere to send an artifact having had no reason to
- * make one.
+ * refusal class, {@link UnconfiguredInstanceError}, says nothing
+ * about a stamp and should not: nothing has been built when it
+ * fires, a deploy with nowhere to send an artifact having had no
+ * reason to make one. Nor do the plain `Error`s {@link deploy}
+ * raises over the artifacts it read and the names it found, each of
+ * which is about a source or an instance rather than about a
+ * tree.
  */
 const STAMP_AT_STAKE =
   'An artifact leaves the tree that built it, and on the far side its ' +
@@ -137,9 +155,11 @@ const STAMP_AT_STAKE =
  * throwing, which is what leaves this the only outcome it produces.
  * The other pre-flight beside it, {@link UnconfiguredInstanceError},
  * has a class of its own for the same reason and is about something
- * else entirely; the steps a deploy takes after the two — the build,
- * the projection and the calls — each carry refusals of their own,
- * and those arrive with `deploy` later in this stage.
+ * else entirely. The steps {@link deploy} takes after the two carry
+ * refusals of their own and none of them is a class: a build raises
+ * whatever a marker or a launcher refusal is, reading an artifact
+ * back raises a plain `Error` naming the file, and a call the
+ * instance refused is `UnsuccessfulReplyError` in `n8n-client.ts`.
  *
  * Nothing stands behind it, which is the other half of why it is a
  * class and not a warning. Measured over a tree with uncommitted work
@@ -340,10 +360,12 @@ function isSet(value: string | undefined): value is string {
  * deploy that was never configured can pin the refusal to it. The
  * other ways this path fails all have names of their own or none:
  * {@link DirtyTreeError} above is the tree, `UnsuccessfulReplyError`
- * in `n8n-client.ts` is a call the instance refused, and a body that
- * cannot be read arrives as `Error` or as `JSON.parse`'s own
- * `SyntaxError`. An assertion taking any `Error` would pass for the
- * last of those.
+ * in `n8n-client.ts` is a call the instance refused, an artifact
+ * that is not a workflow and a name two artifacts or two remote
+ * workflows share are plain `Error`s out of {@link deploy}'s own
+ * steps, and a body that cannot be read arrives as `Error` or as
+ * `JSON.parse`'s own `SyntaxError`. An assertion taking any `Error`
+ * would pass for the last of those.
  *
  * It is also a different class from `UnresolvedSettingError` in
  * `workflow-markers.ts`, and the two are not variants of one idea.
@@ -479,4 +501,434 @@ export function requireInstance(
   }
 
   return { apiKey, baseUrl, fetch };
+}
+
+/**
+ * What a deploy build wrote, as the step that ran it answers for
+ * it.
+ *
+ * The directory and the file names in one value rather than two
+ * options a caller has to keep in step, which is the shape
+ * `BuildTarget` in `build-workflows.ts` takes for the same reason:
+ * where a build writes and what it wrote there are one fact, and
+ * splitting them leaves a way to ask for half of it.
+ *
+ * The files are what the build REPORTED writing rather than what
+ * the directory holds, and the two are not the same list. A build
+ * sweeps nothing, so an artifact whose source has since been
+ * renamed or deleted stays where it lies and reads to a listing as
+ * a built workflow. Uploading the reported list is what keeps a
+ * deploy about the tree under review rather than about whatever an
+ * earlier checkout left behind.
+ *
+ * A build given nothing reports no files, and a deploy over that
+ * uploads nothing and reports nothing. It is not refused here: an
+ * empty `workflows/src/` is a state `buildAll` in
+ * `build-workflows.ts` answers for as an ordinary one, and a
+ * command refusing it would be disagreeing with the build about
+ * what a tree may hold.
+ */
+export interface DeployBuild {
+  /** The directory the artifacts were written into. */
+  readonly dir: string;
+
+  /**
+   * The file names it wrote, one per source built, in the order it
+   * reported them.
+   */
+  readonly files: readonly string[];
+}
+
+/**
+ * Everything {@link deploy} needs and nothing it can find out for
+ * itself.
+ *
+ * Four values, and each is a thing this module deliberately does not
+ * resolve: where the checkout is, what configuration answered for
+ * the two settings, what does the talking, and how a build is run.
+ * `buildAll` in `build-workflows.ts` takes its directories the same
+ * way and for the same reason. The real values are the command
+ * line's to supply, and a function that named them could be driven
+ * only against the one tree and the one instance it named.
+ *
+ * {@link DeployOptions.build} is a function rather than a directory,
+ * and that is the one of the four worth arguing. The deploy build is
+ * `runBuildCli(['--external'])`, which constructs a
+ * `Bun.Transpiler`: a thing that exists inside a bun process and not
+ * inside a vitest worker, where a partial `Bun` global is installed
+ * with no transpiler on it. Taking the build as an argument is what
+ * leaves the sequence drivable from a case at all, and it is the
+ * same seam `buildTemplate` opens with the loader it takes.
+ */
+export interface DeployOptions {
+  /**
+   * Runs the deploy build and answers with what it wrote.
+   *
+   * Called after both pre-flight refusals and before any request,
+   * so a deploy that is going to be refused builds nothing.
+   */
+  readonly build: () => DeployBuild;
+
+  /**
+   * What every call goes through, threaded into the
+   * {@link N8nInstance} {@link requireInstance} assembles.
+   */
+  readonly fetch: HttpFetch;
+
+  /**
+   * A directory inside the checkout to ask git about, resolved as a
+   * `cwd` and so never safely empty or relative.
+   */
+  readonly root: string;
+
+  /** The two settings as configuration answered for them. */
+  readonly settings: InstanceSettings;
+}
+
+/**
+ * What one artifact upload did, as a report an operator reads.
+ *
+ * Four members and no id. An id belongs to the instance that minted
+ * it and is stable nowhere else, so it is a handle for the next call
+ * rather than for a reader: {@link deploy} learns one where it needs
+ * one and passes it no further.
+ *
+ * {@link DeployedWorkflow.armed} is here because an upload is not
+ * an activation and that gap is what an operator most often misses.
+ * `POST /workflows` forces `active` false whatever the body
+ * carried, so a created workflow is never armed, while an updated
+ * one is armed exactly as it already was. Either way this is read
+ * back off what the instance answered rather than assumed from
+ * which of the two calls ran.
+ */
+export interface DeployedWorkflow {
+  /** Whether the instance has it armed now the upload has landed. */
+  readonly armed: boolean;
+
+  /** Whether this run created it rather than replacing one. */
+  readonly created: boolean;
+
+  /** The artifact it was uploaded from. */
+  readonly file: string;
+
+  /**
+   * Its display name, as the artifact and the instance both hold
+   * it.
+   */
+  readonly name: string;
+}
+
+/**
+ * One built artifact, read back as the request that uploads it.
+ *
+ * The name is lifted out of the body rather than read off it again
+ * later, because every step after this one wants it as a `string`
+ * and {@link ApiWorkflow} carries it as `unknown`, the projection
+ * forwarding what the artifact held and promising nothing about it.
+ * Reading it once here is what leaves one place where an artifact
+ * with no handle to upsert on is refused.
+ */
+interface DeployArtifact {
+  /** The four members the API takes, projected off the artifact. */
+  readonly body: ApiWorkflow;
+
+  /** The file it was read from, named in a refusal and reported. */
+  readonly file: string;
+
+  /** Its display name, which is what the upsert matches on. */
+  readonly name: string;
+}
+
+/**
+ * Read one built artifact off disk as the request that uploads it.
+ *
+ * The read is not wrapped. A file the build reported and did not
+ * write arrives as `readFileSync` raised it, naming the absolute
+ * path, and one holding something that is not JSON arrives as the
+ * `SyntaxError` `JSON.parse` raises. Neither is a state a deploy
+ * can do anything about beyond naming the file, and both already
+ * do.
+ *
+ * The parse is read as `unknown` and cast only after the one check
+ * that earns the cast, which is the check `n8n-client.ts` makes of
+ * a workflow an instance answered with: a non-null object that is
+ * not an array. An array passes a bare object test and then answers
+ * `undefined` for every member the projection reads, which is a
+ * body the instance refuses about something else.
+ *
+ * A display name that is not a string is refused and a blank one is
+ * not, which is the same line {@link requireInstance} draws. A
+ * missing name is a workflow this command cannot match on and could
+ * not find again; a blank one is a value only the instance can
+ * settle, and a second opinion here would disagree with it the first
+ * time either moved.
+ *
+ * @param dir - The directory the deploy build wrote into.
+ * @param file - The artifact file name inside it.
+ * @returns The request body, the file it came from, and the name it
+ *   will be upserted on.
+ * @throws Error When the artifact is not a workflow object, or
+ *   carries no display name.
+ */
+function artifactOf(dir: string, file: string): DeployArtifact {
+  const path = join(dir, file);
+  const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(
+      `${path} is not a workflow object, so there is nothing to ` +
+      'project onto a request body. A built artifact is whatever ' +
+      `its source serialized to, so the edit is to workflows/src/${file} ` +
+      'and not to the artifact this read.',
+    );
+  }
+
+  const body = toApiWorkflow(parsed as BuiltArtifact);
+
+  if (typeof body.name !== 'string') {
+    throw new Error(
+      `${path} carries no display name, so there is no handle to ` +
+      'upsert on and this deploy cannot tell whether the instance ' +
+      'already holds it. Give the workflow a name in ' +
+      `workflows/src/${file} and rebuild.`,
+    );
+  }
+
+  return { body, file, name: body.name };
+}
+
+/**
+ * Refuse a build whose artifacts do not each name a different
+ * workflow.
+ *
+ * Two sources declaring one display name is the one way a FIRST run
+ * creates something twice, and it defeats the upsert rather than
+ * being caught by it. The listing is read once, before the first
+ * upload, so the second artifact looks for a name the first has just
+ * created and does not find it. The instance ends up holding two
+ * workflows for two sources that meant to be one, and on every run
+ * after that, one workflow for two sources that meant to be two.
+ * Neither is a state the instance objects to.
+ *
+ * Refused rather than reported afterwards, because the cost lands
+ * on the instance while the edit is in this repository: the fix is
+ * to rename a workflow under `workflows/src/`, whose `README.md`
+ * carries the roster those names come from. Every shared name is
+ * named, for {@link UnconfiguredInstanceError}'s reason, a refusal
+ * naming one of two buying a second run to learn the other.
+ *
+ * A plain `Error` rather than a class, on the split
+ * `tests/invariants/schema-sql.ts` draws: a class is what lets a
+ * case PIN a cause, and no case drives this port's sources into
+ * declaring one name twice.
+ *
+ * @param artifacts - Every artifact this build is uploading.
+ * @throws Error When two of them carry one display name.
+ */
+function assertDistinctNames(artifacts: readonly DeployArtifact[]): void {
+  const byName = new Map<string, string[]>();
+
+  for (const { file, name } of artifacts) {
+    const files = byName.get(name) ?? [];
+
+    files.push(file);
+    byName.set(name, files);
+  }
+
+  const shared = [...byName]
+    .filter(([, files]) => files.length > 1)
+    .map(([name, files]) => `${name} (${files.join(', ')})`);
+
+  if (shared.length > 0) {
+    throw new Error(
+      'more than one workflow source declares the same display ' +
+      'name, so this deploy would put a second workflow on the ' +
+      'instance rather than replace the first: the listing an ' +
+      'upsert matches on is read once, before the first upload, so ' +
+      'the second artifact does not find what the first just ' +
+      'created. Rename one of each pair under workflows/src/. ' +
+      `Shared names: ${shared.join('; ')}.`,
+    );
+  }
+}
+
+/**
+ * Index what the instance is holding by display name.
+ *
+ * A name maps to a LIST of ids rather than to one, because an
+ * instance is free to hold several workflows under a single name and
+ * {@link listWorkflows} hands back the whole set rather than asking
+ * the API to filter. Its `?name=` is a substring match, so matching
+ * exactly is a caller's own, and a second workflow carrying the name
+ * is visible here rather than merely absent.
+ *
+ * An entry whose name is not a string is passed over rather than
+ * refused, which is exact rather than lenient: it can equal no
+ * artifact name, so it is not a match this drops but one that was
+ * never there. What an instance is doing holding such a workflow is
+ * a question for an audit of that instance and not for a deploy.
+ *
+ * @param remote - Every workflow the instance answered with.
+ * @returns The ids it holds under each name it holds any under.
+ */
+function remoteIdsByName(
+  remote: readonly RemoteWorkflow[],
+): ReadonlyMap<string, readonly unknown[]> {
+  const byName = new Map<string, unknown[]>();
+
+  for (const workflow of remote) {
+    const { name } = workflow;
+
+    if (typeof name === 'string') {
+      const ids = byName.get(name) ?? [];
+
+      ids.push(workflow.id);
+      byName.set(name, ids);
+    }
+  }
+
+  return byName;
+}
+
+/**
+ * The instance id for the workflow named `name`, or `null` where it
+ * holds none.
+ *
+ * `null` is the whole of what makes this an upsert: a name nothing
+ * answers to is a workflow to create, and a name one workflow
+ * answers to is a workflow to replace. Nothing else is read out of
+ * an absence.
+ *
+ * A name several workflows answer to is refused instead. Updating
+ * one of them is not an upsert but a choice made by whichever order
+ * the instance answered in, and it leaves the rest running whatever
+ * they were built from while this command reports a success. That
+ * is the failure matching on a name exists to avoid, so it is the
+ * one state here that cannot be carried on from.
+ *
+ * @param byName - The instance workflows indexed by name.
+ * @param name - The display name to match exactly.
+ * @returns The id to update at, or `null` to create at.
+ * @throws Error When more than one workflow answers to the name, or
+ *   when the one that does carries no id to address it by.
+ */
+function remoteIdFor(
+  byName: ReadonlyMap<string, readonly unknown[]>,
+  name: string,
+): string | null {
+  const ids = byName.get(name);
+
+  if (ids === undefined) {
+    return null;
+  }
+
+  if (ids.length > 1) {
+    throw new Error(
+      `the instance holds ${String(ids.length)} workflows named ` +
+      `${name}, so an upsert on that name has no single one to ` +
+      'update and would leave the rest running whatever they were ' +
+      'built from. Remove the duplicates on the instance, or ' +
+      'rename the workflow this port deploys under workflows/src/.',
+    );
+  }
+
+  const [id] = ids;
+
+  if (typeof id !== 'string') {
+    throw new Error(
+      `the instance answered with a workflow named ${name} that ` +
+      'carries no id to address it by, so there is no path to ' +
+      'update it at. Check that the base URL names an n8n instance ' +
+      'and not something in front of one.',
+    );
+  }
+
+  return id;
+}
+
+/**
+ * Build this package's workflows and put every one of them on the
+ * instance, creating what is not there and replacing what is.
+ *
+ * The sequence, in the order it runs: refuse a deploy with no
+ * instance configured, refuse one from a tree no commit accounts
+ * for, build, read each artifact back and project it onto a request
+ * body, refuse a build whose artifacts collide by name, list what
+ * the instance holds, and upsert one artifact at a time. Everything
+ * ahead of the listing is decided on this machine, so a deploy that
+ * one of those refuses makes no request whatsoever. The two refusals
+ * past it read the listing, so they cost one GET and still land
+ * ahead of the first upload.
+ *
+ * Upserting on the display NAME is the whole of how a rerun creates
+ * nothing twice. An id belongs to the instance that minted it and
+ * this repository holds none, so nothing in an artifact says which
+ * workflow on an instance it is; the name is the only handle that
+ * survives the trip, which is what {@link ApiWorkflow} says of its
+ * own member from the other end. The listing is read once, ahead of
+ * the first upload, and every match comes out of it.
+ *
+ * One at a time, in the order the build reported. A deploy of a
+ * handful of workflows has nothing to gain from overlapping the
+ * requests, and running them in sequence is what makes the report
+ * an account of what happened rather than of what was started: a
+ * refusal part way through leaves the artifacts ahead of it
+ * uploaded and the ones behind it untouched, which is a state an
+ * operator can read off the report and finish by rerunning.
+ *
+ * Nothing here arms anything. `POST /workflows` stores a workflow
+ * inert whatever the body carried, so what a deploy leaves is an
+ * instance holding this port's workflows and running none of them,
+ * and {@link DeployedWorkflow.armed} is what says so per workflow.
+ * Arming a LOCAL instance is `activate-workflows.sh`, which goes
+ * through the n8n CLI and arrives later in this stage.
+ *
+ * What it does not do is notice anything an instance holds that
+ * this build did not produce. A workflow deployed off an older
+ * checkout, under a name no source carries any more, is untouched
+ * and unreported, because a deploy reads the listing to match on
+ * and not to judge. Reading an instance back whole is
+ * `audit-workflows.ts`, which arrives later in this stage.
+ *
+ * @param options - Where the checkout is, what to reach and how,
+ *   and how to run the build.
+ * @returns One record per artifact uploaded, in build order.
+ * @throws UnconfiguredInstanceError When either setting is unset.
+ * @throws DirtyTreeError When the tree is not known to be clean.
+ * @throws UnsuccessfulReplyError When the instance refuses a call.
+ * @throws Error When an artifact cannot be read as a workflow, when
+ *   two artifacts or two remote workflows share a name, and for
+ *   whatever the build itself refuses.
+ */
+export async function deploy(
+  options: DeployOptions,
+): Promise<readonly DeployedWorkflow[]> {
+  const { build, fetch, root, settings } = options;
+  const instance = requireInstance(settings, fetch);
+
+  assertCleanTree(root);
+
+  const built = build();
+  const artifacts = built.files.map((file) => artifactOf(built.dir, file));
+
+  assertDistinctNames(artifacts);
+
+  const byName = remoteIdsByName(await listWorkflows(instance));
+  const deployed: DeployedWorkflow[] = [];
+
+  for (const artifact of artifacts) {
+    const id = remoteIdFor(byName, artifact.name);
+    const stored = id === null
+      ? await createWorkflow(instance, artifact.body)
+      : await updateWorkflow(instance, id, artifact.body);
+
+    deployed.push({
+      armed: stored.active === true,
+      created: id === null,
+      file: artifact.file,
+      name: artifact.name,
+    });
+  }
+
+  return deployed;
 }

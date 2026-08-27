@@ -44,8 +44,11 @@
  * {@link isActivatableTrigger} reads both to answer for one type,
  * {@link activatableTriggers} asks that of a whole workflow and hands
  * back the nodes an activation would start, and {@link toApiWorkflow}
- * cuts a built artifact down to what the public API takes. The three
- * commands that call them arrive next in this stage.
+ * cuts a built artifact down to what the public API takes. The first
+ * of the three commands has opened and its `deploy` calls
+ * {@link toApiWorkflow} once per artifact it uploads; the other two,
+ * and the callers of the two arming answers, arrive later in this
+ * stage.
  */
 
 /**
