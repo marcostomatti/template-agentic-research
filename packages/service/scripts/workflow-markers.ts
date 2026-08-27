@@ -155,8 +155,11 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * One of a pair, and what picks between them is the KIND of the
    * claimed row rather than anything written on the row itself: a
    * topic is dispatched to this workflow, an export subscription to
-   * `AR_EXPORT_WORKFLOW_ID`. Neither stands in for the other. The
-   * dispatcher that reads both arrives later in this phase.
+   * `AR_EXPORT_WORKFLOW_ID`. Neither stands in for the other.
+   * `ar-dispatch`'s Code node is what reads both, pairing each kind
+   * to one of them and writing the id it resolved onto the claimed
+   * unit. The node that invokes what it wrote arrives later in this
+   * phase.
    *
    * An id and not a display name. The id is what an Execute Workflow
    * node addresses, what the instance stores a workflow under, and
