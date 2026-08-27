@@ -41,10 +41,11 @@
  *
  * {@link MANUAL_STARTER_TYPES} and {@link ARMED_TRIGGER_TYPES} have
  * landed, naming the trigger types that do and do not arm a workflow,
- * and {@link isActivatableTrigger} reads both to answer for one type.
- * `activatableTriggers` asks that of a whole workflow next in this
- * stage, `toApiWorkflow` follows for the projection, and the three
- * commands that call them arrive with those.
+ * {@link isActivatableTrigger} reads both to answer for one type, and
+ * {@link activatableTriggers} asks that of a whole workflow and hands
+ * back the nodes an activation would start. `toApiWorkflow` follows
+ * for the projection, and the three commands that call them arrive
+ * with those.
  */
 
 /**
@@ -368,7 +369,8 @@ export const ARMED_TRIGGER_TYPES: readonly TriggerTypeRule[] = [
  * A type string and not a node, which is what keeps the rosters
  * askable with no workflow in front of the answer. Which of a given
  * workflow's nodes this reaches, and what a node left disabled counts
- * for, belong to `activatableTriggers` arriving next in this stage.
+ * for, belong to {@link activatableTriggers}, which walks a workflow
+ * and drops what the executor drops before asking this anything.
  */
 export function isActivatableTrigger(type: string): boolean {
   if (MANUAL_STARTER_TYPES.some((rule) => rule.type === type)) {
@@ -380,4 +382,146 @@ export function isActivatableTrigger(type: string): boolean {
   }
 
   return type.endsWith('Trigger');
+}
+
+/**
+ * One node of a workflow, cut down to the two members the arming
+ * question reads off it.
+ *
+ * {@link ActivationNode.type} is what the classification is made from
+ * and is declared a string, because that is what
+ * {@link isActivatableTrigger} compares.
+ * {@link ActivationNode.disabled} decides whether the classification
+ * is asked at all and is declared `unknown`, because the test
+ * {@link activatableTriggers} makes against it is a strict identity
+ * against `true` — total over any value, so nothing here narrows it
+ * and no caller has to promise a boolean it did not check.
+ *
+ * Everything else a node carries stays reachable as `unknown` through
+ * the index signature. That is the split `BuiltWorkflowNode` draws in
+ * `tests/invariants/workflow-dist.ts` and it is drawn for the same
+ * reason: which members a node has depends on the kind of node it is,
+ * and a shape closing the list here would give a format this repo
+ * does not own a second home in it. A node name is one of those — a
+ * caller printing which node arms a workflow reads it back as
+ * `unknown`, since nothing in this file has any use for it.
+ *
+ * Hand-declared, and nothing in this module tests any of it. A caller
+ * hands a node in already parsed, so there is no walk here to earn a
+ * cast the way `loadBuiltWorkflows` earns one next door — and what a
+ * caller's own declaration is worth depends on how the value got
+ * there. Measured both ways: `JSON.parse` answers `any`, which an
+ * annotation lets straight in with nothing tested, while a value
+ * routed through `unknown` first is refused without a cast, which is
+ * the route that file takes on purpose. Neither is a check, so a node
+ * arriving here is whatever the caller said it was.
+ */
+export interface ActivationNode {
+  /**
+   * Whether an operator has switched this node off. Read as `unknown`
+   * and compared against `true`, the way the executor compares it.
+   */
+  readonly disabled?: unknown;
+
+  /**
+   * The node type an instance loads, fully qualified, and the only
+   * member the classification is made from.
+   */
+  readonly type: string;
+
+  /** Everything else the node carries, read by nobody here. */
+  readonly [key: string]: unknown;
+}
+
+/**
+ * One workflow, cut down to the nodes the arming question walks.
+ *
+ * A built artifact and a workflow read back off an instance both
+ * satisfy this, which is what lets the deploy, activate and audit
+ * paths ask one question one way rather than three. It is also why
+ * the shape is not named for either of them: an artifact under
+ * `workflows/dist/` and an API answer differ in members this does not
+ * read.
+ *
+ * Open, for {@link ActivationNode}'s reason and not for symmetry. The
+ * envelope carries `name`, `connections`, `settings` and whatever
+ * else the format puts there, none of which decides anything here,
+ * and the projection that does read those members is
+ * `toApiWorkflow`'s own business.
+ */
+export interface ActivationWorkflow {
+  /**
+   * Every node the workflow carries. May be empty, and an empty list
+   * answers manual-only — which is the right answer for a workflow
+   * with no trigger and also the answer a caller gets for one it
+   * failed to read, so whether the list should have held something is
+   * a question for wherever the workflow was loaded.
+   */
+  readonly nodes: readonly ActivationNode[];
+
+  /** Everything else the envelope carries, read by nobody here. */
+  readonly [key: string]: unknown;
+}
+
+/**
+ * The enabled nodes of `workflow` that would arm it, so an empty
+ * answer means the workflow is manual-only and an activation would
+ * leave nothing running.
+ *
+ * Nodes rather than a count or a flag, because the activate path
+ * needs both readings and they are the same value: empty is the
+ * verdict, and a non-empty answer is the report — which node an
+ * activation would arm the workflow for, and therefore what an
+ * operator is being asked to allow. They come back in the workflow's
+ * own order, one entry per arming node, so a workflow carrying two
+ * clocks comes back with two: a count and not a set.
+ *
+ * Manual-only is a claim about what an ACTIVATION starts and never
+ * about what can run. An error trigger is reached whether or not
+ * anybody activated the workflow holding it, and every workflow
+ * phases 5 and 6 add starts at an execute-workflow trigger
+ * `ar-dispatch` calls — both of them manual starters by
+ * {@link MANUAL_STARTER_TYPES}, both of them reached without an
+ * activation, and neither of them a reason to arm anything. An empty
+ * answer says the instance would register no timer, open no
+ * connection and answer at no URL.
+ *
+ * The disabled skip is the one reading in this module that is about a
+ * node rather than about a name, and it is the executor's own rather
+ * than a choice made here. `Workflow.queryNodes` in `n8n-workflow`
+ * 2.15.0, which both `getTriggerNodes` and `getPollNodes` go through,
+ * drops a node whose `disabled` is `true` before it loads a node type
+ * at all — so a disabled trigger is not a trigger the executor ever
+ * asks about, and a reader mirroring it has to drop the node while
+ * the matcher underneath keeps answering for the type alone.
+ *
+ * Strict against `true`, which is the executor's comparison rather
+ * than a tidier way of writing a falsiness test. `INode.disabled` is
+ * declared optional and boolean and the executor compares with `===`,
+ * so a node carrying anything else — a string an operator typed, a
+ * number some tool wrote — is one the instance still runs, and a
+ * truthy test here would answer manual-only for a workflow that arms.
+ * Erring that way costs no more than the manual activation
+ * {@link isActivatableTrigger}'s own close prices; what it costs
+ * instead is the whole of what this function claims, which is what an
+ * instance WOULD do, and an answer reached by a comparison the
+ * executor does not make is about something else.
+ *
+ * Two limits on the skip, and the second bounds where the first can
+ * bite. It is measured on the trigger and poll walk; a production
+ * webhook is registered by a layer above `n8n-core` that nothing in
+ * this port has read, so for a webhook-armed workflow the skip is
+ * this module's reading of what disabled ought to mean rather than a
+ * mirror of what an instance does. And no node in this port's own
+ * workflow sources carries the member at all, nor any of the origin's
+ * 176 — so it reaches this function from a workflow read back off an
+ * instance, where an operator turned a node off on the canvas, and
+ * never from anything the build wrote.
+ */
+export function activatableTriggers(
+  workflow: ActivationWorkflow,
+): readonly ActivationNode[] {
+  return workflow.nodes.filter(
+    (node) => node.disabled !== true && isActivatableTrigger(node.type),
+  );
 }
