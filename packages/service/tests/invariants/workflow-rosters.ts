@@ -66,8 +66,9 @@
  * and its matcher, and the reader that pulls a node's SQL off its
  * parsed parameters are what have landed. The roster of
  * statements `ar-dispatch` must carry is a file of its own,
- * arriving later in this stage, and reading that last one is how
- * it reaches a statement at all.
+ * `dispatch-sql.ts`, and reading that last one is how it reaches
+ * a statement at all. The entries it holds those statements to
+ * arrive next in this stage.
  */
 
 import type { BuiltWorkflowNode } from './workflow-dist.js';
