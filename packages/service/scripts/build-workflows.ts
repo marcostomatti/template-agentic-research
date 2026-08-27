@@ -910,8 +910,17 @@ const WORKFLOW_DIST_DIR = join(PACKAGE_ROOT, 'workflows', 'dist');
  * A separate directory rather than a flag on the same one, so an
  * artifact that absorbed an environment and one that could not
  * are never the same file. Both are gitignored.
+ *
+ * Exported because {@link runBuildCli} answers with file names
+ * and not with the directory it wrote them into, so the command
+ * that uploads those files has to be told where they are. Told by
+ * importing this rather than by resolving
+ * `workflows/dist-external/` a second time: two spellings of one
+ * path drift silently, and what a stale one finds is not nothing
+ * but the artifacts an earlier run left there, this build
+ * sweeping nothing on its way through.
  */
-const WORKFLOW_EXTERNAL_DIST_DIR = join(
+export const WORKFLOW_EXTERNAL_DIST_DIR = join(
   PACKAGE_ROOT,
   'workflows',
   'dist-external',
@@ -936,8 +945,17 @@ const LIB_DIR = join(PACKAGE_ROOT, 'src', 'lib');
  */
 const ENV_FILE = join(PACKAGE_ROOT, '.env');
 
-/** The argument that asks for the deploy build. */
-const EXTERNAL_FLAG = '--external';
+/**
+ * The argument that asks for the deploy build.
+ *
+ * Exported for the reason the directory above is.
+ * `scripts/deploy-external.ts` reaches this build by handing
+ * {@link runBuildCli} an argv of its own, and a second spelling
+ * of the flag would quietly ask for the DEFAULT build — which
+ * writes into the other directory, leaving the deploy to read
+ * whatever an earlier external build left in this one.
+ */
+export const EXTERNAL_FLAG = '--external';
 
 /**
  * The setting the build stamp resolves through.
@@ -1094,10 +1112,17 @@ const BUILD_REFUSALS = [
 /**
  * Whether a caught value is one of the build's own refusals.
  *
+ * Exported so a command that RUNS a build reports what the build
+ * refused the way this file's own command line does. One
+ * predicate over one roster rather than a copy per caller: a
+ * refusal added to {@link BUILD_REFUSALS} reaches every command
+ * composing this, where a copy would go on printing that one as a
+ * stack.
+ *
  * @param cause - What the build threw.
  * @returns Whether its message is the whole report.
  */
-function isBuildRefusal(cause: unknown): cause is Error {
+export function isBuildRefusal(cause: unknown): cause is Error {
   return BUILD_REFUSALS.some((refusal) => cause instanceof refusal);
 }
 
@@ -1109,8 +1134,8 @@ function isBuildRefusal(cause: unknown): cause is Error {
  * path, so comparing the two as they come is false however the
  * process was started, and the block below would silently never
  * run. `fileURLToPath` is what makes the comparison able to hold
- * at all. `scripts/seed.ts` and `scripts/approve.ts` carry the
- * same guard.
+ * at all. `scripts/seed.ts`, `scripts/approve.ts` and
+ * `scripts/deploy-external.ts` carry the same guard.
  *
  * Worth asking because this module is both a command and a
  * library: `bun scripts/build-workflows.ts` writes a dist, while
@@ -1125,8 +1150,8 @@ function isBuildRefusal(cause: unknown): cause is Error {
  * and answers false in every process — measured, as an exported
  * const and as a function alike. The one extraction that survives
  * is a helper taking `import.meta.url` as an ARGUMENT, evaluated
- * at the call site. This package took three copies of two lines
- * instead, here and in the two scripts named above.
+ * at the call site. This package took four copies of two lines
+ * instead, here and in the three scripts named above.
  *
  * Worth a paragraph because moving it fails silently, and lands
  * on the same observable the unconverted comparison above does —

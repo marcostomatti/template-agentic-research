@@ -75,10 +75,10 @@
  * `n8n-client.ts` holds the four HTTP calls and the refusal for a
  * reply that is not a success, and `toApiWorkflow` in
  * `n8n-workflow.ts` cuts a built artifact down to the members the API
- * accepts; this module is the sequence those are steps in. `deploy`
- * runs that sequence, and `runDeployCli`, the command line over it,
- * arrives next in this stage guarded so that importing this module
- * runs none of it.
+ * accepts; this module is the sequence those are steps in.
+ * {@link deploy} runs that sequence, {@link runDeployCli} is the
+ * command line over it, and the guard beneath that one is what leaves
+ * importing this module running none of it.
  *
  * The two refusals that sequence is worth having in front of it are
  * `assertCleanTree`, which refuses a tree no commit accounts for,
@@ -104,9 +104,24 @@ import type { ApiWorkflow, BuiltArtifact } from './n8n-workflow.js';
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
-import { gitStatusPorcelain } from './build-workflows.js';
-import { createWorkflow, listWorkflows, updateWorkflow } from './n8n-client.js';
+import { config } from '../src/config.js';
+
+import {
+  EXTERNAL_FLAG,
+  WORKFLOW_EXTERNAL_DIST_DIR,
+  gitStatusPorcelain,
+  isBuildRefusal,
+  runBuildCli,
+} from './build-workflows.js';
+import {
+  UnsuccessfulReplyError,
+  createWorkflow,
+  listWorkflows,
+  updateWorkflow,
+} from './n8n-client.js';
 import { toApiWorkflow } from './n8n-workflow.js';
 
 /**
@@ -931,4 +946,251 @@ export async function deploy(
   }
 
   return deployed;
+}
+
+/**
+ * This package's root, and the checkout a deploy asks git about.
+ *
+ * Resolved from this file's own location rather than from the working
+ * directory, so it names this tree however the process was started.
+ * `build-workflows.ts` resolves every path it holds the same way, and
+ * `seed.ts` the seed directory it ships, each off its own
+ * `import.meta.url`.
+ *
+ * Absolute is what the argument needs rather than a tidiness.
+ * {@link deploy} hands it on as a `cwd` — `gitStatusPorcelain` in
+ * `build-workflows.ts` spawns git in it — so an empty or a relative
+ * one answers about whatever checkout the process happened to start
+ * in, and answers in exactly the same words. What a deploy would then
+ * act on is a clean reading of the wrong tree.
+ */
+const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+/**
+ * Run the deploy build and answer with what it wrote and where.
+ *
+ * The build is {@link runBuildCli} handed {@link EXTERNAL_FLAG}
+ * rather than a command line of its own, which is the seam that
+ * function's `argv` parameter exists for. So a deploy runs the build
+ * `bun scripts/build-workflows.ts --external` runs, prints the lines
+ * it prints, and stops on the things that stop it.
+ *
+ * The directory and the file names are answered together because they
+ * are one thing to whoever reads them. {@link runBuildCli} reports
+ * names alone, so a caller pairing them with a directory it resolved
+ * for itself is a caller that can read one this build has stopped
+ * writing to — and what a stale directory holds is an earlier
+ * checkout's artifacts rather than nothing, the build sweeping
+ * nothing on its way through.
+ *
+ * @returns The directory the build wrote into and the file names it
+ *   wrote, in the order it reported them.
+ */
+function runDeployBuild(): DeployBuild {
+  return {
+    dir: WORKFLOW_EXTERNAL_DIST_DIR,
+    files: runBuildCli([EXTERNAL_FLAG]),
+  };
+}
+
+/**
+ * The two settings as `src/config.ts` answered for them.
+ *
+ * Read through the schema rather than off `process.env`, so this
+ * command and the running service resolve one setting the same way
+ * and a malformed environment is refused once, at import, by the
+ * schema that owns it — the arrangement `seed.ts` and `approve.ts`
+ * both give for `DATABASE_URL`.
+ *
+ * Nothing is refused here, though. Both entries are optional over
+ * there because the service opens neither, so what an unset one costs
+ * is {@link requireInstance}'s to say, and it says it before a build
+ * has run.
+ *
+ * @returns Both settings, either of them possibly unset.
+ */
+function configuredInstance(): InstanceSettings {
+  return {
+    apiKey: config.AR_N8N_API_KEY,
+    baseUrl: config.AR_N8N_URL,
+  };
+}
+
+/**
+ * Everything {@link deploy} cannot find out for itself, with a
+ * command line's answers in it.
+ *
+ * The one function that fills all four seams in, which is the whole
+ * of what parts a run from a case: the checkout is this package, the
+ * settings are configuration's, the talking is the global `fetch`,
+ * and the build is the deploy build. {@link runBuildCli} gathers its
+ * own directories in one function for the same reason.
+ *
+ * The global fetch arrives here rather than as a default on
+ * {@link N8nInstance}, which is the decision that interface argues
+ * from its own end: a default there would leave the isolated suite's
+ * isolation to every case remembering to override it, where this way
+ * a case supplying its own options has nothing to talk to unless it
+ * says so.
+ *
+ * @returns The four, with their real values in them.
+ */
+function commandLineOptions(): DeployOptions {
+  return {
+    build: runDeployBuild,
+    fetch,
+    root: PACKAGE_ROOT,
+    settings: configuredInstance(),
+  };
+}
+
+/**
+ * One deploy end to end: build, upload every artifact, report what
+ * landed.
+ *
+ * The report is a line per artifact and then a count, in the order
+ * {@link deploy} answered, which is the order the build reported.
+ * Each line says which of the two calls ran and whether the instance
+ * has that workflow armed now, and neither is inferable from the
+ * other: a created workflow is never armed, `POST /workflows` storing
+ * it inert whatever the body carried, while an updated one is armed
+ * exactly as it already was.
+ *
+ * Nothing here names the instance. Its base URL is the one thing
+ * about an operator's own deployment this command holds, and
+ * `UnsuccessfulReplyError` in `n8n-client.ts` keeps it out of a
+ * refusal for that reason — a report is read wherever a refusal is.
+ *
+ * A build that wrote nothing is reported rather than refused, which
+ * is what {@link DeployBuild} says of an empty `workflows/src/`
+ * carried through to the line an operator reads. The listing still
+ * happened, {@link deploy} reading it before it knows how many
+ * artifacts there are, so what the line says is that nothing was
+ * deployed and not that nothing was done.
+ *
+ * @param options - Where the checkout is, what to reach and how, and
+ *   how to run the build. Defaults to what a command line answers
+ *   for; a caller handing over its own is what makes this drivable
+ *   with no checkout, no instance and no bun.
+ * @returns One record per artifact uploaded, in build order.
+ * @throws UnconfiguredInstanceError When either setting is unset.
+ * @throws DirtyTreeError When the tree is not known to be clean.
+ * @throws UnsuccessfulReplyError When the instance refuses a call.
+ * @throws Error When an artifact cannot be read as a workflow, when
+ *   two artifacts or two remote workflows share a name, and for
+ *   whatever the build itself refuses.
+ */
+export async function runDeployCli(
+  options: DeployOptions = commandLineOptions(),
+): Promise<readonly DeployedWorkflow[]> {
+  const deployed = await deploy(options);
+
+  for (const workflow of deployed) {
+    const verb = workflow.created
+      ? 'created'
+      : 'updated';
+    const state = workflow.armed
+      ? 'armed'
+      : 'inert';
+
+    console.log(`${verb} ${workflow.name} (${state}) from ${workflow.file}`);
+  }
+
+  const armed = deployed.filter((workflow) => workflow.armed).length;
+
+  console.log(
+    deployed.length === 0
+      ? 'nothing deployed: the build wrote no artifact'
+      : `${deployed.length} deployed, ${armed} of them armed`,
+  );
+
+  return deployed;
+}
+
+/**
+ * Every refusal a deploy raises on purpose and can name by class.
+ *
+ * A roster rather than a chain of `instanceof` tests, for the reason
+ * `BUILD_REFUSALS` in `build-workflows.ts` gives: the set is what
+ * matters, and this one spans this module and `n8n-client.ts`. The
+ * build's own set is not copied in — {@link isBuildRefusal} is
+ * composed with this instead, so a refusal added over there reaches
+ * this command with no edit here.
+ *
+ * What no roster reaches is the plain `Error`s {@link deploy} raises
+ * over the artifacts it read and the names it found. Each of those is
+ * as much a report as anything named here, and none of them carries a
+ * class to be named by — so a roster admitting them would have to
+ * admit bare `Error`, which is every unexpected failure on the path
+ * as well: the `ENOENT` a read raises over a file the build reported
+ * and did not write, and whatever an injected fetch throws when it
+ * cannot reach a host. So they print with a stack over them, which
+ * buries the message rather than losing it. What would part them is
+ * classes of their own, and nothing here gives them any.
+ */
+const DEPLOY_REFUSALS = [
+  DirtyTreeError,
+  UnconfiguredInstanceError,
+  UnsuccessfulReplyError,
+];
+
+/**
+ * Whether a caught value is one this command can report as a message.
+ *
+ * @param cause - What the run threw.
+ * @returns Whether its message is the whole report.
+ */
+function isDeployRefusal(cause: unknown): cause is Error {
+  return isBuildRefusal(cause)
+    || DEPLOY_REFUSALS.some((refusal) => cause instanceof refusal);
+}
+
+/**
+ * Whether this file is what the process was started with, rather than
+ * something another module imported.
+ *
+ * `import.meta.url` is a `file:` URL where `process.argv[1]` is a
+ * path, so comparing the two as they come is false however the
+ * process was started, and the block below would silently never run.
+ * `fileURLToPath` is what makes the comparison able to hold at all.
+ * `build-workflows.ts`, `seed.ts` and `approve.ts` carry the same
+ * guard.
+ *
+ * Worth asking because this module is both a command and a library:
+ * `bun scripts/deploy-external.ts` puts this package's workflows on
+ * an instance, while a test importing {@link deploy} or
+ * {@link requireInstance} gets the exports and reaches nothing. What
+ * the guard is worth is higher here than in any of those three: on a
+ * machine that has the two settings, an unguarded import would build,
+ * resolve that operator's own environment into the artifacts, and PUT
+ * them onto whatever `AR_N8N_URL` names, out of a run that asked for
+ * none of it.
+ *
+ * A copy per command rather than one helper, and deliberately.
+ * `import.meta.url` is lexical to the module it is written in, so a
+ * guard moved into a shared helper compares that HELPER's path
+ * against `process.argv[1]` and answers false in every process;
+ * `build-workflows.ts` carries that measurement and the argument in
+ * full.
+ */
+const INVOKED_AS_CLI = process.argv[1] !== undefined
+  && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (INVOKED_AS_CLI) {
+  try {
+    await runDeployCli();
+  } catch (cause) {
+    // Each refusal on the roster is already a report — the setting,
+    // the tree, the call an instance would not take, or the marker a
+    // build stopped on — so a stack over it buries the thing worth
+    // reading. Anything else is unexpected, and there the stack is
+    // what a reader needs. Which reports fall on the wrong side of
+    // that line is `DEPLOY_REFUSALS`'s own paragraph.
+    process.exitCode = 1;
+    console.error(
+      isDeployRefusal(cause)
+        ? cause.message
+        : cause,
+    );
+  }
 }
