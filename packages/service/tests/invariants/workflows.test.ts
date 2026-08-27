@@ -18,10 +18,10 @@
  * properties are the roster this phase expects, the send-free rule,
  * the one schedule trigger, the guards in front of a model call, and
  * the forbidden names. The roster, the send-free rule, the one
- * schedule trigger and the first of those three guards stand here
- * today, beside the surface they all read; the ledger-row guard, the
- * per-run-ceiling guard and the forbidden-name sweep arrive with
- * their own cases over the rest of this stage.
+ * schedule trigger and two of those three guards stand here today,
+ * beside the surface they all read; the per-run-ceiling guard and
+ * the forbidden-name sweep arrive with their own cases over the
+ * rest of this stage.
  *
  * That surface is PARSED nodes and never the artifact's text.
  * `loadBuiltWorkflows` hands over each artifact's own `nodes` array
@@ -57,12 +57,17 @@
  * assert about them, that failure belongs to the file, and the
  * refusal already names the edit.
  */
-import type { BuiltWorkflowNode } from './workflow-dist.js';
+import type { BuiltWorkflow, BuiltWorkflowNode } from './workflow-dist.js';
 
 import { describe, expect, it } from 'vitest';
 
 import { loadBuiltWorkflows, nodesMatching } from './workflow-dist.js';
-import { isModelNode, isScheduleTrigger, isSendCapable } from './workflow-rosters.js';
+import {
+  isModelNode,
+  isScheduleTrigger,
+  isSendCapable,
+  queryParametersOf,
+} from './workflow-rosters.js';
 
 // ---------------------------------------------------------------------------
 // Built tree
@@ -196,6 +201,265 @@ const SCHEDULE_TRIGGER_WORKFLOW_ID = 'ar-dispatch';
 function isModelNodeWithoutRetryOff(node: BuiltWorkflowNode): boolean {
   return isModelNode(node.type) && node.retryOnFail !== false;
 }
+
+// ---------------------------------------------------------------------------
+// The ledger row behind a model call
+// ---------------------------------------------------------------------------
+
+/**
+ * The table a model call's ledger row is written to.
+ *
+ * `src/db/schema/runs.ts` declares it and argues what it is for.
+ * `runs` accounts for a pass as a whole; this accounts for the same
+ * work one call at a time, which is the granularity the question of
+ * what a call cost is asked at. A ceiling declared in a workflow
+ * states what a pass will do and these rows are what it did, so a
+ * ceiling that quietly stopped being applied reads exactly like a
+ * pass whose input happened to be small.
+ *
+ * Nothing in the schema enforces the write. A call whose row was
+ * never written is missing from every total at once and no
+ * constraint can notice it, which is why the property is asserted
+ * against the workflow that should have written the row rather than
+ * against the rows — and so why it is asserted over the artifact an
+ * instance loads rather than anywhere a query could reach.
+ *
+ * Spelled once and read from here by both the rule that matches it
+ * and the nodes planted for that rule, so a rename cannot leave the
+ * two disagreeing about what a ledger write is. What that costs is
+ * that a plant compares this string against itself, which is the
+ * send roster's argument for the same shape and the reason the
+ * controls beside the plant are what carry the weight.
+ */
+const LEDGER_TABLE = 'llm_calls';
+
+/**
+ * A SQL line comment, from its dashes to the end of its line.
+ *
+ * Stripped out of a statement before anything is matched in it, and
+ * what makes that necessary is this port's own convention rather
+ * than a general caution about comments. A workflow source has no
+ * comment syntax of its own, so a node's `query` is one of the few
+ * tracked homes a decision made at a node has, and every statement
+ * `ar-dispatch` runs carries paragraphs of prose inside it. The
+ * prose most likely to name a checked thing is the prose explaining
+ * the check, so a rule reading a statement whole would be answered
+ * by a comment about the ledger as readily as by a write to it.
+ *
+ * Global, and used only with `replace`. A shared global instance
+ * carries `lastIndex` from one `test` into the next, which is why
+ * `naming-patterns.ts` keeps its patterns as sources rather than
+ * as instances; `replace` resets it, so one instance is safe here.
+ */
+const SQL_LINE_COMMENT = /--[^\n]*/gu;
+
+/**
+ * An insert into {@link LEDGER_TABLE}, however it is spaced and
+ * whether or not it names the schema.
+ *
+ * Built from the table name rather than spelling it a second time,
+ * which leaves one place to edit under a rename. What it does not
+ * buy is a check on the name itself: the nodes planted for the rule
+ * are built from the same constant, so an emptied one moves both
+ * sides together and nothing in this file reads it — measured, and
+ * green throughout. That is the send roster's argument about a
+ * plant comparing a string against itself, and it is why the
+ * samples that do NOT carry the name are what say the rule is
+ * keyed to it.
+ *
+ * An insert and not the name on its own, because what the rule is
+ * about is a row being kept. A statement that SELECTs from the
+ * ledger reads it, a statement naming it in a comment writes
+ * nothing, and a rule keyed to the name alone takes both for the
+ * write. Bounded either side by a class admitting everything a
+ * table name cannot carry, so `llm_calls_archive` is a different
+ * table and a quoted spelling of this one is still this one. Folded
+ * for case because SQL keywords are, and matched across the
+ * whitespace a wrapped statement puts between its words.
+ */
+const LEDGER_INSERT = new RegExp(
+  '(^|[^A-Za-z0-9_])insert[ \t\r\n]+into[ \t\r\n]+' +
+  `(public[.])?${LEDGER_TABLE}([^A-Za-z0-9_]|$)`,
+  'iu',
+);
+
+/**
+ * Whether `workflow` holds a node that makes a model call.
+ *
+ * The antecedent of the rule, and a property of a WORKFLOW where
+ * every other matcher in this file answers for a node. That follows
+ * from what the property joins rather than from taste: the node
+ * making the call and the node keeping the row are two nodes, and
+ * what has to hold is that one workflow carries both, so a check
+ * over nodes alone has nowhere to put it.
+ *
+ * Read off {@link BuiltWorkflow.nodeTypes} rather than through
+ * {@link nodesMatching}, for the reason the schedule-trigger case
+ * gives: what this needs is the artifact and not the node, and the
+ * label that walk hands back gives the artifact up only by being
+ * split, which its own docs say never to do.
+ */
+function holdsModelNode(workflow: BuiltWorkflow): boolean {
+  return workflow.nodeTypes.some((type) => isModelNode(type));
+}
+
+/**
+ * Whether `node` writes a row to {@link LEDGER_TABLE}.
+ *
+ * Read off the statement the node runs and never off the artifact's
+ * text, which is {@link queryParametersOf}'s whole argument: an
+ * artifact is one JSON document, so a phrase searched for across it
+ * is answered alike by a sticky note, a display name and the SQL of
+ * some other node. Read off the parameter, a claim about a write is
+ * a claim about the node that makes it.
+ *
+ * The limit is a workflow that keeps its ledger row any way but in
+ * SQL. An HTTP node posting to a service, or a Code node handing
+ * the row to something else, carries no statement for this to read
+ * and would pass as a workflow keeping nothing. What makes that
+ * narrow rather than a hole is where such a row has to end up:
+ * `docs/architecture/00-overview.md` puts every durable fact in
+ * Postgres and says no logic bypasses the database, so a ledger row
+ * arriving any other way is a departure from that before it is a
+ * miss here.
+ */
+function writesLedgerRow(node: BuiltWorkflowNode): boolean {
+  return queryParametersOf(node)
+    .some((query) => LEDGER_INSERT.test(query.replace(SQL_LINE_COMMENT, ' ')));
+}
+
+/**
+ * A statement that keeps a ledger row, as the node making the call
+ * would run it.
+ *
+ * Fixture SQL and not a statement any workflow carries — none
+ * does, the workflows that call a model being phase 6. What is
+ * asserted over it is the reading. What a real ledger write owes
+ * beyond an insert is the run it charges the call to, which
+ * `src/db/schema/runs.ts` argues at length and which nothing here
+ * reads.
+ */
+const LEDGER_WRITE =
+  `INSERT INTO ${LEDGER_TABLE} (run_id, est_tokens)\n` +
+  'VALUES ($1::bigint, $2::integer)';
+
+/**
+ * The same statement against another table: an insert that keeps a
+ * row, and no ledger row.
+ *
+ * The nearest legitimate neighbour rather than an invented one.
+ * `ar-dispatch` opens a `runs` row per claimed unit and this is the
+ * shape of what it runs, so the control stands for a statement the
+ * built tree really carries rather than for one nothing would
+ * write. What it shares with {@link LEDGER_WRITE} is the insert;
+ * what parts them is the table, and the columns that go with it,
+ * which no rule here reads.
+ */
+const RUN_WRITE =
+  'INSERT INTO runs (domain_id, scheduled_by)\n' +
+  'VALUES ($1::bigint, $2)';
+
+/**
+ * A statement that names the ledger insert in a comment and runs
+ * none.
+ *
+ * The control {@link SQL_LINE_COMMENT} exists for, carrying the
+ * matched text verbatim rather than a paraphrase of it: a strip
+ * that stopped running would take this for a write, and a control
+ * quoting something the rule no longer fires on could not report
+ * that. The comment sits after the opening clause rather than at
+ * the head of the statement, which is where every comment in this
+ * port's own statements sits — a Postgres node reads a query whose
+ * first characters are dashes as a SELECT, and what it emits for an
+ * empty result turns on that.
+ */
+const LEDGER_MENTION =
+  'SELECT id FROM runs WHERE status = $1\n' +
+  `-- Each call runs an INSERT INTO ${LEDGER_TABLE} of its own, from\n` +
+  '-- the node that made it rather than from here.';
+
+/**
+ * A Code node body that names the ledger insert.
+ *
+ * The member control, and the shape `workflow-rosters.test.ts`
+ * plants against the model prefix for the same reason: a body is a
+ * parameter like any other, and a script mentioning a write makes
+ * none. {@link queryParametersOf} reads `query` and nothing else,
+ * so this node answers nothing and the rule never sees the text.
+ */
+const LEDGER_MENTION_BODY =
+  `// One INSERT INTO ${LEDGER_TABLE} per call, kept by the node\n` +
+  '// that made it.\n' +
+  'return $input.all();';
+
+/** One node {@link writesLedgerRow} is driven over. */
+interface LedgerSample {
+  /** What the node carries, in prose, and the name of its row. */
+  readonly label: string;
+
+  /** The answer {@link writesLedgerRow} must give for it. */
+  readonly writes: boolean;
+
+  /** The node, planted. */
+  readonly node: BuiltWorkflowNode;
+}
+
+/**
+ * The nodes {@link writesLedgerRow} is driven over, one per answer
+ * it has to give.
+ *
+ * One accepts and three refuse, and they are each other's control:
+ * a rule recognising nothing leaves the accepting sample answering
+ * no, one recognising everything leaves all three refusals
+ * answering yes, and the comparison names whichever moved. Neither
+ * half needs a control written for it separately. Each refusal is a
+ * wrong rule this file could plausibly have shipped rather than an
+ * input nothing would produce — a write to another table, a comment
+ * about the write, and the write named in the one parameter the
+ * reader does not read.
+ *
+ * Named for what each node does, as every node planted in this
+ * suite is, and named apart from the nodes `ar-dispatch` carries so
+ * a label here cannot be read as a claim about one of those.
+ */
+const LEDGER_SAMPLES: readonly LedgerSample[] = [
+  {
+    label: 'a node inserting a row into the ledger',
+    writes: true,
+    node: {
+      name: 'Ledger The Call',
+      type: 'n8n-nodes-base.postgres',
+      parameters: { operation: 'executeQuery', query: LEDGER_WRITE },
+    },
+  },
+  {
+    label: 'a node inserting a row into another table',
+    writes: false,
+    node: {
+      name: 'Open A Run',
+      type: 'n8n-nodes-base.postgres',
+      parameters: { operation: 'executeQuery', query: RUN_WRITE },
+    },
+  },
+  {
+    label: 'a node whose comment names the ledger insert',
+    writes: false,
+    node: {
+      name: 'Read The Running Passes',
+      type: 'n8n-nodes-base.postgres',
+      parameters: { operation: 'executeQuery', query: LEDGER_MENTION },
+    },
+  },
+  {
+    label: 'a Code node whose body names the ledger insert',
+    writes: false,
+    node: {
+      name: 'Plan The Calls',
+      type: 'n8n-nodes-base.code',
+      parameters: { jsCode: LEDGER_MENTION_BODY },
+    },
+  },
+];
 
 describe('workflow invariants — built tree', () => {
   // The surface every check in this file reads, asserted where it
@@ -395,10 +659,11 @@ describe('workflow invariants — built tree', () => {
   // node the tree carries and the conjunction stops there. Measured:
   // gutting that read reddens nothing here, and a matcher
   // recognising nothing reddens nothing either, while one
-  // recognising everything reddens this case alone. So the only
-  // mistake in the predicate this tree can report reaches it through
-  // the matcher half, and says nothing about the read sitting behind
-  // it.
+  // recognising everything reddens this case and the ledger-row case
+  // that follows it, which reads the same matcher for an antecedent
+  // of its own. So the only mistake in the predicate this tree can
+  // report reaches it through the matcher half, and says nothing
+  // about the read sitting behind it.
   //
   // What stands behind it meanwhile is the roster's own controls, in
   // `workflow-rosters.test.ts`. A type planted under the namespace
@@ -422,5 +687,100 @@ describe('workflow invariants — built tree', () => {
   // a send node, not a model one.
   it('holds no model node left free to retry', () => {
     expect(nodesMatching(BUILT_WORKFLOWS, isModelNodeWithoutRetryOff)).toEqual([]);
+  });
+
+  // The second of the three guards in front of a model call, read
+  // over built output: a workflow holding a node that calls a model
+  // holds a node writing the ledger row that call is counted in.
+  // `docs/architecture/01-invariants.md` names it the property that
+  // makes the other four checkable after the fact — a ceiling needs
+  // something to count against, and spend nobody can attribute to a
+  // run is spend nobody can act on.
+  //
+  // One record per workflow that owes a row, held against the same
+  // records saying it kept one, so a failure prints the artifact to
+  // open beside what it was missing. The antecedent is read per
+  // workflow and never per node, for the reason `holdsModelNode`
+  // gives: the node that calls and the node that keeps the row are
+  // two nodes, and the rule is that one workflow carries both.
+  //
+  // It runs across zero workflows and will until phase 6, which is
+  // a different empty from the retry guard.
+  // `MODEL_NODE_TYPE_PREFIX` names both: that one is a claim about
+  // every model node, so it holds over none of them; this is a
+  // claim about every workflow HOLDING one, so its antecedent is
+  // false and the implication holds. This is the emptier of the
+  // two — with no workflow owing a row, the ledger read is never
+  // reached at all.
+  //
+  // So what stands behind it is elsewhere, in two halves. The
+  // matcher is covered over planted nodes in
+  // `workflow-rosters.test.ts`, by the mutual-control pair
+  // `isModelNode` has there. The ledger read is covered by the case
+  // that drives it over planted statements, and by nothing else: no
+  // node in the built tree writes a ledger row, so this case cannot
+  // exercise that rule and does not. The input is covered a module
+  // away, by the two refusals the sweeps in this file rest on. There
+  // is no walk to cover, this case reading each workflow's own nodes
+  // rather than the sweep those use.
+  //
+  // Measured, six legs. A matcher recognising every type reddens
+  // this case and the retry case, which reads the same matcher;
+  // one recognising nothing reddens neither. The ledger read
+  // forced true and forced false each leave this case green and
+  // redden the sample-driven case instead, which is what running
+  // across zero workflows means. A model node planted into the
+  // built artifact reddens this case alone, and reddens nothing
+  // once a ledger write is planted beside it.
+  it('holds a ledger write in every workflow that holds a model node', () => {
+    const owing = BUILT_WORKFLOWS
+      .filter((workflow) => holdsModelNode(workflow))
+      .map((workflow) => ({
+        file: workflow.file,
+        writesLedgerRow: workflow.nodes.some((node) => writesLedgerRow(node)),
+      }));
+    const kept = owing.map((workflow) => ({
+      file: workflow.file,
+      writesLedgerRow: true,
+    }));
+
+    expect(owing).toEqual(kept);
+  });
+
+  // The rule the ledger-row case cannot exercise, driven over the
+  // statements planted for it. Every answer in one comparison and
+  // one record per sample, so a failure names which of the four
+  // moved rather than reporting that something did.
+  //
+  // What it cannot report is `LEDGER_SAMPLES` going empty:
+  // both sides are derived from it, and one empty list equals the
+  // other. That is why the samples are a literal declared beside
+  // the rule rather than a list assembled from anywhere else — the
+  // edit that would empty it is in the diff that makes it, which is
+  // a guarantee about review rather than about the suite, and worth
+  // saying so rather than leaving a reader to assume a stronger
+  // one.
+  //
+  // Measured, five legs, each one red case whose failure names the
+  // samples that moved. A rule recognising nothing flips the
+  // accepting sample alone; one recognising everything flips all
+  // three refusals and not the accept. Then one loosening per
+  // refusal, which is what says each is keyed to something rather
+  // than riding along behind the others: dropping the comment strip
+  // flips the commented sample alone, keying the rule to any insert
+  // flips the other-table sample alone, and reading every string
+  // parameter rather than the query flips the Code-node sample
+  // alone.
+  it('reads a ledger write off the statement a node runs', () => {
+    const read = LEDGER_SAMPLES.map((sample) => ({
+      label: sample.label,
+      writesLedgerRow: writesLedgerRow(sample.node),
+    }));
+    const declared = LEDGER_SAMPLES.map((sample) => ({
+      label: sample.label,
+      writesLedgerRow: sample.writes,
+    }));
+
+    expect(read).toEqual(declared);
   });
 });
