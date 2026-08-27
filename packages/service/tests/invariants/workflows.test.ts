@@ -17,11 +17,9 @@
  * markers, and answers about a file no instance loads. The
  * properties are the roster this phase expects, the send-free rule,
  * the one schedule trigger, the guards in front of a model call, and
- * the forbidden names. The roster, the send-free rule, the one
- * schedule trigger and two of those three guards stand here today,
- * beside the surface they all read; the per-run-ceiling guard and
- * the forbidden-name sweep arrive with their own cases over the
- * rest of this stage.
+ * the forbidden names. All but the last stand here today, beside the
+ * surface they all read; the forbidden-name sweep arrives with its
+ * own case over the rest of this stage.
  *
  * That surface is PARSED nodes and never the artifact's text.
  * `loadBuiltWorkflows` hands over each artifact's own `nodes` array
@@ -461,6 +459,437 @@ const LEDGER_SAMPLES: readonly LedgerSample[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// The per-run ceiling in front of a model call
+// ---------------------------------------------------------------------------
+
+/**
+ * A JavaScript line comment, from its slashes to the end of its
+ * line.
+ *
+ * Stripped out of a body before anything is matched in it, for
+ * the reason {@link SQL_LINE_COMMENT} is stripped out of a
+ * statement: a workflow source has no comment syntax of its own,
+ * so a Code node's body is one of the few tracked homes a
+ * decision made at a node has. The one body the built tree
+ * carries is prose for ninety-nine of its hundred and nineteen
+ * lines, and most of that prose argues about the cap the node
+ * applies. Read whole, a body could satisfy this rule by making
+ * the case for a ceiling rather than by carrying one.
+ *
+ * Over this tree the strip changes no answer — measured, that
+ * body declares the same ceiling with its prose in or out — so
+ * what it is for is the bodies phase 6 writes, and the sample
+ * planted for it is what says it runs at all.
+ *
+ * Line comments and nothing else. Every comment this port writes
+ * in a body is one. The two forms left unread, a block comment
+ * and a string literal spelling a declaration, can only make
+ * this rule ACCEPT a body that bounds nothing, which is the
+ * direction worth naming: text a strip misses turns prose into a
+ * ceiling, where a strip taking too much would leave a real
+ * ceiling unread and redden.
+ *
+ * Global, and used only with `replace`, for the reason
+ * {@link SQL_LINE_COMMENT} gives.
+ */
+const JS_LINE_COMMENT = /\/\/[^\n]*/gu;
+
+/**
+ * A ceiling declared in a Code node body, and the name it is
+ * declared under.
+ *
+ * Two halves, each standing for one way a run comes to have no
+ * bound. The name is upper snake case and carries `PER_RUN`,
+ * which is half of what `docs/architecture/01-invariants.md`
+ * means by an EXPLICIT per-run ceiling: a bound a reviewer finds
+ * by reading the declarations rather than by following the
+ * arithmetic.
+ *
+ * That fragment and not a vocabulary of bound-ish words, because
+ * the looser rule is nearly vacuous for the bodies this is aimed
+ * at. Measured over the origin's built bodies: forty-six numeric
+ * upper-snake constants, thirty-five of them carrying `MAX`, and
+ * exactly six carrying `PER_RUN` — which are exactly its six
+ * per-run ceilings. The other twenty-nine `MAX` names bound a
+ * chunk, a field, a slug or an excerpt, and the workflow this
+ * port's phase 6 answers to carries both kinds in one body, so a
+ * rule taking any `MAX` would read a chunk cap as the run's
+ * ceiling and pass a workflow that has none.
+ *
+ * The cost is that a ceiling has to be NAMED for the run it
+ * bounds. That is the register's own word, it is what the origin
+ * already did six times over, and the failure names the edit:
+ * one line in a source that is hand written and reviewed.
+ *
+ * The value is a number written down — an integer, or the
+ * `Number('25')` a resolved settings marker leaves behind. That is
+ * the other half, and what it refuses is the shape the property
+ * exists for. The same document puts that shape as a run scaling
+ * with its input, and a bound taken from what arrived is written as
+ * a `const` like any other: `const MAX_CALLS_PER_RUN = rows.length`
+ * is named, is read where the work is done, and is no ceiling at
+ * all.
+ *
+ * Which is also why the value half needs the second form, and
+ * why this reads the artifact and never the source. `Plan
+ * Dispatch` is where `Number('25')` was measured: its cap is a
+ * settings marker, so the built body carries a quoted number
+ * where the source carries `Number` over marker text, which is
+ * no number at all. That node's own bound is named `CAP` and is
+ * not one this rule looks for — the workflow holds no model node
+ * and owes no ceiling — but the FORM a resolved setting leaves
+ * behind is the form a phase-6 ceiling will arrive in.
+ *
+ * A fragment is still a fragment, and that is the limit. The
+ * rule reads a name and a shape and never an intent, so a
+ * per-run bound over something other than the model calls
+ * satisfies it — the origin's own six include one bounding
+ * polls and one bounding scores. What it refuses is the two
+ * failures that have cost money: a run bounded by nothing, and a
+ * bound declared and never read. A third spelling of the value,
+ * `parseInt` among them, is refused too, and the edit is a
+ * second form here arriving with the body that needs one.
+ *
+ * Global, and read with `matchAll`, which scans through a clone
+ * of the pattern rather than through this one — measured,
+ * `lastIndex` is still zero afterwards, so the instance is as
+ * safe to share as {@link SQL_LINE_COMMENT} is.
+ */
+const CEILING_DECLARATION = new RegExp(
+  '(?<![A-Za-z0-9_$])const[ \t]+([A-Z0-9_]*PER_RUN[A-Z0-9_]*)[ \t]*=' +
+  '[ \t]*(?:[0-9]+|Number[ \t]*\\([ \t]*[\'"][0-9]+[\'"][ \t]*\\))',
+  'gu',
+);
+
+/**
+ * The JavaScript `node` runs, read off the parameter that
+ * carries it — one text per body the node holds, and none for a
+ * node holding no body at all.
+ *
+ * The shape {@link queryParametersOf} has one member over, and
+ * for its reasons: a parsed parameter rather than the artifact's
+ * text, so a claim about a body is a claim about the node that
+ * runs it, and a list rather than a text or nothing, so a node
+ * with a body and a node without are one shape at a call site.
+ *
+ * Keyed to the parameter and not to the node type, which is the
+ * same choice made there. `jsCode` is what the Code node opens
+ * in a code editor, the way `query` is what the Postgres node
+ * opens in a SQL one, and reading the parameter finds a body
+ * wherever one is written rather than only in the type that
+ * carries it today.
+ *
+ * `pythonCode` is the spelling not read, the Code node's other
+ * language. No workflow in this port carries one, and the edit
+ * is a second name here arriving with the node that needs it.
+ * What the gap costs falls the safe way for the check reading
+ * this: the property is asserted of a workflow that owes a
+ * ceiling, so a body this cannot see reads as a workflow
+ * bounding nothing and reddens, rather than passing having
+ * looked at nothing.
+ *
+ * It lives here rather than beside the rosters because the rule
+ * that reads it does. A member one check reads belongs with the
+ * check, and moving it next door is what a second reader asks
+ * for — {@link queryParametersOf} sits there because two files
+ * ask it. `workflow-rosters.test.ts` does have a reader of this
+ * same member, for the nodes it plants, and that one REFUSES a
+ * node carrying none: the right answer for a fixture whose whole
+ * point is its body, and the wrong one here, where most nodes
+ * carry none at all and answering empty is what a node running
+ * no script has to say.
+ */
+function codeBodiesOf(node: BuiltWorkflowNode): readonly string[] {
+  const parameters = node.parameters;
+
+  if (typeof parameters !== 'object' || parameters === null) {
+    return [];
+  }
+
+  const body = (parameters as Record<string, unknown>).jsCode;
+
+  return typeof body === 'string'
+    ? [body]
+    : [];
+}
+
+/**
+ * The ceilings `code` declares, by name.
+ *
+ * The capture reads as `string | undefined`, a group being
+ * reachable by index like any other member, and a declaration
+ * that matched cannot be missing the name that made it one — so
+ * the case that cannot arise is dropped rather than asserted
+ * away.
+ */
+function declaredCeilings(code: string): readonly string[] {
+  return [...code.matchAll(CEILING_DECLARATION)]
+    .flatMap((declaration) => declaration[1] ?? []);
+}
+
+/**
+ * Whether `code` reads `name` anywhere past the declaration that
+ * introduced it.
+ *
+ * More than one occurrence, the declaration being the first: a
+ * second is the ceiling read where the work is done. What this
+ * deliberately does not read is WHERE. The origin asserted the
+ * site as well as the name, matching a slice against its one
+ * drafting node, which it could do because it knew what that
+ * node bounded. Here the workflows that will carry a ceiling are
+ * phase 6 and what they bound is theirs to choose — a slice, a
+ * call like `capBatch`, a loop bound, a comparison ahead of an
+ * early return — so the property this can hold is that the name
+ * is read at all, which is already what parts a ceiling from a
+ * constant somebody left behind.
+ *
+ * Bounded either side by a class admitting everything an identifier
+ * cannot carry, so `CAP` is not found inside `CAPACITY` and a
+ * ceiling is not read by a longer name that merely starts with it.
+ * Measured, including the case such bounding usually breaks: three
+ * occurrences with nothing but a space between them count as three,
+ * the bounds being lookarounds and consuming none of what they match
+ * against.
+ *
+ * Built from a name this file captured rather than from one a
+ * caller supplied. That name matched a class of upper-case
+ * letters, digits and underscores, so it carries no character a
+ * pattern would read as syntax and there is no escaping here to
+ * get wrong.
+ */
+function readsPastDeclaration(code: string, name: string): boolean {
+  const reads = new RegExp(`(?<![A-Za-z0-9_$])${name}(?![A-Za-z0-9_$])`, 'gu');
+
+  return [...code.matchAll(reads)].length > 1;
+}
+
+/**
+ * Whether `node` bounds a run by a ceiling it both declares and
+ * applies.
+ *
+ * Both halves of ONE node, which is where the consequent of this
+ * rule parts from the ledger's. That one asks whether the
+ * workflow holds a node writing a row, and any node it holds will
+ * do; this asks whether one body declares a ceiling and reads it,
+ * because a ceiling declared in one Code node and read in another
+ * is two names that happen to agree rather than a bound —
+ * nothing carries a value from one body into the next.
+ *
+ * Comments out first, then every ceiling the body declares, then
+ * whether any one of them is read. Any and not all, because what
+ * has to hold is that the run IS bounded: a body that declares a
+ * second constant and never gets round to using it is untidy,
+ * and bounds its run exactly as the first one says.
+ */
+function appliesRunCeiling(node: BuiltWorkflowNode): boolean {
+  return codeBodiesOf(node).some((body) => {
+    const code = body.replace(JS_LINE_COMMENT, ' ');
+
+    return declaredCeilings(code)
+      .some((name) => readsPastDeclaration(code, name));
+  });
+}
+
+/**
+ * The two lines a bounded body carries: a ceiling, and the place
+ * it is applied.
+ *
+ * Spelled once and read both by the body that carries them and
+ * by the body that only talks about them, so the two are
+ * provably about one phrase. A control quoting text the rule no
+ * longer fires on is no control, and quoting it by hand a second
+ * time is how that comes about.
+ */
+const CEILING_LINES =
+  'const MAX_CALLS_PER_RUN = 5;\n' +
+  'const calls = $input.all().slice(0, MAX_CALLS_PER_RUN);';
+
+/**
+ * A body that declares a ceiling and applies it.
+ *
+ * The origin's own shape with its name generalized: six of its
+ * built bodies declare a `_PER_RUN` ceiling and take the front
+ * of the batch with it, and one of the six is the drafting node
+ * whose check this rule generalizes. Written about model calls
+ * because that is the work the rule is about, and phase 6 is
+ * where such a body lands.
+ */
+const CEILING_BODY = `${CEILING_LINES}\nreturn calls;`;
+
+/**
+ * The same ceiling, declared and never read.
+ *
+ * The origin's own failure, and the one its check was written
+ * for: an unbounded pass made one model call per row it found,
+ * unattended, on every tick. A declaration on its own reads as a
+ * bound to anybody skimming the body and bounds nothing at all,
+ * which is the state a rule stopping at `a ceiling is declared`
+ * would pass.
+ */
+const CEILING_DECLARED_ONLY_BODY =
+  'const MAX_CALLS_PER_RUN = 5;\n' +
+  'return $input.all();';
+
+/**
+ * A body bounding its batch by a number written into the
+ * expression that uses it.
+ *
+ * The half of EXPLICIT a name carries. This body does bound a run,
+ * so a rule asking only whether the batch is capped takes it, and
+ * what that costs is the rest of what the register asks a ceiling to
+ * be: nothing says what the number is for, nothing else in the body
+ * can read it, and a reviewer looking for the bound has to read
+ * every expression rather than the declarations.
+ */
+const CEILING_LITERAL_BODY = 'return $input.all().slice(0, 5);';
+
+/**
+ * A ceiling named, applied, and taken from the batch it is meant
+ * to bound.
+ *
+ * The failure `docs/architecture/01-invariants.md` states as a
+ * run scaling with its input, wearing the shape of a ceiling.
+ * It is declared under a name the rule looks for and read where
+ * the work is done, so `declared and applied` holds of it both
+ * ways; what it is not is a number, which is the half of the
+ * declaration that reads the value.
+ */
+const CEILING_FROM_INPUT_BODY =
+  'const rows = $input.all();\n' +
+  'const MAX_CALLS_PER_RUN = rows.length;\n' +
+  'return rows.slice(0, MAX_CALLS_PER_RUN);';
+
+/**
+ * A body whose comments carry the ceiling and its application,
+ * and whose statements carry neither.
+ *
+ * The control {@link JS_LINE_COMMENT} exists for, quoting
+ * {@link CEILING_LINES} verbatim rather than paraphrasing it: a
+ * strip that stopped running would read this as a bounded body,
+ * and a control quoting something the rule no longer fires on
+ * could not report that. Prose of this shape is what this port
+ * writes, the body in the built tree spending most of its lines
+ * arguing about a cap, so the input is one a phase-6 workflow
+ * would plausibly produce rather than one contrived to fail.
+ */
+const CEILING_MENTION_BODY = [
+  ...CEILING_LINES.split('\n').map((line) => `// ${line}`),
+  'return $input.all();',
+].join('\n');
+
+/**
+ * A statement bounding its own result, in the parameter this
+ * rule does not read.
+ *
+ * The member control, and the half of the property a planted
+ * body cannot stand for: the ceiling has to be in a CODE node. A
+ * `LIMIT` is a bound and a real one — both of `ar-dispatch`'s
+ * claims carry the batch cap as one — but it bounds a STATEMENT
+ * rather than a run, and `src/lib/schedule.ts` argues at length
+ * why it is not the copy to rely on: a `LIMIT` is one edit away
+ * from being tuned off by somebody reading the query and nothing
+ * else. So a workflow whose only bound is in SQL answers no
+ * here, and the node carrying it is the shape the built tree
+ * already runs.
+ */
+const CEILING_IN_SQL =
+  'SELECT id, search_terms FROM research_pool\n' +
+  'WHERE status = $1 AND approved_at IS NOT NULL\n' +
+  'ORDER BY approved_at\n' +
+  'LIMIT 5';
+
+/** One node {@link appliesRunCeiling} is driven over. */
+interface CeilingSample {
+  /** What the node carries, in prose, and the name of its row. */
+  readonly label: string;
+
+  /** The answer {@link appliesRunCeiling} must give for it. */
+  readonly bounds: boolean;
+
+  /** The node, planted. */
+  readonly node: BuiltWorkflowNode;
+}
+
+/**
+ * The nodes {@link appliesRunCeiling} is driven over, one per
+ * answer it has to give.
+ *
+ * One accepts and five refuse, and they are each other's control the
+ * way {@link LEDGER_SAMPLES} are: a rule recognising nothing leaves
+ * the accepting sample answering no, one recognising everything
+ * leaves all five refusals answering yes, and the comparison names
+ * whichever moved.
+ *
+ * Each refusal is a rule this file could plausibly have shipped
+ * rather than an input nothing would write, and there are five
+ * because the property has that many ways to be met halfway — a
+ * ceiling declared and never applied, a bound with no name on it, a
+ * bound read off the batch, a ceiling that lives in the prose, and a
+ * bound that is real and is in the wrong parameter.
+ *
+ * Named for what each node does, as every node planted in this
+ * suite is, and named apart from the nodes `ar-dispatch`
+ * carries so a label here cannot be read as a claim about one
+ * of those.
+ */
+const CEILING_SAMPLES: readonly CeilingSample[] = [
+  {
+    label: 'a Code node declaring a ceiling and applying it',
+    bounds: true,
+    node: {
+      name: 'Bound The Calls',
+      type: 'n8n-nodes-base.code',
+      parameters: { jsCode: CEILING_BODY },
+    },
+  },
+  {
+    label: 'a Code node declaring a ceiling and reading it nowhere',
+    bounds: false,
+    node: {
+      name: 'Declare The Bound',
+      type: 'n8n-nodes-base.code',
+      parameters: { jsCode: CEILING_DECLARED_ONLY_BODY },
+    },
+  },
+  {
+    label: 'a Code node bounding its batch by a bare number',
+    bounds: false,
+    node: {
+      name: 'Take The First Few',
+      type: 'n8n-nodes-base.code',
+      parameters: { jsCode: CEILING_LITERAL_BODY },
+    },
+  },
+  {
+    label: 'a Code node taking its ceiling from the batch',
+    bounds: false,
+    node: {
+      name: 'Bound By What Arrived',
+      type: 'n8n-nodes-base.code',
+      parameters: { jsCode: CEILING_FROM_INPUT_BODY },
+    },
+  },
+  {
+    label: 'a Code node whose comments carry the ceiling',
+    bounds: false,
+    node: {
+      name: 'Explain The Bound',
+      type: 'n8n-nodes-base.code',
+      parameters: { jsCode: CEILING_MENTION_BODY },
+    },
+  },
+  {
+    label: 'a node bounding its statement with a SQL LIMIT',
+    bounds: false,
+    node: {
+      name: 'Read The Approved Pool',
+      type: 'n8n-nodes-base.postgres',
+      parameters: { operation: 'executeQuery', query: CEILING_IN_SQL },
+    },
+  },
+];
+
 describe('workflow invariants — built tree', () => {
   // The surface every check in this file reads, asserted where it
   // is used rather than taken on trust. `loadBuiltWorkflows` refuses
@@ -659,11 +1088,11 @@ describe('workflow invariants — built tree', () => {
   // node the tree carries and the conjunction stops there. Measured:
   // gutting that read reddens nothing here, and a matcher
   // recognising nothing reddens nothing either, while one
-  // recognising everything reddens this case and the ledger-row case
-  // that follows it, which reads the same matcher for an antecedent
-  // of its own. So the only mistake in the predicate this tree can
-  // report reaches it through the matcher half, and says nothing
-  // about the read sitting behind it.
+  // recognising everything reddens this case and the two cost-guard
+  // cases that follow it, each reading the same matcher for an
+  // antecedent of its own. So the only mistake in the predicate this
+  // tree can report reaches it through the matcher half, and says
+  // nothing about the read sitting behind it.
   //
   // What stands behind it meanwhile is the roster's own controls, in
   // `workflow-rosters.test.ts`. A type planted under the namespace
@@ -725,13 +1154,14 @@ describe('workflow invariants — built tree', () => {
   // rather than the sweep those use.
   //
   // Measured, six legs. A matcher recognising every type reddens
-  // this case and the retry case, which reads the same matcher;
-  // one recognising nothing reddens neither. The ledger read
-  // forced true and forced false each leave this case green and
-  // redden the sample-driven case instead, which is what running
-  // across zero workflows means. A model node planted into the
-  // built artifact reddens this case alone, and reddens nothing
-  // once a ledger write is planted beside it.
+  // this case, the retry case and the per-run-ceiling case, all
+  // three reading the same matcher; one recognising nothing reddens
+  // none of them. The ledger read forced true and forced false each
+  // leave this case green and redden the sample-driven case instead,
+  // which is what running across zero workflows means. A model node
+  // planted into the built artifact reddens this case and the
+  // ceiling case, one node satisfying both antecedents, and stops
+  // reddening this one once a ledger write is planted beside it.
   it('holds a ledger write in every workflow that holds a model node', () => {
     const owing = BUILT_WORKFLOWS
       .filter((workflow) => holdsModelNode(workflow))
@@ -779,6 +1209,115 @@ describe('workflow invariants — built tree', () => {
     const declared = LEDGER_SAMPLES.map((sample) => ({
       label: sample.label,
       writesLedgerRow: sample.writes,
+    }));
+
+    expect(read).toEqual(declared);
+  });
+
+  // The last of the three guards in front of a model call, read
+  // over built output: a workflow holding a node that calls a model
+  // holds a Code node that declares a ceiling on the pass and
+  // applies it. `docs/architecture/01-invariants.md` puts what its
+  // absence costs as a run scaling with its input — one pass over
+  // an unusually large batch makes as many calls as it found rows,
+  // which is the second of the four properties bounding what a run
+  // can spend.
+  //
+  // Both halves in one answer, because the origin's own check is
+  // what says one half is worth nothing alone: it asserted the
+  // ceiling constant AND the site applying it, on the reasoning
+  // that a declaration nobody reads bounds nothing while reading as
+  // a bound to anybody skimming the body. `appliesRunCeiling`
+  // carries that pair; what this case adds is which workflows owe
+  // it.
+  //
+  // One record per workflow that owes a ceiling, held against the
+  // same records saying it has one, so a failure prints the
+  // artifact to open. The antecedent is read per workflow and the
+  // consequent per node, which is where this parts from the
+  // ledger-row case beside it: a ledger row may be kept by any node
+  // in the workflow, and a ceiling has to be declared and read in
+  // ONE body, nothing carrying a `const` from one Code node into
+  // the next.
+  //
+  // It runs across zero workflows and will until phase 6, the same
+  // empty as the ledger-row case and not the retry case's — the
+  // shape `MODEL_NODE_TYPE_PREFIX` names for both: the antecedent
+  // is false, so the implication holds and the ceiling read is
+  // never reached at all. What stands behind it meanwhile is
+  // elsewhere, in two halves. The matcher is covered over planted
+  // nodes in `workflow-rosters.test.ts`, by the mutual-control pair
+  // `isModelNode` has there. The ceiling read is covered by the
+  // case that drives it over planted bodies, and by nothing else —
+  // no workflow in the built tree holds a model node, so this case
+  // cannot exercise that rule and does not. The input is covered a
+  // module away, by the two refusals the sweeps in this file rest
+  // on. There is no walk to cover, this case reading each
+  // workflow's own nodes rather than the sweep those use.
+  //
+  // Measured, six legs. A matcher recognising every type reddens
+  // this case, the retry case and the ledger-row case, all three
+  // reading it for an antecedent of their own; one recognising
+  // nothing reddens none of them. The ceiling read forced true and
+  // forced false each leave this case green and redden the
+  // sample-driven case instead, which is what running across zero
+  // workflows means.
+  //
+  // The fixture leg that reads this case is two coordinated edits
+  // to the built artifact rather than one: a model node, to fire
+  // the antecedent, and a ledger write beside it, or the ledger-row
+  // case reddens alongside and the split says nothing. That reddens
+  // this case alone. Planting a Code node carrying a ceiling beside
+  // them takes it green again, which is what parts a case reading
+  // the property from one a plant reddened by being there.
+  it('holds an applied ceiling in every workflow that holds a model node', () => {
+    const owing = BUILT_WORKFLOWS
+      .filter((workflow) => holdsModelNode(workflow))
+      .map((workflow) => ({
+        file: workflow.file,
+        appliesRunCeiling: workflow.nodes.some((node) => appliesRunCeiling(node)),
+      }));
+    const bounded = owing.map((workflow) => ({
+      file: workflow.file,
+      appliesRunCeiling: true,
+    }));
+
+    expect(owing).toEqual(bounded);
+  });
+
+  // The rule the ceiling case cannot exercise, driven over the
+  // bodies planted for it. Every answer in one comparison and one
+  // record per sample, so a failure names which of the six moved
+  // rather than reporting that something did.
+  //
+  // What it cannot report is `CEILING_SAMPLES` going empty: both
+  // sides are derived from it, and one empty list equals the other.
+  // That is why the samples are a literal declared beside the rule
+  // rather than a list assembled from anywhere else — the edit that
+  // would empty it is in the diff that makes it, which is a
+  // guarantee about review rather than about the suite.
+  //
+  // Measured, seven legs, each one red case whose failure names the
+  // sample that moved. A rule accepting nothing flips the accepting
+  // sample alone; one accepting everything flips all five refusals
+  // and not the accept. Then one loosening per refusal, which is
+  // what says each is keyed to something rather than riding along
+  // behind the others: dropping the test for a read past the
+  // declaration flips the declared-only sample, letting the
+  // declaration take any value flips the sample whose ceiling is
+  // its own batch, dropping the comment strip flips the commented
+  // sample, counting a SQL `LIMIT` flips the Postgres sample, and
+  // counting a bare number inside a bounding call flips the sample
+  // with no name on its bound. Each of the five flips that sample
+  // and no other.
+  it('reads an applied ceiling off the body a Code node runs', () => {
+    const read = CEILING_SAMPLES.map((sample) => ({
+      label: sample.label,
+      appliesRunCeiling: appliesRunCeiling(sample.node),
+    }));
+    const declared = CEILING_SAMPLES.map((sample) => ({
+      label: sample.label,
+      appliesRunCeiling: sample.bounds,
     }));
 
     expect(read).toEqual(declared);
