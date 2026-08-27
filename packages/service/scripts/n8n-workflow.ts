@@ -40,10 +40,11 @@
  * this package takes.
  *
  * {@link MANUAL_STARTER_TYPES} and {@link ARMED_TRIGGER_TYPES} have
- * landed, naming the trigger types that do and do not arm a workflow.
- * `isActivatableTrigger` and `activatableTriggers` read them next in
- * this stage and `toApiWorkflow` follows for the projection, and the
- * three commands that call them arrive with those.
+ * landed, naming the trigger types that do and do not arm a workflow,
+ * and {@link isActivatableTrigger} reads both to answer for one type.
+ * `activatableTriggers` asks that of a whole workflow next in this
+ * stage, `toApiWorkflow` follows for the projection, and the three
+ * commands that call them arrive with those.
  */
 
 /**
@@ -70,9 +71,9 @@
  * Declared here rather than parsed, so every entry is checked where
  * it is written and one short of a member is refused outright. Data
  * and not a comparison: how a type is held against a roster belongs
- * to the matcher reading it, and keeping that out of the entry is
- * what lets a case ask a roster a question with no workflow in front
- * of the answer.
+ * to {@link isActivatableTrigger}, the matcher reading it, and
+ * keeping that out of the entry is what lets a case ask a roster a
+ * question with no workflow in front of the answer.
  */
 export interface TriggerTypeRule {
   /**
@@ -315,3 +316,45 @@ export const ARMED_TRIGGER_TYPES: readonly TriggerTypeRule[] = [
     type: 'n8n-nodes-base.interval',
   },
 ];
+
+/**
+ * Whether a node of type `type` would arm a workflow that was
+ * activated with that node in place.
+ *
+ * Three readings in one, and the order is what makes them a single
+ * rule. A type {@link MANUAL_STARTER_TYPES} names answers false, a
+ * type {@link ARMED_TRIGGER_TYPES} names answers true, and everything
+ * else is answered by the shape those two rosters correct: a name
+ * ending in `Trigger`. The rosters are the exceptions to it, so they
+ * are read first and the suffix last.
+ *
+ * The rosters name no type in common, so the order between THEM
+ * decides only a type that ended up in both. Manual wins there, which
+ * leaves such a workflow inactive for an operator to arm by hand
+ * rather than pointing the activate path at a workflow one of this
+ * module's own rosters calls manual.
+ *
+ * Compared exactly, where `isSendCapable` in
+ * `tests/invariants/workflow-rosters.ts` folds case. That is a
+ * divergence and not an oversight: a fold is safe under a denylist,
+ * where it widens each entry onto the misspellings of its own type,
+ * and here it would widen in both directions at once. The suffix
+ * reading settles it either way, being a claim about how a name is
+ * SPELLED, which a fold erases.
+ *
+ * A type string and not a node, which is what keeps the rosters
+ * askable with no workflow in front of the answer. Which of a given
+ * workflow's nodes this reaches, and what a node left disabled counts
+ * for, belong to `activatableTriggers` arriving next in this stage.
+ */
+export function isActivatableTrigger(type: string): boolean {
+  if (MANUAL_STARTER_TYPES.some((rule) => rule.type === type)) {
+    return false;
+  }
+
+  if (ARMED_TRIGGER_TYPES.some((rule) => rule.type === type)) {
+    return true;
+  }
+
+  return type.endsWith('Trigger');
+}
