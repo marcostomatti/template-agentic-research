@@ -39,13 +39,13 @@
  * `./n8n-workflow.js`, the relative form every first-party import in
  * this package takes.
  *
- * {@link MANUAL_STARTER_TYPES} and {@link ARMED_TRIGGER_TYPES} have
- * landed, naming the trigger types that do and do not arm a workflow,
- * {@link isActivatableTrigger} reads both to answer for one type, and
+ * {@link MANUAL_STARTER_TYPES} and {@link ARMED_TRIGGER_TYPES} name
+ * the trigger types that do and do not arm a workflow,
+ * {@link isActivatableTrigger} reads both to answer for one type,
  * {@link activatableTriggers} asks that of a whole workflow and hands
- * back the nodes an activation would start. `toApiWorkflow` follows
- * for the projection, and the three commands that call them arrive
- * with those.
+ * back the nodes an activation would start, and {@link toApiWorkflow}
+ * cuts a built artifact down to what the public API takes. The three
+ * commands that call them arrive next in this stage.
  */
 
 /**
@@ -447,7 +447,7 @@ export interface ActivationNode {
  * envelope carries `name`, `connections`, `settings` and whatever
  * else the format puts there, none of which decides anything here,
  * and the projection that does read those members is
- * `toApiWorkflow`'s own business.
+ * {@link toApiWorkflow}, which declares a shape of its own for them.
  */
 export interface ActivationWorkflow {
   /**
@@ -524,4 +524,123 @@ export function activatableTriggers(
   return workflow.nodes.filter(
     (node) => node.disabled !== true && isActivatableTrigger(node.type),
   );
+}
+
+/**
+ * The four members of a workflow n8n's public API takes, and the
+ * whole of what {@link toApiWorkflow} hands back.
+ *
+ * Closed, where {@link ActivationNode} and {@link ActivationWorkflow}
+ * are open, and the difference is the claim rather than a habit.
+ * Those two are read FROM, so a member they do not name belongs to
+ * whoever handed the value over and an index signature says so. This
+ * one is BUILT, and its member list IS the answer: a member missing
+ * from here is a member an upload does not carry.
+ *
+ * Every member `unknown`, because nothing in this module reads one.
+ * {@link ActivationNode.type} is declared a string since
+ * {@link isActivatableTrigger} compares it, and a projection compares
+ * nothing at all — so a caller wanting the display name as a string
+ * narrows it where it needs one, and none has to promise a shape it
+ * did not check.
+ */
+export interface ApiWorkflow {
+  /** The wiring between the nodes, forwarded whole. */
+  readonly connections: unknown;
+
+  /**
+   * The display name, and the one handle on a workflow that is stable
+   * across instances where an id is not — so it is what an upsert
+   * against an instance has to match on.
+   */
+  readonly name: unknown;
+
+  /**
+   * Every node the workflow carries, each one exactly as the build
+   * wrote it.
+   */
+  readonly nodes: unknown;
+
+  /** The workflow-level settings, execution order among them. */
+  readonly settings: unknown;
+}
+
+/**
+ * A workflow as the build wrote it: {@link ApiWorkflow}, and every
+ * other member an artifact under `workflows/dist/` carries.
+ *
+ * Declared by extending the projection rather than beside it, so the
+ * relationship sits in the types instead of in a sentence. An
+ * artifact IS the upload plus the rest, which is the whole of what
+ * {@link toApiWorkflow} is about, and a member added to one shape is
+ * a member the other cannot quietly lose.
+ *
+ * Named for a built artifact where {@link ActivationWorkflow}
+ * deliberately is not. The arming question is asked of an artifact
+ * and of a workflow read back off an instance alike; this one is
+ * asked of an artifact alone, because an artifact is what a deploy
+ * uploads and a workflow read back off an instance is audited rather
+ * than projected.
+ *
+ * The near twin is `BuiltWorkflow` in
+ * `tests/invariants/workflow-dist.ts`, and the two carry different
+ * names on purpose. Nothing stops a script importing that module —
+ * `tests/` sits inside this package's TypeScript program and no rule
+ * forbids the import, measured — but a command whose job is to upload
+ * JSON would be dragging the invariants reader in behind it. So these
+ * are two declarations with nothing holding them together, and one
+ * name over both would promise a reader a single shape to go and
+ * find.
+ *
+ * Not interchangeable with {@link ActivationWorkflow}: an index
+ * signature does not stand in for a required member, so neither shape
+ * is assignable to the other. What holds them apart is that each
+ * demands only what its own question reads, and it costs nothing
+ * while every command parses the workflow it is about and asks one
+ * question of it. Unifying them would have this shape demand a node
+ * list the projection never looks at.
+ *
+ * Hand-declared and unchecked, for {@link ActivationNode}'s reason
+ * and measured there.
+ */
+export interface BuiltArtifact extends ApiWorkflow {
+  /** Everything else the envelope carries, none of it uploaded. */
+  readonly [key: string]: unknown;
+}
+
+/**
+ * `workflow` cut down to the four members n8n's public API takes, so
+ * what comes back is a request body and every other member of the
+ * envelope is gone.
+ *
+ * Dropping is the whole of the work. Nothing is validated, renamed or
+ * filled in: the four values are the artifact's own, forwarded as
+ * they stand.
+ *
+ * Written as a literal rather than as a walk over a roster of member
+ * names, which is what fixes the answer's member set at the site. The
+ * four are checked against {@link ApiWorkflow} where they are
+ * written, a walk would want a cast to come back as one, and a roster
+ * would be a second spelling of a list this module already declares
+ * once.
+ *
+ * A member the artifact does not carry comes back `undefined` rather
+ * than as a refusal, and `JSON.stringify` drops an `undefined` member
+ * outright — so an envelope short of one of the four projects to a
+ * body short of it, and the instance receiving that body is what says
+ * so. This projects; it does not check that there was anything to
+ * project.
+ *
+ * The envelope is as far as it reaches. Nodes cross exactly as the
+ * build wrote them, members and all, and whether every one of those
+ * members is welcome is a question about a node rather than about
+ * this projection.
+ */
+export function toApiWorkflow(workflow: BuiltArtifact): ApiWorkflow {
+  return {
+    connections: workflow.connections,
+    name: workflow.name,
+    nodes: workflow.nodes,
+    settings: workflow.settings,
+  };
 }
