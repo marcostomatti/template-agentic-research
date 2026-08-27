@@ -321,6 +321,17 @@ export const ARMED_TRIGGER_TYPES: readonly TriggerTypeRule[] = [
  * Whether a node of type `type` would arm a workflow that was
  * activated with that node in place.
  *
+ * The rule is over a name because what it stands for cannot be
+ * reached from here: an instance settles it from the node CLASS,
+ * which the executor loads and asks what it implements, and
+ * {@link MANUAL_STARTER_TYPES} sets out that trade and what it costs.
+ * A workflow carries the name and not the class, so the name is what
+ * this reads, and an answer is about the string rather than about the
+ * implementation an instance would load behind it. The two part
+ * company wherever a name and an implementation disagree: a type
+ * renamed between releases, a community node, a release later than
+ * the ones these rosters were read from.
+ *
  * Three readings in one, and the order is what makes them a single
  * rule. A type {@link MANUAL_STARTER_TYPES} names answers false, a
  * type {@link ARMED_TRIGGER_TYPES} names answers true, and everything
@@ -341,6 +352,18 @@ export const ARMED_TRIGGER_TYPES: readonly TriggerTypeRule[] = [
  * and here it would widen in both directions at once. The suffix
  * reading settles it either way, being a claim about how a name is
  * SPELLED, which a fold erases.
+ *
+ * Which way a miss errs is decided by which roster missed it, and the
+ * two sit on opposite sides of the suffix. Every entry in
+ * {@link MANUAL_STARTER_TYPES} ends in `Trigger`, so a manual starter
+ * that roster does not name reaches the suffix and is read as arming.
+ * No entry in {@link ARMED_TRIGGER_TYPES} ends in `Trigger`, so an
+ * armed type of that shape left unnamed reaches the suffix and is
+ * read as manual. Reading an armed type as manual is the safe way to
+ * be wrong, and it costs a manual activation and nothing besides: the
+ * workflow stays inactive, the instance stands as it was, and one
+ * activation by hand is the whole of the correction. What each
+ * roster's own miss costs is argued where that roster is declared.
  *
  * A type string and not a node, which is what keeps the rosters
  * askable with no workflow in front of the answer. Which of a given
