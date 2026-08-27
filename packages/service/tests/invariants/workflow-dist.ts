@@ -60,12 +60,14 @@
  * one helper over that shape rather than over the tree, and it
  * sits here because naming every offender is what an absence
  * check owes a reader once it has been handed something to look
- * at. `workflows.test.ts` holds the assertions over the real
- * tree and calls the walk at module scope; the properties it
- * judges that tree by arrive over the rest of this stage. The
- * cases over this file drive fixture trees of their own, which
- * is what keeps both refusals reachable whatever the built tree
- * happens to hold.
+ * at. `workflows.test.ts` and `dispatch-sql.test.ts` hold the
+ * assertions over the real tree and both call the walk at
+ * module scope, the first over every built workflow and the
+ * second over the one workflow the dispatcher is; the rest of
+ * what that second one holds its workflow to arrives over this
+ * stage. The cases over this file drive fixture trees of their
+ * own, which is what keeps both refusals reachable whatever the
+ * built tree happens to hold.
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -229,21 +231,22 @@ export class EmptyDistDirectoryError extends Error {
  *
  * What parts them is a check that must FIND something, and which
  * workflows have one is a matter of what a roster happens to name
- * rather than a property of the build. `ar-dispatch` has one
- * already, the system's one schedule trigger having to live in
- * it, and gains a second later in this plan when
- * `dispatch-sql.ts` reads statements off its nodes by name. A
- * workflow no roster names carries absence checks alone, and a
- * fixture tree a caller passes in has none in front of it at all.
+ * rather than a property of the build. `ar-dispatch` has
+ * several: the system's one schedule trigger has to live in it,
+ * and `dispatch-sql.ts` names a node of it per property the
+ * dispatcher rests on, each entry held to the statement its node
+ * runs. A workflow no roster names carries absence checks alone,
+ * and a fixture tree a caller passes in has none in front of it
+ * at all.
  *
- * Both of those checks read what this file hands back, so with
- * the refusal in place neither ever meets an empty workflow, and
- * that ordering is the point rather than a side effect. A
- * schedule-trigger case failing over an empty `ar-dispatch`
- * reports a trigger that is not present — one node to go and
- * add — when what the file holds is no node at all. Which of
- * the two says which edit fixes it is the whole reason this
- * refusal runs first.
+ * Every one of those checks reads what this file hands back, so
+ * with the refusal in place none of them ever meets an empty
+ * workflow, and that ordering is the point rather than a side
+ * effect. A schedule-trigger case failing over an empty
+ * `ar-dispatch` reports a trigger that is not present — one node
+ * to go and add — when what the file holds is no node at all.
+ * Which of the two says which edit fixes it is the whole reason
+ * this refusal runs first.
  */
 export class EmptyWorkflowError extends Error {
   /** Name of the empty artifact, relative to `directory`. */
@@ -385,8 +388,8 @@ export interface BuiltWorkflow {
  * Two members are named because every roster in the suite keys on
  * one of them: {@link BuiltWorkflowNode.type} for the send,
  * trigger and model rosters, and {@link BuiltWorkflowNode.name}
- * for the statements read off `ar-dispatch` by node name later in
- * this plan. Everything else stays reachable as `unknown` —
+ * for the statements `dispatch-sql.ts` reads off `ar-dispatch`
+ * by node name. Everything else stays reachable as `unknown` —
  * `parameters` holds the SQL a Postgres node runs and the body a
  * Code node runs, `onError` decides where a failure goes,
  * `retryOnFail` is a cost guard — narrowed by whichever helper

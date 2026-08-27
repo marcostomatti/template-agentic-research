@@ -68,8 +68,8 @@
  * statements `ar-dispatch` must carry is a file of its own,
  * `dispatch-sql.ts`, and reading that last one is how it reaches
  * a statement at all. Every entry it holds those statements to
- * has landed; what is left is the suite holding each of them
- * against the node it names.
+ * has landed, and the suite beside it holds each of them against
+ * the node it names.
  */
 
 import type { BuiltWorkflowNode } from './workflow-dist.js';

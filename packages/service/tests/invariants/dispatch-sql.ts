@@ -78,8 +78,11 @@
  * and every entry the roster carries are what have landed: over
  * both claim statements, over the reschedule folded into each of
  * them, and over the row the dispatcher opens for a claimed unit.
- * What is left is the suite holding each entry against the node
- * it names.
+ * `dispatch-sql.test.ts` holds every one of them against the node
+ * it names, over the tree this package builds. What is left is
+ * the rest of that suite, which reads the same workflow for
+ * properties no statement carries — its wiring, and the setting
+ * that decides where a failure goes.
  */
 
 import type { BuiltWorkflow } from './workflow-dist.js';
