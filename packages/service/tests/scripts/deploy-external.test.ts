@@ -40,13 +40,15 @@
  * none.
  *
  * That it is the control and not a fifth claim is measured rather
- * than argued. A stub rewritten to record nothing leaves the
- * absence claim before it GREEN and reddens that case, which is
- * the vacuity it exists to close; and a sequence that refused
- * whatever it was handed reddens it too, which is what says a
- * block of nothing but a refusal is not a block agreeing with
- * itself. Both legs also redden the second block's claim, every
- * run there going through the same stub and the same sequence.
+ * than argued. Three legs reach it and every one of them leaves the
+ * absence claim GREEN: a stub rewritten to record nothing, a run
+ * pointed at a second stub built the same way, and a sequence that
+ * refused whatever it was handed. The first two are the two ways an
+ * empty call list can mean nothing at all, and the argument for the
+ * second is on {@link recorder}; the third is what says a block of
+ * nothing but a refusal is not a block agreeing with itself. All
+ * three also redden the second block's claim, every run there going
+ * through the same stub and the same sequence.
  *
  * Both blocks want a clean checkout and this file makes one.
  * `assertCleanTree` asks git about a directory and nothing is
@@ -260,6 +262,44 @@ function instanceHoldingNothing(): string {
  * The body is settled when the call is recorded rather than when it
  * is read back, so a reply is an answer to the call sitting beside
  * it in the list and not to whatever the run went on to do.
+ *
+ * What a case reading these calls cannot tell on its own is which
+ * system answered them. An empty list is what this records for a
+ * run refused before it made a call, and equally what it records
+ * for a run that made every call it meant to and made them
+ * somewhere else. Measured by handing {@link deploy} a second
+ * recorder built the same way and asserting against this one: of
+ * the six cases here the two that move are the accepting control
+ * and the upsert claim, each of which reads a call back, while the
+ * first block's absence claim stays GREEN, correct and fail-capable
+ * and about a system that run never used.
+ *
+ * That failure is written up in
+ * `~/.claude/skills/assert-the-stub-was-hit/SKILL.md`, a user-level
+ * skill rather than one vendored under `.claude/` here, which is
+ * why the argument is carried above rather than left to the link.
+ * Two of its five defences are what this file is arranged around:
+ * that a stub-backed block owes a reading saying the stub was
+ * reached at all, which here is a case of its own rather than a
+ * line inside another; and that a claim compares the request
+ * SEQUENCE rather than the value a run answered with, which is what
+ * {@link labelOf} is for and why no case here reads the report
+ * {@link deploy} returns.
+ *
+ * The remaining three are answered elsewhere rather than declined.
+ * It asks that a fake base URL be required and not defaulted, the
+ * failure it was extracted from being an override that silently
+ * missed and left the client on the production default it ships;
+ * here the whole fetch is required, `deploy` taking it as a member
+ * of its options, `n8n-client.ts` putting every call through the
+ * one it is handed and reaching for no global, and this file
+ * constructing a deploy in one place, so there is no default left
+ * to inherit. It asks that the runner block the network, which
+ * would be guarding a route that does not exist; {@link BASE_URL}
+ * answers the same worry the other way, by naming a host that
+ * resolves nowhere. And it asks for fixture values a real service
+ * could not have produced, which {@link API_KEY} is, though the
+ * reading argued there is a different one.
  *
  * @param answer - What the instance answers each call with.
  * @returns The call list and the fetch that writes to it.
