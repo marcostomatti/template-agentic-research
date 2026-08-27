@@ -6,94 +6,125 @@
  * than behind the live seam, and it is what lets a workflow written
  * out by hand stand in for one an instance would have handed over.
  *
- * Two subjects so far, and they are the two halves of one matcher. A
- * type {@link MANUAL_STARTER_TYPES} names comes back false, so a
- * workflow carrying one of them and nothing else arms nothing when
- * it is activated. A type {@link ARMED_TRIGGER_TYPES} names comes
- * back true, and so does the type this port schedules on, which
- * neither roster declares and which the name shape underneath them
- * is what answers for. The walk over a whole workflow's nodes that
- * `activatableTriggers` does and the projection `toApiWorkflow`
- * makes of a built artifact are two subjects of their own, and
- * neither is in this file yet.
+ * Three subjects, and the first two are the two halves of one
+ * matcher. A type {@link MANUAL_STARTER_TYPES} names comes back
+ * false, so a workflow carrying one of them and nothing else arms
+ * nothing when it is activated. A type {@link ARMED_TRIGGER_TYPES}
+ * names comes back true, and so does the type this port schedules
+ * on, which neither roster declares and which the name shape
+ * underneath them is what answers for. The third is the walk
+ * {@link activatableTriggers} makes over a whole workflow, which
+ * asks that of every node it holds and drops what the executor drops
+ * before asking anything. The projection `toApiWorkflow` makes of a
+ * built artifact is a subject of its own and is not in this file
+ * yet.
  *
- * One case per entry, and the sample each one is paired with is that
- * entry's own type. Neither roster carries an id for that reason,
- * and the module argues the reason where they are declared. What a
- * case adds is what the pairing costs: there is no second list
- * behind it. The sibling in `tests/invariants/` declares a sample
- * per entry and holds two rosters against each other, so an entry
- * nobody wrote a sample for is reported by name; here the types are
- * read straight off whichever roster a block is about, and the set a
- * run records is derived from the same declaration it is held
- * against.
+ * One case per entry in each of the two matcher blocks, and the
+ * sample each one is paired with is that entry's own type. Neither
+ * roster carries an id for that reason, and the module argues the
+ * reason where they are declared. What a case adds is what the
+ * pairing costs: there is no second list behind it. The sibling in
+ * `tests/invariants/` declares a sample per entry and holds two
+ * rosters against each other, so an entry nobody wrote a sample for
+ * is reported by name; here the types are read straight off
+ * whichever roster a block is about, and the set a run records is
+ * derived from the same declaration it is held against.
  *
- * So the comparison closing a block is not what an emptied roster
- * reddens. Two empty sets compare equal, and every case the loop
- * would have generated is gone with them, which leaves the rest of
- * the block quiet and printing a tick. The case in front of each
+ * So the comparison closing a roster block is not what an emptied
+ * roster reddens. Two empty sets compare equal, and every case the
+ * loop would have generated is gone with them, which leaves the rest
+ * of the block quiet and printing a tick. The case in front of each
  * loop is what names that. What a comparison reaches instead is a
  * loop narrowed away from its roster — a slice, a filter, a
  * hand-written list — which goes on passing over whatever is left of
  * it, and it reaches that only because each type is recorded from
  * inside its own case rather than off the loop that declared them.
- * Measured on both blocks: emptying a roster reddens the case in
- * front of its loop alone and leaves the comparison green, slicing a
- * loop reddens the comparison alone, and a roster naming one type
- * twice reddens the comparison alongside the distinctness case.
+ * Measured on both: emptying a roster reddens the case in front of
+ * its loop alone and leaves the comparison green, slicing a loop
+ * reddens the comparison alone, and a roster naming one type twice
+ * reddens the comparison alongside the distinctness case.
  *
- * What keeps a block's claims from being strings a rule answering
- * everything the same way would have agreed about is the shape
- * underneath the rosters — a name ending in `Trigger`, which is what
- * {@link isActivatableTrigger} falls through to. Each block asserts
- * that its own entries sit on the far side of it, and the two read
- * it in opposite directions. Every manual type carries the ending,
- * so the fall-through answers true for each of them and the roster
- * overrides them to false; no armed type carries it, so the
+ * What keeps a roster block's claims from being strings a rule
+ * answering everything the same way would have agreed about is the
+ * shape underneath the rosters — a name ending in `Trigger`, which
+ * is what {@link isActivatableTrigger} falls through to. Each of the
+ * two asserts that its own entries sit on the far side of it, and
+ * they read it in opposite directions. Every manual type carries the
+ * ending, so the fall-through answers true for each of them and the
+ * roster overrides them to false; no armed type carries it, so the
  * fall-through answers false for each of them and the roster is what
  * makes them true. Measured: a matcher that had lost the manual
  * roster reads every manual type as arming, and one that had lost
  * the armed roster reads every armed type as manual. Asserted rather
  * than left as a remark, because an entry corrected onto the near
  * side leaves its own claim green while the reason for it is gone —
- * measured on both blocks, such an entry reddens its own block's
- * guard alone.
+ * measured on both, such an entry reddens its own block's guard
+ * alone.
  *
- * The schedule type is the one sample in the file no entry declares,
- * and it is here because the fall-through is a reading of its own
- * rather than a default nothing reaches. Neither roster names it, so
- * the name shape is what answers, and its claim is the only one that
- * moves when that shape is what breaks. The guard beside it holds
- * both halves: no roster naming the type, and the ending the shape
- * reads. Measured, and the split is what the guard is for — an entry
- * for it in the armed roster leaves the claim GREEN while the guard
+ * The schedule type is the one type either of those blocks hands the
+ * matcher that no entry declares, and it is there because the
+ * fall-through is a reading of its own rather than a default nothing
+ * reaches. Neither roster names it, so the name shape is what
+ * answers, and its claim is what moves when that shape stops
+ * answering true — measured, alongside the third block's own pair,
+ * whose clocks carry that same type. The guard beside it holds both
+ * halves: no roster naming the type, and the ending the shape reads.
+ * Measured, and the split is what the guard is for — an entry for it
+ * in the armed roster leaves the claim GREEN while the guard
  * reddens, the claim having quietly stopped being about the
  * fall-through, and an entry in the manual roster reddens the two
- * together.
+ * together and that pair with them.
  *
- * What a block of nothing but refusals cannot reach is a matcher
- * answering false to whatever it is handed, and what an accepting
- * block cannot reach is one answering true. Neither reaches its own,
- * and each is the other's control. Measured: a matcher answering
- * false reddens every accepting claim and nothing among the
- * refusals, and a matcher answering true reddens every refusal and
- * nothing among the accepting claims. So the two are read together
- * or not at all, and a later task deleting either takes the evidence
- * for the other away with it.
+ * Of those two, the block of nothing but refusals cannot reach a
+ * matcher answering false to whatever it is handed, and the
+ * accepting one cannot reach one answering true. Neither reaches its
+ * own, and each is the other's control. Measured: a matcher
+ * answering false reddens every accepting claim and nothing among
+ * the refusals, and a matcher answering true reddens every refusal
+ * and nothing among the accepting claims. So the two are read
+ * together or not at all, and a later task deleting either takes the
+ * evidence for the other away with it. Neither mutation is confined
+ * to them now that a third block asks the matcher too — each reddens
+ * 7 of 22 rather than 5, the extra pair being that block's guard and
+ * the answer it holds, which move with the matcher without saying
+ * which way it went wrong.
  *
- * Two guards the sibling carries are absent from both blocks, and
+ * Two guards the sibling carries are absent from both of them, and
  * both for the same reason. Nothing looks an entry up, so nothing
- * can fail to find one: a sample is an entry here, the schedule type
- * apart, where over there a sample names one and a lookup has to
- * refuse when the name matches nothing. And no plant is built, so
- * there is no node whose type could have been written out a second
- * time beside the string it was read from.
+ * can fail to find one: a sample is an entry there, the schedule
+ * type apart, where over there a sample names one and a lookup has
+ * to refuse when the name matches nothing. And neither builds a
+ * node, so neither holds one whose type could have been written out
+ * a second time beside the string it was read from.
+ *
+ * The third block builds three, and its own guard is about that
+ * fixture rather than about a lookup. Two of them are clocks of one
+ * type with one of them switched off, so what parts those two is the
+ * `disabled` member and nothing else; the third starts nothing, so
+ * what parts the answer from every node an operator left switched on
+ * is the matcher. A disabled node whose type armed nothing would be
+ * dropped for a reason the claim is not about, and the guard is what
+ * says this one is not that.
+ *
+ * Two readings that block does not reach. The skip is strict against
+ * `true`, and every other value is one the executor still runs —
+ * which the module argues at length and which no case here hands
+ * over, a truthy test answering exactly as the shipped one does over
+ * this fixture. And one node comes back, so nothing here says the
+ * answer is a count rather than a set, or that it holds the
+ * workflow's own order.
  */
+import type {
+  ActivationNode,
+  ActivationWorkflow,
+} from '../../scripts/n8n-workflow.js';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   ARMED_TRIGGER_TYPES,
   MANUAL_STARTER_TYPES,
+  activatableTriggers,
   isActivatableTrigger,
 } from '../../scripts/n8n-workflow.js';
 import { SCHEDULE_TRIGGER_TYPE } from '../invariants/workflow-rosters.js';
@@ -298,10 +329,10 @@ describe('isActivatableTrigger — the types that arm a workflow', () => {
   });
 
   // What the schedule claim below rests on, and the only guard in
-  // this file standing behind a type no roster declares. Neither
-  // roster names the schedule type, so what answers for it is the
-  // name shape rather than a roster hit, and it carries the ending
-  // that shape reads, so the shape is able to answer at all.
+  // these two blocks standing behind a type no roster declares.
+  // Neither roster names the schedule type, so what answers for it
+  // is the name shape rather than a roster hit, and it carries the
+  // ending that shape reads, so the shape is able to answer at all.
   //
   // Both halves in one record, so the diff names which of the two
   // moved: a rostered schedule type and one whose name lost the
@@ -309,8 +340,9 @@ describe('isActivatableTrigger — the types that arm a workflow', () => {
   // only the first of them is silent elsewhere — an entry for the
   // type in the ARMED roster reddens this case while the claim below
   // stays green, the claim having quietly stopped being about the
-  // fall-through, and an entry in the manual roster reddens the two
-  // together because the answer really does change.
+  // fall-through, while an entry in the manual roster reddens the
+  // two together and the third block's own two with them, because
+  // the answer really does change.
   it('is handed a schedule type neither roster names', () => {
     const rostered = [...MANUAL_STARTER_TYPES, ...ARMED_TRIGGER_TYPES]
       .map((rule) => rule.type)
@@ -323,17 +355,20 @@ describe('isActivatableTrigger — the types that arm a workflow', () => {
   });
 
   // The third of the matcher's three readings, and the only claim in
-  // this file that reaches it. The type this port schedules on is in
-  // neither roster, so what answers for it is the name shape those
-  // rosters correct — measured, a fall-through returning false
-  // reddens this case alone.
+  // these two blocks that reaches it. The type this port schedules
+  // on is in neither roster, so what answers for it is the name
+  // shape those rosters correct — measured, a fall-through returning
+  // false reddens this case, and the third block's guard and answer
+  // with it, since the type its clocks carry is this one.
   //
-  // The limit is the other direction, and nothing here closes it: a
-  // fall-through widened to answer true for anything leaves every
-  // case in this file green, each rostered type being answered
-  // before it and this one answering true either way. What would
-  // reach that is a type carrying neither the ending nor a roster
-  // entry, and no case here hands one over.
+  // The other direction is not this claim's to reach, and it is not
+  // left open either. A fall-through widened to answer true for
+  // anything leaves every case in these two blocks green, each
+  // rostered type being answered before it and this one answering
+  // true either way; what reads it is a type carrying neither the
+  // ending nor a roster entry, and the workflow the third block is
+  // asked about holds one — measured, that widening reddens its
+  // guard and the answer it holds, and nothing here.
   //
   // Read off `tests/invariants/workflow-rosters.ts` rather than
   // spelled again, which is the whole of why a case here imports
@@ -374,5 +409,145 @@ describe('isActivatableTrigger — the types that arm a workflow', () => {
     const declared = ARMED_TRIGGER_TYPES.map((rule) => rule.type).sort();
 
     expect(reached).toEqual(declared);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The workflow the walk is asked about
+// ---------------------------------------------------------------------------
+
+/**
+ * The clock an operator switched off on the canvas.
+ *
+ * `disabled` is exactly `true`, which is the value the executor
+ * compares against and the only one {@link activatableTriggers}
+ * drops a node for. The fixture guard reads it back. A member
+ * spelled anything else leaves a node nobody switched off, which
+ * both claims move under as well — measured, three cases at once —
+ * and what the guard adds is that the failure is named at the member
+ * rather than read off an answer holding one node too many.
+ *
+ * It carries the type this port schedules on, so the matcher answers
+ * true for it and what leaves it out is the skip rather than a
+ * classification. That is the other half the guard reads, and it is
+ * the half nothing else here reaches: a disabled node of a type that
+ * armed nothing would be left out either way.
+ */
+const DISABLED_CLOCK: ActivationNode = {
+  disabled: true,
+  name: 'Fire On The Clock',
+  type: SCHEDULE_TRIGGER_TYPE,
+};
+
+/**
+ * The clock left running, and the whole of what the walk should hand
+ * back.
+ *
+ * The same type as {@link DISABLED_CLOCK}, so the two differ in the
+ * `disabled` member and in a name, and no reading of the type could
+ * have kept one and dropped the other.
+ *
+ * It is also this block's accept control. A walk answering with
+ * nothing at all satisfies every claim about what it leaves out, so
+ * what says the drop is a drop rather than an empty answer is that
+ * this node comes back — which is why the two are cases of their own
+ * rather than expectations in one.
+ */
+const ENABLED_CLOCK: ActivationNode = {
+  name: 'Fire On The Clock As Well',
+  type: SCHEDULE_TRIGGER_TYPE,
+};
+
+/**
+ * A node that starts nothing, enabled, and sitting between the two
+ * clocks.
+ *
+ * Its type is in neither roster and does not end the way the name
+ * shape reads, so the matcher answers false for it. That is what
+ * makes the keep claim about a walk that asks the matcher rather
+ * than one handing back whatever an operator left switched on:
+ * without it a walk that had stopped asking would answer the same.
+ *
+ * A type spelled here rather than read off a roster, which is safe
+ * only because nothing declares it: there is no entry whose spelling
+ * a second copy could drift from. What the guard does with it is ask
+ * the matcher rather than take the classification on trust.
+ */
+const PLAIN_NODE: ActivationNode = {
+  name: 'Read The Due Rows',
+  type: 'n8n-nodes-base.postgres',
+};
+
+/**
+ * The workflow all three claims are asked of.
+ *
+ * The node that should come back sits last and the disabled one
+ * first, so a walk that took the front of the list, or stopped at
+ * the first node it could keep, answers differently from one that
+ * filtered.
+ */
+const TWO_CLOCKS_ONE_OFF: ActivationWorkflow = {
+  nodes: [DISABLED_CLOCK, PLAIN_NODE, ENABLED_CLOCK],
+};
+
+describe('activatableTriggers — a trigger node left disabled', () => {
+  // What both claims after it rest on, and the only case in this
+  // block that asks nothing of the walk. Four halves, and each names
+  // a way the block could have been about something else. A disabled
+  // node whose type armed nothing would be left out by the matcher
+  // rather than by the skip. An enabled node of some other type
+  // would leave a reading of the type able to part the two. A member
+  // spelled anything but `disabled` would leave a node nobody
+  // switched off. And a third node the matcher answered true for
+  // would leave the keep claim satisfied by a walk that had stopped
+  // asking it at all.
+  //
+  // Held in one record so the diff names which half moved. The two
+  // type halves are the ones nothing else reaches: measured, either
+  // of them edited reddens this case alone, while the other two
+  // redden a claim alongside it and are loud without the guard.
+  it('is handed a disabled node whose type would otherwise arm', () => {
+    expect({
+      theDisabledMemberIsExactlyTrue: DISABLED_CLOCK.disabled === true,
+      theDisabledNodesTypeArms: isActivatableTrigger(DISABLED_CLOCK.type),
+      theEnabledNodeCarriesThatType:
+        ENABLED_CLOCK.type === DISABLED_CLOCK.type,
+      theRemainingNodesTypeArms: isActivatableTrigger(PLAIN_NODE.type),
+    }).toEqual({
+      theDisabledMemberIsExactlyTrue: true,
+      theDisabledNodesTypeArms: true,
+      theEnabledNodeCarriesThatType: true,
+      theRemainingNodesTypeArms: false,
+    });
+  });
+
+  // The claim. A node an operator switched off is not among the ones
+  // an activation would start, and the guard is what says it is the
+  // skip that left it out rather than anything about its type.
+  //
+  // By reference rather than by name, so what it is about is the
+  // node the fixture declares and not a string two nodes could
+  // share. On its own it holds for a walk handing back nothing at
+  // all, which is what the case after it is for: measured, a walk
+  // answering with nothing reddens that one and leaves this green.
+  it('leaves the disabled node out of what it hands back', () => {
+    expect(activatableTriggers(TWO_CLOCKS_ONE_OFF)).not.toContain(
+      DISABLED_CLOCK,
+    );
+  });
+
+  // What the claim before it rests on, and the whole answer rather
+  // than a containment. The clock left running comes back, so the
+  // drop is a drop and not an empty answer; the node that starts
+  // nothing does not, so the walk asks the matcher rather than
+  // handing back every node an operator left switched on.
+  //
+  // One node comes back rather than two, so nothing here says the
+  // answer is a count rather than a set, or that it holds the
+  // workflow's own order. What it does reach is a walk that stopped
+  // early or took the front of the list, the node it wants being
+  // last of the three.
+  it('hands back the clock left running, and nothing besides', () => {
+    expect(activatableTriggers(TWO_CLOCKS_ONE_OFF)).toEqual([ENABLED_CLOCK]);
   });
 });
