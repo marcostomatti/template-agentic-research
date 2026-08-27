@@ -6,7 +6,7 @@
  * than behind the live seam, and it is what lets a workflow written
  * out by hand stand in for one an instance would have handed over.
  *
- * Three subjects, and the first two are the two halves of one
+ * Four subjects, and the first two are the two halves of one
  * matcher. A type {@link MANUAL_STARTER_TYPES} names comes back
  * false, so a workflow carrying one of them and nothing else arms
  * nothing when it is activated. A type {@link ARMED_TRIGGER_TYPES}
@@ -15,9 +15,10 @@
  * underneath them is what answers for. The third is the walk
  * {@link activatableTriggers} makes over a whole workflow, which
  * asks that of every node it holds and drops what the executor drops
- * before asking anything. The projection `toApiWorkflow` makes of a
- * built artifact is a subject of its own and is not in this file
- * yet.
+ * before asking anything. The fourth asks nothing of a node at all:
+ * {@link toApiWorkflow} cuts an envelope down to the four members
+ * n8n's public API takes, and what it is handed is an artifact
+ * carrying every member that API refuses.
  *
  * One case per entry in each of the two matcher blocks, and the
  * sample each one is paired with is that entry's own type. Neither
@@ -85,7 +86,7 @@
  * together or not at all, and a later task deleting either takes the
  * evidence for the other away with it. Neither mutation is confined
  * to them now that a third block asks the matcher too — each reddens
- * 7 of 22 rather than 5, the extra pair being that block's guard and
+ * 7 of 25 rather than 5, the extra pair being that block's guard and
  * the answer it holds, which move with the matcher without saying
  * which way it went wrong.
  *
@@ -113,10 +114,43 @@
  * this fixture. And one node comes back, so nothing here says the
  * answer is a count rather than a set, or that it holds the
  * workflow's own order.
+ *
+ * The fourth reads back both halves of what a projection is, in two
+ * cases rather than one. The answer's member set is exactly the
+ * four, which is what says the six are dropped and, at the other
+ * end, that the four came back at all — an answer of nothing
+ * satisfies every absence a rejected member could be asked about.
+ * And the value behind each of the four is the artifact's own, which
+ * is the claim a projection inventing four values would fail and a
+ * member set would not. Measured, each of the two reddens alone: a
+ * projection forwarding the whole envelope moves the first, and one
+ * that had swapped two of the four moves the second.
+ *
+ * That block's guard is about its artifact rather than about a
+ * roster, and each of its two halves stands behind one of the
+ * claims. The member list is what says there was anything to drop
+ * and anything to forward: an artifact short of a rejected member is
+ * one the drop claim was never asked to drop, and short of a
+ * projected one both sides of the identity comparison answer
+ * `undefined` and agree. The four values being four is what keeps
+ * the second claim about which member went where, since a fixture
+ * whose four had collapsed onto one leaves a projection reading the
+ * wrong member into every one of them answering as the shipped one
+ * does. Measured, all three of those leave both claims green and
+ * redden the guard alone.
+ *
+ * Two readings the fourth does not reach either. Nothing asks the
+ * artifact what it holds after the call, its guard running before
+ * both claims, so a projection that had deleted the six from what it
+ * was handed passes every case in the block. And the four are read
+ * through a roster this file spells out, so a roster emptied leaves
+ * the value claim comparing one empty list with another — measured,
+ * the guard and the drop claim are what redden there.
  */
 import type {
   ActivationNode,
   ActivationWorkflow,
+  BuiltArtifact,
 } from '../../scripts/n8n-workflow.js';
 
 import { describe, expect, it } from 'vitest';
@@ -126,6 +160,7 @@ import {
   MANUAL_STARTER_TYPES,
   activatableTriggers,
   isActivatableTrigger,
+  toApiWorkflow,
 } from '../../scripts/n8n-workflow.js';
 import { SCHEDULE_TRIGGER_TYPE } from '../invariants/workflow-rosters.js';
 
@@ -549,5 +584,189 @@ describe('activatableTriggers — a trigger node left disabled', () => {
   // last of the three.
   it('hands back the clock left running, and nothing besides', () => {
     expect(activatableTriggers(TWO_CLOCKS_ONE_OFF)).toEqual([ENABLED_CLOCK]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The artifact the projection is asked about
+// ---------------------------------------------------------------------------
+
+/**
+ * The four members of a workflow n8n's public API takes, written out
+ * here rather than read off the module under test.
+ *
+ * `toApiWorkflow` writes them as a literal inside its own return
+ * statement and holds no roster of its own, and its block argues
+ * why: a roster there would be a second spelling of a list
+ * `ApiWorkflow` already declares once. Which is exactly the
+ * arrangement the cases below want, and for the reason
+ * {@link TRIGGER_SUFFIX} carries — a list read off the rule would
+ * agree with a rule that had quietly dropped a member, and two
+ * hand-written spellings are the only shape where comparing them
+ * says anything.
+ *
+ * Both claims below read it, so what the answer's member set is held
+ * against and what its values are held against are one list. A
+ * member added here that the projection does not write moves the two
+ * together, rather than leaving one of them about some other four.
+ */
+const PROJECTED_MEMBERS = ['connections', 'name', 'nodes', 'settings'];
+
+/**
+ * The six members a built artifact can carry that the public API
+ * refuses, and the whole of what {@link BUILT_ARTIFACT} is stocked
+ * with beyond the four.
+ *
+ * One list rather than two, though the schema knows them two ways:
+ * `id`, `active` and `tags` it names and marks read-only, and
+ * `versionId`, `meta` and `pinData` it does not name at all. Nothing
+ * here reads that difference because nothing downstream of the
+ * projection does either — the schema is
+ * `additionalProperties: false` over the four, so a body carrying
+ * any of the six is refused whole and which of the two ways it was
+ * refused changes nothing.
+ *
+ * Three of them are what this port's own build writes. `id`,
+ * `active` and `versionId` are declared in `ar-dispatch.json` and
+ * copied through unchanged, so no artifact under `workflows/dist/`
+ * is POSTable as it stands. The other three arrive on a workflow
+ * exported off a canvas, which is what an audit path reads back off
+ * an instance rather than anything the build wrote. Both classes are
+ * here because the projection is what stands between the two.
+ *
+ * Names alone, with no reason beside them, which is where this parts
+ * from the trigger rosters above. There the classification is what a
+ * roster is for and a reason is what makes an entry checkable
+ * against a node. Here every member is refused the same way for the
+ * same reason, and the schema is what says so rather than anything
+ * about the member itself.
+ */
+const REJECTED_MEMBERS = [
+  'active',
+  'id',
+  'meta',
+  'pinData',
+  'tags',
+  'versionId',
+];
+
+/**
+ * The artifact both claims are asked of: every one of the four
+ * members the API takes, and every one of the six it refuses.
+ *
+ * That it carries all six is what the drop claim is worth. An
+ * artifact short of one is one the projection was never asked to
+ * drop, and the claim goes on passing having said nothing whatever
+ * about it — which is the whole of what the guard reads back, and
+ * the reason the guard is a case rather than a remark.
+ *
+ * The values behind the six are thin on purpose. What a rejected
+ * member costs is carrying the KEY at all, the schema refusing a
+ * body for a name it did not expect and never for what sits behind
+ * it, so the fixture's job there is the member and not a plausible
+ * payload.
+ *
+ * The four are not thin, and no two of them are one value, because
+ * the second claim compares them by identity. Four values that
+ * happened to be equal would leave a projection that had mixed the
+ * members up answering exactly as the shipped one does, and that is
+ * the guard's other half.
+ *
+ * Hand-written rather than read out of `workflows/dist/`, which is
+ * the whole reason these cases sit in the default suite: the
+ * projection is answered from a value, so a case owes it a value and
+ * not a tree. What that costs is that nothing here says a shipped
+ * artifact carries what this one carries. The invariants suite is
+ * what reads the built tree, and this file reads none of it.
+ */
+const BUILT_ARTIFACT: BuiltArtifact = {
+  active: false,
+  connections: { 'Fire On The Clock': { main: [[]] } },
+  id: 'ar-dispatch',
+  meta: {},
+  name: 'AR Dispatch',
+  nodes: [{ name: 'Fire On The Clock', type: SCHEDULE_TRIGGER_TYPE }],
+  pinData: {},
+  settings: { executionOrder: 'v1' },
+  tags: [],
+  versionId: '00000000-0000-4000-8000-000000000000',
+};
+
+describe('toApiWorkflow — an artifact carrying what the API refuses', () => {
+  // What both claims after it rest on, and the only case in this
+  // block that asks nothing of the projection. Two halves, and each
+  // names a way the block could have been about something else.
+  //
+  // The first is the fixture's own member list, held against both
+  // rosters at once rather than each roster against the fixture.
+  // Written the other way about, it would be blind where it matters
+  // most: an emptied `REJECTED_MEMBERS` filters to nothing and
+  // compares equal to nothing, leaving a drop claim asked about an
+  // artifact with nothing to drop. This way a roster emptied on
+  // either side, a member either roster lost, and a member named by
+  // both — which puts one name in twice — are all named in the diff.
+  //
+  // The second is that the four carry four values. Each is compared
+  // by identity below, so a fixture whose four had collapsed onto
+  // one would answer the same for a projection that read the wrong
+  // member into every one of them.
+  it('is handed an artifact carrying every member the rosters name', () => {
+    const declared = [...PROJECTED_MEMBERS, ...REJECTED_MEMBERS].sort();
+    const values = new Set(
+      PROJECTED_MEMBERS.map((member) => BUILT_ARTIFACT[member]),
+    );
+
+    expect({
+      itsOwnMembers: Object.keys(BUILT_ARTIFACT).sort(),
+      valuesBehindTheProjectedOnes: values.size,
+    }).toEqual({
+      itsOwnMembers: declared,
+      valuesBehindTheProjectedOnes: PROJECTED_MEMBERS.length,
+    });
+  });
+
+  // The claim. What comes back carries the four members n8n's public
+  // API takes and not one of the six it refuses, over an artifact
+  // carrying all ten.
+  //
+  // Written as the answer's whole member set against the roster
+  // rather than as a list of names asserted absent, because the
+  // member that leaks is the one nobody thought to write down. It
+  // costs nothing to say it this way and it closes the other end at
+  // the same time: an answer of nothing at all satisfies every
+  // absence a rejected member could be asked about, and reddens
+  // here.
+  //
+  // Sorted on both sides, so the order the projection writes its
+  // four in is not something this claims. Nothing downstream reads
+  // it — a request body is JSON and a member order is not a member.
+  it('hands back those four members and none of the six', () => {
+    const answered = Object.keys(toApiWorkflow(BUILT_ARTIFACT));
+
+    expect(answered.sort()).toEqual([...PROJECTED_MEMBERS].sort());
+  });
+
+  // What the claim before it leaves open: the four came back, and
+  // these are the artifact's own four rather than four values the
+  // projection made up. Measured by identity rather than by
+  // equality, which is what the shipped projection gives — it
+  // forwards, and copies nothing.
+  //
+  // Read through the roster the claim above is held against, so both
+  // are about one set of four. A member looked up and not found
+  // reads here as a value that was not forwarded, which is the
+  // honest answer for a projection that dropped it.
+  //
+  // Held as the filtered list against the whole list rather than as
+  // a count, so the diff names the member whose value went
+  // elsewhere. A projection that had swapped two of the four is
+  // reported at both of them.
+  it('forwards the value the artifact carries behind each of them', () => {
+    const answered = new Map(Object.entries(toApiWorkflow(BUILT_ARTIFACT)));
+    const forwarded = PROJECTED_MEMBERS.filter(
+      (member) => Object.is(answered.get(member), BUILT_ARTIFACT[member]),
+    );
+
+    expect(forwarded).toEqual(PROJECTED_MEMBERS);
   });
 });
