@@ -77,24 +77,40 @@
  * `n8n-workflow.ts` cuts a built artifact down to the members the API
  * accepts; this module is the sequence those are steps in. `deploy`
  * runs that sequence and `runDeployCli` is the command line over it,
- * guarded so that importing this module runs none of it. Both arrive
- * next in this stage, along with the refusal for a missing setting;
- * `assertCleanTree` and `DirtyTreeError` below are the dirty-tree
- * half, and they are what a deploy meets first.
+ * guarded so that importing this module runs none of it, and both
+ * arrive next in this stage.
+ *
+ * The two refusals that sequence is worth having in front of it are
+ * here already. `assertCleanTree` refuses a tree no commit accounts
+ * for, and `requireInstance` refuses a deploy with no instance
+ * configured to send one to. Neither reads the other, so which of
+ * them a deploy meets first is `deploy`'s to settle; what they share
+ * is that both answer before anything is built and before any
+ * request is made, which is the whole of what makes a refusal here
+ * free.
  */
+
+import type { HttpFetch, N8nInstance } from './n8n-client.js';
 
 import { gitStatusPorcelain } from './build-workflows.js';
 
 /**
- * Why a deploy cares, appended to both refusals below.
+ * Why a deploy cares about a stamp, appended to both branches of
+ * {@link DirtyTreeError}'s message.
  *
- * Carried once rather than written into each message, for the reason
+ * Carried once rather than written into each branch, for the reason
  * `approve.ts` gives for appending its usage line in one place: a
- * refusal added later cannot leave it out. It is the argument
+ * branch added later cannot leave it out. It is the argument
  * `gitBuildTag` in `build-workflows.ts` makes from the stamp's end,
  * stated here as what it costs — `-dirty` is not injective, so two
  * artifacts built from two different trees at one commit carry the
  * identical stamp while differing in content.
+ *
+ * It reaches that one class and no further. The file's other
+ * refusal, {@link UnconfiguredInstanceError}, says nothing about a
+ * stamp and should not: nothing has been built when it fires, a
+ * deploy with nowhere to send an artifact having had no reason to
+ * make one.
  */
 const STAMP_AT_STAKE =
   'An artifact leaves the tree that built it, and on the far side its ' +
@@ -115,13 +131,15 @@ const STAMP_AT_STAKE =
  * {@link DirtyTreeError.changes} rather than by a second class.
  *
  * A distinct class rather than a bare `Error`, so a case covering a
- * refused deploy can pin the refusal to it. Nothing else on this path
- * raises anything today: `gitStatusPorcelain` reports every way the
- * call can fail as `null` rather than by throwing, which is what
- * leaves this the only outcome to distinguish. The steps a deploy
- * takes after it — the build, the projection and the calls — each
- * carry refusals of their own, and those arrive with `deploy` later
- * in this stage.
+ * refused deploy can pin the refusal to it. Nothing the tree
+ * question reads raises anything of its own: `gitStatusPorcelain`
+ * reports every way the call can fail as `null` rather than by
+ * throwing, which is what leaves this the only outcome it produces.
+ * The other pre-flight beside it, {@link UnconfiguredInstanceError},
+ * has a class of its own for the same reason and is about something
+ * else entirely; the steps a deploy takes after the two — the build,
+ * the projection and the calls — each carry refusals of their own,
+ * and those arrive with `deploy` later in this stage.
  *
  * Nothing stands behind it, which is the other half of why it is a
  * class and not a warning. Measured over a tree with uncommitted work
@@ -242,4 +260,223 @@ export function assertCleanTree(root: string): void {
   if (changes !== '') {
     throw new DirtyTreeError(root, changes);
   }
+}
+
+/**
+ * The two settings a deploy needs in order to reach an instance, as
+ * `src/config.ts` answers for them.
+ *
+ * Both `string | undefined`, which is the schema's own answer and
+ * not a widening here. `AR_N8N_URL` and `AR_N8N_API_KEY` are
+ * declared optional there because the running service opens neither,
+ * so a boot parses an environment carrying neither and reports
+ * nothing about it — which is what leaves the refusal to this
+ * command, and why the shape a command reads is the shape a command
+ * has to narrow.
+ *
+ * A bag of the two rather than the parsed config itself, so a case
+ * can drive {@link requireInstance} over a pair it wrote by hand.
+ * The schema parses `process.env` at import, so a parameter typed as
+ * that value would make every case a statement about the environment
+ * the suite happened to run in.
+ */
+export interface InstanceSettings {
+  /** Whatever `AR_N8N_API_KEY` was set to, if anything. */
+  readonly apiKey: string | undefined;
+
+  /** Whatever `AR_N8N_URL` was set to, if anything. */
+  readonly baseUrl: string | undefined;
+}
+
+/**
+ * Whether a setting was answered for at all.
+ *
+ * Absent and set-to-blank are one answer, which is the reading
+ * `resolveEnvVar` in `workflow-markers.ts` already gives the build
+ * settings and is worth carrying across to these. A line in a `.env`
+ * whose value has been deleted reads as a setting taken back OUT of
+ * the file rather than as one set to the empty string, and nothing
+ * downstream can tell those apart. Taken at face value, a blank base
+ * URL builds every call onto `/api/v1` with no host in front of it
+ * and a blank key sends the header with nothing in it, so what an
+ * operator gets back is a fetch failure or a `401` about a value
+ * they can already see is empty.
+ *
+ * The trim is the TEST and never the answer. Nothing here rewrites a
+ * setting: what was configured is what reaches the instance, and
+ * `apiRoot` in `n8n-client.ts` is where a base URL that carries a
+ * trailing slash or a stray space is dealt with.
+ *
+ * It is written as a predicate because the answer has to survive
+ * into the tail of {@link requireInstance}, where the two settings
+ * are read as the `string` an {@link N8nInstance} declares. The
+ * predicate is narrower than the type it asserts: it takes
+ * `undefined` off, and the blank it also refuses is a `string` that
+ * no type here can exclude — so what a caller may conclude from a
+ * `true` is everything this function tested, and what the compiler
+ * carries away from it is the smaller half.
+ *
+ * @param value - The setting as configuration answered for it.
+ * @returns Whether it is present and not blank.
+ */
+function isSet(value: string | undefined): value is string {
+  return value !== undefined && value.trim() !== '';
+}
+
+/**
+ * Thrown when a deploy is asked of an environment that names no
+ * instance to deploy to.
+ *
+ * It carries every setting that went unanswered rather than the
+ * first of them, and the plural is the ordinary case rather than an
+ * edge of it: an operator who has set neither is one who has not
+ * configured this command at all, and a refusal naming one of two
+ * buys a second run to learn the other. That is the reading
+ * `SeedValidationError` gives in `seed.ts`, applied to a roster of
+ * two, and it is why {@link UnconfiguredInstanceError.settings} is
+ * a list rather than a name.
+ *
+ * A distinct class rather than a bare `Error`, so a case covering a
+ * deploy that was never configured can pin the refusal to it. The
+ * other ways this path fails all have names of their own or none:
+ * {@link DirtyTreeError} above is the tree, `UnsuccessfulReplyError`
+ * in `n8n-client.ts` is a call the instance refused, and a body that
+ * cannot be read arrives as `Error` or as `JSON.parse`'s own
+ * `SyntaxError`. An assertion taking any `Error` would pass for the
+ * last of those.
+ *
+ * It is also a different class from `UnresolvedSettingError` in
+ * `workflow-markers.ts`, and the two are not variants of one idea.
+ * That one is raised while an artifact is being BUILT, over a name
+ * a `__ENVVAR:` marker wrote and `ENV_DEFAULTS` has no text for, and
+ * the edit it asks for is to that table. This one is raised before
+ * anything is built, over a name the zod schema in `src/config.ts`
+ * declares and an environment did not answer, and the edit it asks
+ * for is to that environment. A deploy resolves both chains in one
+ * run, so one class covering both would name the wrong file half the
+ * time.
+ *
+ * Nothing it holds came from configuration. The setting NAMES are
+ * this module's own, written here beside the members they test, and
+ * the values are exactly what is missing — so there is no route by
+ * which a key reaches the message, the stack or a `JSON.stringify`
+ * over the error, which prints the one field alongside the class
+ * name that `this.name` assigns. `UnsuccessfulReplyError` next door
+ * has to argue that property from the request it built; here it is a
+ * consequence of what the refusal is about.
+ */
+export class UnconfiguredInstanceError extends Error {
+  /**
+   * The names of the settings nothing was configured for, in the
+   * order this module reads them: the instance before the key that
+   * authenticates against it.
+   *
+   * Names and never values, and a list rather than one name. It is
+   * the whole of what the message is built from, so a caller reading
+   * the field and a reader reading the message are answering the
+   * same question off the same value.
+   */
+  readonly settings: readonly string[];
+
+  /**
+   * @param settings - The names of every setting that was absent or
+   *   blank, in reading order and at least one of them.
+   */
+  constructor(settings: readonly string[]) {
+    const named = settings.join(' and ');
+    const verb = settings.length === 1
+      ? 'is'
+      : 'are';
+
+    super(
+      `${named} ${verb} not set, so this deploy is refused before ` +
+      'anything is built and before any request is made. The two a ' +
+      'deploy needs are declared optional in `src/config.ts`, ' +
+      'because the running service opens neither and a boot has ' +
+      'nothing to refuse: ' +
+      '`AR_N8N_URL` is the base URL of the public REST API the ' +
+      'target instance exposes, and `AR_N8N_API_KEY` is the key ' +
+      'that instance issued for these calls. Set them in the ' +
+      'untracked environment, in `.env` or in the launching shell, ' +
+      'and never in a tracked file. A setting that is present but ' +
+      'blank is read here as unset, so a `.env` line with nothing ' +
+      'after the `=` is one of these.',
+    );
+    this.name = this.constructor.name;
+    this.settings = settings;
+  }
+}
+
+/**
+ * Refuse a deploy that has no instance configured, and hand back the
+ * instance it cleared.
+ *
+ * It returns an {@link N8nInstance} rather than answering `void` the
+ * way {@link assertCleanTree} does, and that is the load-bearing
+ * decision here rather than a convenience. Every call in
+ * `n8n-client.ts` takes one of those, and this is where one is made,
+ * so a request that has not been through this refusal is not a
+ * request this command can make. Refusing before any
+ * request is attempted is then a property of the signature rather
+ * than an order somebody has to keep, which is the same argument
+ * {@link N8nInstance} makes for carrying its own fetch: a rule the
+ * types enforce outlives a rule every caller has to remember.
+ *
+ * It is a property to keep rather than one the types hand over. That
+ * interface is three members and an object literal satisfies it, so
+ * a second assembly of them anywhere in this module would put a
+ * request back outside the refusal, and no gate here would say so.
+ *
+ * The narrowing is the other half of it. Configuration answers
+ * `string | undefined` for both settings, and a caller left holding
+ * those has only a `??` or a `!` between it and a request built on a
+ * blank — which is the silent failure this refusal exists to be
+ * instead of. That is also why each setting is read through
+ * {@link isSet} twice below: the composed test is what the compiler
+ * narrows on, and the two beneath it are what name the offenders.
+ * The duplication is control flow rather than a second rule, both
+ * readings going through the one predicate, so there is no spelling
+ * of `unset` here for the other to drift from.
+ *
+ * What it does NOT check is worth being plain about, because the
+ * refusal reads stronger than it is. A base URL that is present and
+ * names nothing, a key that is present and was revoked, an instance
+ * that is simply down: every one of them passes here and comes back
+ * from the far side as whatever the instance or the fetch answers,
+ * which is `UnsuccessfulReplyError` in the cases where there was
+ * something to answer. This refusal is about a value that was never
+ * supplied, and about nothing else — a shape check here would be a
+ * second opinion on a value only the instance can settle, which is
+ * the reading {@link N8nInstance} states from the other end.
+ *
+ * @param settings - The two settings as configuration answered for
+ *   them.
+ * @param fetch - What the calls go through, taken as an argument so
+ *   that a case drives them against a stub and the isolated suite
+ *   stays isolated by construction.
+ * @returns The instance those calls are made against.
+ * @throws UnconfiguredInstanceError When either setting is absent or
+ *   blank, naming every one that is.
+ */
+export function requireInstance(
+  settings: InstanceSettings,
+  fetch: HttpFetch,
+): N8nInstance {
+  const { apiKey, baseUrl } = settings;
+
+  if (!isSet(baseUrl) || !isSet(apiKey)) {
+    const missing: string[] = [];
+
+    if (!isSet(baseUrl)) {
+      missing.push('AR_N8N_URL');
+    }
+
+    if (!isSet(apiKey)) {
+      missing.push('AR_N8N_API_KEY');
+    }
+
+    throw new UnconfiguredInstanceError(missing);
+  }
+
+  return { apiKey, baseUrl, fetch };
 }

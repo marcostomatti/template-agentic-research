@@ -37,9 +37,11 @@ const EnvSchema = z.object({
   /**
    * Base URL of the n8n instance `scripts/deploy-external.ts` uploads built
    * workflows to, over the public REST API that instance exposes. That script
-   * has opened; its refusal by name for an absent value arrives later in this
-   * phase. The running service never opens it at all, which is what makes the
-   * entry optional: unset, it leaves a boot exactly as it was.
+   * names this entry in a refusal of its own when nothing is set for it,
+   * before it builds anything or makes a request, and reads a value that is
+   * present but blank as nothing set. The running service never opens it at
+   * all, which is what makes the entry optional: unset, it leaves a boot
+   * exactly as it was.
    */
   AR_N8N_URL: z.string().optional(),
   /**
