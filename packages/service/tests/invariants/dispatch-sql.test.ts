@@ -17,50 +17,65 @@
  * node that invokes a target reaching a node that closes the run.
  * Two are absences: no statement parameterized from the items its
  * node was handed, and no node left to carry on down its regular
- * output after an error. The first two have landed and the rest
- * arrive later in this stage.
+ * output after an error. The first two must-find checks have landed,
+ * and the first of the absences with them; the two over this
+ * workflow's wiring and the one over the setting that decides where
+ * a failure goes arrive later in this stage.
  *
  * What each of them reads is a parsed member, and for a statement
- * that means the `query` parameter its node carries rather than the
- * artifact's text. An artifact is one JSON document, so a phrase
+ * that means the `query` parameter its node carries and the
+ * `options` member holding the values it is run with, rather than
+ * the artifact's text. An artifact is one JSON document, so a phrase
  * looked for across it is answered alike by a sticky note, a display
  * name and the SQL of some other node — and this workflow is a poor
  * one to ask that way, spelling its own node names in its notes and
  * arguing its own properties inside its statements.
- * `queryParametersOf` is the reading and `sqlWords` drops the prose
- * out of what it hands back, neither of which a sweep over
- * characters can do.
+ * `queryParametersOf` and {@link queryValuesOf} are the two
+ * readings, and `sqlWords` drops the prose out of what the first
+ * hands back; none of the three is a thing a sweep over characters
+ * can do.
  *
- * The other half is what stops the file passing by finding nothing:
- * the tree, the workflow and the entry are each refused rather than
- * answered, and the one hole none of those refusals reaches is
- * closed by a case of its own. The tree is refused a module away,
- * `loadBuiltWorkflows` throwing on a `workflows/dist/` that is
- * absent, is not a directory or holds no `*.json`, and on the first
- * artifact carrying no node — both before a case runs, and both
- * naming the command that fills the tree. The workflow is refused by
- * {@link dispatchWorkflow}, every property here belonging to that
- * one workflow. An entry that could not fail, requiring nothing or
- * requiring a fragment holding no word, is refused where its
- * fragments are read rather than counted as an entry a run reached.
- * The hole is the roster going empty, which no assertion over a list
- * of offenders can report: emptied, there is no entry left to go
- * unsatisfied and the list comes back the same either way.
- * {@link REACHED_RULE_IDS} and the case holding it against the
- * roster are what report that.
+ * The other half is what stops the file passing by finding nothing,
+ * and the two kinds of check here want different answers to it. For
+ * the ones that must FIND something the tree, the workflow and the
+ * entry are each refused rather than answered. The tree is refused a
+ * module away, `loadBuiltWorkflows` throwing on a `workflows/dist/`
+ * that is absent, is not a directory or holds no `*.json`, and on
+ * the first artifact carrying no node — both before a case runs, and
+ * both naming the command that fills the tree. The workflow is
+ * refused by {@link dispatchWorkflow}, every property here belonging
+ * to that one workflow. An entry that could not fail, requiring
+ * nothing or requiring a fragment holding no word, is refused where
+ * its fragments are read rather than counted as an entry a run
+ * reached. The hole none of those refusals reaches is the roster
+ * going empty, which no assertion over a list of offenders can
+ * report: emptied, there is no entry left to go unsatisfied and the
+ * list comes back the same either way. {@link REACHED_RULE_IDS} and
+ * the case holding it against the roster are what report that.
  *
  * Which is why the tree is read at module scope rather than in a
  * case, the way `workflows.test.ts` and `naming.test.ts` resolve
  * their own surfaces there: once there is no tree there is nothing
  * left to assert about it, that failure belongs to the file, and the
  * refusal already names the edit.
+ *
+ * An absence sweep has that hole the other way round. Its passing
+ * answer is the empty list, so a rule that could never have fired
+ * reports what a clean workflow reports, and no refusal in front of
+ * it helps: an input worth asserting over is exactly what leaves
+ * nothing to find. So an absence here ships the nodes that say its
+ * rule fires, the near miss that says it fires on the right thing,
+ * and, where the rule is keyed to a phrase, one reading of the
+ * artifact whole that says the phrase it looks for is written in
+ * this workflow at all.
  */
-import type { BuiltWorkflow } from './workflow-dist.js';
+import type { BuiltWorkflow, BuiltWorkflowNode } from './workflow-dist.js';
 
 import { describe, expect, it } from 'vitest';
 
 import { DISPATCH_SQL_RULES, unsatisfiedRequirements } from './dispatch-sql.js';
-import { DIST_DIR, loadBuiltWorkflows } from './workflow-dist.js';
+import { DIST_DIR, loadBuiltWorkflows, nodesMatching } from './workflow-dist.js';
+import { queryParametersOf } from './workflow-rosters.js';
 
 // ---------------------------------------------------------------------------
 // The tree, and the workflow every property here belongs to
@@ -168,6 +183,242 @@ function dispatchWorkflow(): BuiltWorkflow {
  */
 const REACHED_RULE_IDS = new Set<string>();
 
+// ---------------------------------------------------------------------------
+// Where a statement's values come from
+// ---------------------------------------------------------------------------
+
+/**
+ * A read of the whole batch a node was handed.
+ *
+ * `$input.all()` is the n8n expression for it, and what makes this
+ * one phrase worth naming is that it is the reach a hand goes to
+ * first: the whole of what a node was handed, in one call. `$json`
+ * and `$input.item` resolve against the item a run is standing on,
+ * so a statement drawing its values from either says something
+ * different on each of the runs its node makes; this one says the
+ * same thing on all of them.
+ *
+ * Bounded in front by a class admitting everything an identifier
+ * cannot carry, `$` among them, so a variable whose own name
+ * merely ends in `input` is not this. Bounded behind by the open
+ * parenthesis rather than by a class, because what is read is a
+ * CALL: a member named `all` that nothing calls hands nothing to
+ * anything. Whitespace is admitted between the parts for the
+ * reason a statement's is, an expression being written by hand
+ * and wrapped by whoever wrote it.
+ *
+ * What it does not read is the other ways past the item a run is on.
+ * `$input.first()` and `$input.last()` each reach a fixed item of
+ * the batch, `$items()` is the version-1 alias for the whole of it,
+ * and `$('<node>').all()` takes another node's whole output — each
+ * of them the same value on every run of a node, and so the same
+ * multiplication. The rule is therefore narrower than the property
+ * it stands for, and what it covers is the spelling a query node
+ * reaches for in practice: none of the other three is written in a
+ * workflow source here, and in the workflow set this port draws from
+ * every node that does parameterize a statement from its batch
+ * spells this one. The edit is a second pattern arriving with the
+ * expression that needs one.
+ *
+ * Module-private and compiled, having one caller in this file,
+ * which is the split `SQL_LINE_COMMENT` in `dispatch-sql.ts`
+ * draws: a source string buys something where a second module
+ * compiles the same grammar, and buys nothing here. Not global
+ * either, and read with `test` — a shared global instance
+ * carries `lastIndex` from one `test` into the next, and there
+ * is no `replace` here to reset it.
+ */
+const BATCH_INPUT_READ =
+  /(?<![A-Za-z0-9_$])[$]input[ \t\r\n]*[.][ \t\r\n]*all[ \t\r\n]*[(]/u;
+
+/**
+ * The values `node` parameterizes its statement with, one text
+ * per member carrying them and none for a node carrying none.
+ *
+ * The half {@link queryParametersOf} deliberately leaves, and
+ * the collision that reader's own name is named for: a Postgres
+ * node holds its statement in `query` and the values it runs
+ * that statement with in `options.queryReplacement`, which the
+ * node's editor labels Query Parameters. This is the check that
+ * block says reads the second member.
+ *
+ * The shape is that reader's, one member deeper, and for its
+ * reasons. A parsed parameter rather than the artifact's text,
+ * so a claim about where a statement's values come from is a
+ * claim about the node that runs it. A list rather than a text
+ * or nothing, so a node that is parameterized and a node that is
+ * not are one shape at a call site.
+ *
+ * It lives here rather than beside the rosters because the rule
+ * that reads it does, which is the split `codeBodiesOf` in
+ * `workflows.test.ts` already draws: a member one check reads
+ * belongs with the check, and moving it next door is what a
+ * second reader asks for.
+ *
+ * An `options` member that is absent or is not an object, and a
+ * `queryReplacement` that is there but is not a string, all answer
+ * empty. The first two are ordinary — most nodes carry no `options`
+ * at all — while the third is a malformed artifact and is quiet
+ * here: what it costs is a node the sweep over this passes over
+ * having looked at nothing.
+ */
+function queryValuesOf(node: BuiltWorkflowNode): readonly string[] {
+  const parameters = node.parameters;
+
+  if (typeof parameters !== 'object' || parameters === null) {
+    return [];
+  }
+
+  const options = (parameters as Record<string, unknown>).options;
+
+  if (typeof options !== 'object' || options === null) {
+    return [];
+  }
+
+  const values = (options as Record<string, unknown>).queryReplacement;
+
+  return typeof values === 'string'
+    ? [values]
+    : [];
+}
+
+/**
+ * Whether `node` draws a statement's values from the whole batch
+ * it was handed.
+ *
+ * Composed at the call site the way the matchers in
+ * `workflows.test.ts` are: the rule is about a text, and which
+ * members carry a text it is about is read here rather than
+ * inside it.
+ *
+ * Both members, because values reach a statement two ways and
+ * either one multiplies it. `options.queryReplacement` carries
+ * them beside the statement, one expression per `$n` the
+ * statement spells, and an expression written into the `query`
+ * itself is resolved into the SQL text before the statement is
+ * sent. Measured in `n8n-nodes-base` 2.15.1: the execute-query
+ * operation resolves the expressions in both.
+ *
+ * Shared by the claim and the case standing behind it rather
+ * than spelled twice, because a second spelling is a second
+ * place the wrong member can be read. The mistake this
+ * composition invites is not a member left out but one taken in,
+ * `jsCode` above all: the Code node this workflow runs reads its
+ * whole input on purpose, so a rule reaching that member reports
+ * a clean workflow as an offender.
+ */
+function parameterizesQueryFromBatch(node: BuiltWorkflowNode): boolean {
+  return [...queryParametersOf(node), ...queryValuesOf(node)]
+    .some((text) => BATCH_INPUT_READ.test(text));
+}
+
+/**
+ * A statement whose values arrive one item at a time, as the
+ * `$n` placeholders a node fills per run.
+ *
+ * Shared by the node whose values read the batch and by the node
+ * whose values read one item, so the only thing the rule reads that
+ * parts those two is the expression under test.
+ *
+ * Fixture SQL and not a statement `ar-dispatch` runs. What is
+ * asserted over these nodes is the reading; the properties the
+ * real statements have to satisfy are held against them by
+ * `DISPATCH_SQL_RULES`, which names nodes on the canvas and
+ * plants nothing.
+ */
+const PER_ITEM_STATEMENT =
+  'INSERT INTO runs (domain_id)\n' +
+  'VALUES ($1::bigint)';
+
+/**
+ * Values drawn from the whole batch, as one expression.
+ *
+ * Written out rather than built from {@link BATCH_INPUT_READ},
+ * so the pattern and the text it has to fire on are two
+ * spellings of the phrase rather than one compared with itself.
+ */
+const BATCH_VALUES =
+  '={{ JSON.stringify($input.all().map((item) => item.json.domain_id)) }}';
+
+/**
+ * Values drawn from the one item a run is standing on.
+ *
+ * The near miss the sweep has to pass over, and one step from
+ * {@link BATCH_VALUES} rather than a comfortable distance from it: a
+ * node parameterized per item is parameterized, so a rule keyed to
+ * whether a statement takes values at all is answered by this
+ * exactly as it is by the batch plant. It is also the shape every
+ * parameterized node in this workflow is written in, a value
+ * resolved against one item rather than against the batch.
+ */
+const PER_ITEM_VALUES = '={{ $json.domain_id }}';
+
+/**
+ * A statement reaching the batch in its own text, taking no
+ * value through {@link queryValuesOf}'s member at all.
+ *
+ * The other route the rule has to cover, and the one the
+ * multiplication is easiest to see in: an expression resolved
+ * into the SQL rather than passed beside it, so one run writes
+ * every row the node was handed and the node makes one such run
+ * per row.
+ */
+const BATCH_STATEMENT =
+  'INSERT INTO runs (domain_id)\n' +
+  'SELECT domain_id FROM jsonb_to_recordset(\n' +
+  '  {{ JSON.stringify($input.all().map((item) => item.json)) }}::jsonb\n' +
+  ') AS claimed(domain_id bigint)';
+
+/**
+ * A Postgres node carrying `parameters`, planted under `name`.
+ *
+ * `operation` rides along on every one of them so an answer is
+ * never the only text there was to hand back: a rule keyed to
+ * some other member of `parameters` has something to find and
+ * still has to answer no.
+ *
+ * Named for what the node does rather than for the type it
+ * carries, as every node planted in this suite is.
+ */
+function plantedQueryNode(
+  name: string,
+  parameters: Record<string, unknown>,
+): BuiltWorkflowNode {
+  return {
+    name,
+    type: 'n8n-nodes-base.postgres',
+    parameters: { operation: 'executeQuery', ...parameters },
+  };
+}
+
+/**
+ * A node whose VALUES read the batch, its statement reading
+ * nothing, so what flags it can only be the values member.
+ */
+const BATCH_VALUES_PLANT = plantedQueryNode('Open A Run Per Batch', {
+  query: PER_ITEM_STATEMENT,
+  options: { queryReplacement: BATCH_VALUES },
+});
+
+/**
+ * A node whose STATEMENT reads the batch, carrying no values at
+ * all, so what flags it can only be the query member.
+ */
+const BATCH_STATEMENT_PLANT = plantedQueryNode('Open Runs From The Batch', {
+  query: BATCH_STATEMENT,
+  options: {},
+});
+
+/**
+ * A node parameterized per item: a placeholder in the statement and
+ * a values expression resolving against one item, which is the shape
+ * this workflow's own query nodes are written in.
+ */
+const PER_ITEM_PLANT = plantedQueryNode('Open A Run Per Unit', {
+  query: PER_ITEM_STATEMENT,
+  options: { queryReplacement: PER_ITEM_VALUES },
+});
+
 describe('ar-dispatch invariants — built tree', () => {
   // Every entry in the roster held against the node it names, in the
   // one workflow the roster is scoped to. An entry that holds
@@ -243,11 +494,11 @@ describe('ar-dispatch invariants — built tree', () => {
   // Behind the walk rather than last in the file: vitest runs a
   // file's cases in the order they were declared, so what is read
   // here is what the case in front of it wrote, and the cases
-  // arriving later in this stage read the workflow for properties
-  // no entry carries. A run that selects this one without the walk
-  // — a `-t` filter naming it — reports the whole roster as
-  // unreached, which is what asking at run time costs over reading
-  // the roster the walk was written over.
+  // behind it read the workflow for properties no entry carries. A
+  // run that selects this one without the walk — a `-t` filter
+  // naming it — reports the whole roster as unreached, which is
+  // what asking at run time costs over reading the roster the walk
+  // was written over.
   it('reaches every entry the dispatch roster declares', () => {
     const reached = {
       rosterDeclaresAny: DISPATCH_SQL_RULES.length > 0,
@@ -259,5 +510,119 @@ describe('ar-dispatch invariants — built tree', () => {
     };
 
     expect(reached).toEqual(declared);
+  });
+
+  // The rule that keeps a dispatched unit one unit: no statement in
+  // `ar-dispatch` draws its values from the whole batch its node was
+  // handed.
+  //
+  // What it prevents is a multiplication, and the multiplication is
+  // the node's own behaviour rather than a mistake in the SQL. An
+  // executeQuery node maps its statement over the items it was
+  // handed and runs it once per INPUT item, so a tick that
+  // dispatched N units runs each of these statements N times. Values
+  // read off `$json` differ on each of those runs, and N runs write
+  // N rows. Values read off `$input.all()` are the same batch on
+  // every one of them, so a statement writing what it was handed
+  // writes all N rows N times over, and one writing a single row
+  // writes one item's answer N times. Both report success, nothing
+  // counting the rows a statement touched against the items that
+  // reached it, so the tell is downstream: a table that grew with
+  // the square of a backlog, or a row per unit carrying one unit's
+  // answer. It is a shape somebody has reached for and not a
+  // hypothetical: the workflow set this port draws from carries two
+  // Postgres nodes with no `executeOnce`, each mapping
+  // `$input.all()` into a JSON array in its values member and
+  // expanding that array in its statement, so every row the node was
+  // handed is written on every run it makes.
+  //
+  // The workflow argues that mechanism twice already, from the other
+  // end. Both claims sit off the Schedule Trigger rather than one
+  // behind the other so that neither runs once per row the other
+  // emitted, and `Open Run` is fed the per-unit stream precisely so
+  // that it opens one row per claimed unit. This is the half with no
+  // clause to point at: what holds those statements to one unit is
+  // where their values come from, and nothing in a statement says
+  // so.
+  //
+  // Held against an empty array rather than counted, because the
+  // answer is already the report. `nodesMatching` labels every
+  // offender `<file>:<node name>`, so a failure prints the whole
+  // list on its way past and names the source to open under
+  // `workflows/src/`.
+  //
+  // An empty answer is also the passing answer, so what this is
+  // worth is what its input, its walk and its matcher are worth. The
+  // input is refused twice over, once for the tree and once for the
+  // workflow, both argued at the head of this file. The walk is
+  // `nodesMatching`, which refuses nothing and is worth what it was
+  // handed, which here is one workflow that survived both of those
+  // refusals; that it reaches every node it was handed is asserted
+  // of the same walk by the sweep-coverage case in
+  // `workflows.test.ts`. The matcher and the members it is composed
+  // over are what the case behind this one stands behind.
+  it('parameterizes no statement from the batch a node was handed', () => {
+    const flagged = nodesMatching(
+      [dispatchWorkflow()],
+      parameterizesQueryFromBatch,
+    );
+
+    expect(flagged).toEqual([]);
+  });
+
+  // The half an empty list cannot say: that the rule behind it would
+  // have named an offender had there been one. An absence check
+  // reports the same nothing for a workflow that is clean and for a
+  // rule that could never have fired, and no assertion over the
+  // answer parts the two — which is the inverse of the roster cases
+  // above, where a check that must FIND something reddens whether it
+  // recognises too little or too much.
+  //
+  // Four halves in one record, so a failure names which of them
+  // moved rather than reporting that the guard broke.
+  //
+  // Two say the rule fires, one per route the batch can reach a
+  // statement by. The first plants it in the values member and
+  // leaves the statement reading nothing; the second plants it in
+  // the statement and leaves the values member empty. Each is
+  // therefore keyed to the member it was planted in and not to the
+  // other, which is what a single plant carrying both could not say.
+  //
+  // The third is the near miss, and it is one step from the first
+  // rather than a comfortable distance from it: a node parameterized
+  // per item is parameterized, so a rule keyed to whether a
+  // statement takes values at all passes the plants and this alike.
+  // It is also the shape every parameterized node in this workflow
+  // is written in, so this half and the claim above move together
+  // under a rule that widened — measured, both redden. What this
+  // adds is the naming: the claim reports which nodes, and this
+  // reports which reading.
+  //
+  // The fourth is about the workflow rather than the rule. The
+  // phrase this looks for IS written in `ar-dispatch`, in the Code
+  // node that reads its whole input on purpose, so the empty list
+  // above is a rule reading the members that decide what a statement
+  // runs with rather than a phrase nothing in the workflow spells.
+  // It reads the artifact whole, which is the one reading this file
+  // otherwise refuses. As a claim it would be answered by a sticky
+  // note as readily as by a node, and as a guard being answerable by
+  // anything in the workflow at all is exactly what it asks.
+  it('flags a statement drawn from the batch and nothing beside it', () => {
+    const workflow = dispatchWorkflow();
+    const detector = {
+      valuesFromTheBatch: parameterizesQueryFromBatch(BATCH_VALUES_PLANT),
+      statementFromTheBatch:
+        parameterizesQueryFromBatch(BATCH_STATEMENT_PLANT),
+      valuesFromOneItem: parameterizesQueryFromBatch(PER_ITEM_PLANT),
+      batchReadWrittenSomewhereInTheWorkflow:
+        BATCH_INPUT_READ.test(JSON.stringify(workflow.parsed)),
+    };
+
+    expect(detector).toEqual({
+      valuesFromTheBatch: true,
+      statementFromTheBatch: true,
+      valuesFromOneItem: false,
+      batchReadWrittenSomewhereInTheWorkflow: true,
+    });
   });
 });

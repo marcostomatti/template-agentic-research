@@ -593,13 +593,13 @@ const CEILING_DECLARATION = new RegExp(
  * It lives here rather than beside the rosters because the rule
  * that reads it does. A member one check reads belongs with the
  * check, and moving it next door is what a second reader asks
- * for — {@link queryParametersOf} sits there because two files
- * ask it. `workflow-rosters.test.ts` does have a reader of this
- * same member, for the nodes it plants, and that one REFUSES a
- * node carrying none: the right answer for a fixture whose whole
- * point is its body, and the wrong one here, where most nodes
- * carry none at all and answering empty is what a node running
- * no script has to say.
+ * for — {@link queryParametersOf} sits there because more than
+ * one file asks it. `workflow-rosters.test.ts` does have a
+ * reader of this same member, for the nodes it plants, and that
+ * one REFUSES a node carrying none: the right answer for a
+ * fixture whose whole point is its body, and the wrong one here,
+ * where most nodes carry none at all and answering empty is what
+ * a node running no script has to say.
  */
 function codeBodiesOf(node: BuiltWorkflowNode): readonly string[] {
   const parameters = node.parameters;
