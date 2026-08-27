@@ -49,9 +49,14 @@ import { readFileSync, statSync } from 'node:fs';
  *
  * The values are strings because an environment variable is one: a
  * marker resolves to text wherever it sits, and a parameter wanting
- * a number parses it on the far side of the build. Nothing here is
- * read by the running service, which is why none of it belongs in
- * the zod schema in `src/config.ts`.
+ * a number parses it on the far side of the build.
+ *
+ * Nothing here belongs in the zod schema in `src/config.ts`, and
+ * what keeps it out is not that the running service never reads it:
+ * that schema carries operator settings the service never reads
+ * either. It is where the value LANDS. A build setting is baked into
+ * a generated artifact, so a schema entry would stand beside every
+ * marker.
  */
 export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
   /**
