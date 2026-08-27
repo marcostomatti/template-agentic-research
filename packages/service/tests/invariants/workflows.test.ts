@@ -17,9 +17,9 @@
  * markers, and answers about a file no instance loads. The
  * properties are the roster this phase expects, the send-free rule,
  * the one schedule trigger, the guards in front of a model call, and
- * the forbidden names. The roster is the one standing here today,
- * beside the surface they all read; the rest arrive with their own
- * cases over the rest of this stage.
+ * the forbidden names. The roster and the send-free rule stand here
+ * today, beside the surface they all read; the rest arrive with
+ * their own cases over the rest of this stage.
  *
  * That surface is PARSED nodes and never the artifact's text.
  * `loadBuiltWorkflows` hands over each artifact's own `nodes` array
@@ -55,9 +55,12 @@
  * assert about them, that failure belongs to the file, and the
  * refusal already names the edit.
  */
+import type { BuiltWorkflowNode } from './workflow-dist.js';
+
 import { describe, expect, it } from 'vitest';
 
-import { loadBuiltWorkflows } from './workflow-dist.js';
+import { loadBuiltWorkflows, nodesMatching } from './workflow-dist.js';
+import { isSendCapable } from './workflow-rosters.js';
 
 // ---------------------------------------------------------------------------
 // Built tree
@@ -106,6 +109,30 @@ const BUILT_WORKFLOWS = loadBuiltWorkflows();
  * `workflows/` — which that scan reads.
  */
 const PHASE_3_WORKFLOW_IDS = ['ar-dispatch'] as const;
+
+// ---------------------------------------------------------------------------
+// The send-free rule
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a node is one the send roster names, composed the way
+ * {@link isSendCapable} says a sweep over built output composes it:
+ * the matcher answers for a type, and the read of the member
+ * carrying that type happens at the call site.
+ *
+ * Shared by the claim and the case standing behind it rather than
+ * written out twice, because a second spelling is a second place
+ * the wrong member can be read. `name` where `type` belongs is the
+ * mistake this composition invites: every node carries both, the
+ * matcher answers no for a display name, and an absence check
+ * reports that the way it reports a clean tree. Measured: swapping
+ * the member here reddens no case in this file today. The control
+ * arriving later in this stage, which plants a send node into a
+ * parsed copy and expects the sweep to name it, is what will.
+ */
+function isSendCapableNode(node: BuiltWorkflowNode): boolean {
+  return isSendCapable(node.type);
+}
 
 describe('workflow invariants — built tree', () => {
   // The surface every check in this file reads, asserted where it
@@ -180,5 +207,61 @@ describe('workflow invariants — built tree', () => {
     }));
 
     expect(built).toEqual(expected);
+  });
+
+  // The send-free rule read over built output: not one node of a
+  // type that can reach outward, in any workflow this package
+  // builds. `workflows/src/README.md` states it over the workflow
+  // set and `docs/architecture/01-invariants.md` argues what its
+  // absence costs.
+  //
+  // Held against an empty array rather than counted, because the
+  // answer is already the report. `nodesMatching` labels every
+  // offender `<file>:<node name>`, so a failure prints the whole
+  // list on the way past and names each source to open under
+  // `workflows/src/`; one naming only the first offender turns a
+  // single edit into as many runs as there are offenders.
+  //
+  // An empty answer is also the passing answer, so what this is
+  // worth is what its input, its walk and its matcher are worth.
+  // The input is covered a module away, `loadBuiltWorkflows`
+  // refusing an empty tree and an artifact with no node before a
+  // case runs. The walk is covered by the sweep-coverage case in
+  // this section. The matcher is covered over planted nodes in
+  // `workflow-rosters.test.ts`, and over this tree by the control
+  // arriving later in this stage.
+  it('holds no send-capable node in any built workflow', () => {
+    expect(nodesMatching(BUILT_WORKFLOWS, isSendCapableNode)).toEqual([]);
+  });
+
+  // The half a list held against an empty one cannot say: that the
+  // sweep was handed anything to look at. A walk answering with
+  // nothing because it visited nothing prints what a walk over a
+  // clean tree prints, and no assertion over the answer parts the
+  // two — `nodesMatching` says as much of itself, having no refusal
+  // of its own and being worth what it was handed.
+  //
+  // So the predicate records what it was asked about, and what it
+  // recorded is held against the types the reader counted. Two
+  // mechanisms rather than one: the left side is the walk's own
+  // call sequence, the right a direct map over what was read.
+  // `nodeTypes` and not a second read of `nodes`, because the
+  // surface case ties the two index for index, so this rests on
+  // that tie rather than working around it.
+  //
+  // What it says holds for any sweep built on the same walk, not
+  // only the send-free one, so the sweeps arriving later in this
+  // stage rest on it rather than each repeating it.
+  it('sweeps every node the built tree carries', () => {
+    const swept: string[] = [];
+
+    nodesMatching(BUILT_WORKFLOWS, (node) => {
+      swept.push(node.type);
+
+      return isSendCapableNode(node);
+    });
+    const carried = BUILT_WORKFLOWS.flatMap((workflow) => workflow.nodeTypes);
+
+    expect(swept).toEqual(carried);
   });
 });
