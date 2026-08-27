@@ -17,10 +17,11 @@
  * markers, and answers about a file no instance loads. The
  * properties are the roster this phase expects, the send-free rule,
  * the one schedule trigger, the guards in front of a model call, and
- * the forbidden names. The roster, the send-free rule and the one
- * schedule trigger stand here today, beside the surface they all
- * read; the rest arrive with their own cases over the rest of this
- * stage.
+ * the forbidden names. The roster, the send-free rule, the one
+ * schedule trigger and the first of those three guards stand here
+ * today, beside the surface they all read; the ledger-row guard, the
+ * per-run-ceiling guard and the forbidden-name sweep arrive with
+ * their own cases over the rest of this stage.
  *
  * That surface is PARSED nodes and never the artifact's text.
  * `loadBuiltWorkflows` hands over each artifact's own `nodes` array
@@ -61,7 +62,7 @@ import type { BuiltWorkflowNode } from './workflow-dist.js';
 import { describe, expect, it } from 'vitest';
 
 import { loadBuiltWorkflows, nodesMatching } from './workflow-dist.js';
-import { isScheduleTrigger, isSendCapable } from './workflow-rosters.js';
+import { isModelNode, isScheduleTrigger, isSendCapable } from './workflow-rosters.js';
 
 // ---------------------------------------------------------------------------
 // Built tree
@@ -159,6 +160,42 @@ function isSendCapableNode(node: BuiltWorkflowNode): boolean {
  * `workflows/src/README.md`.
  */
 const SCHEDULE_TRIGGER_WORKFLOW_ID = 'ar-dispatch';
+
+// ---------------------------------------------------------------------------
+// The retry guard in front of a model call
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a node is one the retry guard names an offender: a model
+ * node that does not carry `retryOnFail` written `false`.
+ *
+ * Composed at the call site the way {@link isSendCapableNode} is
+ * and for the reason that one gives, with one read more.
+ * {@link isModelNode} answers for a type, so the member carrying
+ * that type is read here rather than inside it; `retryOnFail` is a
+ * node member of its own, which `BuiltWorkflowNode` deliberately
+ * leaves reachable as `unknown` instead of declaring, so this is
+ * where it gets narrowed. Neither read is one a rule keyed to the
+ * artifact's text could make. A node body, a display name and a
+ * sticky note can each spell a model type or a retry setting, and
+ * none of them decides anything about what runs.
+ *
+ * Written `false`, and not merely not written `true`, which is a
+ * stricter rule than the behaviour it stands for. Measured in
+ * `n8n-core` 2.15.0: all four places that read this member test
+ * `retryOnFail === true`, so a node carrying `false` and a node
+ * carrying nothing at all run the same way, one try each. What the
+ * strict form buys is that the setting was decided rather than
+ * defaulted. A file under `workflows/src/` is hand written, and
+ * that directory's README states the instance is a deploy target
+ * and not a source, so an absent member here is a decision nobody
+ * made rather than one a canvas export dropped on the way back.
+ * Being wrong about that costs a line in the source; the loose
+ * rule's cost is a model node whose retry setting no review saw.
+ */
+function isModelNodeWithoutRetryOff(node: BuiltWorkflowNode): boolean {
+  return isModelNode(node.type) && node.retryOnFail !== false;
+}
 
 describe('workflow invariants — built tree', () => {
   // The surface every check in this file reads, asserted where it
@@ -335,5 +372,55 @@ describe('workflow invariants — built tree', () => {
       .map(() => workflow.file));
 
     expect(found).toEqual([`${SCHEDULE_TRIGGER_WORKFLOW_ID}.json`]);
+  });
+
+  // The first of the three guards in front of a model call, read
+  // over built output: not one model node in any built workflow left
+  // free to retry. `docs/architecture/01-invariants.md` argues what
+  // its absence costs — a retried call against a failing credential
+  // is not one failure but one per schedule tick, multiplied by the
+  // retry count, which is one of the four properties bounding what a
+  // run can spend.
+  //
+  // Held against an empty array rather than counted, for the reason
+  // the send-free case gives: `nodesMatching` labels every offender
+  // `<file>:<node name>`, so the answer is the report.
+  //
+  // It runs across zero nodes, and will until phase 6.
+  // `MODEL_NODE_TYPE_PREFIX` records why: the workflows that make
+  // model calls are `ar-research` and `ar-digest`, both phase 6, and
+  // phase 3 delivers `ar-dispatch` alone. The half of the predicate
+  // reading the retry setting is not merely unsatisfied over this
+  // tree, it never runs at all — the matcher answers no for every
+  // node the tree carries and the conjunction stops there. Measured:
+  // gutting that read reddens nothing here, and a matcher
+  // recognising nothing reddens nothing either, while one
+  // recognising everything reddens this case alone. So the only
+  // mistake in the predicate this tree can report reaches it through
+  // the matcher half, and says nothing about the read sitting behind
+  // it.
+  //
+  // What stands behind it meanwhile is the roster's own controls, in
+  // `workflow-rosters.test.ts`. A type planted under the namespace
+  // and a Code node whose body names a model are each other's
+  // control: a matcher recognising nothing reddens the plant, one
+  // recognising everything reddens the refusal, and a third case
+  // holds the two fixtures against each other so neither drifts off
+  // the vendor name they share. Those three are the whole of what
+  // says the matcher is live while there is no model node to ask it
+  // about, and this case adds none of it. What it adds is that the
+  // rule is in place before the nodes are, so phase 6 lands a node
+  // rather than a node and a check.
+  //
+  // The rest of what it is worth, part by part. The input is covered
+  // a module away, `loadBuiltWorkflows` refusing an empty tree and
+  // an artifact with no node before a case runs. The walk is covered
+  // by the sweep-coverage case in this section, which says as much
+  // for any sweep built on it. The composition is covered by
+  // nothing, here or later in this stage: the control that plants a
+  // node into a parsed copy and expects the sweep to name it plants
+  // a send node, not a model one.
+  it('holds no model node left free to retry', () => {
+    expect(nodesMatching(BUILT_WORKFLOWS, isModelNodeWithoutRetryOff)).toEqual([]);
   });
 });
