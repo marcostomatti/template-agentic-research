@@ -42,11 +42,10 @@
  * calls, each taking the fetch it uses as an argument, so a case can
  * drive one against a stub and the isolated suite stays isolated by
  * construction rather than by discipline. A reply that is not a
- * success is refused rather than handed back, naming the endpoint,
- * the status and the body. The distinct class carrying those three
- * arrives next in this stage, and every call reaches that refusal
- * through one function, so landing the class is one edit rather than
- * four.
+ * success is refused rather than handed back, and
+ * {@link UnsuccessfulReplyError} is what carries the endpoint, the
+ * status and the body it was refused over. Every call reaches that
+ * refusal through one function, so one cause covers all four.
  *
  * What an instance does with each of these was read out of the spec
  * and the handler n8n 2.15.1 ships — `dist/public-api/v1/openapi.yml`
@@ -289,6 +288,125 @@ function requestHeaders(
 }
 
 /**
+ * Thrown when an instance answers a call with anything but a success.
+ *
+ * The reply's own `ok` is what decides that, and what the refusal
+ * carries is what a reader acts on: the endpoint that was called, the
+ * status the instance answered with, and the body it sent back. The
+ * body is there because a status on its own is a number to go and ask
+ * about, while the body is where an instance says which member it
+ * would not take. The method rides with the endpoint, for the reason
+ * {@link UnsuccessfulReplyError.method} gives.
+ *
+ * A distinct class rather than a bare `Error`, so a case covering a
+ * refused call can pin the refusal to it. Every other way one of
+ * these calls fails arrives as `Error`: a success whose body is not a
+ * workflow object, a listing page carrying no list of them, an
+ * instance offering more pages than {@link MAX_PAGES}, a
+ * `SyntaxError` out of `JSON.parse` for a success whose body is not
+ * JSON at all, and whatever the injected fetch raises when it cannot
+ * reach the host. An assertion taking any `Error` would pass for
+ * every one of those.
+ *
+ * What stands behind this refusal is worth having measured rather
+ * than assumed, and it is not one answer. Measured with the check
+ * deleted and each call driven against a stub answering `400` with
+ * the instance's own refusal body: {@link createWorkflow},
+ * {@link updateWorkflow} and {@link activateWorkflow} RESOLVE,
+ * handing that refusal body back as a workflow whose `id`, `name` and
+ * `active` all read `undefined`, so a deploy records a create the
+ * instance never made. {@link listWorkflows} is caught one function
+ * on, by the reader that finds no list in the page, but what it
+ * reports is a success carrying no workflows, which sends a reader to
+ * check the base URL over a call the instance answered perfectly
+ * clearly. So nothing stands behind the class for three of the four,
+ * and what stands behind it for the fourth names the wrong thing.
+ *
+ * Nothing about the API key reaches the message, and that is the
+ * shape rather than a redaction. The refusal is built out of the
+ * REPLY and the path it was asked of, while the key is a member of
+ * the REQUEST, travelling as the `X-N8N-API-KEY` header. Measured
+ * either side of one call: the assembled URL carries no key, it being
+ * a header and not a query, and the request object handed to the
+ * fetch does, so a refusal built from the request would carry it and
+ * one built from the reply has nothing to carry. The four values are
+ * enumerable own properties of the error, so a `JSON.stringify` over
+ * one prints them and leaves out `message` and `stack`, which are
+ * not. All three of those readings were measured, and the key is in
+ * none of them.
+ *
+ * The limit is the body. It is the instance's own text, quoted whole
+ * and read by nothing here, so what this class promises is that
+ * nothing IT holds about the credential reaches a message rather than
+ * that no character of an arbitrary body ever could. An instance
+ * echoing a request header back inside an error would be quoted as
+ * faithfully as one naming a member it would not take.
+ */
+export class UnsuccessfulReplyError extends Error {
+  /**
+   * The method that reached the endpoint, carried because an endpoint
+   * on its own does not name a call. The API mounts a listing and a
+   * create on `/workflows`, so a refusal naming the path and not the
+   * method names two of them. It belongs to the message rather than
+   * being a fourth thing the refusal is about: what a reader acts on
+   * is the endpoint, the status and the body.
+   */
+  readonly method: string;
+
+  /**
+   * The path under the API root, with its own query and with no base
+   * URL in front of it. That is one fewer thing about an operator's
+   * own deployment in a log, and it is also why a refusal cannot be
+   * read as an opinion about the base URL: it names the call and
+   * never the instance it was made against.
+   */
+  readonly endpoint: string;
+
+  /**
+   * The status the instance answered with, which is what parts the
+   * edits this refusal can prescribe. A `401` is the key in
+   * `AR_N8N_API_KEY`, a `404` on a workflow path is an id this
+   * instance does not hold, and a `400` is the body this port sent
+   * it.
+   */
+  readonly status: number;
+
+  /**
+   * The body the instance sent back, exactly as it sent it and an
+   * empty one included. It is read before the status is judged, so it
+   * is here whether or not there was ever anything to parse.
+   */
+  readonly body: string;
+
+  /**
+   * @param method - The method the call was made with.
+   * @param endpoint - The path under the API root it was made to.
+   * @param status - The status the instance answered with.
+   * @param body - The body it sent back.
+   */
+  constructor(
+    method: string,
+    endpoint: string,
+    status: number,
+    body: string,
+  ) {
+    super(
+      `The n8n public API answered ${method} ${endpoint} with ` +
+      `${status} rather than a success, and this body: ${body}. ` +
+      'Which edit that asks for is the instance\'s to say: a 401 is ' +
+      'the key in `AR_N8N_API_KEY`, a 404 on a workflow path is an ' +
+      'id this instance does not hold, and a 400 is the body this ' +
+      'port sent it.',
+    );
+    this.name = this.constructor.name;
+    this.method = method;
+    this.endpoint = endpoint;
+    this.status = status;
+    this.body = body;
+  }
+}
+
+/**
  * Make one call and hand back its parsed body.
  *
  * Every call in this module goes through here, which is what settles
@@ -302,15 +420,16 @@ function requestHeaders(
  * ask again. It is read as text for {@link HttpReply}'s reason, and
  * the parse happens after.
  *
- * The refusal is a plain `Error` today and the distinct class
- * carrying the endpoint, the status and the body arrives next in this
- * stage. It is thrown from here and nowhere else, so that landing the
- * class is one edit.
+ * The refusal is {@link UnsuccessfulReplyError}, thrown from here and
+ * nowhere else. That is what lets a caller tell a call the instance
+ * refused from a reply it could not read, over four calls and one
+ * `catch`.
  *
- * Nothing about the key reaches a message. It is set as a header and
- * read from nothing else, and what a refusal names is the ENDPOINT
- * rather than the URL — a path, with no base URL and no query behind
- * it.
+ * Nothing about the key reaches that refusal, and the reason is what
+ * this function hands over rather than a redaction: the method, the
+ * path, and the reply's own status and body, never the request it
+ * built. The key sits in that request, as a header, and
+ * {@link UnsuccessfulReplyError} is where the whole of it is argued.
  *
  * The parse is not wrapped. A success carrying a body that is not
  * JSON arrives as whatever `JSON.parse` raises, which names an offset
@@ -323,7 +442,8 @@ function requestHeaders(
  * @param endpoint - The path under the API root, query and all.
  * @param body - The request body, on the calls that send one.
  * @returns The parsed reply body.
- * @throws Error When the instance answered anything but a success.
+ * @throws UnsuccessfulReplyError When the instance answered
+ *   anything but a success.
  */
 async function request(
   instance: N8nInstance,
@@ -342,10 +462,7 @@ async function request(
   const text = await reply.text();
 
   if (!reply.ok) {
-    throw new Error(
-      `the n8n public API answered ${method} ${endpoint} with ` +
-      `${reply.status} rather than a success, and this body: ${text}`,
-    );
+    throw new UnsuccessfulReplyError(method, endpoint, reply.status, text);
   }
 
   return JSON.parse(text);
@@ -461,9 +578,9 @@ function pageOf(endpoint: string, body: unknown): WorkflowPage {
  *
  * @param instance - The instance to list.
  * @returns Every workflow it holds.
- * @throws Error When a reply is not a success, when a page is not a
- *   listing, or when the instance offers more pages than
- *   {@link MAX_PAGES}.
+ * @throws UnsuccessfulReplyError When a reply is not a success.
+ * @throws Error When a page is not a listing, or when the instance
+ *   offers more pages than {@link MAX_PAGES}.
  */
 export async function listWorkflows(
   instance: N8nInstance,
@@ -515,7 +632,8 @@ export async function listWorkflows(
  * @param instance - Where to create it.
  * @param workflow - The four members the API takes.
  * @returns The workflow as the instance stored it, id and all.
- * @throws Error When the reply is not a success or not a workflow.
+ * @throws UnsuccessfulReplyError When the reply is not a success.
+ * @throws Error When it is a success carrying no workflow object.
  */
 export async function createWorkflow(
   instance: N8nInstance,
@@ -549,7 +667,8 @@ export async function createWorkflow(
  * @param id - The instance's id for it.
  * @param workflow - The four members the API takes.
  * @returns The workflow as the instance stored it.
- * @throws Error When the reply is not a success or not a workflow.
+ * @throws UnsuccessfulReplyError When the reply is not a success.
+ * @throws Error When it is a success carrying no workflow object.
  */
 export async function updateWorkflow(
   instance: N8nInstance,
@@ -584,7 +703,8 @@ export async function updateWorkflow(
  * @param instance - Where the workflow lives.
  * @param id - The instance's id for it.
  * @returns The workflow as the instance stored it, now armed.
- * @throws Error When the reply is not a success or not a workflow.
+ * @throws UnsuccessfulReplyError When the reply is not a success.
+ * @throws Error When it is a success carrying no workflow object.
  */
 export async function activateWorkflow(
   instance: N8nInstance,
