@@ -17,8 +17,8 @@
  * node that invokes a target reaching a node that closes the run.
  * Two are absences: no statement parameterized from the items its
  * node was handed, and no node left to carry on down its regular
- * output after an error. The first has landed and the rest arrive
- * later in this stage.
+ * output after an error. The first two have landed and the rest
+ * arrive later in this stage.
  *
  * What each of them reads is a parsed member, and for a statement
  * that means the `query` parameter its node carries rather than the
@@ -33,8 +33,9 @@
  *
  * The other half is what stops the file passing by finding nothing:
  * the tree, the workflow and the entry are each refused rather than
- * answered, and one hole is left over. The tree is refused a module
- * away, `loadBuiltWorkflows` throwing on a `workflows/dist/` that is
+ * answered, and the one hole none of those refusals reaches is
+ * closed by a case of its own. The tree is refused a module away,
+ * `loadBuiltWorkflows` throwing on a `workflows/dist/` that is
  * absent, is not a directory or holds no `*.json`, and on the first
  * artifact carrying no node — both before a case runs, and both
  * naming the command that fills the tree. The workflow is refused by
@@ -43,9 +44,10 @@
  * requiring a fragment holding no word, is refused where its
  * fragments are read rather than counted as an entry a run reached.
  * The hole is the roster going empty, which no assertion over a list
- * of offenders can report; the case holding the ids a run reached
- * against the roster is what reports it, and it arrives later in
- * this stage.
+ * of offenders can report: emptied, there is no entry left to go
+ * unsatisfied and the list comes back the same either way.
+ * {@link REACHED_RULE_IDS} and the case holding it against the
+ * roster are what report that.
  *
  * Which is why the tree is read at module scope rather than in a
  * case, the way `workflows.test.ts` and `naming.test.ts` resolve
@@ -133,6 +135,39 @@ function dispatchWorkflow(): BuiltWorkflow {
   return found;
 }
 
+// ---------------------------------------------------------------------------
+// What a run of the roster reached
+// ---------------------------------------------------------------------------
+
+/**
+ * Ids of the {@link DISPATCH_SQL_RULES} the walk over them reached,
+ * added as it reaches each one.
+ *
+ * Recorded from inside the walk rather than read off the roster the
+ * walk was written over, which is the whole of the difference. Read
+ * off the roster, the case behind it would be the table held
+ * against itself: it would answer the same for a walk narrowed away
+ * from the roster — a slice, a filter, a hand-written list of ids —
+ * and the same again for one that never ran at all.
+ *
+ * Recorded ahead of the entry being held to its node, which is where
+ * the readers in this directory put theirs and which here buys
+ * nothing a case can see. What would part the two placements is an
+ * entry that cannot fail, and {@link unsatisfiedRequirements} throws
+ * for one of those, which stops the walk and leaves every entry
+ * behind it unreached whichever side of the call the record sits on.
+ * Measured: that refusal reddens the walk and the case behind it
+ * together, either way, so a malformed entry is reported twice —
+ * once naming the entry, and once as a roster the walk did not get
+ * through.
+ *
+ * A set rather than a list, so an id two entries share arrives here
+ * once and fails against a roster that declares it twice. Nothing
+ * else holds the entry ids apart, `DispatchSqlRule.id` saying of
+ * itself that distinctness across the roster is convention.
+ */
+const REACHED_RULE_IDS = new Set<string>();
+
 describe('ar-dispatch invariants — built tree', () => {
   // Every entry in the roster held against the node it names, in the
   // one workflow the roster is scoped to. An entry that holds
@@ -168,15 +203,61 @@ describe('ar-dispatch invariants — built tree', () => {
   // once for the workflow, both argued at the head of this file. An
   // entry that could not fail is refused where its fragments are
   // read. The roster going empty is what an empty list of offenders
-  // cannot report, and the case holding the ids a run reached
-  // against the roster arrives later in this stage.
+  // cannot report, and the case behind this one, holding the ids
+  // this walk reached against the roster, is what reports it — which
+  // is why the walk records each entry on its way past rather than
+  // that case counting the roster it was written over.
   it('holds every statement the dispatch roster requires', () => {
     const workflow = dispatchWorkflow();
 
-    const unsatisfied = DISPATCH_SQL_RULES.flatMap(
-      (rule) => unsatisfiedRequirements(rule, workflow),
-    );
+    const unsatisfied = DISPATCH_SQL_RULES.flatMap((rule) => {
+      REACHED_RULE_IDS.add(rule.id);
+
+      return unsatisfiedRequirements(rule, workflow);
+    });
 
     expect(unsatisfied).toEqual([]);
+  });
+
+  // The half a list of offenders held against an empty one cannot
+  // say: that the walk in front of it was handed the whole roster
+  // to go through. An entry dropped from `DISPATCH_SQL_RULES`, and
+  // a walk narrowed away from the entries that are still in it,
+  // each take a property with them and leave a list of offenders
+  // that reads exactly like the one a clean tree gives.
+  //
+  // Held as sorted lists rather than as two sets, so an id two
+  // entries share is reported rather than swallowed:
+  // `REACHED_RULE_IDS` is a set and the roster is read as it is
+  // written, so a shared id comes back once against a list carrying
+  // it twice.
+  //
+  // The roster declaring anything at all is paired into the same
+  // comparison rather than left to a case of its own, because it is
+  // the one failure the ids cannot report between them. Emptied,
+  // the roster declares nothing and the walk reaches nothing, so
+  // one empty list equals the other — while the case in front of
+  // this one goes on printing a tick over a roster with no property
+  // left in it to check.
+  //
+  // Behind the walk rather than last in the file: vitest runs a
+  // file's cases in the order they were declared, so what is read
+  // here is what the case in front of it wrote, and the cases
+  // arriving later in this stage read the workflow for properties
+  // no entry carries. A run that selects this one without the walk
+  // — a `-t` filter naming it — reports the whole roster as
+  // unreached, which is what asking at run time costs over reading
+  // the roster the walk was written over.
+  it('reaches every entry the dispatch roster declares', () => {
+    const reached = {
+      rosterDeclaresAny: DISPATCH_SQL_RULES.length > 0,
+      ids: [...REACHED_RULE_IDS].sort(),
+    };
+    const declared = {
+      rosterDeclaresAny: true,
+      ids: DISPATCH_SQL_RULES.map((rule) => rule.id).sort(),
+    };
+
+    expect(reached).toEqual(declared);
   });
 });
