@@ -1,10 +1,12 @@
 /**
- * What `deploy` does in front of a stub, over two kinds of run
- * worth reading apart: one refused before it reaches anything, and
- * one that reaches an instance already holding a workflow under one
- * of the names it is uploading. Nothing in this file reads what a
- * deploy returned — every claim here about what one DID is made
- * against the calls the stub recorded.
+ * What `deploy` does in front of a stub, over three kinds of run
+ * worth reading apart: one refused before it reaches anything, one
+ * that reaches an instance already holding a workflow under one of
+ * the names it is uploading, and one read for the text the command
+ * wrote about it afterwards. Nothing in this file reads what a
+ * deploy RETURNED — a claim here about what a run DID is made
+ * against the calls the stub recorded, or against what it put where
+ * an operator would read it.
  *
  * The first block is the refusal: two claims, with a fixture guard
  * in front of them and a control behind. The refusal it is about
@@ -48,9 +50,10 @@
  * second is on {@link recorder}; the third is what says a block of
  * nothing but a refusal is not a block agreeing with itself. All
  * three also redden the second block's claim, every run there going
- * through the same stub and the same sequence.
+ * through the same stub and the same sequence, and the first and
+ * the third the third block's guard along with it.
  *
- * Both blocks want a clean checkout and this file makes one.
+ * Every block wants a clean checkout and this file makes one.
  * `assertCleanTree` asks git about a directory and nothing is
  * injected beneath it, so the only tree it can be handed is a real
  * one — a temporary directory with a file and a commit in it,
@@ -58,9 +61,9 @@
  * back in the first block's guard rather than inferred from the
  * commands having run, so a git that would not run and a roster
  * that stopped committing both name themselves: measured, each
- * reddens that guard, that block's accepting case and the second
- * block's claim together, and leaves the first block's own two
- * claims alone.
+ * reddens that guard, that block's accepting case, the second
+ * block's claim and the third block's guard together, and leaves
+ * the first block's own two claims alone.
  *
  * The second block is the upsert, and it is where creating and
  * replacing are told apart. Its build reports two artifacts and its
@@ -77,9 +80,9 @@
  * was replaced is the deploy's own account of what it did, so a run
  * that assembled the request and a run that only says it did are
  * one value to a case reading the report; the recorded calls are
- * what an instance would have received. The report is read by
- * nothing here, which is why the create and the replace are told
- * apart by a method and a path rather than by a member of it.
+ * what an instance would have received. That report is read by
+ * nothing in this file, which is why the create and the replace are
+ * told apart by a method and a path rather than by a member of it.
  *
  * That block's artifacts are written outside the checkout, and that
  * is not arrangement for its own sake. `git status --porcelain`
@@ -90,18 +93,36 @@
  * answers it the other way, writing into `workflows/dist-external/`
  * — a path the repository ignores.
  *
- * Three readings this file does not reach. It hands the refusal one
+ * The third block is about what a reader ever sees. A key goes to
+ * the instance on purpose, as a header on every request it
+ * authenticates; what the command writes is the other way out of
+ * this machine, and the only one nobody asked for — which makes
+ * what it wrote the whole of that surface, and `runDeployCli`
+ * rather than {@link deploy} the thing to run. Three runs carry a
+ * key to an instance there and everything each produced is read
+ * back for it: the report lines, and for the run something stopped,
+ * the message, the stack and the serialization a command line makes
+ * of a thrown value.
+ *
+ * Its guard is where that stops being an absence claim over
+ * nothing. A text read for something and found not to hold it is
+ * the same green whether the reading works or matches nothing
+ * anywhere, so the guard plants a key in a written line and in a
+ * thrown refusal and reads both back through the same collection
+ * the claim uses. Measured: a reading that matches nothing reddens
+ * that guard ALONE and leaves the claim green, and so does a roster
+ * with no runs in it, while a report line built to carry the key
+ * and a refusal built out of the request rather than the reply each
+ * redden the claim alone.
+ *
+ * Two readings this file does not reach. It hands the refusal one
  * arity — a base URL that is answered for and a key that is not —
  * so nothing here says what a run naming neither reports, though
- * the class builds both its message and its field out of a list. It
- * reads nothing the deploy path PRINTS, which is the command line's
- * doing rather than {@link deploy}'s and is where a key would have
- * to appear for anything to have leaked one. And no case reads a
- * request body past the display name an upsert matches on, so what
- * became of the members n8n's API refuses is
+ * the class builds both its message and its field out of a list.
+ * And no case reads a request body past the display name an upsert
+ * matches on, so what became of the members n8n's API refuses is
  * `tests/scripts/n8n-workflow.test.ts`'s claim rather than one made
- * here. The case this stage still owes this file arrives later in
- * it.
+ * here.
  */
 import type { DeployBuild, InstanceSettings } from '../../scripts/deploy-external.js';
 import type { HttpFetch, HttpRequest } from '../../scripts/n8n-client.js';
@@ -117,6 +138,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   UnconfiguredInstanceError,
   deploy,
+  runDeployCli,
 } from '../../scripts/deploy-external.js';
 
 // ---------------------------------------------------------------------------
@@ -216,14 +238,42 @@ interface CallRecorder {
  * A function of the call rather than a list of replies in order. A
  * script would report a run that made an unexpected call as a stub
  * that ran out, where the call list already reports it as an extra
- * label naming a method and a URL — and the two answers this file
- * needs are decided by the call rather than by how many came
- * before it.
+ * label naming a method and a URL — and the answers this file needs
+ * are decided by the call rather than by how many came before it.
  *
  * @param call - The call as the stub recorded it.
  * @returns The reply body, as text the caller parses.
  */
 type ReplyBody = (call: RecordedCall) => string;
+
+/**
+ * What status an instance answers one call with.
+ *
+ * A function of the call for {@link ReplyBody}'s reason, and a
+ * separate one because the two are answered by different things: a
+ * body is what an instance has to say, and a status is what it made
+ * of the request. The one run that needs them apart answers a
+ * listing and refuses the uploads behind it.
+ *
+ * @param call - The call as the stub recorded it.
+ * @returns The status the instance answers that call with.
+ */
+type ReplyStatus = (call: RecordedCall) => number;
+
+/** The lowest status a reply reports success for. */
+const FIRST_SUCCESS_STATUS = 200;
+
+/** The lowest status above that range. */
+const PAST_SUCCESS_STATUS = 300;
+
+/**
+ * An instance that takes every call it is handed.
+ *
+ * @returns {@link FIRST_SUCCESS_STATUS}, whatever was asked of it.
+ */
+function takesEveryCall(): number {
+  return FIRST_SUCCESS_STATUS;
+}
 
 /**
  * A listing carrying no workflows.
@@ -251,8 +301,8 @@ function instanceHoldingNothing(): string {
 }
 
 /**
- * A fresh stub, recording what it is handed and answering with
- * whatever `answer` makes of the call.
+ * A fresh stub, recording what it is handed and answering it the
+ * way `answer` and `status` make of the call.
  *
  * One per run rather than one for the file: what each case here
  * reads is the calls ONE deploy made, and a shared recorder would
@@ -268,11 +318,11 @@ function instanceHoldingNothing(): string {
  * run refused before it made a call, and equally what it records
  * for a run that made every call it meant to and made them
  * somewhere else. Measured by handing {@link deploy} a second
- * recorder built the same way and asserting against this one: of
- * the six cases here the two that move are the accepting control
- * and the upsert claim, each of which reads a call back, while the
- * first block's absence claim stays GREEN, correct and fail-capable
- * and about a system that run never used.
+ * recorder built the same way and asserting against this one: the
+ * cases that move are the accepting control and the upsert claim,
+ * each of which reads a call back, while the first block's absence
+ * claim stays GREEN, correct and fail-capable and about a system
+ * that run never used.
  *
  * That failure is written up in
  * `~/.claude/skills/assert-the-stub-was-hit/SKILL.md`, a user-level
@@ -301,10 +351,24 @@ function instanceHoldingNothing(): string {
  * could not have produced, which {@link API_KEY} is, though the
  * reading argued there is a different one.
  *
+ * The reply's own `ok` is derived from the status rather than
+ * answered for separately. `HttpReply` in `n8n-client.ts` declares
+ * the two apart and says why the module reads one instead of
+ * working it out from the other; what this stands in for is a
+ * `Response`, which does work it out, so a stub answering the two
+ * independently could hand the module under test a pair no instance
+ * could produce.
+ *
  * @param answer - What the instance answers each call with.
+ * @param status - What status it answers each call with. Defaults
+ *   to an instance that takes them all, which is what every run but
+ *   one here wants.
  * @returns The call list and the fetch that writes to it.
  */
-function recorder(answer: ReplyBody): CallRecorder {
+function recorder(
+  answer: ReplyBody,
+  status: ReplyStatus = takesEveryCall,
+): CallRecorder {
   const calls: RecordedCall[] = [];
 
   return {
@@ -315,10 +379,11 @@ function recorder(answer: ReplyBody): CallRecorder {
       calls.push(call);
 
       const body = answer(call);
+      const code = status(call);
 
       return Promise.resolve({
-        ok: true,
-        status: 200,
+        ok: code >= FIRST_SUCCESS_STATUS && code < PAST_SUCCESS_STATUS,
+        status: code,
         text: () => Promise.resolve(body),
       });
     },
@@ -811,6 +876,423 @@ function refusalOf(run: DeployRun): DeployRefusal {
 }
 
 // ---------------------------------------------------------------------------
+// Everything one run of the command put where a reader is
+// ---------------------------------------------------------------------------
+
+/** What one collected run wrote, and whatever stopped it. */
+interface CapturedWrites {
+  /** What it threw, or {@link RETURNED}. */
+  readonly thrown: unknown;
+
+  /** One entry per write it made, in the order it made them. */
+  readonly written: readonly string[];
+}
+
+/**
+ * Run `during` with the console collected rather than printed, and
+ * answer with what it wrote and with whatever stopped it.
+ *
+ * Both streams, because the command uses both: `runDeployCli`
+ * reports on `console.log`, and the block that runs it as a command
+ * writes a refusal to `console.error`. The two methods are put back
+ * in a `finally`, so a run that threw leaves the console as it
+ * found it and whatever the suite prints next prints normally.
+ *
+ * Every argument is rendered with `String`, which is exact for
+ * everything this is ever handed: `runDeployCli` writes strings,
+ * and the one block that would hand over a thrown value is the one
+ * no case can reach. Such a value would lose whatever a terminal
+ * makes of it, which is why {@link readableTextsOf} reads a thrown
+ * refusal separately rather than pushing it through here.
+ *
+ * @param during - The run to collect the writes of.
+ * @returns What it wrote and what it threw.
+ */
+async function whileCapturingWrites(
+  during: () => Promise<unknown>,
+): Promise<CapturedWrites> {
+  const written: string[] = [];
+  const printed = { error: console.error, log: console.log };
+  const collect = (...args: readonly unknown[]): void => {
+    written.push(args.map((arg) => String(arg)).join(' '));
+  };
+
+  console.error = collect;
+  console.log = collect;
+
+  try {
+    await during();
+
+    return { thrown: RETURNED, written };
+  } catch (thrown) {
+    return { thrown, written };
+  } finally {
+    console.error = printed.error;
+    console.log = printed.log;
+  }
+}
+
+/** One text a run produced, and what produced it. */
+interface ReadableText {
+  /** What produced it, which is what a failure names. */
+  readonly reading: string;
+
+  /** The text itself, which no failure here prints. */
+  readonly text: string;
+}
+
+/**
+ * Every text one run put where an operator could read it.
+ *
+ * What it wrote, and — where something stopped it — the three
+ * readings a command line makes of what it threw. A command line
+ * writes a refusal's `message` for the ones it can name by class
+ * and hands anything else to `console.error` whole, which renders
+ * it with its stack; and a structured logger reading the same value
+ * serializes it, which prints the fields a refusal assigned
+ * alongside the class name and leaves out `message` and `stack`,
+ * those two being properties of the prototype rather than of the
+ * error. No one of the three contains the other two.
+ *
+ * The block doing that writing runs only when this module is what
+ * the process was started with, so no case can reach it. Reading
+ * the thrown value here is what stands in for it: what a command
+ * line would have put on a terminal, out of a run that handed the
+ * same value to a caller instead.
+ *
+ * @param run - The run as {@link whileCapturingWrites} answered.
+ * @returns One entry per text it produced to be read.
+ */
+function readableTextsOf(run: CapturedWrites): readonly ReadableText[] {
+  const written = run.written.map((text, line) => ({
+    reading: `written line ${line + 1}`,
+    text,
+  }));
+
+  if (run.thrown === RETURNED) {
+    return written;
+  }
+
+  const refusal = run.thrown instanceof Error
+    ? run.thrown
+    : undefined;
+
+  return [
+    ...written,
+    {
+      reading: 'the message it refused with',
+      text: refusal?.message ?? String(run.thrown),
+    },
+    {
+      reading: 'the stack over that refusal',
+      text: String(refusal?.stack ?? ''),
+    },
+    {
+      reading: 'that refusal serialized',
+      text: String(JSON.stringify(run.thrown)),
+    },
+  ];
+}
+
+/**
+ * Whether a text carries the key.
+ *
+ * A plain substring test over {@link API_KEY}, which that constant
+ * is shaped for: a needle able to occur for some other reason
+ * reports a leak that is not one, and a false report of a leaked
+ * credential reads exactly like a true one.
+ *
+ * @param text - Something a run produced to be read.
+ * @returns Whether the key is anywhere in it.
+ */
+function carriesTheKey(text: string): boolean {
+  return text.includes(API_KEY);
+}
+
+/** The header the key travels as, which is the spec's own name. */
+const KEY_HEADER = 'X-N8N-API-KEY';
+
+/** The status an instance answers a call it refuses a key for. */
+const KEY_REFUSED_STATUS = 401;
+
+/**
+ * What the instance sends back with that refusal.
+ *
+ * Naming nothing about the request, and deliberately.
+ * `UnsuccessfulReplyError` quotes a reply's body whole and reads no
+ * part of it, so a body echoing the key back would be carried into
+ * the message as faithfully as one naming a member the instance
+ * would not take — which is the limit that class states about
+ * itself rather than a leak this file could catch. The claim that
+ * rests on it is that nothing the deploy path HOLDS about the
+ * credential reaches a message, never that no character of an
+ * arbitrary body could.
+ */
+const UNAUTHORIZED_BODY = JSON.stringify({ message: 'unauthorized' });
+
+/**
+ * An instance that answers the listing and refuses the uploads
+ * behind it.
+ *
+ * A 401 rather than any other refusal, that being the status an
+ * instance means the key by — `UnsuccessfulReplyError`'s own
+ * message says a 401 is the key in `AR_N8N_API_KEY`. So the refusal
+ * this produces is the one most about the credential, out of the
+ * call that carried the most: a key header and a serialized
+ * workflow both.
+ *
+ * @param call - The call as the stub recorded it.
+ * @returns A success for the listing, a refusal for either upload.
+ */
+function refusesEveryUpload(call: RecordedCall): number {
+  return call.init.method === 'GET'
+    ? FIRST_SUCCESS_STATUS
+    : KEY_REFUSED_STATUS;
+}
+
+/**
+ * That instance's bodies: the listing it holds, and its refusal.
+ *
+ * @param call - The call as the stub recorded it.
+ * @returns The listing for the GET, {@link UNAUTHORIZED_BODY} for
+ *   either upload.
+ */
+function instanceRefusingTheUploads(call: RecordedCall): string {
+  return call.init.method === 'GET'
+    ? HELD_LISTING
+    : UNAUTHORIZED_BODY;
+}
+
+/** One run of {@link KEY_BEARING_RUNS}. */
+interface KeyBearingRun {
+  /** What the instance answers each of its calls with. */
+  readonly answer: ReplyBody;
+
+  /** What its build reports, and where it wrote it. */
+  readonly built: DeployBuild;
+
+  /** What names it in a failure. */
+  readonly id: string;
+
+  /** A phrase its own output carries and no other run's does. */
+  readonly produces: string;
+
+  /** What status the instance answers each of its calls with. */
+  readonly status: ReplyStatus;
+}
+
+/**
+ * The runs the sweep is made over: a report, an empty report and a
+ * refusal, each out of a run that was configured with a key.
+ *
+ * Key-bearing on purpose, and that is what the whole claim rests
+ * on. A run refused for an absent key never had one to leak, so the
+ * first block is no part of this however loudly it refuses — what
+ * is swept here is runs that carried the key to an instance, which
+ * the guard reads back off the requests they made rather than off
+ * the settings they were handed.
+ *
+ * The third is the one the claim is really about. The two reports
+ * are assembled out of display names and file names, where there is
+ * no credential anywhere near the text, while a refusal out of a
+ * call is the one message on this path built from a request at all.
+ * The refusals this leaves out — a tree no commit accounts for, an
+ * artifact that is not a workflow — are built the way the reports
+ * are, out of paths and names, with no call behind them.
+ */
+const KEY_BEARING_RUNS: readonly KeyBearingRun[] = [
+  {
+    answer: instanceHoldingTheHeldOne,
+    built: TWO_ARTIFACTS,
+    id: 'the report over two artifacts',
+    produces: '2 deployed',
+    status: takesEveryCall,
+  },
+  {
+    answer: instanceHoldingNothing,
+    built: NOTHING_BUILT,
+    id: 'the report over a build that wrote nothing',
+    produces: 'nothing deployed',
+    status: takesEveryCall,
+  },
+  {
+    answer: instanceRefusingTheUploads,
+    built: TWO_ARTIFACTS,
+    id: 'an upload the instance refused',
+    produces: 'UnsuccessfulReplyError',
+    status: refusesEveryUpload,
+  },
+];
+
+/**
+ * Those same three, written out rather than read off the roster.
+ *
+ * Two spellings is the only arrangement where comparing them says
+ * anything, which is the reasoning `approve-args.test.ts` gives for
+ * its own hand-written copy. What it buys here is the one drift a
+ * comparison built out of the roster alone cannot see: a roster
+ * with nothing in it sweeps no run, and every half of the guard
+ * that reads it then holds an empty list up against another.
+ */
+const SWEPT_RUN_IDS: readonly string[] = [
+  'the report over two artifacts',
+  'the report over a build that wrote nothing',
+  'an upload the instance refused',
+];
+
+/** One swept run, beside the row it was made for. */
+interface SweptRun {
+  /** The row it was made for. */
+  readonly row: KeyBearingRun;
+
+  /** Its calls, its writes, and whatever stopped it. */
+  readonly run: WrittenRun;
+}
+
+/** One run of the command, and all it produced to be read. */
+interface WrittenRun extends CapturedWrites {
+  /** Every call its stub was handed, in order. */
+  readonly calls: readonly RecordedCall[];
+}
+
+/**
+ * Run the command one row is about, and collect what it produced.
+ *
+ * `runDeployCli` rather than {@link deploy}, which is the whole of
+ * what parts this block from the two beside it. The report is the
+ * COMMAND's and not the deploy's, so a case running the deploy
+ * would be reading a value where this one is reading a message —
+ * and what the command writes is the whole of what an operator sees
+ * of a run.
+ *
+ * @param row - The run to make.
+ * @returns Its calls, its writes and whatever stopped it.
+ */
+async function commandOutputOf(row: KeyBearingRun): Promise<WrittenRun> {
+  const stub = recorder(row.answer, row.status);
+  const captured = await whileCapturingWrites(() => runDeployCli({
+    build: () => row.built,
+    fetch: stub.fetch,
+    root: CLEAN_CHECKOUT,
+    settings: ACCEPTED_SETTINGS,
+  }));
+
+  return { ...captured, calls: stub.calls };
+}
+
+/**
+ * Run every row and answer with each beside the row it was made
+ * for.
+ *
+ * One after another rather than together. The collection replaces
+ * two console methods for the length of one run, so runs made at
+ * once would each be handed whatever the others wrote.
+ *
+ * @returns One entry per row, in roster order.
+ */
+async function sweepKeyBearingRuns(): Promise<readonly SweptRun[]> {
+  const swept: SweptRun[] = [];
+
+  for (const row of KEY_BEARING_RUNS) {
+    swept.push({ row, run: await commandOutputOf(row) });
+  }
+
+  return swept;
+}
+
+/**
+ * Which of the swept runs a set of texts could have come from, by
+ * the phrases those runs declare.
+ *
+ * Every row is asked and not just the one the texts came from,
+ * which is what turns a per-run reading into a comparison: a sweep
+ * whose runs had all stopped for one reason answers with the same
+ * name everywhere, or with none at all, and either reads as a drift
+ * rather than as a run that behaved oddly.
+ *
+ * @param texts - What one run produced to be read.
+ * @returns The rows whose declared phrase is in it.
+ */
+function producedBy(texts: readonly ReadableText[]): string {
+  const from = KEY_BEARING_RUNS.filter(
+    (row) => texts.some((readable) => readable.text.includes(row.produces)),
+  );
+
+  return from.length === 0
+    ? '(no phrase this sweep declares)'
+    : from.map((row) => row.id).join(', ');
+}
+
+/**
+ * Whether every call one run made carried the key.
+ *
+ * Read off the requests the stub was handed rather than off the
+ * settings the run was configured with, which is the difference
+ * between a key that was in play and one that was merely written
+ * down. A run that made no call at all falls to the count, `0 of 0`
+ * being exactly the answer that would otherwise read as every call
+ * having carried it.
+ *
+ * @param run - The run as {@link commandOutputOf} answered.
+ * @returns That every call carried it, or how many of how many did.
+ */
+function keyOnTheWireIn(run: WrittenRun): string {
+  const carried = run.calls.filter(
+    (call) => call.init.headers[KEY_HEADER] === API_KEY,
+  ).length;
+
+  return carried > 0 && carried === run.calls.length
+    ? 'every call carried the key'
+    : `${carried} of ${run.calls.length} calls carried the key`;
+}
+
+/**
+ * A line carrying the key, written through the same collection.
+ *
+ * @returns What that collected.
+ */
+async function aWrittenLineCarryingTheKey(): Promise<CapturedWrites> {
+  return whileCapturingWrites(() => {
+    console.log(`deployed something, with ${API_KEY} in the line`);
+
+    return Promise.resolve();
+  });
+}
+
+/**
+ * A refusal carrying the key, thrown through the same collection.
+ *
+ * A second plant rather than a second expectation on the first: the
+ * two halves of {@link readableTextsOf} are separately deletable,
+ * and a written line proves nothing about the readings a thrown
+ * value gets.
+ *
+ * @returns What that collected.
+ */
+async function aRefusalCarryingTheKey(): Promise<CapturedWrites> {
+  return whileCapturingWrites(
+    () => Promise.reject(new Error(`refused, with ${API_KEY} in it`)),
+  );
+}
+
+/**
+ * Which of one run's texts carry the key, as labels to read.
+ *
+ * The run and the reading, and never the text. A failure here is a
+ * credential in a place it should not be, and a diff quoting the
+ * text to say so would be putting a second copy of it wherever the
+ * first one was already too many.
+ *
+ * @param entry - One swept run.
+ * @returns One label per reading of it that carries the key.
+ */
+function keyCarryingReadingsIn(entry: SweptRun): readonly string[] {
+  return readableTextsOf(entry.run)
+    .filter((readable) => carriesTheKey(readable.text))
+    .map((readable) => `${entry.row.id}: ${readable.reading}`);
+}
+
+// ---------------------------------------------------------------------------
 // A deploy an environment configured no key for
 // ---------------------------------------------------------------------------
 
@@ -903,13 +1385,13 @@ describe('deploy — an instance already holding one of the workflows', () => {
   // fixture that drifted is named in the diff rather than reported
   // as a deploy that behaved oddly.
   //
-  // Measured over the six cases in this file, three drifts redden
-  // this guard ALONE and the claim after it sees none of them:
-  // flipping the build order and flipping the claim's own list of
-  // labels with it; giving the held artifact the id the instance
-  // minted, which is what a deploy matching on an artifact's own
-  // id rather than on its name would be satisfied by; and a
-  // listing that grew a workflow no artifact names.
+  // Measured over this block and the two beside it, three drifts
+  // redden this guard ALONE and the claim after it sees none of
+  // them: flipping the build order and flipping the claim's own
+  // list of labels with it; giving the held artifact the id the
+  // instance minted, which is what a deploy matching on an
+  // artifact's own id rather than on its name would be satisfied
+  // by; and a listing that grew a workflow no artifact names.
   //
   // Two more take the claim down with this guard — a display name
   // that never reached its file, and a listing that stopped
@@ -947,7 +1429,7 @@ describe('deploy — an instance already holding one of the workflows', () => {
   // with the same report, while the recorded calls are what an
   // instance would have received. So the create and the replace are
   // told apart here by a method and a path, and no case in this
-  // file reads the report at all.
+  // file reads that value at all.
   //
   // The replace is addressed at the id the LISTING gave, which is
   // not the id the artifact carries — so a deploy matching on an
@@ -958,11 +1440,13 @@ describe('deploy — an instance already holding one of the workflows', () => {
   // anything at all names itself rather than arriving as a short
   // call list a reader has to account for.
   //
-  // Measured over the six cases in this file: a match that never
-  // finds a name, one that answers the same id for every name, and
-  // a sequence that uploads nothing each redden this case ALONE,
-  // as does a label that stops carrying the display name it was
-  // handed.
+  // Measured over this block and the two beside it: a match that
+  // never finds a name and one that answers the same id for every
+  // name each redden this case ALONE, as does a label that stops
+  // carrying the display name it was handed. A sequence that
+  // uploads nothing reddens it alongside the third block's guard,
+  // that block reading a report which then says nothing was
+  // deployed.
   it('replaces the workflow it holds and creates the one it does not', async () => {
     const run = await deployRun(
       ACCEPTED_SETTINGS,
@@ -977,5 +1461,96 @@ describe('deploy — an instance already holding one of the workflows', () => {
       calls: [LISTING_CALL, CREATE_CALL, REPLACE_CALL],
       refusal: NOT_REFUSED,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A deploy that carried a key, and everything it wrote afterwards
+// ---------------------------------------------------------------------------
+
+describe('deploy — what the command writes over a run holding a key', () => {
+  // What the claim after it takes on trust, in one record so a
+  // fixture or a mechanism that drifted is named in the diff rather
+  // than reported as a command that behaved oddly.
+  //
+  // Four halves and each stands behind a different way the claim
+  // could hold over nothing at all. The sweep is the runs it says
+  // it is, held against a list written out rather than read off the
+  // roster, so a roster with nothing in it reports itself instead
+  // of leaving every comparison in this record an empty list
+  // against another. Each of those runs produced its own declared
+  // phrase and no other run's, so a sweep whose runs had all
+  // stopped for one reason is named here rather than swept. The key
+  // was in play: every call every run made carried it, read back
+  // off the requests the stub was handed rather than off the
+  // settings a run was configured with, which is the difference
+  // between a credential that reached an instance and one that was
+  // only ever written down. And the sweep can SEE a key — a written
+  // line and a thrown refusal, each carrying one, each put through
+  // the same collection and the same reading the claim uses.
+  //
+  // That last half is the one the claim cannot do without. A text
+  // read for something and found not to hold it is the same green
+  // whether the reading works or matches nothing anywhere, and the
+  // two halves of that reading are separately deletable, which is
+  // why there are two plants and not one.
+  it('swept the runs it names, carried the key, and can see one', async () => {
+    const swept = await sweepKeyBearingRuns();
+    const plants = [
+      await aWrittenLineCarryingTheKey(),
+      await aRefusalCarryingTheKey(),
+    ];
+
+    expect({
+      eachRunProducedItsOwnOutput: swept.map(
+        (entry) => `${entry.row.id}: ${producedBy(readableTextsOf(entry.run))}`,
+      ),
+      everyCallEveryRunMadeCarriedTheKey: swept.map(
+        (entry) => `${entry.row.id}: ${keyOnTheWireIn(entry.run)}`,
+      ),
+      theRunsSwept: swept.map((entry) => entry.row.id),
+      theSweepSeesAPlantedKey: plants.map(
+        (plant) => readableTextsOf(plant).some(
+          (readable) => carriesTheKey(readable.text),
+        ),
+      ),
+    }).toStrictEqual({
+      eachRunProducedItsOwnOutput: SWEPT_RUN_IDS.map((id) => `${id}: ${id}`),
+      everyCallEveryRunMadeCarriedTheKey: SWEPT_RUN_IDS.map(
+        (id) => `${id}: every call carried the key`,
+      ),
+      theRunsSwept: SWEPT_RUN_IDS,
+      theSweepSeesAPlantedKey: [true, true],
+    });
+  });
+
+  // The claim, and it is about everything an operator ever sees of
+  // a run. A key goes to the instance on purpose, as a header on
+  // every request it authenticates; what the command writes is the
+  // other way out of this machine, and the only one nobody asked
+  // for.
+  //
+  // So every text every swept run produced is read back for it —
+  // each report line, and for the run that was stopped the message,
+  // the stack and the serialization, which are the three a command
+  // line makes of a thrown value and no one of which contains the
+  // other two. The key is in none of them.
+  //
+  // Answered as labels rather than as a boolean or a count, so a
+  // failure names which run leaked and which reading it leaked
+  // through — and as the label alone, never the text, since a diff
+  // quoting the text to report a credential in the wrong place
+  // would be putting a second copy of it there.
+  //
+  // What this does not claim is that no character of an arbitrary
+  // reply could reach a message. `UnsuccessfulReplyError` quotes an
+  // instance's body whole, so an instance echoing the key back
+  // would be carried faithfully; that limit is stated where the
+  // body this sweep answers a refusal with is declared. The claim
+  // is about what the deploy path itself holds.
+  it('writes no message carrying the API key', async () => {
+    const swept = await sweepKeyBearingRuns();
+
+    expect(swept.flatMap(keyCarryingReadingsIn)).toEqual([]);
   });
 });
