@@ -617,6 +617,42 @@ export interface BuiltArtifact extends ApiWorkflow {
  * filled in: the four values are the artifact's own, forwarded as
  * they stand.
  *
+ * The four are not a choice made here, and dropping the rest is not
+ * tidiness. n8n's public `workflow` schema is
+ * `additionalProperties: false` over exactly these four, so a body
+ * carrying a fifth member is refused whole — `400 request/body must
+ * NOT have additional properties`. The extra member is not ignored:
+ * nothing is created at all.
+ *
+ * A built artifact carries several it rejects. The one source this
+ * phase lands, `ar-dispatch.json`, declares `id`, `active` and
+ * `versionId` on top of the four and the build copies all three
+ * through unchanged, so no artifact under `workflows/dist/` is
+ * POSTable as it stands — and a workflow exported off a canvas
+ * carries `tags`, `meta` and `pinData` besides. The schema knows
+ * `id`, `active` and `tags` as read-only members and does not name
+ * `versionId`, `meta` or `pinData` at all; the split changes
+ * nothing here, since both classes fail the one way.
+ *
+ * The artifact is not wrong to carry them, which is why this is a
+ * projection and not a change to what the build writes. The other
+ * deploy path imports the whole file through the n8n CLI, where
+ * `id` is what lands an import on the workflow
+ * `workflows/src/README.md` rosters rather than on a new one, and
+ * a hand-authored workflow carrying no `versionId` is refused
+ * outright. One artifact, two paths, and the narrower of them
+ * takes a cut-down copy.
+ *
+ * The schema, the refusal it answers with and the deploy path
+ * around it are written up in
+ * `~/.claude/skills/n8n-public-api-deploy/SKILL.md`, measured
+ * against an instance's own `openapi.yml` on n8n 2.3.0 and public
+ * API v1.1.1; the CLI import's own demands are in
+ * `~/.claude/skills/n8n-cli-unattended-ops/SKILL.md`. Both are
+ * user-level skills rather than ones vendored under `.claude/`
+ * here, which is why the argument is carried above rather than
+ * left to the links.
+ *
  * Written as a literal rather than as a walk over a roster of member
  * names, which is what fixes the answer's member set at the site. The
  * four are checked against {@link ApiWorkflow} where they are
