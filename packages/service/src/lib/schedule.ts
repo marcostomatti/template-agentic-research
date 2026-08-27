@@ -11,10 +11,13 @@
  * does the same over `export_subscriptions`, so both schedulable tables
  * are claimed and rescheduled by one statement shape. That reschedule is
  * {@link clampIntervalSeconds} written as SQL. A Merge node behind the
- * pair hands both branches' claims on as one stream. What arrives later in
- * this stage is the rest of a tick: that cap applied a second time over
- * that stream. The arithmetic behind all of it lives here and nothing
- * around it. The columns it reads are the schedulable set declared in
+ * pair hands both branches' claims on as one stream, and a Code node
+ * behind that drops the placeholders a claimless branch sends and puts
+ * what is left through {@link capBatch}. What arrives later in this stage
+ * is the rest of a tick: each bounded row routed to the workflow its kind
+ * asks for, a run row opened against it, and that workflow invoked. The
+ * arithmetic behind all of it lives here and nothing around it. The
+ * columns it reads are the schedulable set declared in
  * `src/db/schema/scheduling.ts`, and it reads them as values handed in —
  * no I/O, no clock, no database handle. A rule reaching for one of those
  * could neither be spliced into a node nor be tested without the thing it
@@ -189,11 +192,18 @@ export function clampIntervalSeconds(
  * Take at most `cap` items off the front of a batch.
  *
  * The order handed in is the order kept, and the tail is what goes.
- * `ar-dispatch` claims oldest-due first, so the rows past the cap are
- * the least overdue ones and a capped pass is the front of the queue
- * rather than a sample of it. The batch comes back as a new array
- * whether or not the cap bit, so nothing a caller still holds is
- * trimmed underneath it.
+ * What that buys is the caller's to establish, and `ar-dispatch` is
+ * worth being exact about: each of its claims picks the most overdue
+ * rows with an `ORDER BY` inside its own statement, but an `ORDER BY`
+ * there settles WHICH rows are taken and not the order they come back
+ * in — measured, the shipped claim emits them in join order — and the
+ * merge in front of this call concatenates one branch after the
+ * other. So what reaches here is unordered among the rows claimed,
+ * and what goes is arbitrary among them rather than the least
+ * overdue. Keeping the order is still the rule a caller holding one
+ * needs; it is not a claim that this caller holds one. The batch
+ * comes back as a new array whether or not the cap bit, so nothing a
+ * caller still holds is trimmed underneath it.
  *
  * A cap that is not a positive integer is refused rather than handed
  * to `slice`, which has a plausible-looking answer for every one of

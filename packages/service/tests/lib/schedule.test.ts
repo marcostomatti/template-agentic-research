@@ -1118,12 +1118,15 @@ describe('capBatch — a cap that is a positive integer', () => {
 
   // What parts the claim above it from a count. Exactly `cap`
   // items is satisfied in full by a rule taking the LAST `cap` of
-  // the batch, or any `cap` of them in any order, and neither is
-  // a bounded pass at the front of the queue — `ar-dispatch`
-  // claims oldest-due first, so which end goes is the difference
-  // between a capped pass and a sample of one. Walked over the
-  // whole roster rather than over the biting group, since a cap
-  // that took nothing off the batch can still hand it back in the
+  // the batch, or any `cap` of them in any order, and none of
+  // those is the front of the list it was handed — which is the
+  // whole of what the rule promises, and all a caller may read
+  // off it. `ar-dispatch` is not such a caller: its claims order
+  // the rows they TAKE and not the rows they return, so the front
+  // it hands over is arbitrary among them and
+  // `src/lib/schedule.ts` says so. Walked over the whole roster
+  // rather than over the biting group, since a cap that took
+  // nothing off the batch can still hand it back in the
   // wrong order.
   it('takes those items off the front of the batch, never the back', () => {
     const strayed = TAKEN_CAPS

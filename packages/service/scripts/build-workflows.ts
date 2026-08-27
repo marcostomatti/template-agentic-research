@@ -882,11 +882,11 @@ const WORKFLOW_EXTERNAL_DIST_DIR = join(
  * inside.
  *
  * `src/lib/` is this package's pipeline half, and it holds its
- * first library, `schedule.ts`. No workflow source names it in a
- * marker yet — `ar-dispatch` is the one source `workflows/src/`
- * holds, and the Code node that writes the marker arrives later
- * in this stage — so a build today resolves no library marker
- * and never opens this directory.
+ * first library, `schedule.ts`. `ar-dispatch` names it: the
+ * `Plan Dispatch` Code node's body opens with
+ * `__INLINE:schedule.ts__`, so a build over this package's own
+ * tree opens this directory and splices that library into the
+ * artifact it writes.
  */
 const LIB_DIR = join(PACKAGE_ROOT, 'src', 'lib');
 

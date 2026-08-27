@@ -42,11 +42,14 @@
  * about `schedule.ts`: a fixture library written to be spliceable
  * would say only that the build can splice something, while the
  * question worth asking is whether the library this package ships
- * and this suite imports is one a Code node could run. Nothing else
- * asks it. `workflows/src/` holds no source writing this marker
- * until `ar-dispatch`'s Code node lands later in this stage, so
- * until then the package builds no library at all and a fixture tree
- * is the only place one is put through the shipped command.
+ * and this suite imports is one a Code node could run.
+ * `ar-dispatch`'s `Plan Dispatch` Code node writes this marker too,
+ * so the package's own build splices the same library — but that
+ * artifact is the invariants suite's subject rather than this
+ * file's, and what it holds is whatever `workflows/src/` last
+ * carried. A fixture tree is what lets a case decide what is
+ * planted, so what this file claims is about a build it drove rather
+ * than about whatever was last left on disk.
  *
  * The two claims read off the artifact are one subject read from
  * both ends, and neither stands alone. A node body that came back

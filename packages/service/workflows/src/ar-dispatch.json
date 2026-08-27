@@ -72,6 +72,16 @@
       }
     },
     {
+      "id": "plan-dispatch",
+      "name": "Plan Dispatch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "parameters": {
+        "jsCode": "__INLINE:schedule.ts__\n// Where a tick's claims become the tick's plan. Two steps, in this order: the\n// placeholders a claimless branch sends are dropped, then what is left is\n// bounded by AR_DISPATCH_BATCH_CAP. The whole module behind the marker above is\n// spliced in, so clampIntervalSeconds arrives beside capBatch and goes unused\n// here, the reschedule it states being SQL already, inside the claims.\n//\n// The drop is keyed on the ABSENT unit_kind rather than on which branch an item\n// came in on, because the Merge node in front is where a branch stops being\n// readable: past it an item is an item, and the only handle left is what a\n// claim put IN the row. A Postgres node whose statement is not a SELECT emits\n// one success item when it returns no rows, so a tick with nothing due anywhere\n// arrives here as two items, and a half-empty one as real rows plus a\n// placeholder. No placeholder carries a unit_kind and every claimed row does.\n//\n// Dropping before capping is why these are two steps rather than one filtered\n// slice. A placeholder counted toward the cap spends a slot on a row that does\n// not exist, so a tick with one branch idle would dispatch one fewer than the\n// operator set, and nothing about a short pass says why.\n//\n// This is the SECOND place the cap is applied and it is not a re-check of an\n// already-bounded batch. Each claim carries the same setting as a SQL LIMIT, so\n// a LIMIT bounds a BRANCH and this call bounds the TICK: a pass finding both\n// tables backlogged claims twice the cap and dispatches the cap. What it drops\n// was already CLAIMED, the claim having moved next_run_at before anything\n// looked at the row, so a dropped row waits a whole interval rather than being\n// taken by the tick after this one. capBatch in src/lib/schedule.ts carries the\n// rest, including why a LIMIT one edit away from being tuned off is not the\n// copy to rely on.\n//\n// The setting is quoted and parsed rather than spliced in bare. A marker\n// resolves to whatever the settings chain answered, and quoting is what keeps\n// every possible answer a valid literal: an unparseable one becomes NaN and\n// comes back as capBatch's own refusal naming the value, where a bare marker\n// would leave a ReferenceError naming nothing.\n//\n// What arrives here is NOT ordered by how overdue a row is. A claim's ORDER BY\n// picks WHICH rows it takes and never the order they come back in, and the\n// merge concatenates one branch after the other whatever either returned. So\n// the cap takes the front of an unordered stream: what it drops is arbitrary\n// among the rows claimed, not the least overdue among them.\n//\n// Arbitrary is not the same as random: the merge puts input 0 first, so every\n// topics claim precedes every export claim. A topics table backlogged past the\n// cap on its own therefore leaves no slot for an export subscription at all,\n// and those rows wait a whole interval on every tick it stays that way.\nconst CAP = Number('__ENVVAR:AR_DISPATCH_BATCH_CAP__');\nconst claimed = $input.all().map((i) => i.json).filter((r) => r && r.unit_kind != null);\nreturn capBatch(claimed, CAP).map((unit) => ({ json: unit }));"
+      }
+    },
+    {
       "id": "build-stamp",
       "name": "Build Stamp",
       "type": "n8n-nodes-base.stickyNote",
@@ -104,6 +114,13 @@
       "main": [
         [
           { "node": "Merge Claims", "type": "main", "index": 1 }
+        ]
+      ]
+    },
+    "Merge Claims": {
+      "main": [
+        [
+          { "node": "Plan Dispatch", "type": "main", "index": 0 }
         ]
       ]
     }

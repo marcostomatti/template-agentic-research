@@ -122,18 +122,17 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    *
    * Applied in two places, and they do not defend the same thing.
    * Each of the two claim statements in `ar-dispatch` carries it as
-   * a SQL `LIMIT`; the Code node downstream applies it again over
-   * the merged claims, through `capBatch` in `src/lib/schedule.ts`.
-   * Both claims have landed, and so has the rule the second
-   * application runs; the Code node itself arrives later in this
-   * phase. Note what two claims make of the first place: the `LIMIT`
-   * bounds a BRANCH, so a tick finding both tables backlogged claims
-   * twice this number and the second place is what brings it back
-   * down. The duplication is there because a `LIMIT` reads as
-   * paging. Whoever next tunes that query — adding a filter,
-   * changing the ordering, folding in a join — sees a performance
-   * knob rather than the only thing standing between one pass and
-   * the whole backlog, and it is one edit from being gone.
+   * a SQL `LIMIT`; the `Plan Dispatch` Code node behind their merge
+   * applies it again over the merged claims, through `capBatch` in
+   * `src/lib/schedule.ts`. Both places have landed. Note what two
+   * claims make of the first place: the `LIMIT` bounds a BRANCH, so
+   * a tick finding both tables backlogged claims twice this number
+   * and the second place is what brings it back down. The
+   * duplication is there because a `LIMIT` reads as paging. Whoever
+   * next tunes that query — adding a filter, changing the ordering,
+   * folding in a join — sees a performance knob rather than the only
+   * thing standing between one pass and the whole backlog, and it is
+   * one edit from being gone.
    *
    * Only the second application survives such an edit, and it is
    * worth being exact about what that leaves. The Code node bounds
@@ -838,16 +837,15 @@ const SPLICE_REFUSALS: readonly SpliceRefusal[] = [
  * empty import list and survive into the transpiled text
  * unchanged, so a library reaching for one passes here and fails
  * on the node exactly the way a surviving import would. One
- * library is spliced today, `src/lib/schedule.ts`, and only in
- * the tree `tests/build/schedule-splice.test.ts` builds: no
- * workflow source names a library until `ar-dispatch`'s Code
- * node lands. It satisfies that third rule by hand, and the
- * nearest thing to a check on it is downstream rather than here:
- * that same file runs the spliced body under `new Function`,
- * which supplies no `require` and no `module` and refuses an
- * `import.meta` at construction. Reliance on module STATE gets
- * past even that, so no complete check exists and this is still
- * not where one would go.
+ * library is spliced today, `src/lib/schedule.ts`, into
+ * `ar-dispatch`'s `Plan Dispatch` Code node and into the tree
+ * `tests/build/schedule-splice.test.ts` builds. It satisfies
+ * that third rule by hand, and the nearest thing to a check on
+ * it is downstream rather than here: that same file runs the
+ * spliced body under `new Function`, which supplies no `require`
+ * and no `module` and refuses an `import.meta` at construction.
+ * Reliance on module STATE gets past even that, so no complete
+ * check exists and this is still not where one would go.
  *
  * @param transpiled - The library with its types erased, as
  *   `transformSync` returned it.
