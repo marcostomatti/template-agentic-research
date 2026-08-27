@@ -132,12 +132,80 @@ const PHASE_3_WORKFLOW_IDS = ['ar-dispatch'] as const;
  * mistake this composition invites: every node carries both, the
  * matcher answers no for a display name, and an absence check
  * reports that the way it reports a clean tree. Measured: swapping
- * the member here reddens no case in this file today. The control
- * arriving later in this stage, which plants a send node into a
- * parsed copy and expects the sweep to name it, is what will.
+ * the member here reddens the control that splices a send node
+ * into a copy of a built workflow, and nothing else in this file
+ * — which is the whole of why that control is here, no case next
+ * door reading this composition at all.
  */
 function isSendCapableNode(node: BuiltWorkflowNode): boolean {
   return isSendCapable(node.type);
+}
+
+/**
+ * A node of a type the send roster names, for splicing into a
+ * copy of a built workflow.
+ *
+ * Two members and no more, which is the whole of what a sweep
+ * reads off it: `nodesMatching` hands a node to a predicate,
+ * {@link isSendCapableNode} reads its `type`, and the label a
+ * match comes back as is built from its `name`. A parameter here
+ * would be text the property is not about.
+ *
+ * The type is written out rather than read off `SEND_NODE_TYPES`,
+ * so the plant and the roster are two spellings and a case can
+ * ask whether they still agree — which is what one guard half
+ * beside the claim does. The entry it stands for is the
+ * provider-agnostic send node, which that roster calls the entry
+ * a workflow acquires by accident.
+ *
+ * The name is a display name and nothing the roster answers for,
+ * which is the point rather than an accident: the mistake this
+ * sweep's composition invites is reading `name` where `type`
+ * belongs, and a plant whose name were itself a send type would
+ * leave that mistake green. The other guard half holds the plant
+ * to it.
+ *
+ * Named for what the node does, as every node planted in this
+ * suite is, and named apart from the nodes `ar-dispatch` carries
+ * so a label here cannot be read as a claim about one of those.
+ */
+const SEND_PLANT: BuiltWorkflowNode = {
+  name: 'Mail The Outcome',
+  type: 'n8n-nodes-base.emailSend',
+};
+
+/**
+ * `workflow` with {@link SEND_PLANT} spliced onto the end of a
+ * copy of its parsed envelope.
+ *
+ * A copy, and never the artifact it was read out of. The
+ * envelope and the node list are both rebuilt, so nothing the
+ * splice touches is reachable from {@link BUILT_WORKFLOWS} —
+ * which is what lets one case sweep a spliced copy and the tree
+ * itself and read the second answer as evidence rather than as
+ * an ordering accident. The nodes themselves are shared, and
+ * nothing here writes to one.
+ *
+ * Both ties {@link BuiltWorkflow} documents are rebuilt with it:
+ * the copy's `nodes` IS its envelope's own `nodes` member rather
+ * than a second array, and `nodeTypes[i]` is `nodes[i].type`. A
+ * copy short of either would be a subject the surface case that
+ * opens the assertions says nothing about.
+ *
+ * Onto the end, and the position carries nothing. What says the
+ * walk reaches every node it was handed is the sweep-coverage
+ * case, so a node spliced at the front and one spliced at the
+ * back are the same input here.
+ */
+function withSendNodePlanted(workflow: BuiltWorkflow): BuiltWorkflow {
+  const nodes = [...workflow.nodes, SEND_PLANT];
+
+  return {
+    file: workflow.file,
+    parsed: { ...workflow.parsed, nodes },
+    nodes,
+    nodeTypes: nodes.map((node) => node.type),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1018,8 +1086,9 @@ describe('workflow invariants — built tree', () => {
   // refusing an empty tree and an artifact with no node before a
   // case runs. The walk is covered by the sweep-coverage case in
   // this section. The matcher is covered over planted nodes in
-  // `workflow-rosters.test.ts`, and over this tree by the control
-  // arriving later in this stage.
+  // `workflow-rosters.test.ts`, and the composition reading it is
+  // covered over this tree by the control that splices a send
+  // node into a copy of it.
   it('holds no send-capable node in any built workflow', () => {
     expect(nodesMatching(BUILT_WORKFLOWS, isSendCapableNode)).toEqual([]);
   });
@@ -1040,8 +1109,8 @@ describe('workflow invariants — built tree', () => {
   // that tie rather than working around it.
   //
   // What it says holds for any sweep built on the same walk, not
-  // only the send-free one, so the sweeps arriving later in this
-  // stage rest on it rather than each repeating it.
+  // only the send-free one, so every other sweep in this file
+  // rests on it rather than each repeating it.
   it('sweeps every node the built tree carries', () => {
     const swept: string[] = [];
 
@@ -1053,6 +1122,99 @@ describe('workflow invariants — built tree', () => {
     const carried = BUILT_WORKFLOWS.flatMap((workflow) => workflow.nodeTypes);
 
     expect(swept).toEqual(carried);
+  });
+
+  // The half neither the send-free claim nor the sweep-coverage
+  // case beside it can reach: that the composition they both read
+  // would have named an offender had the tree carried one. An
+  // absence check prints the same nothing for a clean tree as for
+  // a rule that could never have fired, and each of those two
+  // answers with a list — one over what matched, one over what
+  // was visited — so neither parts the two.
+  //
+  // The composition is the part with no other home. The matcher
+  // is driven over planted types in `workflow-rosters.test.ts`
+  // and the walk over fixture trees in `workflow-dist.test.ts`,
+  // and neither reads `isSendCapableNode`, which is where the
+  // member carrying a node's type is chosen. That read is the one
+  // mistake in the send-free rule nothing else reports: every node
+  // carries a `name` as well, the matcher answers no for a display
+  // name, and a sweep asking the wrong member prints the clean
+  // tree's own empty list.
+  //
+  // Four halves in one record, so a failure names which moved.
+  //
+  // The first splices a send node into a copy of every built
+  // workflow and expects the sweep to label each one. Held against
+  // one label per artifact rather than against a count, so a sweep
+  // naming some other node reddens as loudly as one naming
+  // nothing. The name half of each label is the plant's own and is
+  // compared with itself, so what the labels add over a count is
+  // which node was named and not that the name is right.
+  //
+  // The second is that same sweep over the artifacts themselves,
+  // run after the copies were built, and it is the revert half:
+  // the splice reached no artifact the tree holds. `nodesMatching`
+  // is a read, so what could reach one is the splice, and
+  // `withSendNodePlanted` rebuilds the envelope and the node list
+  // precisely so nothing does. It is also what parts a sweep that
+  // named the plant from one naming whatever it is handed.
+  //
+  // The last two are about the plant rather than the sweep. Its
+  // type has to be one the roster still names, or the first half
+  // is a claim about an arbitrary string; its name has to be one
+  // the roster does not, or the wrong-member read this case
+  // exists for stays green while reading as covered. Both ask
+  // the matcher directly, so a roster that lost the entry names
+  // itself here beside the claim rather than leaving a sweep
+  // that quietly stopped working as the whole report.
+  //
+  // Measured, seven legs, and only one of them reddens a second
+  // case. The composition read swapped to `name` reddens this
+  // case alone, which is the leg it exists for. A matcher
+  // recognising nothing, the roster emptied, and the plant's type
+  // moved off the roster each redden the first half and the type
+  // guard together and nothing else in the file: three causes and
+  // one report, and the guard is what says the plant stopped
+  // being a send node rather than that the sweep stopped working.
+  // A matcher recognising everything reddens the second half and
+  // the name guard, and is the one leg the send-free claim moves
+  // under too. The splice made to write into the
+  // artifact reddens the second half alone, every case ahead of
+  // this one having already run and every case behind it reading
+  // the tree for something a send node is not; and the plant's
+  // name moved onto a rostered type reddens the name guard alone.
+  // Those last two are reported by nothing else in this file,
+  // which is the whole of what the revert half and the guards
+  // are for. An empty tree is the shape the file's own head
+  // covers: the read refuses at module scope, so the run reports
+  // no case either way and the class in its log is what parts a
+  // refusal from a leg that isolated nothing.
+  //
+  // What this does not add is the roster. The plant spells one
+  // entry's type, so the eight entries and the near neighbours
+  // they must not reach stay `workflow-rosters.test.ts`'s to
+  // prove, and this case would pass over a roster of one.
+  it('names a send node spliced into a built copy and none in the tree', () => {
+    const spliced = BUILT_WORKFLOWS
+      .map((workflow) => withSendNodePlanted(workflow));
+    const control = {
+      overTheSplicedCopies: nodesMatching(spliced, isSendCapableNode),
+      overTheArtifactsThemselves: nodesMatching(
+        BUILT_WORKFLOWS,
+        isSendCapableNode,
+      ),
+      theSplicedTypeIsSendCapable: isSendCapable(SEND_PLANT.type),
+      theSplicedNameIsSendCapable: isSendCapable(SEND_PLANT.name),
+    };
+
+    expect(control).toEqual({
+      overTheSplicedCopies: BUILT_WORKFLOWS
+        .map((workflow) => `${workflow.file}:${SEND_PLANT.name}`),
+      overTheArtifactsThemselves: [],
+      theSplicedTypeIsSendCapable: true,
+      theSplicedNameIsSendCapable: false,
+    });
   });
 
   // The one-trigger rule read over built output: one schedule
@@ -1145,9 +1307,9 @@ describe('workflow invariants — built tree', () => {
   // an artifact with no node before a case runs. The walk is covered
   // by the sweep-coverage case in this section, which says as much
   // for any sweep built on it. The composition is covered by
-  // nothing, here or later in this stage: the control that plants a
-  // node into a parsed copy and expects the sweep to name it plants
-  // a send node, not a model one.
+  // nothing: the control that splices a node into a copy of a built
+  // workflow and expects the sweep to name it splices a send node,
+  // not a model one.
   it('holds no model node left free to retry', () => {
     expect(nodesMatching(BUILT_WORKFLOWS, isModelNodeWithoutRetryOff)).toEqual([]);
   });
