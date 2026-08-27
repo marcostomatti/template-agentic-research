@@ -158,8 +158,8 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * `AR_EXPORT_WORKFLOW_ID`. Neither stands in for the other.
    * `ar-dispatch`'s Code node is what reads both, pairing each kind
    * to one of them and writing the id it resolved onto the claimed
-   * unit. The node that invokes what it wrote arrives later in this
-   * phase.
+   * unit. An Execute Workflow node behind it reads that id back off
+   * the claimed unit and invokes it, one sub-execution per unit.
    *
    * An id and not a display name. The id is what an Execute Workflow
    * node addresses, what the instance stores a workflow under, and
@@ -1838,14 +1838,14 @@ export const SURVIVING_MARKER_FORMS: readonly string[] = [
  * the literal text would have failed depends entirely on the
  * parameter it landed in, and this check cannot see that. A cron
  * field takes five fields and refuses a string that is not them.
- * A workflow id names no workflow, which the dispatcher arriving
- * later in this phase routes to an error branch. A URL takes
- * `__ENVVAR:AR-BUILD-TAG__` for one more path segment, reads on
- * a canvas as a URL with an odd tail, and says nothing until a
+ * A workflow id names no workflow, which the dispatcher's Execute
+ * Workflow node routes to an error branch. A URL takes
+ * `__ENVVAR:AR-BUILD-TAG__` for one more path segment, reads on a
+ * canvas as a URL with an odd tail, and says nothing until a
  * request is finally made — on an instance, a deploy away from
- * the checkout holding the source and the one wrong character.
- * No setting in {@link ENV_DEFAULTS} supplies a URL today, which
- * is the reason this is written over the form alone rather than
+ * the checkout holding the source and the one wrong character. No
+ * setting in {@link ENV_DEFAULTS} supplies a URL today, which is
+ * the reason this is written over the form alone rather than
  * keyed to a site: the table is not closed, and the quiet site is
  * the one it has to cover.
  */
