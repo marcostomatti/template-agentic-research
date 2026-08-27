@@ -11,11 +11,13 @@
  * does the same over `export_subscriptions`, so both schedulable tables
  * are claimed and rescheduled by one statement shape. That reschedule is
  * {@link clampIntervalSeconds} written as SQL. A Merge node behind the
- * pair hands both branches' claims on as one stream, and a Code node
- * behind that drops the placeholders a claimless branch sends and puts
- * what is left through {@link capBatch}. What arrives later in this stage
- * is the rest of a tick: each bounded row routed to the workflow its kind
- * asks for, a run row opened against it, and that workflow invoked. The
+ * pair hands both branches' claims on as one stream, a Code node behind
+ * that drops the placeholders a claimless branch sends and puts what is
+ * left through {@link capBatch}, and each row that survives is routed to
+ * the workflow its kind asks for. A Postgres node behind it opens a
+ * `runs` row against every one of them. What arrives later in this stage
+ * is the step that spends all of it: the workflow a unit was routed to,
+ * invoked, and its run row closed on whichever way that went. The
  * arithmetic behind all of it lives here and nothing around it. The
  * columns it reads are the schedulable set declared in
  * `src/db/schema/scheduling.ts`, and it reads them as values handed in —

@@ -82,6 +82,26 @@
       }
     },
     {
+      "id": "open-run",
+      "name": "Open Run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [880, 0],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO runs (domain_id, scheduled_by)\nVALUES ($1::bigint, 'interval')\nRETURNING id AS run_id",
+        "options": {
+          "queryReplacement": "={{ $json.domain_id }}"
+        }
+      }
+    },
+    {
       "id": "build-stamp",
       "name": "Build Stamp",
       "type": "n8n-nodes-base.stickyNote",
@@ -121,6 +141,13 @@
       "main": [
         [
           { "node": "Plan Dispatch", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Plan Dispatch": {
+      "main": [
+        [
+          { "node": "Open Run", "type": "main", "index": 0 }
         ]
       ]
     }

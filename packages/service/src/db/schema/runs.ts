@@ -18,8 +18,10 @@
  * and `errors` is what it could not do; a reader wanting any of the
  * three has it without parsing the other two.
  *
- * Nothing writes these rows yet. `ar-dispatch` is the first workflow
- * to open one, phase 3.
+ * `ar-dispatch` opens these rows and is the first workflow to, one
+ * against each claimed row a tick goes on to dispatch. Nothing has
+ * run it: this phase ships the workflow source, and the stack that
+ * would import it arrives in phase 7.
  *
  * `llm_calls` below keeps the module's second account, at the
  * granularity of one model call rather than one pass;
