@@ -144,8 +144,8 @@ export const DIST_DIR = fileURLToPath(
  * got further than this one ever does.
  *
  * What stands behind it is one case rather than a suite. The
- * roster case arriving later in this plan holds the workflows
- * this phase expects against what the read returned, so over the
+ * roster case in `workflows.test.ts` holds the workflows this
+ * phase expects against what the read returned, so over the
  * real tree an empty read reddens there too — naming the
  * workflows it went looking for, the way the static-SQL roster
  * reports a missing constraint and never a missing migration.

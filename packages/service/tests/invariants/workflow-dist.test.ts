@@ -803,7 +803,7 @@ describe('loadBuiltWorkflows — a tree with workflows in it', () => {
 
   // The order the read hands back, which is the order every report
   // built on it prints in: `nodesMatching` lists offenders in it, and
-  // the roster case arriving later in this plan holds its expectations
+  // the roster case in `workflows.test.ts` holds its expectations
   // against it. `readdirSync` answers in directory order — stable on
   // one machine, arbitrary across them — so a read passing that through
   // would print one tree two ways on two machines, and no expectation
