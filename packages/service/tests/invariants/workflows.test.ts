@@ -1365,6 +1365,34 @@ describe('workflow invariants — built tree', () => {
   // `docs/architecture/01-invariants.md` argues what a name reaching
   // a deployed artifact costs.
   //
+  // A re-check rather than a property of its own. Every file the
+  // build reads is one the naming scan reads first: the workflow
+  // source under `workflows/src/`, the library its Code node splices
+  // out of `src/lib/`, and the settings table in
+  // `scripts/workflow-markers.ts` the markers resolve against.
+  // `naming-patterns.ts` prunes built output for that reason, a hit
+  // inside it being a duplicate of one the scan reports at the
+  // authored source. So a name this sweep finds is one
+  // `naming.test.ts` finds first, and the file to edit is the same
+  // either way.
+  //
+  // Asserted anyway, on two grounds. The first is that it is cheap:
+  // one serialization and one matcher call per artifact, over a tree
+  // already read at module scope, with no fixture, no second read
+  // off disk and no build of its own.
+  //
+  // The second is the splice. It is where a library body first
+  // reaches a workflow, and the two halves are scanned apart — the
+  // library as a module, the source as a workflow — with neither
+  // holding the other, so what a node runs is read here for the
+  // first time. It is not the library's text, either, but the
+  // transpiler's output of it: comments stripped, the `export`
+  // keyword taken off, the quotes rewritten. That body is a
+  // transform of something already scanned rather than a copy of it,
+  // and the build stamp — a short commit, so nothing a needle is
+  // shaped to match — is the only string in an artifact that came
+  // from no file at all.
+  //
   // The one check in this file whose subject is the artifact's
   // characters rather than a member, and the only one entitled to
   // be. Everywhere else the file's own header states the rule: a
