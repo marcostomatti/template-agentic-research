@@ -46,9 +46,10 @@
  * statement carries it, or why the statement beside it does. Read
  * whole, the statement that opens a run and the one that closes
  * it as succeeded each answer for a `LIMIT` that neither of them
- * runs, out of prose about the cap the claims apply upstream —
- * measured, and the whole of why the reduction drops comments
- * before it reads anything.
+ * runs: the word for a bound is the word for the keyword, and
+ * both spend a paragraph on the limits they carry. Measured, and
+ * the whole of why the reduction drops comments before it reads
+ * anything.
  *
  * What {@link sqlWords} leaves is words, so an entry can require
  * a phrase and never a SHAPE. Worth stating rather than leaving
@@ -73,12 +74,12 @@
  * arrives later in this phase.
  *
  * The entry shape, the roster, the reduction a statement is
- * judged through and the reading that holds an entry against a
- * node are what have landed. The entries — over both claim
- * statements, the reschedule folded into each, and the row the
- * dispatcher opens for a claimed unit — arrive next in this
- * stage, and the suite holding each against the node it names
- * arrives behind them.
+ * judged through, the reading that holds an entry against a node
+ * and the entries over both claim statements are what have
+ * landed. The rest — the reschedule folded into each claim, and
+ * the row the dispatcher opens for a claimed unit — arrive next
+ * in this stage, and the suite holding each entry against the
+ * node it names arrives behind them.
  */
 
 import type { BuiltWorkflow } from './workflow-dist.js';
@@ -235,9 +236,106 @@ export interface DispatchSqlRule {
  * that gives an enumerable roster its worth is over the roster
  * whole.
  *
- * The entries arrive next in this stage.
+ * None of the six is a hit for any needle in
+ * `naming-patterns.ts`, checked the way `SEND_NODE_TYPES` next
+ * door records checking its own: every member of every entry, run
+ * with the matcher first proven live against its own needles.
+ * Checking is what the case calls for, `tests/` sitting outside
+ * that file's scan roots — nothing re-runs the pass, so this
+ * sentence is the whole of what records it. It covers the six
+ * that landed and nothing past them.
+ *
+ * The six over the two claim statements have landed. The
+ * reschedule folded into each of them, and the row the dispatcher
+ * opens for a claimed unit, arrive next in this stage.
  */
-export const DISPATCH_SQL_RULES: readonly DispatchSqlRule[] = [];
+export const DISPATCH_SQL_RULES: readonly DispatchSqlRule[] = [
+  // Three properties of one statement, so three entries held to
+  // one node. Each requires the phrase a statement dropping the
+  // property would stop carrying, and each was picked with an eye
+  // on what it would still be carried by. `FOR UPDATE SKIP
+  // LOCKED` is one fragment and not two: a lock taken without the
+  // skip WAITS behind whoever holds the row instead of passing
+  // over it, and the halves required separately are carried by a
+  // statement that spells them apart. The ordering fragment names
+  // the column, an ordering over anything else being one that
+  // leaves the wrong rows for the tick behind it. The cap is the
+  // bare keyword and nothing more, the setting behind it having
+  // resolved to a number long before the suite reads the
+  // statement, so the number is no steadier a thing to require.
+  //
+  // Two of the six rest on the comment strip, and each is the
+  // property its own node argues in prose: this statement spells
+  // `FOR UPDATE SKIP LOCKED` while saying why the reschedule is
+  // folded into it, and `Claim Due Export Subscriptions` spells
+  // `LIMIT` while saying that the cap is per claim. Take either
+  // clause out and its entry does report the phrase missing, but
+  // only because the reduction drops comments before it reads a
+  // word. Measured over the built statements.
+  {
+    id: 'topic-claim-skips-locked',
+    property:
+      'Claims a due topic by locking its row and stepping past ' +
+      'one another transaction already holds, so two ticks ' +
+      'overlapping divide the backlog rather than racing for ' +
+      'the same rows.',
+    nodeName: 'Claim Due Topics',
+    requires: ['FOR UPDATE SKIP LOCKED'],
+  },
+  {
+    id: 'topic-claim-oldest-first',
+    property:
+      'Takes the topics whose due time passed longest ago, so ' +
+      'what a capped claim leaves behind is the rows that have ' +
+      'waited least.',
+    nodeName: 'Claim Due Topics',
+    requires: ['ORDER BY next_run_at'],
+  },
+  {
+    id: 'topic-claim-capped',
+    property:
+      'Takes a bounded number of topics however many came due, ' +
+      'so what a tick sets in motion is settled by the cap and ' +
+      'not by the size of the backlog.',
+    nodeName: 'Claim Due Topics',
+    requires: ['LIMIT'],
+  },
+  // The same three properties against the other schedulable
+  // table, and the sentences repeat because the properties do.
+  // Nothing here lets one entry cover both nodes: an entry names
+  // a single node, which is what keeps a failure pointing at one
+  // statement to open. What that buys is a report a shared entry
+  // could not give — a property dropped from one claim and not
+  // the other names the branch it went missing from.
+  {
+    id: 'export-claim-skips-locked',
+    property:
+      'Claims a due export subscription by locking its row and ' +
+      'stepping past one another transaction already holds, so ' +
+      'two ticks overlapping divide the backlog rather than ' +
+      'racing for the same rows.',
+    nodeName: 'Claim Due Export Subscriptions',
+    requires: ['FOR UPDATE SKIP LOCKED'],
+  },
+  {
+    id: 'export-claim-oldest-first',
+    property:
+      'Takes the subscriptions whose due time passed longest ' +
+      'ago, so what a capped claim leaves behind is the rows ' +
+      'that have waited least.',
+    nodeName: 'Claim Due Export Subscriptions',
+    requires: ['ORDER BY next_run_at'],
+  },
+  {
+    id: 'export-claim-capped',
+    property:
+      'Takes a bounded number of subscriptions however many ' +
+      'came due, so what a tick sets in motion is settled by ' +
+      'the cap and not by the size of the backlog.',
+    nodeName: 'Claim Due Export Subscriptions',
+    requires: ['LIMIT'],
+  },
+];
 
 /**
  * The words `statement` runs: its prose gone, its punctuation and
