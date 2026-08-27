@@ -163,6 +163,18 @@
       }
     },
     {
+      "id": "one-schedule-trigger",
+      "name": "One Schedule Trigger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-440, -100],
+      "parameters": {
+        "width": 400,
+        "height": 620,
+        "content": "## One Schedule Trigger\n\nThe Schedule Trigger on this canvas is the only one in the system, and this is the workflow that holds it. Nothing else in the pipeline runs on a clock: a workflow is started by this one through Invoke Target Workflow, by another workflow calling it, by an inbound request, or by hand.\n\nScheduling here is a row rather than a trigger. A `topics` or `export_subscriptions` row says how often it should run and when it is next due, this workflow claims it once `next_run_at` has passed, and invokes the workflow that does the work. So making a new thing schedulable is an INSERT rather than another trigger, here or in any other workflow.\n\nA second one would put a cadence on a canvas instead of in a row. Changing it would be a workflow edit rather than an UPDATE, its work would take no share of the batch cap a tick applies, and nothing here opens a `runs` row for a pass this workflow did not dispatch, so there is no record afterwards of it having run. A trigger acquired by accident is what turns a single mistake into a recurring one.\n\nAdding one on a canvas is lost either way. The instance is a deploy target and never a source, so the next import overwrites whatever was edited into it. The file is `workflows/src/ar-dispatch.json`, and `docs/architecture/01-invariants.md` carries the register row for this rule."
+      }
+    },
+    {
       "id": "build-stamp",
       "name": "Build Stamp",
       "type": "n8n-nodes-base.stickyNote",
