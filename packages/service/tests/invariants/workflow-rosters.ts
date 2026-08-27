@@ -67,10 +67,9 @@
  * parsed parameters are what have landed. The roster of
  * statements `ar-dispatch` must carry is a file of its own,
  * `dispatch-sql.ts`, and reading that last one is how it reaches
- * a statement at all. Of the entries it holds those statements
- * to, the ones over both claim statements and over the reschedule
- * folded into each have landed, and the run-opening entry arrives
- * next in this stage.
+ * a statement at all. Every entry it holds those statements to
+ * has landed; what is left is the suite holding each of them
+ * against the node it names.
  */
 
 import type { BuiltWorkflowNode } from './workflow-dist.js';

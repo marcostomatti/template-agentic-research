@@ -75,11 +75,11 @@
  *
  * The entry shape, the roster, the reduction a statement is
  * judged through, the reading that holds an entry against a node,
- * and the entries over both claim statements and over the
- * reschedule folded into each of them are what have landed. What
- * is left is the row the dispatcher opens for a claimed unit,
- * arriving next in this stage, and the suite holding each entry
- * against the node it names behind it.
+ * and every entry the roster carries are what have landed: over
+ * both claim statements, over the reschedule folded into each of
+ * them, and over the row the dispatcher opens for a claimed unit.
+ * What is left is the suite holding each entry against the node
+ * it names.
  */
 
 import type { BuiltWorkflow } from './workflow-dist.js';
@@ -236,19 +236,18 @@ export interface DispatchSqlRule {
  * that gives an enumerable roster its worth is over the roster
  * whole.
  *
- * None of the eight is a hit for any needle in
+ * None of the nine is a hit for any needle in
  * `naming-patterns.ts`, checked the way `SEND_NODE_TYPES` next
  * door records checking its own: every member of every entry, run
  * with the matcher first proven live against its own needles.
  * Checking is what the case calls for, `tests/` sitting outside
  * that file's scan roots — nothing re-runs the pass, so this
- * sentence is the whole of what records it. It covers the eight
+ * sentence is the whole of what records it. It covers the nine
  * that landed and nothing past them.
  *
- * The six over the two claim statements have landed, and with
- * them the two over the reschedule each of those statements folds
- * in. The row the dispatcher opens for a claimed unit arrives
- * next in this stage.
+ * All nine have landed: six over the two claim statements, two
+ * over the reschedule each of those statements folds in, and one
+ * over the row the dispatcher opens for a claimed unit.
  */
 export const DISPATCH_SQL_RULES: readonly DispatchSqlRule[] = [
   // Three properties of one statement, so three entries held to
@@ -265,17 +264,21 @@ export const DISPATCH_SQL_RULES: readonly DispatchSqlRule[] = [
   // resolved to a number long before the suite reads the
   // statement, so the number is no steadier a thing to require.
   //
-  // Two of the eight rest on the comment strip, and each is the
+  // Three of the nine rest on the comment strip, and each is a
   // property its own node argues in prose: this statement spells
   // `FOR UPDATE SKIP LOCKED` while saying why the reschedule is
-  // folded into it, and `Claim Due Export Subscriptions` spells
-  // `LIMIT` while saying that the cap is per claim. Take either
-  // clause out and its entry does report the phrase missing, but
-  // only because the reduction drops comments before it reads a
-  // word. The other six do not, the two over the bound columns
-  // among them, no statement here naming a bound anywhere but in
-  // the expression that applies it. Measured over the built
-  // statements, entry by entry.
+  // folded into it, `Claim Due Export Subscriptions` spells
+  // `LIMIT` while saying that the cap is per claim, and
+  // `Open Run` spells both the words its own entry requires while
+  // saying why a row is opened against every claimed unit. Take
+  // any of those clauses out and its entry does report the phrase
+  // missing, but only because the reduction drops comments before
+  // it reads a word, and the run-opening entry rests on the strip
+  // on both halves, so with it gone no edit to that statement
+  // would make the entry report. The other six do not, the two
+  // over the bound columns among them, no statement here naming a
+  // bound anywhere but in the expression that applies it.
+  // Measured over the built statements, entry by entry.
   {
     id: 'topic-claim-skips-locked',
     property:
@@ -383,6 +386,49 @@ export const DISPATCH_SQL_RULES: readonly DispatchSqlRule[] = [
       'what the next tick waits on.',
     nodeName: 'Claim Due Export Subscriptions',
     requires: ['min_interval_seconds', 'max_interval_seconds'],
+  },
+  // The row the dispatcher opens against each claimed unit, and
+  // the one entry here over a statement that writes rather than
+  // one that reads. Two fragments for one property, the shape the
+  // reschedule entries take: `scheduled_by` is what a statement
+  // dropping the column stops carrying, and `interval` is the
+  // literal written into it, which is what a statement keeping
+  // the column and writing a null into it stops carrying. Both
+  // are required, so either half going missing is reported and
+  // the label says which half it was.
+  //
+  // That literal is the whole of what stands in for NOT NULL. A
+  // word stream cannot say a column was written a value rather
+  // than a null, so what the entry requires instead is the value
+  // this statement writes — which is stricter than the property,
+  // `runs.scheduled_by` admitting three. Deliberate rather than
+  // convenient: this workflow reschedules in one mode and writes
+  // that one literal for every row it opens, so an entry loosened
+  // to the whole value set would widen a check nobody had decided
+  // to widen.
+  //
+  // Neither fragment says WHERE its word sat, which is the limit
+  // the reschedule entries state, met here by a pair rather than
+  // by one phrase. A column named only in a RETURNING list still
+  // carries the first fragment and is reported by the second; a
+  // statement writing the literal into some other column carries
+  // both and is reported by neither.
+  //
+  // Most of this the database refuses on its own — the column is
+  // NOT NULL and a CHECK holds it to its three values — and the
+  // entry stands in for neither. What it adds is when: nothing
+  // has run this workflow, the stack that would import it
+  // arriving in phase 7, so the refusal the database would give
+  // is one no tick has ever reached.
+  {
+    id: 'run-open-attributed',
+    property:
+      'Opens the row for a claimed unit naming the schedule that ' +
+      'fired it, so a pass running far more often than anyone ' +
+      'meant it to stays attributable once the due time it fired ' +
+      'against has been overwritten.',
+    nodeName: 'Open Run',
+    requires: ['scheduled_by', 'interval'],
   },
 ];
 
