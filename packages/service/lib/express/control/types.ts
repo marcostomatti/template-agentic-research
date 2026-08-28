@@ -90,34 +90,6 @@ export function isPausableDependency(dep: unknown): dep is PausableDependency {
 }
 
 /**
- * Optional extension interface for dependencies that support restart.
- *
- * Use {@link isRestartableDependency} to check whether a dependency implements
- * this interface before calling `stop` or `start`.
- */
-export interface RestartableDependency {
-  /** Fully stop the dependency in preparation for a restart. */
-  stop(): Promise<void>
-  /** Start the dependency after a previous {@link stop} call. */
-  start(): Promise<void>
-}
-
-/**
- * Type guard that checks whether `dep` implements {@link RestartableDependency}.
- *
- * @param dep - Any value to test.
- * @returns `true` when `dep` has callable `stop` and `start` methods.
- */
-export function isRestartableDependency(dep: unknown): dep is RestartableDependency {
-  return (
-    typeof dep === 'object' &&
-    dep !== null &&
-    typeof (dep as Record<string, unknown>)['stop'] === 'function' &&
-    typeof (dep as Record<string, unknown>)['start'] === 'function'
-  );
-}
-
-/**
  * Optional extension interface for dependencies that can provide structured
  * health detail for operator inspection.
  *
