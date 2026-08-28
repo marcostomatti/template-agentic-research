@@ -13,7 +13,10 @@ below, with the hostname row carried from the migration-hygiene rules
 in §6, the category-depth row from the schema-v2 table roster in §2,
 and the hash-dedupe row from the locked core vocabulary in §1, all
 registered here alongside the rest; phase numbers throughout refer to
-the 7-phase sequencing in that design, §7.
+the 7-phase sequencing in that design, §7. The deterministic-build row
+is drawn from outside that design, from the build rules in
+`.specs/q03-port-phase-3-build-dispatch.md` §1 — the phase spec that
+lands the build system.
 
 ## The register
 
@@ -23,6 +26,7 @@ the 7-phase sequencing in that design, §7.
 | A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
 | Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 6 | Unexercised |
 | Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
+| Building one tree twice writes byte-identical artifacts, and the git build stamp is the one value permitted to move with the checkout | `tests/build/build-workflows.test.ts`, spawning `scripts/build-workflows.ts` twice over a fixture source tree and holding the two output directories against each other | 3 | Implemented |
 | Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
 | A category is a root or the child of a root, and nothing deeper | A trigger in the hand-written migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts`, with the opt-in `tests/live/schema.live.test.ts` watching a database refuse the write | 2 | Implemented |
 | Every document carries a hash, and no two carry the same one | The NOT NULL and UNIQUE pair on `documents.hash` in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
