@@ -181,10 +181,19 @@ describe('zodToValidationError (characterization over a real failing parse)', ()
   it('emits the exact field/code/message triple for each issue', () => {
     const result = zodToValidationError(failedFixtureParse());
 
-    // Measured against zod 3.25.76. The message strings are zod's, copied
+    // Measured against zod 4.5.1. The message strings are zod's, copied
     // verbatim into the response body, so a zod upgrade that rewords them
     // turns THIS case red and nothing else in the suite — which is the
     // whole point of the case. Re-measure rather than reword by hand.
+    //
+    // The zod 3-to-4 bump is that split paying off, and the reading is in
+    // the failure list rather than in these strings: this was the only one
+    // of the file's 16 cases to go red, so the major reworded the issues
+    // ('Required' and 'Number must be greater than or equal to 18' became
+    // the two below) and moved nothing else. Both mechanism cases beneath
+    // stayed green, which is what says the issue SHAPE and the verbatim
+    // copy path survived. Had they gone red too, new strings here would
+    // have been the wrong fix.
     //
     // The array order is asserted deliberately: zod reports issues in
     // schema-declaration order, so a reordering is a real finding about
@@ -193,12 +202,12 @@ describe('zodToValidationError (characterization over a real failing parse)', ()
       {
         field: 'user.email',
         code: ZodIssueCode.invalid_type,
-        message: 'Required',
+        message: 'Invalid input: expected string, received undefined',
       },
       {
         field: 'age',
         code: ZodIssueCode.too_small,
-        message: 'Number must be greater than or equal to 18',
+        message: 'Too small: expected number to be >=18',
       },
     ]);
   });
