@@ -32,8 +32,8 @@
  * artifacts and `audit-workflows.ts` reads back what an instance is
  * holding, both over the API; `activate-workflows.sh` is the one that
  * does not, activation going through the n8n CLI against a local
- * container rather than over HTTP; the steps that reach an instance
- * arrive later in this stage. `deploy` lists what an instance holds
+ * container rather than over HTTP, and its steps that reach an
+ * instance have landed. `deploy` lists what an instance holds
  * and creates or replaces each workflow against it. The audit lists
  * the same instance to judge it, and then, only where it was asked to
  * and told twice, disarms or removes what nothing in this repository

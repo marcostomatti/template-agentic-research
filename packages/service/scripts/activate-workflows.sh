@@ -16,13 +16,13 @@
 # (`activatableTriggers` in `n8n-workflow.ts`), which is what keeps
 # what is left here a sequence.
 #
-# What has landed is the preamble, the plan the rest of the run works
-# from, and the precondition the steps behind it stand on: the shell
-# settings, the package root every path in this file is written
-# against, the container to enter, the read of the built tree that
-# says which workflows an activation would arm, and the refusal for a
-# container that is not running. The steps that drive the CLI against
-# an instance arrive later in this stage.
+# The sequence is the shell settings, the package root every path in
+# this file is written against, the container to enter, the read of
+# the built tree that says which workflows an activation would arm,
+# the refusal for a container that is not running, the history row
+# each of those workflows needs before a publish has anything to
+# publish against, and the publish that arms them. Each step carries
+# its own reasoning where it stands.
 
 # `-e` so a failing step stops the run rather than letting the one
 # after it work on whatever the failure left behind, `-u` so a
@@ -204,13 +204,12 @@ done <<<"$PLAN"
   exit 1
 }
 
-# Refuse a container that is not up. The steps that enter it arrive
-# later in this stage and this stands in front of them, because
-# letting them run is a worse report rather than only a later one: a
-# `docker exec` against a stopped container fails once per command
-# rather than once, and measured, what it fails with names the
-# container by its sixty-four character id and says nothing an
-# operator can act on.
+# Refuse a container that is not up. The two steps behind this one
+# enter it and this stands in front of both, because letting them run
+# is a worse report rather than only a later one: a `docker exec`
+# against a stopped container fails once per command rather than
+# once, and measured, what it fails with names the container by its
+# sixty-four character id and says nothing an operator can act on.
 #
 # After the plan read rather than in front of it. That read ANSWERS
 # with the value the rest of the run works from, so it is the first
@@ -256,3 +255,163 @@ RUNNING="$(docker inspect -f '{{.State.Running}}' "$AR_N8N_CONTAINER" 2>/dev/nul
   echo "          bring the stack up and try again: scripts/bootstrap.sh" >&2
   exit 1
 }
+
+# Give every armed workflow a `workflow_history` row to publish
+# against. The publish behind this reads that pair back:
+# `WorkflowRepository.publishVersion` looks the workflow's own
+# `versionId` up in `workflow_history` and refuses where nothing is
+# there, naming the version it wanted and the workflow it wanted it
+# for. So a row missing is not a smaller problem than a workflow
+# missing — the step behind this one cannot run at all.
+#
+# What this repairs on n8n 2.15.1 is narrower than the origin's
+# version of it and worth spelling out, because a reader who finds
+# the origin otherwise reads the difference as a mistake. There it
+# was the ordinary path: 2.3.0's `import:workflow` wrote no history
+# row, so every activation needed one seeded first. Measured on
+# 2.15.1, the import writes one itself, in the same transaction that
+# upserts the entity and under a `versionId` it mints there rather
+# than the one the file carries — so on that path a publish would
+# succeed with this step absent.
+#
+# The route that still leaves a workflow without one is the API.
+# `WorkflowHistoryService.saveVersion` catches its own insert
+# failing, logs it and returns, so a create or an update over the
+# public REST API can store a workflow and leave nothing behind it
+# with nothing raised — and `deploy-external.ts` reaches an instance
+# that way, which nothing stops an operator pointing at the one this
+# arms. Whoever does that and comes here meets the publish refusal
+# instead, which names a version rather than a cause. Running this in
+# front of it is what makes that case a repair rather than a puzzle.
+#
+# An upsert on the `versionId` primary key, and never an insert that
+# ignores a conflict. On the ordinary path the row is already there,
+# so a plain insert would refuse every rerun and an ignoring one
+# would pass over a row without ever reading it. Writing the entity's
+# own nodes back leaves the version an activation will run and what
+# the entity holds the same text, which is the property worth having:
+# measured, an active workflow does not run the nodes in
+# `workflow_entity` at all — n8n's active workflow manager reads
+# `nodes` and `connections` off `dbWorkflow.activeVersion`, the
+# history row `activeVersionId` points at. It also keeps that foreign
+# key, which references `workflow_history(versionId)`, pointing at a
+# row that exists — which is why setting `active` and
+# `activeVersionId` by hand is not the shorter route it looks.
+#
+# No `name` in the write, where the origin has one. On this version
+# that column is the version's own label rather than the workflow's
+# display name — the public API's activate takes a name and a
+# description for the version it publishes — and an import leaves it
+# null for a version nobody labelled. Copying the display name into
+# it, measured, relabels the version an operator sees.
+#
+# An id the import never wrote is reported and passed over rather
+# than ending the run on it, so the report names every one of them
+# rather than the first. Nothing is swallowed by that: publishing
+# refuses a workflow it cannot find, so the run still ends on the
+# step behind this one, with the whole list already printed above the
+# refusal.
+#
+# The database file is n8n's own default rather than a name this
+# project chose, and measured, it is where the published image puts
+# it. `@n8n/config` 2.14.0, which n8n 2.15.1 pins: `DB_TYPE` defaults
+# to sqlite, `DB_SQLITE_DATABASE` names the file and defaults to
+# `database.sqlite`, and that resolves against `.n8n` under
+# `N8N_USER_FOLDER` or the home directory, which is `/home/node`
+# there. Those three settings are what move it, so a compose file in
+# phase 7 choosing any of them owes this step an edit. The refusal in front of the open is what
+# says so on the day: measured, `node:sqlite` CREATES a database at a
+# path holding none, so opening one blind leaves an empty file behind
+# and fails a statement later on a table that was never there.
+#
+# A quoted heredoc rather than a single-quoted argument, so unlike
+# the plan read above this snippet writes its strings the way the
+# TypeScript beside it does. The ids reach it through the environment
+# because a `node` reading its program from stdin has no argument
+# list to read them from. `node:sqlite` ships with the container's
+# own Node and needs no driver installed, `--no-warnings` is for the
+# notice it prints about being experimental, and the busy timeout is
+# for the running n8n, which holds the same database open.
+echo "==> seeding workflow_history for: ${ARMED_IDS[*]}"
+docker exec -i -e AR_IDS="${ARMED_IDS[*]}" "$AR_N8N_CONTAINER" node --no-warnings <<'NODE'
+const { statSync } = require('node:fs');
+const { DatabaseSync } = require('node:sqlite');
+
+const file = '/home/node/.n8n/database.sqlite';
+if (statSync(file, { throwIfNoEntry: false }) === undefined) {
+  console.error('activate: no n8n database at ' + file);
+  console.error('          an instance that moved it needs this step edited');
+  process.exit(1);
+}
+
+const db = new DatabaseSync(file);
+db.exec('PRAGMA busy_timeout = 8000;');
+
+const entity = db.prepare(
+  'SELECT id, versionId, nodes, connections FROM workflow_entity WHERE id = ?',
+);
+const active = db.prepare('SELECT nodes FROM workflow_history WHERE versionId = ?');
+const seed = db.prepare(
+  'INSERT INTO workflow_history ' +
+  '(versionId, workflowId, authors, nodes, connections, autosaved) ' +
+  'VALUES (?, ?, ?, ?, ?, 0) ' +
+  'ON CONFLICT(versionId) DO UPDATE SET nodes = excluded.nodes, ' +
+  'connections = excluded.connections, ' +
+  "updatedAt = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')",
+);
+
+for (const id of (process.env.AR_IDS || '').split(/\s+/).filter(Boolean)) {
+  const workflow = entity.get(id);
+  if (!workflow) {
+    console.log('  not imported, nothing to seed: ' + id);
+    continue;
+  }
+  const before = active.get(workflow.versionId);
+  seed.run(
+    workflow.versionId,
+    workflow.id,
+    'activate-workflows.sh',
+    workflow.nodes,
+    workflow.connections,
+  );
+  const state = !before
+    ? 'seeded'
+    : before.nodes === workflow.nodes
+      ? 'already current'
+      : 'refreshed';
+  console.log('  ' + state + ': ' + id);
+}
+
+db.close();
+NODE
+
+# Publish each armed workflow, which is what an activation is on this
+# version. `update:workflow --active=true` is the older spelling and
+# still runs, but measured on 2.15.1 it warns that it is deprecated,
+# points at this command, and calls the same publish underneath, so
+# there is nothing behind it left to prefer.
+#
+# It runs after every import and not only the first. Measured, an
+# import unarms what it lands on: it sets `active` false, clears
+# `activeVersionId`, and logs that the workflow was deactivated and
+# is to be activated later. So a second import over an armed instance
+# leaves it holding the new build and running none of it until this
+# step goes over it again, which is what makes the command worth
+# rerunning rather than only worth running once.
+#
+# No output filter and no fallback over the loop, where the origin
+# carries both. `-e` ends the run on the first workflow that will not
+# publish, which is the report worth having: publishing part of a set
+# and saying nothing about the rest leaves an operator believing a
+# half-armed instance is armed. What that costs is a partial state,
+# and it is one the run named on its way out and a rerun repairs.
+#
+# Publishing is not arming. It sets the active version, and the
+# triggers register when the container comes back up — measured, the
+# command closes by asking for a restart where n8n is already
+# running. That line is the shipped command's own and is printed once
+# per workflow, which is why nothing here repeats it.
+echo "==> publishing"
+for id in "${ARMED_IDS[@]}"; do
+  docker exec "$AR_N8N_CONTAINER" n8n publish:workflow --id="$id"
+done
