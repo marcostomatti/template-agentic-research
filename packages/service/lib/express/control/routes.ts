@@ -37,6 +37,20 @@ const nameParamSchema = z.string().min(1);
  * off the request path and matches `startTime`, the other value this
  * factory fixes for the router's lifetime.
  *
+ * The four `try`/`catch` wrappers below — on `pause`, `resume`, `restart`
+ * and `clients/:name/reset` — are kept deliberately under Express 5,
+ * not left over from Express 4. Express 5 awaits an async handler's
+ * returned promise, so deleting them would forward the rejection to the
+ * `errorHandler` that `createService` registers last, and that handler
+ * answers a plain `Error` with the generic
+ * `{ code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' }`.
+ * These routes answer `{ error: errorMessage(err) }` instead, so the
+ * operator driving the control plane reads which dependency call failed
+ * and why. The status would move too: the shared handler gives an
+ * `AppError` its own `statusCode`, so a dependency whose `stop()` throws
+ * `ConflictError` would answer 409 where these routes pin 500 for any
+ * failure.
+ *
  * @param deps - Array of managed `Dependency` instances registered with the service.
  * @param clients - Array of managed HTTP client `Dependency` instances.
  * @param config - Control plane configuration (`enabled`, `secret`,
