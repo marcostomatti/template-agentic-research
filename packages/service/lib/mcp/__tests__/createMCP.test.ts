@@ -53,6 +53,11 @@ function tick(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, 0));
 }
 
+// One element of MCPConfig.clients, derived from createMCP's own
+// signature: clients is optional, so the array type has to be unwrapped
+// with NonNullable before it can be indexed.
+type MCPClient = NonNullable<Parameters<typeof createMCP>[0]['clients']>[number];
+
 describe('createMCP', () => {
   // Typed explicitly: a bare vi.fn() widens to Procedure | Constructable,
   // which matches no MCPConfig.setup call signature.
@@ -139,7 +144,7 @@ describe('createMCP', () => {
   });
 
   it('clients are accessible in MCPContext', async () => {
-    const mockClient = { name: 'test-client' } as Parameters<typeof createMCP>[0]['clients'][number];
+    const mockClient = { name: 'test-client' } as MCPClient;
 
     createMCP(makeConfig({ clients: [mockClient] }));
     await tick();
