@@ -82,8 +82,8 @@ Two ways to combine them:
   backend; the real strategy is specced in
   [specs/auth-basic-strategy.md](specs/auth-basic-strategy.md).
 - **Operator control plane** — with `control` configured, `/_control` exposes
-  status/pause/resume/restart/stop behind a shared token (see
-  `lib/express/control/`; hardening notes in
+  status/pause/resume/restart behind a shared token, and `stop` as well when
+  `control.allowStop` opts in (see `lib/express/control/`; hardening notes in
   [specs/control-plane-hardening.md](specs/control-plane-hardening.md)).
 
 ## Testing: isolated vs live

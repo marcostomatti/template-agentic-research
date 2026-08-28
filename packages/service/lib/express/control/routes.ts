@@ -29,11 +29,14 @@ const nameParamSchema = z.string().min(1);
  *
  * All routes are gated first by `controlEnabled` (returns 404 when the control
  * plane is disabled) then by `controlAuth` (returns 403 when the
- * `x-control-token` header does not match `config.secret`).
+ * `x-control-token` header does not match `config.secret`). `POST /stop`
+ * carries a third gate of its own: it is served only when `config.allowStop`
+ * is `true`, and answers 404 otherwise.
  *
  * @param deps - Array of managed `Dependency` instances registered with the service.
  * @param clients - Array of managed HTTP client `Dependency` instances.
- * @param config - Control plane configuration (`enabled`, `secret`).
+ * @param config - Control plane configuration (`enabled`, `secret`,
+ *   `allowStop`).
  * @param serviceId - Unique identifier for this service, included in the status response.
  * @returns A configured Express `Router` that must be mounted at `/_control` in the
  *   host application.
@@ -264,12 +267,30 @@ export function createControlRouter(
    * triggers the same graceful shutdown path as SIGTERM. The response is sent
    * before the signal is emitted so the caller receives confirmation.
    *
-   * **Side effects:** emits `SIGTERM` to the current process via `setImmediate`,
-   * activating any registered `registerShutdown` handlers.
+   * Served only when `config.allowStop` opts in. Enabling the control plane
+   * is not enough — this is the one route that ends the process, so a config
+   * that omits the field keeps every other control route and loses this one.
    *
-   * - `200` with `{ ok: true }` — always, before shutdown begins.
+   * A refusal answers 404 and not 403, the same answer the whole plane gives
+   * while `enabled` is `false`: 403 would confirm to a caller already holding
+   * a valid token that a shutdown endpoint exists here and is merely switched
+   * off, where 404 discloses nothing. The check sits inside the handler
+   * rather than skipping the `router.post` registration, so the refusal
+   * carries this router's own body rather than whatever the host application
+   * answers for an unmatched path.
+   *
+   * **Side effects:** emits `SIGTERM` to the current process via `setImmediate`,
+   * activating any registered `registerShutdown` handlers — only once
+   * `allowStop` has opted in.
+   *
+   * - `404` with `{ error: 'not found' }` when `allowStop` is absent or `false`.
+   * - `200` with `{ ok: true }` otherwise, before shutdown begins.
    */
   router.post('/stop', (_req, res) => {
+    if (!config.allowStop) {
+      res.status(404).json({ error: 'not found' });
+      return;
+    }
     res.status(200).json({ ok: true });
     setImmediate(() => {
       process.kill(process.pid, 'SIGTERM');
