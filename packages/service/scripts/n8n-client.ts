@@ -32,16 +32,17 @@
  * artifacts and `audit-workflows.ts` reads back what an instance is
  * holding, both over the API; `activate-workflows.sh` is the one that
  * does not, activation going through the n8n CLI against a local
- * container rather than over HTTP, and it arrives later in this
- * stage. `deploy` lists what an instance holds and creates or
- * replaces each workflow against it. The audit lists the same
- * instance to judge it, and then, only where it was asked to and told
- * twice, disarms or removes what nothing in this repository accounts
- * for. {@link activateWorkflow} is the one call here still waiting
- * for a caller, arming being the CLI path's to do on a local instance
- * and nothing either of those two does. So `n8n-workflow.ts` answers
- * for three commands where this module serves two, and what parts
- * them is a transport rather than an omission. The live seam under
+ * container rather than over HTTP; its preamble has landed and the
+ * steps that reach an instance arrive later in this stage. `deploy`
+ * lists what an instance holds and creates or replaces each workflow
+ * against it. The audit lists the same instance to judge it, and
+ * then, only where it was asked to and told twice, disarms or removes
+ * what nothing in this repository accounts for.
+ * {@link activateWorkflow} is the one call here still waiting for a
+ * caller, arming being the CLI path's to do on a local instance and
+ * nothing either of those two does. So `n8n-workflow.ts` answers for
+ * three commands where this module serves two, and what parts them is
+ * a transport rather than an omission. The live seam under
  * `tests/live/` arrives with them and is no command at all.
  *
  * {@link listWorkflows}, {@link createWorkflow},
