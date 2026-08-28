@@ -24,6 +24,18 @@ export interface ControlConfig {
    * exists here.
    */
   allowStop?: boolean
+  /**
+   * Service version reported in the `GET /_control/status` payload.
+   * When supplied it is used as-is and the `package.json` read is
+   * skipped entirely.
+   *
+   * Omitting it leaves the version resolved by reading the service's
+   * `package.json`, which is what a normal checkout wants. Supply it
+   * for a bundled deployment, where the module is inlined into an
+   * artifact carrying no `package.json` to read and the lookup would
+   * otherwise report `'unknown'`.
+   */
+  version?: string
 }
 
 /**
