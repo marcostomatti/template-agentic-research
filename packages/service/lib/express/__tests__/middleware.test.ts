@@ -12,9 +12,9 @@ process.env.NODE_ENV = 'test';
 // ---------------------------------------------------------------------------
 // Response headers installed by applyMiddleware
 //
-// Every value below was MEASURED against helmet 7.2.0 and
-// express-rate-limit 7.5.1 over the stack applyMiddleware actually builds —
-// none of it is recalled from either library's README, and neither library
+// Every value below was MEASURED over the stack applyMiddleware actually
+// builds, against the dependency version named on its own group — none of
+// it is recalled from either library's README, and neither library
 // documents its full default set in one place. A major of either is expected
 // to move these strings, which is the whole point of pinning them: the header
 // set is this service's security posture, and a silent change to it is the
@@ -27,11 +27,21 @@ process.env.NODE_ENV = 'test';
 // ---------------------------------------------------------------------------
 
 /**
- * Every header `helmet()` sets with no options, measured.
+ * Every header `helmet()` sets with no options, measured against helmet
+ * 8.3.0.
  *
- * Two absences are as load-bearing as the entries: helmet 7 leaves
- * `Cross-Origin-Embedder-Policy` off by default, and it REMOVES Express's
- * `X-Powered-By` rather than setting anything — see the dedicated case below.
+ * The 7.2.0 to 8.3.0 bump moved exactly ONE entry in here:
+ * `strict-transport-security` went from `max-age=15552000` (180 days) to
+ * `max-age=31536000` (365 days). No header was added, none was dropped and
+ * no other value was reworded — which is what this case going red while the
+ * completeness case below stayed green already reported, and what a direct
+ * diff of the two majors' middleware over a recording response confirmed
+ * independently.
+ *
+ * Two absences are as load-bearing as the entries: helmet still leaves
+ * `Cross-Origin-Embedder-Policy` off by default under 8, and it REMOVES
+ * Express's `X-Powered-By` rather than setting anything — see the dedicated
+ * case below.
  */
 const HELMET_DEFAULT_HEADERS: Readonly<Record<string, string>> = {
   'content-security-policy': 'default-src \'self\';base-uri \'self\';'
@@ -45,7 +55,7 @@ const HELMET_DEFAULT_HEADERS: Readonly<Record<string, string>> = {
   'cross-origin-resource-policy': 'same-origin',
   'origin-agent-cluster': '?1',
   'referrer-policy': 'no-referrer',
-  'strict-transport-security': 'max-age=15552000; includeSubDomains',
+  'strict-transport-security': 'max-age=31536000; includeSubDomains',
   'x-content-type-options': 'nosniff',
   'x-dns-prefetch-control': 'off',
   'x-download-options': 'noopen',
@@ -57,7 +67,8 @@ const HELMET_DEFAULT_HEADERS: Readonly<Record<string, string>> = {
 /**
  * The rate-limit headers produced by the FALLBACK literal in
  * `applyMiddleware` — `{ max: 100, windowMs: 60_000, standardHeaders: true,
- * legacyHeaders: false }` — measured on a request to a fresh service.
+ * legacyHeaders: false }` — measured on a request to a fresh service,
+ * against express-rate-limit 7.5.1.
  *
  * Names are spelled out one at a time on purpose. A `startsWith('ratelimit')`
  * assertion would keep passing across a draft change that renamed every one
@@ -155,7 +166,8 @@ describe('applyMiddleware — response headers on a built service', () => {
     // Expected to go RED at a helmet major, and to be re-measured rather
     // than hand-edited when it does. Red here with the completeness case
     // green means helmet reworded a value; both red means it added or
-    // dropped a header.
+    // dropped a header. The 7 -> 8 bump produced the first reading, on the
+    // HSTS max-age alone — see HELMET_DEFAULT_HEADERS above.
     for (const [name, value] of Object.entries(HELMET_DEFAULT_HEADERS)) {
       expect(res.headers[name], `helmet header ${name}`).toBe(value);
     }
@@ -202,7 +214,7 @@ describe('applyMiddleware — response headers on a built service', () => {
     // a header rather than setting one, so the completeness case above
     // cannot see it — an absent name is absent either way. This one should
     // survive a helmet major untouched; if it does not, helmet stopped
-    // doing something this service relies on it for.
+    // doing something this service relies on it for. It survived 7 -> 8.
     expect(res.headers).not.toHaveProperty('x-powered-by');
   });
 
