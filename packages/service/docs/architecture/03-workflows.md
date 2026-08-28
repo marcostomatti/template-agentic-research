@@ -205,6 +205,7 @@ hypothetical: with the strip removed, `Open Run` and
 clause an INSERT and an UPDATE against one id cannot carry at all —
 out of the paragraphs each of them writes about the honest limits it
 has.
+
 ## The build
 
 `workflows/src/<id>.json` is not what an instance runs.
@@ -371,3 +372,110 @@ more path segment and says nothing until a request is finally made.
 No setting in `ENV_DEFAULTS` supplies a URL today, which is why the
 check is keyed to the form rather than to a site: the table is not
 closed, and the quiet site is the one it has to cover.
+
+### Two runs over one tree write the same bytes
+
+One source text and one settings chain produce one artifact, byte for
+byte. A default build reads four things and the tree it runs in
+decides all four: the sources under `workflows/src/`, the libraries
+their `__INLINE:` markers name under `src/lib/`, `ENV_DEFAULTS` in
+this package's own source, and one call to git. Nothing reads a clock
+and nothing is randomized, so what could differ between two such
+builds is whatever differs between the trees they ran in. Even the
+layout is the build's rather than the source's: it serializes at a
+fixed indentation with a trailing newline instead of copying whatever
+a hand-written file was spaced at, so two sources formatted
+differently come back formatted alike.
+
+Determinism has no tripwire of the usual kind here. Where generated
+output is committed, a build that stopped being deterministic surfaces
+as a rebuild that changes a file under review. Both directories a
+build writes to are gitignored, so there is no committed artifact to
+rebuild and diff against, and an artifact is a deploy input rather
+than a diff — a comparison between two builds of one tree is the whole
+of what says this build is deterministic.
+
+Two such comparisons are available and they cover different things.
+`tests/build/build-workflows.test.ts` spawns the shipped command twice
+and holds the two output directories against each other byte for byte.
+It builds a fixture tree rather than this package's own because what
+this package holds moves with the plan, so a case driving it would
+assert how far the work had got rather than what a build does. What
+that leaves out is the sources this repository ships: a second
+`bun run build:workflows` over this package's own tree, compared
+against the first, is the only comparison that reaches `ar-dispatch`
+and the library its `__INLINE:` marker splices — and nothing automates
+it.
+
+### The stamp is the one value permitted to move with the checkout
+
+That git call is the fourth input and the only one that is not a file
+in the tree. `AR_BUILD_TAG` reaches an artifact the way
+every setting does, through a marker, and is answered unlike any
+other: `scripts/build-workflows.ts` asks git for the short commit of
+the checkout it is running in and supplies that in the defaults
+table's own position in the chain, so it resolves the way every other
+setting does and an operator override in a deploy build still wins.
+Three answers: the short commit, for a clean working tree; that commit
+with `-dirty` behind it, for a tree carrying uncommitted work or one
+git could not be asked about; and `dev`, for a build with no commit to
+name at all. `dev` is also the value `ENV_DEFAULTS` carries for that
+setting, so an artifact nothing stamped and an artifact stamped by a
+build with no commit read alike.
+
+Two limits, and both are easy to read past. The stamp is keyed to the
+state of the repository rather than to what the build read:
+`git status --porcelain` reports the working tree entire whatever
+directory it runs from and counts untracked files, so an edit to a
+file no build ever opens flips the suffix. Identical within one tree
+means the tree standing still, not the sources. And `-dirty` is one
+text for every uncommitted state, so two artifacts built from two
+different dirty trees at one commit carry the same stamp while
+differing in content — it says an artifact is unaccounted for and
+never says what is in it, which is why `scripts/deploy-external.ts`
+refuses a dirty tree outright rather than trusting the label.
+
+That the stamp is the ONLY value permitted to move is a claim the same
+suite makes: the fixture roster is built a third time with a stamp
+handed in, and every artifact whose source names some other setting
+comes back byte-identical to what the run handed nothing wrote.
+
+The obvious stamp would be the wrong one, and the comparison above is
+why. A build timestamp or a generated id reads just as usefully on a
+canvas and moves on every run, and with no committed artifact to diff
+against, two builds of one tree agreeing is the only evidence there is
+— a per-run stamp would leave that comparison with nothing to assert
+while looking, to whoever reads it, exactly like this one.
+
+### A canvas reads the stamp for which build, not what that build holds
+
+A sticky note is addressed to a canvas rather than to a file, and the
+stamp is what a reader standing there has instead of a checkout.
+`ar-dispatch` carries it on a `Build Stamp` note; somebody standing in
+front of that note can open none of the files this document argues
+from, and what they have is a workflow behaving one way and a question
+about which build they are looking at.
+
+The stamp answers that question and no other. One that does not match
+the commit that was deployed means the instance is running an older
+import — an instance is a deploy target rather than a source, and the
+label an artifact was written with is the label it arrives carrying.
+`dev` and `-dirty` are the two readings likeliest to be taken for an
+older import and neither is one: the first is a build with no commit
+to name and the second a tree with uncommitted work in it, and an
+instance showing either is showing the build somebody sent it.
+
+What it does not answer is what the artifact holds. A commit locates
+an artifact without describing it, and a `-dirty` suffix says only
+that the commit in front of it is not the whole account — a canvas
+reading one has been told to go and look, not told what to look for.
+
+The stamp is also the one thing in a sticky note that cannot go stale.
+Everything else such a note spells — a node name, a workflow id, a
+path — is prose nothing holds to the thing it names, while the stamp
+is a marker: the build resolves it, and an artifact still carrying it
+unresolved is refused before it is written. What that costs is a build
+that never refuses over the stamp itself. `gitBuildTag` answers for
+any root it is handed and throws for none, because a build that would
+not write an artifact when git could not be asked would have stopped a
+deploy over a note on a canvas.
