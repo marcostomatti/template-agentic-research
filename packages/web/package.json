@@ -11,7 +11,8 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src tests *.ts *.mjs",
     "lint:fix": "eslint src tests *.ts *.mjs --fix",
-    "test": "vitest run"
+    "pretest": "bun run --filter '@ar/ui' build",
+    "test": "vitest run && playwright test"
   },
   "dependencies": {
     "@ar/ui": "workspace:*",

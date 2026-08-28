@@ -232,20 +232,34 @@ red package never masks another and a single run gives the whole picture.
   every line, because an unaccounted line IS the tool's own output, and that
   is the only reading that makes "prints nothing" a measurement.
 - Neither fan-out declares a lifecycle hook, so one exit-zero line per
-  package is exact for both. `test:all` is the exception: `pretest` gives
-  `@ar/service` and `@ar/ui` two prefixed lines apiece.
+  package is exact for both. `test:all` is the exception, and all three
+  packages declare a `pretest` there: `@ar/service` and `@ar/ui` give two
+  exit-zero lines apiece, `@ar/web` gives FOUR. Its pretest is itself a
+  filtered run (`bun run --filter '@ar/ui' build`, so the app's suite is
+  self-contained whatever order the fan-out reaches the packages in), and
+  the nested filter prints `@ar/ui build:` and `@ar/ui postbuild:` exit
+  lines of its own inside `@ar/web pretest:`. Read four there as the
+  healthy count, not as a package that ran twice — and note the doubled
+  prefix is what keeps those lines classifiable, since they are `@ar/ui`'s
+  build output sitting under `@ar/web`'s name.
 - `test:all` prints the root vitest summary, then one line per package.
   All three packages now run real vitest suites — `@ar/web`'s placeholder
   `echo` is gone, so its code-0 line finally means a suite RAN, and
   `vitest run` exits 1 on zero matching files, so no suite can quietly
-  shrink to a vacuous pass. What that line still does not carry is app
-  coverage: `@ar/web`'s include is `src/**/*.test.ts` under the node
-  environment, so it reads colocated tests over PURE modules only — never
-  a `.tsx` component, and never the `packages/web/tests/` tree its README
-  reserves for Playwright. Read its `Tests N passed` count, not just the
-  exit line.
-- Do NOT grep a `test:all` capture for `failed`/`FAIL`. A fully green run is
-  ~1900 lines and `@ar/service` writes those words deliberately: its
+  shrink to a vacuous pass. `@ar/web` now chains TWO runners behind its
+  single line (`vitest run && playwright test`), so that line covers two
+  summaries and the `&&` short-circuits: a red vitest means Playwright
+  never ran at all, and its absence from the capture is not evidence it
+  passed. The split is by what each runner can reach — vitest's include is
+  `src/**/*.test.ts` under the node environment, so it reads colocated
+  tests over PURE modules only, and every `.tsx` component plus the
+  assembled app falls to the specs under `packages/web/tests/e2e/`. Read
+  both summaries, not just the exit line.
+- Do NOT grep a `test:all` capture for `failed`/`FAIL`. A fully green run
+  is ~3700 lines — over half of it the `@ar/ui` library build, printed
+  TWICE now that `@ar/web`'s pretest builds it as well, and elided to the
+  last ten lines per script only when the fan-out has a TTY — and
+  `@ar/service` writes those words deliberately: its
   vendored framework half exercises its own error paths through structured
   pino logs (`dependency failed to start`, a request record carrying a 500,
   `dependency stop failed`), so the natural grep reports three regressions
@@ -272,8 +286,9 @@ red package never masks another and a single run gives the whole picture.
   (measured 1906/67 and later 1999/1800/75 in one dependency-bump plan).
   Re-derive the buckets per run and read the OTHER bucket, which is where an
   unexplained line would sit. The `Exited with code 0` set is exactly
-  FIVE and worth NAMING rather than counting — `@ar/service pretest`,
-  `@ar/ui pretest`, `@ar/ui test`, `@ar/web test`, `@ar/service test`.
+  SIX and worth NAMING rather than counting — `@ar/service pretest`,
+  `@ar/ui pretest`, `@ar/web pretest`, `@ar/ui test`, `@ar/web test`,
+  `@ar/service test`.
 - Of those buckets exactly one is assertable by MEMBERSHIP instead of by a
   drifting count: the OTHER (unprefixed) bucket enumerates completely as the
   two `$` echoes, the root vitest run's own nine-line block (banner, two
