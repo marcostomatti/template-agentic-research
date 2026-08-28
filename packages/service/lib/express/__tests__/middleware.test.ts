@@ -66,9 +66,9 @@ const HELMET_DEFAULT_HEADERS: Readonly<Record<string, string>> = {
 
 /**
  * The rate-limit headers produced by the FALLBACK literal in
- * `applyMiddleware` — `{ max: 100, windowMs: 60_000, standardHeaders: true,
- * legacyHeaders: false }` — measured on a request to a fresh service,
- * against express-rate-limit 7.5.1.
+ * `applyMiddleware` — `{ max: 100, windowMs: 60_000, standardHeaders:
+ * 'draft-6', legacyHeaders: false }` — measured on a request to a fresh
+ * service, against express-rate-limit 7.5.1.
  *
  * Names are spelled out one at a time on purpose. A `startsWith('ratelimit')`
  * assertion would keep passing across a draft change that renamed every one
@@ -184,7 +184,7 @@ describe('applyMiddleware — response headers on a built service', () => {
       expect(res.headers[name], `rate-limit header ${name}`).toBe(value);
     }
 
-    // The other half of "standardHeaders: true, legacyHeaders: false".
+    // The other half of "standardHeaders: 'draft-6', legacyHeaders: false".
     expect(res.headers).not.toHaveProperty('x-ratelimit-limit');
     expect(res.headers).not.toHaveProperty('x-ratelimit-remaining');
     expect(res.headers).not.toHaveProperty('x-ratelimit-reset');
@@ -253,12 +253,16 @@ describe('applyMiddleware — response headers on a built service', () => {
     // The cause is that `ServiceConfigSchema` models `rateLimit` as `max`
     // plus `windowMs` and nothing else, so a caller-supplied block reaches
     // the limiter without the `standardHeaders`/`legacyHeaders` choice the
-    // fallback literal carries, and v7's own defaults take over. Documented
-    // here because it is measured behaviour, not endorsed as a design.
+    // fallback literal carries, and express-rate-limit's own defaults
+    // answer instead. Those defaults did not move at the 7 to 8 bump —
+    // `standardHeaders` off, `legacyHeaders` on — so this case reads
+    // identically across it. Documented here because it is measured
+    // behaviour, not endorsed as a design.
     expect(res.headers).not.toHaveProperty('ratelimit-limit');
     expect(res.headers['x-ratelimit-limit']).toBe('7');
     expect(res.headers['x-ratelimit-remaining']).toBe('6');
-    // Value deliberately unasserted: v7 emits an absolute epoch second here.
+    // Value deliberately unasserted: 7 and 8 both put an absolute epoch
+    // second here, so pinning it would pin the clock rather than the header.
     expect(res.headers).toHaveProperty('x-ratelimit-reset');
   });
 });
