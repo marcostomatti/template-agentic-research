@@ -15,17 +15,23 @@
  * arrive with the command line later in this stage, and so does the
  * listing they would act on.
  *
- * What has landed is the sorting. {@link classify} takes two lists
+ * What has landed is the sorting, and the half of the input this
+ * repository answers for on its own. {@link classify} takes two lists
  * and answers with five readings and a verdict over them, opening no
  * socket, reading no file and knowing nothing about where either list
  * came from — so the question this command exists to settle can be
  * driven from a case holding two literals, with nothing stubbed and
- * no instance in front of it. Where those two lists come from arrives
- * later in this stage: `expectedNames` off the workflow sources, and
- * the listing off the instance.
+ * no instance in front of it. {@link expectedNames} reads the
+ * workflow sources for one of those two lists. The listing it is
+ * sorted against arrives with the command line.
  */
 
 import type { RemoteWorkflow } from './n8n-client.js';
+
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { ENV_MARKER, LIB_MARKER } from './workflow-markers.js';
 
 /**
  * One display name the instance holds more than one workflow under.
@@ -100,8 +106,8 @@ export interface Classification {
  * here knows or checks where that list came from, which makes the
  * choice of list the caller's whole responsibility rather than a
  * detail of it. What this command hands over is read off
- * `workflows/src/` — `expectedNames`, arriving later in this stage —
- * and never off a record of what some deploy put on an instance.
+ * `workflows/src/` by {@link expectedNames} and never off a record of
+ * what some deploy put on an instance.
  *
  * A record of deploys would be answering a different question in the
  * same shape. It accounts for acts, where an audit asks what this
@@ -186,4 +192,217 @@ export function classify(
     missing,
     stray,
   };
+}
+
+/**
+ * Build-marker text, in either grammar, anywhere in a string.
+ *
+ * Compiled here rather than imported compiled, and out of the
+ * exported sources rather than from a second copy of the two
+ * grammars, for the reason `ForbiddenPattern.source` in
+ * `tests/invariants/naming-patterns.ts` gives: a shared global
+ * instance carries `lastIndex` from one call into the next. Measured
+ * on these two grammars, that costs the refusal itself — a global
+ * instance refuses a name on one call and passes the identical name
+ * on the next, the throw being what stops the walk before any second
+ * name is reached. This instance is not global, and the grammars are
+ * the build's own, so what is read here and what the build resolves
+ * cannot drift.
+ *
+ * Both forms are read even though only a setting marker is a
+ * plausible thing to write in a display name. Neither resolves to
+ * itself, so what an instance holds is not what the source says
+ * either way, and a rule admitting one of them would be narrower than
+ * the property for no reason a reader could see. The retired forms
+ * are left out: a source carrying one is refused by the build, so it
+ * has no artifact, nothing was ever deployed from it, and its name
+ * being reported missing is exact rather than a false reading.
+ */
+const BUILD_MARKER = new RegExp(`${LIB_MARKER}|${ENV_MARKER}`, 'u');
+
+/**
+ * Where an audit reads what this repository declares.
+ *
+ * One member, and a bag rather than a bare path, because the member
+ * name is the whole of what ties a call site to the build's own
+ * `sourceDir`. The two have to name ONE directory: an expectation
+ * read out of some other tree is still a list of names, still sorts
+ * against a listing, and still answers with a verdict, so nothing
+ * downstream can tell it from a verdict about this repository. A bare
+ * string carries none of that to a call site, where a directory
+ * handed over wrongly looks exactly like one handed over right.
+ */
+export interface ExpectedNamesOptions {
+  /**
+   * The directory `*.json` workflow sources are read out of,
+   * `workflows/src/` in a real audit.
+   *
+   * A parameter carrying no default, the way `buildAll` in
+   * `build-workflows.ts` takes both of its directories: the real path
+   * reaches this command from its own command line, still to come,
+   * and nothing in this module knows it. It is also what lets a case
+   * drive the read over a tree of its own rather than over the one
+   * the rest of this package is built from.
+   */
+  readonly sourceDir: string;
+}
+
+/**
+ * Read the display name one workflow source declares.
+ *
+ * Neither the read nor the parse is wrapped. A file the listing named
+ * and a read cannot open arrives as `readFileSync` raised it, naming
+ * the absolute path, and one holding something that is not JSON
+ * arrives as the `SyntaxError` `JSON.parse` raises. Wrapping either
+ * would put this command's own error in front of a cause that already
+ * names the file and says what is wrong with it.
+ *
+ * The parse is read as `unknown` and cast only after the check that
+ * earns the cast, which is the check `artifactOf` in
+ * `deploy-external.ts` makes of the artifact built from this same
+ * file: a non-null object that is not an array. An array passes a
+ * bare object test and then answers `undefined` for every member, so
+ * without it a source that is not a workflow at all would be refused
+ * as one carrying no display name, and the reader sent to add a name
+ * to a file that needs rewriting.
+ *
+ * A name that is not a string is refused and a blank one is not,
+ * which is the line `artifactOf` draws over the artifact and the same
+ * one for the same reason: a workflow with no name is one no deploy
+ * could upsert on, while a blank name is a value only the instance
+ * can settle, and a second opinion here would disagree with it the
+ * first time either moved.
+ *
+ * Every refusal here is a plain `Error` rather than a class, on the
+ * split `tests/invariants/schema-sql.ts` draws and
+ * `assertDistinctNames` in `deploy-external.ts` already takes in this
+ * directory: a class is what lets a case PIN a cause, and no case in
+ * this plan drives a workflow source into any of these states. What
+ * each message owes instead is the edit that fixes it, which for all
+ * of them is to a file under `workflows/src/` and never to anything
+ * this command holds.
+ *
+ * @param dir - The directory the workflow sources are read out of.
+ * @param file - The source file name inside it.
+ * @returns The display name that source declares.
+ * @throws Error When the source is not a workflow object, declares no
+ *   display name, or declares one this command cannot resolve.
+ */
+function sourceNameOf(dir: string, file: string): string {
+  const path = join(dir, file);
+  const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(
+      `${path} is not a workflow object, so it declares no display ` +
+      'name for an audit to expect. One JSON object per file is the ' +
+      'rule the build, the deploy and this command all read this ' +
+      'directory by, and workflows/src/README.md states it. Make ' +
+      'that file one, or move it out of this directory.',
+    );
+  }
+
+  const { name } = parsed as { readonly name?: unknown };
+
+  if (typeof name !== 'string') {
+    throw new Error(
+      `${path} carries no display name, so an audit has no handle ` +
+      'to look for and whatever the instance holds for this source ' +
+      'would sort as a stray. Give the workflow a name in ' +
+      `workflows/src/${file}.`,
+    );
+  }
+
+  if (BUILD_MARKER.test(name)) {
+    throw new Error(
+      `${path} declares a display name carrying build-marker text, ` +
+      `so what an instance holds is not ${name}: a marker is resolved ` +
+      'when the workflow is built, and which value it resolved to ' +
+      'depends on the settings chain that build ran under, which an ' +
+      'audit has no way to pick. Write the name out in ' +
+      `workflows/src/${file} so this command can ask about it.`,
+    );
+  }
+
+  return name;
+}
+
+/**
+ * Read the display name out of every workflow source.
+ *
+ * The list {@link classify} holds an instance against, and the whole
+ * of what this repository declares: one name per `*.json` file
+ * directly under `sourceDir`.
+ *
+ * The walk is `buildAll`'s in `build-workflows.ts`, deliberately and
+ * with nothing holding the two together. Top level only, `*.json`
+ * only, files only — so a directory sitting beside a source is passed
+ * over rather than descended into, and the `README.md` carrying the
+ * workflow roster sits with the sources it describes without being
+ * read as one of them. A walk that drifted from the build's would
+ * leave this command expecting a different set of files from the one
+ * a deploy uploads, and the report would name that difference as
+ * strays and missing workflows on an instance that was never wrong.
+ *
+ * Sorted for the same reason the build sorts: `readdirSync` answers
+ * in directory order, stable on one machine and arbitrary across
+ * them, and {@link Classification.missing} follows the order it was
+ * given in. Unsorted, two machines holding one tree would print the
+ * same verdict in two orders.
+ *
+ * Read off the sources and never off `workflows/dist/`, which is
+ * {@link classify}'s argument against a deploy record met one step
+ * earlier. A build sweeps nothing, so an artifact whose source has
+ * since been renamed or deleted stays where it lies — and the
+ * workflow the instance is holding under that old name is there for
+ * the same rename, so an expectation read out of that directory would
+ * account for precisely the stray this command exists to name. It
+ * would also put the expectation behind a build, and there are two of
+ * those writing two directories, where the tree they are both built
+ * from is one.
+ *
+ * A `sourceDir` that cannot be listed is raised rather than answered
+ * for: an absent one is `ENOENT` and one naming a file is `ENOTDIR`,
+ * and each names the path it was handed. That is what parts a
+ * mistyped directory from an empty one, and it matters more here than
+ * to the build this walk comes from — a build given nothing does
+ * nothing, where an audit given nothing reports every workflow an
+ * instance holds as unaccounted for, which is a loud wrong answer
+ * rather than a quiet one. The one path that names nothing back is
+ * the empty string, `ENOENT` about no directory at all, which is also
+ * the one a caller is likeliest to have assembled rather than typed.
+ *
+ * A `sourceDir` that IS there and holds no `*.json` comes back empty.
+ * That agrees with `buildAll`, and with what `DeployBuild` in
+ * `deploy-external.ts` says of the same tree: an empty
+ * `workflows/src/` is an ordinary state, and a command refusing it
+ * would be disagreeing with the build about what a tree may hold. The
+ * limit rides with it — over an empty expectation every workflow an
+ * instance holds sorts as a stray, so the flags arriving with this
+ * command's command line have that verdict to refuse to act on rather
+ * than to read as a licence.
+ *
+ * Nothing is deduplicated and nothing is refused for being declared
+ * twice. {@link classify} reads this list as a set, so a name two
+ * sources declare is one name to it, and what a shared display name
+ * costs is a deploy's to refuse: `assertDistinctNames` in
+ * `deploy-external.ts` refuses it there, where the second workflow
+ * would land.
+ *
+ * @param options - Where the workflow sources are read from.
+ * @returns Every display name they declare, sorted by the file each
+ *   was read from.
+ * @throws Error When the sources cannot be listed, or one of them
+ *   declares no display name this command can use.
+ */
+export function expectedNames(
+  options: ExpectedNamesOptions,
+): readonly string[] {
+  const { sourceDir } = options;
+
+  return readdirSync(sourceDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right))
+    .map((file) => sourceNameOf(sourceDir, file));
 }
