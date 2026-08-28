@@ -18,7 +18,6 @@ in `.claude/skills/` and are pointed to below.
 | `scripts/` | Operator entry points run by hand. Six have landed: `seed.ts` (`bun run db:seed`), `approve.ts` (`bun run approve`), `build-workflows.ts` (`bun run build:workflows`), `deploy-external.ts` (`bun run deploy:external`), `audit-workflows.ts` (`bun run audit:workflows`), and `activate-workflows.sh`, run by path rather than through a `package.json` script. Not every `.ts` here is a command: `workflow-markers.ts`, `n8n-workflow.ts` and `n8n-client.ts` are halves read by more than one of them and carry no CLI guard. The stack-lifecycle scripts and the doc-link check arrive in phase 7. `scripts/README.md` names every script and the phase each arrives in. |
 | `tools/ralph/` (umbrella root) | The agent task loop: `plan` (spec → PLAN/PREREQUISITES), `start` (tracker loop, `--plan`, `--start-at`), `usage`. |
 | `tests/` | Cross-cutting tests; `tests/live/` is the live suite (see Testing). Package-level tests are colocated (`lib/**/__tests__`, `src/**/*.test.ts`). |
-| `specs/` | TRACKED follow-up specs + index (`specs/README.md`) — only for work whose subject is already visible in the code (refactors, hardening of published code, tooling). |
 | `.specs/`, `.plans/` | UNTRACKED (gitignored) working areas — see "Plans and specs" below. |
 | `docs/` | Tracked guides (drizzle, rpc, sse, seeding). Generated output goes to gitignored `.docs/` (`bun run docs:generate`). |
 | `docs/architecture/` | The architecture doc set: the platform shape, the layout map, and the invariant register — indexed from `ARCHITECTURE.md` and numbered by reading order. See "Research pipeline" below. |
@@ -383,16 +382,17 @@ reach the remote ahead of the fix. Rules:
 - Generated plan artifacts (`PLAN-<stub>.md`, `PREREQUISITES-<stub>.md`,
   `PLAN_TRACKER-<stub>.md`) live in `.plans/` — `ralph plan` writes there,
   and the loop's commit step can then never pick them up by accident.
-- Specs you are actively working from go in `.specs/`. The tracked `specs/`
-  directory is only for follow-ups whose subject is already visible in the
-  public code (e.g. hardening notes on shipped modules); when in doubt,
-  `.specs/`.
+- Specs you are actively working from go in `.specs/`. There is no tracked
+  `specs/` directory here — a follow-up whose subject is already visible in
+  the public code is written up in `docs/` or in the section of this file
+  that owns the behaviour (the control-plane hardening notes live under
+  "Operator control plane"); when in doubt, `.specs/`.
 - Never "tidy" these files into a tracked path, and never weaken the
   `.gitignore` entries.
 
 ## The loop
 
-`bun run ralph plan --spec=<specs|.specs>/<file>.md` writes
+`bun run ralph plan --spec=.specs/<file>.md` writes
 `.plans/PLAN-<stub>.md` (+ `.plans/PREREQUISITES-<stub>.md` when needed) per
 the `dev-planner` skill; when a `progress.txt` exists, its findings are
 injected as advisory planning context (skip with `--no-progress`).

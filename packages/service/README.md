@@ -79,12 +79,12 @@ Two ways to combine them:
   wired for bearer tokens against an RFC 7662 introspection endpoint and
   fails closed; without `AUTH_INTROSPECT_URL`/`AUTH_INTROSPECT_SECRET` both
   are no-op passthroughs. `src/auth/stub.ts` is a dev-only introspection
-  backend; the real strategy is specced in
-  [specs/auth-basic-strategy.md](specs/auth-basic-strategy.md).
+  backend; a first-party credential strategy is not part of this package
+  yet.
 - **Operator control plane** — with `control` configured, `/_control` exposes
   status/pause/resume/restart behind a shared token, and `stop` as well when
-  `control.allowStop` opts in (see `lib/express/control/`; hardening notes in
-  [specs/control-plane-hardening.md](specs/control-plane-hardening.md)).
+  `control.allowStop` opts in (see `lib/express/control/`; hardening notes
+  in AGENTS.md — "Operator control plane").
 
 ## Testing: isolated vs live
 
@@ -124,9 +124,9 @@ lives in `tools/ralph/PROMPT.md` at the umbrella root (a repo-root `PROMPT.md` o
 
 Working plans and specs live in the **gitignored** `.plans/` and `.specs/`
 directories — they can describe unpatched privacy/security bugs, so they
-stay out of the remote by design (see AGENTS.md — "Plans and specs"). The
-tracked `specs/` directory only indexes follow-ups whose subject is already
-visible in the code; those can be fed straight into `ralph plan` too.
+stay out of the remote by design (see AGENTS.md — "Plans and specs").
+There is no tracked `specs/` directory here: design prose whose subject is
+already public lands in `docs/` or AGENTS.md instead.
 
 ## CI & deploy
 
