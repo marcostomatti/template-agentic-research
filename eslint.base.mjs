@@ -10,6 +10,7 @@ import * as jsoncParser from 'jsonc-eslint-parser';
 import { configs as tsLintConfig } from 'typescript-eslint';
 
 import sharedRules from './sharedRules.mjs';
+import unsafeUnicode from './unsafeUnicode.mjs';
 /**
  * A custom ESLint configuration for typescript
  *
@@ -94,6 +95,23 @@ export default defineConfig([
     rules: {
       'jsonc/indent': ['error', 2],
       '@stylistic/no-multiple-empty-lines': ['error', { 'max': 0, 'maxEOF': 0 }],
+    },
+  },
+  {
+    // One universal block ON PURPOSE, covering every linted language: a
+    // rule registered inside a single language's block silently vanishes
+    // when someone edits that block. Parsing comes from the per-language
+    // blocks above; this block only adds the rule. The byte-level floor
+    // under it is tools/control-byte-gate/ (also covers unlinted files).
+    files: [
+      '**/*.js', '**/*.mjs', '**/*.cjs', '**/*.ts', '**/*.tsx', '**/*.jsx',
+      '**/*.md', '**/*.json',
+    ],
+    plugins: {
+      ar: unsafeUnicode,
+    },
+    rules: {
+      'ar/no-unsafe-unicode': 'error',
     },
   },
 ]);

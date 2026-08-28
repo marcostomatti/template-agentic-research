@@ -27,6 +27,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+
+      # Release gate: refuse to ship an image built from a tree carrying
+      # raw control bytes or invisible/bidi codepoints. Bare checkout —
+      # node builtins only, no install.
+      - name: Control-byte gate
+        run: bun tools/control-byte-gate/control-byte-gate.ts
+
       # Workspace build: the lockfile lives at the repo root, so the build
       # context is the root and the Dockerfile lives in the package.
       - name: Build image
