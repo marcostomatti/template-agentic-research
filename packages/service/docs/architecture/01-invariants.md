@@ -33,10 +33,13 @@ the 7-phase sequencing in that design, §7.
 ## Reading the register
 
 **Enforced by** names the artifact a violation surfaces in — the file
-that goes red, not the rule in prose. **Owning phase** is the phase that
-lands that artifact. **Status** is `Implemented` when the artifact
-exists and runs in the default suite today, and `Pending` when the row
-is still a reservation.
+that goes red, not the rule in prose. **Owning phase** is the phase
+accountable for the row: the one that lands the artifact, or, where the
+artifact is already written, the one that lands what it judges.
+**Status** is `Implemented` when the artifact exists, runs in the
+default suite today, and reads something the rule applies to;
+`Unexercised` when it exists and runs over nothing the rule applies to;
+and `Pending` when the row is still a reservation.
 
 ### A row is written before the artifact that enforces it
 
@@ -64,6 +67,41 @@ Extending one suite rather than starting a parallel one is the same
 argument the single test runner rests on: a check that lives outside
 what `bun run test` collects is a check the gate does not run, and a
 check nothing runs is indistinguishable from one that passes.
+
+### A check with no subject runs, passes, and enforces nothing
+
+A check the gate never collects is one kind of empty. There is a second,
+and the suite reaches it on every run: a check that is collected, runs,
+walks its whole input, and finds nothing the rule is about. Landing the
+spine ahead of the behaviour it guards is what produces one — the guards
+over model calls walk every built workflow, match no node, and pass, and
+will until phase 6 delivers a workflow that makes a model call. That
+pass says the built tree holds no counterexample, and it says exactly as
+much over a tree with nothing to hold to the rule. Nothing in the run
+parts the two.
+
+Neither of the other readings reports that honestly. `Implemented` would
+report the property as held, where what holds it is that nothing has
+offered the check a subject. `Pending` would lose the half that is real:
+the artifact exists and is collected, and **Owning phase** names the
+phase that lands the subject rather than the phase that lands the check
+— the reverse of a pending row, where one phase lands both.
+`Unexercised` is the reading for exactly that, and a row carrying it
+becomes `Implemented` when its subject arrives, with nothing about the
+check moving for it.
+
+The refusal that keeps the workflow rows honest does not reach this one.
+Those assertions read built output through a reader that refuses an
+empty tree, which is what stops an absence check passing over no
+workflows at all, and what makes the green on the send-capable-node and
+schedule-trigger rows a reading over a tree with nodes in it. No refusal
+can do the same here: a built tree carrying no model node is what phase
+3 delivers rather than a mistake to fail on. What stands behind an
+unexercised row meanwhile is whatever a planted sample can reach — the
+matcher that finds its subject, driven over planted types in
+`tests/invariants/workflow-rosters.test.ts`, and the reads behind it,
+driven over planted statements and bodies where they are driven at all.
+None of that says anything about the two composed over a real node.
 
 ## Why each row is here
 
