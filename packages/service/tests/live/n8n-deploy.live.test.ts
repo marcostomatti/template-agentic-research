@@ -74,6 +74,29 @@
  * `beforeAll`, ahead of the checkout and the build, so nothing is made
  * or spawned for a run with nowhere to send it.
  *
+ * Nothing here reaches a database, which is a property of the import
+ * graph rather than a habit to keep. Every module this file pulls in
+ * resolves to `node:` builtins, `zod` and `vitest` and to nothing
+ * else: no `pg`, no `drizzle-orm`, no `src/db/`, and nothing at all
+ * out of `live-postgres.ts`. So the two helpers `assertLiveDatabase`
+ * opens, `applyMigrations` and `resetTables`, are called from no line
+ * here, and the TRUNCATE inside `resetTables` is not a path a run of
+ * this file can take. The build it spawns answers the same one process
+ * out, reaching `workflow-markers.ts` and `node:` builtins and
+ * stopping there.
+ *
+ * That is worth writing down because the two gates in this directory
+ * key on different settings. A machine that exported `AR_N8N_URL` and
+ * not `AR_LIVE_DATABASE_URL` runs every case here with the Postgres
+ * ones still skipped, so what the one setting consents to is an
+ * instance written to and no database touched at all, and the
+ * `fileParallelism: false` in `vitest.config.ts`, held for the files
+ * that do truncate between cases, is something this one inherits
+ * rather than needs. The limit is what it uploads rather than what it
+ * imports: the artifact carries statements against an `AR Postgres`
+ * credential, and what keeps those from running is that a create is
+ * inert and that nothing here arms one.
+ *
  * In the first case's record the last member is the claim and the five
  * in front of it stand behind it. It is an absence — the uploaded
  * names the instance does not hold — and an absence over an empty list
