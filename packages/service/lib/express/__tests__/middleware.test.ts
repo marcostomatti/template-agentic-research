@@ -68,11 +68,27 @@ const HELMET_DEFAULT_HEADERS: Readonly<Record<string, string>> = {
  * The rate-limit headers produced by the FALLBACK literal in
  * `applyMiddleware` — `{ max: 100, windowMs: 60_000, standardHeaders:
  * 'draft-6', legacyHeaders: false }` — measured on a request to a fresh
- * service, against express-rate-limit 7.5.1.
+ * service, against express-rate-limit 8.6.2.
  *
- * Names are spelled out one at a time on purpose. A `startsWith('ratelimit')`
- * assertion would keep passing across a draft change that renamed every one
- * of them, and the draft spelling is what a client codes against.
+ * The 7.5.1 to 8.6.2 bump moved NOTHING in here: no name renamed, no value
+ * reworded, none added and none dropped. Recording that took two readings
+ * rather than one, because a case staying green across a major is on its
+ * own indistinguishable from a case that quietly stopped discriminating —
+ * the assertions below stayed green, and the two majors' own middleware
+ * driven side by side at `standardHeaders: 'draft-6'` over a recording
+ * response produced byte-identical output. So the version above is a
+ * re-measurement that found no change, not a change transcribed into the
+ * constant.
+ *
+ * These four are draft-6's spelling, draft-6 being what the fallback
+ * literal now names outright. They are listed one at a time rather than
+ * matched by prefix because a `startsWith('ratelimit')` assertion keeps
+ * passing across a draft change that renames every one of them, and the
+ * draft spelling is the client-visible contract. Measured under this same
+ * 8.6.2: draft-7 answers with `ratelimit-policy` plus a combined
+ * `ratelimit: limit=100, remaining=99, reset=60`, and draft-8 with a
+ * quoted `ratelimit: "100-in-1min"; r=99; t=60` — two header sets that
+ * share exactly one name with the four below.
  *
  * `ratelimit-remaining` is `99` rather than `100` because the request being
  * measured is itself the first hit of the window, and `ratelimit-reset` is
@@ -176,10 +192,23 @@ describe('applyMiddleware — response headers on a built service', () => {
   it('installs the RateLimit headers of the fallback rate-limit config', async () => {
     const res = await probeResponse();
 
-    // Expected to go RED at an express-rate-limit major: v8 changed both
-    // the default draft and the `standardHeaders` encoding. The value half
-    // (100, 99, 60) is derived from the fallback literal's own max/windowMs,
-    // so it also fails if someone edits those numbers without saying so.
+    // Names the OTHER drafts' spelling rather than prefix-matching this
+    // one, and sits ahead of the value loop so that a draft change reports
+    // as itself: draft-7 and draft-8 both collapse the
+    // limit/remaining/reset trio into a single combined `ratelimit`, so the
+    // absence of that one name is what says this response is draft-6 and
+    // not merely RateLimit-ish. The loop below cannot make the call — it
+    // iterates over the names it expects and is blind to an added one — and
+    // it fails FIRST on a draft change, which would bury this reading.
+    expect(res.headers).not.toHaveProperty('ratelimit');
+
+    // This case was expected to go RED at the express-rate-limit major, on
+    // the premise that v8 moved the default draft and the `standardHeaders`
+    // encoding. It did not: every literal below survived the 7 to 8 bump
+    // untouched. What still reddens it is the fallback literal naming a
+    // different draft, or the library rewording a value. The value half
+    // (100, 99, 60) is derived from that literal's own max/windowMs, so it
+    // also fails if someone edits those numbers without saying so.
     for (const [name, value] of Object.entries(FALLBACK_RATE_LIMIT_HEADERS)) {
       expect(res.headers[name], `rate-limit header ${name}`).toBe(value);
     }
