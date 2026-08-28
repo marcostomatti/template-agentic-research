@@ -91,8 +91,11 @@
  * instance, and it moves with every case added here, so it is not a
  * number to hold against one quoted elsewhere.
  *
- * No file drives this gate yet. `tests/live/n8n-deploy.live.test.ts`
- * is the first, and it arrives next in this stage.
+ * `tests/live/n8n-deploy.live.test.ts` is the first file to drive this
+ * gate. It uploads the workflows this package builds to the instance
+ * the setting names and reads that instance back for each of them,
+ * which is the half of the deploy path a stub in the isolated suite
+ * has no way to answer.
  */
 import { describe } from 'vitest';
 
