@@ -215,8 +215,13 @@ export const MODAL_PLACEHOLDER = (
  * rail, and the rail is a better way back than a button repeating one of
  * its entries. Its counterpart in `./DomainGuard.tsx` has no rail and so
  * has to carry one.
+ *
+ * Exported for the same reason the two placeholders above are: the
+ * catch-all is the one route in the tree whose element a test can name,
+ * so "did this path fall through" is a `toBe` rather than a guess at a
+ * path pattern.
  */
-const NOT_FOUND = (
+export const NOT_FOUND = (
   <EmptyState
     title="Page not found"
     description="Nothing in this deployment answers to that address. Pick a surface from the sidebar to carry on."
