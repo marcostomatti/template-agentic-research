@@ -5,8 +5,8 @@ should run and when it is next due, one workflow claims whatever has
 come due, and that is the whole of it: no cron per table, no queue
 carrying a due time of its own, and no timetable anywhere outside the
 database. This document is the map of that mechanism — what makes a
-row due, the four ways a due time gets set, and the shape of the query
-that takes it.
+row due, the four ways a due time gets set, the shape of the query
+that takes it, and the record a claimed row leaves behind.
 
 It is the document the Scheduling row of the behaviour table in
 `docs/architecture/00-overview.md` names, so a change to how a row
@@ -367,3 +367,91 @@ second write to `next_run_at` after the fact. Neither is ruled out by
 anything in this design. What is ruled out is the one arrangement that
 writes the new due time outside the lock, and a re-dispatch is what
 that one costs.
+
+## The run a claimed unit opens
+
+`ar-dispatch` opens a `runs` row for every unit it dispatches, and the
+alternative it is written against is one row per tick. The statement
+is the same INSERT under either, so nothing in it settles the question
+and what parts the two is only where it draws its values from. The
+reasons for taking the finer of them are the two columns the insert
+supplies.
+
+### The two columns the insert supplies are why the row is finer
+
+`INSERT INTO runs (domain_id, scheduled_by)` is the whole of what the
+dispatcher writes, and each of the two reads differently at the two
+granularities.
+
+`scheduled_by` is NOT NULL because attributing a fired schedule
+afterwards is the whole of its job, and a tick claiming several due
+rows at once would file every one of their schedules under a single
+answer. `src/db/schema/runs.ts` records that limit on the column
+itself, that an attribution is only ever as fine as a run, so what a
+row per claimed unit buys is a run that is one claim.
+
+`domain_id` is the other half, and there the coarser row has nowhere
+to put the answer rather than a rounder version of it. `topics` and
+`export_subscriptions` both declare their domain NOT NULL, so every
+claimed unit carries a real one, while a tick spans every domain at
+once and could write only NULL. On `runs` that NULL is not an empty
+slot but a meaning of its own, that the pass was not scoped to a
+domain, which is what a maintenance or a backfill pass legitimately
+is. A tick-level dispatch row would be stored looking exactly like one
+of those.
+
+What the finer row does not buy is a truer answer. This workflow
+writes the literal `interval` on every row it opens, and nothing in a
+claimed row records which of the four modes set its `next_run_at` —
+all four write that one column, and a stored timestamp does not say
+who chose it. So `interval` names the mode this workflow reschedules
+in, and a row an agent or an operator had scheduled is filed under it
+just the same. The row count decides how finely the column is
+attributed and never how accurately.
+
+### Nothing in the statement holds the row count where it is
+
+The granularity is a property of the graph. A Postgres node runs its
+statement once per input item, and here that is the behaviour wanted
+rather than the one to design around: every item reaching the
+run-opening statement is a unit the cap kept, which makes the row
+count the tick's dispatch count. Three things hold it there and none
+of them is a clause — the per-unit stream the node is fed, and two it
+does not carry, `executeOnce` and a read of the whole batch it was
+handed in place of the item a run is standing on.
+
+Only one of those two is watched.
+`tests/invariants/dispatch-sql.test.ts` sweeps the workflow for a
+statement or a value drawing on the whole batch a node was handed, so
+that route reddens there; `executeOnce` is read by nothing in this
+package, and setting it on that node leaves the suite green. The
+roster in `tests/invariants/dispatch-sql.ts` is no second reader of
+either. Its entries are phrases a statement has to carry, so what it
+reports is a clause that went missing, and neither of these two edits
+removes one: the statement is byte for byte the same under both.
+
+What bounds the writing is the cap. `capBatch` runs in front of the
+run-opening statement, so the rows this table gains on a tick are the
+units the cap kept and never the rows the claims took.
+
+### A tick that claims nothing leaves no row
+
+A claim that took no rows still puts an item on its branch, the
+executor's own placeholder for a statement that returned nothing, and
+those placeholders are dropped before the run-opening statement is
+reached. So a tick on which neither table had anything due opens no
+row at all.
+
+`runs` therefore records what the dispatcher dispatched and never that
+it ran, and the two are the same absence: a dispatcher whose cron has
+stopped firing and one firing on time into an empty backlog leave an
+identical gap in this table. The one workflow holding the only clock
+is what that gap is least able to report on. Counting rows says
+nothing about a cadence either, the row rate being the dispatch rate.
+
+What answers it is the executor's own execution list, which records a
+run of the workflow whether or not the workflow wrote anything down.
+That sits outside this database and outside this repository, and it is
+the cost of the choice rather than an oversight: a row per tick would
+have put liveness in `runs` and paid for it in both `domain_id` and
+`scheduled_by`.
