@@ -86,6 +86,7 @@ import type {
   Connector,
   Document,
   Domain,
+  Entity,
   Finding,
   Persona,
   Settings,
@@ -106,6 +107,7 @@ import {
   fetchDocuments,
   fetchDomain,
   fetchDomains,
+  fetchEntities,
   fetchExportSubscriptions,
   fetchFindings,
   fetchNotifications,
@@ -145,6 +147,7 @@ export type DomainResource =
   | 'category-summaries'
   | 'documents'
   | 'domain'
+  | 'entities'
   | 'export-subscriptions'
   | 'findings'
   | 'personas'
@@ -181,7 +184,7 @@ export const DEPLOYMENT_SCOPE = '@deployment';
 /**
  * The options every hook in this module passes to `useCache`.
  *
- * One shared frozen object rather than a literal repeated sixteen
+ * One shared frozen object rather than a literal repeated seventeen
  * times, so "what this app's reads do" is one line to read and one
  * line to change. Frozen because it is handed to every call: an
  * options object a caller could write through would change the
@@ -301,6 +304,30 @@ export function useFindings(
   return useCache(
     domainQueryKey(slug, 'findings'),
     () => fetchFindings(slug),
+    READ_OPTIONS,
+  );
+}
+
+/**
+ * This domain's subjects — what its findings are about, joined to them
+ * by id in the page.
+ *
+ * A separate read from {@link useFindings} rather than a field on it,
+ * for the reason `./digest.ts` keeps the tables apart: the page
+ * performs the join a q15 endpoint would otherwise have to invent a
+ * flattened row shape for.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @returns Its entities, in id order.
+ */
+export function useEntities(
+  domainSlug?: string | null,
+): CachedRead<readonly Entity[]> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useCache(
+    domainQueryKey(slug, 'entities'),
+    () => fetchEntities(slug),
     READ_OPTIONS,
   );
 }

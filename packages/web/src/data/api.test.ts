@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import * as api from './api';
 import { CONNECTORS, listConnectors, summarizeExportSubscriptions } from './connectors';
-import { listDocuments, listFindings } from './digest';
+import { listDocuments, listEntities, listFindings } from './digest';
 import {
   DEFAULT_DOMAIN_SLUG,
   DOMAINS,
@@ -71,6 +71,12 @@ const DOMAIN_SCOPED: readonly DomainScopedCase[] = [
     name: 'fetchFindings',
     read: api.fetchFindings,
     expected: (domain) => listFindings(domain.id),
+    listed: true,
+  },
+  {
+    name: 'fetchEntities',
+    read: api.fetchEntities,
+    expected: (domain) => listEntities(domain.id),
     listed: true,
   },
   {
@@ -281,13 +287,14 @@ describe('the barrel export surface', () => {
     expect(duplicated).toEqual([]);
   });
 
-  it('scopes nine accessors by domain and leaves seven unscoped', () => {
-    // The count the module docblock states, asserted against literals
-    // so that moving an accessor from one table to the other is a
-    // failure here rather than a silent re-reading of the rule. WHICH
-    // seven cannot be scoped is the arity test further down.
+  it('scopes ten accessors by domain and leaves seven unscoped', () => {
+    // Counted against literals so that moving an accessor from one
+    // table to the other is a failure here rather than a silent
+    // re-reading of the rule. WHICH seven cannot be scoped — the
+    // count the module docblock states — is the arity test further
+    // down.
     // Arrange / Act / Assert
-    expect(DOMAIN_SCOPED).toHaveLength(9);
+    expect(DOMAIN_SCOPED).toHaveLength(10);
     expect(UNSCOPED).toHaveLength(7);
   });
 });
@@ -563,7 +570,7 @@ describe('the unknown-slug rule, over the module export surface', () => {
 
     // Assert
     expect(stale).toEqual([]);
-    expect(SCOPED_EXPORTS).toHaveLength(9);
+    expect(SCOPED_EXPORTS).toHaveLength(10);
     expect(EXEMPT_EXPORTS).toHaveLength(7);
   });
 

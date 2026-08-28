@@ -86,6 +86,7 @@
  */
 
 import type { Surface } from './paths';
+import type { ReactNode } from 'react';
 import type { RouteObject } from 'react-router';
 
 import { EmptyState } from '@ar/ui';
@@ -95,6 +96,7 @@ import { AppLayout } from '../app-shell/AppLayout';
 import { Sidebar } from '../app-shell/Sidebar';
 import { Topbar } from '../app-shell/Topbar';
 import { PlaceholderModal } from '../components/PlaceholderModal';
+import { findPage } from '../pages';
 
 import { DomainGuard } from './DomainGuard';
 import {
@@ -178,12 +180,13 @@ const SHELL = (
 );
 
 /**
- * The stand-in every surface route renders until its page lands.
+ * The stand-in a surface route renders until its page lands.
  *
- * ONE element shared by all six routes, which is what lets the page
- * stage's registration test ask a real question: a surface whose route
- * element is still this object has no page behind it yet. It names no
- * surface because the topbar already does, from the same table.
+ * ONE element shared by every surface still waiting for one, which is
+ * what lets the page stage's registration test ask a real question: a
+ * surface whose route element is still this object has no page behind
+ * it yet. It names no surface because the topbar already does, from
+ * the same table.
  */
 export const SURFACE_PLACEHOLDER = (
   <EmptyState
@@ -234,6 +237,29 @@ export const NOT_FOUND = (
 );
 
 /**
+ * What one surface route renders.
+ *
+ * The join between the surface table and `../pages`, and the only
+ * place this file knows a page exists. A surface with no page
+ * registered falls back to {@link SURFACE_PLACEHOLDER} — the state
+ * every surface is in until its own task lands.
+ *
+ * The component is instantiated here rather than held as an element,
+ * so each base gets its own: two trees sharing one element would be
+ * two routes rendering one instance's worth of React identity.
+ *
+ * @param surface - Entry from `SURFACES`.
+ * @returns Its page, or the stand-in.
+ */
+const surfaceElement = (surface: Surface): ReactNode => {
+  const Page = findPage(surface.id);
+
+  return Page === undefined
+    ? SURFACE_PLACEHOLDER
+    : <Page />;
+};
+
+/**
  * One list surface, with its modal sub-route beneath it where it has
  * one.
  *
@@ -248,14 +274,15 @@ export const NOT_FOUND = (
  */
 const surfaceRoute = (surface: Surface): RouteObject => {
   const modalPath = MODAL_SUB_ROUTES.get(surface.id);
+  const element = surfaceElement(surface);
 
   if (modalPath === undefined) {
-    return { path: surface.segment, element: SURFACE_PLACEHOLDER };
+    return { path: surface.segment, element };
   }
 
   return {
     path: surface.segment,
-    element: SURFACE_PLACEHOLDER,
+    element,
     children: [{ path: modalPath, element: MODAL_PLACEHOLDER }],
   };
 };

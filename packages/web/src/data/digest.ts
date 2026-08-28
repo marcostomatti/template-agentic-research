@@ -446,6 +446,26 @@ export function listFindings(domainId: number): readonly Finding[] {
 }
 
 /**
+ * The subjects one domain records, in id order.
+ *
+ * Id order rather than alphabetical: nothing lists entities on their
+ * own, so there is no display order to answer with — a caller wants
+ * the whole set to resolve the {@link Finding.entityId} references it
+ * is holding, and the alias rows have to be in it for
+ * {@link resolveEntity} to have anything to follow.
+ *
+ * The digest page is what needs this: its category filter reads the
+ * taxonomy bucket a subject was matched under, which lives on
+ * {@link Entity.attributes} and reaches a finding only through here.
+ *
+ * @param domainId - The `domains.id` whose subjects are wanted.
+ * @returns Its entities, in id order. Never the stored array.
+ */
+export function listEntities(domainId: number): readonly Entity[] {
+  return ENTITIES.filter((entity) => entity.domainId === domainId);
+}
+
+/**
  * Look a document up by id, or throw.
  *
  * No tolerant twin, unlike {@link findFinding}: a document id reaches

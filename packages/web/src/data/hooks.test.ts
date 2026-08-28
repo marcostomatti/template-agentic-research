@@ -66,6 +66,7 @@ const DOMAIN_RESOURCE_GUARD: Readonly<Record<DomainResource, true>> = {
   'category-summaries': true,
   documents: true,
   domain: true,
+  entities: true,
   'export-subscriptions': true,
   findings: true,
   personas: true,
@@ -140,6 +141,12 @@ const DOMAIN_HOOKS: readonly DomainHookCase[] = [
     resource: 'findings',
     hook: hooks.useFindings,
     reads: api.fetchFindings,
+  },
+  {
+    name: 'useEntities',
+    resource: 'entities',
+    hook: hooks.useEntities,
+    reads: api.fetchEntities,
   },
   {
     name: 'useCategorySummaries',
@@ -479,12 +486,12 @@ describe('the hook surface', () => {
     expect(unscoped).toEqual([...DEPLOYMENT_RESOURCES].sort());
   });
 
-  it('scopes nine hooks by domain and leaves seven unscoped', () => {
+  it('scopes ten hooks by domain and leaves seven unscoped', () => {
     // The split `./api.ts` documents, asserted against literals so
     // that moving a read from one scope to the other is a failure here
     // rather than a silent re-reading of the rule.
     // Arrange / Act / Assert
-    expect(DOMAIN_HOOKS).toHaveLength(9);
+    expect(DOMAIN_HOOKS).toHaveLength(10);
     expect(DEPLOYMENT_HOOKS).toHaveLength(7);
   });
 });
@@ -603,7 +610,7 @@ describe('what each hook files and reads', () => {
 
     // Assert
     expect(borrowed).toEqual([]);
-    expect(reads).toHaveLength(16);
+    expect(reads).toHaveLength(17);
   });
 });
 
@@ -628,7 +635,7 @@ describe('the read options', () => {
   });
 
   it('refuses a write', () => {
-    // One object is handed to all sixteen reads, so a caller writing
+    // One object is handed to every read, so a caller writing
     // through it would change every read after it and lose the change
     // on reload — the version that looks like it worked. Read back
     // against a snapshot taken before the attempt rather than against

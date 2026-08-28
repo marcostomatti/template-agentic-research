@@ -1,4 +1,4 @@
-import type { DomainFieldSpec, DomainFieldType } from './types';
+import type { DomainFieldSpec, DomainFieldType, Entity } from './types';
 
 import { describe, expect, it } from 'vitest';
 
@@ -13,6 +13,7 @@ import {
   getEntity,
   getFinding,
   listDocuments,
+  listEntities,
   listFindings,
   resolveEntity,
 } from './digest';
@@ -714,6 +715,57 @@ describe('listFindings', () => {
 
     // Assert
     expect(FINDINGS.map((finding) => finding.id)).toEqual(before);
+  });
+});
+
+describe('listEntities', () => {
+  it('returns every entity of the seeded domain', () => {
+    // Arrange
+    const seededId = getDomain(DEFAULT_DOMAIN_SLUG).id;
+
+    // Act
+    const listed = listEntities(seededId);
+
+    // Assert
+    expect(listed.map((entity) => entity.id))
+      .toEqual(ENTITIES.map((entity) => entity.id));
+  });
+
+  it('includes the alias rows, which a resolver needs to follow', () => {
+    // The reason this lists rather than filters: a caller resolving a
+    // finding's entity needs the row an alias POINTS AT and the alias
+    // itself, so dropping either half would answer the wrong subject.
+    // Arrange
+    const seededId = getDomain(DEFAULT_DOMAIN_SLUG).id;
+
+    // Act
+    const listed = listEntities(seededId);
+
+    // Assert
+    expect(listed.filter((entity) => entity.aliasOf !== null))
+      .not.toHaveLength(0);
+  });
+
+  it('returns nothing for the sparse domain', () => {
+    // Arrange
+    const sparseId = getDomain(SPARSE_DOMAIN_SLUG).id;
+
+    // Act / Assert
+    expect(listEntities(sparseId)).toEqual([]);
+  });
+
+  it('never hands back the stored table', () => {
+    // Arrange
+    const seededId = getDomain(DEFAULT_DOMAIN_SLUG).id;
+    const before = ENTITIES.map((entity) => entity.id);
+
+    // Act — the cast is the point: `readonly` is a compile-time claim
+    // a consumer can drop, and the fresh array is what answers the one
+    // that did.
+    (listEntities(seededId) as Entity[]).reverse();
+
+    // Assert
+    expect(ENTITIES.map((entity) => entity.id)).toEqual(before);
   });
 });
 

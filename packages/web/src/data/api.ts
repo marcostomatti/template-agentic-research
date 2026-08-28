@@ -72,9 +72,12 @@
  * id (`getFinding`, `getSource`, `getConnector` and friends stay
  * unwrapped), because every modal sub-route in this plan renders a
  * placeholder carrying its route parameter and no editor loads a
- * record yet; nothing lists entities or a category's terms, for the
- * same reason. Each is one function and one test on the day a surface
- * needs it — and the fixture accessor it would wrap already exists.
+ * record yet; nothing lists a category's terms, for the same reason.
+ * Each is one function and one test on the day a surface needs it —
+ * and the fixture accessor it would wrap already exists.
+ * {@link fetchEntities} is that day arriving for one of them: the
+ * digest page joins its findings to their subjects, so the read it
+ * needs is here rather than in the page.
  *
  * The `fetch` prefix is not decoration either. The fixture layer's
  * verbs are `list`/`get`/`find`/`summarize`; changing the verb at the
@@ -90,6 +93,7 @@ import type {
   Connector,
   Document,
   Domain,
+  Entity,
   Finding,
   Persona,
   Settings,
@@ -103,7 +107,7 @@ import type {
 } from '@ar/ui';
 
 import { listConnectors, summarizeExportSubscriptions } from './connectors';
-import { listDocuments, listFindings } from './digest';
+import { listDocuments, listEntities, listFindings } from './digest';
 import { DOMAINS, getDomain, resolveVerdictVocabulary } from './domains';
 import { summarizeCategories } from './lexicon';
 import { listPersonas } from './personas';
@@ -247,6 +251,26 @@ export function fetchDocuments(slug: string): Promise<readonly Document[]> {
  */
 export function fetchFindings(slug: string): Promise<readonly Finding[]> {
   return deliverForDomain(slug, (domain) => listFindings(domain.id));
+}
+
+/**
+ * One domain's subjects — what its findings are ABOUT.
+ *
+ * The whole set rather than the ones a page happens to be showing:
+ * a finding names its subject by id and a retired name is an alias
+ * row pointing at another, so a caller resolving either needs both
+ * halves in hand.
+ *
+ * The digest joins them for its category filter, which reads the
+ * taxonomy bucket a subject was matched under. No surface lists these
+ * on their own.
+ *
+ * @param slug - A resolved domain slug.
+ * @returns Its entities, in id order; `[]` for a domain that records
+ * none.
+ */
+export function fetchEntities(slug: string): Promise<readonly Entity[]> {
+  return deliverForDomain(slug, (domain) => listEntities(domain.id));
 }
 
 /**
