@@ -168,8 +168,9 @@ hour. The rules:
 1. New tests mock or fake external systems by default. If a fake gets
    nontrivial, give the fake its own contract tests.
 2. Live tests go in `tests/live/*.live.test.ts`, gated through
-   `describeLivePg` (env-var opt-in → `describe.skip` otherwise; keep the
-   explicit type annotation — inference breaks `tsc` with TS2742).
+   `describeLivePg` or `describeLiveN8n` by the service they need (env-var
+   opt-in → `describe.skip` otherwise; keep the explicit type annotation —
+   inference breaks `tsc` with TS2742).
 3. Live tests run only against the `--profile stress` compose services
    (`bun run stress:start / test:live / stress:stop`) — separate port,
    separate database name, no volume.
@@ -186,6 +187,30 @@ hour. The rules:
    counterpart from the name.
 6. `fileParallelism: false` lives in `vitest.config.ts`, not on a script
    flag, so exported env vars can't re-parallelize the live files.
+
+`describeLivePg` is one of two gates in that directory. `describeLiveN8n`,
+in `tests/live/live-n8n.ts`, keys the n8n cases to `AR_N8N_URL` the same
+way, and the two are armed differently — which is the part to know before
+reading a run. `test:live` sets `AR_LIVE_DATABASE_URL` in its own script
+definition and sets nothing else, so it opens the Postgres gate itself and
+leaves the n8n one shut; nothing here exports `AR_N8N_URL`, and a value an
+operator put in `.env` for the deploy commands does not reach a worker. A
+live run with the stress container up therefore reports the n8n file
+skipping while the Postgres files run, which is that command's steady state
+rather than a broken setup, and the skip count a plain `bun run test` prints
+now has two sources behind it.
+
+There is also nothing here to point that gate at, which is why rule 3 is one
+an n8n case cannot satisfy rather than one it breaks. `docker-compose.yml`
+declares postgres, redis and postgres-live and no n8n service, and
+`scripts/bootstrap.sh`, which would stand one up, is phase 7 in
+`scripts/README.md`'s roster, so until that phase the instance an n8n case
+needs is an operator's own, started by hand. Every command this package
+ships leaves those cases skipped, which makes what is written under that
+gate debt recorded rather than behaviour a gate here proves: treat a case
+added there as unrun until somebody runs it. `tests/live/live-n8n.ts`
+carries the rest — what a skipped-but-collected case still reports, and the
+one place the seam can be broken without touching the gate.
 
 Test files open with a `/** ... */` header stating what the file PROVES (not
 what it calls), and separate regions with `// ---` banner comments 78 chars
