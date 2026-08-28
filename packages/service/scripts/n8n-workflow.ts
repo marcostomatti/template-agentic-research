@@ -165,10 +165,12 @@ export interface TriggerTypeRule {
  *
  * One of these is what this port runs on. `ar-dispatch` holds the
  * only schedule in the system and reaches the other workflows through
- * an Execute Workflow node, so every workflow phases 5 and 6 add
- * starts at an execute-workflow trigger. A rule reading the suffix
- * alone would report each of them as ready to arm and the activate
- * path would try, which makes this roster load-bearing rather than
+ * an Execute Workflow node, so four of the five workflows phases 5
+ * and 6 add start at an execute-workflow trigger. `ar-capture` is the
+ * exception the roster in `workflows/src/README.md` names, a generic
+ * push webhook, and a webhook arms. A rule reading the suffix alone
+ * would report the other four as ready to arm and the activate path
+ * would try, which makes this roster load-bearing rather than
  * defensive.
  *
  * Entries run from the furthest-out asker inward: a person at the
@@ -177,11 +179,20 @@ export interface TriggerTypeRule {
  *
  * The bound is the one every named set carries, and it is not the
  * bound its counterpart carries. A type ending in `Trigger` and
- * missing from here is read as arming, and what that costs is an
- * activation the instance itself refuses, which is loud and leaves
- * nothing running that nobody asked for. So this roster can be short
- * without being unsafe, and the completeness the other one claims is
- * deliberately not claimed here.
+ * missing from here is read as arming, and the activate path would
+ * try. What that costs is not the loud refusal it would be convenient
+ * to assume: `ActiveWorkflowManager.add` in `n8n` 2.15.1 validates
+ * against `STARTING_NODES`, which is exactly `manualTrigger` and
+ * `manualChatTrigger`, and both are named here already. A manual
+ * starter this roster is missing declares a trigger method like any
+ * other, so the validator accepts it, the activation succeeds having
+ * registered nothing, and an operator is left looking at a workflow
+ * that reads as active. That is the quiet direction, so a gap here is
+ * unsafe rather than merely incomplete. The completeness its
+ * counterpart claims is not available here either: that roster is
+ * closed by a census of what each type declares, while a manual
+ * starter is told from an arming one by what its trigger method
+ * returns, which no census reads.
  */
 export const MANUAL_STARTER_TYPES: readonly TriggerTypeRule[] = [
   {
@@ -485,10 +496,10 @@ export interface ActivationWorkflow {
  *
  * Manual-only is a claim about what an ACTIVATION starts and never
  * about what can run. An error trigger is reached whether or not
- * anybody activated the workflow holding it, and every workflow
- * phases 5 and 6 add starts at an execute-workflow trigger
- * `ar-dispatch` calls — both of them manual starters by
- * {@link MANUAL_STARTER_TYPES}, both of them reached without an
+ * anybody activated the workflow holding it, and the workflows phases
+ * 5 and 6 add are started through an execute-workflow trigger another
+ * workflow calls, `ar-capture` aside — both of them manual starters
+ * by {@link MANUAL_STARTER_TYPES}, both of them reached without an
  * activation, and neither of them a reason to arm anything. An empty
  * answer says the instance would register no timer, open no
  * connection and answer at no URL.
@@ -645,10 +656,12 @@ export interface BuiltArtifact extends ApiWorkflow {
  * projection and not a change to what the build writes. The other
  * deploy path imports the whole file through the n8n CLI, where
  * `id` is what lands an import on the workflow
- * `workflows/src/README.md` rosters rather than on a new one, and
- * a hand-authored workflow carrying no `versionId` is refused
- * outright. One artifact, two paths, and the narrower of them
- * takes a cut-down copy.
+ * `workflows/src/README.md` rosters rather than on a new one,
+ * while a `versionId` the source declares is overwritten rather
+ * than required: `ImportService.importWorkflows` mints a fresh one
+ * per import, so the one in the file never reaches the database.
+ * One artifact, two paths, and the narrower of them takes a
+ * cut-down copy.
  *
  * The schema, the refusal it answers with and the deploy path
  * around it are written up in

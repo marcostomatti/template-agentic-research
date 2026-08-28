@@ -774,12 +774,12 @@ export interface BuildAllOptions extends ResolveMarkersOptions {
  * would widen that silence to a `sourceDir` naming a file, which
  * `ENOTDIR` names outright — leaving them raised keeps the one
  * case that says which edit fixes it. What stands behind the
- * silence is not this function: the reader over `workflows/dist/`
- * arriving later in this phase refuses a directory holding no
- * workflow, which is where a build of nothing surfaces. Nothing
- * sweeping `outDir` leaves that backstop a hole — an artifact an
- * earlier run wrote satisfies it on behalf of a run that wrote
- * nothing.
+ * silence is not this function: `loadBuiltWorkflows` in
+ * `tests/invariants/workflow-dist.ts` refuses a directory holding
+ * no workflow, which is where a build of nothing surfaces.
+ * Nothing sweeping `outDir` leaves that backstop a hole — an
+ * artifact an earlier run wrote satisfies it on behalf of a run
+ * that wrote nothing.
  *
  * Every artifact is built before any is written, so a source the
  * marker pass refuses leaves `outDir` as it stands rather than

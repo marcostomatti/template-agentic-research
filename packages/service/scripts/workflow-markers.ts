@@ -461,7 +461,7 @@ export interface EnvSourceOptions {
  * A chain rather than one merged object, because the sources are
  * walked rather than layered. Which entries count as answers is
  * the resolver's rule, and merging here would settle that question
- * before the resolver arrives later in this stage — an empty entry
+ * before {@link resolveEnvVar} ever saw a source — an empty entry
  * in an earlier source would have overwritten a real value in a
  * later one while both were still objects, leaving nothing to
  * decline.
@@ -1809,11 +1809,18 @@ export const SURVIVING_MARKER_FORMS: readonly string[] = [
  * cannot be written as whatever `writeFileSync` throws — and an
  * assertion accepting any `Error` would pass for either of them.
  *
- * Nothing stands behind this one, which is what separates it from
- * every refusal ahead of it. {@link RetiredMarkerError} and
- * {@link MarkerPathError} each have this check underneath them:
- * delete either rule and the build still fails, further along and
- * with a message about an artifact rather than about the marker.
+ * Nothing stands behind this one. The two refusals ahead of it
+ * that a marker can reach are not alike in that respect either.
+ * {@link RetiredMarkerError} has this check underneath it:
+ * nothing replaces a retired form, so deleting that rule leaves
+ * the form to survive here and the build still fails, further
+ * along and with a message about an artifact rather than about
+ * the marker. {@link MarkerPathError} does not. Delete that one
+ * and the marker is replaced by whatever the loader returned, so
+ * no marker survives for this check to see: a path pointing
+ * outside the lib directory meets the loader instead, which
+ * raises for a file it cannot read, while one that resolves back
+ * onto a readable file is spliced and reported as a success.
  * Delete this one and the build reports success, writes the file,
  * and the marker text reaches an instance. So a case here is not
  * asserting which of two rules caught something — it is the whole
