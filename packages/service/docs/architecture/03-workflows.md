@@ -479,3 +479,63 @@ that never refuses over the stamp itself. `gitBuildTag` answers for
 any root it is handed and throws for none, because a build that would
 not write an artifact when git could not be asked would have stopped a
 deploy over a note on a canvas.
+
+### A transpiler comes from the launcher, and a test worker has none
+
+The library splice is the step that needs a transpiler: a TypeScript
+source under `src/lib/` has to become JavaScript before it can be
+pasted into a Code node body. `Bun.Transpiler` is what does that, and
+it is a property of a global only a process bun is running has — so a
+bun on PATH, a bun in `packageManager` and a bun that installed the
+dependencies each say nothing about whether the build can reach one.
+The transpiler is the launcher's rather than the manifest's, which is
+why `build:workflows` is `bun scripts/build-workflows.ts` and not a
+script any runtime could carry.
+
+That cuts both ways. What a library is transpiled into is the
+launcher's too, so a bun that changed what it emits would move an
+artifact where nothing in the tree had moved — the one input a
+comparison between two builds of one tree cannot see, the four a
+default build reads all being in the tree it ran in.
+
+A vitest worker is a node process, so a build cannot happen inside
+one. `pretest` runs that same command before the suite starts, in a
+bun process of its own, so `workflows/dist/` is already written by the
+time any worker opens it and every check over built output is a read
+rather than a build. Where a case has to exercise the real transpiler
+it spawns `bun scripts/build-workflows.ts` as a subprocess, a worker
+having no way to relaunch itself; everything either side of the
+transpile is drivable without one, marker resolution taking the
+library loader as a parameter so a stand-in can answer for it.
+
+What sits in front of that constructor is a check on the `Transpiler`
+property, and the obvious check on the `Bun` global would be wrong
+here — wrong for exactly one launcher, and that one is a worker.
+`tests/helpers/bun-polyfill.ts` is a setup file in `vitest.config.ts`,
+so every worker in this package starts with a partial `Bun` global
+already installed: one carrying `serve` and nothing else, put there so
+the health server and the MCP transport have something to listen on.
+Inside a worker `typeof Bun` is therefore `'object'`,
+`Object.keys(Bun)` is `['serve']`, and `Bun.Transpiler` is
+`undefined`.
+
+So `typeof Bun === 'undefined'` does not fire, the constructor is
+reached anyway, and what comes back is
+`TypeError: Bun.Transpiler is not a constructor` — which is what a
+build carrying no check at all raises in the same place. The wrong
+check and no check end together, and only one of the two looks like
+protection on the way there. It is convincing because it is right
+twice: under node the global is genuinely absent and it fires, under
+bun the global is whole and it does not, and the single launcher it is
+wrong for is the one where relaunching is not the edit and spawning
+is.
+
+`pretest` carries a limit of its own. It runs for the `test` script
+and for no other, so `test:live`, `test:watch` and a bare `vitest run`
+read whatever `workflows/dist/` happens to hold. What stops that being
+silent is the reader every check over built output goes through. It
+refuses a tree that yielded no artifact — absent, or there and empty —
+naming `bun run build:workflows` as what writes that directory, and it
+refuses an artifact carrying no node, naming the source the node
+belongs in. A suite run against a tree nobody built fails by name
+rather than sweeping nothing and passing.
