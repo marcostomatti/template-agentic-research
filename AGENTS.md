@@ -235,9 +235,15 @@ red package never masks another and a single run gives the whole picture.
   package is exact for both. `test:all` is the exception: `pretest` gives
   `@ar/service` and `@ar/ui` two prefixed lines apiece.
 - `test:all` prints the root vitest summary, then one line per package.
-  TRAP: `@ar/web`'s `test` script is a placeholder `echo`, so its code-0
-  line is not evidence of a passing suite. "Every package suite passes"
-  means two real suites plus one placeholder — report it that way.
+  All three packages now run real vitest suites — `@ar/web`'s placeholder
+  `echo` is gone, so its code-0 line finally means a suite RAN, and
+  `vitest run` exits 1 on zero matching files, so no suite can quietly
+  shrink to a vacuous pass. What that line still does not carry is app
+  coverage: `@ar/web`'s include is `src/**/*.test.ts` under the node
+  environment, so it reads colocated tests over PURE modules only — never
+  a `.tsx` component, and never the `packages/web/tests/` tree its README
+  reserves for Playwright. Read its `Tests N passed` count, not just the
+  exit line.
 - Do NOT grep a `test:all` capture for `failed`/`FAIL`. A fully green run is
   ~1900 lines and `@ar/service` writes those words deliberately: its
   vendored framework half exercises its own error paths through structured

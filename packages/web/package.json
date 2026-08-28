@@ -11,7 +11,7 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src tests *.ts *.mjs",
     "lint:fix": "eslint src tests *.ts *.mjs --fix",
-    "test": "echo '@ar/web: no tests yet'"
+    "test": "vitest run"
   },
   "dependencies": {
     "@ar/ui": "workspace:*",
@@ -28,6 +28,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "tailwindcss": "^4",
-    "vite": "^8.0.13"
+    "vite": "^8.0.13",
+    "vitest": "^4.1.7"
   }
 }
