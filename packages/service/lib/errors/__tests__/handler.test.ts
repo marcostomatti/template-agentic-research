@@ -23,6 +23,38 @@ function makeLogger(): Logger {
   };
 }
 
+/**
+ * Narrows one entry out of a `details` array so a field can be read off it.
+ *
+ * `ValidationError.details` is optional and `noUncheckedIndexedAccess` makes
+ * every index read possibly-undefined, so a bare `details?.[0].field` does
+ * not type-check. Throwing here also tells apart two failures that reading
+ * `.field` off `undefined` would report identically: details never
+ * populated at all, and details populated with fewer entries than the case
+ * asked for.
+ *
+ * Generic over the entry type so it serves both the `FieldError[]` on a
+ * `ValidationError` and the cast response bodies further down this file.
+ *
+ * @param details - The details array under test, possibly absent.
+ * @param index - The entry whose field the case is about to read.
+ * @returns That entry, typed without the `undefined`.
+ * @throws Error When details is absent or holds no entry at `index`.
+ */
+function detailAt<T>(details: readonly T[] | undefined, index: number): T {
+  const detail = details?.[index];
+
+  if (detail === undefined) {
+    const found = details === undefined
+      ? 'details is undefined'
+      : `details has length ${details.length}`;
+
+    throw new Error(`expected a details entry at index ${index}, but ${found}`);
+  }
+
+  return detail;
+}
+
 // Minimal Express req and next stubs
 const req = {} as Parameters<ReturnType<typeof errorHandler>>[1];
 const next = vi.fn() as Parameters<ReturnType<typeof errorHandler>>[3];
@@ -58,8 +90,8 @@ describe('zodToValidationError', () => {
     ]);
 
     const result = zodToValidationError(zodErr);
-    expect(result.details?.[0].field).toBe('name');
-    expect(result.details?.[0].field).not.toContain('.');
+    expect(detailAt(result.details, 0).field).toBe('name');
+    expect(detailAt(result.details, 0).field).not.toContain('.');
   });
 
   it('maps multiple issues to multiple FieldErrors', () => {
@@ -83,8 +115,8 @@ describe('zodToValidationError', () => {
 
     const result = zodToValidationError(zodErr);
     expect(result.details).toHaveLength(2);
-    expect(result.details?.[0].field).toBe('a');
-    expect(result.details?.[1].field).toBe('b.c');
+    expect(detailAt(result.details, 0).field).toBe('a');
+    expect(detailAt(result.details, 1).field).toBe('b.c');
   });
 });
 
@@ -143,7 +175,7 @@ describe('errorHandler', () => {
 
     const body = (res.json.mock.calls[0] as [{ code: string; details: Array<{ field: string }> }])[0];
     expect(body.code).toBe('VALIDATION_ERROR');
-    expect(body.details[0].field).toBe('user.email');
+    expect(detailAt(body.details, 0).field).toBe('user.email');
   });
 
   it('calls logger.warn (not error) for ZodError', () => {
@@ -285,7 +317,7 @@ describe('errorHandler', () => {
     expect(res.status).toHaveBeenCalledWith(422);
     const body = (res.json.mock.calls[0] as [{ code: string; details: Array<{ field: string }> }])[0];
     expect(body.code).toBe('VALIDATION_ERROR');
-    expect(body.details[0].field).toBe('user.email');
+    expect(detailAt(body.details, 0).field).toBe('user.email');
   });
 
   it('always responds via res.json (Content-Type: application/json implied)', () => {
