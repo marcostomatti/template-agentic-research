@@ -619,12 +619,15 @@ export function resolveEnvVar(
  * form is refused here, naming the file and the form, rather than
  * being written into a node that throws on its first execution.
  *
- * The refusal is the dual-context rule made mechanical. A library
- * under `src/lib/` is imported by the test suite AND spliced into
- * a workflow, and only the first of those two readers forgives an
- * import or a trailing export list. A build that let one through
- * would produce an artifact that passes every check this package
- * runs and fails on an instance, in a node nobody is watching.
+ * The refusal is two of the three dual-context rules made
+ * mechanical. A library under `src/lib/` is imported by the test
+ * suite AND spliced into a workflow, and only the first of those
+ * two readers forgives an import or a trailing export list. A
+ * build that let one through would produce an artifact that passes
+ * every check this package runs and fails on an instance, in a
+ * node nobody is watching. The third rule, reliance on module
+ * scope, leaves a scan nothing to read; {@link assertSpliceable}
+ * states what that costs.
  *
  * A distinct class rather than a bare `Error`, so a case covering
  * this rule can pin the refusal to it. The other ways an inline

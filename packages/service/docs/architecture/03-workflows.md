@@ -205,3 +205,169 @@ hypothetical: with the strip removed, `Open Run` and
 clause an INSERT and an UPDATE against one id cannot carry at all —
 out of the paragraphs each of them writes about the honest limits it
 has.
+## The build
+
+`workflows/src/<id>.json` is not what an instance runs.
+`scripts/build-workflows.ts` reads every source in that directory,
+resolves the markers each one carries, and writes one artifact per
+source into `workflows/dist/` — the same file name, the same envelope
+and the same nodes, with each marker replaced by what it named. That
+artifact is what a deploy uploads and what every check over built
+output reads.
+
+A marker is the only thing whose content moves. The envelope, the
+node list, the wiring and the prose in all four of its homes carry
+into the artifact exactly what the source wrote, so the transform is
+readable one string at a time and reviewing a workflow is still
+reviewing the source. What does not carry across is the layout: the
+build serializes at two spaces with a trailing newline rather than
+copying the source's own formatting, so an artifact is not a diff of
+the file it came from.
+
+### A source may write two marker forms, and the build refuses two more
+
+| Form | What it names | What stands in its place |
+| --- | --- | --- |
+| `__INLINE:<path>__` | A library under `src/lib/`, by a path relative to that directory. | That library's body, transpiled to JavaScript and stripped of its export keywords. |
+| `__ENVVAR:<NAME>__` | A build setting, by the name `ENV_DEFAULTS` in `scripts/workflow-markers.ts` declares it under. | Whatever the settings chain resolves that name to. |
+| `__INLINE_JSON:<file>__` | Retired. Named a curated data file to bake into a node body as a JSON literal. | Nothing — the build refuses the source by name. |
+| `__INLINE_YAML:<file>__` | Retired. Named an operator-editable file to convert at build time. | Nothing — the build refuses the source by name. |
+
+`ar-dispatch` writes eight markers: one library marker naming
+`schedule.ts`, and seven setting markers naming five settings — the
+cron its trigger fires on, the batch cap (in each claim statement's
+`LIMIT`, and again in the Code node that applies it a second time),
+the two workflow ids it routes to, and the stamp on its `Build Stamp`
+sticky note.
+
+Which settings a build reads is opt-in, and the default is the
+narrowest chain there is: `bun run build:workflows` consults
+`ENV_DEFAULTS` and nothing else, so a developer's own environment
+cannot reach `workflows/dist/`. The `--external` build that
+`scripts/deploy-external.ts` runs resolves the environment and the
+package's `.env` in front of that table, and writes into
+`workflows/dist-external/` — a directory of its own, so an artifact
+that absorbed an environment and one that could not are never the
+same file.
+
+### A library is inlined before a setting is resolved
+
+Both live forms are resolved in one walk over every string a source
+holds, and the order of the two steps is the whole of what a source
+may nest. A library body carrying `__ENVVAR:AR_BUILD_TAG__` has that
+marker resolved, because settings resolution walks the string
+inlining returned rather than the one the source wrote. The reverse
+does not resolve and is not meant to: replacement never re-scans
+what it inserted, so a library marker inside a library body, or
+inside a value a setting resolved to, is text the pass has already
+gone past.
+
+The walk is over object values. A marker written as a key is not
+reached — replacing a key changes the shape rather than the content,
+and can land on a key already there.
+
+### A spliced library obeys three rules, and the build can see two
+
+`src/lib/` is dual-context: one file, imported by the default suite
+and pasted into a Code node body, so a node runs the function the
+suite ran rather than a second copy of it written for the canvas.
+That is the whole of what `__INLINE:` buys, and what it costs is
+three constraints on how such a library may be written.
+
+- **No value import** — a Code node resolves no specifier, so a
+  dependency that survived the transpile fails on the node's first
+  execution. A type-only import is not one: `import type` erases
+  before the build reads the source, and an `interface`, a `type`
+  alias and a generic signature erase with it, so the rule costs a
+  library no type surface at all.
+- **Declaration-form exports only** — `export function`,
+  `export const`, `export class`, `export let` and `export var` have
+  the keyword taken off and reach the node as the declarations they
+  already were, while `export {`, `export default` and `export *`
+  name a module boundary that will not be there and that no strip
+  repairs.
+- **No reliance on module scope** — a node body is one execution, and
+  a `require`, an `import.meta` or a value kept between calls each
+  assume otherwise.
+
+`assertSpliceable` in `scripts/workflow-markers.ts` refuses the first
+two, so a library breaking either is never built into an artifact at
+all. The third leaves nothing to refuse it on: `require(p)`, an
+`import()` written against a variable, `import.meta.url` and a
+top-level `let` all scan with an empty import list and survive the
+transpile unchanged, which is to say they are indistinguishable from
+a library that obeys the rule. It is satisfied by hand rather than
+checked.
+
+What breaking it costs splits in two, and only the louder half is
+reachable offline. `tests/build/schedule-splice.test.ts` puts the one
+library this repository splices through the shipped build and then
+through `new Function`, which supplies no `require` and no `module`
+exactly as a Code node does not: an `import.meta` is refused when
+that function is constructed, and a `require` raises when its line
+runs. Module-level state is invisible in both contexts — it lives as
+long as the process that imported the file, and as long as the one
+execution that ran the spliced copy, and neither reports the
+difference.
+
+The five declaration forms are the whole of what is spliceable, and a
+sixth is the standing gap. `export async function` declares a name the
+way the others do, but the word after `export` is `async`, which is
+not one of the five: it is neither refused nor stripped, and would
+survive into a node body to fail there. No library writes one.
+
+### A retired form is refused rather than left to pass through
+
+Neither retired form is resolved and neither is passed through: a
+source carrying one is refused by name, and the message says where
+the value it wanted is read from now.
+
+What makes that a rule rather than dead code is what a build with no
+such rule would do. A retired form matches no grammar, so nothing
+replaces it and nothing reports it, and the literal
+`__INLINE_JSON:<file>__` somebody typed is written into a node body
+while the build reports success — read on an instance, at whatever
+hour that node is next reached, where a value belonged.
+
+The named refusal is not the only thing between that and an
+artifact. A retired form nothing replaced reaches the serialized
+output, which the build reads back before writing it — so deleting
+the retired rule alone still fails the build. What the named refusal
+buys is which message an operator gets: one about the marker they
+wrote and the edit that fixes it, rather than one about an artifact
+it survived into.
+
+And that edit has a destination. Both forms retired because the
+configuration they carried moved into the database, not because
+inlining a file was a mistake — each was built on an argument that
+still holds for what it was about. What ended them is that a value
+inlined at build time is one value for every domain the artifact
+reaches, and this pipeline runs the same workflows for as many
+domains as there are rows. `domains.settings`, the jsonb payload on
+the domains row, is where such a value lives now: read per-domain at
+run time, so changing one is a row edit rather than a rebuild and a
+redeploy of every workflow that inlined it.
+
+### Nothing says the pass finished, so the artifact is read back
+
+Resolution replaces what it recognizes, and a marker it did not
+recognize is still there afterwards. There are three ways to write
+one: a name the grammar does not admit, `__ENVVAR:AR-BUILD-TAG__`
+carrying a hyphen where the name class takes none; a well-formed
+marker sitting in an object key, which a walk over values never
+reaches; and a retired form written inside a library body rather
+than in the source, spliced in as it stands.
+
+So the last thing the build does to an artifact is read its
+serialized bytes back for marker text and refuse them, which is the
+only vantage from which all three are visible at once. Nothing
+stands behind that check: delete it and the build reports success,
+writes the file, and the marker text reaches an instance. How loudly
+it would fail there depends entirely on the parameter it landed in,
+and the check cannot see which — a cron field refuses a string that
+is not five fields, a workflow id names no workflow and routes to
+the dispatcher's error branch, and a URL takes the marker for one
+more path segment and says nothing until a request is finally made.
+No setting in `ENV_DEFAULTS` supplies a URL today, which is why the
+check is keyed to the form rather than to a site: the table is not
+closed, and the quiet site is the one it has to cover.
