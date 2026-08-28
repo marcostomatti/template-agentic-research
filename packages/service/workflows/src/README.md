@@ -1,8 +1,15 @@
 # workflows/src — n8n workflow sources
 
 This directory holds the **editable source** for every n8n workflow in the
-research pipeline. No workflow JSON exists yet: phase 1 lands the layout
-and the rules below, and the first workflow arrives in phase 3.
+research pipeline. It holds one of them today. Phase 1 landed the layout
+and the rules below, phase 3 landed `ar-dispatch.json`, and the other five
+workflows in the roster arrive in phases 5 and 6.
+
+The build landed with that first workflow, which is what makes the rules
+below a description of what runs rather than a plan:
+`bun run build:workflows` reads every file here, and
+`tests/invariants/workflows.test.ts` holds the set-wide invariants against
+what it wrote.
 
 Phase numbers throughout refer to the 7-phase sequencing in the parent
 design, `.specs/2026-08-19-research-pipeline-port.md` §7.
@@ -27,7 +34,7 @@ The 1:1 rule is what the surrounding tooling assumes:
 
 | Workflow | Delivered in | Role |
 | --- | --- | --- |
-| `ar-dispatch` | phase 3 | The only cron in the system. Claims due schedulable rows and invokes the others via Execute Workflow. |
+| `ar-dispatch` | phase 3 — landed | The only cron in the system. Claims due schedulable rows and invokes the others via Execute Workflow. |
 | `ar-ingest` | phase 5 | Pull adapters → dedupe → gate → document to finding. |
 | `ar-capture` | phase 5 | Generic push webhook: external capture clients POST against a documented capture contract. |
 | `ar-score` | phase 5 | Scores findings against the domain's criteria. |
