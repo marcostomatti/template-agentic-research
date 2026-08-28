@@ -74,13 +74,14 @@
  * is what leaves the refusal for an absent one to this command.
  *
  * Neither the calls nor the projection is written again here.
- * `n8n-client.ts` holds the four HTTP calls and the refusal for a
- * reply that is not a success, and `toApiWorkflow` in
- * `n8n-workflow.ts` cuts a built artifact down to the members the API
- * accepts; this module is the sequence those are steps in.
- * {@link deploy} runs that sequence, {@link runDeployCli} is the
- * command line over it, and the guard beneath that one is what leaves
- * importing this module running none of it.
+ * `n8n-client.ts` holds every HTTP call this package makes against an
+ * instance and the refusal for a reply that is not a success, three
+ * of which a deploy uses; `toApiWorkflow` in `n8n-workflow.ts` cuts a
+ * built artifact down to the members the API accepts; this module is
+ * the sequence those are steps in. {@link deploy} runs that sequence,
+ * {@link runDeployCli} is the command line over it, and the guard
+ * beneath that one is what leaves importing this module running none
+ * of it.
  *
  * The two refusals that sequence is worth having in front of it are
  * `assertCleanTree`, which refuses a tree no commit accounts for,
@@ -373,6 +374,13 @@ function isSet(value: string | undefined): value is string {
  * two, and it is why {@link UnconfiguredInstanceError.settings} is
  * a list rather than a name.
  *
+ * It is raised for two commands and not one. `audit-workflows.ts`
+ * reaches {@link requireInstance} for the same reason a deploy does
+ * and stops on the same refusal, which is why nothing in the message
+ * names a deploy or a build: what an operator holding it has to do
+ * is the same either way, and a sentence naming the wrong command
+ * would be the one thing in it they could not act on.
+ *
  * A distinct class rather than a bare `Error`, so a case covering a
  * deploy that was never configured can pin the refusal to it. The
  * other ways this path fails all have names of their own or none:
@@ -428,11 +436,11 @@ export class UnconfiguredInstanceError extends Error {
       : 'are';
 
     super(
-      `${named} ${verb} not set, so this deploy is refused before ` +
-      'anything is built and before any request is made. The two a ' +
-      'deploy needs are declared optional in `src/config.ts`, ' +
-      'because the running service opens neither and a boot has ' +
-      'nothing to refuse: ' +
+      `${named} ${verb} not set, so the command that asked for them ` +
+      'is refused before it reads anything and before any request is ' +
+      'made. The two settings are declared optional in ' +
+      '`src/config.ts`, because the running service opens neither ' +
+      'and a boot has nothing to refuse: ' +
       '`AR_N8N_URL` is the base URL of the public REST API the ' +
       'target instance exposes, and `AR_N8N_API_KEY` is the key ' +
       'that instance issued for these calls. Set them in the ' +

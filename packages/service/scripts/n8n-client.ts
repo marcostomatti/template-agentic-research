@@ -28,31 +28,40 @@
  * incident behind it rather than a preference of style.
  *
  * Two of the three instance-facing commands in this directory call
- * in. `deploy-external.ts` uploads built artifacts and
- * `audit-workflows.ts` reads back what an instance is holding, both
- * over the API; `activate-workflows.sh` is the one that does not,
- * activation going through the n8n CLI against a local container
- * rather than over HTTP. The first of those has opened and its
- * `deploy` calls in, listing what an instance holds and creating or
- * replacing each workflow against it; {@link activateWorkflow} is the
- * one of the four still waiting for a caller, arming being the CLI
- * path's job on a local instance and nothing a deploy does.
- * `audit-workflows.ts` has opened since, with no call in it yet — the
- * listing it wants arrives with its command line later in this stage,
- * and so does `activate-workflows.sh`. So `n8n-workflow.ts` answers
+ * in, and both of them now do. `deploy-external.ts` uploads built
+ * artifacts and `audit-workflows.ts` reads back what an instance is
+ * holding, both over the API; `activate-workflows.sh` is the one that
+ * does not, activation going through the n8n CLI against a local
+ * container rather than over HTTP, and it arrives later in this
+ * stage. `deploy` lists what an instance holds and creates or
+ * replaces each workflow against it. The audit lists the same
+ * instance to judge it, and then, only where it was asked to and told
+ * twice, disarms or removes what nothing in this repository accounts
+ * for. {@link activateWorkflow} is the one call here still waiting
+ * for a caller, arming being the CLI path's to do on a local instance
+ * and nothing either of those two does. So `n8n-workflow.ts` answers
  * for three commands where this module serves two, and what parts
  * them is a transport rather than an omission. The live seam under
  * `tests/live/` arrives with them and is no command at all.
  *
  * {@link listWorkflows}, {@link createWorkflow},
- * {@link updateWorkflow} and {@link activateWorkflow} are those
+ * {@link updateWorkflow}, {@link activateWorkflow},
+ * {@link deactivateWorkflow} and {@link deleteWorkflow} are those
  * calls, each taking the fetch it uses as an argument, so a case can
  * drive one against a stub and the isolated suite stays isolated by
  * construction rather than by discipline. A reply that is not a
  * success is refused rather than handed back, and
  * {@link UnsuccessfulReplyError} is what carries the endpoint, the
  * status and the body it was refused over. Every call reaches that
- * refusal through one function, so one cause covers all four.
+ * refusal through one function, so one cause covers all six.
+ *
+ * Five of the six move stored JSON around or change what an instance
+ * is running, and every one of those five can be answered by the
+ * call that undoes it. {@link deleteWorkflow} is the one that cannot
+ * — the route is the API's hard delete rather than the archive an
+ * instance's own interface does first — so the whole of what it
+ * takes with it is written out on that call, where a caller reading
+ * the signature is standing.
  *
  * What an instance does with each of these was read out of the spec
  * and the handler n8n 2.15.1 ships — `dist/public-api/v1/openapi.yml`
@@ -319,15 +328,24 @@ function requestHeaders(
  * than assumed, and it is not one answer. Measured with the check
  * deleted and each call driven against a stub answering `400` with
  * the instance's own refusal body: {@link createWorkflow},
- * {@link updateWorkflow} and {@link activateWorkflow} RESOLVE,
+ * {@link updateWorkflow}, {@link activateWorkflow},
+ * {@link deactivateWorkflow} and {@link deleteWorkflow} all RESOLVE,
  * handing that refusal body back as a workflow whose `id`, `name` and
  * `active` all read `undefined`, so a deploy records a create the
- * instance never made. {@link listWorkflows} is caught one function
- * on, by the reader that finds no list in the page, but what it
- * reports is a success carrying no workflows, which sends a reader to
- * check the base URL over a call the instance answered perfectly
- * clearly. So nothing stands behind the class for three of the four,
- * and what stands behind it for the fourth names the wrong thing.
+ * instance never made and an audit reports a stray removed that is
+ * still there. {@link listWorkflows} is caught one function on, by
+ * the reader that finds no list in the page, but what it reports is a
+ * success carrying no workflows, which sends a reader to check the
+ * base URL over a call the instance answered perfectly clearly. So
+ * nothing stands behind the class for five of the six, and what
+ * stands behind it for the sixth names the wrong thing.
+ *
+ * The two that arrived last are why that measurement is worth
+ * re-running rather than quoting. Every call added here lands on one
+ * side of that split or the other, and a resolved
+ * {@link deleteWorkflow} is the worst place on it: what a caller
+ * would report is a workflow gone that the instance refused to
+ * delete, and the next audit finds it again with nothing to say why.
  *
  * Nothing about the API key reaches the message, and that is the
  * shape rather than a redaction. The refusal is built out of the
@@ -418,8 +436,8 @@ export class UnsuccessfulReplyError extends Error {
  *
  * Every call in this module goes through here, which is what settles
  * the URL, the headers, the refusal and the parse once rather than
- * four times. The four exported functions are then each an endpoint,
- * a method and a reading of the answer.
+ * six times. The six exported functions are then each an endpoint, a
+ * method and a reading of the answer.
  *
  * The body is read before the status is judged, because a refusal
  * quotes it: an instance that refuses a workflow says which member it
@@ -429,7 +447,7 @@ export class UnsuccessfulReplyError extends Error {
  *
  * The refusal is {@link UnsuccessfulReplyError}, thrown from here and
  * nowhere else. That is what lets a caller tell a call the instance
- * refused from a reply it could not read, over four calls and one
+ * refused from a reply it could not read, over six calls and one
  * `catch`.
  *
  * Nothing about the key reaches that refusal, and the reason is what
@@ -724,4 +742,85 @@ export async function activateWorkflow(
   const endpoint = `/workflows/${encodeURIComponent(id)}/activate`;
 
   return workflowOf(endpoint, await request(instance, 'POST', endpoint));
+}
+
+/**
+ * Disarm the workflow at `id`, so the instance stops what its
+ * triggers were starting.
+ *
+ * The other half of {@link activateWorkflow} and the same shape: a
+ * POST with no body, answered with the workflow as the instance now
+ * holds it. What it costs is the mirror image too — a timer unset, a
+ * connection closed, a URL that has stopped answering — which is
+ * what makes it worth a call of its own to whoever has found an
+ * instance running something nothing accounts for.
+ *
+ * It is not a delete and it undoes nothing else. The workflow stays
+ * on the instance under the same id, holding whatever it was built
+ * from, and an operator who disarmed one by mistake arms it again
+ * with the call above. That is the whole of what makes this the
+ * cheaper of the two acts `audit-workflows.ts` can be asked to
+ * perform, and it is why only the other one asks twice.
+ *
+ * The handler answers `404` for a workflow this key cannot reach and
+ * `400` carrying the instance's own message for anything else it
+ * refuses, both of which arrive here as
+ * {@link UnsuccessfulReplyError} with that body quoted.
+ *
+ * @param instance - Where the workflow lives.
+ * @param id - The instance's id for it.
+ * @returns The workflow as the instance stored it, now disarmed.
+ * @throws UnsuccessfulReplyError When the reply is not a success.
+ * @throws Error When it is a success carrying no workflow object.
+ */
+export async function deactivateWorkflow(
+  instance: N8nInstance,
+  id: string,
+): Promise<RemoteWorkflow> {
+  const endpoint = `/workflows/${encodeURIComponent(id)}/deactivate`;
+
+  return workflowOf(endpoint, await request(instance, 'POST', endpoint));
+}
+
+/**
+ * Delete the workflow at `id` outright, and hand back what was
+ * deleted.
+ *
+ * The one call here that cannot be undone from this module, and the
+ * reason is not that a delete is a delete: it is what THIS route does
+ * with one. Read out of the handler n8n 2.15.1 ships, the public
+ * API's delete calls the workflow service with its `force` argument
+ * set, which is the argument the service checks before refusing to
+ * delete a workflow that has not been archived first. So this route
+ * skips the archive the instance's own UI makes an operator do, and
+ * there is no archived copy afterwards to unarchive.
+ *
+ * What goes with the row was measured in the same place and is more
+ * than the workflow. An armed workflow is removed from the instance's
+ * active-workflow manager before the row goes, so a delete disarms
+ * what it deletes and this call needs no {@link deactivateWorkflow}
+ * in front of it; and the binary data of every execution that
+ * workflow ever had is deleted alongside the row. That second one is
+ * the part an operator is least likely to have expected, and it is
+ * the reason the command calling this asks for a second flag before
+ * it does. What becomes of the execution ROWS was not read here, so
+ * this says what the delete does and not everything it reaches.
+ *
+ * A workflow this key cannot reach is a `404` rather than a silent
+ * success, so a delete of an id no longer on the instance is
+ * reported rather than counted.
+ *
+ * @param instance - Where the workflow lives.
+ * @param id - The instance's id for it.
+ * @returns The workflow as it stood when it was deleted.
+ * @throws UnsuccessfulReplyError When the reply is not a success.
+ * @throws Error When it is a success carrying no workflow object.
+ */
+export async function deleteWorkflow(
+  instance: N8nInstance,
+  id: string,
+): Promise<RemoteWorkflow> {
+  const endpoint = `/workflows/${encodeURIComponent(id)}`;
+
+  return workflowOf(endpoint, await request(instance, 'DELETE', endpoint));
 }

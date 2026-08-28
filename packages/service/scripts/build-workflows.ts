@@ -895,8 +895,19 @@ const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url));
  * One directory for both builds: what a build READS is the same
  * tree either way, and `--external` moves only where artifacts
  * land and what their settings resolve against.
+ *
+ * Exported for a second reader that is not a build at all.
+ * `audit-workflows.ts` reads the display name out of every source
+ * here to know what an instance is supposed to be holding, and
+ * `ExpectedNamesOptions.sourceDir` over there states the property
+ * that makes importing this the only correct way to hand it over:
+ * an expectation read out of some other tree is still a list of
+ * names and still answers with a verdict, so nothing downstream
+ * can tell it from a verdict about this repository. Two spellings
+ * of one path drift silently, and this is a path where the drift
+ * would surface as an instance being told it is wrong.
  */
-const WORKFLOW_SOURCE_DIR = join(PACKAGE_ROOT, 'workflows', 'src');
+export const WORKFLOW_SOURCE_DIR = join(PACKAGE_ROOT, 'workflows', 'src');
 
 /**
  * Where the default build writes, and the directory every check
