@@ -23,6 +23,41 @@
 # each of those workflows needs before a publish has anything to
 # publish against, and the publish that arms them. Each step carries
 # its own reasoning where it stands.
+#
+# Nothing in this repository stands that container up. The compose
+# file in this package declares postgres, redis and postgres-live and
+# no n8n service at all, `bootstrap.sh` is phase 7 in the roster next
+# door, and no tracked file anywhere runs an `import:workflow` — so
+# both the instance this arms and the import that puts workflows on
+# it are an operator's to supply until that phase lands. What stands
+# behind the branches below is therefore a run against a container
+# started by hand, and that is the only evidence a shell script in
+# this package ever gets: `lint` and `check-types` open no `.sh` at
+# all, and the naming invariant, which does read this one, reads
+# names rather than behaviour.
+#
+# The pair of steps this file ends on — seed a `workflow_history`
+# row, then publish — is written up in
+# `~/.claude/skills/n8n-cli-unattended-ops/SKILL.md`, a user-level
+# skill rather than one vendored under `.claude/` here, which is why
+# the argument is carried above rather than left to the link. It
+# numbers six failures and four of them are out of this file's reach:
+# three are about `n8n execute`, which nothing here runs, and one is
+# about `import:workflow`, which is not this file's step either. The
+# two that remain are what those two steps are for.
+#
+# What does not carry across from it is the REASONS. It was written
+# against 2.3.0 and this port targets 2.15.1 throughout, and on this
+# version the import writes its own history row and mints its own
+# `versionId`: the seeding below is a repair for a route that
+# swallows a failed insert rather than the prerequisite every
+# activation once needed, the stale-active-version hazard behind its
+# fixed-id advice cannot arise, and one column of the statement it
+# gives now labels the version rather than the workflow. Each of
+# those is argued at the step it belongs to. What only a note about
+# the whole file can add is that they are one divergence and not
+# three, so the link is worth following for the shape of the sequence
+# and never for why it is shaped that way.
 
 # `-e` so a failing step stops the run rather than letting the one
 # after it work on whatever the failure left behind, `-u` so a
@@ -319,10 +354,11 @@ RUNNING="$(docker inspect -f '{{.State.Running}}' "$AR_N8N_CONTAINER" 2>/dev/nul
 # `database.sqlite`, and that resolves against `.n8n` under
 # `N8N_USER_FOLDER` or the home directory, which is `/home/node`
 # there. Those three settings are what move it, so a compose file in
-# phase 7 choosing any of them owes this step an edit. The refusal in front of the open is what
-# says so on the day: measured, `node:sqlite` CREATES a database at a
-# path holding none, so opening one blind leaves an empty file behind
-# and fails a statement later on a table that was never there.
+# phase 7 choosing any of them owes this step an edit. The refusal in
+# front of the open is what says so on the day: measured,
+# `node:sqlite` CREATES a database at a path holding none, so opening
+# one blind leaves an empty file behind and fails a statement later
+# on a table that was never there.
 #
 # A quoted heredoc rather than a single-quoted argument, so unlike
 # the plan read above this snippet writes its strings the way the
