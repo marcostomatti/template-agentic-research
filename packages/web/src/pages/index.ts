@@ -35,6 +35,7 @@ import { AgentsPage } from './agents/AgentsPage';
 import { DigestPage } from './digest/DigestPage';
 import { LexiconPage } from './lexicon/LexiconPage';
 import { SourcesPage } from './sources/SourcesPage';
+import { ToolsPage } from './tools/ToolsPage';
 
 /**
  * The pages built so far, keyed by the surface each one answers at.
@@ -47,6 +48,7 @@ const PAGE_COMPONENTS: Readonly<Record<string, ComponentType>> = {
   lexicon: LexiconPage,
   sources: SourcesPage,
   agents: AgentsPage,
+  tools: ToolsPage,
 };
 
 /** The same table, with every key proven to name a surface. */
