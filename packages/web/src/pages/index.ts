@@ -33,6 +33,7 @@ import { getSurface } from '../routes/paths';
 
 import { DigestPage } from './digest/DigestPage';
 import { LexiconPage } from './lexicon/LexiconPage';
+import { SourcesPage } from './sources/SourcesPage';
 
 /**
  * The pages built so far, keyed by the surface each one answers at.
@@ -43,6 +44,7 @@ import { LexiconPage } from './lexicon/LexiconPage';
 const PAGE_COMPONENTS: Readonly<Record<string, ComponentType>> = {
   digest: DigestPage,
   lexicon: LexiconPage,
+  sources: SourcesPage,
 };
 
 /** The same table, with every key proven to name a surface. */
