@@ -3,6 +3,7 @@ import type { Domain } from './types';
 import { describe, expect, it } from 'vitest';
 
 import { domainBase } from '../routes/paths';
+import { repeated } from '../test-support/repeated';
 
 import {
   DEFAULT_DOMAIN_SLUG,
@@ -16,16 +17,6 @@ import {
   resolveVerdictVocabulary,
 } from './domains';
 import { FIXTURE_NOW } from './types';
-
-/**
- * The values that occur more than once, in the order they repeat.
- *
- * Returned rather than counted so the assertions below can compare
- * against `[]` and let vitest print the colliding values themselves.
- */
-function repeated<T>(values: readonly T[]): readonly T[] {
-  return values.filter((value, index) => values.indexOf(value) !== index);
-}
 
 /**
  * A domain built here rather than taken from the table.

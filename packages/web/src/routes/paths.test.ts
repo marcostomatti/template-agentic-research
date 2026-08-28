@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { NAV_ITEMS } from '../app-shell/nav';
+import { repeated } from '../test-support/repeated';
 
 import {
   SINGLE_DOMAIN_BASE,
@@ -164,16 +165,6 @@ describe('swapBase', () => {
     expect(swapped).toBe('/digest');
   });
 });
-
-/**
- * The values that occur more than once, in the order they repeat.
- *
- * Returned rather than counted so the assertions below can compare
- * against `[]` and let vitest print the colliding paths themselves.
- */
-function repeated(values: readonly string[]): readonly string[] {
-  return values.filter((value, index) => values.indexOf(value) !== index);
-}
 
 describe('every surface under both bases', () => {
   // Whole-table claims, as opposed to the single-surface cases above: the
