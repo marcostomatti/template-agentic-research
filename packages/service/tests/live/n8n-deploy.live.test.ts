@@ -13,13 +13,16 @@
  * none, that a name the listing already carries is replaced rather
  * than created a second time. What a stub cannot answer is whether the
  * body this port projects is one the API accepts, whether the instance
- * is holding the workflow once the call has returned, and whether it
- * is holding one of each rather than two once a rerun has been
- * through. That is the whole of what is left for this file. The first
- * case answers the first two — the one by the uploads not being
- * refused, the other by the reading behind them — and the second
- * answers the third by uploading twice and counting what the instance
- * holds afterwards.
+ * is holding the workflow once the call has returned, whether it is
+ * holding one of each rather than two once a rerun has been through,
+ * and what the workflow it stored would do if somebody activated it.
+ * That is the whole of what is left for this file. The first case
+ * answers the first two — the one by the uploads not being refused,
+ * the other by the reading behind them — the second answers the third
+ * by uploading twice and counting what the instance holds afterwards,
+ * and the third answers the last by reading those stored nodes back
+ * and putting them through the classifier the activate path reads a
+ * built artifact with.
  *
  * Everything this file does sits inside the gate, which is
  * load-bearing rather than tidy. `describeLiveN8n` binds a `describe`
@@ -85,34 +88,55 @@
  * guessed at: a build that would not launch, and a git that would not
  * run over the checkout. A listing that came back empty needs no guard
  * at all, every uploaded name being one the instance does not hold —
- * measured, a listing emptied on the way in reddens that claim and
- * nothing else in that record, and both readings of the instance in
- * the second case's.
+ * measured, `displayNamesListed` emptied on the way in reddens that
+ * claim and nothing else in that record, and both readings of the
+ * instance in the second case's. The third case reads the listing for
+ * itself rather than through that helper, so the leg leaves it green
+ * and its own is one door further out.
  *
  * Run against a real instance rather than left as debt: a throwaway
  * n8n 2.15.1 started for the purpose took the artifact this build
- * writes with its twelve nodes intact and inert, both cases here
- * passed over it from an empty instance and from one already holding
- * the workflow, every leg this file quotes split as described, and
- * the three deploys a green run makes left it holding exactly one of
- * that workflow. That is evidence about this sequence at that
- * version and about no instance an operator holds, and nothing re-runs
- * it — the gate leaves this file skipped under every command this
- * package ships.
+ * writes with its twelve nodes intact, in the source's own order and
+ * inert, all three cases here passed over it from an empty instance
+ * and from one already holding the workflow, the third passed alone
+ * under a `-t` filter naming it, every leg this file quotes split as
+ * described, and the four deploys a green run makes left it holding
+ * exactly one of that workflow. That is evidence about this sequence
+ * at that version and about no instance an operator holds, and nothing
+ * re-runs it — the gate leaves this file skipped under every command
+ * this package ships.
  *
- * One more case arrives next in this stage: a reading of whether
- * `ar-dispatch` would arm on the instance, taken without arming it.
+ * The third case acts no further than the two above it: it deploys, as
+ * they do, and everything after that is a reading. It asks the
+ * instance what it is holding, puts those nodes through
+ * `activatableTriggers` — the rule `activate-workflows.sh` sorts built
+ * artifacts by — and holds the answer against the one trigger this
+ * port schedules on, so what it says is that a workflow an activation
+ * would arm is what reached the instance. Nothing in this file arms
+ * one. `n8n-client.ts` exports `activateWorkflow` next door and
+ * nothing here imports it, and the reading of `active` taken beside
+ * the other two is what says the instance was left as it stood.
  */
 import type {
   DeployBuild,
   DeployedWorkflow,
   InstanceSettings,
 } from '../../scripts/deploy-external.js';
-import type { N8nInstance } from '../../scripts/n8n-client.js';
+import type { N8nInstance, RemoteWorkflow } from '../../scripts/n8n-client.js';
+import type {
+  ActivationNode,
+  ActivationWorkflow,
+} from '../../scripts/n8n-workflow.js';
 import type { SpawnSyncReturns } from 'node:child_process';
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -127,7 +151,9 @@ import {
 } from '../../scripts/build-workflows.js';
 import { deploy, requireInstance } from '../../scripts/deploy-external.js';
 import { listWorkflows } from '../../scripts/n8n-client.js';
+import { activatableTriggers } from '../../scripts/n8n-workflow.js';
 import { config } from '../../src/config.js';
+import { SCHEDULE_TRIGGER_TYPE } from '../invariants/workflow-rosters.js';
 
 import { describeLiveN8n } from './live-n8n.js';
 
@@ -161,6 +187,78 @@ const CHECKOUT_STEPS: readonly (readonly string[])[] = [
   ['add', '-A'],
   ['commit', '-q', '-m', 'the commit this checkout is clean against'],
 ];
+
+/**
+ * The workflow source the third case holds an instance against.
+ *
+ * One source and not the whole directory, because what an activation
+ * would arm is a different answer per workflow, and the roster in
+ * `workflows/src/README.md` already says the set will not agree:
+ * `ar-dispatch` holds the only schedule in the system, `ar-capture` is
+ * a push webhook and would arm on a URL, and the rest are reached
+ * through Execute Workflow and would arm nothing. A claim written over
+ * the directory as a whole would be false for part of it the moment
+ * phase 5 lands.
+ */
+const DISPATCH_SOURCE = 'ar-dispatch.json';
+
+/**
+ * What the readings of the instance answer with where it is not
+ * holding exactly one workflow of the name they were asked about, with
+ * a node list on it this file can read.
+ *
+ * A sentence rather than an empty answer, because each of those
+ * readings has an empty answer of its own that means something else —
+ * no node that arms, no node at all. The sentence is what parts a
+ * reading nobody could take from one that was taken and came back with
+ * nothing.
+ */
+const NOT_READ_BACK = 'no one readable workflow of that name';
+
+/**
+ * What the reading of `active` answers with for a workflow the
+ * instance is holding and has not armed.
+ *
+ * A label rather than a boolean, because `RemoteWorkflow.active` is
+ * `unknown` and the three answers worth telling apart are `true`,
+ * `false` and a member the instance did not send at all. `String` over
+ * the value keeps all three, where a comparison against `true` folds
+ * the last two into one and reads an answer that never arrived as a
+ * workflow left inert.
+ */
+const INACTIVE = 'active: false';
+
+/**
+ * One workflow source, read for the two things this repository
+ * declares about it that the third case holds an instance against.
+ *
+ * The independent side of that case, in the sense
+ * {@link LiveDeploy.declaredNames} is of the second: read out of
+ * `workflows/src/` rather than off what the build answered with or off
+ * what a run uploaded, so a comparison keyed to it is about the
+ * workflow this repository declares and not about the run being
+ * checked.
+ *
+ * Read here rather than through `expectedNames`, which answers for
+ * every source at once and hands back display names alone. This case
+ * is about one source and wants its node types alongside its name, and
+ * reading the file once for both is what leaves the two provably about
+ * one workflow.
+ */
+interface DeclaredWorkflow {
+  /**
+   * The display name it declares, which is the handle the instance
+   * holds it under and the one an upsert matches on.
+   */
+  readonly name: string;
+
+  /**
+   * Every node type it declares, in the source order, one entry per
+   * node — a count and not a set, so a source carrying two of a type
+   * is held against an instance holding two.
+   */
+  readonly nodeTypes: readonly string[];
+}
 
 /**
  * One spawned deploy build, as the run that made it answers for it.
@@ -223,6 +321,12 @@ interface LiveDeploy {
    * not about the run being checked.
    */
   readonly declaredNames: readonly string[];
+
+  /**
+   * What `workflows/src/ar-dispatch.json` declares, which is what the
+   * third case holds the instance's own copy against.
+   */
+  readonly dispatch: DeclaredWorkflow;
 
   /** The instance, for the listing this file reads for itself. */
   readonly instance: N8nInstance;
@@ -314,6 +418,97 @@ function sourceWorkflowFiles(): readonly string[] {
     .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
     .map((entry) => entry.name)
     .sort();
+}
+
+/**
+ * Whether `value` is a node the arming question can be asked about.
+ *
+ * Two conditions and no more, which is exactly what `ActivationNode`
+ * declares: an object that is not an array, carrying a `type` that is
+ * a string. `disabled` is not tested, that shape declaring it
+ * `unknown` because `activatableTriggers` compares it against `true`
+ * and the comparison is total over any value.
+ *
+ * A predicate rather than a cast, so the two readers using it narrow
+ * through `filter` and hand a checked list on. Neither is handed a
+ * node by a caller: each parses one out of a file or out of a reply,
+ * which is where a hand-declared shape is worth what the walk behind
+ * it did and no more.
+ *
+ * @param value - Anything a parsed node list held.
+ * @returns Whether it can be read as a node.
+ */
+function isActivationNode(value: unknown): value is ActivationNode {
+  return typeof value === 'object'
+    && value !== null
+    && !Array.isArray(value)
+    && typeof (value as { readonly type?: unknown }).type === 'string';
+}
+
+/**
+ * Read one workflow source for its display name and its node types.
+ *
+ * Refuses rather than coerces, and every refusal names the file,
+ * because a source this cannot read is a repository problem and never
+ * an instance one. Folded into an empty answer instead, the readings
+ * it is held against would report an instance that had lost every node
+ * it was sent.
+ *
+ * Two of the three refusals are `expectedNames`'s own over the same
+ * directory. Its third, a display name carrying build-marker text, is
+ * left out because the fixture reads that list as well, so a second
+ * spelling of the rule here would be one more thing to keep in step.
+ * What is added instead is the node types, which no other reader of
+ * this directory asks a source for.
+ *
+ * @param dir - The directory workflow sources are read out of.
+ * @param file - The source file name inside it.
+ * @returns Its display name and the node types it declares.
+ * @throws Error When the source is not a workflow object, carries no
+ *   display name, or carries no node list this can read.
+ */
+function declaredWorkflow(dir: string, file: string): DeclaredWorkflow {
+  const path = join(dir, file);
+  const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(
+      `${path} is not a workflow object, so it declares neither a ` +
+      'display name to look for on the instance nor a node list to ' +
+      'hold what the instance stored against. One JSON object per ' +
+      'file is the rule this directory is read by everywhere.',
+    );
+  }
+
+  const { name, nodes } = parsed as {
+    readonly name?: unknown;
+    readonly nodes?: unknown;
+  };
+
+  if (typeof name !== 'string') {
+    throw new Error(
+      `${path} carries no display name, so there is no handle to ask ` +
+      'the instance about and every reading below would report a ' +
+      `workflow it is not holding. Give it a name in ${file}.`,
+    );
+  }
+
+  const declared: readonly unknown[] = Array.isArray(nodes)
+    ? nodes
+    : [];
+  const readable = declared.filter(isActivationNode);
+
+  if (readable.length === 0 || readable.length !== declared.length) {
+    throw new Error(
+      `${path} carries no node list this can read — ${String(declared.length)} ` +
+      `entries, ${String(readable.length)} of them objects with a string ` +
+      'type on them. The arming question is asked of node types, so ' +
+      `the edit is to the nodes member of ${file} rather than to ` +
+      'anything the instance is holding.',
+    );
+  }
+
+  return { name, nodeTypes: readable.map((node) => node.type) };
 }
 
 /**
@@ -451,6 +646,60 @@ async function timesHeldBy(
   });
 }
 
+/**
+ * The workflow the instance is holding under `name`, in the shape
+ * `activatableTriggers` asks its question of, or `null` where the
+ * listing carries no such workflow, more than one of them, or one
+ * whose nodes are not a list this can read.
+ *
+ * Exactly one, because two workflows under a single display name leave
+ * a reading with no subject to be about. Which of them an instance
+ * would run is the case above's question rather than this one's, so
+ * here it is a state to report and never one to pick a workflow out
+ * of.
+ *
+ * Nothing is copied away or renamed: what comes back is the listing's
+ * own object with its node list narrowed, so the rest of the answer
+ * rides along through `ActivationWorkflow`'s index signature. That is
+ * where the reading of whether the instance has it armed is taken
+ * from, `active` being a member `RemoteWorkflow` declares and the
+ * arming shape does not.
+ *
+ * An absent node list is `null` and an empty one is not. An answer
+ * carrying no `nodes` member is one this could not read; an answer
+ * carrying an empty list is the instance saying it holds a workflow
+ * with nothing in it, which is a thing the readings above are entitled
+ * to report rather than one to hide behind a sentence.
+ *
+ * @param listed - Every workflow the instance answered with.
+ * @param name - The display name to look for.
+ * @returns That workflow in the arming shape, or `null`.
+ */
+function storedAs(
+  listed: readonly RemoteWorkflow[],
+  name: string,
+): ActivationWorkflow | null {
+  const held = listed.filter((workflow) => workflow.name === name);
+  const [only] = held;
+
+  if (only === undefined || held.length !== 1) {
+    return null;
+  }
+
+  const member: unknown = only.nodes;
+
+  if (!Array.isArray(member)) {
+    return null;
+  }
+
+  const stored: readonly unknown[] = member;
+  const nodes = stored.filter(isActivationNode);
+
+  return nodes.length === stored.length
+    ? { ...only, nodes }
+    : null;
+}
+
 describeLiveN8n('deploying the built workflows to a live n8n instance', () => {
   beforeAll(() => {
     const sources = sourceWorkflowFiles();
@@ -472,6 +721,7 @@ describeLiveN8n('deploying the built workflows to a live n8n instance', () => {
       checkout: checkoutRoot,
       checkoutState: initCleanCheckout(checkoutRoot),
       declaredNames: expectedNames({ sourceDir: WORKFLOW_SOURCE_DIR }),
+      dispatch: declaredWorkflow(WORKFLOW_SOURCE_DIR, DISPATCH_SOURCE),
       instance,
       settings,
       sources,
@@ -630,6 +880,150 @@ describeLiveN8n('deploying the built workflows to a live n8n instance', () => {
       theSecondPassUploadedEveryArtifact: sources,
       whatTheSecondPassCreatedRatherThanReplaced: [],
       whatTheInstanceHoldsNow: heldOnce,
+    });
+  });
+
+  // What only an instance answers here is what its own copy of the
+  // workflow would do. `activatableTriggers` is driven over
+  // hand-written workflows in `tests/scripts/n8n-workflow.test.ts` and
+  // over built artifacts by the plan step of `activate-workflows.sh`,
+  // and neither of those is the copy an instance stored.
+  // Between an artifact and that copy sit `toApiWorkflow`, which drops
+  // every member outside the four the API takes, and the create
+  // handler itself, which mints ids into the nodes it is handed — so
+  // whether what reached the instance is still a workflow an
+  // activation would arm is a question with no answer on this side of
+  // the wire.
+  //
+  // The deploy is this case's own rather than the two above it having
+  // made one. A `-t` filter naming this case, or a run whose cases
+  // were reordered, would otherwise leave it reading whatever an
+  // operator's instance already held, and every reading below would be
+  // about that instead — silently, since an instance holding an older
+  // copy answers all three of them.
+  //
+  // Two claims, and each is held against something written down, which
+  // is what leaves them loud in both directions. The first is what the
+  // classifier answers over the stored nodes, against the one trigger
+  // this port schedules on: a classifier answering for everything
+  // answers with eleven more entries, one answering for nothing
+  // answers with none, and an instance holding no such workflow
+  // answers with the sentence that says so. The second is what the
+  // instance says about having it armed, read as a label rather than
+  // as a boolean so an answer that never arrived is not taken for a
+  // workflow left inert.
+  //
+  // The guard both claims rest on is the one in front of them that
+  // reads the instance: the node types it stored the workflow with,
+  // held against what the source declares. Without it a one-node
+  // workflow under this name satisfies both — a schedule trigger arms,
+  // and nothing armed it — so the reading would be about something
+  // that is not what was deployed. The source is the independent side,
+  // the way `declaredNames` is for the case above.
+  //
+  // The listing is read once and three things are asked of it, which
+  // is why neither `namesHeldBy` nor `timesHeldBy` is reached for:
+  // each of those lists for itself, and three readings taken over
+  // three listings can disagree about an instance that moved between
+  // them.
+  //
+  // Nothing here arms anything, and the reading of `active` is what
+  // says so rather than an assertion about calls nobody made.
+  // `activateWorkflow` is exported by `n8n-client.ts` and this file
+  // does not import it; what the reading adds is the half that is not
+  // about this file at all, that the upload did not arm it either —
+  // the create handler forces a new workflow inactive, and an update
+  // republishes only one that was already armed.
+  //
+  // The limit is the walk's disabled skip, which no run of this can
+  // reach. No node in `workflows/src/` carries the member and nothing
+  // between an artifact and the instance adds one, so what parts a
+  // node an operator switched off from one left running is
+  // `tests/scripts/n8n-workflow.test.ts`'s claim alone and stays there
+  // until somebody edits a workflow on the canvas.
+  //
+  // Measured over a throwaway instance, and five of the eight legs
+  // name a single member. The classifier answering for nothing and the
+  // classifier answering for everything each move the arming claim
+  // alone, which is the pair saying a must-find held against a
+  // written-down expectation needs no coverage case of its own. The
+  // reader finding no workflow of that name moves all three readings,
+  // and so does `listWorkflows` answering with nothing, which is a
+  // mutation in the client rather than in anything here and reddens
+  // the two cases above as well.
+  //
+  // The guard is read by two legs, one from either side of the
+  // comparison it makes. An upload cut down to its first node leaves
+  // the instance holding a one-node workflow under this name, and the
+  // guard moves ALONE with both claims green — the vacuity it exists
+  // for, measured rather than argued. Truncating what the source
+  // declares moves it alone from the other side, which is what says it
+  // reads that file rather than restating the reading it is held
+  // against.
+  //
+  // The inactive claim has a leg of its own that edits nothing: arm
+  // the workflow on the instance by hand and run. It moves that claim
+  // alone, the arming claim and the guard staying green, and what it
+  // measures on the way past is why the claim is worth asserting at
+  // all — a redeploy over an armed workflow republishes it rather than
+  // standing it down, so an upload is inert only for a workflow the
+  // instance was not already running.
+  //
+  // The build and upload guards come apart from the claims the way the
+  // case above's do. Over an instance already holding the workflow, a
+  // build reporting no artifact moves two of them alone and leaves
+  // every reading of the instance green. And the leg those two cases
+  // rest on does not reach here: `displayNamesListed` emptied moves
+  // three members between them and nothing of this, this case reading
+  // the listing for itself rather than through the helper they share.
+  it('reads the dispatch workflow back as one an activation would arm', async () => {
+    const {
+      built,
+      checkout,
+      checkoutState,
+      dispatch,
+      instance,
+      settings,
+      sources,
+    } = fixture();
+
+    const uploaded = await deploy({
+      build: () => built.build,
+      fetch,
+      root: checkout,
+      settings,
+    });
+
+    // One listing behind all three readings below, taken after the
+    // upload: what is asked is what the instance is holding once the
+    // calls have returned, and asking it three times would be asking
+    // about three moments.
+    const stored = storedAs(await listWorkflows(instance), dispatch.name);
+
+    expect({
+      theBuildRan: built.outcome,
+      itWroteOneArtifactPerSource: [...built.build.files].sort(),
+      theCheckoutTheDeployAsksGitAbout: checkoutState,
+      everyArtifactWasUploaded: uploaded
+        .map((workflow) => workflow.file)
+        .sort(),
+      theNodeTypesTheInstanceStoredItWith: stored === null
+        ? [NOT_READ_BACK]
+        : stored.nodes.map((node) => node.type),
+      whatAnActivationWouldArmItFor: stored === null
+        ? [NOT_READ_BACK]
+        : activatableTriggers(stored).map((node) => node.type),
+      whetherTheInstanceHasItArmed: stored === null
+        ? NOT_READ_BACK
+        : `active: ${String(stored.active)}`,
+    }).toEqual({
+      theBuildRan: BUILD_RAN,
+      itWroteOneArtifactPerSource: sources,
+      theCheckoutTheDeployAsksGitAbout: CHECKOUT_CLEAN,
+      everyArtifactWasUploaded: sources,
+      theNodeTypesTheInstanceStoredItWith: dispatch.nodeTypes,
+      whatAnActivationWouldArmItFor: [SCHEDULE_TRIGGER_TYPE],
+      whetherTheInstanceHasItArmed: INACTIVE,
     });
   });
 });
