@@ -52,8 +52,16 @@ const SURFACES_BY_ID = new Map<string, Surface>(
 /** The base the route tree sits at when no domain is in the URL. */
 export const SINGLE_DOMAIN_BASE = '/';
 
-/** The prefix the domain-scoped copy of the route tree is mounted behind. */
-const DOMAIN_BASE_PREFIX = '/d';
+/**
+ * The prefix the domain-scoped copy of the route tree is mounted behind.
+ *
+ * Exported for `./router.tsx` alone, which builds its `/d/:domainSlug`
+ * path pattern from it. A pattern is the router's to own, but the `/d`
+ * inside it is this module's — `domainBase` and `swapBase` both encode
+ * it — and a third spelling over there is exactly the drift that would
+ * leave the tree mounted somewhere the links do not point.
+ */
+export const DOMAIN_BASE_PREFIX = '/d';
 
 /**
  * Slug shape: lowercase alphanumerics and dashes, which is what the domain
