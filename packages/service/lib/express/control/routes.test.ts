@@ -63,6 +63,32 @@ describe('GET /_control/status', () => {
     expect(res.body.uptime).toBeGreaterThanOrEqual(0);
   });
 
+  // Built inline rather than through `makeApp` because `config.version` is the
+  // whole subject and the helper omits it — an omitted version is what the case
+  // above already covers, so the two together are one grid over that field.
+  // The literal deliberately does not look like a package version: a router
+  // that dropped the field and read `package.json` anyway would fail here on
+  // the value, where a `\d+\.\d+\.\d+` fixture would have passed either way.
+  it('reports config.version verbatim when the config supplies one', async () => {
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter(
+        [],
+        [],
+        { enabled: true, secret: SECRET, version: 'bundled-42' },
+        'my-service',
+      ),
+    );
+
+    const res = await request(app)
+      .get('/_control/status')
+      .set('x-control-token', SECRET);
+
+    expect(res.status).toBe(200);
+    expect(res.body.version).toBe('bundled-42');
+  });
+
   it('omits detail when dependency does not implement healthDetail', async () => {
     const dep = makeDep({ name: 'db', status: 'running' });
     const app = makeApp([dep], []);

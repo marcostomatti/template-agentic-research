@@ -33,10 +33,18 @@ const nameParamSchema = z.string().min(1);
  * carries a third gate of its own: it is served only when `config.allowStop`
  * is `true`, and answers 404 otherwise.
  *
+ * The version reported by `GET /status` is resolved once at construction
+ * time. `config.version` is handed to {@link readServiceVersion} and wins
+ * outright when supplied; omitting it leaves the version read from the
+ * nearest `package.json` above this module, which is what a normal
+ * checkout wants. Resolving here rather than per request keeps the read
+ * off the request path and matches `startTime`, the other value this
+ * factory fixes for the router's lifetime.
+ *
  * @param deps - Array of managed `Dependency` instances registered with the service.
  * @param clients - Array of managed HTTP client `Dependency` instances.
  * @param config - Control plane configuration (`enabled`, `secret`,
- *   `allowStop`).
+ *   `allowStop`, `version`).
  * @param serviceId - Unique identifier for this service, included in the status response.
  * @returns A configured Express `Router` that must be mounted at `/_control` in the
  *   host application.
@@ -49,7 +57,7 @@ export function createControlRouter(
 ): ExpressRouter {
   const router = Router();
   const startTime = Date.now();
-  const version = readServiceVersion();
+  const version = readServiceVersion(config.version);
 
   router.use(controlEnabled(config.enabled));
   router.use(controlAuth(config.secret));

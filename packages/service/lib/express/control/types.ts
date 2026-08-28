@@ -156,7 +156,12 @@ export type ControlStatusResponse = {
   status: string
   /** Service uptime in seconds since the HTTP server started accepting requests. */
   uptime: number
-  /** Service version read from `package.json` at startup. */
+  /**
+   * Service version, resolved once when the router is created rather
+   * than per request. `ControlConfig.version` supplies it directly when
+   * present; otherwise it is the `version` field of the nearest
+   * `package.json` above the control-plane module, or `'unknown'`.
+   */
   version: string
   /** Per-dependency runtime status keyed by dependency name. */
   dependencies: Record<string, DependencyControlStatus>
