@@ -89,8 +89,13 @@ describe('createHttpLogger — req.log attachment', () => {
 
     const reqWithLog = req as IncomingMessage & { log?: unknown };
     expect(reqWithLog.log).toBeDefined();
-    expect(typeof (reqWithLog.log as Record<string, unknown>)['info']).toBe('function');
-    expect(typeof (reqWithLog.log as Record<string, unknown>)['child']).toBe('function');
+    // pino-http declaration-merges `log: pino.Logger` onto `http.IncomingMessage`, and
+    // that merged member wins over the local `log?: unknown` above. The double cast
+    // erases that pino `Logger` on purpose: it carries no string index signature, and
+    // this test deliberately probes the attached value as a bag of properties, so the
+    // assertions stay about the child logger's methods rather than pino's type shape.
+    expect(typeof (reqWithLog.log as unknown as Record<string, unknown>)['info']).toBe('function');
+    expect(typeof (reqWithLog.log as unknown as Record<string, unknown>)['child']).toBe('function');
   });
 });
 
