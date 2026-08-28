@@ -129,6 +129,23 @@ AR_N8N_CONTAINER="${AR_N8N_CONTAINER:-ar-n8n}"
 # acts on go first and the raw failure after them, because bun prints
 # a source excerpt around an uncaught error and a fix line behind
 # that is a fix line nobody reads.
+#
+# An `if !` around the assignment rather than a bare one, because
+# `-e` is the one thing here it costs rather than buys. A plain
+# assignment is a command and its status is the substitution's, so
+# the same substitution assigned bare ends the run on that line and
+# this guard never runs. A condition is where `-e` does not act on a
+# status, and that is the whole of what leaves this failure a message
+# of its own to end on.
+#
+# The capture and that abort are separate, and running the two
+# together is the easy thing to get wrong about this line: it is not
+# the redirection that ENDS the run. Measured on the bash `env` finds
+# here, 3.2: the same assignment without the `2>&1` aborts on the
+# same status, and what folding stderr in takes away is the one thing
+# that would still have reached a terminal. With the redirection in
+# place, a bare assignment leaves a non-zero exit and no output at
+# all.
 if ! PLAN="$(bun -e '
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
