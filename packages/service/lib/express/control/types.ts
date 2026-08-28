@@ -4,12 +4,26 @@
  * When `enabled` is `false`, all `/_control` routes respond with 404.
  * When `enabled` is `true`, routes are protected by `secret` via the
  * `x-control-token` request header.
+ *
+ * Enabling the plane does not enable all of it: the destructive
+ * `POST /_control/stop` route is served only when `allowStop` opts in.
  */
 export interface ControlConfig {
   /** Whether the control plane routes are active. */
   enabled: boolean
   /** Shared secret required in the `x-control-token` header. */
   secret: string
+  /**
+   * Whether `POST /_control/stop`, which shuts the process down, is
+   * served. Defaults to `false`: a config that omits this field keeps
+   * every other control route and loses that one.
+   *
+   * When absent or `false` the route answers 404 rather than 403, the
+   * same answer the whole plane gives while `enabled` is `false` — a
+   * caller holding a valid token is not told a shutdown endpoint
+   * exists here.
+   */
+  allowStop?: boolean
 }
 
 /**
