@@ -81,16 +81,25 @@
  * the transaction keeps that true of a machine slow enough for it not
  * to be, rather than of this one.
  *
- * Two guards sit in front of the comparison. The first is that what is
- * under test came out of a build made here, and that the nodes driven
- * are every node in the built dispatcher whose statement carries the
- * clamp — derived from the artifact and held against a written-out
- * pair, so a third schedulable table's claim is driven or reported
- * rather than quietly left out. The second is that those statements
- * moved rows: two expressions that each answered the proposal they
- * were handed agree over a table that clamps nothing, so agreement is
- * a claim only where the expression agreed with does something, and
- * only the outcomes Postgres produced say whether it did.
+ * Three guards sit in front of the comparison. The first is that what
+ * is under test came out of a build made here, and that the nodes
+ * driven are every node in the built dispatcher whose statement
+ * carries the clamp — derived from the artifact and held against a
+ * written-out pair, so a third schedulable table's claim is driven or
+ * reported rather than quietly left out. The second is that those
+ * statements moved rows: two expressions that each answered the
+ * proposal they were handed agree over a table that clamps nothing, so
+ * agreement is a claim only where the expression agreed with does
+ * something, and only the outcomes Postgres produced say whether it
+ * did. The third is that the rows driven are the rows
+ * `tests/lib/schedule.test.ts` is written over. What is claimed here
+ * is that the two expressions agree, and that the answer they agree on
+ * is the right one is that file's claim — made over the five declared
+ * groups its sections walk rather than over the composed table this
+ * one drives — so the two compose only while the groups and the table
+ * hold one set of rows. The groups are named again here for that
+ * comparison, a union taken off the table being the table agreeing
+ * with itself.
  *
  * What is deliberately not asserted here is which ROWS make the
  * comparison able to report a clamp written wrongly. A floor with no
@@ -100,7 +109,10 @@
  * differently. Both are pinned in `tests/lib/schedule.test.ts`, which
  * the default suite runs on every verification and which
  * `bun run test:live` collects not at all — so a copy here would say
- * the same thing in the one run that needs it least.
+ * the same thing in the one run that needs it least. The third guard
+ * is not that claim restated: it asks only that the rows driven here
+ * are the rows those pins are written over, which is the whole of what
+ * makes leaving them there safe.
  */
 import type { BuiltWorkflow, BuiltWorkflowNode } from '../invariants/workflow-dist.js';
 import type { ClampCase } from '../lib/schedule-cases.js';
@@ -116,7 +128,14 @@ import { clampIntervalSeconds } from '../../src/lib/schedule.js';
 import { sqlWords } from '../invariants/dispatch-sql.js';
 import { loadBuiltWorkflows } from '../invariants/workflow-dist.js';
 import { queryParametersOf } from '../invariants/workflow-rosters.js';
-import { CLAMP_CASES } from '../lib/schedule-cases.js';
+import {
+  CAPPED_CLAMP_CASES,
+  CLAMP_CASES,
+  CROSSED_BOUND_CLAMP_CASES,
+  FLOORED_CLAMP_CASES,
+  INERT_BOUND_CLAMP_CASES,
+  UNBOUNDED_CLAMP_CASES,
+} from '../lib/schedule-cases.js';
 
 import {
   applyMigrations,
@@ -435,9 +454,43 @@ const DRIVEN_NODE_NAMES: readonly string[] = [
   'Claim Due Topics',
 ];
 
+/**
+ * The groups `tests/lib/schedule.test.ts` writes its claims over,
+ * and the whole of them.
+ *
+ * Named again here rather than taken off the table this file drives.
+ * `CLAMP_CASES` is composed from these five, so a union read off it
+ * would be that table agreeing with itself — and what a roster here
+ * reaches instead is a sixth group landing beside these, or one of
+ * these dropped out of the composition, neither of which this file
+ * would otherwise notice.
+ *
+ * Groups rather than the ids they hold, so both sides of that
+ * comparison read their ids the same way and a divergence is about
+ * which rows each side carries rather than about how either was
+ * spelled.
+ */
+const ASSERTED_CLAMP_GROUPS: readonly (readonly ClampCase[])[] = [
+  CAPPED_CLAMP_CASES,
+  CROSSED_BOUND_CLAMP_CASES,
+  FLOORED_CLAMP_CASES,
+  INERT_BOUND_CLAMP_CASES,
+  UNBOUNDED_CLAMP_CASES,
+];
+
 /** Sorted copy, so an equality is over members rather than order. */
-function sorted(names: readonly string[]): readonly string[] {
-  return [...names].sort();
+function sorted(values: readonly string[]): readonly string[] {
+  return [...values].sort();
+}
+
+/**
+ * The ids a list of rows carries, in the order it carries them.
+ *
+ * @param cases - The rows to read.
+ * @returns Their ids.
+ */
+function caseIds(cases: readonly ClampCase[]): readonly string[] {
+  return cases.map((testCase) => testCase.id);
 }
 
 /**
@@ -881,6 +934,44 @@ describeLivePg('dispatcher reschedule clamp (live Postgres)', () => {
     }).toEqual({
       outcomesReached: sorted([...CLAMP_OUTCOMES]),
       rowsClaimed: EVERY_ROW_CLAIMED,
+    });
+  });
+
+  // The third guard, and the only case in this file that reads no
+  // drive: the rows this file plants and compares are the rows
+  // `tests/lib/schedule.test.ts` is written over.
+  //
+  // The claim below is only that the two expressions agree. Whether
+  // the answer they agree on is the right one is that file's claim,
+  // and it makes it over the five declared groups its sections walk
+  // rather than over the composed table this one drives — so the two
+  // compose only while the groups and the table hold one set of rows.
+  // Rows the composition stopped reaching are judged over there and
+  // never put to a statement here; a row the composition grew past
+  // these five is driven here and judged by nothing.
+  //
+  // That tie is read from the other side too, where each group is held
+  // against the table filtered by the property it stands for. What is
+  // new here is the invocation and the roster: `bun run test:live`
+  // collects none of that file, and a sixth group landing beside these
+  // five is a thing no guard over there can see this file failing to
+  // drive.
+  //
+  // Sorted lists rather than sets, so one id written into a group and
+  // into the table twice over reddens instead of being swallowed. The
+  // non-empty half rides in the same record because two empty lists
+  // compare equal — the guard over the outcomes Postgres produced
+  // reddens for an emptied table as well, and this is what names the
+  // cause in this comparison's own diff.
+  it('drives the rows the clamp function is held against next door', () => {
+    const assertedNextDoor = caseIds(ASSERTED_CLAMP_GROUPS.flat());
+
+    expect({
+      idsDrivenHere: sorted(caseIds(CLAMP_CASES)),
+      theGroupsDeclareRows: assertedNextDoor.length > 0,
+    }).toEqual({
+      idsDrivenHere: sorted(assertedNextDoor),
+      theGroupsDeclareRows: true,
     });
   });
 
