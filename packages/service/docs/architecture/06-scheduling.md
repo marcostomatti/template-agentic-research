@@ -455,3 +455,52 @@ That sits outside this database and outside this repository, and it is
 the cost of the choice rather than an oversight: a row per tick would
 have put liveness in `runs` and paid for it in both `domain_id` and
 `scheduled_by`.
+
+### No column on a run names the workflow that opened it
+
+`INSERT INTO runs (domain_id, scheduled_by)` is the whole of what the
+dispatcher supplies, and the six columns `src/db/schema/runs.ts` adds
+to those two — a surrogate key, a start, a finish, a status, a tally
+and a list of failures — say what a pass did and never who ran it. A
+row read on its own cannot answer which workflow opened it.
+
+The question is answerable today all the same, by convention rather
+than by reading. `ar-dispatch` is the only workflow that opens one, so
+every row a workflow opened came out of the dispatcher's own insert,
+and the answer belongs to the table instead of to the row. The scope
+is workflows rather than the table: `src/db/schema/taxonomy.ts`
+records that rows in this schema arrive from the seed script, from
+hand-written SQL inside workflow nodes and from an operator at a psql
+prompt, and it is the middle of those three the convention covers.
+
+A reading this document has already made rests on it. Counting `runs`
+rows says nothing about a cadence because the row rate is the dispatch
+rate — true of a table one workflow writes, and not of a shared one,
+where the rate is the sum of every writer's and there is no column to
+filter one writer out by. What the dispatcher can claim on its own is
+narrower, and is about its own statement: the rows that statement
+opens are the units its cap kept. Reading a dispatch rate off the
+table rather than off the node is what the convention buys.
+
+Nothing would report the change. The entries in
+`tests/invariants/dispatch-sql.ts` each name a node of `ar-dispatch`,
+so a second workflow's insert is outside what any of them reads, and
+the sweeps in `tests/invariants/workflows.test.ts` key on node types
+and on what a workflow holding a model node owes. The one place `runs`
+appears in that suite is as the near-miss control that proves the
+ledger rule does not fire on an insert against another table. So the
+premise is a fact about the workflow set rather than a checked
+property, and it stops holding without a case failing.
+
+Phase 5 is where it stops. The roster in `workflows/src/README.md`
+delivers `ar-ingest`, `ar-capture` and `ar-score` there, and the first
+of the three to open a run of its own leaves two workflows sharing one
+table with nothing in a row to tell their passes apart. What is stored
+narrows without naming: `domain_id` says which domain a pass ran for
+and several workflows will run for the same one, while `scheduled_by`
+carries the same literal on every row this workflow opens. `counts`
+and `errors` refuse nothing, so a producer's name dropped into either
+is one writer's habit rather than a column a reader can query. Closing
+the gap is a column and a column is a migration this phase does not
+carry, which is why it is left open rather than closed: the choice
+between the column and a second convention is phase 5's to take.
