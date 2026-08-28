@@ -135,12 +135,15 @@ const domainFieldSpecSchema = z.object({
  *
  * The two records are the open-by-key case the module header names.
  * Their keys are the domain's own vocabulary and go unchecked; their
- * values do not.
+ * values do not. The `z.string()` in the key slot is that openness
+ * spelled out rather than a check on it: zod requires a key schema
+ * and a value schema from zod 4 on, and a string key is the one
+ * constraint no key of a JSON object can violate.
  */
 const domainSettingsSchema = z.object({
-  scoringWeights: z.record(z.number()).optional(),
+  scoringWeights: z.record(z.string(), z.number()).optional(),
   verdictVocabulary: z.array(z.string()).optional(),
-  fieldContract: z.record(domainFieldSpecSchema).optional(),
+  fieldContract: z.record(z.string(), domainFieldSpecSchema).optional(),
   findingsDisplayName: z.string().optional(),
 }).strict();
 
