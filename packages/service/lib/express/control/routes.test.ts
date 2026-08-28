@@ -523,6 +523,36 @@ describe('POST /_control/stop', () => {
     killSpy.mockRestore();
   });
 
+  // The case above covers the field being ABSENT; this one covers it being
+  // present and `false`. They are not one assertion twice: a gate written as
+  // `'allowStop' in config` refuses the omitted config and serves this one,
+  // so an explicit denial only counts as covered when it is stated.
+  it('returns 404 and never signals when allowStop is explicitly false', async () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter(
+        [],
+        [],
+        { enabled: true, secret: SECRET, allowStop: false },
+        'my-service',
+      ),
+    );
+
+    const res = await request(app)
+      .post('/_control/stop')
+      .set('x-control-token', SECRET);
+    // Same one-tick deferral as the case above — without this wait the
+    // not-called assertion holds even against a router that did stop.
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'not found' });
+    expect(killSpy).not.toHaveBeenCalled();
+    killSpy.mockRestore();
+  });
+
   it('returns 403 when x-control-token is missing', async () => {
     const res = await request(makeApp([], []))
       .post('/_control/stop');
