@@ -62,9 +62,15 @@ on the remote.
 ## Security posture (carried from the templates, incident-derived)
 
 - Isolated vs live test split is structural: the default suite touches no
-  external service; the live suite self-skips without `AR_LIVE_DATABASE_URL`,
-  runs only against the no-volume `ar_live` DB on port 5433, and its
-  destructive helpers refuse any other database name.
+  external service; the live files self-skip unless the service they need is
+  configured, and the Postgres half runs only against the no-volume `ar_live`
+  DB on port 5433, whose destructive helpers refuse any other database name.
+  There are TWO gates now, armed differently — `describeLivePg` keys on
+  `AR_LIVE_DATABASE_URL`, which `bun run test:live` sets in its own script
+  definition, and `describeLiveN8n` keys on `AR_N8N_URL`, which nothing here
+  exports and no compose service satisfies. So a live run's steady state is
+  the Postgres files running and the n8n file skipping, and "the live suite"
+  is two things whenever a skip count is being read.
 - Security findings route to a private advisory, never a public tracker —
   and are never searched for on a public tracker first (see the
   `qa-bug-reporter` agent).
@@ -100,18 +106,42 @@ red package never masks another and a single run gives the whole picture.
 - A green `lint:all` prints nothing from ESLint itself — the only positive
   output is one `@ar/<pkg> lint: Exited with code 0` line per package, and
   those three lines are what distinguish "all packages linted clean" from
-  "the filter matched nothing". `check-types:all` is the same shape plus the
-  root `tsc --noEmit` echo.
+  "the filter matched nothing". Hold the three package NAMES set-equal
+  against `packages/*` rather than counting to three — a count cannot say
+  WHICH three. `check-types:all` is the identical shape rather than a longer
+  one: both fan-outs are exactly five lines, and the root `tsc --noEmit`
+  echo occupies the same slot `lint:all` fills with `$ eslint .`. Classify
+  every line, because an unaccounted line IS the tool's own output, and that
+  is the only reading that makes "prints nothing" a measurement.
+- Neither fan-out declares a lifecycle hook, so one exit-zero line per
+  package is exact for both. `test:all` is the exception: `pretest` gives
+  `@ar/service` and `@ar/ui` two prefixed lines apiece.
 - `test:all` prints the root vitest summary, then one line per package.
   TRAP: `@ar/web`'s `test` script is a placeholder `echo`, so its code-0
   line is not evidence of a passing suite. "Every package suite passes"
   means two real suites plus one placeholder — report it that way.
-- `@ar/service` reporting skipped tests is the expected steady state: the
-  live suite self-skipping without `AR_LIVE_DATABASE_URL`. A run with zero
-  skipped means the live database leaked into the default suite, not that
-  something improved. The count is not the check — it moves with every
-  case added under `tests/live/`, so compare it against HEAD's own run
-  rather than against a number quoted here or in a plan.
+- Do NOT grep a `test:all` capture for `failed`/`FAIL`. A fully green run is
+  ~1900 lines and `@ar/service` writes those words deliberately: its
+  vendored framework half exercises its own error paths through structured
+  pino logs (`dependency failed to start`, a request record carrying a 500,
+  `dependency stop failed`), so the natural grep reports three regressions
+  over a run whose every package exited 0. Key on vitest's own glyphs
+  (`×`/`✕`/`✗`) and read the summary lines, which are prefixed per package
+  (`@ar/service test:  Test Files ...`) — a `^ *Test Files` anchor catches
+  the root's summary alone and silently misses every package's.
+- `@ar/service` reporting skipped tests is the expected steady state, and it
+  now has TWO sources behind it: the Postgres-gated files self-skipping
+  without `AR_LIVE_DATABASE_URL`, and the n8n-gated file self-skipping
+  without `AR_N8N_URL`. A run with zero skipped means a live service leaked
+  into the default suite, not that something improved. The count is not the
+  check — it moves with every case added under `tests/live/`, so compare it
+  against HEAD's own run rather than against a number quoted here or in a
+  plan. When the tree IS HEAD there is nothing to compare and nothing to
+  stash: `@ar/service`'s `pretest` prints `1 built, stamped <sha>` a few
+  lines above the vitest banner, so that sha held against
+  `git rev-parse --short HEAD`, plus the ABSENCE of a `-dirty` suffix, says
+  both that the artifacts under test are HEAD's and that the tree is clean —
+  in one line of one run.
 
 ## Workflow
 

@@ -123,12 +123,35 @@ A new directory under `src` needs no config change (tsconfig `include`
 already covers `src`, the `lint` script covers `src lib tests scripts`,
 and vitest discovers tests). `scripts/` used to be asymmetric — listed by
 tsconfig `include`, unnamed by the `lint` script — and phase 2 closed the
-gap, so a `.ts` file there is both type-checked and linted. The
-directories outside every root — `workflows/`, `data/`, `docs/` — are
-covered by no lint or type-check target today. Prove coverage rather than
-assuming it: `tsc --noEmit --listFilesOnly` and `eslint <path> -f json` both
-report what they actually read (see the `prove-gate-coverage-read-only`
-skill).
+gap, so a `.ts` file there is both type-checked and linted. Phase 3 widened
+`lint` to `eslint src lib workflows tests scripts`, which reaches the
+workflow sources, `workflows/src/README.md` AND both generated trees (the
+base config's `dist/**` ignore is base-relative and does not match a nested
+`workflows/dist/**`), so that gate's file set moves with build state — a
+fresh clone lints two files under `workflows/` where a built tree lints
+four. It reads STRUCTURE only there (`jsonc/indent`, empty lines, markdown
+recommended): no node name, statement, marker form or display name is
+checked by it. `data/` and `docs/` are still covered by no lint or
+type-check target.
+
+Prove coverage rather than assuming it — and prove it from the directory you
+are running in, because BOTH gates are cwd-dependent. `eslint`'s governing
+leaf config changes with the launch directory, so a file "no lint gate
+reads" from the repo root is ordinarily linted from inside the package;
+`tsc`'s program is worse than partial — from `packages/service` it is ~857
+files of which 91 are the package's, and from the repo root it is ~311 of
+which ZERO are. Use `--no-warn-ignored -f json` for eslint (a plain
+`errorCount: 0` is indistinguishable between a clean file and a skipped one;
+the tell is `warningCount: 1` carrying `File ignored`) and
+`tsc --noEmit --listFilesOnly` for types, which has no third state. The
+strongest reading of either is a COUNT DELTA between two argument lists
+rather than a grep for one path. See the `prove-gate-coverage-read-only`
+skill.
+
+A `.sh` under a scan root is a third cell: `collectScannedFiles` applies no
+extension filter, so the naming invariant reads it, while `eslint` and `tsc`
+name it never. Shell behaviour here is proven by RUNNING it — including its
+refusal paths — and by nothing else.
 
 Markdown and JSON are gated unevenly here, and the map is worth knowing
 before calling a prose edit verified. The naming invariant's scan roots
@@ -146,9 +169,22 @@ directory) rather than by reading the doc and agreeing with it.
 
 Neither `max-len` nor `max-lines` exists in any config, so the ~800-line
 file cap and the hand-maintained comment wrapping are review-quality
-conventions that turn no gate red. `scripts/seed.ts` and
-`scripts/approve.ts` are both over the cap today, and the seam each wants
-is recorded here rather than in the file: split the LOADER out of
+conventions that turn no gate red. Re-derive the over-cap roster
+(`wc -l scripts/*.ts | sort -rn`) rather than quoting one: phase 3 put five
+more files over it, `scripts/workflow-markers.ts` furthest by a wide margin,
+and any roster written down here goes stale on the next docs task without a
+gate to say so.
+
+Comment WIDTH is likewise measured and not quoted. It varies per directory,
+per file and per block — `scripts/` alone spans 63 to 67 characters of text
+— so read the width off the block you are editing (reproduce its existing
+line breaks at each candidate width) rather than from a sibling, a
+directory, or a number recorded in a doc. The `prose-reflow-helper-asserts`
+skill carries the helper and the nine ways a programmatic rewrap ships
+broken prose that every mechanical check passes.
+
+The seam each over-cap file wants is recorded here rather than in the file:
+split the LOADER out of
 `seed.ts` into `scripts/seed-load.ts` (no import cycle, and it leaves
 `seed.ts` a thin entry point — moving `runSeedCli` out instead does cycle,
 since the guard must stay in the file `bun scripts/seed.ts` runs), and
@@ -248,6 +284,30 @@ guard therefore does not fire — the constructor is reached anyway and raises
 property, never the global. A case that needs the real transpiler spawns
 `bun scripts/build-workflows.ts` as a subprocess;
 `docs/architecture/03-workflows.md` carries the argument for both halves.
+
+Two known flakes live in the vendored framework `lib/` half, neither in
+anything this port wrote, so a single red case naming one of them is not a
+regression in your change. In `lib/express/control/routes.test.ts`, the
+restart route's `returns 404 when control plane is disabled` case is
+order-dependent; in `lib/express/builtin-routes.test.ts`, `GET /health`'s
+`returns 200 when all dependencies are running` fails with `socket hang up`,
+which is transport-level rather than an assertion at all.
+Three discriminators, and all three must hold: it passes when run alone, an
+immediate full re-run is green, and the two runs report the SAME totals with
+the failure moved into the passed column — that totals identity is the
+cheapest evidence a red is a flake rather than a case that stopped running.
+Under the default reporter a one-off red cannot be attributed at all (it
+prints only a count), so capture with `--reporter=verbose`. Check `uptime`
+before chasing either: machine-load timeouts pick a different victim each
+run, and the tell is the summary line, where a healthy `@ar/service` run
+reads `import ~4s / tests ~2.5s` and a degraded one reads hundreds of
+seconds. Never start a second vitest process while the full suite runs.
+
+A green suite cannot say a file was COLLECTED. Renaming one out of the glob
+leaves the run fully green and moves only the two denominators, which nobody
+holds against a prior run — `bun x vitest list --filesOnly` collects without
+running, so a grep over it answers membership directly and its count against
+the run's own parenthesised denominator ties collection to the run.
 
 ## Plans and specs
 
