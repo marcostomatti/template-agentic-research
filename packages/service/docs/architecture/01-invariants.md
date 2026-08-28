@@ -19,7 +19,7 @@ the 7-phase sequencing in that design, §7.
 
 | Invariant | Enforced by | Owning phase | Status |
 | --- | --- | --- | --- |
-| No workflow holds a send-capable node | `tests/invariants/`, over workflows built from `workflows/src/` | 3 | Pending |
+| No workflow holds a send-capable node | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
 | A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
 | Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
 | Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/`, over workflows built from `workflows/src/` | 3 | Pending |
@@ -74,12 +74,21 @@ email export produces a draft and stops there. Reaching outward is a
 service-layer capability that arrives later, behind its own approval
 gate, so nothing in the executor needs the ability at all.
 
-The node-type scan is what keeps it that way. A send-capable node
-added to any workflow — deliberately, or carried in by a copied
-template — fails the suite before the workflow reaches an instance.
-The payoff is a review surface small enough to audit: one gate to read
-rather than every workflow, and a pipeline bug that stays a pipeline
-bug instead of becoming a delivery one.
+The node-type scan is what keeps it that way. A node of one of the
+types it names, added to any workflow — deliberately, or carried in by
+a copied template — fails the suite before the workflow reaches an
+instance. The payoff is a review surface small enough to audit: one
+gate to read rather than every workflow, and a pipeline bug that stays
+a pipeline bug instead of becoming a delivery one.
+
+What `Implemented` means for this row is narrower than the heading
+above it. Nothing in a test can ask an instance what a node is able to
+do, so the scan holds a node's type against a roster carrying one
+entry per send route rather than one per vendor: a workflow reaching
+for a further vendor of a route already named is a miss, and the
+answer to one is an entry rather than a wider pattern.
+`tests/invariants/workflow-rosters.ts` is where that set lives, and
+each entry states the route it stands for.
 
 ### Four separate properties bound what a run can spend
 
