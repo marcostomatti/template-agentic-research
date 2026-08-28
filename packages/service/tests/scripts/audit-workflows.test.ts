@@ -3,18 +3,20 @@
  * no instance anywhere in the run. `classify` takes two lists and
  * answers with five readings and a verdict over them, opening no
  * socket and reading no file, so the whole of what reaches it in
- * this file is a listing written out by hand and the names this
+ * this file is listings written out by hand and the names this
  * repository is standing in for. Nothing is stubbed, because there
  * is nothing to stub.
  *
- * Two blocks, and a listing of its own for each. They cannot share
- * one: the first asserts that no two of its workflows answer to a
+ * Three blocks, and listings of their own for each. They cannot
+ * share: the first asserts that no two of its workflows answer to a
  * single label, and a listing where two of them do is precisely what
- * the second is written over. Every declaration is filed under the
- * block it belongs to and no block reads another's, the module under
- * test aside. The one thing that crosses is a doc reference: the
- * second block's reader of an id names the first block's reader of a
- * label, to say which of the two a duplicate needs.
+ * the second is written over, while the third wants five of them
+ * rather than one, each carrying a different combination of the
+ * conditions a verdict is read for. Every declaration is filed under
+ * the block it belongs to and no block reads another's, the module
+ * under test aside. The one thing that crosses is a doc reference:
+ * the second block's reader of an id names the first block's reader
+ * of a label, to say which of the two a duplicate needs.
  *
  * The first block is over the two readings that module argues an
  * operator acts on first. A workflow no expected name accounts for
@@ -32,16 +34,17 @@
  * reading wrong — counting every armed workflow rather than every
  * armed stray, handing it the strays entire, and never filling it at
  * all — each redden the second alone, and a run sorting nothing into
- * the strays reddens the first alone.
+ * the strays reddens the first alongside the third block's verdict
+ * claim, which reads whether the strays came back empty.
  *
  * One leg moves both, and that fixture is built for it to. A run
  * sorting EVERYTHING into the strays reddens the second as well as
- * the first, because the workflow this repository declares is itself
- * armed and so arrives under both readings at once. It is armed for
- * that reason and no other, which is measurable rather than
- * arguable: with it inert, a run counting every armed workflow
- * rather than every armed stray answers over that listing exactly as
- * the shipped one does.
+ * the first, and the third block's verdict claim with them, because
+ * the workflow this repository declares is itself armed and so
+ * arrives under both readings at once. It is armed for that reason
+ * and no other, which is measurable rather than arguable: with it
+ * inert, a run counting every armed workflow rather than every armed
+ * stray answers over that listing exactly as the shipped one does.
  *
  * Four workflows in it, one per reading, and the order they are
  * listed in is part of the fixture rather than a detail of it. The
@@ -84,8 +87,9 @@
  * should answer; the remaining two are held once, so a run reporting
  * every name it saw reddens as well. Measured, those two legs and
  * the two beneath them — a run answering with no missing name, and
- * one answering with no duplicate — each redden their own claim and
- * nothing else in the file.
+ * one answering with no duplicate — each redden their own claim, and
+ * the two of the four that move the duplicates redden the third
+ * block's verdict claim alongside it.
  *
  * The declared duplicate is the one that earns its line twice over.
  * The module records a name before it asks whether the expected set
@@ -93,10 +97,11 @@
  * this repository declares it — and a run reporting duplicates only
  * among the names it sorted into the strays answers over that
  * listing with the undeclared pair alone. Measured, that leg reddens
- * the duplicate claim alone, and goes green the moment the expected
- * set stops declaring the shared name, which is what says it is
- * keyed to that name being declared rather than to anything else
- * about the pair.
+ * the duplicate claim and, in the third block, the verdict claim
+ * that reads whether the duplicates came back empty; the duplicate
+ * claim goes green the moment the expected set stops declaring the
+ * shared name, which is what says it is keyed to that name being
+ * declared rather than to anything else about the pair.
  *
  * Both comparisons there are ordered too, and neither order is one a
  * sort produces. `missing` follows the order the expected names were
@@ -114,8 +119,56 @@
  * accumulating across the listing reddens — and, measured, is fully
  * green over the same listing with each pair brought together.
  *
- * Three guards to each block, and in both cases each is about the
- * fixture rather than about the sorting.
+ * The third block is over the verdict those readings produce, and
+ * over the word ONLY in it. An instance is clean where it holds no
+ * stray and no name more than one workflow answers to, and it is
+ * clean even where it holds no workflow under a name this repository
+ * declares. That last is the module's own reading rather than an
+ * oversight: what is missing is the instance sitting behind this
+ * repository and one deploy from being level with it, where a stray
+ * is the instance carrying something no part of this repository
+ * accounts for.
+ *
+ * Five listings rather than one, each carrying a different
+ * combination of those three conditions, and one table rather than a
+ * case each — the ONLY is a statement about the five together. Two
+ * of them answer true: one holding what this repository declares and
+ * nothing besides, and one withholding a declared name. The other
+ * three answer false, one per condition that does decide the verdict
+ * and one carrying both at once.
+ *
+ * All five are built out of the same four workflows, so what parts
+ * one listing from another is which of the four it holds and nothing
+ * else. The duplicate is under a DECLARED name, which leaves the
+ * listing holding it carrying no stray at all, both workflows being
+ * ones an expected name accounts for. And the listing carrying both
+ * conditions carries them on DIFFERENT workflows, which is what
+ * parts two rules a pair under a single undeclared name would not.
+ *
+ * One claim reads the verdict, so every wrong rule moves that one
+ * case and which ROW moved is the report. Measured over the five:
+ * reading the strays alone moves the listing holding a duplicate;
+ * reading the duplicates alone moves the one holding a stray;
+ * counting a missing name against the instance moves the one whose
+ * only condition is that; answering with the disjunction where the
+ * conjunction belongs moves the two carrying one condition each and
+ * leaves the one carrying both; and calling an instance clean
+ * wherever the two deciding readings are both empty or both not, or
+ * wherever they come to the same number of entries, moves the one
+ * carrying both alone. Answering true to everything moves the three
+ * listings carrying a condition, and false to everything the two
+ * without one.
+ *
+ * Nothing about the order the five are written in reaches the
+ * module, each being a call of its own, which is the axis the other
+ * two blocks build their fixtures around and this one holds still.
+ * And what the claim reads of an answer is whether each of the two
+ * deciding readings came back empty and nothing else, so which
+ * workflows are under either of them is those blocks' subject and
+ * not this one's.
+ *
+ * Three guards to each block, and in all three cases each is about
+ * the fixture rather than about the sorting.
  *
  * The first block's are these. Every workflow answers to a label of
  * its own, which is what makes a label the thing a claim compares —
@@ -157,25 +210,48 @@
  * that roster moves the third alone, where in the first block it
  * takes the claims with it.
  *
- * No guard in front of either listing saying it is not empty, which
- * the sibling suites in this directory carry. There is nothing for
- * one to isolate in either block: every claim in the file holds its
- * answer against names written out, so an emptied listing reddens
- * the claims rather than leaving them comparing one empty list with
- * another. Measured, that is the first block's two claims and no
- * guard, and the second block's two claims with two of its guards
- * behind them — that block reads what a name amounts to off the
- * listing itself, where the first reads it off the workflow in hand.
+ * The third block's three are about its listings rather than about
+ * the verdict. Nothing in any of them is armed and nothing in them
+ * is missing a display name, which is what keeps five listings out
+ * of the two readings the first block is written over. Each row
+ * carries the combination it declares, held against the one derived
+ * from its own listing and the expected names without the module
+ * being called. And the five combinations the rows cover are held
+ * against the five that block is written over.
  *
- * One reading no case reaches, and one strictness. The verdict over
- * the five is read by nothing here, and both listings make it false.
- * The armed reading is strict against `true` where every other value
- * is one an instance would not have armed on, which the module
- * argues at length and which no sample in either block hands over —
- * measured, a truthiness test answers over both listings exactly as
- * the shipped one does. And nothing asks either list what it holds
- * AFTER a call, so a run that had written into what it was handed
- * passes every case below, which is measured in both blocks too.
+ * Measured, each of those reddens alone as well. A workflow with no
+ * display name added to the listing that already holds a stray, and
+ * one of the four armed, each move the first and nothing else in the
+ * file. A row's declared combination edited off what its listing
+ * carries moves the second alone. A row dropped along with its line
+ * in the verdicts written out, and the roster of combinations
+ * emptied, each move the third alone. A listing edited until it
+ * carries some other combination moves the second and the third
+ * together, and cannot move one without the other: any combination
+ * it moves to is either one another row already carries or one the
+ * roster does not name, and the guard over them reports both.
+ *
+ * No guard in front of any listing saying it is not empty, which the
+ * sibling suites in this directory carry. There is nothing for one
+ * to isolate in any of the three blocks: every claim in the file
+ * holds its answer against names or verdicts written out, so an
+ * emptied fixture reddens the claims rather than leaving them
+ * comparing one empty list with another. Measured, that is the first
+ * block's two claims and no guard, the second block's two claims
+ * with two of its guards behind them — that block reads what a name
+ * amounts to off the listing itself, where the first reads it off
+ * the workflow in hand — and, in the third, the verdict claim with
+ * the guard over its combinations.
+ *
+ * One strictness, and one thing no case in the file asks. The armed
+ * reading is strict against `true` where every other value is one an
+ * instance would not have armed on, which the module argues at
+ * length and which no sample in any of the three blocks hands over —
+ * measured, a truthiness test answers over every listing here
+ * exactly as the shipped one does. And nothing asks either list what
+ * it holds AFTER a call, so a run that had written into what it was
+ * handed passes every case below, which is measured in all three
+ * blocks.
  */
 import type { RemoteWorkflow } from '../../scripts/n8n-client.js';
 
@@ -876,6 +952,362 @@ describe('classify — a name held by nothing, and one held twice', () => {
         name: TWINNED_NAME,
         workflows: [TWINNED_FIRST_ID, TWINNED_SECOND_ID],
       },
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The names a verdict is read against
+// ---------------------------------------------------------------------------
+
+/** A declared name every listing in this block holds a workflow under. */
+const ACCOUNTED_NAME = 'AR Accounted';
+
+/** The other declared name, held by every listing here but one. */
+const ALSO_ACCOUNTED_NAME = 'AR Also Accounted';
+
+/** The undeclared name a stray answers to. */
+const UNACCOUNTED_NAME = 'AR Unaccounted';
+
+/**
+ * Every name this repository is standing in for, in this block.
+ *
+ * Two rather than one, because a listing here has to be able to
+ * withhold a declared name while still holding another. A name the
+ * instance holds no workflow under is one of the three conditions
+ * the verdict could be read over, and it is the one this block is
+ * written to show does NOT decide it — so it needs a listing of its
+ * own, and with a single declared name that listing could only be
+ * the empty one. An instance holding nothing at all is a weaker
+ * thing to call clean than one holding what this repository
+ * declares.
+ */
+const VERDICT_EXPECTED_NAMES = [ACCOUNTED_NAME, ALSO_ACCOUNTED_NAME];
+
+// ---------------------------------------------------------------------------
+// The four workflows every listing here is built out of
+// ---------------------------------------------------------------------------
+
+/**
+ * The workflow every listing in this block holds.
+ *
+ * All four of them are shared between the listings rather than
+ * written out per row, which is what leaves a row differing from
+ * its neighbour only in what was added to it or taken from it.
+ * Nothing writes into either list it is handed, so a workflow in
+ * five listings is read five times and is the same workflow each
+ * time.
+ *
+ * Every one of them is inert and carries a display name. The armed
+ * reading and the unnamed one are the first block's subjects and no
+ * claim here reads either, which the first guard below holds this
+ * fixture to rather than leaving to how it happens to be written.
+ */
+const ACCOUNTED_WORKFLOW: RemoteWorkflow = {
+  active: false,
+  id: 'wf-accounted',
+  name: ACCOUNTED_NAME,
+};
+
+/** The workflow under the other declared name. */
+const ALSO_ACCOUNTED_WORKFLOW: RemoteWorkflow = {
+  active: false,
+  id: 'wf-also-accounted',
+  name: ALSO_ACCOUNTED_NAME,
+};
+
+/**
+ * A second workflow under that same name, which is a duplicate.
+ *
+ * Under a DECLARED name, so a listing holding both of them carries
+ * a duplicate and no stray at all — each is a workflow an expected
+ * name accounts for. That is what makes the row holding it the one
+ * a run reading the verdict off the strays alone answers wrongly.
+ */
+const ALSO_ACCOUNTED_TWIN: RemoteWorkflow = {
+  active: false,
+  id: 'wf-also-accounted-twin',
+  name: ALSO_ACCOUNTED_NAME,
+};
+
+/**
+ * A workflow no expected name accounts for.
+ *
+ * One of it rather than a pair, so a listing holding it carries a
+ * stray and no duplicate. A pair under one undeclared name would
+ * carry both conditions at once, which is a listing this block does
+ * not want: the two arriving on DIFFERENT workflows parts one rule
+ * that pair does not, a run calling an instance clean wherever the
+ * strays and the duplicates come to the same number.
+ */
+const UNACCOUNTED_WORKFLOW: RemoteWorkflow = {
+  active: false,
+  id: 'wf-unaccounted',
+  name: UNACCOUNTED_NAME,
+};
+
+// ---------------------------------------------------------------------------
+// The five combinations of conditions the listings are written over
+// ---------------------------------------------------------------------------
+
+/** A listing carrying none of the three conditions. */
+const CONDITIONS_NOTHING_AMISS = 'no stray, no duplicate, no missing name';
+
+/** One holding no workflow under a name this repository declares. */
+const CONDITIONS_MISSING = 'no stray, no duplicate, a missing name';
+
+/** One holding a workflow no declared name accounts for. */
+const CONDITIONS_STRAY = 'a stray, no duplicate, no missing name';
+
+/** One holding two workflows under a single name. */
+const CONDITIONS_DUPLICATE = 'no stray, a duplicate, no missing name';
+
+/** One holding both of those, on different workflows. */
+const CONDITIONS_BOTH = 'a stray, a duplicate, no missing name';
+
+/**
+ * The five combinations this block is written over.
+ *
+ * Held against the combinations the listings actually carry rather
+ * than counted, so the diff names the one that went missing. A
+ * count passes for five rows sitting on four combinations, which is
+ * one of them read twice and one read by nothing.
+ */
+const VERDICT_CONDITIONS = [
+  CONDITIONS_NOTHING_AMISS,
+  CONDITIONS_MISSING,
+  CONDITIONS_STRAY,
+  CONDITIONS_DUPLICATE,
+  CONDITIONS_BOTH,
+];
+
+/**
+ * Which of the three conditions one listing carries.
+ *
+ * Total over any listing: each of the three is a yes or a no, so a
+ * listing edited into some other combination answers to one rather
+ * than to nothing, and the guard reading this reports which
+ * combination it moved to. A combination outside the five reads
+ * back as itself.
+ *
+ * Derived from the listing and the expected names rather than read
+ * off the row, which is the whole of what the guard holding the two
+ * against each other is for — and derived without calling the
+ * module, so what the rows declare and what `classify` was handed
+ * are held apart by two mechanisms rather than by one.
+ *
+ * A workflow carrying no display name is a stray and is keyed under
+ * no name, which is the reading the module takes. None is handed
+ * over here, and this block's first guard is what says so.
+ *
+ * @param remote - One listing, as `classify` is handed it.
+ * @returns The combination of conditions it carries.
+ */
+function conditionsOf(remote: readonly RemoteWorkflow[]): string {
+  const names = remote
+    .map((workflow) => workflow.name)
+    .filter((name): name is string => typeof name === 'string');
+  const accounted = names.filter((name) => (
+    VERDICT_EXPECTED_NAMES.includes(name)
+  ));
+
+  const stray = accounted.length < remote.length;
+  const duplicate = names.some((name, at) => names.indexOf(name) !== at);
+  const missing = VERDICT_EXPECTED_NAMES.some((name) => (
+    !names.includes(name)
+  ));
+
+  const strayWord = stray
+    ? 'a stray'
+    : 'no stray';
+  const duplicateWord = duplicate
+    ? 'a duplicate'
+    : 'no duplicate';
+  const missingWord = missing
+    ? 'a missing name'
+    : 'no missing name';
+
+  return `${strayWord}, ${duplicateWord}, ${missingWord}`;
+}
+
+// ---------------------------------------------------------------------------
+// The five listings, one per combination
+// ---------------------------------------------------------------------------
+
+/** One listing, and the combination of conditions it is here for. */
+interface VerdictRow {
+  /**
+   * The combination it stands for, as {@link conditionsOf} derives
+   * it.
+   *
+   * Declared rather than derived, so the two can be held against
+   * each other. A listing edited until it carries some other
+   * combination is a fixture that has stopped being about what it
+   * says, and a verdict that came out right anyway reports nothing.
+   */
+  readonly conditions: string;
+
+  /** Its own handle, which is what the claim and a guard name. */
+  readonly id: string;
+
+  /** The listing itself, as an instance would have answered. */
+  readonly remote: readonly RemoteWorkflow[];
+}
+
+/**
+ * The five listings, in no order the module reads.
+ *
+ * Each is a separate call, so nothing about the order they are
+ * written in reaches `classify` — which is the one axis the other
+ * two blocks build their fixtures around and this one holds still.
+ * What is written down is the order the claim below reports in, and
+ * it is the roster's own.
+ */
+const VERDICT_ROWS: readonly VerdictRow[] = [
+  {
+    conditions: CONDITIONS_NOTHING_AMISS,
+    id: 'nothing-amiss',
+    remote: [ACCOUNTED_WORKFLOW, ALSO_ACCOUNTED_WORKFLOW],
+  },
+  {
+    conditions: CONDITIONS_MISSING,
+    id: 'a-name-held-by-nothing',
+    remote: [ACCOUNTED_WORKFLOW],
+  },
+  {
+    conditions: CONDITIONS_STRAY,
+    id: 'a-stray',
+    remote: [
+      ACCOUNTED_WORKFLOW,
+      UNACCOUNTED_WORKFLOW,
+      ALSO_ACCOUNTED_WORKFLOW,
+    ],
+  },
+  {
+    conditions: CONDITIONS_DUPLICATE,
+    id: 'a-name-held-twice',
+    remote: [
+      ACCOUNTED_WORKFLOW,
+      ALSO_ACCOUNTED_WORKFLOW,
+      ALSO_ACCOUNTED_TWIN,
+    ],
+  },
+  {
+    conditions: CONDITIONS_BOTH,
+    id: 'a-stray-and-a-name-held-twice',
+    remote: [
+      ACCOUNTED_WORKFLOW,
+      UNACCOUNTED_WORKFLOW,
+      ALSO_ACCOUNTED_WORKFLOW,
+      ALSO_ACCOUNTED_TWIN,
+    ],
+  },
+];
+
+// ---------------------------------------------------------------------------
+// The verdict, and what does not decide it
+// ---------------------------------------------------------------------------
+
+describe('classify — the verdict, and what does not decide it', () => {
+  // What keeps five listings out of the two readings the first block
+  // is written over. Nothing here is armed and nothing here is
+  // unnamed, so no listing in this block is also a fixture for a
+  // claim somewhere else in the file — and, measured, this is the
+  // only case anywhere in it that moves when either creeps in.
+  //
+  // Pinned to the value written rather than to the reading the
+  // module takes, which arms on `true` and nothing looser. Holding
+  // it to `false` says the fixture is as written rather than merely
+  // not armed, and there is no third value in this block for the
+  // difference to be about.
+  //
+  // The offenders are the answer rather than a count of them: a
+  // failing comparison against an empty list prints the workflows
+  // themselves, which is the whole report a reader needs.
+  it('lists nothing armed and nothing without a display name', () => {
+    const offenders = VERDICT_ROWS
+      .flatMap((row) => row.remote)
+      .filter((workflow) => (
+        workflow.active !== false || typeof workflow.name !== 'string'
+      ));
+
+    expect(offenders).toEqual([]);
+  });
+
+  // What the claim takes on trust about its listings. A row declares
+  // the combination it is here for and its own listing is what
+  // carries it, so a listing edited until it carries some other
+  // combination leaves the claim green wherever the verdict comes
+  // out the same anyway — which it does for every edit between two
+  // combinations the verdict answers alike, the three that make an
+  // instance not clean and the two that leave it clean. Measured,
+  // the guard beneath this one moves with this one there, any other
+  // combination being either one another row already carries or one
+  // the roster does not name.
+  //
+  // Paired by id rather than compared as two lists, so the diff
+  // names the row that drifted and the combination it drifted to.
+  it('gives each row the combination its own listing carries', () => {
+    const derived = VERDICT_ROWS.map((row) => ({
+      conditions: conditionsOf(row.remote),
+      id: row.id,
+    }));
+    const declared = VERDICT_ROWS.map((row) => ({
+      conditions: row.conditions,
+      id: row.id,
+    }));
+
+    expect(derived).toEqual(declared);
+  });
+
+  // The other half of that, and the one the guard above cannot
+  // reach. A row removed along with its line in the verdicts
+  // written out below leaves every remaining row agreeing with its
+  // own listing, and the block short of a combination anyway.
+  //
+  // A set against the roster rather than a count, so the diff names
+  // the combination nothing is left carrying.
+  it('covers each of the five combinations it is written over', () => {
+    const covered = VERDICT_ROWS.map((row) => conditionsOf(row.remote));
+
+    expect([...new Set(covered)].sort())
+      .toEqual([...VERDICT_CONDITIONS].sort());
+  });
+
+  // The claim, and a table rather than a case each because the ONLY
+  // in it is a statement about the five together: a rule reading
+  // any further condition into the verdict answers one of these
+  // rows wrongly and the rest of them right.
+  //
+  // Two rows answer true. One is an instance holding what this
+  // repository declares and nothing else; the other holds no
+  // workflow under one of the declared names, which is the whole of
+  // the ONLY half — what is missing is the instance sitting behind
+  // this repository and one deploy from being level with it, where
+  // a stray is the instance carrying something no part of this
+  // repository accounts for.
+  //
+  // Three answer false, one per condition that does decide it and
+  // one carrying both at once. The duplicate is under a declared
+  // name, so the row it is in holds no stray and a run reading the
+  // verdict off the strays alone answers it wrongly.
+  //
+  // Held against verdicts written out rather than against a member
+  // of the roster, so a row taken out of it reddens here as well as
+  // in the guard above — an answer derived from the roster on both
+  // sides would be comparing one empty list with another.
+  it('calls an instance clean only where it holds no stray and no duplicate', () => {
+    const verdicts = VERDICT_ROWS.map((row) => ({
+      clean: classify(row.remote, VERDICT_EXPECTED_NAMES).clean,
+      id: row.id,
+    }));
+
+    expect(verdicts).toEqual([
+      { clean: true, id: 'nothing-amiss' },
+      { clean: true, id: 'a-name-held-by-nothing' },
+      { clean: false, id: 'a-stray' },
+      { clean: false, id: 'a-name-held-twice' },
+      { clean: false, id: 'a-stray-and-a-name-held-twice' },
     ]);
   });
 });
