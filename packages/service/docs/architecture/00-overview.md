@@ -92,7 +92,7 @@ Paths are relative to `packages/service`.
 | --- | --- |
 | `lib/` | The service framework: express, mcp, service-core, errors, logger — and reserved for it. Distinct from `src/lib/`. |
 | `src/db/` | Schema v2 and the drizzle client: the tables one file per concern under `src/db/schema/`, re-exported by the `src/db/schema.ts` barrel that drizzle-kit and the client both read. |
-| `src/lib/` | Ported pipeline libs, from phase 4 onward: parsing, gating, scoring, and the feature mechanisms. Distinct from the framework `lib/`. |
+| `src/lib/` | Pipeline libs, written dual-context so the workflow build can splice one into a Code node body. `schedule.ts` is the first and landed in phase 3, which is what proves the splice over a library this package ships rather than a fixture; the ported wave — parsing, gating, scoring, and the feature mechanisms — arrives in phase 4. Distinct from the framework `lib/`. |
 | `src/sources/` | The source adapter contract and the adapters that satisfy it (phase 4 onward), push capture included. |
 | `src/exports/` | Export renderers (phase 6): one per format a subscription can be rendered into. |
 | `src/routes/`, `src/mcp/` | The API surface itself — HTTP routes and MCP tools over the schema. |
@@ -110,9 +110,9 @@ The table names both, and no later phase merges them. `lib/` is the
 service framework — express, mcp, service-core, errors, logger — and
 stays reserved for it: a fork-style copy of a service template, held
 as stable library code and changed deliberately. `src/lib/` is
-application code, the pipeline libs ported from phase 4 onward,
-sitting beside the schema, the adapters, and the renderers they run
-against.
+application code: the scheduling lib phase 3 landed and the pipeline
+libs ported from phase 4 onward, sitting beside the schema, the
+adapters, and the renderers they run against.
 
 The separation is what keeps each half legible. Nothing syncs the
 fork with its template, so pipeline logic dropped into `lib/` leaves
