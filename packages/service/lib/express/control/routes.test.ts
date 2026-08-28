@@ -498,6 +498,31 @@ describe('POST /_control/stop', () => {
     killSpy.mockRestore();
   });
 
+  // The config is built inline here rather than through `makeApp` because the
+  // absence of `allowStop` is what this case is about — routing it through a
+  // helper would hide the literal under test. An enabled plane and a valid
+  // token are both supplied, so nothing but the missing opt-in refuses it.
+  it('returns 404 and never signals when allowStop is omitted', async () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter([], [], { enabled: true, secret: SECRET }, 'my-service'),
+    );
+
+    const res = await request(app)
+      .post('/_control/stop')
+      .set('x-control-token', SECRET);
+    // The served route defers its signal by one tick, so without this wait the
+    // not-called assertion would hold even against a router that did stop.
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'not found' });
+    expect(killSpy).not.toHaveBeenCalled();
+    killSpy.mockRestore();
+  });
+
   it('returns 403 when x-control-token is missing', async () => {
     const res = await request(makeApp([], []))
       .post('/_control/stop');
