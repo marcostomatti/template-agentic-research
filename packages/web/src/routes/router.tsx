@@ -94,6 +94,7 @@ import { Navigate, createBrowserRouter } from 'react-router';
 import { AppLayout } from '../app-shell/AppLayout';
 import { Sidebar } from '../app-shell/Sidebar';
 import { Topbar } from '../app-shell/Topbar';
+import { PlaceholderModal } from '../components/PlaceholderModal';
 
 import { DomainGuard } from './DomainGuard';
 import {
@@ -197,16 +198,20 @@ export const SURFACE_PLACEHOLDER = (
  * ONE element for all five, for the same reason {@link
  * SURFACE_PLACEHOLDER} is one for all six: identity makes "is there
  * anything behind this route yet" a `toBe` a test can ask without
- * rendering. It is unreachable in the meantime — the surface routes
- * above still render a placeholder rather than a list page, so there is
- * no `Outlet` for it to arrive in.
+ * rendering. Held as an ELEMENT rather than as the component itself,
+ * so that stays true across both trees — writing the tag at each
+ * registration would build ten distinct objects.
+ *
+ * Unlike its neighbour above this one is a component rather than
+ * markup, because the row it names and the list it closes to are both
+ * read from the router — see `../components/PlaceholderModal`, which
+ * lives over there for the reason `./DomainGuard.tsx` gives.
+ *
+ * It is unreachable in the meantime: the surface routes above still
+ * render a placeholder rather than a list page, so there is no
+ * `Outlet` for it to arrive in.
  */
-export const MODAL_PLACEHOLDER = (
-  <EmptyState
-    title="Modal not built yet"
-    description="Opening a row is defined in the UI spec and arrives with the page stage."
-  />
-);
+export const MODAL_PLACEHOLDER = <PlaceholderModal />;
 
 /**
  * What an unmatched path renders, inside the shell.
