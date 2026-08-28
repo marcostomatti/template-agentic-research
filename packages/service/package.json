@@ -32,6 +32,7 @@
     "approve": "bun scripts/approve.ts",
     "build:workflows": "bun scripts/build-workflows.ts",
     "deploy:external": "bun scripts/deploy-external.ts",
+    "audit:workflows": "bun scripts/audit-workflows.ts",
     "docs:generate": "typedoc"
   },
   "dependencies": {
