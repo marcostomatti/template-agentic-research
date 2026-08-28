@@ -77,13 +77,13 @@ export const SCAN_FILES: readonly string[] = [
  * scan root is pruned as readily as a top-level one.
  *
  * Every entry is installed, built, or rendered output: `node_modules` is
- * vendored, `dist` and `dist-external` are built from `workflows/src`,
- * `.tmp` and `.docs` are generated, and `.exports` holds rendered
- * research artifacts (gitignored, so its contents never reach the
- * remote). A hit inside any of them is either a duplicate of one the scan
- * already reports at the authored source, or noise out of minified,
- * hashed, or bundled content — and neither is fixable by editing the file
- * it was found in.
+ * vendored, `dist` and `dist-external` are built from `workflows/src` and
+ * from the `src/lib/` libraries spliced into it, `.tmp` and `.docs` are
+ * generated, and `.exports` holds rendered research artifacts
+ * (gitignored, so its contents never reach the remote). A hit inside any
+ * of them is either a duplicate of one the scan already reports at the
+ * authored source, or noise out of minified, hashed, or bundled content —
+ * and neither is fixable by editing the file it was found in.
  */
 export const EXCLUDED_DIRS: readonly string[] = [
   'node_modules',

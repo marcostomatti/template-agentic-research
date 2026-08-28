@@ -2,8 +2,9 @@
 
 This directory holds the commands an operator runs by hand: seeding,
 approving, building and deploying workflows, standing the stack up, and
-tearing it down again. Phase 1 landed the layout and the roster below;
-phase 2 is filling it, starting with `seed.ts`.
+tearing it down again. Phase 1 landed the layout and the roster below, and
+each phase since has filled the rows it owns; the `Arrives in` column
+marks the ones that have landed.
 
 Phase numbers throughout refer to the 7-phase sequencing in the parent
 design, `.specs/2026-08-19-research-pipeline-port.md` §7.
@@ -14,15 +15,45 @@ design, `.specs/2026-08-19-research-pipeline-port.md` §7.
 | --- | --- | --- |
 | `seed.ts` | phase 2 — landed | `bun run db:seed`. Validates every seed file in `data/` before a connection is opened, then applies the bundle in one transaction and reports created, updated and unchanged per concern. The only code path that takes a value out of that directory. `seed-schemas.ts` and `seed-apply.ts` are the shape half and the write half beneath it, not entry points of their own. |
 | `approve.ts` | phase 2 — landed | `bun run approve`. Lists the rows waiting on a ruling and approves or rejects one by id, a client of `research_pool_approval_check` rather than a substitute for it. The whole operator surface until the API and UI take approvals over. |
-| `build-workflows.ts` | phase 3 | Reads every source in `workflows/src/`, resolves its markers (transpile-and-splice libs, bake settings), writes `workflows/dist/`. |
-| `deploy-external.ts` | phase 3 | Uploads built workflows to an existing n8n over its public REST API — no Docker, no shell on the target host. |
-| `activate-workflows.sh` | phase 3 | Activates imported workflows on a local instance, where activation goes through the CLI rather than the API. |
-| `audit-workflows.ts` | phase 3 | Inventories every workflow on an instance and names the ones that do not belong. Read-only unless asked otherwise. |
+| `build-workflows.ts` | phase 3 — landed | `bun run build:workflows`. Reads every source in `workflows/src/`, resolves the markers each one carries — a library spliced out of `src/lib/`, a build setting baked in — and writes one artifact per source into `workflows/dist/`, refusing a marker that survived into the output. `--external` resolves those settings against the environment and `.env` instead, writing `workflows/dist-external/`, which is the tree a deploy uploads. Also what `pretest` runs, so the invariant suite reads a tree built from the sources beside it rather than whatever was last left on disk. |
+| `deploy-external.ts` | phase 3 — landed | `bun run deploy:external`. Uploads the `--external` build's artifacts to an n8n that already exists, over its public REST API — no container, no compose file, no shell on the host — upserting on the display name, so a rerun replaces rather than leaving a second copy. Refuses a dirty tree and an unset `AR_N8N_URL` or `AR_N8N_API_KEY` before it builds anything or makes a request. What it leaves is inert: `POST /workflows` stores a workflow inactive whatever the body carried, so an operator who has deployed has not yet armed anything. |
+| `activate-workflows.sh` | phase 3 — landed | `scripts/activate-workflows.sh`. Arms imported workflows on a local instance, where activation goes through the n8n CLI inside the container rather than the API — which is why this one wants a container and `deploy-external.ts` and `audit-workflows.ts` do not. Reads `workflows/dist/` to sort the artifacts an activation would arm from the manual-only ones it names and leaves alone, refuses a container that is not running, gives each armed workflow the `workflow_history` row a publish needs to publish against, then publishes. `AR_N8N_CONTAINER` names the container, defaulting to `ar-n8n`. |
+| `audit-workflows.ts` | phase 3 — landed | `bun run audit:workflows`. Lists every workflow an instance is holding and sorts it against the display names `workflows/src/` declares: known, stray, armed stray, missing, duplicate, and a verdict over them. Read-only unless asked otherwise, and it exits 0 whatever the verdict, which is a reading an operator acts on rather than a gate. `--deactivate` and `--prune` are the two flags that change anything, each refused without `--yes` beside it, and neither will touch a workflow the sources declare. |
 | `bootstrap.sh` | phase 7 | Brings the self-contained stack up and imports credentials. Idempotent. |
 | `panic.sh` | phase 7 | Stops everything in this project that can spend money, on every reachable host, in one command. |
 | `test-stack.sh` | phase 7 | Creates and destroys a disposable scratch stack, so verifying never touches anything live. |
 | `verify-external.sh` | phase 7 | Read-only verification of an external-mode deployment: the workflows exist and are active, the dependencies answer, the schema is migrated. |
 | `check-doc-links.ts` | phase 7 | Asserts every relative markdown link in the tracked docs resolves to a file that exists. |
+
+Not every `.ts` file here is a command. `workflow-markers.ts`,
+`n8n-workflow.ts` and `n8n-client.ts` landed with the phase-3 rows of the
+roster and are halves beneath them rather than entry points of their own:
+no `package.json` script names one, and none carries the `INVOKED_AS_CLI`
+block each landed `.ts` command guards its run with. They are named here
+rather than inside a row because each is read by more than one of those
+commands, where `seed-schemas.ts` and `seed-apply.ts` sit inside
+`seed.ts`'s row because it is the only command that reads either.
+
+`workflow-markers.ts` holds the marker grammar and the build-time settings
+table those markers resolve against. It is split from `build-workflows.ts`
+so that a rule decidable without a filesystem or a transpiler can be
+driven without either, which is what lets a case assert a refusal by
+calling one function. `audit-workflows.ts` compiles the same two grammars,
+to refuse a display name still carrying a marker rather than hold one
+against an instance.
+
+`n8n-workflow.ts` and `n8n-client.ts` split what an instance-facing
+command asks along the line where the instance itself is needed.
+`n8n-workflow.ts` answers from a workflow value alone — which of its nodes
+would arm it, which envelope members the public API takes — and holds
+those answers in one place so that no two of the three instance-facing
+commands give different ones; `deploy-external.ts` and
+`activate-workflows.sh` read it. `n8n-client.ts` is the half that opens a
+socket and wants the key: every HTTP call this package makes against an
+instance, and the refusal for a reply that is not a success.
+`deploy-external.ts` and `audit-workflows.ts` are the two commands that
+call in, and `activate-workflows.sh` is the one that does not, activation
+going through the CLI inside the container rather than over the API.
 
 Database migrations are deliberately absent: drizzle owns them end to end
 (`drizzle/`, `drizzle.config.ts`, `bun run db:generate` / `db:migrate`),

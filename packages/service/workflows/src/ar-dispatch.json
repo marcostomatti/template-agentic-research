@@ -1,0 +1,257 @@
+{
+  "id": "ar-dispatch",
+  "name": "AR Dispatch",
+  "active": false,
+  "versionId": "00000000-0000-4000-8000-00000000ad01",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "__ENVVAR:AR_DISPATCH_CRON__"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "claim-due-topics",
+      "name": "Claim Due Topics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, -100],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH due AS (\n  SELECT id\n  FROM topics\n  WHERE enabled\n    AND next_run_at <= now()\n  ORDER BY next_run_at\n  LIMIT __ENVVAR:AR_DISPATCH_BATCH_CAP__\n  FOR UPDATE SKIP LOCKED\n)\n-- Claim and reschedule are one statement on purpose. FOR UPDATE SKIP LOCKED holds a\n-- claimed row for exactly as long as the transaction that took it, so a claim\n-- committed before next_run_at moves leaves the row unlocked and still due, which\n-- invites the following tick to run it again. Lifting this UPDATE out into a second\n-- node or a second statement is that mistake, and it reads as tidying. Run over one\n-- set of due rows twice, the folded form takes them on the first pass and nothing on\n-- the second. A claim that only SELECTed hands back the same ids both times.\n\n-- LEAST and GREATEST ignore a NULL argument, so a bound the row does not carry is\n-- skipped rather than stood in with COALESCE, which would cap a floored interval back\n-- to the proposal and leave the floor doing nothing. clampIntervalSeconds in\n-- src/lib/schedule.ts is this same rule as TypeScript, and argues both in full.\nUPDATE topics AS t\nSET next_run_at = now() + make_interval(secs => LEAST(\n  t.max_interval_seconds,\n  GREATEST(t.min_interval_seconds, t.interval_seconds)\n))\nFROM due\nWHERE t.id = due.id\n-- Five columns because this projection is the shape the merged claim stream carries:\n-- every branch answers in it, so the nodes past the merge read one item kind rather\n-- than one per table. unit_kind is a literal because nothing in a claimed row says\n-- which table it came from, and once the branches merge that is the only thing left\n-- to route on. RETURNING on an UPDATE reads the row as written, so next_run_at is\n-- the time this pass set rather than the one that made the row due.\nRETURNING\n  t.id,\n  t.domain_id,\n  'topic'::text AS unit_kind,\n  t.name,\n  t.next_run_at",
+        "options": {}
+      }
+    },
+    {
+      "id": "claim-due-export-subscriptions",
+      "name": "Claim Due Export Subscriptions",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, 100],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH due AS (\n  SELECT id\n  FROM export_subscriptions\n  WHERE enabled\n    AND next_run_at <= now()\n  ORDER BY next_run_at\n  LIMIT __ENVVAR:AR_DISPATCH_BATCH_CAP__\n  FOR UPDATE SKIP LOCKED\n)\n-- The same statement as Claim Due Topics, against the other schedulable table. One\n-- dispatcher reads both the same way, so the two arguments that shape it are written\n-- out on that node and are not repeated here: why the claim and the reschedule are\n-- folded into one statement, and why the clamp skips a null bound rather than\n-- standing it in with COALESCE. What differs is the table, and the projection below.\n\n-- This claim sits beside Claim Due Topics off the Schedule Trigger rather than behind\n-- it, and the difference is a multiplication rather than a preference. A Postgres\n-- node runs its statement once per INPUT item, mapping the query over every item it\n-- was handed, so chained behind that claim this one would run once per claimed topic,\n-- each run taking a fresh batch off this table and rescheduling every row in it. Its\n-- run count would be settled by what the node in front emitted, a fact about the\n-- other table that says nothing about this one. What makes the parallel form run once\n-- is the other half: the trigger emits a single item per fire. Neither half implies\n-- the other, and without the emit count a branch off the trigger could multiply for\n-- the same reason a chained one does.\n\n-- The cap is per claim and not per tick. This LIMIT and the one on Claim Due Topics\n-- read one setting, so a tick finding both tables backlogged claims up to twice it,\n-- and both claims have already moved next_run_at on every row they took. So the\n-- second application of the cap, over the merged stream, is a choice about which\n-- claimed rows are RUN and not a re-check of a batch already inside the cap. What it\n-- leaves behind was rescheduled without being dispatched, and comes round again a\n-- whole interval later. capBatch in src/lib/schedule.ts carries the rest of that\n-- argument.\nUPDATE export_subscriptions AS s\nSET next_run_at = now() + make_interval(secs => LEAST(\n  s.max_interval_seconds,\n  GREATEST(s.min_interval_seconds, s.interval_seconds)\n))\nFROM due\nWHERE s.id = due.id\n-- The five columns Claim Due Topics answers in, plus one of this branch's own.\n-- export_subscriptions carries no name, so the label is the format, which is what the\n-- row renders. It does not identify the row: a domain may take one format at two\n-- destinations, and connector_id is what tells those apart. That column rides on this\n-- branch alone, so nothing past the merge may read one off an arbitrary claimed unit.\n-- unit_kind is 'export' rather than this table's own singular because it names the\n-- dispatch the row asks for, and pairs with AR_EXPORT_WORKFLOW_ID the way 'topic'\n-- pairs with AR_TOPIC_WORKFLOW_ID.\nRETURNING\n  s.id,\n  s.domain_id,\n  'export'::text AS unit_kind,\n  s.format AS name,\n  s.next_run_at,\n  s.connector_id",
+        "options": {}
+      }
+    },
+    {
+      "id": "merge-claims",
+      "name": "Merge Claims",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [440, 0],
+      "notes": "Append, so what leaves here is the two claim branches concatenated: nothing is dropped, added or rewritten, and a table with nothing due never holds the tick, append needing data from only one input to continue. What it does not pass on is which branch an item came in on, which is what unit_kind stands in for downstream. A tick claiming nothing does not arrive as nothing: a Postgres node whose statement is not a SELECT emits one success item when it returns no rows, so an empty tick reaches here as two items carrying no unit_kind. Dropping them belongs to the Code node, keyed on the absent unit_kind rather than on a branch.",
+      "parameters": {
+        "mode": "append"
+      }
+    },
+    {
+      "id": "plan-dispatch",
+      "name": "Plan Dispatch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "parameters": {
+        "jsCode": "__INLINE:schedule.ts__\n// Where a tick's claims become the tick's plan. Three steps, in this order: the\n// placeholders a claimless branch sends are dropped, what is left is bounded by\n// AR_DISPATCH_BATCH_CAP, and every unit that survives is given the id of the\n// workflow its kind asks for. The whole module behind the marker above is\n// spliced in, so clampIntervalSeconds arrives beside capBatch and goes unused\n// here, the reschedule it states being SQL already, inside the claims.\n//\n// The drop is keyed on the ABSENT unit_kind rather than on which branch an item\n// came in on, because the Merge node in front is where a branch stops being\n// readable: past it an item is an item, and the only handle left is what a\n// claim put IN the row. A Postgres node whose statement is not a SELECT emits\n// one success item when it returns no rows, so a tick with nothing due anywhere\n// arrives here as two items, and a half-empty one as real rows plus a\n// placeholder. No placeholder carries a unit_kind and every claimed row does.\n//\n// Dropping before capping is why these are two steps rather than one filtered\n// slice. A placeholder counted toward the cap spends a slot on a row that does\n// not exist, so a tick with one branch idle would dispatch one fewer than the\n// operator set, and nothing about a short pass says why.\n//\n// Routing runs last and, unlike the two steps in front of it, its position is\n// free. Dropping before capping decides what gets dispatched; routing before or\n// after the cap decides nothing, a unit resolving the same id whether the cap\n// keeps it or drops it. It is written at the end so the item this node emits is\n// built in one place, not because the other order would break anything.\n//\n// This is the SECOND place the cap is applied and it is not a re-check of an\n// already-bounded batch. Each claim carries the same setting as a SQL LIMIT, so\n// a LIMIT bounds a BRANCH and this call bounds the TICK: a pass finding both\n// tables backlogged claims twice the cap and dispatches the cap. What it drops\n// was already CLAIMED, the claim having moved next_run_at before anything\n// looked at the row, so a dropped row waits a whole interval rather than being\n// taken by the tick after this one. capBatch in src/lib/schedule.ts carries the\n// rest, including why a LIMIT one edit away from being tuned off is not the\n// copy to rely on.\n//\n// The settings are quoted and parsed rather than spliced in bare. A marker\n// resolves to whatever the settings chain answered, and quoting is what keeps\n// every possible answer a valid literal: an unparseable cap becomes NaN and\n// comes back as capBatch's own refusal naming the value, where a bare marker\n// would leave a ReferenceError naming nothing. The two workflow ids take the\n// first half of that and not the second. Quoting is what keeps them literals\n// too, an id spliced in bare being a pair of names the node would die on, but\n// there is no parse for them to fail: whatever the chain answered becomes the\n// id, and an id that is wrong is wrong on the instance rather than here.\n//\n// What arrives here is NOT ordered by how overdue a row is. A claim's ORDER BY\n// picks WHICH rows it takes and never the order they come back in, and the\n// merge concatenates one branch after the other whatever either returned. So\n// the cap takes the front of an unordered stream: what it drops is arbitrary\n// among the rows claimed, not the least overdue among them.\n//\n// Arbitrary is not the same as random: the merge puts input 0 first, so every\n// topics claim precedes every export claim. A topics table backlogged past the\n// cap on its own therefore leaves no slot for an export subscription at all,\n// and those rows wait a whole interval on every tick it stays that way.\n//\n// What a unit is routed TO is settled by its kind and by nothing else on the\n// row, which the claims already argue: unit_kind is a literal precisely because\n// a claimed row says nothing about the table it came from. What only this node\n// can say is WHEN that pairing is settled. Both ids arrive as markers, so which\n// workflow a kind reaches is written into the artifact at build time and is not\n// something the instance holds. Retargeting a dispatch is an edit to\n// ENV_DEFAULTS or to a deploy environment followed by a rebuild, never a row an\n// operator updates, and a workflow renamed on an instance leaves this node\n// addressing the old id until something builds again.\n//\n// TARGET_BY_KIND is a Map and not an object literal, and the difference is what\n// a kind with no entry gets back. A plain object answers for names nothing put\n// in it: constructor, __proto__, toString and valueOf all come back as\n// inherited members, so a kind spelled any of those would resolve to a function\n// or to an object where an id belongs, and whatever invoked it would be handed\n// that. Map.get answers undefined for every name that was never set.\n//\n// A kind with no entry is passed on carrying a null target rather than dropped\n// or raised, and both of those are worse. Dropping it would strand a row that\n// was CLAIMED and rescheduled before anything looked at it, so it would wait a\n// whole interval with nothing anywhere recording that it went nowhere. Raising\n// would take the tick down, and every other row in that tick was rescheduled\n// too, so one unroutable unit would cost the whole pass. Passed on, it carries\n// a null where an id belongs, fails at the node that invokes it, and closes its\n// run on the error branch, which is the same route a correct id with no\n// workflow behind it takes. That node is Invoke Target Workflow, behind the\n// run-opening node, and Close Run Failed sits on the output it takes when an\n// invocation fails. The route is shared and the record is not: Close Run Failed\n// writes the target into the run's errors as it stood, so a JSON null there\n// names a kind this node had no entry for where a string names an id that had\n// nothing behind it.\n//\n// The target is written as null rather than left off the item, because those\n// two are not one value on both sides of a JSON round trip: an undefined member\n// is a member here and gone once the item is written out, so which of them a\n// reader saw would depend on where they stood. It is spelled\n// target_workflow_id, snake_case like the members a claim wrote, so a reader\n// past this node sees one shape rather than two, and it is the one member on a\n// claimed unit that no claim wrote. The unit is spread into a new object rather\n// than written to: the merge passes items on by reference, so a claimed row is\n// still the input item's own json, and setting a member on it would write into\n// what this node was handed.\nconst CAP = Number('__ENVVAR:AR_DISPATCH_BATCH_CAP__');\nconst TARGET_BY_KIND = new Map([\n  ['topic', '__ENVVAR:AR_TOPIC_WORKFLOW_ID__'],\n  ['export', '__ENVVAR:AR_EXPORT_WORKFLOW_ID__'],\n]);\nconst claimed = $input.all().map((i) => i.json).filter((r) => r && r.unit_kind != null);\nreturn capBatch(claimed, CAP).map((unit) => ({\n  json: { ...unit, target_workflow_id: TARGET_BY_KIND.get(unit.unit_kind) ?? null },\n}));"
+      }
+    },
+    {
+      "id": "open-run",
+      "name": "Open Run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [880, 0],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO runs (domain_id, scheduled_by)\n-- One row per CLAIMED UNIT rather than one per tick, and nothing in this statement\n-- says so. An executeQuery node maps its query over the items it was handed and runs\n-- it once per INPUT item, so the multiplication the two claims are wired in parallel\n-- to avoid is exactly the behaviour wanted here. Every item that reaches this node is\n-- a unit Plan Dispatch kept, which makes the row count the tick's dispatch count.\n-- What holds it that way is the two things this node does not carry: no executeOnce,\n-- and a domain read off $json rather than off the whole batch. Either one would turn\n-- this back into a single row per tick without touching a clause.\n\n-- The per-unit row is what the two columns above are worth anything for. scheduled_by\n-- is NOT NULL because attributing a fired schedule afterwards is the whole of its\n-- job, and a tick-level row files every claimed row's schedule under one answer,\n-- which is the limit runs.scheduled_by in src/db/schema/runs.ts already records for a\n-- pass claiming several due rows at once. domain_id is the other half: topics and\n-- export_subscriptions both declare it NOT NULL, so every claimed unit carries a real\n-- domain, while a tick spans every domain at once and could only write NULL. On runs\n-- that NULL is not an empty slot but a meaning of its own, that the pass was not\n-- scoped to a domain, so a tick-level dispatch row would be stored looking exactly\n-- like the maintenance and backfill passes that legitimately carry none.\n\n-- Two honest limits. A tick claiming nothing opens no row at all, Plan Dispatch\n-- having dropped both empty-result placeholders before anything reaches here, so runs\n-- records what the dispatcher dispatched and never whether it ran. That question is\n-- answered from the executor's own execution list instead. And a per-unit row makes\n-- the attribution as fine as one claim without making the interval literal below any\n-- truer: nothing in a claimed row records which of the three modes wrote its\n-- next_run_at, all of them writing that one column, which is why\n-- src/db/schema/scheduling.ts has the choosing logged on the run rather than read\n-- back off it. So interval here names the mode THIS workflow reschedules in, not the\n-- mode that set the time this pass fired against.\n\n-- One question this statement leaves open, and it is the table's gap rather than a\n-- third limit of the choice above. runs carries no column naming the workflow that\n-- opened a row. The column list above is the whole of what this insert supplies, and\n-- the six src/db/schema/runs.ts adds to it are a surrogate key, a start, a finish, a\n-- status, a tally and a list of failures, none of which says who wrote the row. The\n-- question is answerable today all the same, by convention rather than by reading:\n-- ar-dispatch is the only workflow that opens one, so every row a workflow opened\n-- came out of this statement and the answer belongs to the table instead of to the\n-- row.\n\n-- The convention holds exactly as long as its premise does. The roster in\n-- workflows/src/README.md delivers ar-ingest, ar-capture and ar-score in phase 5, and\n-- the first of them to open a run of its own leaves two workflows sharing one table\n-- with nothing in a row to tell their passes apart. What is stored narrows without\n-- naming: domain_id says which domain a pass ran for, and several workflows will run\n-- for the same domain, while scheduled_by carries the one literal below for every row\n-- this workflow opens. counts and errors refuse nothing, so a producer's name dropped\n-- into either is one writer's habit rather than a column a reader can query. Closing\n-- the gap is a column and a column is a migration this phase does not carry, so it is\n-- left here for phase 5, which is the phase that has to choose between the column and\n-- a second convention.\nVALUES ($1::bigint, 'interval')\nRETURNING id AS run_id",
+        "options": {
+          "queryReplacement": "={{ $json.domain_id }}"
+        }
+      }
+    },
+    {
+      "id": "invoke-target-workflow",
+      "name": "Invoke Target Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [1100, 0],
+      "onError": "continueErrorOutput",
+      "notes": "Run once for each item is a requirement and not a tuning choice: the once mode resolves ONE workflow id, from the first input item, and sends every claimed unit to it, which would put every export subscription through the topic workflow. The id is read off Plan Dispatch rather than $json because the Postgres node in front replaces an item's json with its own RETURNING projection, leaving a run id and nothing of the claimed unit; pairedItem carries the lineage that far. Waiting for the sub-workflow is the default written out, a run closed by outcome needing one: without it a unit reaches the success output as soon as its sub-execution starts. onError puts a failure on a second output the executor appends here; continuing on the REGULAR output would hand a failed invocation to Close Run Succeeded.",
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Plan Dispatch').item.json.target_workflow_id }}"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "close-run-failed",
+      "name": "Close Run Failed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1320, 100],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE runs\n-- Closes the run Open Run opened for this unit, on the output the executor appends\n-- when Invoke Target Workflow fails. Every unit reaching that node already has a row\n-- here, so this statement finishes one and never writes one: a row exists for what\n-- the tick dispatched, and this branch settles how it went.\n\n-- failed rather than partial, because the run's whole work was the one invocation.\n-- partial is the member for a pass that produced real work and a real failure at\n-- once, and no such split is available here: a unit is dispatched or it is not.\n\n-- status and finished_at are set together because nothing in the schema holds them\n-- together. src/db/schema/runs.ts records that a row saying failed with no finish, or\n-- carrying a finish while still saying running, is storable, and that only the writer\n-- pairs them. This statement is that writer for the rows this workflow opens.\n\n-- The entry is APPENDED and not written over. runs.errors is one entry per failure\n-- defaulting to an empty list, and this row's id does not stay inside this workflow:\n-- Open Run's projection is the item Invoke Target Workflow forwards to the target, so\n-- a target that recorded its own failure against this run before failing has entries\n-- here already. Assigning a fresh list would drop them and leave the dispatcher's\n-- account of the failure standing as the whole of it.\n\n-- The entry names the target that could not be invoked and the executor's own\n-- message. A null target is an answer rather than a missing one: Plan Dispatch passes\n-- on a unit whose kind it has no entry for carrying a null where an id belongs, and\n-- that unit and one carrying a good id with no workflow behind it fail onto this same\n-- branch. The route cannot tell those apart and the stored entry can, a JSON null\n-- naming the routing miss where a string names the id that had nothing behind it.\n\n-- Both jsonb parameters are handed over as JSON TEXT rather than as bare values, and\n-- that is what makes the statement safe rather than what makes it tidy. A query\n-- parameter is split on commas unless it parses as JSON on its own, and an executor's\n-- message routinely carries one, so a bare message would arrive as two values and the\n-- statement would be refused for a parameter count it never asked for. Stringifying\n-- makes every possible answer parse, so each is taken whole. It carries the null too,\n-- which reaches jsonb as a null and not as a string spelling one. The run id needs no\n-- wrapper for the narrower reason that a number already parses as JSON.\nSET\n  status = 'failed',\n  finished_at = now(),\n  errors = errors || jsonb_build_array(jsonb_build_object(\n    'node', 'Invoke Target Workflow',\n    'target_workflow_id', $2::jsonb,\n    'error', $3::jsonb\n  ))\nWHERE id = $1::bigint",
+        "options": {
+          "queryReplacement": "={{ $('Open Run').item.json.run_id }}, {{ JSON.stringify($('Plan Dispatch').item.json.target_workflow_id ?? null) }}, {{ JSON.stringify($json.error ?? null) }}"
+        }
+      }
+    },
+    {
+      "id": "close-run-succeeded",
+      "name": "Close Run Succeeded",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1320, -100],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE runs\n-- Closes the run Open Run opened for this unit, on the output Invoke Target Workflow\n-- takes when its invocation returns. Close Run Failed is the same statement on that\n-- node's other output, and the two arguments the pair shares are written out there\n-- rather than repeated here: why a row always exists for this to finish and never to\n-- write, and why status and finished_at have to be set together.\n\n-- ok is what a finished pass with nothing to report carries. RUN_STATUSES in\n-- src/db/schema/values.ts holds no member spelled succeeded, and ok rather than\n-- partial follows Close Run Failed's reason for failed rather than partial: from this\n-- workflow's side the run's whole work was the one invocation, and a unit is either\n-- dispatched or it is not.\n\n-- What that reading leaves open is a question about the row rather than about this\n-- statement. The run id Open Run returned is the item Invoke Target Workflow forwards\n-- to the target, so a target can write entries into this row's errors and still\n-- return. This statement does not read that column, so such a run closes ok while\n-- carrying the entries that make partial the accurate member, a pairing\n-- src/db/schema/runs.ts records as storable and leaves entirely to the writer. This\n-- writer takes the invocation's outcome as the whole answer. Nothing reaches the case\n-- yet, no target existing until phase 5, which is the phase that has to choose\n-- between reading errors here and holding every target to reporting its own status.\n\n-- The run id is read off Open Run rather than off $json, for a different reason than\n-- the same read has on the failed branch. Invoke Target Workflow waits for the\n-- sub-workflow, so what arrives here is the TARGET's output and neither the claimed\n-- unit nor the run row survives the invocation. What does survive is pairedItem, set\n-- to the input index on every item forwarded, and that is the whole of what makes\n-- $('Open Run').item resolve here.\n\n-- Two honest limits, both of them counts rather than values, and both settled by the\n-- target's contract rather than by anything here. The first is that this node runs\n-- once per item on the success output, which is not once per dispatched unit: the\n-- items are whatever the target returned, so a target answering with three items\n-- closes one run three times. The repeats cost nothing past the writes. They agree on\n-- the status, and they agree on the finish as well, a node execution sending its\n-- whole batch as one query string and Postgres running that as one transaction, which\n-- is what fixes now() across it.\n\n-- That same fixing is worth reading the other way, because it says what the column\n-- holds. Every run this node closes in a tick carries one finish, and it is the time\n-- the dispatcher closed them rather than the time any target stopped working.\n\n-- The second limit is the other end of the count. A target answering with NO items\n-- puts nothing on this output at all, so its run is never closed: it keeps the\n-- running status Open Run left it at, which src/db/schema/runs.ts records as the\n-- member no writer reports and which nothing here can age out, a row whose pass died\n-- reading exactly like one still working. Phase 5 writes the first target and is\n-- where both limits stop being hypothetical.\nSET\n  status = 'ok',\n  finished_at = now()\nWHERE id = $1::bigint",
+        "options": {
+          "queryReplacement": "={{ $('Open Run').item.json.run_id }}"
+        }
+      }
+    },
+    {
+      "id": "one-schedule-trigger",
+      "name": "One Schedule Trigger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-440, -100],
+      "parameters": {
+        "width": 400,
+        "height": 620,
+        "content": "## One Schedule Trigger\n\nThe Schedule Trigger on this canvas is the only one in the system, and this is the workflow that holds it. Nothing else in the pipeline runs on a clock: a workflow is started by this one through Invoke Target Workflow, by another workflow calling it, by an inbound request, or by hand.\n\nScheduling here is a row rather than a trigger. A `topics` or `export_subscriptions` row says how often it should run and when it is next due, this workflow claims it once `next_run_at` has passed, and invokes the workflow that does the work. So making a new thing schedulable is an INSERT rather than another trigger, here or in any other workflow.\n\nA second one would put a cadence on a canvas instead of in a row. Changing it would be a workflow edit rather than an UPDATE, its work would take no share of the batch cap a tick applies, and nothing here opens a `runs` row for a pass this workflow did not dispatch, so there is no record afterwards of it having run. A trigger acquired by accident is what turns a single mistake into a recurring one.\n\nAdding one on a canvas is lost either way. The instance is a deploy target and never a source, so the next import overwrites whatever was edited into it. The file is `workflows/src/ar-dispatch.json`, and `docs/architecture/01-invariants.md` carries the register row for this rule."
+      }
+    },
+    {
+      "id": "failed-runs-expected",
+      "name": "Failed Runs Are Expected",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-440, 540],
+      "parameters": {
+        "width": 400,
+        "height": 720,
+        "content": "## Failed Runs Are Expected\n\nEvery run this workflow opens closes as failed today, and that record is accurate. Invoke Target Workflow addresses `ar-ingest` for a claimed topic and `ar-digest` for a claimed export subscription, and neither workflow is on this instance yet. The invocation finds nothing behind the id, the claimed unit takes the node's error output, and Close Run Failed writes its `runs` row as failed.\n\nThe ids are right and the targets have not been built. The tick itself does not fail: the failure is routed rather than raised, so the pass carries on and every other claimed unit is dispatched the same way. Each failed run carries an entry in `errors` naming the target that could not be reached, so the row says which workflow was missing rather than only that something went wrong.\n\nThis clears in two steps. `ar-ingest` arrives in phase 5 and `ar-digest` in phase 6, so there is a stretch where a claimed topic reaches a workflow that exists while a claimed export subscription still reaches nothing, and one tick writes successes and failures side by side for a reason that is nobody's mistake.\n\nNone of it is a fault to switch off. Setting Invoke Target Workflow to continue on its REGULAR output would hand a failed invocation to Close Run Succeeded, which is how a dispatch that never happened comes to read like one that did, and disabling a node here is lost on the next import anyway: the instance is a deploy target and never a source. The workflow is `workflows/src/ar-dispatch.json` and the two ids are in `scripts/workflow-markers.ts`."
+      }
+    },
+    {
+      "id": "build-stamp",
+      "name": "Build Stamp",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-440, -400],
+      "parameters": {
+        "width": 400,
+        "height": 280,
+        "content": "## Build Stamp\n\n**__ENVVAR:AR_BUILD_TAG__**\n\nThe git short commit `scripts/build-workflows.ts` resolved when it wrote this artifact. A stamp that does not match the commit you deployed means the instance is running an older import.\n\n`dev` is a build with no commit to name, and a `-dirty` suffix a tree carrying uncommitted changes. Neither is an older import."
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          { "node": "Claim Due Topics", "type": "main", "index": 0 },
+          { "node": "Claim Due Export Subscriptions", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Claim Due Topics": {
+      "main": [
+        [
+          { "node": "Merge Claims", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Claim Due Export Subscriptions": {
+      "main": [
+        [
+          { "node": "Merge Claims", "type": "main", "index": 1 }
+        ]
+      ]
+    },
+    "Merge Claims": {
+      "main": [
+        [
+          { "node": "Plan Dispatch", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Plan Dispatch": {
+      "main": [
+        [
+          { "node": "Open Run", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Open Run": {
+      "main": [
+        [
+          { "node": "Invoke Target Workflow", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Invoke Target Workflow": {
+      "main": [
+        [
+          { "node": "Close Run Succeeded", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Close Run Failed", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  }
+}
