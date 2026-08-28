@@ -17,7 +17,6 @@ export type {
   ClientControlStatus,
   ControlStatusResponse,
   PausableDependency,
-  RestartableDependency,
   HealthDetailProvider,
 } from './control/types';
-export { isPausableDependency, isRestartableDependency, isHealthDetailProvider } from './control/types';
+export { isPausableDependency, isHealthDetailProvider } from './control/types';
