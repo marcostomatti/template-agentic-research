@@ -30,7 +30,8 @@ criteria — **do not execute the plan**.
   headings are visual separators only; the checklist must read as one flat
   sequence across stages.
 * One atomic action per task; no compound tasks joined by "and". Tasks must
-  be independently completable in the order listed.
+  be independently completable in the order listed. A module-sized
+  deliverable (see Task sizing below) counts as one atomic action.
 * Use imperative, specific wording ("Add Zod schema for `CreateJobRequest`",
   not "Handle input validation").
 * Avoid the words "current", "previous" and "next" in task text — the loop
@@ -42,6 +43,22 @@ criteria — **do not execute the plan**.
 * Add a test task at the end of each stage at minimum; for larger stages,
   test in smaller increments. Negative tests before positive tests; unit
   tests before integration tests; test tasks live in the stage they cover.
+  Stage-end test tasks cover cross-module/integration behavior — a module's
+  own unit tests ride inside its module task (Task sizing below).
+
+## Task sizing (session economics)
+
+* One task = one full agent session, so task COUNT is the plan's
+  wall-clock. Target **≤80 tasks**; exceed it only when the spec genuinely
+  enumerates more independent deliverables, and say so in the Description.
+* A module ships as ONE task: implementation + its TSDoc + its colocated
+  unit tests together. Never split creation from documentation, or from
+  the tests that cover only that module.
+* Documentation-only updates fold into the task whose change they document
+  (the same-commit doc law already requires the pairing).
+* Keep as SEPARATE tasks: cross-cutting verification (fan-out gates,
+  invariant sweeps), live-seam runs, migrations, and close-out — these
+  preserve resumability where a halt is most likely.
 
 ## Spec
 
