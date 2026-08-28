@@ -63,10 +63,21 @@ written down which phase that is.
 
 Phase 1 opened `tests/invariants/` with the naming invariant, and
 phase 2 added the static-SQL scan over `drizzle/` beside it. Phase 3
-lands the rest of the spine next to the build system that produces the
-artifacts those assertions read — before most of the behaviour they
-guard exists — and each later phase adds its assertions to that same
-suite.
+landed the workflow half of the suite next to
+`scripts/build-workflows.ts`, which writes the tree it stands on:
+`tests/invariants/workflow-dist.ts` reads `workflows/dist/`,
+`tests/invariants/workflow-rosters.ts` fixes the node types the rules
+are keyed to, and `tests/invariants/workflows.test.ts` holds every
+built workflow to them. A register row naming that last file rests on
+all three, and what all three read today is one built workflow,
+`ar-dispatch`.
+
+Phase 3 also put a module in `tests/invariants/` that no row names.
+`tests/invariants/dispatch-sql.ts` holds `ar-dispatch`'s own
+statements to the properties `docs/architecture/06-scheduling.md`
+argues, which are properties of one workflow rather than of the
+pipeline; the register is the second kind. Both kinds join the same
+suite, and each later phase adds its assertions to it.
 
 Extending one suite rather than starting a parallel one is the same
 argument the single test runner rests on: a suite that lives outside
