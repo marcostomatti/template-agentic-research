@@ -44,11 +44,15 @@
  * {@link isActivatableTrigger} reads both to answer for one type,
  * {@link activatableTriggers} asks that of a whole workflow and hands
  * back the nodes an activation would start, and {@link toApiWorkflow}
- * cuts a built artifact down to what the public API takes. The first
- * of the three commands has opened and its `deploy` calls
- * {@link toApiWorkflow} once per artifact it uploads; the other two,
- * and the callers of the two arming answers, arrive later in this
- * stage.
+ * cuts a built artifact down to what the public API takes. `deploy`
+ * in `deploy-external.ts` puts every artifact it uploads through
+ * {@link toApiWorkflow}, and the plan step of `activate-workflows.sh`
+ * puts every built artifact through {@link activatableTriggers},
+ * sorting the ones an activation would arm from the ones it would
+ * leave inactive. `audit-workflows.ts` asks nothing here, judging an
+ * instance by what it holds rather than by what it would start, and
+ * {@link isActivatableTrigger} is reached through
+ * {@link activatableTriggers} rather than by a command of its own.
  */
 
 /**

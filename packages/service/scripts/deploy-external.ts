@@ -12,10 +12,10 @@
  *
  * The sibling on the other side of that line is
  * `activate-workflows.sh`, which reaches a LOCAL instance through the
- * n8n CLI and so wants the container this one does without. Its
- * preamble has landed, and the steps that drive that CLI arrive later
- * in this stage. `audit-workflows.ts` sits on this side of the same
- * line and has landed whole, its own command line included.
+ * n8n CLI and so wants the container this one does without. The steps
+ * that drive that CLI arrive later in this stage.
+ * `audit-workflows.ts` sits on this side of the same line and has
+ * landed whole, its own command line included.
  *
  * What it uploads is the `--external` build's output,
  * `workflows/dist-external/`, rather than `workflows/dist/`. That is
@@ -905,8 +905,8 @@ function remoteIdFor(
  * inert whatever the body carried, so what a deploy leaves is an
  * instance holding this port's workflows and running none of them,
  * and {@link DeployedWorkflow.armed} is what says so per workflow.
- * Arming a LOCAL instance is `activate-workflows.sh`, whose preamble
- * has landed and whose arming steps arrive later in this stage.
+ * Arming a LOCAL instance is `activate-workflows.sh`, whose arming
+ * steps arrive later in this stage.
  *
  * What it does not do is notice anything an instance holds that this
  * build did not produce. A workflow deployed off an older checkout,

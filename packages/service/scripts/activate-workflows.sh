@@ -16,10 +16,12 @@
 # (`activatableTriggers` in `n8n-workflow.ts`), which is what keeps
 # what is left here a sequence.
 #
-# What has landed is the preamble: the shell settings, the package
-# root every path in this file is written against, and the container
-# to enter. The steps that read the built tree and drive the CLI
-# against an instance arrive later in this stage.
+# What has landed is the preamble and the plan the rest of the run
+# works from: the shell settings, the package root every path in this
+# file is written against, the container to enter, and the read of
+# the built tree that says which workflows an activation would arm.
+# The steps that drive the CLI against an instance arrive later in
+# this stage.
 
 # `-e` so a failing step stops the run rather than letting the one
 # after it work on whatever the failure left behind, `-u` so a
@@ -74,3 +76,112 @@ cd "$(dirname "$0")/.."
 # beside this one, and nothing a shell script runs can import
 # anything.
 AR_N8N_CONTAINER="${AR_N8N_CONTAINER:-ar-n8n}"
+
+# What is built, and which of it an activation would actually arm.
+# One line per artifact — `arm` or `manual`, then the workflow id,
+# then its display name — so the split that follows can tell the two
+# apart and the report names workflows rather than counting them.
+# Sorted so it reads the same on every machine: `readdirSync` answers
+# in directory order and nothing here joins the artifacts, which is
+# the whole of what the sort buys.
+#
+# Derived from the built tree rather than from a list kept here. A
+# hardcoded list is one more thing to edit whenever a workflow lands
+# and is silently wrong until somebody notices — and quietly wrong,
+# for the shapes this port has. Measured in `n8n` 2.15.1: an
+# activation is refused only where every enabled node outside its two
+# manual-starter types declares no trigger, poll or webhook, so a
+# workflow reached through an execute-workflow trigger activates and
+# registers nothing rather than being turned away. The rule is
+# `activatableTriggers` in `n8n-workflow.ts`, where this directory
+# keeps the questions an instance-facing command asks about a
+# workflow, so a second command asking what one would start reads
+# that same answer rather than a second reading of it.
+#
+# `workflows/dist/` and not `workflows/dist-external/`: this command
+# arms an instance the project stands up itself and imports through
+# that instance's own CLI, while the external tree is the one whose
+# settings were resolved against an environment for an instance
+# somewhere else.
+#
+# The directory is spelled relative to the root this file has already
+# moved to rather than imported from the build, and relative costs
+# nothing extra here: bun resolves the module specifier in the same
+# snippet against the working directory too, so a run from anywhere
+# else fails on the import before it ever reaches the directory.
+# `build-workflows.ts` writes that path and
+# `tests/invariants/workflow-dist.ts` reads it, each resolving it
+# from its own file's location, and the `cd` is this file's version
+# of the same thing — so none of the three is keyed to where a
+# process was started.
+#
+# Single quotes around the snippet, so the shell hands it to bun
+# untouched. Inside double quotes every dollar sign, backtick and
+# backslash would be bash's own, and a template literal reached for
+# later would be interpolated before bun ever saw it. What that costs
+# is a snippet writing its strings with double quotes where the
+# TypeScript beside it writes single ones, and one that can carry no
+# apostrophe at all.
+#
+# The capture folds stderr in, so a directory nobody has built, an
+# artifact that will not parse and a snippet that will not run all
+# reach the guard as text it can print. The two lines an operator
+# acts on go first and the raw failure after them, because bun prints
+# a source excerpt around an uncaught error and a fix line behind
+# that is a fix line nobody reads.
+if ! PLAN="$(bun -e '
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { activatableTriggers } from "./scripts/n8n-workflow.ts";
+
+const dist = "workflows/dist";
+const files = readdirSync(dist).filter((f) => f.endsWith(".json")).sort();
+
+for (const file of files) {
+  const built = JSON.parse(readFileSync(join(dist, file), "utf8"));
+  const kind = activatableTriggers(built).length > 0 ? "arm" : "manual";
+  console.log(kind + " " + built.id + " " + built.name);
+}
+' 2>&1)"; then
+  echo "activate: could not read the built workflows under workflows/dist/" >&2
+  echo "          usually means nothing has been built: bun run build:workflows" >&2
+  echo "$PLAN" >&2
+  exit 1
+fi
+
+# Split the plan: the armed ids are what the steps after this drive
+# the CLI with, and the manual-only ones are reported and left alone.
+# A herestring rather than a pipe, so the loop runs in this shell and
+# the array it fills survives it; the empty-line skip is for the one
+# line a herestring makes out of an empty plan.
+#
+# Left inactive is the outcome rather than a gap. Manual-only means
+# an activation would start nothing, and the workflows `ar-dispatch`
+# reaches through an Execute Workflow node are started by it rather
+# than by anything an activation registers. Not everything still to
+# land is one of those — `ar-capture` in the phase-5 roster starts at
+# a webhook, which arms — so the split is read off each artifact
+# rather than assumed. Nothing built today is manual-only:
+# `ar-dispatch` holds the only schedule trigger in the system and
+# arms on it.
+ARMED_IDS=()
+while read -r kind id name; do
+  [ -n "${kind:-}" ] || continue
+  if [ "$kind" = "arm" ]; then
+    ARMED_IDS+=("$id")
+  else
+    echo "  manual-only, left inactive: $id ($name) — an activation would start nothing"
+  fi
+done <<<"$PLAN"
+
+# Refuse rather than carry on: a run with nothing to arm is either a
+# tree with nothing built in it or a system that has lost its only
+# clock, and the message says how to read which. It also has to come
+# before the array is expanded anywhere. Measured on the bash macOS
+# ships, 3.2, a count of an empty array is 0 while a quoted expansion
+# of one under `-u` aborts the run as an unbound variable.
+[ "${#ARMED_IDS[@]}" -gt 0 ] || {
+  echo "activate: no built workflow has a trigger an activation would arm" >&2
+  echo "          nothing printed above means workflows/dist/ is empty: bun run build:workflows" >&2
+  exit 1
+}
