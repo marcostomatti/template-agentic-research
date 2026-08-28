@@ -28,3 +28,10 @@ visual-report.json
 packages/service/workflows/dist/
 packages/service/workflows/dist-external/
 packages/service/.exports/
+
+# Playwright output for @ar/web's e2e suite: `test-results/` holds the
+# per-failure artifacts (traces, screenshots, error context) and
+# `playwright-report/` the HTML reporter's output. Both are regenerated
+# by every run and neither is ever committed.
+test-results/
+playwright-report/
