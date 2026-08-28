@@ -504,3 +504,67 @@ is one writer's habit rather than a column a reader can query. Closing
 the gap is a column and a column is a migration this phase does not
 carry, which is why it is left open rather than closed: the choice
 between the column and a second convention is phase 5's to take.
+
+### Every run opened before the targets exist closes as failed
+
+`Invoke Target Workflow` addresses `ar-ingest` for a claimed topic and
+`ar-digest` for a claimed export subscription, and the roster in
+`workflows/src/README.md` delivers the first of those in phase 5 and
+the second in phase 6. Until each arrives the id resolves, nothing on
+the instance answers to it, the claimed unit takes the node's error
+output, and `Close Run Failed` writes its row as failed. Why a routed
+failure is the right shape for that is argued on
+`AR_TOPIC_WORKFLOW_ID` in `scripts/workflow-markers.ts`, and on the
+workflow's own canvas for an operator standing in front of it. What
+follows from a whole phase of it is this document's.
+
+The window does not compound, and what keeps it from compounding is
+the fold. A claim writes the row's next due time before anything looks
+at what it dispatched, so a unit whose target is missing has already
+been rescheduled by the time the invocation is attempted: it is not
+retried, and it is not still owed. A missing target therefore costs
+one failed run per row per interval, and no more of them on a tick
+than the cap kept — the same bound a working target would run under,
+reached for the opposite reason.
+
+For the length of the window the status column separates nothing.
+Every row this workflow closes says the same thing, so `runs` is a
+list of dispatches rather than a mix of outcomes, and what it still
+answers is what the two columns the insert supplies were for: which
+domain a pass ran for, and the mode its schedule is attributed to. The
+failed branch appends an entry to `errors` naming the target it could
+not reach, which is where a row says which of the two ids it was
+about.
+
+That is what makes a failed row worth keeping rather than filtering
+out. Reaching `failed` is the mechanism having run once end to end —
+the trigger fired, a claim took a row and moved its `next_run_at`, the
+cap kept the unit, a run was opened carrying a real domain, an
+invocation was attempted, the failure was routed rather than raised,
+and the row was closed. Before any target exists a pass leaves nothing
+else behind in this database, so a table of these rows is the closest
+it comes to reporting that the parts fit together.
+
+Both ways of stopping the failures without building a target are
+watched, and what the branch writes once it gets there is not.
+`tests/invariants/dispatch-sql.test.ts` holds `Invoke Target Workflow`
+to the setting that appends a second output and holds
+`Close Run Failed` to being what arrives on it, so dropping that
+setting or wiring the error output nowhere reddens there — measured,
+the setting dropped moves the routing case and the sweep that flags
+the other continuing value. No entry in
+`tests/invariants/dispatch-sql.ts` names the closing node and the
+routing case reads only that it runs a statement, so the same branch
+closing its run as `ok` leaves both built-tree suites green —
+measured, with no case moving at all. The route is checked and the
+record on it is convention.
+
+When a target does land, `failed` starts meaning that a workflow ran
+and its work failed, rather than that no workflow was there, with
+nothing in this repository edited and nothing in a row to mark the
+change. The `errors` entry is what carries the difference, naming the
+target as it stood. And the absence that replaces this one is the
+opposite shape: a target returning no items puts nothing on the
+success output at all, so its run keeps the `running` status it was
+opened with, which is the limit `Close Run Succeeded` records against
+the phase that makes it real.
