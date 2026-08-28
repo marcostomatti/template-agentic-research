@@ -54,8 +54,32 @@ that enforces each, is docs/architecture/01-invariants.md.
 and writes one built artifact per source file to `workflows/dist/`. The
 build resolves the markers a source template carries: library sources are
 transpiled and spliced into Code nodes, so a node runs the same functions
-the test suite imports, and build-time settings are baked in. The marker
-forms are specified alongside the build script when it lands.
+the test suite imports, and build-time settings are baked in.
+
+A marker is plain text inside a JSON string. Two forms may be written
+here, and two more are refused by name:
+
+| Form | What it names | What the build writes in its place |
+| --- | --- | --- |
+| `__INLINE:<path>__` | A library under `src/lib/`, by a path relative to that directory. | That library's body, transpiled to JavaScript and stripped of its `export` keywords. |
+| `__ENVVAR:<NAME>__` | A build setting, by the name `ENV_DEFAULTS` in `scripts/workflow-markers.ts` declares it under. | Whatever the settings chain resolves that name to. |
+| `__INLINE_JSON:<file>__` | Retired. Named a curated data file to bake into a node body as a JSON literal. | Nothing. The build refuses the source, naming the form. |
+| `__INLINE_YAML:<file>__` | Retired. Named an operator-editable file to convert at build time. | Nothing. The build refuses the source, naming the form. |
+
+Three things about writing a marker are not in the table. A setting has to
+be declared in `ENV_DEFAULTS` before a marker may name it, or the build
+fails naming that setting rather than resolving the marker to a blank.
+Markers are replaced in object values only, so one written as a key is
+left standing and fails the build at the end, as marker text nothing
+resolved. And a marker carries no quotes of its own, so a source landing
+one in executable code quotes it at the site: `ar-dispatch`'s Code node
+writes `Number('__ENVVAR:AR_DISPATCH_BATCH_CAP__')`, because what is
+spliced in is the resolved text and nothing else, and a bare marker is an
+identifier.
+
+The order the two live forms are resolved in, why a retired one fails the
+build rather than passing through, and the three rules a spliced library
+obeys are argued in `docs/architecture/03-workflows.md`.
 
 `workflows/dist/` is **gitignored**, as is its sibling
 `workflows/dist-external/` — the deploy-time build, which resolves

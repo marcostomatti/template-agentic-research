@@ -14,10 +14,11 @@ design, §7.
 
 `workflows/src/README.md` is the directory's own README, and it
 carries what somebody editing a workflow needs at hand: the naming
-rule, the roster, and the standing prohibition on editing built
-output. What is here is the set as a whole — what it is for a workflow
-to belong to it, and where the line falls between what a workflow
-holds and what it calls.
+rule, the roster, the marker forms a source may write and the two it
+may not, and the standing prohibition on editing built output. What is
+here is the set as a whole — what it is for a workflow to belong to
+it, and where the line falls between what a workflow holds and what it
+calls.
 
 ## The set
 
