@@ -693,7 +693,8 @@ export interface DigestDefaults {
  * So this is the one type here the q15 swap cannot satisfy by pointing
  * at an existing endpoint — it needs somewhere to persist first, and
  * where that lands is a schema decision rather than a UI one. The
- * settings surface renders these controls disabled for that reason.
+ * settings surface holds a change as a tab-local delta for that
+ * reason, and says on the page that nothing there is saved.
  */
 export interface Settings {
   /**

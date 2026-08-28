@@ -11,9 +11,16 @@
  * configuration in `domains.settings` and keeps nothing per operator.
  * So there is no seed to transcribe, no column to narrow, and no
  * endpoint for the q15 swap to point at until somewhere to persist
- * this has been decided. That is why the settings surface renders its
- * controls disabled rather than live: a switch that flips and forgets
- * is a worse answer than one that says it cannot flip yet.
+ * this has been decided. What the settings surface does about that is
+ * hold an operator's changes as a delta for the life of the tab and
+ * say so in a banner over the page: a switch that flips and forgets is
+ * a bad answer only while it is silent about forgetting. It has no
+ * choice in any case — `SelectProps` carries no `disabled`, so the
+ * default-domain and digest controls could only be live or absent. The
+ * two operator text fields there ARE inert, because a free-text box
+ * accepts values this deployment has never seen and echoing one back
+ * would be a fabrication rather than a reading.
+ * `../pages/settings/fields.ts` carries the argument in full.
  *
  * What the fixture is for, then, is the SHAPE of that decision. Each
  * member below is written against what it would be stored as, so the
@@ -81,10 +88,13 @@ const DAILY_INTERVAL_SECONDS = 86400;
  * The round trip IS the check: `getDomain` throws on a slug no fixture
  * carries, so a domain removed from `./domains.ts` fails at import
  * here instead of reaching the settings page as a `Select` whose value
- * matches no option — a control that renders blank and drops the
- * preference it was supposed to be showing. Same bargain
- * `./personas.ts` makes reading its `SEEDED_DOMAIN_ID` off the table
- * instead of writing `1`.
+ * matches no option — which does not render blank: `Select` falls back
+ * to its FIRST option, quietly reporting some other domain as this
+ * deployment's default. `../pages/settings/fields.ts` guards the same
+ * failure from the other side, where the preference and the domain
+ * list are two reads that can disagree. Same bargain `./personas.ts`
+ * makes reading its `SEEDED_DOMAIN_ID` off the table instead of
+ * writing `1`.
  */
 const RESOLVED_DEFAULT_DOMAIN_SLUG = getDomain(DEFAULT_DOMAIN_SLUG).slug;
 

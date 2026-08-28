@@ -34,6 +34,7 @@ import { getSurface } from '../routes/paths';
 import { AgentsPage } from './agents/AgentsPage';
 import { DigestPage } from './digest/DigestPage';
 import { LexiconPage } from './lexicon/LexiconPage';
+import { SettingsPage } from './settings/SettingsPage';
 import { SourcesPage } from './sources/SourcesPage';
 import { ToolsPage } from './tools/ToolsPage';
 
@@ -49,6 +50,7 @@ const PAGE_COMPONENTS: Readonly<Record<string, ComponentType>> = {
   sources: SourcesPage,
   agents: AgentsPage,
   tools: ToolsPage,
+  settings: SettingsPage,
 };
 
 /** The same table, with every key proven to name a surface. */
