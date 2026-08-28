@@ -164,3 +164,82 @@ describe('swapBase', () => {
     expect(swapped).toBe('/digest');
   });
 });
+
+/**
+ * The values that occur more than once, in the order they repeat.
+ *
+ * Returned rather than counted so the assertions below can compare
+ * against `[]` and let vitest print the colliding paths themselves.
+ */
+function repeated(values: readonly string[]): readonly string[] {
+  return values.filter((value, index) => values.indexOf(value) !== index);
+}
+
+describe('every surface under both bases', () => {
+  // Whole-table claims, as opposed to the single-surface cases above: the
+  // router declares one route per SURFACES entry under each base, so two
+  // entries sharing a path would shadow each other and the operator would
+  // reach one page from two nav items. An empty table would satisfy every
+  // case here vacuously — `SURFACES derives at least one surface` is the
+  // guard that closes that, and it fails first if NAV_ITEMS empties out.
+
+  it('gives every surface a distinct path under the single-domain base', () => {
+    // Arrange / Act
+    const paths = SURFACES.map(
+      (surface) => withBase(SINGLE_DOMAIN_BASE, surface.id),
+    );
+
+    // Assert
+    expect(repeated(paths)).toEqual([]);
+  });
+
+  it('gives every surface a distinct path under a domain base', () => {
+    // Arrange / Act
+    const paths = SURFACES.map(
+      (surface) => withBase(domainBase(DOMAIN_SLUG), surface.id),
+    );
+
+    // Assert
+    expect(repeated(paths)).toEqual([]);
+  });
+
+  it('never reuses a single-domain path under the domain base', () => {
+    // Distinctness within each base is not enough on its own: swapBase
+    // treats the two sets as counterparts, so a path that belongs to both
+    // would make the mapping below ambiguous rather than reversible.
+    // Arrange
+    const singlePaths = SURFACES.map(
+      (surface) => withBase(SINGLE_DOMAIN_BASE, surface.id),
+    );
+    const domainPaths = SURFACES.map(
+      (surface) => withBase(DOMAIN_BASE, surface.id),
+    );
+
+    // Act
+    const shared = singlePaths.filter((path) => domainPaths.includes(path));
+
+    // Assert
+    expect(shared).toEqual([]);
+  });
+
+  it('maps every surface path onto its counterpart under the other base', () => {
+    // Both directions in one table so a failure names the surface that
+    // stopped round-tripping rather than just the direction.
+    // Arrange
+    const pairs = SURFACES.map((surface) => ({
+      id: surface.id,
+      single: withBase(SINGLE_DOMAIN_BASE, surface.id),
+      domain: withBase(DOMAIN_BASE, surface.id),
+    }));
+
+    // Act
+    const swapped = pairs.map((pair) => ({
+      id: pair.id,
+      single: swapBase(pair.domain, SINGLE_DOMAIN_BASE),
+      domain: swapBase(pair.single, DOMAIN_BASE),
+    }));
+
+    // Assert
+    expect(swapped).toEqual(pairs);
+  });
+});
