@@ -157,13 +157,12 @@ export interface IntervalBounds {
  * evidence rather than a reading of the Postgres manual. The rows
  * themselves live in `tests/lib/schedule-cases.ts`, so those two files
  * are driven over the same ones rather than over two lists that agree
- * until somebody edits one. The lib case reads that table today; the
- * live one arrives later in this plan and self-skips without
- * `AR_LIVE_DATABASE_URL`, so a default suite run exercises this
- * function alone and says nothing about the expression it is meant to
- * agree with. The row carrying that comparison is a floor with no
- * ceiling, since every other combination of bounds agrees under the
- * COALESCE form too.
+ * until somebody edits one. The live one self-skips without
+ * `AR_LIVE_DATABASE_URL`, and `bun run test:live` is the only script
+ * that sets it, so a default suite run exercises this function alone
+ * and says nothing about the expression it is meant to agree with. The
+ * row carrying that comparison is a floor with no ceiling, since every
+ * other combination of bounds agrees under the COALESCE form too.
  *
  * What the bounds bound is a PROPOSAL. No CHECK relates the two
  * columns to `interval_seconds` or to `next_run_at`, so calling this is

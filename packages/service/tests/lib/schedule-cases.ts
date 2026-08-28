@@ -16,10 +16,11 @@
  * the `expected` column, and `tests/build/schedule-splice.test.ts`,
  * which drives the copy a Code node runs — spliced by the shipped
  * build and constructed with `new Function` — and holds it against
- * the imported one row for row. The third reader arrives later in
- * this plan: `tests/live/schedule-clamp.live.test.ts`, which drives
- * the SQL against a real Postgres, and it is the only one of the
- * three that reads an expression written separately from this one.
+ * the imported one row for row. The third is
+ * `tests/live/schedule-clamp.live.test.ts`, which drives the SQL
+ * against a real Postgres and holds what it applied against the
+ * imported function, and it is the only one of the three that reads
+ * an expression written separately from this one.
  *
  * `expected` is written out per row rather than computed. A computed
  * one would be `clampIntervalSeconds` reimplemented, and a case

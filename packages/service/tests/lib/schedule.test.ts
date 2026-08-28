@@ -65,8 +65,8 @@
  * reach is a second batch. Every call there is made with the same
  * four claims and only the cap moves, so a rule keyed to that one
  * length would answer all of it — and nothing later in this plan
- * varies the batch, since the readers arriving for the clamp
- * table drive rows rather than lists.
+ * varies the batch, the readers of the clamp table all driving
+ * rows rather than lists.
  *
  * The clamp rows are imported rather than written here because the
  * same ones drive the SQL expression the dispatcher carries and the
