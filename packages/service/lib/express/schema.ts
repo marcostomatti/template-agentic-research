@@ -91,8 +91,28 @@ export const ServiceConfigSchema = z.object({
    * Operator control-plane configuration.
    * When enabled, mounts `/_control/*` routes protected by `secret`.
    * See {@link ControlConfig} for field descriptions.
+   *
+   * `allowStop` gates the destructive `POST /_control/stop` route and
+   * defaults to `false`, so a config that omits it keeps every other
+   * control route and loses that one. It is declared here as well as on
+   * {@link ControlConfig} because this object strips the keys it does
+   * not declare: without it, a consumer setting `allowStop: true` would
+   * type-check against the interface and then have the field dropped
+   * before the router ever sees it.
+   *
+   * `version` is declared here for that same reason. It overrides the
+   * `package.json` lookup the control plane otherwise performs, and the
+   * deployment it exists for — a bundle with no `package.json` above the
+   * module — reaches the router through this object like any other, so
+   * leaving it undeclared would strip the field on the only path that
+   * needs it. It carries no default: absent means "read the file".
    */
-  control: z.object({ enabled: z.boolean(), secret: z.string() })
+  control: z.object({
+    enabled: z.boolean(),
+    secret: z.string(),
+    allowStop: z.boolean().default(false),
+    version: z.string().optional(),
+  })
     .refine(
       (val) => !val.enabled || val.secret.length > 0,
       { message: 'control.secret must be a non-empty string when the control plane is enabled', path: ['secret'] },

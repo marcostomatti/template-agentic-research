@@ -1,4 +1,5 @@
-import type { MCPConfig } from '../types.js';
+import type { MCPConfig, MCPContext } from '../types.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 
 import process from 'node:process';
 
@@ -52,8 +53,15 @@ function tick(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, 0));
 }
 
+// One element of MCPConfig.clients, derived from createMCP's own
+// signature: clients is optional, so the array type has to be unwrapped
+// with NonNullable before it can be indexed.
+type MCPClient = NonNullable<Parameters<typeof createMCP>[0]['clients']>[number];
+
 describe('createMCP', () => {
-  let mockSetup: ReturnType<typeof vi.fn>;
+  // Typed explicitly: a bare vi.fn() widens to Procedure | Constructable,
+  // which matches no MCPConfig.setup call signature.
+  let mockSetup: ReturnType<typeof vi.fn<(server: McpServer, ctx: MCPContext) => void>>;
 
   function makeConfig(overrides?: Partial<MCPConfig>): MCPConfig {
     return { serviceId: 'test-mcp', setup: mockSetup, ...overrides };
@@ -64,7 +72,7 @@ describe('createMCP', () => {
     vi.clearAllMocks();
     mocks.serverInstances.length = 0;
     mocks.mockTransportClose.mockResolvedValue(undefined);
-    mockSetup = vi.fn().mockResolvedValue(undefined);
+    mockSetup = vi.fn<(server: McpServer, ctx: MCPContext) => void>().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -136,7 +144,7 @@ describe('createMCP', () => {
   });
 
   it('clients are accessible in MCPContext', async () => {
-    const mockClient = { name: 'test-client' } as Parameters<typeof createMCP>[0]['clients'][number];
+    const mockClient = { name: 'test-client' } as MCPClient;
 
     createMCP(makeConfig({ clients: [mockClient] }));
     await tick();
@@ -195,7 +203,11 @@ describe('createMCP', () => {
     let transportResolved = false;
     vi.mocked(wireHttpTransport).mockImplementationOnce(async () => {
       transportResolved = true;
-      return mocks.mockTransportInstance;
+      // The hoisted stub implements only close(), the single method
+      // shutdown() calls, so wireHttpTransport's declared return type
+      // (an SDK WebStandardStreamableHTTPServerTransport) is erased
+      // here rather than stubbing that whole surface.
+      return mocks.mockTransportInstance as unknown as Awaited<ReturnType<typeof wireHttpTransport>>;
     });
 
     let healthCalledAfterTransport = false;

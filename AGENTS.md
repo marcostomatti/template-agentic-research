@@ -102,6 +102,49 @@ on the remote.
   just after service work — a user-level skill can carry a real origin
   hostname, and a green `test:all` would not notice. Zero hits is only
   evidence once the scan itself is proven live (`zero-hit-scan-proof-kit`).
+- Do not classify that split by hand — it is COMPUTABLE, and the two
+  clauses a reader most often infers are both wrong. `collectScannedFiles`
+  is exported from `tests/invariants/naming-patterns.ts`, so a `bun -e`
+  importing it and intersecting against
+  `git diff --name-only <base>..HEAD` names exactly which changed files the
+  automated scan covers and which the manual sweep still owes (surface: 125
+  files). The two non-obvious members: `lib/**/__tests__/*.test.ts` ARE
+  scanned (they sit under the `lib` root, so "tests are out" is true only
+  of `tests/`), and `scripts/README.md` IS scanned (a `.md` inside a scan
+  root, so "READMEs are out" is true only of the package-root one).
+- For the manual half, run the invariant's OWN matcher rather than a
+  retyped `git grep`: `findForbiddenMatches(content, path)` takes CONTENT,
+  so feeding it `git ls-files` applies the five declared needle SOURCES
+  with no hand-transcription step and no exposure to the shimmed-`grep`
+  trap (measured 676/676 tracked files, agreeing with the git grep at 1
+  hit). It carries its own liveness leg for free — the same matcher over an
+  in-memory planted sample built from fragments must return 5 hits naming
+  all five ids. Run BOTH readings and let their agreement be the result.
+  `git grep -P` DOES support lookbehind here (the ugrep shim is on bare
+  `grep`, not on `git grep`), so the guarded needle is runnable as-is.
+- The correct outcome of that sweep is ONE hit, not zero, and a literal
+  zero would itself be the finding: `NOTICE:10` carries the Apache-2.0
+  §4(d) attribution that the `origin-project` needle's own description
+  names as the reason `NOTICE` sits outside the scan surface. It is the
+  positive control against the real tree — needle, pathspec and case flags
+  all proven live in the output that reports the result. The other four
+  needles have zero legitimate occurrences, so each gets a near-neighbour
+  control instead: drop the guard from the needle and re-run, and the
+  UNguarded form must return a non-zero set of legitimate near misses (each
+  one measured in single digits here — a base64 run inside `bun.lock`, the
+  invariant's own false-positive fixture, and one legal `ExportFormat`
+  member). That is what makes the guarded zero a guard discriminating
+  rather than a dead needle. Build those unguarded forms at the shell from
+  fragments, exactly as `naming-patterns.ts` assembles the real ones — a
+  bare needle token pasted into a doc, a plan or a commit message becomes
+  the very literal the law forbids, and this paragraph tripped that on its
+  first draft.
+- Also true of ANY sweep needle here: prove it excludes its legitimate
+  sibling before reading a count as an inventory. `specs/` sits inside
+  `.specs/`, so a bare `git grep -E 'specs/'` returned 24 lines of which 18
+  were correct `.specs/` references; the negative-context form
+  `-E '(^|[^.])specs/'` returns only the dangling ones. That is a false
+  POSITIVE where the liveness controls above guard false negatives.
 
 ## Verification order
 
@@ -139,10 +182,43 @@ red package never masks another and a single run gives the whole picture.
   vendored framework half exercises its own error paths through structured
   pino logs (`dependency failed to start`, a request record carrying a 500,
   `dependency stop failed`), so the natural grep reports three regressions
-  over a run whose every package exited 0. Key on vitest's own glyphs
-  (`×`/`✕`/`✗`) and read the summary lines, which are prefixed per package
-  (`@ar/service test:  Test Files ...`) — a `^ *Test Files` anchor catches
-  the root's summary alone and silently misses every package's.
+  over a run whose every package exited 0. Read the summary lines, which
+  are prefixed per package (`@ar/service test:  Test Files ...`) — a
+  `^ *Test Files` anchor catches the root's summary alone and silently
+  misses every package's.
+- Keying that same capture on vitest's failure glyphs (`×`/`✕`/`✗`) is a
+  ZERO-HIT scan with no in-band control, because a GREEN default-reporter
+  run emits no per-case glyph at all. The only two `✓` in an 1888-line
+  capture are `@ar/ui pretest`'s vite lines (`✓ 2092 modules transformed.`),
+  so reading one as proof the glyph vocabulary is present misattributes a
+  build line and makes a dead needle look live. Plant the control — a
+  throwaway file carrying `×`/`✕`/`✗` grepped in the SAME command — or use
+  Python (`re.compile('[×✕✗]')` over decoded text), which needs no PCRE and
+  dodges the shimmed-`grep` family entirely. The summary lines remain the
+  primary reading; the glyphs are a cross-check that must prove itself.
+- Classifying every line is what makes "no failures" a measurement, and the
+  biggest bucket is not vitest: of 1888 lines, 1780 are `@ar/ui pretest`'s
+  vite chunk-size table (two `│` apiece) and 49 are the framework's
+  deliberate pino error-path JSON. The `Exited with code 0` set is exactly
+  FIVE and worth NAMING rather than counting — `@ar/service pretest`,
+  `@ar/ui pretest`, `@ar/ui test`, `@ar/web test`, `@ar/service test`.
+- A green capture carries NO per-file and no per-case line, so grepping one
+  for a test file's NAME reports whether that file's code LOGS, never
+  whether it ran (measured: all four `lib/express/control/*.test.ts` names
+  appear zero times; `create-service.test.ts` appears once, solely because
+  its 500-path pino log embeds a stack trace). "Confirm file X reports zero
+  failures" has exactly two readings and neither is a grep of the run: the
+  whole-suite summary's zero, plus `bun x vitest list --filesOnly` run from
+  INSIDE the package (BARE pathspec) held set-equal against
+  `git ls-files -- '*.test.ts'` — the one check that catches a test file on
+  disk that was never collected.
+- The capture's LINE COUNT is not stable across two runs of the IDENTICAL
+  tree (measured 1888 vs 1889 at the same clean HEAD), so it can never be a
+  suite-identity check: the whole delta is `@ar/ui`'s vite
+  `[PLUGIN_TIMINGS]` block, whose length depends on which plugin hooks
+  cross a percentage threshold that run. What IS stable is a skeleton diff —
+  strip the pino JSON, normalise durations/ports/timestamps, then `difflib`
+  the rest.
 - `@ar/service` reporting skipped tests is the expected steady state, and it
   now has TWO sources behind it: the Postgres-gated files self-skipping
   without `AR_LIVE_DATABASE_URL`, and the n8n-gated file self-skipping
@@ -156,6 +232,52 @@ red package never masks another and a single run gives the whole picture.
   `git rev-parse --short HEAD`, plus the ABSENCE of a `-dirty` suffix, says
   both that the artifacts under test are HEAD's and that the tree is clean —
   in one line of one run.
+
+### Which gate reads which file
+
+A fan-out's green SHAPE is invariant under any change to what it COVERS, so
+"exits 0 with its five-line shape" and "read my files" are two questions and
+the shape answers only the first. A leaf config that had silently stopped
+matching anything prints exactly the same five lines.
+
+- NO gate in the `lint:all` fan-out lints any package-ROOT file — 11 of them
+  across the three packages, including every `vitest.config.ts`,
+  `eslint.config.mjs`, `tsconfig.json`, `AGENTS.md` and `README.md`.
+  `@ar/service`'s script is `eslint src lib workflows tests scripts`, and the
+  root leaf config ignores `packages/**` (`eslint.config.mjs` line 11).
+- Those files are un-TARGETED, not IGNORED, and the two need different fixes
+  while looking identical from the fan-out. `bun x eslint -f json
+  eslint.config.mjs` from inside the package returns a result entry with
+  `messages: []` — the covered-and-clean shape — and NOT a `File ignored
+  because of a matching ignore pattern` warning. So the fix is a one-word
+  script edit, never an ignore-pattern change, and `--no-ignore` is a
+  misleading reflex that presumes the half nobody measured. Ask with a plain
+  explicit-path `-f json` run first.
+- `bun run gate:control-bytes` DOES open every tracked file, package-root
+  `README.md` and `AGENTS.md` included (676 scanned, and that count is its
+  own liveness control). So a docs-only commit is NOT gateless — it has
+  exactly one green worth reading, and it is neither fan-out.
+- Proving a gate ran over YOUR work needs a different mechanism per gate,
+  because the file-count control is invariant under any plan that only edits
+  files already in the target list. For ESLint, per-PATH membership:
+  `git diff --name-only $(git merge-base main HEAD)..HEAD -- packages/`
+  against the absolute `filePath`s in an `-f json` capture, with a
+  definitely-absent path asserted false in the same command. For tsc there
+  is no per-file line to read at all, so plant
+  `export const planted: number = 'x'` in a throwaway `zz-tmp-control.test.ts`
+  and run the FAN-OUT (not `-p <cfg>`, which is evidence about a config and
+  not about the script). That also settles the RED shape of both fan-outs:
+  the green five lines PLUS package-prefixed error lines above the failing
+  package's own `Exited with code 2`, with sibling packages still printing
+  code-0 lines beneath — the filter does not short-circuit, now measured.
+  `git status --short -uall` printing nothing after the `rm` is the whole
+  revert check.
+- For a COVERAGE change specifically, membership must be a set DIFF and not
+  a remembered count: `bun x tsc --noEmit --listFilesOnly -p <cfg> | grep
+  '\.test\.ts$'` sorted against `git ls-files -- '*.test.ts'`, run from
+  INSIDE the package with a BARE pathspec — the repo-root-relative form
+  matches nothing there and prints a zero that reads as "no test files
+  exist".
 
 ## Workflow
 

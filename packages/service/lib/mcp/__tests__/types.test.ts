@@ -5,6 +5,7 @@
  * exported interfaces at compile time, and runtime checks to guard against
  * accidental regressions in the schema defaults that back these types.
  */
+import type { Logger } from '../../service-core/index.js';
 import type { ClientsMap, HealthConfig, MCPConfig, MCPContext } from '../types';
 
 import { describe, expect, it } from 'vitest';
@@ -40,11 +41,15 @@ describe('MCPConfig', () => {
   });
 
   it('accepts health with only port specified', () => {
+    // Annotated rather than written inline: `satisfies` preserves the
+    // literal's own inferred type, so an inline `{ port: 8080 }` would leave
+    // `config.health` with no `path` property for the assertion below to read.
+    const health: HealthConfig = { port: 8080 };
     const config = {
       serviceId: 'port-only',
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       setup: (_server: unknown, _ctx: unknown) => {},
-      health: { port: 8080 },
+      health,
     } satisfies MCPConfig;
 
     expect(config.health?.port).toBe(8080);
@@ -59,14 +64,21 @@ describe('MCPConfig', () => {
 describe('MCPContext', () => {
   it('accepts a valid context object (satisfies)', () => {
     const fakeClients: ClientsMap = {};
+    // Annotated rather than written inline: `Logger` also requires `trace`,
+    // `fatal` and `level`, and its `child` must return a `Logger`. A hoisted
+    // binding satisfies that by returning itself, so no cast is needed.
+    const fakeLogger: Logger = {
+      trace: () => {},
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      fatal: () => {},
+      child: () => fakeLogger,
+      level: 'info',
+    };
     const ctx = {
-      logger: {
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-        debug: () => {},
-        child: () => ({} as unknown),
-      },
+      logger: fakeLogger,
       clients: fakeClients,
     } satisfies MCPContext;
 

@@ -580,8 +580,16 @@ const UNHELD_NAME = 'AR Unheld';
  * strings apart: an artifact whose own id happened to be the
  * instance's would be satisfied in full by a deploy that never
  * matched on a name at all.
+ *
+ * The annotation is what keeps that guard compiling. Both ids are
+ * declared `const`, so `tsc` infers two distinct literal types and
+ * reports a comparison between them as statically decidable
+ * (TS2367) — an error about how the fixture is written rather
+ * than about the drift the guard is watching for. Widening this
+ * one to `string` answers the static reading and leaves the
+ * runtime comparison its work.
  */
-const HELD_SOURCE_ID = 'ar-held';
+const HELD_SOURCE_ID: string = 'ar-held';
 
 /** The other artifact's own id, which nothing matches on either. */
 const UNHELD_SOURCE_ID = 'ar-unheld';

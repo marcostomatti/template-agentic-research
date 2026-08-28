@@ -276,6 +276,57 @@ function captureWrite(table: string, domainId: number, hash: string | null, body
   `;
 }
 
+/**
+ * The single row a `.returning()` clause promised, read rather than
+ * destructured off nothing.
+ *
+ * Every write below returns exactly one row and
+ * `noUncheckedIndexedAccess` types the first element as
+ * `T | undefined` regardless, so `const [row] = ...` carries that
+ * `undefined` into every later read. Narrowing it once here is what
+ * clears those reads without a `!` on each of them: an assertion
+ * silences the compiler and leaves the empty case surfacing a few
+ * lines later as a property read on undefined, naming neither the
+ * statement that returned nothing nor the fixture it was standing up.
+ *
+ * What the rows carry is why the empty case has to name the write
+ * that missed. A returned id is what the next insert hangs off and
+ * what the refusals these cases pin interpolate back, and a returned
+ * column is read as a precondition — so a statement that wrote
+ * nothing breaks a case in its SETUP, where a rejected write and a
+ * missing row otherwise read alike.
+ *
+ * Read as the first element rather than by asserting the length,
+ * because the length is not what any caller here is claiming: these
+ * writes each name one row, and a result carrying more would be a
+ * different finding than the one this helper is placed to report.
+ * `tests/live/schedule-clamp.live.test.ts` carries the same shape as
+ * `firstRow`, phrased for what its own fixtures plant.
+ *
+ * @param rows - Whatever the statement returned.
+ *
+ * @param wrote - What it was asked to write, quoted back in the
+ * refusal so the failure names the statement rather than the read.
+ *
+ * @returns Its single row, typed without the `undefined`.
+ *
+ * @throws Error When it returned none.
+ */
+function oneRow<T>(rows: readonly T[], wrote: string): T {
+  const row = rows[0];
+
+  if (row === undefined) {
+    throw new Error(
+      `[schema-live] the statement writing ${wrote} returned no row, ` +
+      'so there is no id for the writes under test to hang off and ' +
+      'none to interpolate into the refusal they are pinned against. ' +
+      'Whatever it did, it did not write what this case asked of it.',
+    );
+  }
+
+  return row;
+}
+
 describeLivePg('schema migrations (live Postgres)', () => {
   let pool: Pool;
   let db: ReturnType<typeof createLiveDb>;
@@ -338,15 +389,24 @@ describeLivePg('schema migrations (live Postgres)', () => {
     // the foreign key, which refuses the insert as 23503 — a rejection
     // that reads the same from here while saying nothing about the
     // guard.
-    const [domain] = await db.insert(domains)
-      .values({ slug: 'depth-cap', name: 'Depth cap' })
-      .returning({ id: domains.id });
-    const [root] = await db.insert(categories)
-      .values({ domainId: domain.id, key: 'root', name: 'Root', parentId: null })
-      .returning({ id: categories.id });
-    const [child] = await db.insert(categories)
-      .values({ domainId: domain.id, key: 'child', name: 'Child', parentId: root.id })
-      .returning({ id: categories.id });
+    const domain = oneRow(
+      await db.insert(domains)
+        .values({ slug: 'depth-cap', name: 'Depth cap' })
+        .returning({ id: domains.id }),
+      'the depth-cap domain',
+    );
+    const root = oneRow(
+      await db.insert(categories)
+        .values({ domainId: domain.id, key: 'root', name: 'Root', parentId: null })
+        .returning({ id: categories.id }),
+      'the root of the depth-cap taxonomy',
+    );
+    const child = oneRow(
+      await db.insert(categories)
+        .values({ domainId: domain.id, key: 'child', name: 'Child', parentId: root.id })
+        .returning({ id: categories.id }),
+      'the child one level under that root',
+    );
 
     const failure = await db.insert(categories)
       .values({
@@ -389,22 +449,31 @@ describeLivePg('schema migrations (live Postgres)', () => {
     // UPDATE against a root with nothing under it is accepted, so what
     // goes red here is this row's children and not the act of giving a
     // root a parent.
-    const [domain] = await db.insert(domains)
-      .values({ slug: 'depth-cap-update', name: 'Depth cap (update)' })
-      .returning({ id: domains.id });
-    const [moved] = await db.insert(categories)
-      .values({
-        domainId: domain.id,
-        key: ROOT_WITH_CHILD_KEY,
-        name: 'Root with a child',
-        parentId: null,
-      })
-      .returning({ id: categories.id });
+    const domain = oneRow(
+      await db.insert(domains)
+        .values({ slug: 'depth-cap-update', name: 'Depth cap (update)' })
+        .returning({ id: domains.id }),
+      'the depth-cap update domain',
+    );
+    const moved = oneRow(
+      await db.insert(categories)
+        .values({
+          domainId: domain.id,
+          key: ROOT_WITH_CHILD_KEY,
+          name: 'Root with a child',
+          parentId: null,
+        })
+        .returning({ id: categories.id }),
+      'the root the UPDATE below moves',
+    );
     await db.insert(categories)
       .values({ domainId: domain.id, key: 'child', name: 'Child', parentId: moved.id });
-    const [newParent] = await db.insert(categories)
-      .values({ domainId: domain.id, key: 'other-root', name: 'Other root', parentId: null })
-      .returning({ id: categories.id });
+    const newParent = oneRow(
+      await db.insert(categories)
+        .values({ domainId: domain.id, key: 'other-root', name: 'Other root', parentId: null })
+        .returning({ id: categories.id }),
+      'the root it would be moved under',
+    );
 
     const failure = await db.update(categories)
       .set({ parentId: newParent.id })
@@ -448,9 +517,12 @@ describeLivePg('schema migrations (live Postgres)', () => {
     // with no guard admits a root too. Only the refusals above tell
     // those apart, which is why this sits beside them rather than
     // standing in for them.
-    const [domain] = await db.insert(domains)
-      .values({ slug: 'depth-cap-root', name: 'Depth cap (root)' })
-      .returning({ id: domains.id });
+    const domain = oneRow(
+      await db.insert(domains)
+        .values({ slug: 'depth-cap-root', name: 'Depth cap (root)' })
+        .returning({ id: domains.id }),
+      'the depth-cap root domain',
+    );
 
     const inserted = await db.insert(categories)
       .values({
@@ -485,12 +557,18 @@ describeLivePg('schema migrations (live Postgres)', () => {
     // takes — a row is raised open and closed later — and not because
     // the statement kind matters. What is refused is a state, so the
     // same pair is refused however the row arrives at it.
-    const [domain] = await db.insert(domains)
-      .values({ slug: 'approval-gate', name: 'Approval gate' })
-      .returning({ id: domains.id });
-    const [queued] = await db.insert(researchPool)
-      .values({ domainId: domain.id })
-      .returning({ id: researchPool.id, approvedAt: researchPool.approvedAt });
+    const domain = oneRow(
+      await db.insert(domains)
+        .values({ slug: 'approval-gate', name: 'Approval gate' })
+        .returning({ id: domains.id }),
+      'the approval-gate domain',
+    );
+    const queued = oneRow(
+      await db.insert(researchPool)
+        .values({ domainId: domain.id })
+        .returning({ id: researchPool.id, approvedAt: researchPool.approvedAt }),
+      'the open research_pool row the UPDATE below closes',
+    );
 
     // The precondition this case is named for, read back rather than
     // inferred. Give the column a default and the UPDATE below is
@@ -543,12 +621,18 @@ describeLivePg('schema migrations (live Postgres)', () => {
     // that case's reason about its own guard: a table carrying no such
     // rule takes this pair too. Only the refusal above tells the two
     // apart.
-    const [domain] = await db.insert(domains)
-      .values({ slug: 'approval-gate-closed', name: 'Approval gate (closed)' })
-      .returning({ id: domains.id });
-    const [queued] = await db.insert(researchPool)
-      .values({ domainId: domain.id })
-      .returning({ id: researchPool.id });
+    const domain = oneRow(
+      await db.insert(domains)
+        .values({ slug: 'approval-gate-closed', name: 'Approval gate (closed)' })
+        .returning({ id: domains.id }),
+      'the approval-gate closed domain',
+    );
+    const queued = oneRow(
+      await db.insert(researchPool)
+        .values({ domainId: domain.id })
+        .returning({ id: researchPool.id }),
+      'the open research_pool row the UPDATEs below approve and close',
+    );
 
     // Two distinct instants rather than one reused clock reading. Each
     // column is read back to the value its OWN statement wrote, so a
@@ -604,9 +688,12 @@ describeLivePg('schema migrations (live Postgres)', () => {
     // the same SQLSTATE, so an insert supplying a key the sequence
     // already issued reads from here exactly like a repeated hash
     // while saying nothing whatever about the corpus.
-    const [domain] = await db.insert(domains)
-      .values({ slug: 'hash-dedupe', name: 'Hash dedupe' })
-      .returning({ id: domains.id });
+    const domain = oneRow(
+      await db.insert(domains)
+        .values({ slug: 'hash-dedupe', name: 'Hash dedupe' })
+        .returning({ id: domains.id }),
+      'the hash-dedupe domain',
+    );
     const captured = await db.insert(documents)
       .values({ domainId: domain.id, hash: REPEATED_HASH, body: FIRST_CAPTURE_BODY })
       .returning({ hash: documents.hash });
@@ -689,9 +776,12 @@ describeLivePg('schema migrations (live Postgres)', () => {
     // and answer to no domain of their own. One ALTER then drops the
     // NOT NULL, and that ALTER is the entire hypothesis — whatever the
     // two tables do differently below is what it bought.
-    const [domain] = await db.insert(domains)
-      .values({ slug: 'hash-not-null', name: 'Hash NOT NULL' })
-      .returning({ id: domains.id });
+    const domain = oneRow(
+      await db.insert(domains)
+        .values({ slug: 'hash-not-null', name: 'Hash NOT NULL' })
+        .returning({ id: domains.id }),
+      'the hash NOT NULL domain',
+    );
 
     const hashless = captureWrite(getTableName(documents), domain.id, null, FIRST_CAPTURE_BODY);
     const refused = await db.execute(hashless)

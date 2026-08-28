@@ -63,6 +63,32 @@ describe('GET /_control/status', () => {
     expect(res.body.uptime).toBeGreaterThanOrEqual(0);
   });
 
+  // Built inline rather than through `makeApp` because `config.version` is the
+  // whole subject and the helper omits it — an omitted version is what the case
+  // above already covers, so the two together are one grid over that field.
+  // The literal deliberately does not look like a package version: a router
+  // that dropped the field and read `package.json` anyway would fail here on
+  // the value, where a `\d+\.\d+\.\d+` fixture would have passed either way.
+  it('reports config.version verbatim when the config supplies one', async () => {
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter(
+        [],
+        [],
+        { enabled: true, secret: SECRET, version: 'bundled-42' },
+        'my-service',
+      ),
+    );
+
+    const res = await request(app)
+      .get('/_control/status')
+      .set('x-control-token', SECRET);
+
+    expect(res.status).toBe(200);
+    expect(res.body.version).toBe('bundled-42');
+  });
+
   it('omits detail when dependency does not implement healthDetail', async () => {
     const dep = makeDep({ name: 'db', status: 'running' });
     const app = makeApp([dep], []);
@@ -400,15 +426,6 @@ describe('POST /_control/dependencies/:name/restart', () => {
     expect(res.body).toEqual({ error: 'dependency not found' });
   });
 
-  it('returns 400 when the dependency does not implement stop/start', async () => {
-    const dep = { name: 'db', status: 'running' } as unknown as Dependency;
-    const res = await request(makeApp([dep], []))
-      .post('/_control/dependencies/db/restart')
-      .set('x-control-token', SECRET);
-    expect(res.status).toBe(400);
-    expect(res.body).toEqual({ error: 'dependency does not support restart' });
-  });
-
   it('calls stop() before start() and returns 200 on success', async () => {
     const callOrder: string[] = [];
     const stop = vi.fn().mockImplementation(() => {
@@ -478,11 +495,28 @@ describe('POST /_control/dependencies/:name/restart', () => {
 // ---------------------------------------------------------------------------
 
 describe('POST /_control/stop', () => {
+  // These two cases carry `allowStop: true` inline rather than going through
+  // `makeApp` because the opt-in is what puts the route on the router at all
+  // — the four cases in this block are one grid over that single field
+  // (omitted and false refuse, true serves), and hiding half of the grid in
+  // a helper default would leave a reader unable to see the axis it varies.
   it('responds 200 with { ok: true } before triggering shutdown', async () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const res = await request(makeApp([], []))
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter(
+        [],
+        [],
+        { enabled: true, secret: SECRET, allowStop: true },
+        'my-service',
+      ),
+    );
+
+    const res = await request(app)
       .post('/_control/stop')
       .set('x-control-token', SECRET);
+
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
     killSpy.mockRestore();
@@ -490,11 +524,78 @@ describe('POST /_control/stop', () => {
 
   it('triggers process.kill with SIGTERM after responding', async () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
-    await request(makeApp([], []))
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter(
+        [],
+        [],
+        { enabled: true, secret: SECRET, allowStop: true },
+        'my-service',
+      ),
+    );
+
+    await request(app)
       .post('/_control/stop')
       .set('x-control-token', SECRET);
     await new Promise(resolve => setImmediate(resolve));
+
     expect(killSpy).toHaveBeenCalledWith(process.pid, 'SIGTERM');
+    killSpy.mockRestore();
+  });
+
+  // The config is built inline here rather than through `makeApp` because the
+  // absence of `allowStop` is what this case is about — routing it through a
+  // helper would hide the literal under test. An enabled plane and a valid
+  // token are both supplied, so nothing but the missing opt-in refuses it.
+  it('returns 404 and never signals when allowStop is omitted', async () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter([], [], { enabled: true, secret: SECRET }, 'my-service'),
+    );
+
+    const res = await request(app)
+      .post('/_control/stop')
+      .set('x-control-token', SECRET);
+    // The served route defers its signal by one tick, so without this wait the
+    // not-called assertion would hold even against a router that did stop.
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'not found' });
+    expect(killSpy).not.toHaveBeenCalled();
+    killSpy.mockRestore();
+  });
+
+  // The case above covers the field being ABSENT; this one covers it being
+  // present and `false`. They are not one assertion twice: a gate written as
+  // `'allowStop' in config` refuses the omitted config and serves this one,
+  // so an explicit denial only counts as covered when it is stated.
+  it('returns 404 and never signals when allowStop is explicitly false', async () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter(
+        [],
+        [],
+        { enabled: true, secret: SECRET, allowStop: false },
+        'my-service',
+      ),
+    );
+
+    const res = await request(app)
+      .post('/_control/stop')
+      .set('x-control-token', SECRET);
+    // Same one-tick deferral as the case above — without this wait the
+    // not-called assertion holds even against a router that did stop.
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'not found' });
+    expect(killSpy).not.toHaveBeenCalled();
     killSpy.mockRestore();
   });
 

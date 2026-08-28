@@ -6,11 +6,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 
 import { controlAuth, controlEnabled } from './middleware';
-import {
-  isHealthDetailProvider,
-  isPausableDependency,
-  isRestartableDependency,
-} from './types';
+import { isHealthDetailProvider, isPausableDependency } from './types';
 import { aggregateStatus, circuitBreakerState, errorMessage } from './utils';
 import { readServiceVersion } from './version';
 
@@ -29,11 +25,22 @@ const nameParamSchema = z.string().min(1);
  *
  * All routes are gated first by `controlEnabled` (returns 404 when the control
  * plane is disabled) then by `controlAuth` (returns 403 when the
- * `x-control-token` header does not match `config.secret`).
+ * `x-control-token` header does not match `config.secret`). `POST /stop`
+ * carries a third gate of its own: it is served only when `config.allowStop`
+ * is `true`, and answers 404 otherwise.
+ *
+ * The version reported by `GET /status` is resolved once at construction
+ * time. `config.version` is handed to {@link readServiceVersion} and wins
+ * outright when supplied; omitting it leaves the version read from the
+ * nearest `package.json` above this module, which is what a normal
+ * checkout wants. Resolving here rather than per request keeps the read
+ * off the request path and matches `startTime`, the other value this
+ * factory fixes for the router's lifetime.
  *
  * @param deps - Array of managed `Dependency` instances registered with the service.
  * @param clients - Array of managed HTTP client `Dependency` instances.
- * @param config - Control plane configuration (`enabled`, `secret`).
+ * @param config - Control plane configuration (`enabled`, `secret`,
+ *   `allowStop`, `version`).
  * @param serviceId - Unique identifier for this service, included in the status response.
  * @returns A configured Express `Router` that must be mounted at `/_control` in the
  *   host application.
@@ -46,7 +53,7 @@ export function createControlRouter(
 ): ExpressRouter {
   const router = Router();
   const startTime = Date.now();
-  const version = readServiceVersion();
+  const version = readServiceVersion(config.version);
 
   router.use(controlEnabled(config.enabled));
   router.use(controlAuth(config.secret));
@@ -196,8 +203,20 @@ export function createControlRouter(
    * **Side effects:** calls `dep.stop()` followed by `dep.start()` on the matched
    * dependency. `start()` is only called when `stop()` resolves successfully.
    *
+   * Unlike the pause and resume routes above, this one runs no capability
+   * check before acting. `Dependency` declares `stop()` and `start()` as
+   * REQUIRED members, where the `pause()`/`resume()` pair those two routes
+   * guard on is optional — so every value in `deps` is restartable by
+   * construction and a guard here could only ever pass. The service
+   * template this package forks carries one, along with a `400 dependency
+   * does not support restart` branch that no value type-checking as a
+   * `Dependency` can reach; both are deliberately absent here rather than
+   * lost in the port. The route still answers 400 for a malformed
+   * `:name`, which is the shared parameter check and not a statement
+   * about the dependency — so the list below carries no 400 where its
+   * two neighbours do.
+   *
    * - `404` when no dependency matches `:name`.
-   * - `400` when the dependency does not implement `stop`/`start`.
    * - `500` with `{ error: string }` when `dep.stop()` or `dep.start()` throws.
    * - `200` with `{ ok: true }` on success.
    */
@@ -210,10 +229,6 @@ export function createControlRouter(
     const dep = deps.find(d => d.name === nameResult.data);
     if (!dep) {
       res.status(404).json({ error: 'dependency not found' });
-      return;
-    }
-    if (!isRestartableDependency(dep)) {
-      res.status(400).json({ error: 'dependency does not support restart' });
       return;
     }
     try {
@@ -264,12 +279,30 @@ export function createControlRouter(
    * triggers the same graceful shutdown path as SIGTERM. The response is sent
    * before the signal is emitted so the caller receives confirmation.
    *
-   * **Side effects:** emits `SIGTERM` to the current process via `setImmediate`,
-   * activating any registered `registerShutdown` handlers.
+   * Served only when `config.allowStop` opts in. Enabling the control plane
+   * is not enough — this is the one route that ends the process, so a config
+   * that omits the field keeps every other control route and loses this one.
    *
-   * - `200` with `{ ok: true }` — always, before shutdown begins.
+   * A refusal answers 404 and not 403, the same answer the whole plane gives
+   * while `enabled` is `false`: 403 would confirm to a caller already holding
+   * a valid token that a shutdown endpoint exists here and is merely switched
+   * off, where 404 discloses nothing. The check sits inside the handler
+   * rather than skipping the `router.post` registration, so the refusal
+   * carries this router's own body rather than whatever the host application
+   * answers for an unmatched path.
+   *
+   * **Side effects:** emits `SIGTERM` to the current process via `setImmediate`,
+   * activating any registered `registerShutdown` handlers — only once
+   * `allowStop` has opted in.
+   *
+   * - `404` with `{ error: 'not found' }` when `allowStop` is absent or `false`.
+   * - `200` with `{ ok: true }` otherwise, before shutdown begins.
    */
   router.post('/stop', (_req, res) => {
+    if (!config.allowStop) {
+      res.status(404).json({ error: 'not found' });
+      return;
+    }
     res.status(200).json({ ok: true });
     setImmediate(() => {
       process.kill(process.pid, 'SIGTERM');

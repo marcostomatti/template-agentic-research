@@ -4,12 +4,38 @@
  * When `enabled` is `false`, all `/_control` routes respond with 404.
  * When `enabled` is `true`, routes are protected by `secret` via the
  * `x-control-token` request header.
+ *
+ * Enabling the plane does not enable all of it: the destructive
+ * `POST /_control/stop` route is served only when `allowStop` opts in.
  */
 export interface ControlConfig {
   /** Whether the control plane routes are active. */
   enabled: boolean
   /** Shared secret required in the `x-control-token` header. */
   secret: string
+  /**
+   * Whether `POST /_control/stop`, which shuts the process down, is
+   * served. Defaults to `false`: a config that omits this field keeps
+   * every other control route and loses that one.
+   *
+   * When absent or `false` the route answers 404 rather than 403, the
+   * same answer the whole plane gives while `enabled` is `false` — a
+   * caller holding a valid token is not told a shutdown endpoint
+   * exists here.
+   */
+  allowStop?: boolean
+  /**
+   * Service version reported in the `GET /_control/status` payload.
+   * When supplied it is used as-is and the `package.json` read is
+   * skipped entirely.
+   *
+   * Omitting it leaves the version resolved by reading the service's
+   * `package.json`, which is what a normal checkout wants. Supply it
+   * for a bundled deployment, where the module is inlined into an
+   * artifact carrying no `package.json` to read and the lookup would
+   * otherwise report `'unknown'`.
+   */
+  version?: string
 }
 
 /**
@@ -64,34 +90,6 @@ export function isPausableDependency(dep: unknown): dep is PausableDependency {
 }
 
 /**
- * Optional extension interface for dependencies that support restart.
- *
- * Use {@link isRestartableDependency} to check whether a dependency implements
- * this interface before calling `stop` or `start`.
- */
-export interface RestartableDependency {
-  /** Fully stop the dependency in preparation for a restart. */
-  stop(): Promise<void>
-  /** Start the dependency after a previous {@link stop} call. */
-  start(): Promise<void>
-}
-
-/**
- * Type guard that checks whether `dep` implements {@link RestartableDependency}.
- *
- * @param dep - Any value to test.
- * @returns `true` when `dep` has callable `stop` and `start` methods.
- */
-export function isRestartableDependency(dep: unknown): dep is RestartableDependency {
-  return (
-    typeof dep === 'object' &&
-    dep !== null &&
-    typeof (dep as Record<string, unknown>)['stop'] === 'function' &&
-    typeof (dep as Record<string, unknown>)['start'] === 'function'
-  );
-}
-
-/**
  * Optional extension interface for dependencies that can provide structured
  * health detail for operator inspection.
  *
@@ -130,7 +128,12 @@ export type ControlStatusResponse = {
   status: string
   /** Service uptime in seconds since the HTTP server started accepting requests. */
   uptime: number
-  /** Service version read from `package.json` at startup. */
+  /**
+   * Service version, resolved once when the router is created rather
+   * than per request. `ControlConfig.version` supplies it directly when
+   * present; otherwise it is the `version` field of the nearest
+   * `package.json` above the control-plane module, or `'unknown'`.
+   */
   version: string
   /** Per-dependency runtime status keyed by dependency name. */
   dependencies: Record<string, DependencyControlStatus>
