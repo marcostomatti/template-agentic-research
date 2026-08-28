@@ -70,8 +70,7 @@
  * about a roster declared here directly rather than a suite
  * assuming it. `docs/architecture/01-invariants.md` carries the
  * register these properties answer to; the scheduling half of the
- * argument lands in `docs/architecture/06-scheduling.md`, which
- * arrives later in this phase.
+ * argument lands in `docs/architecture/06-scheduling.md`.
  *
  * The entry shape, the roster, the reduction a statement is
  * judged through, the reading that holds an entry against a node,
@@ -163,9 +162,9 @@ export interface DispatchSqlRule {
    *
    * The register in `docs/architecture/01-invariants.md` is what
    * says which phase owns a property and what enforces it, and
-   * the scheduling doc arriving later in this phase is where the
-   * ones here are argued at length. What belongs on this member
-   * is the one sentence saying what the statement has to do.
+   * `docs/architecture/06-scheduling.md` is the document those
+   * arguments belong in. What belongs on this member is the one
+   * sentence saying what the statement has to do.
    */
   readonly property: string;
 
