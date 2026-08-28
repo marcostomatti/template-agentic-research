@@ -478,11 +478,28 @@ describe('POST /_control/dependencies/:name/restart', () => {
 // ---------------------------------------------------------------------------
 
 describe('POST /_control/stop', () => {
+  // These two cases carry `allowStop: true` inline rather than going through
+  // `makeApp` because the opt-in is what puts the route on the router at all
+  // — the four cases in this block are one grid over that single field
+  // (omitted and false refuse, true serves), and hiding half of the grid in
+  // a helper default would leave a reader unable to see the axis it varies.
   it('responds 200 with { ok: true } before triggering shutdown', async () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const res = await request(makeApp([], []))
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter(
+        [],
+        [],
+        { enabled: true, secret: SECRET, allowStop: true },
+        'my-service',
+      ),
+    );
+
+    const res = await request(app)
       .post('/_control/stop')
       .set('x-control-token', SECRET);
+
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
     killSpy.mockRestore();
@@ -490,10 +507,22 @@ describe('POST /_control/stop', () => {
 
   it('triggers process.kill with SIGTERM after responding', async () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
-    await request(makeApp([], []))
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter(
+        [],
+        [],
+        { enabled: true, secret: SECRET, allowStop: true },
+        'my-service',
+      ),
+    );
+
+    await request(app)
       .post('/_control/stop')
       .set('x-control-token', SECRET);
     await new Promise(resolve => setImmediate(resolve));
+
     expect(killSpy).toHaveBeenCalledWith(process.pid, 'SIGTERM');
     killSpy.mockRestore();
   });
