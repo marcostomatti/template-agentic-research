@@ -138,6 +138,111 @@ const UNSCOPED: readonly UnscopedCase[] = [
   { name: 'fetchOperator', read: api.fetchOperator, same: OPERATOR },
 ];
 
+/**
+ * How the block at the bottom of this file calls an accessor without
+ * knowing which one it is holding.
+ *
+ * Every export of `./api.ts` is assignable to this, including the
+ * seven that declare no parameter — a function of fewer parameters is
+ * assignable to one of more. That is load-bearing rather than a
+ * convenience: those seven are CALLED with a slug below, because arity
+ * is a claim TypeScript checks at the call sites it can see and
+ * JavaScript enforces nowhere at all.
+ */
+type BarrelAccessor = (slug: string) => Promise<unknown>;
+
+/**
+ * Every export of `./api.ts`, read off the module itself.
+ *
+ * The final block is written over this rather than over the two tables
+ * above, which is the difference between "every accessor the author
+ * listed obeys the rule" and "every accessor obeys the rule". An
+ * accessor added to the barrel and to neither table is caught by the
+ * surface test below; one added to the barrel and to the WRONG table
+ * is caught only there.
+ */
+const EXPORTED: readonly (readonly [string, BarrelAccessor])[] =
+  Object.entries(api);
+
+/**
+ * The accessors the unknown-slug rule does not reach, written out
+ * rather than derived from {@link UNSCOPED}.
+ *
+ * A literal on purpose. Derived from that table, filing a new
+ * domain-scoped accessor under it would exempt the accessor from the
+ * rule and every test in this file would still pass. Written out, the
+ * same mistake leaves this list one name short of the table, the
+ * accessor falls into the scoped set, and its refusal test reports it
+ * by name.
+ *
+ * Six of the seven answer something that has no domain at all: the
+ * domain list itself, the installation's connectors, the operator's
+ * settings, the deployment's spend, its notifications and the
+ * operator. The palette is the one known narrowing — a live search
+ * endpoint would be scoped. `./api.ts` carries the reasoning per
+ * accessor.
+ */
+const UNSCOPED_EXEMPT: readonly string[] = [
+  'fetchDomains',
+  'fetchConnectors',
+  'fetchSettings',
+  'fetchSpendSummary',
+  'fetchSearchSuggestions',
+  'fetchNotifications',
+  'fetchOperator',
+];
+
+/** The exports the rule reaches: everything the list above omits. */
+const SCOPED_EXPORTS = EXPORTED.filter(
+  ([name]) => !UNSCOPED_EXEMPT.includes(name),
+);
+
+/** The exports it does not, resolved from the module rather than named. */
+const EXEMPT_EXPORTS = EXPORTED.filter(
+  ([name]) => UNSCOPED_EXEMPT.includes(name),
+);
+
+/** What refusing {@link UNKNOWN_SLUG} reads as in {@link outcomeOf}. */
+const REFUSAL = `rejected: Unknown domain slug: ${UNKNOWN_SLUG}`;
+
+/**
+ * Call one accessor and report how it answered, as a string a failing
+ * assertion can print beside the accessor's own name.
+ *
+ * The call and the await sit in SEPARATE `try` blocks so that a
+ * synchronous throw stays distinguishable from a rejection. Collapsed
+ * into one, both would report as `rejected:` and the property the
+ * seam's `async` exists for would go unasserted — a cache hook renders
+ * a rejected promise as an error state, while a throw out of a query
+ * function reaches the render and takes the shell down with the page.
+ *
+ * @param read - The accessor, called with `slug` whether or not it
+ * declares a parameter.
+ * @param slug - What to hand it.
+ * @returns `resolved`, `threw synchronously`, or `rejected: <message>`.
+ */
+async function outcomeOf(read: BarrelAccessor, slug: string): Promise<string> {
+  let pending: Promise<unknown>;
+
+  try {
+    pending = read(slug);
+  } catch {
+    return 'threw synchronously';
+  }
+
+  try {
+    await pending;
+  } catch (error) {
+    const message = error instanceof Error
+      ? error.message
+      : String(error);
+
+    return `rejected: ${message}`;
+  }
+
+  return 'resolved';
+}
+
 describe('the barrel export surface', () => {
   it('exports nothing beyond the two case tables below', () => {
     // The guard the whole file rests on: every claim here is made
@@ -436,5 +541,124 @@ describe('fetchDomains', () => {
     expect(answered).not.toBe(DOMAINS);
     expect(answered.map((domain) => domain.slug)).not.toEqual(before);
     expect(DOMAINS.map((domain) => domain.slug)).toEqual(before);
+  });
+});
+
+describe('the unknown-slug rule, over the module export surface', () => {
+  it('reaches every export the exemption list does not name', () => {
+    // The guard the rest of this block rests on. Every claim below
+    // compares a collected offender list against `[]`, which is a
+    // sentence about nothing if the set it walked was empty — and both
+    // sets are DERIVED from the module, so an emptied barrel would
+    // satisfy the lot at once. The counts are literals rather than a
+    // comparison against the tables above, so moving an accessor from
+    // one side of the rule to the other fails here instead of being
+    // tracked silently; 9 and 7 are also what `./api.ts`'s own
+    // docblock says, which is the sentence this pins.
+    // Arrange
+    const exported = EXPORTED.map(([name]) => name);
+
+    // Act
+    const stale = UNSCOPED_EXEMPT.filter((name) => !exported.includes(name));
+
+    // Assert
+    expect(stale).toEqual([]);
+    expect(SCOPED_EXPORTS).toHaveLength(9);
+    expect(EXEMPT_EXPORTS).toHaveLength(7);
+  });
+
+  it('rejects an unknown domain slug', async () => {
+    // The rule itself, made over the module rather than over a table
+    // of remembered names: an accessor is in this set from the moment
+    // `./api.ts` exports it, and leaves only when somebody adds its
+    // name to the exemption list and says why. The comparison is
+    // against the whole outcome string, so an accessor that refused
+    // with some other message — or resolved a domain nothing carries
+    // into an empty page — is reported rather than counted as a pass.
+    // Arrange / Act
+    const outcomes = await Promise.all(
+      SCOPED_EXPORTS.map(async ([name, read]) => ({
+        name,
+        outcome: await outcomeOf(read, UNKNOWN_SLUG),
+      })),
+    );
+
+    // Assert
+    expect(outcomes).toHaveLength(SCOPED_EXPORTS.length);
+    expect(outcomes.filter((entry) => entry.outcome !== REFUSAL)).toEqual([]);
+  });
+
+  it('resolves for every fixture domain slug', async () => {
+    // The other half, and the one written over EVERY export rather
+    // than over the scoped subset: the exempt seven have to answer a
+    // slug too, since a page reaches them through the same hooks on
+    // the same render. Driven off `DOMAINS` rather than off the two
+    // slug constants the tables above use, so a third fixture domain
+    // is exercised by this the day it is seeded.
+    // Arrange
+    const slugs = DOMAINS.map((domain) => domain.slug);
+
+    // Act
+    const outcomes = await Promise.all(
+      EXPORTED.flatMap(([name, read]) => slugs.map(async (slug) => ({
+        name,
+        slug,
+        outcome: await outcomeOf(read, slug),
+      }))),
+    );
+
+    // Assert
+    expect(slugs.length).toBeGreaterThan(1);
+    expect(outcomes).toHaveLength(EXPORTED.length * slugs.length);
+    expect(outcomes.filter((entry) => entry.outcome !== 'resolved')).toEqual([]);
+  });
+
+  it('ignores a slug handed to an exempt accessor', async () => {
+    // What turns the exemption from a comment into evidence. Arity is
+    // checked at the call sites TypeScript can see and enforced
+    // nowhere at runtime, so each of the seven is called here with the
+    // slug no domain carries: one that had quietly grown a lookup
+    // refuses it, and the surface it feeds goes blank on a domain the
+    // switcher has never heard of.
+    // Arrange / Act
+    const outcomes = await Promise.all(
+      EXEMPT_EXPORTS.map(async ([name, read]) => ({
+        name,
+        outcome: await outcomeOf(read, UNKNOWN_SLUG),
+      })),
+    );
+
+    // Assert
+    expect(outcomes).toHaveLength(EXEMPT_EXPORTS.length);
+    expect(outcomes.filter((entry) => entry.outcome !== 'resolved')).toEqual([]);
+  });
+
+  it('answers an exempt accessor the same whichever domain is active', async () => {
+    // The shell-visible reading of the exemption, and the one a page
+    // would notice going wrong: a domain switch leaves the topbar's
+    // palette, its bell and its avatar, the sidebar's spend figure,
+    // the tools surface's connector cards and the whole settings
+    // surface exactly where they were. Compared by value rather than
+    // by identity because two of the seven copy — the identity claim
+    // for the five frozen ones is made further up, against the fixture
+    // constants themselves. The name travels into the compared object
+    // so a failure says WHICH accessor moved.
+    // Arrange / Act
+    const answers = await Promise.all(
+      EXEMPT_EXPORTS.map(async ([name, read]) => ({
+        name,
+        seeded: await read(DEFAULT_DOMAIN_SLUG),
+        sparse: await read(SPARSE_DOMAIN_SLUG),
+      })),
+    );
+
+    // Assert
+    expect(answers).toHaveLength(EXEMPT_EXPORTS.length);
+    answers.forEach((entry) => {
+      expect({ name: entry.name, answered: entry.sparse }).toEqual({
+        name: entry.name,
+        answered: entry.seeded,
+      });
+    });
   });
 });
