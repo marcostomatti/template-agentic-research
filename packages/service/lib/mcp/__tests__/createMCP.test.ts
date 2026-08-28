@@ -203,7 +203,11 @@ describe('createMCP', () => {
     let transportResolved = false;
     vi.mocked(wireHttpTransport).mockImplementationOnce(async () => {
       transportResolved = true;
-      return mocks.mockTransportInstance;
+      // The hoisted stub implements only close(), the single method
+      // shutdown() calls, so wireHttpTransport's declared return type
+      // (an SDK WebStandardStreamableHTTPServerTransport) is erased
+      // here rather than stubbing that whole surface.
+      return mocks.mockTransportInstance as unknown as Awaited<ReturnType<typeof wireHttpTransport>>;
     });
 
     let healthCalledAfterTransport = false;
