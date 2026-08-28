@@ -193,6 +193,37 @@ wide. Table-driven suites carry their own anti-vacuity guards — pair samples
 to the constant table by id and assert set equality, or an entry added later
 is silently untested (see the `table-driven-test-vacuity-guards` skill).
 
+The default suite READS `workflows/dist/` and never builds it. `pretest`
+runs `bun scripts/build-workflows.ts`, so the tree is written in a bun
+process of its own before any worker opens it. bun keys that hook to the
+script NAME rather than to the launcher: it fires for the `test` script —
+`bun run test`, a path appended to it, and the root fan-out that runs the
+same script — and for no other. `test:live`, `test:watch` and a bare
+`bun x vitest run <path>` all read whatever the directory happens to hold,
+so `bun run test <path>` and `bun x vitest run <path>` are two ways of
+running one file that differ in exactly this. Rebuild by hand before reading
+a built artifact for any purpose.
+
+Forgetting is loud rather than silent, but only in the run log.
+`loadBuiltWorkflows` refuses a tree that yielded no artifact, naming the
+directory and `bun run build:workflows`, so the absence checks over built
+output cannot sweep nothing and pass. It throws at module scope, though, so
+the summary reads `Test Files 1 failed (1)` and `Tests no tests` — byte for
+byte what an unparseable test file prints. The case counts are not the
+reading; the class in the log is.
+
+A worker cannot do that build itself, so do not write one there.
+`Bun.Transpiler` belongs to a global only a bun process carries, and
+`tests/helpers/bun-polyfill.ts` is a `setupFiles` entry, so every worker in
+this package starts with a partial `Bun` holding `serve` and nothing else:
+`typeof Bun` is `'object'`, `Bun.Transpiler` is `undefined`, and
+`process.versions.bun` is absent. The obvious `typeof Bun === 'undefined'`
+guard therefore does not fire — the constructor is reached anyway and raises
+`TypeError: Bun.Transpiler is not a constructor`. Check the `Transpiler`
+property, never the global. A case that needs the real transpiler spawns
+`bun scripts/build-workflows.ts` as a subprocess;
+`docs/architecture/03-workflows.md` carries the argument for both halves.
+
 ## Plans and specs
 
 `.plans/` and `.specs/` are the destinations for working plans and specs,
