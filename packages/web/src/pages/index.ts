@@ -32,6 +32,7 @@ import type { ComponentType } from 'react';
 import { getSurface } from '../routes/paths';
 
 import { DigestPage } from './digest/DigestPage';
+import { LexiconPage } from './lexicon/LexiconPage';
 
 /**
  * The pages built so far, keyed by the surface each one answers at.
@@ -41,6 +42,7 @@ import { DigestPage } from './digest/DigestPage';
  */
 const PAGE_COMPONENTS: Readonly<Record<string, ComponentType>> = {
   digest: DigestPage,
+  lexicon: LexiconPage,
 };
 
 /** The same table, with every key proven to name a surface. */
