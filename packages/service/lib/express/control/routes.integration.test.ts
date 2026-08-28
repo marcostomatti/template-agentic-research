@@ -395,3 +395,91 @@ describe('POST /_control/stop — integration', () => {
     killSpy.mockRestore();
   });
 });
+
+// ---------------------------------------------------------------------------
+// x-control-token — wrong-length refusal across route kinds
+// ---------------------------------------------------------------------------
+
+describe('x-control-token — integration', () => {
+  const SHORTER = 'int';
+  const LONGER = `${SECRET}-and-then-some`;
+
+  /**
+   * Issues one request at a read-only control route and one at a mutating
+   * one, both carrying `token`, and returns the two responses.
+   */
+  async function callBothRouteKinds(app: ReturnType<typeof makeApp>, token: string) {
+    const readOnly = await request(app)
+      .get('/_control/status')
+      .set('x-control-token', token);
+    const mutating = await request(app)
+      .post('/_control/dependencies/db/restart')
+      .set('x-control-token', token);
+    return { readOnly, mutating };
+  }
+
+  // `controlAuth` reduces both sides to a SHA-256 digest before handing
+  // them to `timingSafeEqual`, which throws a `RangeError` on operands of
+  // unequal length. That is what makes a wrong-LENGTH token worth driving
+  // over the wire rather than only at the middleware: a compare over raw
+  // tokens throws, and Express turns that throw into a 500, so what an
+  // operator reads would be a crash rather than a refusal. The unit
+  // sibling in `middleware.test.ts` covers the same token classes, but a
+  // throw there surfaces as `Input buffers must have the same byte length`
+  // — a test error, never a status.
+  //
+  // Each case spans both route kinds because the status is only half the
+  // refusal: on the mutating route the dependency's `stop()` never running
+  // is what says the request was turned away before it could act. The
+  // exact secret closing each case is the accept control — without it a
+  // router that refused everything would leave both cases green — and it
+  // is also what proves the `not.toHaveBeenCalled()` above it can fail.
+  it('refuses a token shorter than the secret at both route kinds', async () => {
+    expect(SHORTER.length).toBeLessThan(SECRET.length);
+
+    const db = makeStatefulDep('db', 'running');
+    const stop = (db as unknown as { stop: ReturnType<typeof vi.fn> }).stop;
+    const app = makeApp([db]);
+
+    const refused = await callBothRouteKinds(app, SHORTER);
+    expect(refused.readOnly.status).toBe(403);
+    expect(refused.readOnly.headers['content-type']).toMatch(/application\/json/);
+    expect(refused.readOnly.body).toEqual({ error: 'forbidden' });
+    expect(refused.mutating.status).toBe(403);
+    expect(refused.mutating.body).toEqual({ error: 'forbidden' });
+    expect(stop).not.toHaveBeenCalled();
+
+    const accepted = await callBothRouteKinds(app, SECRET);
+    expect(accepted.readOnly.status).toBe(200);
+    expect(accepted.mutating.status).toBe(200);
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  // The longer token carries the secret as a PREFIX, so a compare that
+  // absorbed the length difference by truncating to the secret's length
+  // would accept it where the digest refuses it. That leg reddens this
+  // case alone, with its shorter sibling still green — which is what says
+  // the two are not copies of each other, since nothing accepts a
+  // truncated secret by accident.
+  it('refuses a token longer than the secret at both route kinds', async () => {
+    expect(LONGER.length).toBeGreaterThan(SECRET.length);
+    expect(LONGER.startsWith(SECRET)).toBe(true);
+
+    const db = makeStatefulDep('db', 'running');
+    const stop = (db as unknown as { stop: ReturnType<typeof vi.fn> }).stop;
+    const app = makeApp([db]);
+
+    const refused = await callBothRouteKinds(app, LONGER);
+    expect(refused.readOnly.status).toBe(403);
+    expect(refused.readOnly.headers['content-type']).toMatch(/application\/json/);
+    expect(refused.readOnly.body).toEqual({ error: 'forbidden' });
+    expect(refused.mutating.status).toBe(403);
+    expect(refused.mutating.body).toEqual({ error: 'forbidden' });
+    expect(stop).not.toHaveBeenCalled();
+
+    const accepted = await callBothRouteKinds(app, SECRET);
+    expect(accepted.readOnly.status).toBe(200);
+    expect(accepted.mutating.status).toBe(200);
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+});
