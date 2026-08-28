@@ -16,6 +16,31 @@
  * statement applied against what the imported function answers for
  * the same row.
  *
+ * Nothing else in this package reads a value out of both expressions,
+ * so this file is the whole of what would report the two stating
+ * different rules. `tests/lib/schedule.test.ts` drives the function
+ * against the answers the shared table records and never reaches a
+ * statement; the splice comparison in
+ * `tests/build/schedule-splice.test.ts` has TypeScript on both of its
+ * sides. The reader likeliest to be taken for a second one is
+ * `tests/invariants/dispatch-sql.ts`, and it is a claim about the
+ * columns rather than about their arrangement: it requires each
+ * reschedule to name `min_interval_seconds` and
+ * `max_interval_seconds`, and measured, both of the wrongly written
+ * clamps this comparison is keyed to carry those words and leave that
+ * entry green — a missing bound stood in with `COALESCE`, and a
+ * ceiling applied before the floor. Its own roster says as much,
+ * pointing at `clampIntervalSeconds` and at the live seam behind it.
+ *
+ * The limit that comes with being the only one is the self-skip.
+ * `bun run test:live` is the only script anywhere in the repository
+ * that sets `AR_LIVE_DATABASE_URL`, so a green verification order
+ * leaves the pair unread: between runs of this file the two
+ * expressions sit in two languages and two files with nothing holding
+ * them together. That is what a red run here is worth, and it is
+ * equally why a clamp written wrongly on one side is a change that can
+ * land with every gate green.
+ *
  * The statements come out of `workflows/dist/` and never
  * `workflows/src/`. A source carries `LIMIT` against an unresolved
  * setting marker where the artifact carries a number, so the text
