@@ -270,9 +270,24 @@ describe('POST /_control/dependencies/:name/restart — integration', () => {
 // ---------------------------------------------------------------------------
 
 describe('POST /_control/stop — integration', () => {
+  // Every case in this block builds its router inline rather than through
+  // `makeApp`, because `allowStop` is the axis they vary along: the three
+  // below opt in, the fourth omits the field entirely, and that difference
+  // is the whole subject. Routing the accept half through a helper default
+  // would bury half the grid where a reader has to go and look it up — and
+  // would silently convert the omitting case the day the helper widens.
   it('responds 200 with { ok: true } before triggering shutdown', async () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const app = makeApp([]);
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter(
+        [],
+        [],
+        { enabled: true, secret: SECRET, allowStop: true },
+        'int-service',
+      ),
+    );
 
     const res = await request(app)
       .post('/_control/stop')
@@ -289,7 +304,16 @@ describe('POST /_control/stop — integration', () => {
 
   it('triggers SIGTERM on the current process via setImmediate after responding', async () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const app = makeApp([]);
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter(
+        [],
+        [],
+        { enabled: true, secret: SECRET, allowStop: true },
+        'int-service',
+      ),
+    );
 
     await request(app)
       .post('/_control/stop')
@@ -306,7 +330,16 @@ describe('POST /_control/stop — integration', () => {
   it('still returns 200 when deps are in a degraded or error state', async () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
     const db = makeStatefulDep('db', 'error');
-    const app = makeApp([db]);
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter(
+        [db],
+        [],
+        { enabled: true, secret: SECRET, allowStop: true },
+        'int-service',
+      ),
+    );
 
     const res = await request(app)
       .post('/_control/stop')
@@ -317,6 +350,48 @@ describe('POST /_control/stop — integration', () => {
 
     // Flush the setImmediate queue so the route's kill call runs while the spy is still active
     await new Promise<void>(resolve => setImmediate(resolve));
+    killSpy.mockRestore();
+  });
+
+  // The unit-test sibling in `routes.test.ts` drives the same refusal at the
+  // handler; this one drives it over the wire, which is the only place the
+  // 404 body and its `application/json` Content-Type can be observed as the
+  // control router's own answer rather than whatever Express would emit for
+  // an unmatched path. Enabled plane, valid token, deps present — nothing
+  // but the missing opt-in stands between the request and a shutdown.
+  it('returns 404 with a JSON body and never signals when allowStop is omitted', async () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const db = makeStatefulDep('db', 'running');
+    const app = express();
+    app.use(
+      '/_control',
+      createControlRouter([db], [], { enabled: true, secret: SECRET }, 'int-service'),
+    );
+
+    const res = await request(app)
+      .post('/_control/stop')
+      .set('x-control-token', SECRET);
+    // The served route defers its signal by one tick, so give that tick a
+    // chance to run before asserting it never came. Measured here, the
+    // supertest round-trip already outlasts the deferral and the assertion
+    // catches a refuse-but-signal router with or without this line — but
+    // that ordering is incidental to the socket, not guaranteed by it, so
+    // the wait pins it rather than leaving the case resting on a race.
+    await new Promise<void>(resolve => setImmediate(resolve));
+
+    expect(res.status).toBe(404);
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+    expect(res.body).toEqual({ error: 'not found' });
+    expect(killSpy).not.toHaveBeenCalled();
+
+    // The refusal is the route's own, not a dead router: a sibling control
+    // route on the same app still answers 200 with the same token.
+    const alive = await request(app)
+      .get('/_control/dependencies')
+      .set('x-control-token', SECRET);
+    expect(alive.status).toBe(200);
+    expect(alive.body).toEqual([{ name: 'db', status: 'running' }]);
+
     killSpy.mockRestore();
   });
 });
