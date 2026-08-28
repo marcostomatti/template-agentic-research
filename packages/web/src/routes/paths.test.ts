@@ -6,6 +6,7 @@ import { repeated } from '../test-support/repeated';
 import {
   SINGLE_DOMAIN_BASE,
   SURFACES,
+  activeSurfaceId,
   domainBase,
   getSurface,
   swapBase,
@@ -163,6 +164,79 @@ describe('swapBase', () => {
 
     // Assert
     expect(swapped).toBe('/digest');
+  });
+});
+
+describe('activeSurfaceId', () => {
+  // Two OPPOSITE claims live here and each needs its own case, because a
+  // mutation satisfying one leaves the other green: an implementation that
+  // always answers undefined passes every "names none" case, and one that
+  // falls back to the first surface passes every "names the surface" case.
+
+  it('names the surface for every surface path under the single-domain base', () => {
+    // Arrange
+    const paths = SURFACES.map((surface) => ({
+      id: surface.id,
+      path: withBase(SINGLE_DOMAIN_BASE, surface.id),
+    }));
+
+    // Act
+    const read = paths.map((entry) => ({
+      id: activeSurfaceId(entry.path),
+      path: entry.path,
+    }));
+
+    // Assert
+    expect(read).toEqual(paths);
+  });
+
+  it('names the surface for every surface path under a domain base', () => {
+    // The base is what the two route trees disagree about, so the same
+    // table has to answer identically below either one.
+    // Arrange
+    const paths = SURFACES.map((surface) => ({
+      id: surface.id,
+      path: withBase(DOMAIN_BASE, surface.id),
+    }));
+
+    // Act
+    const read = paths.map((entry) => ({
+      id: activeSurfaceId(entry.path),
+      path: entry.path,
+    }));
+
+    // Assert
+    expect(read).toEqual(paths);
+  });
+
+  it('keeps naming the list surface below a modal sub-route', () => {
+    // A modal renders into the list page's trailing Outlet, so the nav
+    // entry stays highlighted while the modal is open.
+    // Arrange / Act / Assert
+    expect(activeSurfaceId('/digest/42')).toBe('digest');
+    expect(activeSurfaceId(`${DOMAIN_BASE}/lexicon/c-1/edit`)).toBe('lexicon');
+  });
+
+  it('answers undefined at either base index', () => {
+    // Neither index is a surface: the router redirects off it, and until
+    // it has, nothing in the nav is current.
+    // Arrange / Act / Assert
+    expect(activeSurfaceId(SINGLE_DOMAIN_BASE)).toBeUndefined();
+    expect(activeSurfaceId(DOMAIN_BASE)).toBeUndefined();
+  });
+
+  it('answers undefined for a path naming no surface', () => {
+    // What the router's catch-all is about to render. The chrome still
+    // mounts, so this has to be an absent id rather than a throw.
+    // Arrange / Act / Assert
+    expect(activeSurfaceId('/not-a-surface')).toBeUndefined();
+    expect(activeSurfaceId(`${DOMAIN_BASE}/not-a-surface`)).toBeUndefined();
+  });
+
+  it('ignores a trailing slash on the path it is handed', () => {
+    // Arrange / Act / Assert
+    expect(activeSurfaceId('/digest/')).toBe('digest');
+    expect(activeSurfaceId(`${DOMAIN_BASE}/`)).toBeUndefined();
   });
 });
 

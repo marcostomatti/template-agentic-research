@@ -148,3 +148,41 @@ export function swapBase(path: string, nextBase: string): string {
     ? SINGLE_DOMAIN_BASE
     : swapped;
 }
+
+/**
+ * Which surface a path is on, if any.
+ *
+ * Tolerant where {@link getSurface} throws, and the difference is where
+ * the argument comes from: an id is the app's own, taken from
+ * {@link SURFACES}, while a path arrives from the URL bar and may name
+ * nothing at all. The chrome asks this so it can highlight the active nav
+ * entry and title the page, so a path the router is about to hand to its
+ * catch-all has to leave both blank rather than take the shell down with
+ * it.
+ *
+ * Reads the segment BELOW the base, so one path answers the same under
+ * either base and no caller has to resolve the base first. It matches
+ * that segment as a PREFIX rather than the whole path, which is what
+ * keeps a modal sub-route on its list surface — an operator editing a
+ * lexicon category is still on the lexicon.
+ *
+ * Unlike its two neighbours this does NOT normalise a trailing slash,
+ * and that is the absence of a line rather than a missing case: reading
+ * one fixed segment out of the split makes the answer indifferent to
+ * everything after it, trailing separators included. A mutation grid
+ * confirms it — trimming first changes no result the tests can see.
+ *
+ * @param path - Current absolute path, under either base.
+ * @returns The surface id, or `undefined` where the path names none —
+ * both base index paths included, since neither is a surface until the
+ * router's index redirect has moved off it.
+ */
+export function activeSurfaceId(path: string): string | undefined {
+  const [, segment] = path.replace(DOMAIN_BASE_PATTERN, '').split('/');
+
+  if (segment === undefined || !SURFACES_BY_ID.has(segment)) {
+    return undefined;
+  }
+
+  return segment;
+}
