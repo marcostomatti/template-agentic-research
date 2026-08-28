@@ -74,6 +74,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # @ar/web's lint and type-check resolve @ar/ui through its dist
+      # exports (gitignored), so the library must be built before any
+      # per-package check — the ui test step's pretest builds it too, but
+      # that runs after Lint would already have failed on the bare tree.
+      - name: Build @ar/ui
+        run: bun run --filter '@ar/ui' build
+
       - name: Lint
         run: bun run --filter '@ar/ui' lint && bun run --filter '@ar/web' lint
 
@@ -89,8 +96,8 @@ jobs:
         working-directory: packages/ui
         run: bun run build:storybook
 
-      # @ar/web resolves @ar/ui through its dist exports — the ui build ran
-      # as part of the test step above.
+      # @ar/web resolves @ar/ui through its dist exports — built in the
+      # "Build @ar/ui" step above and refreshed by the test step's pretest.
       - name: Web build
         working-directory: packages/web
         run: bun run build
