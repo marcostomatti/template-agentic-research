@@ -252,9 +252,26 @@ export const runs = pgTable('runs', {
    * psql prompt is storable. And the attribution is only as fine as
    * a run: a pass claiming several due rows at once records one
    * answer for all of them, so a tick mixing an agent-proposed row
-   * with periodic ones cannot say which was which. Whether a pass
-   * opens a row per claimed row is `ar-dispatch`'s to settle, in
-   * phase 3.
+   * with periodic ones cannot say which was which.
+   *
+   * How fine a run gets was the dispatcher's to choose, and
+   * `ar-dispatch` chose the fine one: it opens a row per claimed
+   * unit rather than one per tick, so each of its runs is one claim
+   * and a tick mixing modes leaves a row apiece. What that buys is
+   * the granularity and not the reading. Nothing in a claimed row
+   * records which mode wrote its `next_run_at`, all of them writing
+   * that one column, so the dispatcher supplies the literal
+   * `interval` for every unit it dispatches — and a reader holding
+   * one of those rows has the mode that workflow reschedules in
+   * rather than the mode that set the time the pass fired against.
+   *
+   * The other cost of the finer row is an absence. A tick claiming
+   * nothing opens none at all, so this table records what a
+   * dispatcher dispatched and never that one ran, and a stopped
+   * clock and an empty backlog leave the same gap in it. What
+   * answers that is the executor's own execution list, which sits
+   * outside this database entirely.
+   * `docs/architecture/06-scheduling.md` follows both.
    */
   scheduledBy: text('scheduled_by').notNull(),
 }, (table) => [
