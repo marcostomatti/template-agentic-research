@@ -276,6 +276,57 @@ function captureWrite(table: string, domainId: number, hash: string | null, body
   `;
 }
 
+/**
+ * The single row a `.returning()` clause promised, read rather than
+ * destructured off nothing.
+ *
+ * Every write below returns exactly one row and
+ * `noUncheckedIndexedAccess` types the first element as
+ * `T | undefined` regardless, so `const [row] = ...` carries that
+ * `undefined` into every later read. Narrowing it once here is what
+ * clears those reads without a `!` on each of them: an assertion
+ * silences the compiler and leaves the empty case surfacing a few
+ * lines later as a property read on undefined, naming neither the
+ * statement that returned nothing nor the fixture it was standing up.
+ *
+ * What the rows carry is why the empty case has to name the write
+ * that missed. A returned id is what the next insert hangs off and
+ * what the refusals these cases pin interpolate back, and a returned
+ * column is read as a precondition — so a statement that wrote
+ * nothing breaks a case in its SETUP, where a rejected write and a
+ * missing row otherwise read alike.
+ *
+ * Read as the first element rather than by asserting the length,
+ * because the length is not what any caller here is claiming: these
+ * writes each name one row, and a result carrying more would be a
+ * different finding than the one this helper is placed to report.
+ * `tests/live/schedule-clamp.live.test.ts` carries the same shape as
+ * `firstRow`, phrased for what its own fixtures plant.
+ *
+ * @param rows - Whatever the statement returned.
+ *
+ * @param wrote - What it was asked to write, quoted back in the
+ * refusal so the failure names the statement rather than the read.
+ *
+ * @returns Its single row, typed without the `undefined`.
+ *
+ * @throws Error When it returned none.
+ */
+function oneRow<T>(rows: readonly T[], wrote: string): T {
+  const row = rows[0];
+
+  if (row === undefined) {
+    throw new Error(
+      `[schema-live] the statement writing ${wrote} returned no row, ` +
+      'so there is no id for the writes under test to hang off and ' +
+      'none to interpolate into the refusal they are pinned against. ' +
+      'Whatever it did, it did not write what this case asked of it.',
+    );
+  }
+
+  return row;
+}
+
 describeLivePg('schema migrations (live Postgres)', () => {
   let pool: Pool;
   let db: ReturnType<typeof createLiveDb>;
@@ -338,9 +389,12 @@ describeLivePg('schema migrations (live Postgres)', () => {
     // the foreign key, which refuses the insert as 23503 — a rejection
     // that reads the same from here while saying nothing about the
     // guard.
-    const [domain] = await db.insert(domains)
-      .values({ slug: 'depth-cap', name: 'Depth cap' })
-      .returning({ id: domains.id });
+    const domain = oneRow(
+      await db.insert(domains)
+        .values({ slug: 'depth-cap', name: 'Depth cap' })
+        .returning({ id: domains.id }),
+      'the depth-cap domain',
+    );
     const [root] = await db.insert(categories)
       .values({ domainId: domain.id, key: 'root', name: 'Root', parentId: null })
       .returning({ id: categories.id });
