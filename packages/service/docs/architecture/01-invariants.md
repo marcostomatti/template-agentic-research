@@ -253,6 +253,26 @@ string returning rather than every hostname somebody might add; no
 tracked file names a real host, and the rest of that rule is held by
 review.
 
+Pruning built output is not a third such limit. The walk drops `dist`
+and `dist-external` by base name at any depth, so the `workflows/` root
+contributes its sources and nothing built from them, and
+`tests/invariants/workflows.test.ts` sweeps the built artifacts for the
+same five names instead. That sweep is a re-check rather than a fourth
+row: every file a default build reads — the workflow source, the library
+its Code node splices out of `src/lib/`, and the settings table in
+`scripts/workflow-markers.ts` — is inside the scan roots already, so a
+name it finds is one `tests/invariants/naming.test.ts` finds first and
+the file to edit is the same either way. It is stated over files because
+the fourth thing such a build reads is not one: the call to git behind
+the build stamp, whose short commit is nothing a needle is shaped to
+match. Built output is gitignored besides, so nothing that sweep reads
+is the tracked text these three rows constrain. What holds the
+derivation up is where a build's inputs sit rather than anything the
+build does: an input added outside the scan roots would end it, leaving
+that sweep the only thing that reads the file's text for a name, and
+then only as much of it as an artifact carries, a library's comments
+being stripped on the way.
+
 ### The register names what it refuses, and never spells it out
 
 Each of the three rows says which class of name is banned without
