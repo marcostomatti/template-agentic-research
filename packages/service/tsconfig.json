@@ -15,8 +15,5 @@
     "noUnusedParameters": true
   },
   "include": ["src", "lib", "tests", "scripts", "*.ts", "*.mjs"],
-  // *.test.ts is excluded from check-types (origin parity — vitest executes
-  // them; tsc doesn't gate them). Burning this down is tracked in
-  // .specs/service/test-type-checking.md.
-  "exclude": ["node_modules", ".tmp", "dist", ".docs", "**/*.test.ts"]
+  "exclude": ["node_modules", ".tmp", "dist", ".docs"]
 }

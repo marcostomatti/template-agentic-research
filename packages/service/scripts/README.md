@@ -101,7 +101,9 @@ Both widenings were then proved by reading rather than assumed.
 parsed it, which is the half answerable before any `.ts` file exists;
 `tsc --noEmit --listFilesOnly` names every file in the program, and every
 `.ts` file in this directory appears in it (four at the close of phase 2),
-while the by-design `**/*.test.ts` exclusion still counts zero.
+while `*.test.ts` counts zero, this directory having none of its own. (The
+service tsconfig used to exclude test files package-wide; it no longer
+does, so that zero is now about this directory rather than about a gate.)
 
 `eslint scripts -f json` reports one file more for this directory: the
 same scripts plus this README, because `eslint.base.mjs` lints markdown

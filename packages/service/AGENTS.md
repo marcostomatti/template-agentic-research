@@ -106,18 +106,20 @@ Two rules bind every phase of that port:
 bun run lint && bun run check-types && bun run test
 ```
 
-All three must be green before a PR. `check-types` currently excludes
-`**/*.test.ts` (origin parity — see `specs/test-type-checking.md`).
+All three must be green before a PR. `check-types` covers `**/*.test.ts`
+too: the exclusion carried from the origin is gone, so a type error in a
+test file fails the gate like any other.
 
 Run these from inside `packages/service` as the fast inner loop (seconds);
 the root `lint:all` / `check-types:all` / `test:all` fan-out is the gate
 before a PR.
 
-That `**/*.test.ts` exclusion creates an asymmetry inside `tests/`: plain
-`.ts` modules there ARE type-checked (tsconfig `include` lists `tests`)
-while their `*.test.ts` siblings are not. Keep matcher, walker, and helper
-logic in a plain module beside the test — the same code inlined into the
-`.test.ts` gets no tsc gate at all.
+`tests/` no longer carries a type-checking asymmetry: plain `.ts` modules
+and their `*.test.ts` siblings are both in the program (tsconfig `include`
+lists `tests`, and nothing excludes the tests). Matcher, walker and helper
+logic inlined into a `.test.ts` now gets the same tsc gate as a plain
+module beside it, so splitting it out is a readability call rather than
+the coverage one it used to be.
 
 A new directory under `src` needs no config change (tsconfig `include`
 already covers `src`, the `lint` script covers `src lib tests scripts`,
