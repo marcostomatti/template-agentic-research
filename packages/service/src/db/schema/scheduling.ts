@@ -28,7 +28,7 @@ import { EXPORT_FORMATS, checkOneOf } from './values.js';
  * needs builders of its own, and handing two tables the same
  * instances shares state between them.
  *
- * One dispatcher reads these columns. `ar-dispatch`, arriving in
+ * One dispatcher reads these columns. `ar-dispatch`, landed in
  * phase 3, holds the only schedule trigger in the system: it wakes on
  * its own cron, takes the rows that are enabled and whose
  * `next_run_at` has passed with `FOR UPDATE SKIP LOCKED`, caps how
@@ -155,8 +155,14 @@ export function schedulableColumns() {
  * `next_run_at` is set — no workflow gains a branch and no schedule is
  * configured anywhere else.
  *
- * Nothing runs a topic yet. The dispatcher that claims due rows
- * arrives in phase 3 and the research workflow it invokes in phase 6.
+ * `ar-dispatch` claims these rows, and this phase is where it landed:
+ * a topic that is enabled and whose `next_run_at` has passed is taken
+ * by its tick and dispatched to `ar-ingest`, which the roster in
+ * `workflows/src/README.md` delivers in phase 5. So the claim is real
+ * and what it reaches is not — and nothing has run the dispatcher
+ * either, this phase shipping the workflow source and the stack that
+ * would import it arriving in phase 7.
+ *
  * What the table fixes now is that the subject, its terms and its
  * cadence are one row, so what the pipeline is currently looking into
  * — and when it will next look — is a SELECT rather than a reading of
@@ -278,12 +284,17 @@ export const topics = pgTable('topics', {
  * delivers through it — moving a destination is an UPDATE on the one
  * connector row, and every subscription naming it follows.
  *
- * Nothing renders one yet. The dispatcher that claims due rows arrives
- * in phase 3, and the digest workflow that renders an artifact and
- * hands it over in phase 6. What the table fixes now is that the
- * format, the destination and the cadence are one row, so subscribing
- * a domain to a feed is an INSERT and asking what it currently
- * receives is a SELECT.
+ * `ar-dispatch` claims these rows too, on the same terms: a
+ * subscription that is enabled and whose `next_run_at` has passed is
+ * taken by the dispatcher's tick and dispatched to `ar-digest`, which
+ * the roster in `workflows/src/README.md` delivers in phase 6. That is
+ * a phase behind the topic path's target, so this is the later of the
+ * two to be reachable end to end — and neither is reachable at all
+ * until the stack that imports the dispatcher arrives in phase 7.
+ *
+ * What the table fixes now is that the format, the destination and the
+ * cadence are one row, so subscribing a domain to a feed is an INSERT
+ * and asking what it currently receives is a SELECT.
  *
  * No row here sends anything on its own account. A format names an
  * artifact the pipeline writes and hands to its connector — see
