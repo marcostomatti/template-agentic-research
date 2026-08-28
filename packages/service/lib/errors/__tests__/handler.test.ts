@@ -1,7 +1,7 @@
 import type { Logger } from '../handler.js';
 
 import { describe, expect, it, vi } from 'vitest';
-import { ZodError, ZodIssueCode } from 'zod';
+import { z, ZodError, ZodIssueCode } from 'zod';
 
 import { NotFoundError, ValidationError } from '../errors.js';
 import { errorHandler, zodToValidationError } from '../handler.js';
@@ -117,6 +117,100 @@ describe('zodToValidationError', () => {
     expect(result.details).toHaveLength(2);
     expect(detailAt(result.details, 0).field).toBe('a');
     expect(detailAt(result.details, 1).field).toBe('b.c');
+  });
+});
+
+/**
+ * Schema whose failing parse is this file's characterization fixture: one
+ * nested required field and one numeric lower bound — the two issue shapes
+ * this service's request validation actually produces.
+ *
+ * The cases above hand-build their `ZodIssue` objects. That pins the
+ * path-joining in `zodToValidationError`, but it never runs zod's own
+ * message generation, so it cannot see a zod release that rewords an
+ * issue. `zodToValidationError` copies `issue.message` straight into the
+ * 422 body, which makes those words API surface rather than an internal
+ * detail — hence a fixture built by a REAL `safeParse`.
+ */
+const characterizationSchema = z.object({
+  user: z.object({
+    email: z.string(),
+  }),
+  age: z.number().min(18),
+});
+
+/**
+ * Runs the characterization fixture and hands back the error it fails with.
+ *
+ * Throwing on a successful parse is the vacuity guard: were a future edit to
+ * `characterizationSchema` or to the input below to make the parse SUCCEED,
+ * the cases would otherwise be asserting over an error zod never produced.
+ *
+ * @returns The `ZodError` from the fixture's failing `safeParse`.
+ * @throws Error When the fixture parses successfully.
+ */
+function failedFixtureParse(): ZodError {
+  const result = characterizationSchema.safeParse({ user: {}, age: 17 });
+
+  if (result.success) {
+    throw new Error('the characterization fixture PARSED, so there is no ZodError to characterize');
+  }
+
+  return result.error;
+}
+
+describe('zodToValidationError (characterization over a real failing parse)', () => {
+  it('emits the exact field/code/message triple for each issue', () => {
+    const result = zodToValidationError(failedFixtureParse());
+
+    // Measured against zod 3.25.76. The message strings are zod's, copied
+    // verbatim into the response body, so a zod upgrade that rewords them
+    // turns THIS case red and nothing else in the suite — which is the
+    // whole point of the case. Re-measure rather than reword by hand.
+    //
+    // The array order is asserted deliberately: zod reports issues in
+    // schema-declaration order, so a reordering is a real finding about
+    // zod's traversal and not a flake to be sorted away.
+    expect(result.details).toEqual([
+      {
+        field: 'user.email',
+        code: ZodIssueCode.invalid_type,
+        message: 'Required',
+      },
+      {
+        field: 'age',
+        code: ZodIssueCode.too_small,
+        message: 'Number must be greater than or equal to 18',
+      },
+    ]);
+  });
+
+  it('derives field and code from the issue independently of its message text', () => {
+    const zodErr = failedFixtureParse();
+
+    // Deliberately a subset of the triple case above, kept separate because
+    // the two halves have different lifetimes: message text is expected to
+    // move with a zod major, field and code are not. After a bump, triple
+    // red + this green reads as "wording only"; both red says the issue
+    // SHAPE changed and the conversion needs more than new strings.
+    expect(zodErr.issues).toHaveLength(2);
+    const pairs = zodToValidationError(zodErr).details?.map(({ field, code }) => ({ field, code }));
+    expect(pairs).toEqual([
+      { field: 'user.email', code: ZodIssueCode.invalid_type },
+      { field: 'age', code: ZodIssueCode.too_small },
+    ]);
+  });
+
+  it('copies issue.message verbatim rather than composing its own text', () => {
+    const zodErr = failedFixtureParse();
+
+    // `toHaveLength` first, or this goes vacuous: with no issues at all both
+    // sides of the comparison below are `[]` and the case passes having
+    // compared nothing. This leg is about the MECHANISM, so unlike the
+    // triple case it should survive a zod major untouched.
+    expect(zodErr.issues).toHaveLength(2);
+    const emitted = zodToValidationError(zodErr).details?.map((detail) => detail.message);
+    expect(emitted).toEqual(zodErr.issues.map((issue) => issue.message));
   });
 });
 
