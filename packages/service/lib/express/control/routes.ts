@@ -6,11 +6,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 
 import { controlAuth, controlEnabled } from './middleware';
-import {
-  isHealthDetailProvider,
-  isPausableDependency,
-  isRestartableDependency,
-} from './types';
+import { isHealthDetailProvider, isPausableDependency } from './types';
 import { aggregateStatus, circuitBreakerState, errorMessage } from './utils';
 import { readServiceVersion } from './version';
 
@@ -207,8 +203,20 @@ export function createControlRouter(
    * **Side effects:** calls `dep.stop()` followed by `dep.start()` on the matched
    * dependency. `start()` is only called when `stop()` resolves successfully.
    *
+   * Unlike the pause and resume routes above, this one runs no capability
+   * check before acting. `Dependency` declares `stop()` and `start()` as
+   * REQUIRED members, where the `pause()`/`resume()` pair those two routes
+   * guard on is optional — so every value in `deps` is restartable by
+   * construction and a guard here could only ever pass. The service
+   * template this package forks carries one, along with a `400 dependency
+   * does not support restart` branch that no value type-checking as a
+   * `Dependency` can reach; both are deliberately absent here rather than
+   * lost in the port. The route still answers 400 for a malformed
+   * `:name`, which is the shared parameter check and not a statement
+   * about the dependency — so the list below carries no 400 where its
+   * two neighbours do.
+   *
    * - `404` when no dependency matches `:name`.
-   * - `400` when the dependency does not implement `stop`/`start`.
    * - `500` with `{ error: string }` when `dep.stop()` or `dep.start()` throws.
    * - `200` with `{ ok: true }` on success.
    */
@@ -221,10 +229,6 @@ export function createControlRouter(
     const dep = deps.find(d => d.name === nameResult.data);
     if (!dep) {
       res.status(404).json({ error: 'dependency not found' });
-      return;
-    }
-    if (!isRestartableDependency(dep)) {
-      res.status(400).json({ error: 'dependency does not support restart' });
       return;
     }
     try {
