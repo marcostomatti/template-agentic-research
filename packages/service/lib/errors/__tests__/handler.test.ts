@@ -59,13 +59,33 @@ function detailAt<T>(details: readonly T[] | undefined, index: number): T {
 const req = {} as Parameters<ReturnType<typeof errorHandler>>[1];
 const next = vi.fn() as Parameters<ReturnType<typeof errorHandler>>[3];
 
+// Every hand-built `ZodError` in this file — here and in the `errorHandler`
+// cases further down — is shaped to zod 4, measured against a real failing
+// parse rather than read off the type declarations. A missing nested field
+// emits exactly `{ expected, code, path, message }`, and a bound violation
+// exactly `{ origin, code, minimum, inclusive, path, message }`.
+//
+// Two renames land in these fixtures. `received` is gone, and zod 4 puts no
+// `input` key on a finalised issue either, so the value that failed survives
+// only inside the message text — which is why the missing-field intent now
+// rests on the path and the case name. And `too_small`'s `type` is `origin`.
+//
+// The message strings stay arbitrary sentinels, and `'Required'` — zod 3's
+// real text for a missing field — is left in place deliberately rather than
+// re-measured: these cases assert only that the string they supply comes back
+// out, and rewording them would blur the split with the characterization
+// block below, which is where zod's own generated text is pinned.
+//
+// One fidelity gap the bump opened that no assertion here can see: zod 4's
+// `new ZodError([...])` is NOT `instanceof Error`, while the error a real
+// `safeParse` hands back is. These fixtures still reach the 422 branch only
+// because `errorHandler` tests `instanceof ZodError` before anything else.
 describe('zodToValidationError', () => {
   it('maps a nested path to dot-notation field', () => {
     const zodErr = new ZodError([
       {
         code: ZodIssueCode.invalid_type,
         expected: 'string',
-        received: 'undefined',
         path: ['user', 'email'],
         message: 'Required',
       },
@@ -83,7 +103,6 @@ describe('zodToValidationError', () => {
       {
         code: ZodIssueCode.invalid_type,
         expected: 'string',
-        received: 'undefined',
         path: ['name'],
         message: 'Required',
       },
@@ -99,13 +118,12 @@ describe('zodToValidationError', () => {
       {
         code: ZodIssueCode.invalid_type,
         expected: 'string',
-        received: 'undefined',
         path: ['a'],
         message: 'Required',
       },
       {
         code: ZodIssueCode.too_small,
-        type: 'string',
+        origin: 'string',
         minimum: 1,
         inclusive: true,
         path: ['b', 'c'],
@@ -257,7 +275,6 @@ describe('errorHandler', () => {
       {
         code: ZodIssueCode.invalid_type,
         expected: 'string',
-        received: 'undefined',
         path: ['user', 'email'],
         message: 'Required',
       },
@@ -281,7 +298,6 @@ describe('errorHandler', () => {
       {
         code: ZodIssueCode.invalid_type,
         expected: 'string',
-        received: 'undefined',
         path: ['x'],
         message: 'Required',
       },
@@ -401,7 +417,6 @@ describe('errorHandler', () => {
       {
         code: ZodIssueCode.invalid_type,
         expected: 'string',
-        received: 'undefined',
         path: ['user', 'email'],
         message: 'Required',
       },
@@ -425,7 +440,6 @@ describe('errorHandler', () => {
         {
           code: ZodIssueCode.invalid_type,
           expected: 'string',
-          received: 'undefined',
           path: ['f'],
           message: 'Required',
         },
