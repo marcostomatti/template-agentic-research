@@ -21,7 +21,7 @@ the 7-phase sequencing in that design, §7.
 | --- | --- | --- | --- |
 | No workflow holds a send-capable node | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
 | A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
-| Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
+| Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 6 | Unexercised |
 | Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
 | Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
 | A category is a root or the child of a root, and nothing deeper | A trigger in the hand-written migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts`, with the opt-in `tests/live/schema.live.test.ts` watching a database refuse the write | 2 | Implemented |
@@ -43,7 +43,7 @@ and `Pending` when the row is still a reservation.
 
 ### A row is written before the artifact that enforces it
 
-Several of the rows are pending, and the register is written that way on
+Rows go into the register before anything enforces them, and that is on
 purpose: a property is recorded once it is decided, not once somebody
 gets around to checking it.
 
@@ -161,6 +161,15 @@ hidden types that type replaced holds a schedule the count never sees,
 and a trigger left disabled is counted while it fires on nothing.
 `tests/invariants/workflow-rosters.ts` is where the type is fixed and
 each limit is argued beside the declaration it belongs to.
+
+The other properties are spread across two rows, and the two do not read
+alike. The ceiling, the ledger row and the retry setting are one row,
+and `tests/invariants/workflows.test.ts` holds every built workflow to
+all three today, so that row reads `Unexercised`: the assertions run on
+every pass and no built workflow has offered them a model node yet. The
+prepared-chunk row has nothing behind it and is still a reservation, so
+it reads `Pending`. Both name phase 6, and the reading is what says
+which kind of phase-6 work each is waiting on.
 
 ### Approval is a constraint, not a branch
 
