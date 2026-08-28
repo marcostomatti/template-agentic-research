@@ -9,8 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check-types": "tsc --noEmit",
-    "lint": "eslint ./src",
-    "lint:fix": "eslint ./src --fix",
+    "lint": "eslint src tests *.ts *.mjs",
+    "lint:fix": "eslint src tests *.ts *.mjs --fix",
     "test": "echo '@ar/web: no tests yet'"
   },
   "dependencies": {
