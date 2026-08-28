@@ -43,6 +43,54 @@
  * this module could hand over and leaves a case one place to ask
  * rather than two.
  *
+ * The gate is the law here rather than a convenience. `vitest run`
+ * sets no `include`, so every `*.live.test.ts` in this directory is
+ * collected by the default `bun run test` and loaded with it —
+ * measured, a file written under this gate has its module scope run
+ * even on a pass that answered no instance. What stands between a
+ * case and a real instance is this one ternary, and what it is
+ * holding is the rule `AGENTS.md` states under
+ * `Testing — isolated vs live`: the default suite touches no
+ * database, no network and no credentials, which is incident-derived
+ * rather than stylistic. A case reaching an instance outside the gate
+ * has not taken a shortcut, it has put a network call inside the
+ * suite CI runs on every PR. The gate opens only for a setting
+ * exported into the run: measured, an `AR_N8N_URL` an operator put in
+ * `.env` for the deploy commands leaves a case under it skipped, so
+ * arming this seam is deliberate rather than a side effect of having
+ * configured one. The limit is that same measurement read the other
+ * way: the gate binds a `describe` and nothing above one, so a
+ * module-scope call in a file under it runs whatever the setting
+ * answered, and that is where this seam can be broken without
+ * touching this file at all.
+ *
+ * No compose stack in this repository ships an instance to point it
+ * at. `docker-compose.yml` here declares postgres, redis and
+ * postgres-live and no n8n service, and the script that stands one
+ * up, `bootstrap.sh`, is phase 7 in the roster in
+ * `scripts/README.md`. So the sibling's arrangement has no
+ * counterpart here: `bun run stress:start` brings up the
+ * `postgres-live` service that `bun run test:live` then points
+ * `AR_LIVE_DATABASE_URL` at, that command sets no other setting, and
+ * `.env.example` carries `AR_N8N_URL` commented and without a value.
+ * Rule 3 under `Testing — isolated vs live`, that live tests run only
+ * against the `--profile stress` services, is one an n8n case cannot
+ * satisfy for the same reason, so the instance a case here needs is
+ * an operator's own, started by hand, until that phase lands.
+ *
+ * A run of a file under this gate is therefore not a gate for this
+ * plan. Every command this package ships leaves such a case skipped —
+ * `bun run test`, the `test:all` fan-out that reaches it, and
+ * `bun run test:live` alike — so a green verification order is silent
+ * about anything written here, and what lands under this gate is debt
+ * this plan records rather than behaviour it proved. What a run does
+ * say is narrower and worth keeping: a skipped case is a collected
+ * one, so the count in the summary is evidence the file was found and
+ * its gate resolved, which is the one thing a file quietly renamed
+ * out of the glob stops reporting. It is no evidence about an
+ * instance, and it moves with every case added here, so it is not a
+ * number to hold against one quoted elsewhere.
+ *
  * No file drives this gate yet. `tests/live/n8n-deploy.live.test.ts`
  * is the first, and it arrives next in this stage.
  */
