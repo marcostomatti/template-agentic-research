@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { channelRegistry } from '../registry.js';
 
 export const EmailPayloadSchema = z.object({
-  to: z.string().email(),
+  to: z.email(),
   subject: z.string(),
   body: z.string(),
 });
