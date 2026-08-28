@@ -41,6 +41,20 @@ wanted in both places must be made in both repos.
   parens, not after the `=>`), and `import/order` lists `type` as the FIRST
   group, so an `import type` sits above the `node:` builtins in its own
   blank-line-separated block.
+- Control characters appear in tracked files only as escapes, never as
+  raw bytes — a raw NUL makes `git diff` render `Bin` forever and makes
+  POSIX grep report no match for text that is present, both silently.
+  Two layers enforce this: the universal `ar/no-unsafe-unicode` block in
+  `eslint.base.mjs` (rule source: root `unsafeUnicode.mjs`) covers every
+  linted language, and `bun run gate:control-bytes`
+  (`tools/control-byte-gate/`) is the byte-level floor over every
+  tracked file — deny-by-default file selection, exit 2 when it cannot
+  run, zero files scanned is a failure, `--staged` judges index blobs.
+  CI runs the gate in all three workflows; enable the local pre-commit
+  hook once per clone with `git config core.hooksPath .githooks`. Fix a
+  finding with a small script that rewrites the byte to its escape
+  (binary read/write) — an edit tool cannot reliably match a control
+  character it renders as whitespace.
 
 ## Plans and specs (CRITICAL)
 
