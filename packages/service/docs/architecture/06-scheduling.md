@@ -264,3 +264,106 @@ arbitrary claimed unit.
 `RETURNING` on an UPDATE reads the row as written, so the
 `next_run_at` a claimed unit carries is the time this pass set rather
 than the one that made it due.
+
+## Claim and reschedule in one statement
+
+The locking SELECT and the UPDATE that moves `next_run_at` forward are
+two halves of one statement rather than two statements run in order.
+Folding them is what makes a claim safe rather than merely orderly: a
+single statement is atomic, so the transaction that takes a row's lock
+is the same one that writes its new due time, and there is no instant
+at which a row has been claimed and is still due.
+
+The obligation is the schema's rather than this workflow's preference.
+`schedulableColumns` in `src/db/schema/scheduling.ts` states it for
+anything that reads the column set, and
+`docs/architecture/02-schema.md` carries it beside the indexes the
+claim runs against. Neither follows it through to what an early commit
+then costs, or to what would report one.
+
+### `SKIP LOCKED` is worth exactly the length of its transaction
+
+A lock ends with the transaction holding it, so what `SKIP LOCKED`
+buys overlapping ticks is true only inside that transaction. Commit
+the claim before `next_run_at` moves and the row is unlocked and still
+due in the same instant: the next pass to look finds it eligible,
+exactly as though the first had never run.
+
+Folding them is therefore not a second protection layered over the
+lock. The lock's reach is the transaction and nothing more, so an
+early commit does not weaken the guarantee, it ends it — and it ends
+it in the one window the lock exists for. A pass starting while the
+one before it is still working is the case `SKIP LOCKED` is written
+for, and it is also the case in which a row left unlocked and due is
+claimed a second time. That window is as wide as the gap between
+taking a row and writing its next due time, which is why the failure
+arrives under load rather than at rest.
+
+### A row claimed and not rescheduled comes back on the next tick
+
+What an early commit costs is a second dispatch of work already
+dispatched, and then a third. The row is still due, so the following
+tick claims it and the one after that claims it again — the
+duplication is per tick rather than once, and it lasts as long as a
+pass is still between its claim and its write when the next one
+starts. Every claim is a whole pass: another `runs` row, another
+invocation, and from phase 6 another set of paid model calls.
+
+None of it is reported. No statement fails, no branch carries an error
+and every tick finishes reporting success, a row that is due being
+exactly what the claim exists to find. The record left behind cannot
+say it happened either: `runs` carries a domain, an attribution and
+the timings, so two rows an hour apart against one topic read
+precisely as a topic on an hourly cadence reads.
+
+`docs/architecture/01-invariants.md` names a schedule trigger acquired
+by accident as what turns a single mistake into a recurring bill. An
+early commit reaches the same recurrence with no second trigger
+anywhere: what comes back every tick is the row itself. And it
+surfaces the way that register says such a burn surfaces, from whoever
+sends the invoice rather than from anything in the pipeline.
+
+### One pass cannot tell the folded form from the split one
+
+The counterfactual needs no fixture and is available at the SQL level:
+run the shipped claim twice over one set of due rows. Folded, it takes
+them on the first pass and returns nothing on the second. A claim that
+only SELECTs hands back the same ids both times. Both claim statements
+answer that way, and a single pass is identical under either form —
+which is why lifting the UPDATE out reads as tidying, and why the
+two-run pair rather than one run is the check.
+
+### What reports the mistake is the reschedule's own roster entry
+
+`tests/invariants/dispatch-sql.ts` holds each claim node to naming
+both bound columns, and an entry names one node while each of these
+nodes runs one statement. So a reschedule lifted into a node of its
+own stops being carried by the claim's statement and that entry
+reports — one entry per claim node, with that node's three claim
+entries still satisfied, which is what the two reschedule entries buy
+that no entry over a claim can.
+
+What they do not reach is a reschedule that stayed in the statement
+and is wrong, an entry reading words rather than the places they sit
+in. That limit is argued where the entries are declared, and the clamp
+they cannot check is what `tests/live/schedule-clamp.live.test.ts`
+exists for.
+
+### The fold decides when a row is rescheduled and not only where
+
+Folding the write into the claim also fixes its timing: `next_run_at`
+moves before anything is invoked, so a claimed row's next due time is
+chosen before its outcome is known. Two consequences already recorded
+share that one cause. A row the batch cap drops has been rescheduled
+and waits its whole interval, and a dispatch that fails is not retried
+either — `AR_TOPIC_WORKFLOW_ID` in `scripts/workflow-markers.ts`
+argues the retry half where it describes the dispatcher's error
+branch.
+
+That is the trade rather than an oversight. Rescheduling on the
+outcome would mean a transaction held open across the invocation, with
+a claimed row locked for the length of somebody else's work, or a
+second write to `next_run_at` after the fact. Neither is ruled out by
+anything in this design. What is ruled out is the one arrangement that
+writes the new due time outside the lock, and a re-dispatch is what
+that one costs.
