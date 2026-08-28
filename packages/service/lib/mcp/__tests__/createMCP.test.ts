@@ -1,4 +1,5 @@
-import type { MCPConfig } from '../types.js';
+import type { MCPConfig, MCPContext } from '../types.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 
 import process from 'node:process';
 
@@ -53,7 +54,9 @@ function tick(): Promise<void> {
 }
 
 describe('createMCP', () => {
-  let mockSetup: ReturnType<typeof vi.fn>;
+  // Typed explicitly: a bare vi.fn() widens to Procedure | Constructable,
+  // which matches no MCPConfig.setup call signature.
+  let mockSetup: ReturnType<typeof vi.fn<(server: McpServer, ctx: MCPContext) => void>>;
 
   function makeConfig(overrides?: Partial<MCPConfig>): MCPConfig {
     return { serviceId: 'test-mcp', setup: mockSetup, ...overrides };
@@ -64,7 +67,7 @@ describe('createMCP', () => {
     vi.clearAllMocks();
     mocks.serverInstances.length = 0;
     mocks.mockTransportClose.mockResolvedValue(undefined);
-    mockSetup = vi.fn().mockResolvedValue(undefined);
+    mockSetup = vi.fn<(server: McpServer, ctx: MCPContext) => void>().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
