@@ -94,6 +94,35 @@ export interface Classification {
  * written to, so a caller may hold on to both and read them again
  * afterwards.
  *
+ * What those readings are worth is settled outside this function.
+ * {@link Classification.stray} and {@link Classification.clean} are
+ * claims about `expected` as much as about the instance, and nothing
+ * here knows or checks where that list came from, which makes the
+ * choice of list the caller's whole responsibility rather than a
+ * detail of it. What this command hands over is read off
+ * `workflows/src/` — `expectedNames`, arriving later in this stage —
+ * and never off a record of what some deploy put on an instance.
+ *
+ * A record of deploys would be answering a different question in the
+ * same shape. It accounts for acts, where an audit asks what this
+ * repository declares, and the two come apart in precisely the cases
+ * this command exists for. Shared, such a record carries whatever
+ * another machine's deploy uploaded, off a branch or a fork this
+ * checkout knows nothing about, so the workflow an audit is for reads
+ * as expected and is never named. Kept per machine it goes wrong the
+ * other way, ratifying what this machine put there off an older
+ * checkout under a name no source carries any more, which is the case
+ * `deploy` in `deploy-external.ts` names as the one it does not
+ * notice.
+ *
+ * Nor is there such a record to prefer: `deploy` answers with a
+ * report of what it did and writes nothing down. What reading the
+ * sources costs instead is that the expected set moves with the
+ * checkout — it is whatever this commit declares, so an audit run
+ * from an older one reports the workflows a newer one added as
+ * strays. The verdict is the instance held against one commit, and
+ * which commit that is belongs to whoever ran the command.
+ *
  * A workflow whose name is not a string is a stray rather than one
  * this passes over. It can equal no expected name, so it is not a
  * match that was dropped but one that was never there — which is the
