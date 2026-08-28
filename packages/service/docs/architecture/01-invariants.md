@@ -22,7 +22,7 @@ the 7-phase sequencing in that design, §7.
 | No workflow holds a send-capable node | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
 | A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
 | Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
-| Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/`, over workflows built from `workflows/src/` | 3 | Pending |
+| Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
 | Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
 | A category is a root or the child of a root, and nothing deeper | A trigger in the hand-written migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts`, with the opt-in `tests/live/schema.live.test.ts` watching a database refuse the write | 2 | Implemented |
 | Every document carries a hash, and no two carry the same one | The NOT NULL and UNIQUE pair on `documents.hash` in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
@@ -113,6 +113,16 @@ every model call writes a ledger row. A ceiling needs something to count
 against, and spend nobody can attribute to a run is spend nobody can act
 on — a burn stays invisible until the provider is the one who reports
 it.
+
+The schedule-trigger row is the only one of the four the register marks
+`Implemented`, and what that means for it is a count and not a clock.
+`tests/invariants/workflows.test.ts` holds the whole built tree to one
+node of one named type, carried by `ar-dispatch`. The two limits on that
+bound it from opposite sides: a workflow written with either of the
+hidden types that type replaced holds a schedule the count never sees,
+and a trigger left disabled is counted while it fires on nothing.
+`tests/invariants/workflow-rosters.ts` is where the type is fixed and
+each limit is argued beside the declaration it belongs to.
 
 ### Approval is a constraint, not a branch
 
