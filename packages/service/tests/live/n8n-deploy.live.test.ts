@@ -1,22 +1,25 @@
 /**
- * One deploy against a real instance: this package's workflows built
- * the way `bun run deploy:external` builds them, uploaded to whatever
+ * Deploys against a real instance: this package's workflows built the
+ * way `bun run deploy:external` builds them, uploaded to whatever
  * `AR_N8N_URL` names, and that instance read back for each of them by
  * name. It creates workflows over there and replaces the ones already
- * held under a name it is uploading, so it changes somebody's own
- * deployment rather than reading one, and the gate it hangs off is the
- * whole of the consent for that.
+ * held under a name it is uploading, and it uploads more than once, so
+ * it changes somebody's own deployment rather than reading one, and
+ * the gate it hangs off is the whole of the consent for that.
  *
  * `tests/scripts/deploy-external.test.ts` drives the same sequence in
  * front of a stub, and everything decidable without an instance is
  * settled over there: which calls a run makes, that a refusal makes
  * none, that a name the listing already carries is replaced rather
  * than created a second time. What a stub cannot answer is whether the
- * body this port projects is one the API accepts and whether the
- * instance is holding the workflow once the call has returned. That is
- * the whole of what is left for this file, and this case answers both:
- * the first by the uploads not being refused, the second by the
- * reading behind them.
+ * body this port projects is one the API accepts, whether the instance
+ * is holding the workflow once the call has returned, and whether it
+ * is holding one of each rather than two once a rerun has been
+ * through. That is the whole of what is left for this file. The first
+ * case answers the first two — the one by the uploads not being
+ * refused, the other by the reading behind them — and the second
+ * answers the third by uploading twice and counting what the instance
+ * holds afterwards.
  *
  * Everything this file does sits inside the gate, which is
  * load-bearing rather than tidy. `describeLiveN8n` binds a `describe`
@@ -51,10 +54,10 @@
  * and nothing is injected beneath it, so the only tree it can be
  * handed is a real one, and this repository's own carries uncommitted
  * work on any run made while anything in it is being edited — which
- * would refuse this case for a reason its own fixture cannot touch.
- * That refusal is covered in the isolated suite, where it is the
- * subject rather than the obstacle. What the substitution costs is the
- * thing the refusal was for: the artifacts this run uploads carry
+ * would refuse the cases here for a reason their own fixture cannot
+ * touch. That refusal is covered in the isolated suite, where it is
+ * the subject rather than the obstacle. What the substitution costs is
+ * the thing the refusal was for: the artifacts this run uploads carry
  * whatever stamp the tree produced, `-dirty` among them, so what a run
  * of this file leaves on an instance is not a deploy to leave there.
  *
@@ -68,35 +71,43 @@
  * `beforeAll`, ahead of the checkout and the build, so nothing is made
  * or spawned for a run with nowhere to send it.
  *
- * The last member of the record is the claim and the five in front of
- * it stand behind it. It is an absence — the uploaded names the
- * instance does not hold — and an absence over an empty list is what a
- * run that built nothing or uploaded nothing produces, silently. Three
- * of the five close that: the artifacts are held against the sources
- * they were built from, the directory they landed in against the one
- * the upload reads, and the uploads against those same sources.
- * Measured, a build reporting no artifact reddens exactly those three
- * and leaves the claim green, which is the split that says they stand
- * behind it rather than restate it. The other two name a cause those
- * three would otherwise leave to be guessed at: a build that would not
- * launch, and a git that would not run over the checkout. A listing
- * that came back empty needs no guard at all, every uploaded name
- * being one the instance does not hold — measured, a listing emptied
- * on the way in reddens the claim and nothing else.
+ * In the first case's record the last member is the claim and the five
+ * in front of it stand behind it. It is an absence — the uploaded
+ * names the instance does not hold — and an absence over an empty list
+ * is what a run that built nothing or uploaded nothing produces,
+ * silently. Three of the five close that: the artifacts are held
+ * against the sources they were built from, the directory they landed
+ * in against the one the upload reads, and the uploads against those
+ * same sources. Measured, a build reporting no artifact reddens
+ * exactly those three of that record and leaves its claim green, which
+ * is the split that says they stand behind it rather than restate it.
+ * The other two name a cause those three would otherwise leave to be
+ * guessed at: a build that would not launch, and a git that would not
+ * run over the checkout. A listing that came back empty needs no guard
+ * at all, every uploaded name being one the instance does not hold —
+ * measured, a listing emptied on the way in reddens that claim and
+ * nothing else in that record, and both readings of the instance in
+ * the second case's.
  *
- * Run once against a real instance rather than left as debt: a
- * throwaway n8n 2.15.1 started for the purpose took the artifact this
- * build writes with its twelve nodes intact and inert, and both legs
- * above split as described over it. That is evidence about this
- * sequence at that version and about no instance an operator holds,
- * and nothing re-runs it — the gate leaves this file skipped under
- * every command this package ships.
+ * Run against a real instance rather than left as debt: a throwaway
+ * n8n 2.15.1 started for the purpose took the artifact this build
+ * writes with its twelve nodes intact and inert, both cases here
+ * passed over it from an empty instance and from one already holding
+ * the workflow, every leg this file quotes split as described, and
+ * the three deploys a green run makes left it holding exactly one of
+ * that workflow. That is evidence about this sequence at that
+ * version and about no instance an operator holds, and nothing re-runs
+ * it — the gate leaves this file skipped under every command this
+ * package ships.
  *
- * Two more cases arrive next in this stage — a second upload, which is
- * what says the upsert creates nothing twice against a real instance,
- * and a reading of whether `ar-dispatch` would arm on one.
+ * One more case arrives next in this stage: a reading of whether
+ * `ar-dispatch` would arm on the instance, taken without arming it.
  */
-import type { DeployBuild, InstanceSettings } from '../../scripts/deploy-external.js';
+import type {
+  DeployBuild,
+  DeployedWorkflow,
+  InstanceSettings,
+} from '../../scripts/deploy-external.js';
 import type { N8nInstance } from '../../scripts/n8n-client.js';
 import type { SpawnSyncReturns } from 'node:child_process';
 
@@ -108,6 +119,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, expect, it } from 'vitest';
 
+import { expectedNames } from '../../scripts/audit-workflows.js';
 import {
   EXTERNAL_FLAG,
   WORKFLOW_EXTERNAL_DIST_DIR,
@@ -201,6 +213,17 @@ interface LiveDeploy {
   /** What git found in it, read back rather than assumed. */
   readonly checkoutState: string;
 
+  /**
+   * The display name every workflow source declares, in the order
+   * {@link expectedNames} reads them.
+   *
+   * The independent side of the counting the second case does: read
+   * out of `workflows/src/` rather than off what a run uploaded, so a
+   * comparison keyed to it is about what this repository declares and
+   * not about the run being checked.
+   */
+  readonly declaredNames: readonly string[];
+
   /** The instance, for the listing this file reads for itself. */
   readonly instance: N8nInstance;
 
@@ -277,9 +300,9 @@ function initCleanCheckout(root: string): string {
 /**
  * Every workflow source this package ships, sorted.
  *
- * The independent side of the build comparison below. `buildAll`
- * writes one artifact per `*.json` it finds here and keeps the
- * source's own name, so this list is what the build should have
+ * The independent side of the build comparisons the cases make.
+ * `buildAll` writes one artifact per `*.json` it finds here and keeps
+ * the source's own name, so this list is what the build should have
  * reported and it is derived from the tree rather than from the run
  * being checked. Directory entries are filtered out the way that build
  * filters them, so the two answers cannot disagree over one.
@@ -357,7 +380,8 @@ function fixture(): LiveDeploy {
 }
 
 /**
- * Every display name the instance is holding, as strings.
+ * Every display name the instance is holding, one per workflow and in
+ * the order it listed them.
  *
  * A workflow whose `name` is not a string is passed over rather than
  * coerced. `RemoteWorkflow.name` is `unknown` because the instance is
@@ -365,16 +389,66 @@ function fixture(): LiveDeploy {
  * port uploaded — what an instance is doing holding such a workflow is
  * a question for `audit-workflows.ts` rather than for a deploy.
  *
+ * Duplicates are kept, which is the whole of what parts this from
+ * {@link namesHeldBy}: two workflows under one display name is the
+ * state a repeat of a deploy is supposed to leave impossible, so it
+ * has to survive the read that goes looking for it.
+ *
  * @param instance - The instance to list.
- * @returns The names it holds.
+ * @returns The names it holds, one per workflow.
  */
-async function namesHeldBy(instance: N8nInstance): Promise<ReadonlySet<string>> {
+async function displayNamesListed(
+  instance: N8nInstance,
+): Promise<readonly string[]> {
   const listed = await listWorkflows(instance);
-  const named = listed
+
+  return listed
     .map((workflow) => workflow.name)
     .filter((name): name is string => typeof name === 'string');
+}
 
-  return new Set(named);
+/**
+ * Every display name the instance is holding, deduplicated.
+ *
+ * The membership half of {@link displayNamesListed}, which is where
+ * the argument for what it passes over lives.
+ *
+ * @param instance - The instance to list.
+ * @returns The names it holds, with no name in it twice.
+ */
+async function namesHeldBy(instance: N8nInstance): Promise<ReadonlySet<string>> {
+  return new Set(await displayNamesListed(instance));
+}
+
+/**
+ * How many workflows the instance is holding under each of `names`.
+ *
+ * One `<name>: <count>` label per name rather than a tally, so a name
+ * held twice reports as two beside the one the comparison expected,
+ * and a name it lost reports as zero. A count of the wrong ones would
+ * say how many and never which.
+ *
+ * The names are asked FOR rather than read off the listing, so the
+ * answer is keyed to what this repository declares and not to what the
+ * instance happens to hold: a workflow nobody here deployed is neither
+ * counted nor reported, which is `audit-workflows.ts`'s question
+ * rather than a deploy's.
+ *
+ * @param instance - The instance to list.
+ * @param names - The display names to count, in the order to report.
+ * @returns One label per name, in that order.
+ */
+async function timesHeldBy(
+  instance: N8nInstance,
+  names: readonly string[],
+): Promise<readonly string[]> {
+  const held = await displayNamesListed(instance);
+
+  return names.map((name) => {
+    const times = held.filter((candidate) => candidate === name).length;
+
+    return `${name}: ${String(times)}`;
+  });
 }
 
 describeLiveN8n('deploying the built workflows to a live n8n instance', () => {
@@ -397,6 +471,7 @@ describeLiveN8n('deploying the built workflows to a live n8n instance', () => {
       built: runExternalBuild(),
       checkout: checkoutRoot,
       checkoutState: initCleanCheckout(checkoutRoot),
+      declaredNames: expectedNames({ sourceDir: WORKFLOW_SOURCE_DIR }),
       instance,
       settings,
       sources,
@@ -445,6 +520,116 @@ describeLiveN8n('deploying the built workflows to a live n8n instance', () => {
       theCheckoutTheDeployAsksGitAbout: CHECKOUT_CLEAN,
       everyArtifactWasUploaded: sources,
       namesTheInstanceDoesNotHold: [],
+    });
+  });
+
+  // A repeat of the deploy `bun run deploy:external` runs, measured
+  // against the state the pass in front of it left. Upserting on the
+  // display name is the whole of how a rerun creates nothing twice,
+  // and the isolated suite already pins that from the request side: a
+  // name the listing carries is a PUT at the id the listing gave and
+  // not a second POST. What a stub cannot answer is what the instance
+  // is holding once both passes have returned, which is the one place
+  // a create nobody wanted and a replace that landed on the wrong
+  // workflow look different from each other.
+  //
+  // Both passes are this case's own rather than the first of them
+  // being the one the case before it makes. A repeat has to say what
+  // it is a repeat of, and the reading taken between the two is what
+  // says it — off the instance rather than off a sibling case having
+  // run first, which a `-t` filter or a reordering would leave untrue
+  // with nothing reporting it.
+  //
+  // The two claims are the last two members and the six in front of
+  // them stand behind: an absence of creates and a count of one apiece
+  // are both what a run that built nothing or uploaded nothing leaves,
+  // silently. What the build reported is held against the sources it
+  // was built from and each pass's uploads against those same sources,
+  // so a run with nothing to say is reported as one rather than read
+  // as a deploy that repeated well.
+  //
+  // Where the build wrote is not among them, as it is in the first
+  // case's record. A directory the upload read and the build did not
+  // write into is an artifact `artifactOf` cannot open, which arrives
+  // here as the `ENOENT` it raised naming the path rather than as a
+  // short list somebody has to account for.
+  //
+  // Measured over a throwaway instance, and the legs are what part the
+  // two claims from each other and from the guards. Over an EMPTY
+  // instance, a match that never finds a name — so that every pass
+  // creates — moves all three readings here: the count between the
+  // passes, the count after them, and the created list naming the
+  // workflow. That same mutation with the report calling every create
+  // a replace leaves the created list GREEN and moves the two counts
+  // alone, which is what says the instance's state carries a failure
+  // the deploy's own account of itself cannot. Over an instance
+  // already holding the workflow, a build reporting no artifact moves
+  // the three build-and-upload members and leaves both claims and the
+  // count between the passes alone; and a listing read that came back
+  // empty, and one answering every name twice, each move the two
+  // counts and leave the created list green.
+  it('replaces what it already put there rather than deploying it twice', async () => {
+    const {
+      built,
+      checkout,
+      checkoutState,
+      declaredNames,
+      instance,
+      settings,
+      sources,
+    } = fixture();
+    const upload = async (): Promise<readonly DeployedWorkflow[]> => deploy({
+      build: () => built.build,
+      fetch,
+      root: checkout,
+      settings,
+    });
+    const heldOnce = declaredNames.map((name) => `${name}: 1`);
+
+    const first = await upload();
+
+    // The state the repeat is measured against, read off the instance
+    // rather than inferred from the pass that just ran. A first pass
+    // that uploaded nothing to an instance already holding these names
+    // leaves this reading exactly as a first pass that landed does, so
+    // what parts the two is the first pass's own upload list and not
+    // this.
+    const between = await timesHeldBy(instance, declaredNames);
+    const second = await upload();
+    const created = second
+      .filter((workflow) => workflow.created)
+      .map((workflow) => workflow.name)
+      .sort();
+
+    // The two claims, and each is a reading the other cannot make. The
+    // first is the deploy's own account of what it did, which is what
+    // says it took the update path at all; the second is the
+    // instance's state, which is what says the update landed where the
+    // account claims. A run that replaced nothing and posted twice
+    // fails both, and one that reported a replace while creating a
+    // copy fails only the second.
+    expect({
+      theBuildRan: built.outcome,
+      itWroteOneArtifactPerSource: [...built.build.files].sort(),
+      theCheckoutTheDeployAsksGitAbout: checkoutState,
+      theFirstPassUploadedEveryArtifact: first
+        .map((workflow) => workflow.file)
+        .sort(),
+      whatTheInstanceHeldBetweenThePasses: between,
+      theSecondPassUploadedEveryArtifact: second
+        .map((workflow) => workflow.file)
+        .sort(),
+      whatTheSecondPassCreatedRatherThanReplaced: created,
+      whatTheInstanceHoldsNow: await timesHeldBy(instance, declaredNames),
+    }).toEqual({
+      theBuildRan: BUILD_RAN,
+      itWroteOneArtifactPerSource: sources,
+      theCheckoutTheDeployAsksGitAbout: CHECKOUT_CLEAN,
+      theFirstPassUploadedEveryArtifact: sources,
+      whatTheInstanceHeldBetweenThePasses: heldOnce,
+      theSecondPassUploadedEveryArtifact: sources,
+      whatTheSecondPassCreatedRatherThanReplaced: [],
+      whatTheInstanceHoldsNow: heldOnce,
     });
   });
 });
