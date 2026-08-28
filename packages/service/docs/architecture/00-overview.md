@@ -167,7 +167,7 @@ to it has a single row to keep true.
 | --- | --- | --- |
 | Invariants | `tests/invariants/` | `docs/architecture/01-invariants.md` |
 | Schema | `src/db/`, `drizzle/` | `docs/architecture/02-schema.md` |
-| Workflows | `workflows/src/` | `docs/architecture/03-workflows.md` |
+| Workflows | `workflows/src/`, `scripts/build-workflows.ts`, and the spliced libraries in `src/lib/` | `docs/architecture/03-workflows.md` |
 | Sources | `src/sources/` | `docs/architecture/04-sources.md` |
 | Exports | `src/exports/` | `docs/architecture/05-exports.md` |
 | Scheduling | `workflows/src/ar-dispatch.json`, and the schedule state in `src/db/` | `docs/architecture/06-scheduling.md` |
