@@ -40,11 +40,15 @@ describe('MCPConfig', () => {
   });
 
   it('accepts health with only port specified', () => {
+    // Annotated rather than written inline: `satisfies` preserves the
+    // literal's own inferred type, so an inline `{ port: 8080 }` would leave
+    // `config.health` with no `path` property for the assertion below to read.
+    const health: HealthConfig = { port: 8080 };
     const config = {
       serviceId: 'port-only',
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       setup: (_server: unknown, _ctx: unknown) => {},
-      health: { port: 8080 },
+      health,
     } satisfies MCPConfig;
 
     expect(config.health?.port).toBe(8080);
