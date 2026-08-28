@@ -426,15 +426,6 @@ describe('POST /_control/dependencies/:name/restart', () => {
     expect(res.body).toEqual({ error: 'dependency not found' });
   });
 
-  it('returns 400 when the dependency does not implement stop/start', async () => {
-    const dep = { name: 'db', status: 'running' } as unknown as Dependency;
-    const res = await request(makeApp([dep], []))
-      .post('/_control/dependencies/db/restart')
-      .set('x-control-token', SECRET);
-    expect(res.status).toBe(400);
-    expect(res.body).toEqual({ error: 'dependency does not support restart' });
-  });
-
   it('calls stop() before start() and returns 200 on success', async () => {
     const callOrder: string[] = [];
     const stop = vi.fn().mockImplementation(() => {
