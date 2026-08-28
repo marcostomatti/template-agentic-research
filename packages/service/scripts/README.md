@@ -25,6 +25,36 @@ design, `.specs/2026-08-19-research-pipeline-port.md` §7.
 | `verify-external.sh` | phase 7 | Read-only verification of an external-mode deployment: the workflows exist and are active, the dependencies answer, the schema is migrated. |
 | `check-doc-links.ts` | phase 7 | Asserts every relative markdown link in the tracked docs resolves to a file that exists. |
 
+Not every `.ts` file here is a command. `workflow-markers.ts`,
+`n8n-workflow.ts` and `n8n-client.ts` landed with the phase-3 rows of the
+roster and are halves beneath them rather than entry points of their own:
+no `package.json` script names one, and none carries the `INVOKED_AS_CLI`
+block each landed `.ts` command guards its run with. They are named here
+rather than inside a row because each is read by more than one of those
+commands, where `seed-schemas.ts` and `seed-apply.ts` sit inside
+`seed.ts`'s row because it is the only command that reads either.
+
+`workflow-markers.ts` holds the marker grammar and the build-time settings
+table those markers resolve against. It is split from `build-workflows.ts`
+so that a rule decidable without a filesystem or a transpiler can be
+driven without either, which is what lets a case assert a refusal by
+calling one function. `audit-workflows.ts` compiles the same two grammars,
+to refuse a display name still carrying a marker rather than hold one
+against an instance.
+
+`n8n-workflow.ts` and `n8n-client.ts` split what an instance-facing
+command asks along the line where the instance itself is needed.
+`n8n-workflow.ts` answers from a workflow value alone — which of its nodes
+would arm it, which envelope members the public API takes — and holds
+those answers in one place so that no two of the three instance-facing
+commands give different ones; `deploy-external.ts` and
+`activate-workflows.sh` read it. `n8n-client.ts` is the half that opens a
+socket and wants the key: every HTTP call this package makes against an
+instance, and the refusal for a reply that is not a success.
+`deploy-external.ts` and `audit-workflows.ts` are the two commands that
+call in, and `activate-workflows.sh` is the one that does not, activation
+going through the CLI inside the container rather than over the API.
+
 Database migrations are deliberately absent: drizzle owns them end to end
 (`drizzle/`, `drizzle.config.ts`, `bun run db:generate` / `db:migrate`),
 and a script here that also moved schema would be a second engine.
