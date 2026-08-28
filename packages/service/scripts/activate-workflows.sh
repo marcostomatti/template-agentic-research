@@ -16,12 +16,13 @@
 # (`activatableTriggers` in `n8n-workflow.ts`), which is what keeps
 # what is left here a sequence.
 #
-# What has landed is the preamble and the plan the rest of the run
-# works from: the shell settings, the package root every path in this
-# file is written against, the container to enter, and the read of
-# the built tree that says which workflows an activation would arm.
-# The steps that drive the CLI against an instance arrive later in
-# this stage.
+# What has landed is the preamble, the plan the rest of the run works
+# from, and the precondition the steps behind it stand on: the shell
+# settings, the package root every path in this file is written
+# against, the container to enter, the read of the built tree that
+# says which workflows an activation would arm, and the refusal for a
+# container that is not running. The steps that drive the CLI against
+# an instance arrive later in this stage.
 
 # `-e` so a failing step stops the run rather than letting the one
 # after it work on whatever the failure left behind, `-u` so a
@@ -200,5 +201,58 @@ done <<<"$PLAN"
 [ "${#ARMED_IDS[@]}" -gt 0 ] || {
   echo "activate: no built workflow has a trigger an activation would arm" >&2
   echo "          nothing printed above means workflows/dist/ is empty: bun run build:workflows" >&2
+  exit 1
+}
+
+# Refuse a container that is not up. The steps that enter it arrive
+# later in this stage and this stands in front of them, because
+# letting them run is a worse report rather than only a later one: a
+# `docker exec` against a stopped container fails once per command
+# rather than once, and measured, what it fails with names the
+# container by its sixty-four character id and says nothing an
+# operator can act on.
+#
+# After the plan read rather than in front of it. That read ANSWERS
+# with the value the rest of the run works from, so it is the first
+# step and not a check standing ahead of one, and the ordering also
+# puts the local problem first — a tree with nothing built in it is
+# wrong on every machine, where a container that is down is wrong on
+# this one and an operator fixes it in place.
+#
+# The reading is folded onto one answer on purpose. Measured:
+# `docker inspect` prints `true` for a running container and `false`
+# for a stopped one, and FAILS for a container nothing created, for a
+# daemon it cannot reach, and where docker is not installed at all —
+# so the `|| echo false` is what turns the three that are errors into
+# an answer, and the comparison is against the one answer that means
+# running rather than against its opposite. That second half is
+# load-bearing: measured, a missing container leaves not `false` but
+# a blank line and then it, `docker inspect` writing an empty line to
+# stdout before it fails and a substitution keeping a leading
+# newline.
+#
+# No `if !` wrapper here, where the plan read above needs one. The
+# fallback answers for every way the read can fail, so this
+# substitution exits zero whatever happened and `-e` has no status to
+# act on.
+#
+# What the fold costs is a diagnosis, and it costs it for two of the
+# four states that reach it. A stopped container and one nothing
+# created both get the same two lines and bringing the stack up is
+# the edit for either; a docker that is not running, or is not
+# installed at all, gets them too and is not, and finds out when the
+# command named below refuses in its turn.
+#
+# That command is `bootstrap.sh`, which the roster in `README.md`
+# here describes as bringing the stack up and importing credentials —
+# the credentials clause is why the message names it rather than a
+# bare compose command. It arrives in phase 7, so what the message
+# points at is a command an operator cannot run yet: the same shape
+# as the container default above, and the roster is where a reader
+# looks either of them up.
+RUNNING="$(docker inspect -f '{{.State.Running}}' "$AR_N8N_CONTAINER" 2>/dev/null || echo false)"
+[ "$RUNNING" = "true" ] || {
+  echo "activate: the n8n container $AR_N8N_CONTAINER is not running" >&2
+  echo "          bring the stack up and try again: scripts/bootstrap.sh" >&2
   exit 1
 }
