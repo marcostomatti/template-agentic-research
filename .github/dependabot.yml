@@ -9,9 +9,14 @@ version: 2
 # read it, so an `npm` entry would resolve nothing at all. Dependabot's bun
 # support wants bun >= 1.1.39; package.json pins bun@1.3.9.
 #
-# Every PR this file opens lands on an existing gate: back.yml and front.yml
-# each list 'package.json' and 'bun.lock' in their paths: filters, and each
-# also lists its own workflow file.
+# Every PR this file opens lands on an existing gate today: back.yml and
+# front.yml each list 'package.json' and 'bun.lock' in their paths: filters,
+# and each also lists its own workflow file. The gap is deploy-back.yml,
+# which neither filter names: harmless while its only two actions (checkout,
+# setup-bun) are shared with the gated workflows, but a bump to an action
+# used ONLY there would open a PR no gate runs on. Add that path to
+# back.yml's paths: lists if the operator section ever grows an action
+# of its own.
 
 updates:
   # Runtime and toolchain dependencies for the root and every packages/*
