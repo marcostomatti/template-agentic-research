@@ -62,9 +62,14 @@ instance, and the refusal for a reply that is not a success.
 call in, and `activate-workflows.sh` is the one that does not, activation
 going through the CLI inside the container rather than over the API.
 
-Database migrations are deliberately absent: drizzle owns them end to end
-(`drizzle/`, `drizzle.config.ts`, `bun run db:generate` / `db:migrate`),
-and a script here that also moved schema would be a second engine.
+Database migrations stay drizzle's end to end (`drizzle/`,
+`drizzle.config.ts`, `bun run db:generate` / `db:migrate`): a script here
+that also moved schema would be a second engine. `scaffold.ts`'s
+`migration` generator is not one. It writes a skeleton and nothing else —
+it reads no schema, opens no connection, applies nothing, and leaves the
+index, the timestamp and the snapshot that would make its output part of
+that chain unfilled, because a generator that is a pure function of a name
+knows none of them.
 
 The phase-7 group is deferred on purpose. Each of those scripts drives a
 stack — compose, credentials, a live instance — that does not exist until
@@ -83,6 +88,7 @@ table is the prose half of that list and says what each one is for.
 | --- | --- |
 | `lib` | `src/lib/<name>.ts` and `tests/lib/<name>.test.ts`. The module carries the three dual-context rules a spliceable library obeys rather than pointing at them, because the moment somebody is most likely to break one is while writing the file. Both halves are placeholders and say so: the export throws, and the case beside it asserts that it throws. That pairing is the point — a generated case that passed whatever the module did would leave a new library covered by nothing while reporting a green suite over it, where this one reddens the moment the library is written. |
 | `source-adapter` | `src/sources/<id>.ts`, `src/sources/<id>.test.ts` and `src/sources/<id>-payload.json`. The skeleton declares every member of the `SourceAdapter` contract and is arranged around two of its rules: `fetch` is the only member that does I/O, so `parse` and `toCanonical` are pure and can be driven over a stored payload; and the endpoint and `parser_config` bind at construction rather than per call, so `parse` stays a function of the payload alone. Its operand is an id rather than a name, because that is what the registry keys on and what a `sources` row selects. Every member throws, and the cases assert the refusals, on the same reasoning as `lib`. |
+| `migration` | `drizzle/<nnnn>_<name>.sql` and `drizzle/meta/<nnnn>_<name>.journal-entry.json`. For DDL `src/db/schema.ts` cannot express — a trigger, a function, a `COMMENT ON` — which `bun run db:generate` will therefore never write, never diff and never propose dropping. The `.sql` carries two statements with one `--> statement-breakpoint` between them, because a hand-written migration is almost always an object and the thing that attaches it and the marker between the two is what nobody remembers. Both statements raise, on the same reasoning as `lib`. |
 
 The `lib` pair rather than the module alone, because a library under
 `src/lib/` with no case file is not a shape this package has. What proves
@@ -108,6 +114,29 @@ build as well as by the suite, and an adapter is read by neither, so
 colocating follows this package's existing convention for a module whose
 cases are about that module alone (`src/cron/cron.test.ts`,
 `src/notifications/dispatch.test.ts`) and puts all three in one listing.
+
+The `migration` pair because a `.sql` file with no journal entry is not a
+migration: the migrator walks `drizzle/meta/_journal.json`, resolves each
+entry's tag into a filename, and never opens a file no entry names. A
+generator stopping at the SQL would emit something that looks applied and
+has never run.
+
+That entry lands as a file of its own rather than as an edit to the
+journal, because an edit is an overwrite and nothing this command does
+overwrites anything. It is an envelope — a `_readme` beside an `entry`
+key — for the reason the payload fixture is one, with the difference that
+what goes into the journal is the `entry` value exactly as it stands.
+Moving it is a person's, and the header says so.
+
+Neither half is complete, and both say which parts are missing. The
+index, the timestamp and the snapshot are all properties of the `drizzle/`
+tree the pair will land in, and a generator that is a pure function of a
+name knows none of them. The index is `9999`, which no tree can already
+hold and which sorts to the end of a listing; the timestamp is the epoch.
+The snapshot — the third artifact `drizzle-kit generate --custom` writes —
+is left absent rather than guessed, because an absent snapshot is loud
+where a wrong one is a generated diff proposing to drop everything the
+snapshot does not model.
 
 ## `.ts` for logic, `.sh` for orchestration
 

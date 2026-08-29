@@ -80,6 +80,29 @@
  * rather than one invented here, so what stands opposite the
  * emitted library is a source this package already declares
  * unspliceable.
+ *
+ * A `migration` run is read against two things outside itself,
+ * because neither half of what it emits means anything on its own.
+ * The entry is held against this package's REAL journal rather
+ * than a copy of one — what an emitted entry has to match is what
+ * drizzle writes there today, so a release that moved the format
+ * reddens here instead of in a migration somebody has just
+ * written. And the pair is handed to `drizzle-orm`'s own migration
+ * reader, with the one move the entry's header asks for made
+ * first: the entry pasted into a journal, and nothing else about
+ * the emitted tree touched. That reader resolves the tag into a
+ * filename, throws when it names nothing, and splits what it finds
+ * on the marker — so two statements out of it is the whole shape
+ * decided by the thing that will decide it in production.
+ *
+ * The text claims beside it are the ones a reader can check by
+ * eye, and one of them is there because the split cannot make it.
+ * Counting pieces counts pieces: a statement commented out leaves
+ * the count at two while the database gets one, which is the
+ * failure shape with no signal anywhere — the migrator records the
+ * migration applied, postgres does nothing, and every scan over
+ * the file still finds every string it looks for. What separates
+ * them is anchoring the statement to the start of its line.
  */
 import { spawnSync } from 'node:child_process';
 import {
@@ -94,6 +117,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import {
@@ -114,6 +138,9 @@ const GENERATOR = 'lib';
 
 /** The second, which takes an id where the first takes a name. */
 const ADAPTER_GENERATOR = 'source-adapter';
+
+/** The third, which stamps into a tree drizzle-kit also writes. */
+const MIGRATION_GENERATOR = 'migration';
 
 /**
  * A name the pattern accepts, in two words.
@@ -300,6 +327,7 @@ const USAGE_LINES: readonly string[] = [
   'generators:',
   '  lib <name> — a spliceable library under src/lib/ and its case file',
   '  source-adapter <id> — an adapter under src/sources/, cases and payload',
+  '  migration <name> — a hand-written migration under drizzle/ and its entry',
 ];
 
 // ---------------------------------------------------------------------------
@@ -1131,5 +1159,309 @@ describe('the payload a source-adapter run writes', () => {
   // file the adapter itself never saw.
   it('carries the key the case file beside it reads', () => {
     expect(Object.keys(ADAPTER_PAYLOAD_VALUE)).toContain(PAYLOAD_KEY_READ);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The pair a migration run writes
+// ---------------------------------------------------------------------------
+
+/**
+ * A name the pattern accepts, in two words.
+ *
+ * Hyphenated for the reason {@link EMITTED_NAME} is, and the casing
+ * step it exercises is a third one: a migration tag is
+ * underscore-separated where a command line is hyphenated, so a
+ * single word would agree with itself however that step behaved.
+ */
+const MIGRATION_NAME = 'sample-migration';
+
+/**
+ * What that migration is known by: the placeholder index the
+ * generator numbers with, then the name in a tag's own spelling.
+ */
+const MIGRATION_TAG = '9999_sample_migration';
+
+/** Where the stamped migration lands, relative to the target. */
+const MIGRATION_PATH = `drizzle/${MIGRATION_TAG}.sql`;
+
+/** Where the journal entry beside it lands. */
+const MIGRATION_ENTRY_PATH =
+  `drizzle/meta/${MIGRATION_TAG}.journal-entry.json`;
+
+/** Both, in the order the generator emits them. */
+const MIGRATION_PATHS: readonly string[] = [
+  MIGRATION_PATH,
+  MIGRATION_ENTRY_PATH,
+];
+
+/** The one migration emission every claim below reads. */
+const MIGRATION_EMITTED = emitInto(
+  MIGRATION_GENERATOR,
+  MIGRATION_NAME,
+  'accepted-migration',
+);
+
+/** Both, absolute, as a run under that target writes them. */
+const MIGRATION_ABSOLUTE_PATHS: readonly string[] = MIGRATION_PATHS
+  .map((path) => join(MIGRATION_EMITTED.targetDir, path));
+
+/** The migration that emission wrote, read back off the filesystem. */
+const MIGRATION_SQL = readFileSync(
+  join(MIGRATION_EMITTED.targetDir, MIGRATION_PATH),
+  'utf8',
+);
+
+/** Its lines, which two claims below read one at a time. */
+const MIGRATION_LINES: readonly string[] = MIGRATION_SQL.split('\n');
+
+/** The envelope it wrote beside it, read back and parsed. */
+const MIGRATION_ENVELOPE = JSON.parse(readFileSync(
+  join(MIGRATION_EMITTED.targetDir, MIGRATION_ENTRY_PATH),
+  'utf8',
+)) as Record<string, unknown>;
+
+/**
+ * The journal entry under that envelope's one key.
+ *
+ * Typed through a cast rather than left `unknown`, for the reason
+ * {@link ADAPTER_PAYLOAD_VALUE} is: the claims reading it would
+ * otherwise need one apiece. What holds it to the shape is the
+ * case below that compares it against the real journal.
+ */
+const MIGRATION_ENTRY = MIGRATION_ENVELOPE['entry'] as Record<string, unknown>;
+
+/**
+ * This package's own migration journal, read off disk.
+ *
+ * Resolved from this file's location rather than from the working
+ * directory, which is what lets the suite be launched from the
+ * package and from the repository root alike.
+ */
+const REAL_JOURNAL = JSON.parse(readFileSync(
+  fileURLToPath(new URL('../../drizzle/meta/_journal.json', import.meta.url)),
+  'utf8',
+)) as { readonly entries: readonly Record<string, unknown>[] };
+
+/** Every entry it holds, which the shape claims walk whole. */
+const REAL_JOURNAL_ENTRIES = REAL_JOURNAL.entries;
+
+/**
+ * One entry's shape: every key it writes, with the type of the
+ * value under it, sorted.
+ *
+ * Keys AND types, because either alone accepts something worth
+ * failing — a key set alone accepts an entry whose `when` is a
+ * string, and a type list alone accepts one whose keys are five
+ * other words. Sorted, because JSON key order is not part of what
+ * an entry means, and a drizzle release that reordered them would
+ * otherwise redden a case over a file that still reads correctly.
+ *
+ * @param entry - A journal entry, real or emitted.
+ * @returns One string per key, in a stable order.
+ */
+function shapeOf(entry: Record<string, unknown>): readonly string[] {
+  return Object.entries(entry)
+    .map(([key, value]) => `${key}: ${typeof value}`)
+    .sort();
+}
+
+/**
+ * The literal a migration file is split on.
+ *
+ * Written out here rather than imported, and for a stronger reason
+ * than {@link USAGE_LINES} has: this string is drizzle's, not this
+ * package's. Its migrator splits a file on this and on nothing
+ * else, so a generator that drifted into another spelling emits
+ * one long statement — and a case comparing the command's own
+ * constant against itself would agree with the drift.
+ */
+const BREAKPOINT_MARKER = '--> statement-breakpoint';
+
+/** What splitting the emitted migration on it yields. */
+const MIGRATION_CHUNKS: readonly string[] =
+  MIGRATION_SQL.split(BREAKPOINT_MARKER);
+
+/**
+ * A statement opening at the start of a line.
+ *
+ * Anchored, which is the whole of what it is for: an unanchored
+ * pattern matches a statement that has been commented out exactly
+ * as happily as one that will run. Global, which `matchAll`
+ * requires.
+ */
+const STATEMENT_OPENER = /^DO \$\$$/gmu;
+
+/**
+ * How many statements a chunk opens at the start of a line.
+ *
+ * @param chunk - One piece of the split migration.
+ * @returns The number of anchored openers it carries.
+ */
+function openersIn(chunk: string): number {
+  return [...chunk.matchAll(STATEMENT_OPENER)].length;
+}
+
+/**
+ * The journal the migrator reads, written into the emitted tree.
+ *
+ * The one move the entry's own header asks for, made here: the
+ * emitted `entry` pasted into an `entries` array, under the real
+ * journal's own header keys. Nothing else about the tree is
+ * touched, so what the reader below is pointed at is what the
+ * generator wrote plus the step it says to take.
+ */
+writeFileSync(
+  join(MIGRATION_EMITTED.targetDir, 'drizzle/meta/_journal.json'),
+  JSON.stringify({ ...REAL_JOURNAL, entries: [MIGRATION_ENTRY] }, null, 2),
+  'utf8',
+);
+
+/** What drizzle's own migration reader makes of that tree. */
+const READ_BACK = readMigrationFiles({
+  migrationsFolder: join(MIGRATION_EMITTED.targetDir, 'drizzle'),
+});
+
+describe('the pair a migration run writes', () => {
+  // The layout, as two paths under the target. The entry is
+  // emitted with the migration rather than left to whoever writes
+  // one, because a `.sql` file no journal entry names is a file
+  // the migrator never opens — one that looks applied and has
+  // never run.
+  it('writes the migration and its journal entry, and nothing else', () => {
+    expect(MIGRATION_EMITTED.written).toStrictEqual(MIGRATION_ABSOLUTE_PATHS);
+  });
+
+  // The tag is the load-bearing string of the whole shape: it
+  // names the file AND is what the entry carries, and the migrator
+  // resolves the second into the first. A generator spelling one
+  // with hyphens and the other with underscores emits a pair that
+  // makes the migrator throw before it applies anything.
+  it('names the file for the tag the entry beside it carries', () => {
+    expect(`drizzle/${String(MIGRATION_ENTRY['tag'])}.sql`)
+      .toBe(MIGRATION_PATH);
+  });
+
+  // Two statements, one marker. Neither half implies the other: a
+  // second marker would make this a three-statement file with an
+  // empty statement in the middle, and none at all would join the
+  // pair into one string the simple query protocol runs without
+  // ever complaining.
+  it('separates its two statements with exactly one marker', () => {
+    expect(MIGRATION_CHUNKS.map((chunk) => chunk.trim() !== ''))
+      .toStrictEqual([true, true]);
+  });
+
+  // On a line of its own, because the migrator splits on the
+  // string wherever it sits. A marker trailing a line of SQL
+  // splits mid-statement, and one quoted inside a comment splits
+  // the header off as a statement — which is why the emitted
+  // header explains the marker without ever writing it.
+  it('writes that marker on a line of its own, once', () => {
+    expect(MIGRATION_LINES.filter((line) => line === BREAKPOINT_MARKER))
+      .toStrictEqual([BREAKPOINT_MARKER]);
+  });
+
+  // The claim splitting cannot make. Counting pieces counts
+  // pieces, so a statement commented out leaves the count at two
+  // while the database gets one — and that is the failure shape
+  // with no signal anywhere: the migrator records the migration
+  // applied, postgres does nothing, and every scan over the file
+  // still finds every string it looks for.
+  it('leaves a statement uncommented in each of them', () => {
+    expect(MIGRATION_CHUNKS.map((chunk) => openersIn(chunk)))
+      .toStrictEqual([1, 1]);
+  });
+
+  // Where that hazard comes from, closed at the source:
+  // drizzle-kit's own custom template ends mid-line-comment, so an
+  // append onto one lands inside the comment. A file ending past
+  // its last statement, with a newline, has nothing an append can
+  // land inside.
+  it('ends with a newline, past its last statement', () => {
+    const written = MIGRATION_LINES.filter((line) => line.trim() !== '');
+    const terminated = MIGRATION_SQL.endsWith('\n');
+
+    expect({ terminated, last: written.at(-1) })
+      .toStrictEqual({ terminated: true, last: '$$;' });
+  });
+});
+
+describe('that pair, read back by the migrator itself', () => {
+  // The resolving claim, and what this section is really for.
+  // Every claim above reads the file as text; this hands the tree
+  // to `drizzle-orm`'s own reader, which resolves the entry's tag
+  // into a filename, throws when it names nothing, and splits what
+  // it finds there on the marker. Two statements out of it is the
+  // pair being a pair, decided by the thing that will decide it in
+  // production rather than by a pattern agreeing with one.
+  it('resolves the entry to the file and splits it in two', () => {
+    expect(READ_BACK.map((migration) => migration.sql.length))
+      .toStrictEqual([2]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The journal entry that run writes beside it
+// ---------------------------------------------------------------------------
+
+describe('the journal entry a migration run writes', () => {
+  // A header beside the entry rather than inside it, for the
+  // reason the payload fixture carries one that way: what goes
+  // into the journal is the `entry` value exactly as it stands
+  // here, and a `_readme` written into it would be a key the
+  // journal does not have.
+  it('writes a header beside the entry rather than inside it', () => {
+    expect(Object.keys(MIGRATION_ENVELOPE)).toStrictEqual(['_readme', 'entry']);
+  });
+
+  // The shape claim, against this package's real journal rather
+  // than against a copy of one. Walked over every entry that
+  // journal holds, with the guard in front that stops an emptied
+  // `entries` array making it vacuously true — two empty lists
+  // compare equal, and this is the only case reading them.
+  it('writes an entry shaped like every one the journal holds', () => {
+    expect(REAL_JOURNAL_ENTRIES.length).toBeGreaterThan(0);
+
+    const shapes = REAL_JOURNAL_ENTRIES.map((entry) => shapeOf(entry));
+
+    expect(shapes)
+      .toStrictEqual(REAL_JOURNAL_ENTRIES.map(() => shapeOf(MIGRATION_ENTRY)));
+  });
+
+  // The two members of that shape whose VALUE is a claim rather
+  // than a placeholder. `version` is the journal format, and an
+  // entry written on a format the journal has left is one drizzle
+  // reads differently; `breakpoints` is what it writes beside
+  // every migration it generates. Both read off the real journal
+  // and compared against the emitted entry, so a release moving
+  // either reddens here rather than in a migration.
+  it('carries the format and the flag those entries carry', () => {
+    const pinned = REAL_JOURNAL_ENTRIES
+      .map((entry) => [entry['version'], entry['breakpoints']]);
+
+    expect(pinned).toStrictEqual(REAL_JOURNAL_ENTRIES
+      .map(() => [MIGRATION_ENTRY['version'], MIGRATION_ENTRY['breakpoints']]));
+  });
+
+  // And the two whose value is a placeholder, asserted as the
+  // placeholders they are. Neither is decidable by a generator
+  // that reaches no filesystem and reads no clock — the next index
+  // is a property of the tree this will land in, the timestamp of
+  // the moment it lands — so what they must not be is plausible.
+  // The timestamp is the epoch, which is no time any migration was
+  // written, and the index is one no tree can already hold.
+  it('leaves the index and the timestamp visibly unfilled', () => {
+    expect({ idx: MIGRATION_ENTRY['idx'], when: MIGRATION_ENTRY['when'] })
+      .toStrictEqual({ idx: 9999, when: 0 });
+  });
+
+  // That index is spelled twice — once under `idx` and once inside
+  // the tag — and renumbering has to move both. The generator
+  // writing them from one constant is what leaves an operator one
+  // number to change rather than two to keep in step.
+  it('spells that index inside the tag as well', () => {
+    expect(MIGRATION_ENTRY['tag'])
+      .toBe(`${String(MIGRATION_ENTRY['idx'])}_sample_migration`);
   });
 });

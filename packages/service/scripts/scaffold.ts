@@ -133,6 +133,87 @@ const SOURCE_DIR = 'src/sources';
 const PAYLOAD_SUFFIX = '-payload.json';
 
 /**
+ * Where a migration lands, relative to a package root.
+ *
+ * The directory `drizzle.config.ts` names as its `out`, and where
+ * `drizzle-kit` writes the migrations it generates. A hand-written
+ * one is not a file beside that tree but a full member of it, which
+ * is what the journal entry below is for.
+ */
+const MIGRATION_DIR = 'drizzle';
+
+/** Where the journal and the snapshots sit, under that directory. */
+const MIGRATION_META_DIR = `${MIGRATION_DIR}/meta`;
+
+/**
+ * The journal: the list the migrator walks, and the only thing that
+ * makes a `.sql` file under `drizzle/` a migration at all.
+ *
+ * A constant because the emitted entry's own header points a reader
+ * at it, so the path this generator writes into a file and the path
+ * it lays its files out around are one decision.
+ */
+const JOURNAL_PATH = `${MIGRATION_META_DIR}/_journal.json`;
+
+/**
+ * What an emitted journal entry's filename ends in, after the tag.
+ *
+ * The entry is emitted as a file of its own rather than spliced
+ * into {@link JOURNAL_PATH}, because splicing is editing and
+ * {@link writeScaffold} writes nothing it would have to overwrite.
+ * So the entry lands as an envelope holding itself and the
+ * instructions for moving it, and what reads it is a person.
+ */
+const JOURNAL_ENTRY_SUFFIX = '.journal-entry.json';
+
+/**
+ * The index an emitted migration is numbered with.
+ *
+ * A placeholder, chosen to be one no tree can already hold: drizzle
+ * numbers from `0000` upwards and this package is in the low single
+ * digits, so this is unmistakable in a listing and sorts to the end
+ * of one. What it stands in for is not decidable here — the next
+ * index is a property of the `drizzle/` tree and a generator
+ * reaches no filesystem — so both emitted files say to renumber,
+ * and the number they carry meanwhile cannot be read as an answer.
+ *
+ * A string, because it is first of all a filename component. It is
+ * interpolated unquoted into the entry below, where `idx` is a
+ * number, so the two spellings of one index stay one constant.
+ */
+const MIGRATION_INDEX = '9999';
+
+/**
+ * The journal format this package is on, as every entry in
+ * {@link JOURNAL_PATH} carries it.
+ *
+ * A string rather than a number, which is how drizzle writes it.
+ * Pinned here so an emitted entry is the shape the journal already
+ * holds, and held against the real journal by
+ * `tests/scripts/scaffold.test.ts` — so a drizzle release that
+ * moved the format reddens there rather than in a migration
+ * somebody has just written.
+ */
+const JOURNAL_VERSION = '7';
+
+/**
+ * The one thing that splits a migration into statements.
+ *
+ * Measured in `drizzle-orm/migrator.js`: the migrator reads the
+ * file whole and splits it on this literal and on nothing else. Two
+ * consequences the emitted file is arranged around. A `;` inside a
+ * dollar-quoted body needs no escaping, because it is not a
+ * splitter; and a second statement with no marker in front of it
+ * reaches the driver joined to the first, which the simple query
+ * protocol runs without complaint.
+ *
+ * The journal's `breakpoints` flag does not gate this. The split
+ * happens before the flag is looked at, and the postgres dialect
+ * iterates the already-split list without ever reading it.
+ */
+const STATEMENT_BREAKPOINT = '--> statement-breakpoint';
+
+/**
  * The identifier a file stem is spelled as in code.
  *
  * `yaml-lite` becomes `yamlLite`. The stem is already known to match
@@ -166,6 +247,40 @@ function toPascalCase(name: string): string {
   const camel = toCamelCase(name);
 
   return camel.slice(0, 1).toUpperCase() + camel.slice(1);
+}
+
+/**
+ * The spelling a file stem takes inside a migration tag.
+ *
+ * `category-depth-guard` becomes `category_depth_guard`. Every tag
+ * under `drizzle/` is underscore-separated, drizzle's own generated
+ * names included, and a name reaching here already matches
+ * {@link NAME_PATTERN} — so hyphens are the only separator there
+ * is and nothing else has to be recognised.
+ *
+ * @param name - The file stem, as the command line gave it.
+ * @returns The same words joined by underscores.
+ */
+function toSnakeCase(name: string): string {
+  return name.split('-').join('_');
+}
+
+/**
+ * What a migration is known by: its index and its name, as one
+ * word.
+ *
+ * The load-bearing string of the whole shape. It names the `.sql`
+ * file, the journal entry carries it, and the migrator resolves the
+ * second into the first — an entry whose tag names no file makes
+ * `bun run db:migrate` throw before it applies anything at all.
+ * Built once here, so the file this generator writes and the tag
+ * the entry beside it claims cannot disagree.
+ *
+ * @param name - The file stem, as the command line gave it.
+ * @returns The tag, index and all.
+ */
+function migrationTag(name: string): string {
+  return `${MIGRATION_INDEX}_${toSnakeCase(name)}`;
 }
 
 /**
@@ -686,6 +801,192 @@ const SOURCE_ADAPTER_GENERATOR: ScaffoldGenerator = {
 };
 
 /**
+ * The migration skeleton, as text.
+ *
+ * Two statements with one {@link STATEMENT_BREAKPOINT} between
+ * them, which is the arrangement the whole shape exists for: a
+ * hand-written migration is almost always an object and the thing
+ * that attaches it, and the marker between the two is what nobody
+ * remembers. Emitting one statement would emit the case that needs
+ * no marker and leave the case that does to memory.
+ *
+ * Both statements raise, for the reason {@link libSource} gives
+ * about its throwing export. A placeholder that applied cleanly
+ * would be indistinguishable from a migration that had done
+ * something, and the migrator would record it as applied.
+ *
+ * The header quotes no marker. A comment carrying that literal
+ * splits the file exactly as the marker does, because the migrator
+ * splits on the string and knows nothing about comments — so a
+ * header explaining the marker by quoting it would silently make
+ * this a three-statement file.
+ *
+ * Newline-terminated, unlike drizzle-kit's own `--custom` template,
+ * which ends mid-line-comment. An append onto that template lands
+ * inside the comment, where it is applied by nothing, reported by
+ * nothing and still found by every scan that greps the file for it.
+ *
+ * @param name - The migration's file stem.
+ * @returns The whole of `drizzle/<tag>.sql`.
+ */
+function migrationSource(name: string): string {
+  const tag = migrationTag(name);
+
+  return `-- ${tag} -- one sentence saying what this does.
+--
+-- Hand-written on purpose, which is the only reason this shape
+-- exists: DDL that src/db/schema.ts cannot express -- a trigger, a
+-- function, a COMMENT ON -- and that bun run db:generate will
+-- therefore never write, never diff, and never propose dropping.
+--
+-- Scaffolded by \`bun run scaffold migration ${name} <dir>\`,
+-- and a scaffold until somebody replaces it. Both statements
+-- below raise, so a tree still carrying this file fails its own
+-- migration and names it; one that succeeded quietly would be
+-- indistinguishable from a migration that had done something.
+--
+-- THREE THINGS THIS FILE IS NOT YET, none of them decidable by a
+-- generator that reaches no filesystem and reads no clock.
+--
+-- The index. ${MIGRATION_INDEX} is a placeholder, not the next number.
+-- Renumber the filename and the tag in the entry beside it
+-- together: the migrator resolves the tag into the filename, and
+-- throws when it finds nothing there.
+--
+-- The timestamp. The entry's \`when\` is 0, which is no time any
+-- migration was written.
+--
+-- The snapshot. drizzle-kit generate --custom writes three
+-- artifacts where this generator writes two: ${MIGRATION_META_DIR}/ also
+-- wants a <nnnn>_snapshot.json, which is the previous snapshot with
+-- a fresh id chained onto it. Left absent rather than guessed --
+-- absent is loud, where a wrong one is a generated diff proposing
+-- to drop everything the snapshot does not model.
+--
+-- Two rules about the text below, both read off the migrator
+-- rather than assumed. It splits this file on the marker between
+-- the statements and on nothing else: a semicolon inside a
+-- dollar-quoted body needs no escaping, a statement added with no
+-- marker in front of it reaches the driver joined to its
+-- neighbour, and a comment quoting that marker splits the file
+-- exactly as the marker does. And the entry's breakpoints flag
+-- gates none of it -- the split happens first, and the postgres
+-- dialect never reads the flag at all.
+
+-- The object. A function, a view, a constraint the schema DSL has
+-- no word for. One statement, however many semicolons its body
+-- carries.
+DO $$
+BEGIN
+\tRAISE EXCEPTION 'migration ${tag} is a scaffold'
+\t\tUSING HINT = 'Replace both statements with the DDL this '
+\t\t\t|| 'migration is for, or delete it and its journal entry.';
+END;
+$$;
+${STATEMENT_BREAKPOINT}
+-- What attaches it. A trigger on a table, a grant, a comment: the
+-- half that gives the object above teeth, and the reason a
+-- hand-written migration usually has two statements rather than
+-- one. Match its idempotency to the statement above -- a CREATE OR
+-- REPLACE followed by a bare CREATE re-applies halfway, and then
+-- dies.
+DO $$
+BEGIN
+\tRAISE EXCEPTION 'migration ${tag} is a scaffold'
+\t\tUSING HINT = 'The second statement is here so the marker '
+\t\t\t|| 'above it is, which is all that splits this file.';
+END;
+$$;
+`;
+}
+
+/**
+ * The journal entry that lands beside a scaffolded migration.
+ *
+ * An envelope, for the reason {@link sourceAdapterPayload} is one:
+ * a file met on its own says nothing about which path owns it, and
+ * a header written into the entry would be a key the journal does
+ * not have. So the header sits beside the entry rather than inside
+ * it, and what goes into `_journal.json` is the `entry` value
+ * exactly as it stands here.
+ *
+ * A file rather than an edit to the journal, because an edit is an
+ * overwrite and {@link writeScaffold} refuses those — which is not
+ * a limitation worked around here but the rule that makes a rerun
+ * safe. Moving the entry is a person's, and the header says so.
+ *
+ * @param name - The migration's file stem.
+ * @returns The whole of `drizzle/meta/<tag>.journal-entry.json`.
+ */
+function migrationJournalEntry(name: string): string {
+  const tag = migrationTag(name);
+
+  return `{
+  "_readme": [
+    "JOURNAL ENTRY for \`${MIGRATION_DIR}/${tag}.sql\`.",
+    "",
+    "Read by nothing. \`${JOURNAL_PATH}\` is the list the",
+    "migrator walks, and a .sql file no entry there names is one it",
+    "never opens -- so this envelope holds the entry that migration",
+    "needs, and moving it is a person's.",
+    "",
+    "Paste \`entry\` into that journal's \`entries\` array, last, and",
+    "delete this file. Then fix what a generator could not decide:",
+    "\`idx\` becomes the next index after the entry above it, \`when\`",
+    "becomes a millisecond timestamp, and \`tag\` is renumbered to",
+    "match -- along with the .sql file itself, because the migrator",
+    "resolves the tag into that filename and throws when it finds",
+    "nothing there.",
+    "",
+    "\`breakpoints\` is true, as every entry in that journal is. On",
+    "postgres it is inert: the migrator splits a migration on the",
+    "statement marker before this flag is looked at, and the",
+    "postgres dialect never reads it. It is written true anyway, so",
+    "the entry is the shape the journal already holds."
+  ],
+  "entry": {
+    "idx": ${MIGRATION_INDEX},
+    "version": "${JOURNAL_VERSION}",
+    "when": 0,
+    "tag": "${tag}",
+    "breakpoints": true
+  }
+}
+`;
+}
+
+/**
+ * The generator behind `scaffold migration <name> <dir>`.
+ *
+ * The pair rather than the `.sql` alone, because a migration file
+ * with no journal entry is not a migration: the migrator walks the
+ * journal, so a file no entry names is one it never opens, and a
+ * generator stopping at the SQL would emit something that looks
+ * applied and has never run.
+ *
+ * Neither half is complete, and both say which parts are missing.
+ * The index, the timestamp and the snapshot are all properties of
+ * the `drizzle/` tree this will land in, and a generator that is a
+ * pure function of a name knows none of them.
+ */
+const MIGRATION_GENERATOR: ScaffoldGenerator = {
+  name: 'migration',
+  operand: 'name',
+  summary: 'a hand-written migration under drizzle/ and its entry',
+  generate: (name) => [
+    {
+      path: `${MIGRATION_DIR}/${migrationTag(name)}.sql`,
+      contents: migrationSource(name),
+    },
+    {
+      path: `${MIGRATION_META_DIR}/${migrationTag(name)}`
+        + JOURNAL_ENTRY_SUFFIX,
+      contents: migrationJournalEntry(name),
+    },
+  ],
+};
+
+/**
  * Every generator this command can run, keyed by the word an
  * operator types.
  *
@@ -703,6 +1004,7 @@ const SOURCE_ADAPTER_GENERATOR: ScaffoldGenerator = {
 export const GENERATORS: Readonly<Record<string, ScaffoldGenerator>> = {
   [LIB_GENERATOR.name]: LIB_GENERATOR,
   [SOURCE_ADAPTER_GENERATOR.name]: SOURCE_ADAPTER_GENERATOR,
+  [MIGRATION_GENERATOR.name]: MIGRATION_GENERATOR,
 };
 
 /**
