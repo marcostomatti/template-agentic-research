@@ -532,8 +532,8 @@ wrong for is the one where relaunching is not the edit and spawning
 is.
 
 `pretest` carries a limit of its own. It runs for the `test` script
-and for no other, so `test:live`, `test:watch` and a bare `vitest run`
-read whatever `workflows/dist/` happens to hold. What stops that being
+and for no other, so `test:live`, `test:parity`, `test:watch` and a
+bare `vitest run` read whatever `workflows/dist/` happens to hold. What stops that being
 silent is the reader every check over built output goes through. It
 refuses a tree that yielded no artifact — absent, or there and empty —
 naming `bun run build:workflows` as what writes that directory, and it

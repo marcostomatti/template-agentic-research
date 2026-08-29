@@ -341,6 +341,33 @@ added there as unrun until somebody runs it. `tests/live/live-n8n.ts`
 carries the rest — what a skipped-but-collected case still reports, and the
 one place the seam can be broken without touching the gate.
 
+A THIRD seam sits beside those two, in `tests/parity/`, gated the same way
+for a different reason. `bun run test:parity` runs
+`tests/parity/*.parity.test.ts`, where a file drives a ported library and
+the origin it was ported from over one set of neutral fixtures and diffs
+the answers. `describePortParity`, in `tests/helpers/port-parity.ts`, keys
+those files to `AR_PORT_PARITY_ORIGIN` — the origin checkout root, which is
+an operator's own local filesystem path and is recorded in no tracked file
+here — the harness TSDoc carries why. So this gate is armed unlike EITHER
+live one. `test:live` opens the Postgres gate from its own script
+definition; nothing in this package sets the parity variable, no compose
+service supplies it and no default stands in for it, so only an operator
+export arms it. A run with it unset reports the parity files SKIPPING, and
+that is the steady state of this command, of `bun run test` and of CI
+alike, not a broken setup.
+
+The arming is therefore per-MACHINE rather than per-command, which is the
+half that catches a reader out. `vitest.config.ts` declares no `include`
+override, so `tests/parity/` matches the default glob and a plain
+`bun run test` collects those files too: on a machine whose shell profile
+exports the variable, the default suite reaches an origin checkout outside
+this repository and CI's run does not, off the same tree. The closed-gate
+reading has to be FORCED there rather than observed —
+`env -u AR_PORT_PARITY_ORIGIN bun run test:parity` is the one command that
+shows the skip, and it is how a change to the gate itself gets read.
+Measured both ways at the seam's first file: 8 passed armed, 8 skipped
+unarmed, `Test Files 1 skipped (1)` naming the file rather than a count.
+
 Test files open with a `/** ... */` header stating what the file PROVES (not
 what it calls), and separate regions with `// ---` banner comments 78 chars
 wide. Table-driven suites carry their own anti-vacuity guards — pair samples
@@ -389,11 +416,11 @@ runs `bun scripts/build-workflows.ts`, so the tree is written in a bun
 process of its own before any worker opens it. bun keys that hook to the
 script NAME rather than to the launcher: it fires for the `test` script —
 `bun run test`, a path appended to it, and the root fan-out that runs the
-same script — and for no other. `test:live`, `test:watch` and a bare
-`bun x vitest run <path>` all read whatever the directory happens to hold,
-so `bun run test <path>` and `bun x vitest run <path>` are two ways of
-running one file that differ in exactly this. Rebuild by hand before reading
-a built artifact for any purpose.
+same script — and for no other. `test:live`, `test:parity`, `test:watch`
+and a bare `bun x vitest run <path>` all read whatever the directory
+happens to hold, so `bun run test <path>` and `bun x vitest run <path>` are
+two ways of running one file that differ in exactly this. Rebuild by hand
+before reading a built artifact for any purpose.
 
 Forgetting is loud rather than silent, but only in the run log.
 `loadBuiltWorkflows` refuses a tree that yielded no artifact, naming the
