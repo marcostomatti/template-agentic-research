@@ -9,16 +9,19 @@
     "build": "vite build",
     "preview": "vite preview",
     "check-types": "tsc --noEmit",
-    "lint": "eslint ./src",
-    "lint:fix": "eslint ./src --fix",
-    "test": "echo '@ar/web: no tests yet'"
+    "lint": "eslint src tests *.ts *.mjs",
+    "lint:fix": "eslint src tests *.ts *.mjs --fix",
+    "pretest": "bun run --filter '@ar/ui' build",
+    "test": "vitest run && playwright test"
   },
   "dependencies": {
     "@ar/ui": "workspace:*",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "react-router": "^7.18.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@tailwindcss/vite": "^4",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
@@ -28,6 +31,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "tailwindcss": "^4",
-    "vite": "^8.0.13"
+    "vite": "^8.0.13",
+    "vitest": "^4.1.7"
   }
 }

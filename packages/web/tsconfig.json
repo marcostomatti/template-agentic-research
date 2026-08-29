@@ -11,6 +11,6 @@
     "noImplicitOverride": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "*.ts", "*.tsx", "*.mjs"],
+  "include": ["src", "tests", "*.ts", "*.tsx", "*.mjs"],
   "exclude": ["node_modules", "dist"]
 }

@@ -3,7 +3,9 @@ name: Front
 # Frontend pipeline: @ar/ui + @ar/web. Two jobs:
 #
 # - checks: hosted runner — lint, types, unit tests + bundle guard, library
-#   build, storybook compile, web build.
+#   build, storybook compile, web build, and @ar/web's own two-runner
+#   suite (vitest over its pure modules, then a chromium Playwright smoke
+#   suite against the assembled shell).
 # - visual: pixel regression on a self-hosted runner. OFF BY DEFAULT — it
 #   does nothing until the repository Actions variable VISUAL_CI is set to
 #   "enabled" (`gh variable set VISUAL_CI --body enabled`). The activation
@@ -97,10 +99,41 @@ jobs:
         run: bun run build:storybook
 
       # @ar/web resolves @ar/ui through its dist exports — built in the
-      # "Build @ar/ui" step above and refreshed by the test step's pretest.
+      # "Build @ar/ui" step above and refreshed by the @ar/ui test step's
+      # pretest. Cheap, so it runs before the browser download below: a
+      # broken bundle should not cost a Chromium install first.
       - name: Web build
         working-directory: packages/web
         run: bun run build
+
+      # The same 1.61.1 the visual job installs, RESOLVED rather than
+      # spelled: @ar/web pins @playwright/test and it dedupes onto the
+      # playwright/playwright-core @ar/ui pins, so one download serves
+      # both packages and a future bump moves the pin and this step
+      # together. The working-directory is load-bearing, not cosmetic —
+      # bun's isolated linker leaves the repo root with no playwright
+      # binary to resolve, and `bun x playwright` there silently fetches
+      # the registry's latest instead — measured with `install --dry-run`,
+      # which names chromium v1234 at the root against the v1228 both
+      # packages resolve, i.e. a browser build nothing under test asked
+      # for. `bun x`, not `bunx`: the repo-wide form.
+      #
+      # `--with-deps` where the visual job needs none: that runner's OS
+      # libraries are a one-time operator install (see
+      # packages/ui/docs/ci/), while a hosted runner is ephemeral and
+      # starts from whatever the image happens to ship.
+      - name: Install pinned Playwright browser
+        working-directory: packages/web
+        run: bun x playwright install --with-deps chromium
+
+      # Two runners behind one script — `vitest run && playwright test`,
+      # fronted by a pretest that rebuilds @ar/ui so the suite is
+      # self-contained. The `&&` short-circuits, so a red vitest means the
+      # browser suite never ran at all: its absence from the log is not
+      # evidence that it passed.
+      - name: Web tests (unit + e2e)
+        working-directory: packages/web
+        run: bun run test
 
   visual:
     # Gated on the untracked VISUAL_CI variable; same-repo events only —
