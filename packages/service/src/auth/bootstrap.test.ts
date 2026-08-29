@@ -3,14 +3,18 @@
  * in-memory {@link AuthStore} and the real argon2 primitives rather
  * than over stubs of them.
  *
- * Two claims. The first is what a boot against an empty table
+ * Three claims. The first is what a boot against an empty table
  * leaves behind: one row, carrying the configured login name, the
  * namespaced subject derived from it, and a hash the configured
  * password verifies against and a different password does not. The
- * second is what a boot against a store that refuses does: the
- * dependency's `start()` rejects with the store's own error and the
- * dependency lands in `error`, which is the state `createService`
- * reads when it aborts a boot and names the dependency.
+ * second is what the boots AFTER it leave, which is the restart
+ * idempotency this module upserts in order to have: three
+ * consecutive runs leave ONE row, whose `sub` and `created_at` are
+ * still the ones the first run wrote. The third is what a boot
+ * against a store that refuses does: the dependency's `start()`
+ * rejects with the store's own error and the dependency lands in
+ * `error`, which is the state `createService` reads when it aborts
+ * a boot and names the dependency.
  *
  * The store is the in-memory implementation from
  * `tests/helpers/memory-auth-store.ts` — a second implementation of
@@ -39,6 +43,15 @@
  * store keeps a clock of its own and is unaffected. `ttlSeconds` has
  * no equivalent trap available, so it is a marker value.
  *
+ * THE STORE'S CLOCK IS MOVED BY HAND in the idempotency case, which
+ * is what makes its two timestamp readings separable. Behind the
+ * wall clock the three writes land at whatever instants three argon2
+ * hashes happen to take, so `created_at` standing still and
+ * `updated_at` moving would both be facts about how long the run
+ * took. Moved by hand, the three expected instants are spelled out,
+ * and a store that quietly ignored the second and third runs is a
+ * red `updated_at` rather than a green everything.
+ *
  * Anti-vacuity. The insert case's password assertions are a pair:
  * the configured password must verify and a different one must not,
  * because a hash that accepted everything would pass the first
@@ -51,23 +64,51 @@
  * free, since the row it asserts is absent before `start()` and
  * present after is what says construction writes nothing.
  *
- * The grid, measured over these two cases rather than predicted.
- * Storing the plaintext instead of the hash reddens ONE, the insert
- * case. Dropping the subject namespace reddens ONE, the same case.
+ * The idempotency case needs two controls of its own, because an
+ * unchanged `created_at` is exactly what a store that dropped the
+ * second and third runs would answer. One is the `updated_at`
+ * reading above. The other is independent of the clock: argon2
+ * salts at random, so three hashes of one password are three
+ * different strings, and asserting they are is what says each run
+ * hashed and wrote — which is also the only pin on the module's
+ * remark that it hashes whether or not the stored hash would have
+ * verified.
+ *
+ * The grid, re-measured over all THREE cases rather than carried
+ * forward: a leg's split is a property of the file's own case list,
+ * so appending a case falsifies every number in it. Storing the
+ * plaintext instead of the hash reddens TWO, both `bootstrapAuthUser`
+ * cases. Dropping the subject namespace reddens the same two.
  * Swallowing the store's rejection inside `onStart` reddens ONE, the
  * refusal case. Running the bootstrap at construction rather than on
  * start reddens ONE, the refusal case again — through the control
  * at its end, which is what says that control is load-bearing
  * rather than decorative. Reading `deps.now()` in the bootstrap
- * reddens BOTH, since every call in the file is made under the
+ * reddens all THREE, since every call in the file is made under the
  * throwing clock.
+ *
+ * Two further legs are on the FAKE rather than on the module, and
+ * they are the only ones that reach the idempotency claim: the
+ * upsert asymmetry it is about lives in the store, so no mutation of
+ * `bootstrap.ts` can move it. Rewriting `created_at` on conflict
+ * reddens that case at the `created_at` assertion, and dropping the
+ * `updated_at` rewrite reddens it at the control instead — one leg
+ * per reading, which is what says the control is not a restatement
+ * of the claim. Both move a file the rest of the auth suite shares,
+ * so both were run against this file alone.
  */
 import type { AuthDeps } from './service.js';
 import type { AuthStore, AuthUserCredential } from './store.js';
+import type {
+  MemoryAuthUserRow,
+} from '../../tests/helpers/memory-auth-store.js';
 
 import { describe, expect, it } from 'vitest';
 
-import { createMemoryAuthStore } from '../../tests/helpers/memory-auth-store.js';
+import {
+  createMemoryAuthStore,
+  createMovableClock,
+} from '../../tests/helpers/memory-auth-store.js';
 
 import {
   bootstrapAuthUser,
@@ -98,6 +139,30 @@ const WRONG_PASSWORD = 'bootstrap-passwoRd';
 const REFUSAL = 'memory auth store: planted upsert refusal';
 
 /**
+ * When the first of the idempotency case's three runs happens.
+ *
+ * The three instants are spelled out rather than computed from
+ * {@link RUN_GAP_SECONDS}, for the reason {@link EXPECTED_SUBJECT}
+ * is: an expectation built the way the value was built agrees with
+ * whatever the value turns out to be.
+ */
+const FIRST_RUN_ISO = '2026-01-02T03:04:05.000Z';
+
+/** When the second happens, one gap after the first. */
+const SECOND_RUN_ISO = '2026-01-02T03:05:05.000Z';
+
+/** When the third happens, one gap after that. */
+const THIRD_RUN_ISO = '2026-01-02T03:06:05.000Z';
+
+/**
+ * How far the clock moves between two consecutive runs.
+ *
+ * Any non-zero gap would do. A whole minute keeps the three
+ * instants above readable as the same clock at three times.
+ */
+const RUN_GAP_SECONDS = 60;
+
+/**
  * What the bootstrap is configured with in every case.
  */
 const CREDENTIALS = { user: USER, password: PASSWORD };
@@ -122,6 +187,30 @@ const UNREAD_DEPS: AuthDeps = {
   },
   ttlSeconds: Number.NaN,
 };
+
+/**
+ * The one row a listing holds, narrowed.
+ *
+ * Narrowing rather than a non-null assertion, so a run that left
+ * the wrong number of rows fails here, naming the count, instead of
+ * as a `TypeError` on whichever field the next line reads.
+ *
+ * @param users - What {@link MemoryAuthStore.listUsers} answered.
+ * @returns That row.
+ */
+function soleUserRow(
+  users: readonly MemoryAuthUserRow[],
+): MemoryAuthUserRow {
+  const [row] = users;
+
+  if (users.length !== 1 || row === undefined) {
+    throw new Error(
+      `expected exactly one auth_users row, found ${users.length}`,
+    );
+  }
+
+  return row;
+}
 
 // ---------------------------------------------------------------------------
 // bootstrapAuthUser
@@ -178,6 +267,79 @@ describe('bootstrapAuthUser', () => {
     expect(row.passwordHash).not.toBe(PASSWORD);
     expect(JSON.stringify(row)).not.toContain(PASSWORD);
     expect(JSON.stringify(row)).toContain(USER);
+  });
+
+  it('keeps one row, sub and created_at, over three runs', async () => {
+    // ONE clock, moved by hand between the runs. Behind the wall
+    // clock the three writes land at whatever instants three argon2
+    // hashes happen to take, and both timestamp claims below become
+    // readings of the run rather than of the upsert.
+    const clock = createMovableClock(new Date(FIRST_RUN_ISO));
+    const store = createMemoryAuthStore({ now: clock.now });
+
+    await bootstrapAuthUser(store, UNREAD_DEPS, CREDENTIALS);
+
+    const afterFirst = store.listUsers();
+
+    clock.advanceSeconds(RUN_GAP_SECONDS);
+    await bootstrapAuthUser(store, UNREAD_DEPS, CREDENTIALS);
+
+    const afterSecond = store.listUsers();
+
+    clock.advanceSeconds(RUN_GAP_SECONDS);
+    await bootstrapAuthUser(store, UNREAD_DEPS, CREDENTIALS);
+
+    const afterThird = store.listUsers();
+    const runs = [afterFirst, afterSecond, afterThird];
+
+    // The criterion's first half: a restart leaves one credential
+    // rather than one per boot. A bootstrap that inserted instead of
+    // upserting reads as 1, 2, 3 here.
+    expect(runs.map((users) => users.length)).toStrictEqual([1, 1, 1]);
+
+    const rows = runs.map(soleUserRow);
+
+    // Its second half. The subject is spelled out rather than taken
+    // off the first row, so a run proposing some other subject that
+    // the store then discarded is not read as a bootstrap that
+    // namespaced correctly all three times.
+    expect(rows.map((row) => row.sub)).toStrictEqual([
+      EXPECTED_SUBJECT,
+      EXPECTED_SUBJECT,
+      EXPECTED_SUBJECT,
+    ]);
+    expect(rows.map((row) => row.createdAt.toISOString())).toStrictEqual([
+      FIRST_RUN_ISO,
+      FIRST_RUN_ISO,
+      FIRST_RUN_ISO,
+    ]);
+
+    // And it is the same row throughout, which `created_at` alone
+    // does not say: three inserts with two deletes between them
+    // would leave one row too.
+    expect(rows.map((row) => row.id)).toStrictEqual([1, 1, 1]);
+
+    // In-band control, and what makes every assertion above a claim
+    // about an upsert rather than about a store that ignored the
+    // second and third runs: `updated_at` moved with the clock each
+    // time, so all three writes happened.
+    expect(rows.map((row) => row.updatedAt.toISOString())).toStrictEqual([
+      FIRST_RUN_ISO,
+      SECOND_RUN_ISO,
+      THIRD_RUN_ISO,
+    ]);
+
+    // The second control, independent of the clock. argon2 salts at
+    // random, so three hashes of one password are three different
+    // strings — which says each run hashed and wrote, and pins the
+    // module's remark that it does so whether or not the stored hash
+    // would have verified.
+    expect(new Set(rows.map((row) => row.passwordHash)).size).toBe(3);
+    expect(
+      await Promise.all(
+        rows.map((row) => verifyPassword(row.passwordHash, PASSWORD)),
+      ),
+    ).toStrictEqual([true, true, true]);
   });
 });
 
