@@ -98,6 +98,7 @@ const PARITY_FILES: readonly string[] = [
   'parse-eml.parity.test.ts',
   'sanitize-md.parity.test.ts',
   'shingle.parity.test.ts',
+  'static-gate.parity.test.ts',
   'yaml-lite.parity.test.ts',
 ];
 

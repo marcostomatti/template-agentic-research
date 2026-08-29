@@ -210,6 +210,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'built.removed.truncated || capped.truncated',
     ],
   },
+  {
+    file: 'static-gate.ts',
+    ownText: [
+      'Math.abs(termWeight(term.entry))',
+      'hits.slice(0, MAX_REASON_HITS)',
+      'Number.parseFloat(asText(raw))',
+    ],
+  },
 ];
 
 /**
