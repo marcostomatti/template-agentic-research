@@ -214,6 +214,123 @@ const JOURNAL_VERSION = '7';
 const STATEMENT_BREAKPOINT = '--> statement-breakpoint';
 
 /**
+ * Where a workflow source lives, relative to a package root.
+ *
+ * The directory `scripts/build-workflows.ts` reads every file of, so
+ * a workflow stamped into a package is built by the next
+ * `bun run build:workflows` and judged by the invariant suite over
+ * what that wrote. Which is the reason the skeleton below is
+ * arranged the way it is rather than left to be tidied later: it has
+ * to satisfy those invariants the moment it lands.
+ */
+const WORKFLOW_SOURCE_DIR = 'workflows/src';
+
+/**
+ * The execution order every workflow here declares, as the one that
+ * has landed declares it.
+ *
+ * A node-by-node order rather than the legacy one, and written out
+ * because the member is not defaulted anywhere this package
+ * controls: an envelope short of it is uploaded short of it, and
+ * what fills it in is then whatever the instance's own default is.
+ */
+const WORKFLOW_EXECUTION_ORDER = 'v1';
+
+/**
+ * The `versionId` an emitted workflow carries.
+ *
+ * A placeholder, and a required one: the CLI import path writes this
+ * straight into a NOT NULL column, so an envelope without it is
+ * refused rather than filled in. What makes it a placeholder is the
+ * all-zero node field — every digit an author would have chosen is
+ * visibly unchosen, the way {@link MIGRATION_INDEX} is.
+ *
+ * Replacing it is not cosmetic. On an instance this is the primary
+ * key of the version history, so two workflows carrying one string
+ * collide there, and the emitted note says to give each file a
+ * distinct one. The v4 shape is kept — the version and variant
+ * nibbles are the two non-zero digits — so what a reader sees is a
+ * blank of the right kind rather than a string of another kind.
+ */
+const WORKFLOW_VERSION_ID = '00000000-0000-4000-8000-000000000000';
+
+/**
+ * The node type a placeholder step is written as.
+ *
+ * The one type able to refuse with nothing behind it: no credential,
+ * no endpoint, no table. Every other type this pipeline uses would
+ * need something standing up before it could fail on purpose, and a
+ * step that failed for want of a connection would say the wrong
+ * thing about why it failed.
+ */
+const CODE_NODE_TYPE = 'n8n-nodes-base.code';
+
+/** The version of that type the one landed workflow runs its Code node at. */
+const CODE_NODE_TYPE_VERSION = 2;
+
+/**
+ * The node type prose is written as, since a JSON file has no
+ * comments and a workflow envelope has no place for a header key.
+ *
+ * `_readme` is this package's convention for a committed JSON
+ * fixture ({@link sourceAdapterPayload}), and it is the wrong shape
+ * here: the API path drops every envelope member outside the four it
+ * takes, and the CLI path imports the file whole, so a header key
+ * would be either discarded or stored as an envelope member n8n does
+ * not have. A sticky note is where a workflow keeps its prose, which
+ * is what `ar-dispatch` already carries three of.
+ */
+const STICKY_NOTE_TYPE = 'n8n-nodes-base.stickyNote';
+
+/** The version of that type the landed sticky notes are written at. */
+const STICKY_NOTE_TYPE_VERSION = 1;
+
+/**
+ * One node the skeleton writes, by the two names it is known by.
+ *
+ * Both, rather than a name alone, because the split between them is
+ * the trap the skeleton exists to show. A node carries an `id` and a
+ * display `name`, and `connections` keys on the NAME — so a rename
+ * that misses the wiring leaves a workflow whose halves are no
+ * longer joined, with nothing anywhere reporting it.
+ */
+interface SkeletonNode {
+  /** The id the node carries, stable across a rename. */
+  readonly id: string;
+
+  /** The display name, and what every connection to it is keyed by. */
+  readonly name: string;
+}
+
+/** Where a workflow's work begins, and the only wired source. */
+const FIRST_STEP: SkeletonNode = { id: 'first-step', name: 'First Step' };
+
+/** What it hands on to, over the one connection there is. */
+const SECOND_STEP: SkeletonNode = { id: 'second-step', name: 'Second Step' };
+
+/** The note carrying the rules a workflow author has to obey. */
+const SCAFFOLD_NOTE: SkeletonNode = {
+  id: 'scaffold-note',
+  name: 'Scaffold',
+};
+
+/**
+ * `word` with its first letter raised and nothing else touched.
+ *
+ * The one step every spelling below shares, written once rather than
+ * three times, because three copies of it is three places for a stem
+ * to start being cased differently in one emitted file than in
+ * another. Safe on an empty string, which is what `slice` on one
+ * hands back.
+ *
+ * @param word - One word of a name, already lower case.
+ * @returns The same word, capitalized.
+ */
+function capitalize(word: string): string {
+  return word.slice(0, 1).toUpperCase() + word.slice(1);
+}
+
+/**
  * The identifier a file stem is spelled as in code.
  *
  * `yaml-lite` becomes `yamlLite`. The stem is already known to match
@@ -227,9 +344,7 @@ const STATEMENT_BREAKPOINT = '--> statement-breakpoint';
 function toCamelCase(name: string): string {
   const [first = '', ...rest] = name.split('-');
 
-  return first + rest
-    .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
-    .join('');
+  return first + rest.map(capitalize).join('');
 }
 
 /**
@@ -244,9 +359,7 @@ function toCamelCase(name: string): string {
  * @returns The same words as one Pascal-case identifier.
  */
 function toPascalCase(name: string): string {
-  const camel = toCamelCase(name);
-
-  return camel.slice(0, 1).toUpperCase() + camel.slice(1);
+  return capitalize(toCamelCase(name));
 }
 
 /**
@@ -263,6 +376,31 @@ function toPascalCase(name: string): string {
  */
 function toSnakeCase(name: string): string {
   return name.split('-').join('_');
+}
+
+/**
+ * The spelling a workflow id takes as a display name.
+ *
+ * `sample-workflow` becomes `Sample Workflow`. Load-bearing rather
+ * than decorative: the display name is what `deploy-external.ts`
+ * upserts on and what `audit-workflows.ts` sorts an instance's
+ * workflows against, so a workflow is known by this string wherever
+ * an id does not reach.
+ *
+ * It is also the one part of an emitted workflow a generator can
+ * only half decide, and the emitted note says so. An initialism is
+ * invisible to a rule over words — this package spells `ar-dispatch`
+ * as `AR Dispatch`, and nothing in an id says its first word is not
+ * a word — so a stamped file comes back one capital short of house
+ * style wherever the id opens with one.
+ *
+ * @param name - The id, as the command line gave it.
+ * @returns The same words capitalized and joined by spaces.
+ */
+function toTitleCase(name: string): string {
+  return name.split('-')
+    .map(capitalize)
+    .join(' ');
 }
 
 /**
@@ -987,6 +1125,302 @@ const MIGRATION_GENERATOR: ScaffoldGenerator = {
 };
 
 /**
+ * What the first step's body says about itself, as the comment lines
+ * a Code node carries above its code.
+ *
+ * A constant rather than prose inside the builder, so the two steps
+ * differ in what they explain and agree on everything else — the
+ * refusal they raise is assembled once, below.
+ */
+const FIRST_STEP_COMMENTARY: readonly string[] = [
+  '// The first step, and a placeholder: it throws, so a workflow',
+  '// still carrying this node fails at its top and names itself,',
+  '// rather than handing an empty batch to whatever is wired below.',
+  '//',
+  '// A Code node because that is the one type able to refuse with',
+  '// nothing behind it — no credential, no endpoint, no table.',
+  '// Whatever this workflow really begins with is almost certainly',
+  '// not this, and replacing the node is expected rather than a',
+  '// last resort.',
+  '//',
+  '// What a real step hands on is a list of items, one object',
+  '// apiece, each carrying its own json. Most node types then run',
+  '// once per INPUT item, so what leaves here decides how many',
+  '// times the node below runs: a multiplication rather than a',
+  '// preference, and the thing to settle before writing either.',
+];
+
+/** The same, for the step reached over the one connection there is. */
+const SECOND_STEP_COMMENTARY: readonly string[] = [
+  '// The second step, reached over the one connection this workflow',
+  '// declares, which is the whole reason there are two of them. A',
+  '// skeleton with a single node would leave connections empty, and',
+  '// the wiring is the half of a workflow file that nothing',
+  '// generates and no gate reads.',
+  '//',
+  '// It throws for the reason the step above it does, and while',
+  '// that one still throws this is never reached at all: fix the',
+  '// top of a workflow first, and this refusal is what says the',
+  '// rest of it is still a scaffold.',
+];
+
+/**
+ * One Code node's body: what it explains, then the refusal it
+ * raises.
+ *
+ * The refusal is built here rather than in either commentary, so
+ * both steps refuse in one sentence and a case can pin the shape
+ * `<id> is a scaffold` across every generator this command has.
+ *
+ * Split over two emitted lines rather than written as one, because
+ * what is being wrapped is the OUTPUT: an interpolated id shortens
+ * the line it sits on here and lengthens it there, so a body that
+ * reads tidily in this file arrives on a canvas running well past
+ * the comments above it.
+ *
+ * @param name - The workflow's id.
+ * @param step - Which step this is, by name.
+ * @param commentary - The comment lines to open the body with.
+ * @returns The whole of that node's `jsCode`.
+ */
+function workflowStepBody(
+  name: string,
+  step: SkeletonNode,
+  commentary: readonly string[],
+): string {
+  return [
+    ...commentary,
+    'throw new Error(',
+    `  '${name} is a scaffold: ${step.name} has nothing to do. '`,
+    '  + \'Replace both steps and the note beside them.\',',
+    ');',
+  ].join('\n');
+}
+
+/**
+ * One placeholder step, as the node an artifact carries.
+ *
+ * @param name - The workflow's id, which the refusal quotes.
+ * @param step - The step's id and display name.
+ * @param position - Where it sits on the canvas.
+ * @param commentary - What its body explains before refusing.
+ * @returns That node, ready to be serialized.
+ */
+function workflowStepNode(
+  name: string,
+  step: SkeletonNode,
+  position: readonly [number, number],
+  commentary: readonly string[],
+): Record<string, unknown> {
+  return {
+    id: step.id,
+    name: step.name,
+    type: CODE_NODE_TYPE,
+    typeVersion: CODE_NODE_TYPE_VERSION,
+    position,
+    parameters: { jsCode: workflowStepBody(name, step, commentary) },
+  };
+}
+
+/**
+ * The note a stamped workflow carries, as text.
+ *
+ * It carries the rules rather than pointing at them, for the reason
+ * {@link libSource} does: what is different about a workflow in this
+ * port is a small set of constraints over the SET of workflows, and
+ * the moment somebody is most likely to break one is while drawing
+ * this canvas. Two of them are swept by
+ * `tests/invariants/workflows.test.ts` and the third — the wiring
+ * keyed on a display name — is checked by nothing at all, which is
+ * why it is spelled out here.
+ *
+ * The three unfilled values close it. Each is a property of where
+ * this file lands rather than of the name it was stamped from, so a
+ * generator that is a pure function of a name can only name them.
+ *
+ * @param name - The workflow's id.
+ * @returns The whole of that note's markdown.
+ */
+function workflowNoteContent(name: string): string {
+  return [
+    '## Scaffold',
+
+    'Nothing here runs, and that is the point. Both Code nodes throw, '
+    + 'and this workflow carries no trigger at all, so there is nothing '
+    + 'to start it: a skeleton that executed would be indistinguishable '
+    + 'from a workflow that worked. Replace both steps, wire whatever '
+    + 'really starts this one, and delete this note.',
+
+    '### Whatever starts it, it is not a clock',
+
+    '`ar-dispatch` holds the only Schedule Trigger in the system and no '
+    + 'other workflow may hold one. Scheduling here is a row rather than '
+    + 'a trigger: a `topics` or `export_subscriptions` row says when it '
+    + 'is next due, the dispatcher claims it once it is, and invokes the '
+    + 'workflow that does the work. So what starts this one is an '
+    + 'Execute Workflow trigger, an inbound request, or an operator — '
+    + 'never a cadence drawn on this canvas.',
+
+    '### No node that sends',
+
+    'The pipeline reads, scores, stores and renders, and the one thing '
+    + 'it never does is send: no mail node, no chat node, no gateway to '
+    + 'a phone, whatever a step looks like it wants. An email export '
+    + 'produces a draft. `tests/invariants/workflows.test.ts` sweeps '
+    + 'every built workflow for both of these rules and names the file '
+    + 'and the node it found one in, and '
+    + '`docs/architecture/01-invariants.md` argues what each costs and '
+    + 'says which phase enforces it.',
+
+    '### Connections key on a display NAME',
+
+    `The wiring below refers to \`${FIRST_STEP.name}\` and `
+    + `\`${SECOND_STEP.name}\`, which are display names — every node `
+    + 'also carries an `id`, and that is not what a connection names. '
+    + 'Renaming a node means renaming its key and every reference to it '
+    + 'in the same edit. Miss one and the wire is simply gone, with '
+    + 'nothing anywhere reporting a workflow that now stops halfway.',
+
+    '### Three things a generator could not decide',
+
+    'The display name above is this id title-cased, which is one capital '
+    + 'short wherever an id opens with an initialism: `ar-dispatch` is '
+    + 'spelled `AR Dispatch`, and nothing in an id says its first word '
+    + 'is not a word. That name is what a deploy upserts on and what an '
+    + 'audit sorts an instance against, so it is worth settling here '
+    + 'rather than on a canvas.',
+
+    '`versionId` is all zeros. On an instance it is the primary key of '
+    + 'the version history, so two workflows carrying this one collide '
+    + 'there — give this file a distinct one before it lands beside '
+    + 'another.',
+
+    `And \`${name}\` is on no roster. \`workflows/src/README.md\` lists `
+    + 'the workflows this repository builds, and '
+    + '`tests/invariants/workflows.test.ts` holds the built tree against '
+    + 'that list, so this file reddens that case until both name it.',
+  ].join('\n\n');
+}
+
+/**
+ * That note, as the node an artifact carries it in.
+ *
+ * Sized for the content rather than for the canvas: a note whose box
+ * is shorter than its text scrolls, and the one thing a reader must
+ * not have to discover is that there was more of it.
+ *
+ * @param name - The workflow's id.
+ * @returns That node, ready to be serialized.
+ */
+function workflowNoteNode(name: string): Record<string, unknown> {
+  return {
+    id: SCAFFOLD_NOTE.id,
+    name: SCAFFOLD_NOTE.name,
+    type: STICKY_NOTE_TYPE,
+    typeVersion: STICKY_NOTE_TYPE_VERSION,
+    position: [-500, -160],
+    parameters: {
+      width: 460,
+      height: 1180,
+      content: workflowNoteContent(name),
+    },
+  };
+}
+
+/**
+ * The workflow skeleton, as text.
+ *
+ * Serialized from a value rather than written out as a template,
+ * which is where this generator parts from the other three. Their
+ * emissions are TEXT whose exact layout is part of what they mean —
+ * a hand-wrapped docblock, a marker that has to sit on a line of its
+ * own — while this one is a VALUE, and the layout is not its
+ * business: the build serializes at its own fixed indentation
+ * whatever a source was spaced at. What the value buys is that the
+ * escaping is `JSON.stringify`'s. A Code node body is a JavaScript
+ * program inside a JSON string, so hand-writing this file means
+ * hand-escaping every newline in two node bodies, and one missed
+ * escape is a source no build can parse.
+ *
+ * What the skeleton refuses to be is a workflow that could run.
+ * Both steps throw ({@link workflowStepBody}) and there is no
+ * trigger of any kind, so nothing on any path starts it — which is
+ * the same claim {@link libSource} makes with a throwing export, one
+ * level up: a canvas that executed would be indistinguishable from a
+ * workflow somebody had finished.
+ *
+ * No trigger is also the only safe answer to a question a generator
+ * cannot ask. A workflow is started by the dispatcher's Execute
+ * Workflow node, by an inbound request, or by hand, and which of
+ * those is a property of the workflow rather than of the set — so
+ * guessing one would wire a start nobody chose. The near miss is
+ * louder than that: a schedule trigger is the one type this port
+ * permits a single instance of, and a generator that stamped one
+ * would break a system-wide invariant every time it ran.
+ *
+ * Two nodes rather than one, for the reason {@link migrationSource}
+ * emits two statements. One node would leave `connections` empty and
+ * the arrangement it is emitted to show unshown: the wiring keys on
+ * a node's display NAME while the node also carries an id, and that
+ * is the half of a workflow file no gate here reads.
+ *
+ * @param name - The workflow's id, which is also its file stem.
+ * @returns The whole of `workflows/src/<id>.json`.
+ */
+function workflowSource(name: string): string {
+  const envelope = {
+    id: name,
+    name: toTitleCase(name),
+    active: false,
+    versionId: WORKFLOW_VERSION_ID,
+    settings: { executionOrder: WORKFLOW_EXECUTION_ORDER },
+    nodes: [
+      workflowStepNode(name, FIRST_STEP, [0, 0], FIRST_STEP_COMMENTARY),
+      workflowStepNode(name, SECOND_STEP, [220, 0], SECOND_STEP_COMMENTARY),
+      workflowNoteNode(name),
+    ],
+    connections: {
+      [FIRST_STEP.name]: {
+        main: [[{ node: SECOND_STEP.name, type: 'main', index: 0 }]],
+      },
+    },
+  };
+
+  return `${JSON.stringify(envelope, null, 2)}\n`;
+}
+
+/**
+ * The generator behind `scaffold workflow <id> <dir>`.
+ *
+ * One file, where the three generators above emit a pair or a trio,
+ * and the difference is the 1:1 rule `workflows/src/README.md`
+ * states: a workflow is exactly one file named for its id, no
+ * workflow is split across files, and nothing else in the tree
+ * belongs to it. The cases over a workflow are the set-wide
+ * invariants under `tests/invariants/`, which read the BUILT tree
+ * rather than this source, so there is no case file to emit beside
+ * it — and its own id joining the roster those cases walk is one of
+ * the three things the emitted note asks for.
+ *
+ * The operand is an id rather than a name, for the reason
+ * {@link SOURCE_ADAPTER_GENERATOR} takes one: the id names the file,
+ * is the workflow's id on an instance, and is what the roster keys
+ * on, so what an operator is asked for is the thing the workflow
+ * will be known by.
+ */
+const WORKFLOW_GENERATOR: ScaffoldGenerator = {
+  name: 'workflow',
+  operand: 'id',
+  summary: 'a workflow source under workflows/src/, with no trigger',
+  generate: (name) => [
+    {
+      path: `${WORKFLOW_SOURCE_DIR}/${name}.json`,
+      contents: workflowSource(name),
+    },
+  ],
+};
+
+/**
  * Every generator this command can run, keyed by the word an
  * operator types.
  *
@@ -1005,6 +1439,7 @@ export const GENERATORS: Readonly<Record<string, ScaffoldGenerator>> = {
   [LIB_GENERATOR.name]: LIB_GENERATOR,
   [SOURCE_ADAPTER_GENERATOR.name]: SOURCE_ADAPTER_GENERATOR,
   [MIGRATION_GENERATOR.name]: MIGRATION_GENERATOR,
+  [WORKFLOW_GENERATOR.name]: WORKFLOW_GENERATOR,
 };
 
 /**

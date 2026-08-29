@@ -103,7 +103,34 @@
  * migration applied, postgres does nothing, and every scan over
  * the file still finds every string it looks for. What separates
  * them is anchoring the statement to the start of its line.
+ *
+ * A `workflow` run is read in three passes, because a workflow
+ * source has three readers and they want different things. It has
+ * to PARSE, which is asserted as a case rather than left to a
+ * module-scope throw — the generator assembles this one by
+ * serializing a value precisely so the escaping is not
+ * hand-written, and the claim is worth having where a failure can
+ * say so. It has to carry the envelope the deploy paths read,
+ * which is held against the projection `deploy-external.ts`
+ * uploads with rather than against four keys named here. And it
+ * has to satisfy the set-wide invariants the moment it lands in a
+ * package, since `workflows/src/` is what the build reads: the
+ * nodes narrow the way `tests/invariants/workflow-dist.ts`
+ * narrows them, both ends of every connection name a node the file
+ * carries, and no node is a schedule trigger or able to send.
+ *
+ * That last claim is an absence, so it is asserted twice. The
+ * matchers are the invariant suite's own, and an empty answer out
+ * of one is what a clean workflow gives AND what a matcher pointed
+ * at the wrong string gives. So the same walk is run again over
+ * the emission plus one planted node per roster entry, and it has
+ * to come back naming every one of them. The marker claim beside
+ * it is the same shape for the same reason: a zero over a roster
+ * of forms, and the roster appended to the text to prove the
+ * needles are live.
  */
+import type { BuiltArtifact } from '../../scripts/n8n-workflow.js';
+
 import { spawnSync } from 'node:child_process';
 import {
   existsSync,
@@ -120,6 +147,7 @@ import { fileURLToPath } from 'node:url';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { afterAll, describe, expect, it } from 'vitest';
 
+import { toApiWorkflow } from '../../scripts/n8n-workflow.js';
 import {
   GENERATORS,
   parseScaffoldArgs,
@@ -127,7 +155,14 @@ import {
   ScaffoldWriteError,
   writeScaffold,
 } from '../../scripts/scaffold.js';
+import { SURVIVING_MARKER_FORMS } from '../../scripts/workflow-markers.js';
 import { REFUSED_LIB_SAMPLES } from '../build/marker-fixtures.js';
+import {
+  isScheduleTrigger,
+  isSendCapable,
+  SCHEDULE_TRIGGER_TYPE,
+  SEND_NODE_TYPES,
+} from '../invariants/workflow-rosters.js';
 
 // ---------------------------------------------------------------------------
 // The generator these cases drive, and the name they drive it with
@@ -141,6 +176,9 @@ const ADAPTER_GENERATOR = 'source-adapter';
 
 /** The third, which stamps into a tree drizzle-kit also writes. */
 const MIGRATION_GENERATOR = 'migration';
+
+/** The fourth, and the only one emitting a single file. */
+const WORKFLOW_GENERATOR = 'workflow';
 
 /**
  * A name the pattern accepts, in two words.
@@ -328,6 +366,7 @@ const USAGE_LINES: readonly string[] = [
   '  lib <name> — a spliceable library under src/lib/ and its case file',
   '  source-adapter <id> — an adapter under src/sources/, cases and payload',
   '  migration <name> — a hand-written migration under drizzle/ and its entry',
+  '  workflow <id> — a workflow source under workflows/src/, with no trigger',
 ];
 
 // ---------------------------------------------------------------------------
@@ -1463,5 +1502,502 @@ describe('the journal entry a migration run writes', () => {
   it('spells that index inside the tag as well', () => {
     expect(MIGRATION_ENTRY['tag'])
       .toBe(`${String(MIGRATION_ENTRY['idx'])}_sample_migration`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The source a workflow run writes
+// ---------------------------------------------------------------------------
+
+/**
+ * An id the pattern accepts, in two words.
+ *
+ * Hyphenated for the reason {@link EMITTED_NAME} is, and the casing
+ * step it exercises is a fourth one: a display name is the id
+ * title-cased with its hyphens turned into spaces, so a single word
+ * would agree with itself however that step behaved.
+ *
+ * Deliberately not spelled with this repository's own `ar-` prefix.
+ * The one capital a generator cannot supply is an initialism's, so
+ * an id opening with one would make the display-name case below an
+ * assertion about that gap rather than about the step.
+ */
+const WORKFLOW_ID = 'sample-workflow';
+
+/** The display name that id is title-cased into. */
+const WORKFLOW_NAME = 'Sample Workflow';
+
+/** Where the stamped source lands, relative to the target. */
+const WORKFLOW_PATH = `workflows/src/${WORKFLOW_ID}.json`;
+
+/** The one workflow emission every claim below reads. */
+const WORKFLOW_EMITTED = emitInto(
+  WORKFLOW_GENERATOR,
+  WORKFLOW_ID,
+  'accepted-workflow',
+);
+
+/** That path, absolute, as a run under this target writes it. */
+const WORKFLOW_FILE = join(WORKFLOW_EMITTED.targetDir, WORKFLOW_PATH);
+
+/** The source it wrote, read back off the filesystem as text. */
+const WORKFLOW_TEXT = readFileSync(WORKFLOW_FILE, 'utf8');
+
+// ---------------------------------------------------------------------------
+// Reading it the way the build reads it
+// ---------------------------------------------------------------------------
+
+/** What {@link readWorkflow} reports for text `JSON.parse` took. */
+const PARSED = 'parsed';
+
+/** One attempt at reading that source. */
+interface WorkflowRead {
+  /** {@link PARSED}, or what `JSON.parse` refused the text with. */
+  readonly outcome: string;
+
+  /** The envelope it yielded, or an empty one when it yielded none. */
+  readonly envelope: Record<string, unknown>;
+}
+
+/**
+ * Read the emitted source, reporting a refusal rather than raising
+ * one.
+ *
+ * The parse is the first thing anything does with a workflow source,
+ * and it is the failure a generator assembling JSON as text arrives
+ * at — one missed escape inside a Code node body and there is no
+ * artifact at all. Reported rather than thrown, so that failure is a
+ * case carrying a message instead of a module that would not load,
+ * taking every claim below it with it.
+ *
+ * @param text - The emitted source, whole.
+ * @returns How the parse went, and what it yielded.
+ */
+function readWorkflow(text: string): WorkflowRead {
+  try {
+    const envelope = JSON.parse(text) as Record<string, unknown>;
+
+    return { outcome: PARSED, envelope };
+  } catch (thrown) {
+    return { outcome: String(thrown), envelope: {} };
+  }
+}
+
+/** That read, which every claim below stands on. */
+const WORKFLOW_READ = readWorkflow(WORKFLOW_TEXT);
+
+/** The envelope it yielded. */
+const WORKFLOW = WORKFLOW_READ.envelope;
+
+/**
+ * `value` as a record, or an empty one when it is not an object.
+ *
+ * Nothing a parse hands back is narrowed, and the readers below want
+ * to walk it without asserting its shape on the way — which is the
+ * whole point, since two of the claims are ABOUT the types of
+ * members `tests/invariants/workflow-dist.ts` narrows on the way in.
+ *
+ * @param value - Anything the parse produced.
+ * @returns The record it is, or an empty one.
+ */
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+    ? value as Record<string, unknown>
+    : {};
+}
+
+/**
+ * `value` as a list, or an empty one when it is not an array.
+ *
+ * @param value - Anything the parse produced.
+ * @returns The list it is, or an empty one.
+ */
+function asArray(value: unknown): readonly unknown[] {
+  return Array.isArray(value)
+    ? value as unknown[]
+    : [];
+}
+
+/** Every node that envelope carries, unnarrowed, in its own order. */
+const WORKFLOW_NODES: readonly Record<string, unknown>[] =
+  asArray(WORKFLOW['nodes']).map(asRecord);
+
+/** The wiring it declares, unnarrowed. */
+const WORKFLOW_CONNECTIONS = asRecord(WORKFLOW['connections']);
+
+/** Every Code node body it wrote, in node order. */
+const WORKFLOW_STEP_BODIES: readonly string[] = WORKFLOW_NODES
+  .map((node) => asRecord(node['parameters'])['jsCode'])
+  .filter((body): body is string => typeof body === 'string');
+
+// ---------------------------------------------------------------------------
+// What the envelope has to declare
+// ---------------------------------------------------------------------------
+
+/**
+ * Every envelope member a source carries, in the order it carries
+ * them.
+ *
+ * Seven, answering to three readers. Four of them —
+ * `connections`, `name`, `nodes` and `settings` — are what n8n's
+ * public API takes, and the case below hands the whole envelope to
+ * the projection that cuts a body down to those rather than trusting
+ * this list to be them. `id` is what lands a CLI import on the
+ * workflow the roster names instead of on a new one, `versionId`
+ * fills a NOT NULL column on that same path, and `active` is what a
+ * source says about arming.
+ */
+const WORKFLOW_ENVELOPE_KEYS: readonly string[] = [
+  'id',
+  'name',
+  'active',
+  'versionId',
+  'settings',
+  'nodes',
+  'connections',
+];
+
+/**
+ * The emitted envelope, cut down to the members an upload carries.
+ *
+ * Through the projection `deploy-external.ts` uploads with rather
+ * than by picking keys here, so the case reading it is decided by
+ * the module that decides it: n8n's `workflow` schema is closed over
+ * exactly four members, and a body short of one is not filled in but
+ * refused whole.
+ *
+ * The cast is what a parse costs — `JSON.parse` hands back `unknown`
+ * and the projection wants a declared shape — so the assertion is
+ * itself the claim, and the case below is what earns it.
+ */
+const WORKFLOW_UPLOAD = toApiWorkflow(WORKFLOW as BuiltArtifact);
+
+/** Which of its members came back carrying something. */
+const WORKFLOW_UPLOAD_MEMBERS: readonly string[] = Object
+  .entries(WORKFLOW_UPLOAD)
+  .filter(([, value]) => value !== undefined)
+  .map(([member]) => member);
+
+/** The four that schema takes, in the order the projection writes. */
+const API_WORKFLOW_MEMBERS: readonly string[] = [
+  'connections',
+  'name',
+  'nodes',
+  'settings',
+];
+
+describe('the source a workflow run writes', () => {
+  // The layout, as one path under the target. One file rather than
+  // a pair or a trio, which is the 1:1 rule `workflows/src/`
+  // states: a workflow is exactly one file named for its id, and
+  // the cases over it are the set-wide invariants that read the
+  // BUILT tree rather than this source.
+  it('writes one workflow source, and nothing else', () => {
+    expect(WORKFLOW_EMITTED.written).toStrictEqual([WORKFLOW_FILE]);
+  });
+
+  // Asserted apart from every claim that reads the envelope, so a
+  // source nothing could parse says THAT rather than failing a
+  // comparison about members, over an object the catch left empty.
+  it('writes a source the build can parse', () => {
+    expect(WORKFLOW_READ.outcome).toBe(PARSED);
+  });
+
+  it('declares every envelope member a source carries', () => {
+    expect(Object.keys(WORKFLOW)).toStrictEqual(WORKFLOW_ENVELOPE_KEYS);
+  });
+
+  // The four the public API takes, read off the projection rather
+  // than off the list above. A member absent from the envelope
+  // projects to `undefined` and is dropped on the way out, so what
+  // this catches is an envelope that would upload short — which the
+  // instance refuses whole rather than filling in.
+  it('projects to an upload body carrying all four members', () => {
+    expect(WORKFLOW_UPLOAD_MEMBERS).toStrictEqual(API_WORKFLOW_MEMBERS);
+  });
+
+  // The tag-shaped claim this generator has: the file is named for
+  // the id, and the envelope declares the same one. An import keys
+  // on that id to land on the rostered workflow rather than a new
+  // one, so a file and an envelope disagreeing about it deploys
+  // twice under two names.
+  it('names the file for the id the envelope declares', () => {
+    expect(`workflows/src/${String(WORKFLOW['id'])}.json`)
+      .toBe(WORKFLOW_PATH);
+  });
+
+  // The casing step, read where it lands. This is also the one
+  // value the emitted note asks a reader to check rather than to
+  // replace: an id opening with an initialism comes back a capital
+  // short, and this id deliberately does not.
+  it('names the workflow for that id, title-cased', () => {
+    expect(WORKFLOW['name']).toBe(WORKFLOW_NAME);
+  });
+
+  // Both placeholders, asserted as the placeholders they are.
+  // `active` is not decidable later — a source arriving armed is a
+  // workflow running before anybody read it — while the version id
+  // is all zeros because on an instance it is the primary key of
+  // the version history, so two files carrying one collide there.
+  it('arrives inactive, with the version id visibly unfilled', () => {
+    expect({ active: WORKFLOW['active'], versionId: WORKFLOW['versionId'] })
+      .toStrictEqual({
+        active: false,
+        versionId: '00000000-0000-4000-8000-000000000000',
+      });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The nodes and the wiring the invariant suite reads
+// ---------------------------------------------------------------------------
+
+/**
+ * Every node name the wiring refers to on the far end of a
+ * connection.
+ *
+ * Two levels of array between the output map and an entry — one per
+ * output, one per connection off it — which is the format's own
+ * nesting and the reason this is a walk rather than a lookup.
+ *
+ * @param outputs - One node's outgoing connections.
+ * @returns Every name they target, in the order they name them.
+ */
+function connectionTargets(outputs: unknown): readonly string[] {
+  const named: string[] = [];
+
+  for (const byOutput of Object.values(asRecord(outputs))) {
+    for (const output of asArray(byOutput)) {
+      for (const entry of asArray(output)) {
+        named.push(String(asRecord(entry)['node']));
+      }
+    }
+  }
+
+  return named;
+}
+
+/**
+ * Every node name the wiring refers to: one per source key, then one
+ * per target off it.
+ *
+ * Both ends, because a name naming no node is a dead wire either way
+ * and the two go wrong differently — a key is what a rename leaves
+ * behind, a target what a deletion does.
+ *
+ * @param connections - The envelope's `connections` member.
+ * @returns Every name it mentions, sources before their targets.
+ */
+function connectionNames(
+  connections: Record<string, unknown>,
+): readonly string[] {
+  return Object.entries(connections)
+    .flatMap(([source, outputs]) => [source, ...connectionTargets(outputs)]);
+}
+
+/** The two steps and the note, by the display names they carry. */
+const WORKFLOW_NODE_NAMES: readonly string[] = [
+  'First Step',
+  'Second Step',
+  'Scaffold',
+];
+
+/** The types those three are, in the same order. */
+const WORKFLOW_NODE_TYPES: readonly string[] = [
+  'n8n-nodes-base.code',
+  'n8n-nodes-base.code',
+  'n8n-nodes-base.stickyNote',
+];
+
+/** What each of the two step bodies refuses with. */
+const WORKFLOW_REFUSAL = `${WORKFLOW_ID} is a scaffold`;
+
+describe('the nodes a workflow run writes', () => {
+  // The composition, and the no-trigger claim in its positive form:
+  // two Code steps and the note explaining them, and nothing that
+  // could start a run. A workflow is begun by the dispatcher's
+  // Execute Workflow node, by an inbound request, or by hand, and
+  // which of those is a property of the workflow rather than of the
+  // set — so a generator wiring any of them would wire a start
+  // nobody chose.
+  it('carries two Code steps and the note that explains them', () => {
+    expect(WORKFLOW_NODES.map((node) => node['type']))
+      .toStrictEqual(WORKFLOW_NODE_TYPES);
+  });
+
+  // Both members `tests/invariants/workflow-dist.ts` narrows on the
+  // way in, read as the types they are rather than through a
+  // narrowing here. A `type` that is not a string is the quiet one:
+  // it matches no roster entry, so every check of the shape `no
+  // node of type X` passes over it having looked at nothing.
+  it('carries nodes the invariants reader can narrow', () => {
+    expect(WORKFLOW_NODES.length).toBeGreaterThan(0);
+
+    const declared = WORKFLOW_NODES.map((node) => ({
+      name: typeof node['name'],
+      type: typeof node['type'],
+    }));
+
+    expect(declared).toStrictEqual(WORKFLOW_NODES
+      .map(() => ({ name: 'string', type: 'string' })));
+  });
+
+  it('names those nodes for what they are', () => {
+    expect(WORKFLOW_NODES.map((node) => node['name']))
+      .toStrictEqual(WORKFLOW_NODE_NAMES);
+  });
+
+  // Both steps refuse, and the count is part of the claim: a
+  // skeleton whose second step had grown a plausible body would
+  // satisfy a check that only asked whether SOME body refused.
+  it('refuses in each of its two steps, naming the workflow', () => {
+    expect(WORKFLOW_STEP_BODIES.map((body) => body.includes(WORKFLOW_REFUSAL)))
+      .toStrictEqual([true, true]);
+  });
+});
+
+describe('the wiring a workflow run writes', () => {
+  // Two nodes exist so that this is not empty. The wiring is the
+  // half of a workflow file nothing generates and no gate reads,
+  // and what it is keyed on is the trap: `First Step` here is a
+  // DISPLAY name, while the node also carries `first-step` as its
+  // id, and a connection names neither the id nor the position.
+  it('wires the first step to the second, keyed by display name', () => {
+    expect(connectionNames(WORKFLOW_CONNECTIONS))
+      .toStrictEqual(['First Step', 'Second Step']);
+  });
+
+  // The tie between the two halves, which is what a rename breaks.
+  // Guarded at both ends: an emptied node list makes every name
+  // unknown and fails, an emptied wiring fails the case above.
+  it('names a node it carries on both ends of every connection', () => {
+    const carried = WORKFLOW_NODES.map((node) => String(node['name']));
+    const dangling = connectionNames(WORKFLOW_CONNECTIONS)
+      .filter((name) => !carried.includes(name));
+
+    expect(dangling).toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The two node kinds it may not carry
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether `node` is one of the two kinds no workflow stamped here
+ * may carry.
+ *
+ * The matchers are the invariant suite's own rather than a
+ * comparison written beside this case, so an entry added to
+ * `SEND_NODE_TYPES` is swept here without an edit — and a workflow
+ * this generator stamps is judged by the same rule that will judge
+ * it once it is built.
+ *
+ * @param node - One node, unnarrowed.
+ * @returns Whether its type is a schedule trigger or can send.
+ */
+function isForbiddenNode(node: Record<string, unknown>): boolean {
+  const type = String(node['type']);
+
+  return isScheduleTrigger(type) || isSendCapable(type);
+}
+
+/**
+ * The display name of every node in `nodes` that sweep flags.
+ *
+ * Names rather than a count, so a failure prints which node to open
+ * on the way past.
+ *
+ * @param nodes - The nodes to sweep.
+ * @returns Every offender's display name, in node order.
+ */
+function forbiddenNodes(
+  nodes: readonly Record<string, unknown>[],
+): readonly string[] {
+  return nodes
+    .filter(isForbiddenNode)
+    .map((node) => String(node['name']));
+}
+
+/**
+ * A node of every kind that sweep must find, planted beside the
+ * emitted ones.
+ *
+ * The whole reason the absence claim says anything. An empty answer
+ * is what a clean workflow gives AND what a matcher pointed at the
+ * wrong string gives, and nothing about a sweep over the emission
+ * alone parts those two.
+ *
+ * Built from the rosters rather than from type strings written here:
+ * one node per send entry, so an entry added to `SEND_NODE_TYPES`
+ * joins this control without an edit, and one carrying the type that
+ * puts a workflow on a clock.
+ */
+const PLANTED_NODES: readonly Record<string, unknown>[] = [
+  { name: 'Planted schedule', type: SCHEDULE_TRIGGER_TYPE },
+  ...SEND_NODE_TYPES.map((rule) => ({
+    name: `Planted ${rule.id}`,
+    type: rule.type,
+  })),
+];
+
+/** What a live sweep has to name, in the order they are planted. */
+const PLANTED_NAMES: readonly string[] = PLANTED_NODES
+  .map((node) => String(node['name']));
+
+describe('what a workflow run refuses to write', () => {
+  it('holds neither a schedule trigger nor a node that can send', () => {
+    expect(forbiddenNodes(WORKFLOW_NODES)).toStrictEqual([]);
+  });
+
+  // The same walk over the same nodes plus one plant per entry. It
+  // has to come back naming every plant and nothing emitted, which
+  // is what separates the zero above from a sweep that could not
+  // have found anything — the failure a matcher keyed on a string
+  // that had moved would otherwise report as a clean workflow.
+  it('names every planted one when the same walk meets them', () => {
+    expect(PLANTED_NAMES.length).toBeGreaterThan(1);
+
+    expect(forbiddenNodes([...WORKFLOW_NODES, ...PLANTED_NODES]))
+      .toStrictEqual(PLANTED_NAMES);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Marker text, which the build refuses an artifact for carrying
+// ---------------------------------------------------------------------------
+
+/**
+ * Which marker forms `text` carries, in roster order.
+ *
+ * The build reads its own output back and refuses an artifact still
+ * spelling any of them, so a skeleton carrying one is a source that
+ * builds into nothing. Worth a claim here rather than there because
+ * the emitted note is prose ABOUT how a workflow is written, which
+ * is exactly the text most likely to quote a form it means to
+ * describe.
+ *
+ * @param text - Anything a build would serialize.
+ * @returns Every form it spells, in the roster's order.
+ */
+function markerFormsIn(text: string): readonly string[] {
+  return SURVIVING_MARKER_FORMS.filter((form) => text.includes(form));
+}
+
+describe('the marker text a workflow run does not write', () => {
+  it('spells no marker form the build refuses an artifact for', () => {
+    expect(markerFormsIn(WORKFLOW_TEXT)).toStrictEqual([]);
+  });
+
+  // The same reading over the same text with every form appended,
+  // which is what says the zero above was a measurement. An empty
+  // roster, or a needle that had drifted from what the build looks
+  // for, reports a clean source exactly as a clean source does.
+  it('finds every one of them in a text that spells them', () => {
+    expect(SURVIVING_MARKER_FORMS.length).toBeGreaterThan(0);
+
+    const spelled = `${WORKFLOW_TEXT} ${SURVIVING_MARKER_FORMS.join(' ')}`;
+
+    expect(markerFormsIn(spelled)).toStrictEqual(SURVIVING_MARKER_FORMS);
   });
 });
