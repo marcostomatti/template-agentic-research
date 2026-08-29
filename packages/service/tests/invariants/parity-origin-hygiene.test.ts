@@ -91,6 +91,7 @@ const PARITY_FILES: readonly string[] = [
   'audit-log.parity.test.ts',
   'fixtures.ts',
   'harness.parity.test.ts',
+  'html-text.parity.test.ts',
   'parse-csv.parity.test.ts',
   'parse-eml.parity.test.ts',
   'sanitize-md.parity.test.ts',
