@@ -186,6 +186,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'spans[Number(index)]',
     ],
   },
+  {
+    file: 'shingle.ts',
+    ownText: [
+      'hash ^= BigInt(str.charCodeAt(i))',
+      'i + SHINGLE_WORDS <= words.length',
+      'hashes.slice(0, SHINGLE_SKETCH_SIZE)',
+    ],
+  },
 ];
 
 /**
