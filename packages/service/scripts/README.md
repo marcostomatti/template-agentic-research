@@ -90,6 +90,7 @@ table is the prose half of that list and says what each one is for.
 | `source-adapter` | `src/sources/<id>.ts`, `src/sources/<id>.test.ts` and `src/sources/<id>-payload.json`. The skeleton declares every member of the `SourceAdapter` contract and is arranged around two of its rules: `fetch` is the only member that does I/O, so `parse` and `toCanonical` are pure and can be driven over a stored payload; and the endpoint and `parser_config` bind at construction rather than per call, so `parse` stays a function of the payload alone. Its operand is an id rather than a name, because that is what the registry keys on and what a `sources` row selects. Every member throws, and the cases assert the refusals, on the same reasoning as `lib`. |
 | `migration` | `drizzle/<nnnn>_<name>.sql` and `drizzle/meta/<nnnn>_<name>.journal-entry.json`. For DDL `src/db/schema.ts` cannot express — a trigger, a function, a `COMMENT ON` — which `bun run db:generate` will therefore never write, never diff and never propose dropping. The `.sql` carries two statements with one `--> statement-breakpoint` between them, because a hand-written migration is almost always an object and the thing that attaches it and the marker between the two is what nobody remembers. Both statements raise, on the same reasoning as `lib`. |
 | `workflow` | `workflows/src/<id>.json`, and only that: a workflow is exactly one file named for its id, and what holds one to its rules is the set-wide invariant suite over the BUILT tree rather than a case file beside the source. The skeleton cannot run — both Code steps throw and it carries no trigger of any kind — which is `lib`'s reasoning about a placeholder, one level up. No trigger is also the only safe answer to a question a generator cannot ask: what starts a workflow is a property of that workflow rather than of the set, and the near miss is loud, a Schedule Trigger being the one type this port permits a single instance of. Two steps rather than one so `connections` is not empty, because the wiring keys on a node's display NAME while the node also carries an `id`, and that is the half of a workflow file no gate here reads. |
+| `seed-bundle` | `data/domains.json`, `data/personas.json`, `data/categories.json`, `data/terms.json` and `data/topics.json` — one per concern in `scripts/seed.ts`'s roster, all five or none, because `loadSeedBundle` reads that whole roster before it decides anything and a file it names that the directory does not hold is a failure rather than an empty concern. Its operand is a slug rather than a name: it becomes no filename, the five being fixed by the roster, but it is what every file in the bundle names the domain by. The one shape this command stamps that has to WORK on arrival — every other emits a placeholder that throws, while a seed refusing to validate would say nothing about whether the bundle somebody edits it into would apply. So the placeholder is in the values: an empty `settings`, one persona per role with an empty `systemText`, a root category and a child named for the scaffold, one term per polarity, and a topic that is enabled and never due because no seed names `nextRunAt`. |
 
 The `lib` pair rather than the module alone, because a library under
 `src/lib/` with no case file is not a shape this package has. What proves
@@ -169,14 +170,67 @@ on no roster: `workflows/src/README.md` lists the workflows this
 repository builds, and the invariant suite holds the built tree against
 that list.
 
-It is also the one generator that serializes a value rather than writing
-its output out as text. The other three emit files whose exact layout is
-part of what they mean — a hand-wrapped docblock, a marker that has to
-sit on a line of its own — while a workflow source is reformatted by the
-build at a fixed indentation whatever it was spaced at. What the value
+It is also one of the two generators that serialize a value rather than
+writing their output out as text, `seed-bundle` being the other. The
+three that emit text write files whose exact layout is part of what they
+mean — a hand-wrapped docblock, a marker that has to sit on a line of
+its own — while a workflow source is reformatted by the build at a fixed
+indentation whatever it was spaced at. What the value
 buys is that the escaping is `JSON.stringify`'s: a Code node body is a
 JavaScript program inside a JSON string, and one missed newline escape is
 a source no build can parse.
+
+The `seed-bundle` five because a bundle is only ever read whole.
+`loadSeedBundle` walks the roster in `scripts/seed.ts` before it decides
+anything, so a file that roster names and the directory does not hold is
+a failure rather than an empty concern — a generator stopping at four
+would emit something that cannot be applied at all. They land in roster
+order, which is parent before child: the order the rows have to be
+written in, and the order failures are reported in.
+
+It is the one generator whose output has to WORK on arrival, and that is
+a deliberate break from the four above it. Their placeholders throw
+because a placeholder that answers plausibly cannot be told from an
+implementation. A seed cannot be that and should not be: a bundle
+refusing to validate would say nothing about whether the bundle somebody
+edits it into would apply, which is most of what a generated seed is
+for. So the placeholder moves into the values, where it is visible in
+the row rather than in a failure — `settings` empty, one persona per
+role with an empty `systemText`, a root category and a child named for
+the scaffold, one term per polarity, and a topic that is enabled and
+never due because no seed names `nextRunAt`.
+
+Each of those is a value a generator could not decide, and each is the
+honest form of not deciding it rather than an invented one. `settings`
+is keyed by names the domain owns — its scoring signals and its document
+fields — so an example there becomes the convention for whoever copies
+the file. An empty `systemText` is a state the column is entitled to
+hold and a reader can act on, where invented instructions are the one
+kind of placeholder a model would go on and follow. And the categories
+are two rather than one for the reason the `migration` pair has two
+statements: only a child has anywhere to put a `parentKey`, so a bundle
+of roots alone would leave that half to memory.
+
+The terms are one per member of `TERM_POLARITIES`, imported from
+`src/db/schema/values.ts` rather than written out. That tuple is the
+single declaration `terms_polarity_check` is generated from, so a
+scaffold can never emit a polarity the column would refuse — the same
+tie `scripts/seed-schemas.ts` makes, and the one thing this generator
+reaches outside itself for.
+
+What holds all of it together is the suite rather than review:
+`tests/scripts/scaffold.test.ts` validates every emitted file against
+the schema `scripts/seed-schemas.ts` exports for its concern — the same
+object the loader's roster carries, asserted by identity — and then
+loads the whole directory through `loadSeedBundle`, which is what also
+holds the references across the five. That is what says a stamped bundle
+would survive `bun run db:seed` before anybody has edited it.
+
+Nothing about the target directory changes here, which means the command
+cannot stamp this package's own `data/` while these five files exist:
+every path is checked before any is written, so the run refuses and
+leaves the directory as it found it. Stamp a bundle somewhere else and
+move across what is wanted.
 
 ## `.ts` for logic, `.sh` for orchestration
 

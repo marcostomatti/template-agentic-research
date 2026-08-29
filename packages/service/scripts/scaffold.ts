@@ -41,6 +41,8 @@ import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { TERM_POLARITIES } from '../src/db/schema/values.js';
+
 /**
  * One file a generator emits.
  *
@@ -1331,12 +1333,13 @@ function workflowNoteNode(name: string): Record<string, unknown> {
  * The workflow skeleton, as text.
  *
  * Serialized from a value rather than written out as a template,
- * which is where this generator parts from the other three. Their
- * emissions are TEXT whose exact layout is part of what they mean —
- * a hand-wrapped docblock, a marker that has to sit on a line of its
- * own — while this one is a VALUE, and the layout is not its
- * business: the build serializes at its own fixed indentation
- * whatever a source was spaced at. What the value buys is that the
+ * which is where this generator parts from the three that emit
+ * text. {@link seedConcernFile} takes the same route for the same
+ * reason. Those three emissions are TEXT whose exact layout is part
+ * of what they mean — a hand-wrapped docblock, a marker that has to
+ * sit on a line of its own — while this one is a VALUE, and the
+ * layout is not its business: the build serializes at its own fixed
+ * indentation whatever a source was spaced at. What the value buys is that the
  * escaping is `JSON.stringify`'s. A Code node body is a JavaScript
  * program inside a JSON string, so hand-writing this file means
  * hand-escaping every newline in two node bodies, and one missed
@@ -1421,6 +1424,482 @@ const WORKFLOW_GENERATOR: ScaffoldGenerator = {
 };
 
 /**
+ * Where a seed bundle's files land, relative to a package root.
+ *
+ * The directory `scripts/seed.ts` resolves as its own
+ * `SEED_DATA_DIR`, and the only one it opens. A constant for the
+ * reason {@link LIB_TEST_TO_SOURCE} is one: all five emitted paths
+ * are built from it, and a bundle written anywhere else is five
+ * files the loader never reads.
+ */
+const SEED_DIR = 'data';
+
+/**
+ * The two paragraphs every seed file opens with, as the header
+ * lines they are.
+ *
+ * `docs/SEEDING.md` requires them identically in all five files —
+ * one says the file is a seed, that `scripts/seed.ts` applies it
+ * and that nothing in the directory is read at runtime; the other
+ * says underscore-prefixed keys are stripped, which is what lets a
+ * header be there at all. That document deliberately does not
+ * reprint the text, so the wording has one home; this is the copy
+ * every file this command stamps opens with.
+ *
+ * The trailing empty entry is the blank line before whatever a file
+ * adds next, so a caller appends its own paragraphs rather than
+ * remembering to separate them.
+ */
+const SEED_SHARED_HEADER: readonly string[] = [
+  'SEED FILE. `scripts/seed.ts` is the only code path that opens this',
+  'directory, and nothing here is read at runtime: Postgres is the',
+  'single source of truth once a row lands, so an edit below changes',
+  'nothing until the next seed pass applies it.',
+  '',
+  'Keys beginning with an underscore are stripped by the loader before',
+  'anything is validated or written, which is what lets a seed file',
+  'carry this header at all. A seed is usually met on its own, in a',
+  'diff or an editor tab, where nothing about the content says which',
+  'path owns it.',
+  '',
+];
+
+/**
+ * What every file this generator stamps closes with, and the one
+ * divergence from the rest of this command worth stating.
+ *
+ * Every other generator here emits something that throws, on the
+ * reasoning {@link libSource} sets out: a placeholder answering
+ * plausibly is indistinguishable from an implementation. A seed
+ * cannot be that, and should not be — a bundle that refused to
+ * validate would say nothing about whether the bundle somebody
+ * edits it into would apply, which is most of what a generated seed
+ * is for. So the placeholder moves into the values, where it is
+ * visible in the row rather than in a failure, and every value a
+ * generator could not decide is named so a row still carrying it
+ * says so.
+ *
+ * Opens with an empty entry for the reason {@link SEED_SHARED_HEADER}
+ * closes with one.
+ */
+const SEED_SCAFFOLD_NOTE: readonly string[] = [
+  '',
+  'Scaffolded by `bun run scaffold seed-bundle <slug> <dir>`, and',
+  'a scaffold until somebody replaces the rows below. It is the',
+  'one shape that command stamps which has to WORK on arrival.',
+  'Every other one throws, because a placeholder that answers',
+  'plausibly cannot be told from an implementation; a seed that',
+  'refused to validate would instead say nothing about whether',
+  'the bundle it is edited into would apply. So the placeholder',
+  'is in the values rather than in a refusal, and every value a',
+  'generator could not decide is named so that a row still',
+  'carrying it says so.',
+];
+
+/**
+ * The roles this bundle seeds a persona for.
+ *
+ * Three, because three are what the pipeline plays today.
+ * `personas.role` carries no CHECK and no schema enumerates them,
+ * so the set is rows rather than a closed list — which is why they
+ * are written out here rather than imported from somewhere that
+ * would have to exist first.
+ */
+const SEED_PERSONA_ROLES: readonly string[] = [
+  'researcher',
+  'scorer',
+  'drafter',
+];
+
+/**
+ * The key the scaffolded root category is upserted on.
+ *
+ * Named for what it is rather than for a subject, so a taxonomy
+ * still carrying it is reading as a scaffold in every join that
+ * reaches it. The display name is this key title-cased, by
+ * {@link toTitleCase}, so the two cannot drift.
+ */
+const SEED_ROOT_CATEGORY_KEY = 'scaffold-root';
+
+/** The key of the one child sitting under it, named the same way. */
+const SEED_CHILD_CATEGORY_KEY = 'scaffold-child';
+
+/**
+ * What every term in the bundle weighs.
+ *
+ * One, uniformly, which is a refusal rather than a choice: nothing
+ * in the schema fixes what a match is worth, so a number invented
+ * here would become the convention for whoever copies this file by
+ * being the only one written down.
+ */
+const SEED_TERM_WEIGHT = 1;
+
+/**
+ * What the one term carrying a note says.
+ *
+ * One row of the three carries a note and two carry `null`, so both
+ * shapes of a required-and-nullable member appear in the file
+ * somebody edits.
+ */
+const SEED_TERM_NOTE = 'Scaffold. Replace the pattern with something '
+  + 'this domain really matches on, and the weight with what such a '
+  + 'match is worth to it.';
+
+/** The name the scaffolded topic is upserted under. */
+const SEED_TOPIC_NAME = 'Scaffold Topic';
+
+/** How often a scaffolded topic asks to be run: a day. */
+const SEED_INTERVAL_SECONDS = 86_400;
+
+/** The floor an agent proposal is clamped up to: six hours. */
+const SEED_MIN_INTERVAL_SECONDS = 21_600;
+
+/** The ceiling it is clamped down to: a week. */
+const SEED_MAX_INTERVAL_SECONDS = 604_800;
+
+/**
+ * One seed file, as the concern it seeds and the rows it carries.
+ *
+ * Serialized rather than assembled as text, for the reason
+ * {@link workflowSource} is: what a header carries is prose, and
+ * prose inside a JSON string wants escaping no template should be
+ * hand-writing.
+ *
+ * The concern names both the top-level key and the file, which is
+ * the rule `SEED_ROSTER` in `scripts/seed.ts` already follows —
+ * `domains` is the key inside `domains.json` — so one word decides
+ * both here and the two cannot disagree.
+ *
+ * @param concern - The roster key, which is also the file stem.
+ * @param header - The `_readme` lines, one per line as written.
+ * @param rows - That concern's rows, as its schema takes them.
+ * @returns The file, for {@link writeScaffold} to place.
+ */
+function seedConcernFile(
+  concern: string,
+  header: readonly string[],
+  rows: readonly unknown[],
+): ScaffoldFile {
+  const file = { _readme: header, [concern]: rows };
+
+  return {
+    path: `${SEED_DIR}/${concern}.json`,
+    contents: `${JSON.stringify(file, null, 2)}\n`,
+  };
+}
+
+/**
+ * `data/domains.json`: the domain the rest of the bundle hangs off.
+ *
+ * The one row a generator can mostly decide, because the operand IS
+ * the slug and the display name is that slug title-cased. What it
+ * cannot decide is `settings`, and the header says why it is left
+ * empty rather than filled with an example.
+ *
+ * @param name - The domain's slug, as the command line gave it.
+ * @returns The whole of `data/domains.json`.
+ */
+function seedDomainsFile(name: string): ScaffoldFile {
+  return seedConcernFile(
+    'domains',
+    [
+      ...SEED_SHARED_HEADER,
+      'This file seeds `domains`. A domain is upserted by `slug`, so a',
+      'second seed pass updates the same row rather than adding one.',
+      'The slug is the only key in this bundle that is not safe to',
+      'rename: every other file here names this domain by it.',
+      '',
+      '`name` is that slug title-cased, which is the one value a',
+      'generator can decide from what it was handed. Nothing but a',
+      'person reads it, so rename it freely.',
+      '',
+      '`settings` is the DomainSettings payload declared in',
+      '`src/db/schema/domains.ts`. Every member of it is optional and',
+      'an absent one means the pipeline default applies, so `{}` is a',
+      'complete value rather than an unfilled one.',
+      '',
+      'It is empty rather than filled with an example because two of',
+      'its members are keyed by names this domain owns — its scoring',
+      'signals and its document fields — and a scaffold choosing them',
+      'would hand whoever copies this file a vocabulary nobody picked.',
+      '`docs/SEEDING.md` carries the shape to fill it with.',
+      ...SEED_SCAFFOLD_NOTE,
+    ],
+    [{ slug: name, name: toTitleCase(name), settings: {} }],
+  );
+}
+
+/**
+ * `data/personas.json`: the standing instructions each role gets.
+ *
+ * Every `systemText` is empty, which is the placeholder this file
+ * can afford. `scripts/seed-schemas.ts` puts no floor under the
+ * member for exactly this reason — an empty one records that the
+ * role exists and has no instructions yet — and it is the one kind
+ * of placeholder that cannot be mistaken for content, because
+ * invented instructions are instructions a model would follow.
+ *
+ * @param name - The domain's slug, as the command line gave it.
+ * @returns The whole of `data/personas.json`.
+ */
+function seedPersonasFile(name: string): ScaffoldFile {
+  return seedConcernFile(
+    'personas',
+    [
+      ...SEED_SHARED_HEADER,
+      'This file seeds `personas`: the standing instructions a domain',
+      'gives one role. A persona is upserted by the (domain, role)',
+      'pair `personas_domain_id_role_unique` holds.',
+      '',
+      '`domainSlug` is not a column. `personas.domain_id` holds a key',
+      'the database issues, which no seed can know before the domain',
+      'row is written, so a persona names its domain by the one key',
+      'an author owns: the slug `domains.json` seeds. The loader',
+      'resolves it, and refuses a persona naming a slug the bundle',
+      'does not carry.',
+      '',
+      'Three roles, because three are what the pipeline plays today.',
+      '`personas.role` carries no CHECK, so the set is rows rather',
+      'than a closed list: a fourth role is a row here and not a code',
+      'change.',
+      '',
+      'Every `systemText` is empty, and that is a state the column is',
+      'entitled to hold and a reader can act on — the role exists and',
+      'has no instructions yet. It is also the only placeholder this',
+      'file could carry safely: invented instructions are the one',
+      'kind a model would go on and follow.',
+      ...SEED_SCAFFOLD_NOTE,
+    ],
+    SEED_PERSONA_ROLES.map((role) => ({
+      domainSlug: name,
+      role,
+      systemText: '',
+    })),
+  );
+}
+
+/**
+ * `data/categories.json`: the buckets a domain's terms hang off.
+ *
+ * Two rows where one would validate, and the second is the whole
+ * reason: a root writes `parentKey` as `null`, so a bundle of roots
+ * alone never shows where a parent key goes. It is the same
+ * reasoning {@link migrationSource} gives for emitting two
+ * statements — emitting only the case that needs nothing leaves the
+ * case that needs something to memory.
+ *
+ * @param name - The domain's slug, as the command line gave it.
+ * @returns The whole of `data/categories.json`.
+ */
+function seedCategoriesFile(name: string): ScaffoldFile {
+  return seedConcernFile(
+    'categories',
+    [
+      ...SEED_SHARED_HEADER,
+      'This file seeds `categories`: one bucket of a domain\'s',
+      'taxonomy. A category is upserted by the (domain, key) pair',
+      '`categories_domain_id_key_unique` holds.',
+      '',
+      '`domainSlug` stands in for `categories.domain_id`, for the',
+      'reason `personas.json` gives. `parentKey` is the same',
+      'substitution one level down, standing in for',
+      '`categories.parent_id`.',
+      '',
+      'Two rows, and the second is why. A root carries `parentKey` as',
+      'null, written out rather than left off because a root is not a',
+      'category missing a parent; only a child shows where a parent',
+      'key actually goes, and a bundle of roots would leave that to',
+      'memory.',
+      '',
+      'Nesting is capped at one level by a trigger on `categories`,',
+      'which refuses a parent that is itself a child and a parent',
+      'belonging to another domain. These two sit on the right side',
+      'of that cap. A third generation under them would not.',
+      '',
+      '`parentKey` is the one reference the loader does not resolve.',
+      'A category naming a parent the bundle does not carry reaches',
+      'the apply pass, which is where such a key becomes an id.',
+      ...SEED_SCAFFOLD_NOTE,
+    ],
+    [
+      {
+        domainSlug: name,
+        key: SEED_ROOT_CATEGORY_KEY,
+        name: toTitleCase(SEED_ROOT_CATEGORY_KEY),
+        parentKey: null,
+      },
+      {
+        domainSlug: name,
+        key: SEED_CHILD_CATEGORY_KEY,
+        name: toTitleCase(SEED_CHILD_CATEGORY_KEY),
+        parentKey: SEED_ROOT_CATEGORY_KEY,
+      },
+    ],
+  );
+}
+
+/**
+ * `data/terms.json`: one pattern a category matches on, three times.
+ *
+ * One row per member of `TERM_POLARITIES`, which is the roster worth
+ * showing here: which way a match points is `polarity`'s to say and
+ * `weight` says only how much, so a file carrying one polarity
+ * would show half the mechanism.
+ *
+ * The polarities are imported rather than written out, for the
+ * reason `scripts/seed-schemas.ts` imports them: that tuple is the
+ * single declaration `terms_polarity_check` is generated from, so a
+ * scaffold can never emit a polarity the column would refuse. It is
+ * the one thing this generator reaches outside itself for.
+ *
+ * Takes no name, and is the only one here that does not: no term
+ * names a domain. It reaches one through the category it keys on,
+ * which is the substitution that file's own header explains.
+ *
+ * @returns The whole of `data/terms.json`.
+ */
+function seedTermsFile(): ScaffoldFile {
+  return seedConcernFile(
+    'terms',
+    [
+      ...SEED_SHARED_HEADER,
+      'This file seeds `terms`: one pattern a category matches on,',
+      'and what a match is worth. A term is upserted by the',
+      '(category, pattern) pair `terms_category_id_pattern_unique`',
+      'holds.',
+      '',
+      '`categoryKey` is not a column. It stands in for',
+      '`terms.category_id` and names one half of a category\'s own',
+      'natural key, so the loader holds it against every key',
+      '`categories.json` declares and refuses a term naming one that',
+      'file does not carry. No term names a domain: it reaches one',
+      'through the category above it.',
+      '',
+      'One row per polarity, which is the roster worth showing here.',
+      'Which way a match points is `polarity` to say and `weight`',
+      'says only how much, so a file carrying one polarity would show',
+      'half the mechanism. The three are the members',
+      '`terms_polarity_check` is generated from, so a fourth is a',
+      'schema change rather than a row.',
+      '',
+      'Every weight is 1, and that is a refusal rather than a choice.',
+      'Nothing in the schema fixes what a match is worth, so a number',
+      'invented here would become the convention for whoever copies',
+      'this file, by being the only one written down.',
+      '',
+      '`notes` is required and nullable, and both shapes are below: a',
+      'row with nothing recorded says so, rather than being',
+      'indistinguishable from a member somebody left off.',
+      ...SEED_SCAFFOLD_NOTE,
+    ],
+    TERM_POLARITIES.map((polarity, index) => ({
+      categoryKey: SEED_ROOT_CATEGORY_KEY,
+      pattern: `scaffold ${polarity} term`,
+      weight: SEED_TERM_WEIGHT,
+      polarity,
+      notes: index === 0
+        ? SEED_TERM_NOTE
+        : null,
+    })),
+  );
+}
+
+/**
+ * `data/topics.json`: the standing subject, and how often it runs.
+ *
+ * The one file whose placeholder has a runtime consequence worth
+ * stating, and the header states it: `enabled` defaults to true, so
+ * a seeded topic is a schedulable row the moment it lands, and what
+ * keeps this one from being researched is that no seed names
+ * `nextRunAt` — the claim takes rows whose `next_run_at` has
+ * passed, and a NULL never has.
+ *
+ * @param name - The domain's slug, as the command line gave it.
+ * @returns The whole of `data/topics.json`.
+ */
+function seedTopicsFile(name: string): ScaffoldFile {
+  return seedConcernFile(
+    'topics',
+    [
+      ...SEED_SHARED_HEADER,
+      'This file seeds `topics`: a standing subject, the queries it',
+      'issues on its own behalf, and how often it runs. A topic is',
+      'upserted by the (domain, name) pair',
+      '`topics_domain_id_name_unique` holds.',
+      '',
+      '`domainSlug` stands in for `topics.domain_id`, for the reason',
+      '`personas.json` gives.',
+      '',
+      '`searchTerms` is written out empty rather than left off. The',
+      'column defaults to `[]`, so a database cannot tell the two',
+      'apart; the member is here because those queries are what the',
+      'topic is for, and an absent member is easy never to notice.',
+      '',
+      'The three intervals are chosen here and fixed by nothing: a',
+      'day, with a floor of six hours and a ceiling of a week. No',
+      'CHECK relates them to each other, and the clamp between the',
+      'bounds is applied by the writer rather than by the database.',
+      '',
+      '`enabled` and `nextRunAt` are not members, and writing either',
+      'would be an unrecognized key rather than a quiet overwrite:',
+      'the first belongs to an operator and the second to the',
+      'dispatcher. That is also what makes this row safe to apply',
+      'unedited. `enabled` defaults to true, so the topic is',
+      'schedulable the moment it lands — but `next_run_at` arrives',
+      'NULL, and the claim takes rows whose `next_run_at` has',
+      'PASSED, which a NULL never has. Nothing researches this topic',
+      'until somebody gives it a due time.',
+      ...SEED_SCAFFOLD_NOTE,
+    ],
+    [
+      {
+        domainSlug: name,
+        name: SEED_TOPIC_NAME,
+        searchTerms: [],
+        intervalSeconds: SEED_INTERVAL_SECONDS,
+        minIntervalSeconds: SEED_MIN_INTERVAL_SECONDS,
+        maxIntervalSeconds: SEED_MAX_INTERVAL_SECONDS,
+      },
+    ],
+  );
+}
+
+/**
+ * The generator behind `scaffold seed-bundle <slug> <dir>`.
+ *
+ * Five files, one per concern in `SEED_ROSTER`, and all five or
+ * none: `loadSeedBundle` reads the whole roster before it decides
+ * anything, so a file the roster names and the directory does not
+ * hold is a failure rather than an empty concern. A generator
+ * emitting four of them would emit a bundle that cannot be applied
+ * at all.
+ *
+ * Emitted in the roster's own order, which is parent before child —
+ * the order the rows have to be written in, and the order failures
+ * are reported in.
+ *
+ * The operand is a slug rather than a name, because that is what
+ * every file in the bundle names the domain by: `domains.json`
+ * upserts on it and the other four resolve against it. It is also
+ * the one operand of this command that does not become a filename,
+ * the five names being fixed by the roster. {@link NAME_PATTERN}
+ * is the right shape for one anyway: a slug is exactly lower-case
+ * words joined by single hyphens.
+ */
+const SEED_BUNDLE_GENERATOR: ScaffoldGenerator = {
+  name: 'seed-bundle',
+  operand: 'slug',
+  summary: 'the five seed files under data/, for one domain',
+  generate: (name) => [
+    seedDomainsFile(name),
+    seedPersonasFile(name),
+    seedCategoriesFile(name),
+    seedTermsFile(),
+    seedTopicsFile(name),
+  ],
+};
+
+/**
  * Every generator this command can run, keyed by the word an
  * operator types.
  *
@@ -1440,6 +1919,7 @@ export const GENERATORS: Readonly<Record<string, ScaffoldGenerator>> = {
   [SOURCE_ADAPTER_GENERATOR.name]: SOURCE_ADAPTER_GENERATOR,
   [MIGRATION_GENERATOR.name]: MIGRATION_GENERATOR,
   [WORKFLOW_GENERATOR.name]: WORKFLOW_GENERATOR,
+  [SEED_BUNDLE_GENERATOR.name]: SEED_BUNDLE_GENERATOR,
 };
 
 /**

@@ -130,6 +130,8 @@
  * needles are live.
  */
 import type { BuiltArtifact } from '../../scripts/n8n-workflow.js';
+import type { SeedBundle } from '../../scripts/seed.js';
+import type { ZodType } from 'zod';
 
 import { spawnSync } from 'node:child_process';
 import {
@@ -155,7 +157,20 @@ import {
   ScaffoldWriteError,
   writeScaffold,
 } from '../../scripts/scaffold.js';
+import {
+  CategoriesFileSchema,
+  DomainsFileSchema,
+  PersonasFileSchema,
+  TermsFileSchema,
+  TopicsFileSchema,
+} from '../../scripts/seed-schemas.js';
+import {
+  loadSeedBundle,
+  SEED_ROSTER,
+  stripUnderscoreKeys,
+} from '../../scripts/seed.js';
 import { SURVIVING_MARKER_FORMS } from '../../scripts/workflow-markers.js';
+import { TERM_POLARITIES } from '../../src/db/schema/values.js';
 import { REFUSED_LIB_SAMPLES } from '../build/marker-fixtures.js';
 import {
   isScheduleTrigger,
@@ -179,6 +194,9 @@ const MIGRATION_GENERATOR = 'migration';
 
 /** The fourth, and the only one emitting a single file. */
 const WORKFLOW_GENERATOR = 'workflow';
+
+/** The fifth, which stamps five files that have to VALIDATE. */
+const SEED_BUNDLE_GENERATOR = 'seed-bundle';
 
 /**
  * A name the pattern accepts, in two words.
@@ -285,6 +303,17 @@ const NO_NAME_ARGV: readonly string[] = [GENERATOR];
  */
 const NO_ID_ARGV: readonly string[] = [ADAPTER_GENERATOR];
 
+/**
+ * A third generator with nothing after it either, in a third word.
+ *
+ * Two operands settle that the word is read off the registry rather
+ * than fixed; a third settles that it is read off the entry that
+ * was NAMED, which two cannot — a parser keying the word on
+ * anything but the entry would have to disagree with one of these
+ * three.
+ */
+const NO_SLUG_ARGV: readonly string[] = [SEED_BUNDLE_GENERATOR];
+
 /** A generator and a name, with nowhere to put the result. */
 const NO_TARGET_ARGV: readonly string[] = [GENERATOR, EMITTED_NAME];
 
@@ -311,6 +340,7 @@ const REFUSED_ARGUMENTS: readonly (readonly string[])[] = [
   UNKNOWN_GENERATOR_ARGV,
   NO_NAME_ARGV,
   NO_ID_ARGV,
+  NO_SLUG_ARGV,
   NO_TARGET_ARGV,
   EXTRA_ARGUMENT_ARGV,
   ...UNUSABLE_NAME_ARGVS,
@@ -331,6 +361,9 @@ const NO_NAME_PROBLEM = 'no name followed lib';
 
 /** What the one taking an id is refused with, in its own word. */
 const NO_ID_PROBLEM = 'no id followed source-adapter';
+
+/** And what the one taking a slug is refused with, in its. */
+const NO_SLUG_PROBLEM = 'no slug followed seed-bundle';
 
 /** What a generator and a name with nowhere to go is refused with. */
 const NO_TARGET_PROBLEM = 'no target directory given';
@@ -367,6 +400,7 @@ const USAGE_LINES: readonly string[] = [
   '  source-adapter <id> — an adapter under src/sources/, cases and payload',
   '  migration <name> — a hand-written migration under drizzle/ and its entry',
   '  workflow <id> — a workflow source under workflows/src/, with no trigger',
+  '  seed-bundle <slug> — the five seed files under data/, for one domain',
 ];
 
 // ---------------------------------------------------------------------------
@@ -477,6 +511,13 @@ describe('parseScaffoldArgs — a command line it cannot stamp', () => {
   // two cases and fails the other.
   it('refuses one taking an id in that generator\'s own word', () => {
     expect(refusedProblem(NO_ID_ARGV)).toBe(NO_ID_PROBLEM);
+  });
+
+  // The third word, which is what turns that pair into a rule. Two
+  // operands are satisfied by a parser alternating between them;
+  // three are satisfied only by one reading the entry it was given.
+  it('refuses one taking a slug in that generator\'s own word', () => {
+    expect(refusedProblem(NO_SLUG_ARGV)).toBe(NO_SLUG_PROBLEM);
   });
 
   // The target directory is a required operand and not a default,
@@ -1999,5 +2040,404 @@ describe('the marker text a workflow run does not write', () => {
     const spelled = `${WORKFLOW_TEXT} ${SURVIVING_MARKER_FORMS.join(' ')}`;
 
     expect(markerFormsIn(spelled)).toStrictEqual(SURVIVING_MARKER_FORMS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The bundle a seed-bundle run writes
+// ---------------------------------------------------------------------------
+
+/**
+ * A slug the pattern accepts, in two words.
+ *
+ * Hyphenated for the reason {@link EMITTED_NAME} is, and the step it
+ * exercises is the one {@link WORKFLOW_ID} drives: a domain's
+ * display name is its slug title-cased, so a single word would agree
+ * with itself however that step behaved.
+ */
+const BUNDLE_SLUG = 'sample-domain';
+
+/** The display name that slug is title-cased into. */
+const BUNDLE_DOMAIN_NAME = 'Sample Domain';
+
+/** The one seed-bundle emission every claim below reads. */
+const BUNDLE_EMITTED = emitInto(
+  SEED_BUNDLE_GENERATOR,
+  BUNDLE_SLUG,
+  'accepted-bundle',
+);
+
+/**
+ * Where those files sit, as `loadSeedBundle` takes a directory.
+ *
+ * The emitted paths are relative to a package root, so the bundle
+ * lands one level down. Naming it here rather than in each reader
+ * is what lets the loader be handed the same directory the schemas
+ * below are pointed at.
+ */
+const BUNDLE_DATA_DIR = join(BUNDLE_EMITTED.targetDir, 'data');
+
+/**
+ * Every concern a bundle is, in the roster's own order.
+ *
+ * Taken from `SEED_ROSTER` rather than written out, which is what
+ * makes the claims below about the loader's roster instead of about
+ * a copy of it: a sixth concern added there reddens the emission
+ * case and the schema-table case in the same run.
+ *
+ * `Object.keys` is typed to `string[]`, since an object in general
+ * carries keys its type does not name. That roster is a `const`
+ * literal in `scripts/seed.ts`, so its keys are exactly the
+ * concerns it declares — the same assertion that file makes about
+ * it for the same reason.
+ */
+const BUNDLE_CONCERNS: readonly (keyof typeof SEED_ROSTER)[] =
+  Object.keys(SEED_ROSTER) as (keyof typeof SEED_ROSTER)[];
+
+/**
+ * The schema `scripts/seed-schemas.ts` exports for each concern.
+ *
+ * Written out rather than read off the roster, because two of the
+ * claims below are about the pairing itself: that this table names
+ * every concern the roster does, and that each entry is the SAME
+ * OBJECT the roster carries. Reading it off the roster would make
+ * both vacuous, and validating with a lookalike would say the
+ * emitted files satisfy something other than what `bun run db:seed`
+ * holds them to.
+ */
+const BUNDLE_SCHEMAS: Readonly<Record<string, ZodType>> = {
+  domains: DomainsFileSchema,
+  personas: PersonasFileSchema,
+  categories: CategoriesFileSchema,
+  terms: TermsFileSchema,
+  topics: TopicsFileSchema,
+};
+
+/**
+ * Where each concern's file lands, absolute, in roster order.
+ *
+ * Built from the roster's own filenames, so what the emission is
+ * held against is the path the loader will open rather than a
+ * spelling repeated here.
+ */
+const BUNDLE_ROSTER_PATHS: readonly string[] = BUNDLE_CONCERNS
+  .map((concern) => join(BUNDLE_DATA_DIR, SEED_ROSTER[concern].file));
+
+/** Whether each table entry is the object the roster holds. */
+const BUNDLE_SCHEMA_IDENTITY: readonly boolean[] = BUNDLE_CONCERNS
+  .map((concern) => BUNDLE_SCHEMAS[concern] === SEED_ROSTER[concern].schema);
+
+// ---------------------------------------------------------------------------
+// Holding each emitted file to its own schema
+// ---------------------------------------------------------------------------
+
+/** What a reading reports for a file its schema took whole. */
+const VALIDATED = 'validated';
+
+/** What one reports when the table names no schema for a concern. */
+const NO_SCHEMA = '(no schema for this concern)';
+
+/** One emitted file, held against the schema for its concern. */
+interface SeedFileReading {
+  /** The concern, as the roster keys it. */
+  readonly concern: string;
+
+  /** {@link VALIDATED}, or every issue the schema raised. */
+  readonly outcome: string;
+}
+
+/**
+ * Read one emitted file and hand it to the schema for its concern.
+ *
+ * The two steps `loadSeedBundle` takes, in its order and with the
+ * same seam between them: parse, clear the underscore keys, then
+ * validate. `strip` is what makes that order visible — the schemas
+ * are strict and name no `_readme`, so the same file read either
+ * way is the difference between a bundle that would apply and one
+ * refused for its own header.
+ *
+ * A refusal is reported rather than raised, and reported by issue
+ * rather than as the fact that something was refused: five schemas
+ * refuse a great many different things, and a case reading only
+ * that a refusal arrived passes for any of them.
+ *
+ * @param concern - The roster key naming the file and the schema.
+ * @param strip - Whether to clear underscore keys first, which is
+ * what the loader does before it validates anything.
+ * @returns What that schema made of the file.
+ */
+function readEmittedSeed(
+  concern: keyof typeof SEED_ROSTER,
+  strip: boolean,
+): SeedFileReading {
+  const path = join(BUNDLE_DATA_DIR, SEED_ROSTER[concern].file);
+  const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+  const value = strip
+    ? stripUnderscoreKeys(parsed)
+    : parsed;
+  const result = BUNDLE_SCHEMAS[concern]?.safeParse(value);
+
+  if (result === undefined) {
+    return { concern, outcome: NO_SCHEMA };
+  }
+
+  if (result.success) {
+    return { concern, outcome: VALIDATED };
+  }
+
+  return {
+    concern,
+    outcome: result.error.issues.map((issue) => (
+      issue.code === 'unrecognized_keys'
+        ? `unrecognized ${issue.keys.join('+')}`
+        : `${issue.code} at ${issue.path.join('.')}`
+    )).join('; '),
+  };
+}
+
+/** Every emitted file, read the way the loader reads one. */
+const BUNDLE_STRIPPED_READINGS: readonly SeedFileReading[] = BUNDLE_CONCERNS
+  .map((concern) => readEmittedSeed(concern, true));
+
+/** The same five, with their headers still on. */
+const BUNDLE_RAW_READINGS: readonly SeedFileReading[] = BUNDLE_CONCERNS
+  .map((concern) => readEmittedSeed(concern, false));
+
+/** What a schema says about the header, once nothing has stripped it. */
+const HEADER_REFUSAL = 'unrecognized _readme';
+
+// ---------------------------------------------------------------------------
+// Reading the whole bundle the way `bun run db:seed` reads one
+// ---------------------------------------------------------------------------
+
+/** What a load reports when the loader returned a bundle. */
+const LOADED = 'loaded';
+
+/** One attempt at loading the emitted directory. */
+interface BundleLoad {
+  /** {@link LOADED}, or what the loader refused it with. */
+  readonly outcome: string;
+
+  /** The bundle it yielded, or `null` when it yielded none. */
+  readonly bundle: SeedBundle | null;
+}
+
+/** A bundle carrying nothing, stood in for one that never loaded. */
+const EMPTY_BUNDLE: SeedBundle = {
+  domains: [],
+  personas: [],
+  categories: [],
+  terms: [],
+  topics: [],
+};
+
+/**
+ * Load the emitted directory, reporting a refusal rather than
+ * raising one.
+ *
+ * The claim this whole section is for, and the one the per-file
+ * readings cannot make: the loader validates every file AND then
+ * holds the rows against each other, so a persona, a category or a
+ * topic naming a domain the bundle does not carry — or a term
+ * naming a category it does not declare — is refused here and by
+ * nothing above. A generated bundle that validated file by file and
+ * failed that pass would be one `bun run db:seed` never applies.
+ *
+ * Reported rather than thrown for the reason {@link readWorkflow}
+ * is: a module-scope refusal would take every case below it down
+ * with it, and what a reader wants is the failure with a message.
+ *
+ * @returns How the load went, and what it yielded.
+ */
+function loadEmittedBundle(): BundleLoad {
+  try {
+    return { outcome: LOADED, bundle: loadSeedBundle(BUNDLE_DATA_DIR) };
+  } catch (thrown) {
+    return { outcome: String(thrown), bundle: null };
+  }
+}
+
+/** That load, which every claim about the rows stands on. */
+const BUNDLE_LOAD = loadEmittedBundle();
+
+/** The rows it yielded, or none at all. */
+const BUNDLE: SeedBundle = BUNDLE_LOAD.bundle ?? EMPTY_BUNDLE;
+
+/**
+ * Every domain slug the bundle's rows name, in file order.
+ *
+ * Four of the five concerns name one; a term does not, reaching its
+ * domain through the category it keys on instead.
+ */
+const BUNDLE_SLUGS: readonly string[] = [
+  ...BUNDLE.domains.map((row) => row.slug),
+  ...BUNDLE.personas.map((row) => row.domainSlug),
+  ...BUNDLE.categories.map((row) => row.domainSlug),
+  ...BUNDLE.topics.map((row) => row.domainSlug),
+];
+
+/** Every category key it declares, in file order. */
+const BUNDLE_CATEGORY_KEYS: readonly string[] = BUNDLE.categories
+  .map((row) => row.key);
+
+/** The parent each of those categories names, in the same order. */
+const BUNDLE_PARENT_KEYS: readonly (string | null)[] = BUNDLE.categories
+  .map((row) => row.parentKey);
+
+describe('the bundle a seed-bundle run writes', () => {
+  // The layout, as one file per concern the loader reads rather
+  // than as five paths named here. All five or none: the loader
+  // reads the whole roster before it decides anything, so a file it
+  // names and the directory does not hold is a failure rather than
+  // an empty concern.
+  it('writes one file per concern the loader reads, and nothing else', () => {
+    expect(BUNDLE_EMITTED.written).toStrictEqual(BUNDLE_ROSTER_PATHS);
+  });
+
+  // The guard under every claim below: the table is paired with the
+  // roster by key, so a concern added to one and not the other is
+  // reported here rather than silently unvalidated.
+  it('holds a schema for every concern the roster names', () => {
+    expect(Object.keys(BUNDLE_SCHEMAS)).toStrictEqual(BUNDLE_CONCERNS);
+  });
+
+  // And the pairing is by identity rather than by resemblance, so
+  // what the emitted files are held to below is the object the
+  // loader itself validates with. A lookalike would pass every
+  // reading here and say nothing about `bun run db:seed`.
+  it('pairs each with the schema the loader validates with', () => {
+    expect(BUNDLE_SCHEMA_IDENTITY)
+      .toStrictEqual(BUNDLE_CONCERNS.map(() => true));
+  });
+
+  // The claim the generator exists for: what it stamps would apply
+  // before anybody edits it. Read file by file rather than as a
+  // count, so a schema that refused one of them names which.
+  it('validates every emitted file against its own schema', () => {
+    expect(BUNDLE_STRIPPED_READINGS).toStrictEqual(BUNDLE_CONCERNS
+      .map((concern) => ({ concern, outcome: VALIDATED })));
+  });
+
+  // The control that makes the pass above a measurement. Every
+  // schema is strict and none names `_readme`, so the same files
+  // read without the strip have to be refused and refused BY NAME.
+  // A table of schemas that accepted anything would satisfy the
+  // case above exactly as a correct bundle does; nothing satisfies
+  // both.
+  it('refuses those same files with their headers still on', () => {
+    expect(BUNDLE_RAW_READINGS).toStrictEqual(BUNDLE_CONCERNS
+      .map((concern) => ({ concern, outcome: HEADER_REFUSAL })));
+  });
+
+  // The half the per-file readings cannot reach: every reference
+  // across the five resolves. A bundle whose files each validated
+  // and whose personas named a slug `domains.json` does not carry
+  // is refused here, which is where `bun run db:seed` would refuse
+  // it too.
+  it('loads whole through the loader that would apply it', () => {
+    expect(BUNDLE_LOAD.outcome).toBe(LOADED);
+  });
+
+  // The operand, read where it lands. Every row that names a domain
+  // names the one the command line gave — asserted as the set of
+  // slugs the rows carry, so a file left pointing at some other
+  // domain is a second member here rather than a reference that
+  // happens to resolve.
+  it('names the domain it was given in every row that has one', () => {
+    expect([...new Set(BUNDLE_SLUGS)]).toStrictEqual([BUNDLE_SLUG]);
+  });
+
+  // The casing step, read off the row it lands in.
+  it('names that domain for its slug, title-cased', () => {
+    expect(BUNDLE.domains.map((row) => row.name))
+      .toStrictEqual([BUNDLE_DOMAIN_NAME]);
+  });
+
+  // Two categories rather than one, which is the shape a bundle of
+  // roots alone would never show: `parentKey` stands in for a key
+  // the database issues, and only a child has anywhere to put one.
+  it('seeds a root and a child that names it', () => {
+    expect(BUNDLE_PARENT_KEYS).toStrictEqual([null, BUNDLE_CATEGORY_KEYS[0]]);
+  });
+
+  // One term per polarity, held against the tuple the CHECK on
+  // `terms.polarity` is generated from rather than against three
+  // words repeated here. That tuple is what the generator maps
+  // over, so this is also what says a polarity added to it reaches
+  // the bundle instead of leaving a member the seed never shows.
+  it('seeds one term per polarity the column is checked against', () => {
+    expect(BUNDLE.terms.map((row) => row.polarity))
+      .toStrictEqual([...TERM_POLARITIES]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The header every one of those files opens with
+// ---------------------------------------------------------------------------
+
+/** The key a seed file's header sits under, as the file spells it. */
+const HEADER_KEY_OPENING = '"_readme": [';
+
+/**
+ * What `docs/SEEDING.md` caps a header line at, as it sits in the
+ * file — four spaces of indent, the quotes and the comma included.
+ */
+const SEED_HEADER_COLUMNS = 74;
+
+/**
+ * The header lines of one emitted file, as they sit in it.
+ *
+ * Read off the text rather than off the parsed array, because the
+ * cap is on the rendered line and not on the string inside it. That
+ * is the failure a template hides: an entry authored to a column
+ * limit renders four spaces, two quotes and a comma wider, and
+ * nothing but the file itself reports it.
+ *
+ * @param concern - The roster key naming the file.
+ * @returns Its header lines, or none when it carries no header.
+ */
+function headerLinesOf(concern: keyof typeof SEED_ROSTER): readonly string[] {
+  const path = join(BUNDLE_DATA_DIR, SEED_ROSTER[concern].file);
+  const lines = readFileSync(path, 'utf8').split('\n');
+  const opened = lines.findIndex((line) => line.includes(HEADER_KEY_OPENING));
+
+  if (opened < 0) {
+    return [];
+  }
+
+  const rest = lines.slice(opened + 1);
+  const closed = rest.findIndex((line) => line.trimStart().startsWith(']'));
+
+  if (closed < 0) {
+    return [];
+  }
+
+  return rest.slice(0, closed);
+}
+
+/** How many header lines each file carries, in roster order. */
+const BUNDLE_HEADER_COUNTS: readonly number[] = BUNDLE_CONCERNS
+  .map((concern) => headerLinesOf(concern).length);
+
+/** Every concern whose header runs past the column the format fixes. */
+const BUNDLE_OVERLONG_HEADERS: readonly string[] = BUNDLE_CONCERNS
+  .filter((concern) => headerLinesOf(concern)
+    .some((line) => line.length > SEED_HEADER_COLUMNS));
+
+describe('the header a seed-bundle run opens every file with', () => {
+  // The required half. `docs/SEEDING.md` makes the header
+  // mandatory, because a seed file is usually met on its own — in a
+  // diff or an editor tab — where nothing about the content says
+  // which path owns it.
+  it('gives every one of the five a header of its own', () => {
+    expect(BUNDLE_HEADER_COUNTS.map((count) => count > 0))
+      .toStrictEqual(BUNDLE_CONCERNS.map(() => true));
+  });
+
+  // A zero-hit reading, and the case above is its control: a file
+  // with no header has no line to run long, so an empty answer here
+  // means something only once every file is known to carry one.
+  it('wraps every header line inside the column the format fixes', () => {
+    expect(BUNDLE_OVERLONG_HEADERS).toStrictEqual([]);
   });
 });
