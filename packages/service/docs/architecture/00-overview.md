@@ -96,6 +96,7 @@ Paths are relative to `packages/service`.
 | `src/sources/` | The source adapter contract and the adapters that satisfy it (phase 4 onward), push capture included. |
 | `src/exports/` | Export renderers (phase 6): one per format a subscription can be rendered into. |
 | `src/routes/`, `src/mcp/` | The API surface itself — HTTP routes and MCP tools over the schema. |
+| `src/http/` | The shared boundary under that surface, one declaration each: the success envelope and the pagination meta derived from the window and the store's count, the slug/id param and pagination query schemas, and the boundary parser whose validation details name a field path and never a submitted value. Arrives with the wave-1 route groups; see `docs/architecture/08-http-api.md`. |
 | `workflows/src/` | n8n workflow sources, one JSON file per workflow (phase 3 onward). See `workflows/src/README.md`. |
 | `workflows/dist/`, `workflows/dist-external/` | Build output. Gitignored, and never hand-edited. |
 | `scripts/` | Operator entry points: `seed.ts` applies the `data/` bundle, `approve.ts` lists the rows waiting on a ruling and approves or rejects one. Workflow build, deploy, activation and audit landed in phase 3; the stack-lifecycle scripts and the doc-link check arrive in phase 7. See `scripts/README.md`. |
