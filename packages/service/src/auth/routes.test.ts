@@ -1,8 +1,34 @@
 /**
- * Two things about `buildAuthRouter` that only a running router
- * reports: the rate limiter it puts in front of `POST /login`, and
- * the secret gate it puts in front of `POST /introspect`. Both are
- * driven over supertest against a router built by the real factory.
+ * Three things about `buildAuthRouter` that only a running router
+ * reports: the answer each refusal path writes, the rate limiter it
+ * puts in front of `POST /login`, and the secret gate it puts in
+ * front of `POST /introspect`. All of them are driven over supertest
+ * against a router built by the real factory.
+ *
+ * SIX REFUSALS COME FIRST, and what they pin is the UNIFORMITY of
+ * the answer rather than any one status. Three are `POST /login`: a
+ * request carrying no body at all, one whose body names no password,
+ * and one whose password does not verify. All three answer the same
+ * flat `401` with the same `{ error: 'Unauthorized' }`, which is the
+ * whole of that route's refusal design — a client able to tell them
+ * apart has been told whether its request was well formed and
+ * whether a login name exists, and neither is a refused login's
+ * business. The status is doing more work there than it looks: a
+ * parse failure allowed through to the `errorHandler` that
+ * `createService` registers last answers `422` with a `details`
+ * array built out of the submitted body, so `401` is what says this
+ * handler refused it first, and `toStrictEqual` is what would catch
+ * a `details` key arriving beside the `error` one.
+ *
+ * The other three are the routes carrying no credential.
+ * `POST /logout` answers a token naming no session the same
+ * `200 { ok: true }` a real revocation gets, which is RFC 7009 §2.2
+ * and the reason `revokeSession`'s boolean is dropped rather than
+ * put on the wire. `POST /introspect` refuses an absent
+ * `Authorization` header and an equal-length wrong secret with one
+ * answer. Each of those five refusals is asserted against the SAME
+ * two constants, which is how this file says they are one envelope
+ * rather than five that happen to agree today.
  *
  * Nothing else in the repository reports on the limiter. It has no
  * exported symbol, no type a signature could pin and no branch a
@@ -49,7 +75,10 @@
  * byte-identical request, and nothing in the response separates the
  * two. Its in-band control is an authorized call on that same
  * counter, since a store nothing ever calls answers `0` to
- * everything.
+ * everything. The refusal group above asserts that same status and
+ * body over again on purpose: those cases say what a caller reads
+ * and make no claim about where the refusal happened, and the
+ * counter is the whole of what this one adds to them.
  *
  * One claim against the ASSEMBLED service, which is the only place
  * the word "stricter" means anything: `createService` installs an
@@ -60,57 +89,94 @@
  * does, so the case follows a change to either limiter instead of
  * pinning today's numbers.
  *
- * Anti-vacuity. The budget case asserts the TENTH attempt was served
- * as well as that the eleventh was not, because a limiter set to one
- * or to zero satisfies the refusal alone. The before-the-store case
- * pairs its `0` against an allowed attempt's `1` on the same
- * counter, since a store nothing ever calls answers `0` to
- * everything. The scoping case fires more than the whole budget at
- * `/logout` rather than one request past it. And each keying case
- * reads `RateLimit-Remaining` rather than a status, so it reports
- * which window was charged rather than only that the request was
- * under some limit.
+ * Anti-vacuity, refusals first. The credential case reads the store
+ * counter AND the planted row: an unknown login name is refused with
+ * the identical bytes at the identical cost of one store call, so
+ * without the row assertion this would be an unknown-user case
+ * wearing a wrong-password label. The logout case reads the counter
+ * in the same direction — its `200` has to be a revocation that was
+ * attempted and collapsed rather than a handler that answered before
+ * asking — and asserts the store minted nothing. The two
+ * malformed-login cases carry no counter on purpose: where a refusal
+ * happens on `/login` is the limiter case's subject and on
+ * `/introspect` the gate case's, and a third reading of it here
+ * would be one claim written twice.
+ *
+ * Anti-vacuity for the limiter. The budget case asserts the TENTH
+ * attempt was served as well as that the eleventh was not, because a
+ * limiter set to one or to zero satisfies the refusal alone. The
+ * before-the-store case pairs its `0` against an allowed attempt's
+ * `1` on the same counter, since a store nothing ever calls answers
+ * `0` to everything. The scoping case fires more than the whole
+ * budget at `/logout` rather than one request past it. And each
+ * keying case reads `RateLimit-Remaining` rather than a status, so
+ * it reports which window was charged rather than only that the
+ * request was under some limit.
  *
  * The window is fifteen minutes, so no case here waits for one to
  * roll: every claim is about what happens inside a single window,
  * and a fresh router is how a case gets a fresh one.
  *
- * Eight mutations of `routes.ts` were run against these ten cases,
- * and the split is worth reading rather than assuming, because two
- * legs are far wider than the setting they move. Dropping the
- * limiter from the route reddens EIGHT — every case but two: the
- * scoping one, which asserts `/logout` is not limited and so cannot
- * notice a limiter that stopped existing, and the gate one, which
- * makes no login request at all. Raising the count from ten to a
- * hundred reddens that same eight rather than the two budget cases,
- * because each keying case reads `RateLimit-Remaining` and so
- * inherits the count. The other three limiter legs are narrow and
- * matched: mounting the limiter on the router with `use` instead of
- * on the route reddens the scoping case and the assembled-service
- * one; shortening the window to thirty seconds reddens the envelope
- * case (which reads `Retry-After`) and, again, the
- * assembled-service one; and adding a `keyGenerator` keyed on the
- * exact `req.ip` reddens exactly ONE, the /56 case, which is the
+ * Eleven mutations of `routes.ts` were run against these sixteen
+ * cases, and the split is worth reading rather than assuming,
+ * because two legs are far wider than the setting they move.
+ * Dropping the limiter from the route reddens EIGHT — every limiter
+ * case but two: the scoping one, which asserts `/logout` is not
+ * limited and so cannot notice a limiter that stopped existing, and
+ * the gate one, which makes no login request at all. Raising the
+ * count from ten to a hundred reddens that same eight rather than
+ * the two budget cases, because each keying case reads
+ * `RateLimit-Remaining` and so inherits the count. Neither reaches
+ * the refusal group, whose three login cases spend one attempt
+ * apiece and read no rate-limit header. The other three limiter legs
+ * are narrow and matched: mounting the limiter on the router with
+ * `use` instead of on the route reddens the scoping case and the
+ * assembled-service one; shortening the window to thirty seconds
+ * reddens the envelope case (which reads `Retry-After`) and, again,
+ * the assembled-service one; and adding a `keyGenerator` keyed on
+ * the exact `req.ip` reddens exactly ONE, the /56 case, which is the
  * whole reason that case is written the way it is.
  *
- * The three gate legs each redden exactly one case, the gate's own,
- * but through DIFFERENT assertions — which is what says its three
- * readings are not restatements of each other. Deleting the gate
- * fails on the status, `expected 200 to be 401`. Changing the
- * refusal's status fails on that same assertion, `expected 403 to
- * be 401`. And moving the gate to after `verifySession` leaves the
- * status and the body untouched and fails on the counter alone,
- * `expected 1 to be +0`. That last leg is the reason the counter is
- * in the case at all: a gate running after the read is invisible to
- * every assertion a refusal test would ordinarily carry.
+ * The three gate legs redden the gate case through DIFFERENT
+ * assertions, which is what says its three readings are not
+ * restatements of each other, and two of them reach the refusal
+ * group as well. Deleting the gate fails the gate case on the
+ * status, `expected 200 to be 401`, and reddens both introspection
+ * refusals with it — three in all. Changing the refusal's status to
+ * `403` fails that same assertion, `expected 403 to be 401`, and
+ * reddens the same three. And moving the gate to after
+ * `verifySession` leaves the status and the body untouched and fails
+ * ONE case on the counter alone, `expected 1 to be +0`. That last
+ * leg is the reason the counter is in the gate case at all: a gate
+ * running after the read is invisible to every assertion a refusal
+ * test would ordinarily carry, the two refusal cases in the first
+ * group included.
+ *
+ * The three legs on the refusal paths name three different readings,
+ * and only two of them are narrow. Answering the login PARSE failure
+ * with `422` — which is what letting the `ZodError` through would
+ * produce — reddens exactly the two malformed cases, on the status,
+ * and leaves the credential one green, which is the split saying
+ * those two are refused somewhere the credential path never reaches.
+ * Putting `revokeSession`'s boolean on the wire as `{ ok }` reddens
+ * exactly the logout case, on the body. But answering the login
+ * CREDENTIAL failure with `403` reddens FOUR: the credential case
+ * plus three limiter ones, because the `login` helper they all post
+ * through sends a well-formed body naming a user no store holds, so
+ * each of them reaches that same branch and reads its status. That
+ * is the file saying its login refusal is load-bearing well outside
+ * the case named after it, rather than three cases needing a fix.
  */
 import type { AuthStore } from './store.js';
 import type { ServiceHandle } from '../../lib/express/types.js';
+import type {
+  MemoryAuthStore,
+} from '../../tests/helpers/memory-auth-store.js';
 import type { Application } from 'express';
 
 import express from 'express';
 import request from 'supertest';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { createService } from '../../lib/express/create-service.js';
 import { createLogger } from '../../lib/logger/node.js';
@@ -118,6 +184,7 @@ import {
   createMemoryAuthStore,
 } from '../../tests/helpers/memory-auth-store.js';
 
+import { hashPassword } from './password.js';
 import { buildAuthRouter } from './routes.js';
 
 // Tests run in test mode — no process.exit, ephemeral port. Only the
@@ -212,10 +279,15 @@ interface CountingStore {
  * separates a limiter that answered first from one that ran after
  * the handler had already done the work.
  *
+ * @param inner - The store to count against. Defaults to an empty
+ *   in-memory one, which every case that plants no rows wants. A
+ *   caller holding this reference reads it without moving the
+ *   counter, which is how a case inspects rows it did not write.
  * @returns The wrapped store and its counter.
  */
-function createCountingStore(): CountingStore {
-  const inner = createMemoryAuthStore();
+function createCountingStore(
+  inner: AuthStore = createMemoryAuthStore(),
+): CountingStore {
   let calls = 0;
 
   const store = new Proxy(inner, {
@@ -300,6 +372,185 @@ async function login(
 
   return pending.send({ user: 'nobody', password: 'not-the-password' });
 }
+
+// ---------------------------------------------------------------------------
+// What each refusal answers
+//
+// Plain HTTP readings: a status and a body per refusal path, and no
+// claim about where inside a handler the refusal was decided. Six
+// cases, five of which answer one envelope.
+// ---------------------------------------------------------------------------
+
+/** The login name the credential case plants and then presents. */
+const USERNAME = 'auth-routes-user';
+
+/** The subject that credential carries. */
+const SUBJECT = 'auth-routes-sub';
+
+/** The password that credential accepts. */
+const PASSWORD = 'auth-routes-password';
+
+/**
+ * A password of the same length that it does not accept.
+ *
+ * One letter's case apart and no shorter, so the refusal cannot be
+ * something a length check below the verify would have reached
+ * first.
+ */
+const WRONG_PASSWORD = 'auth-routes-passwoRd';
+
+/**
+ * The status every refusal below answers with.
+ *
+ * A constant rather than a literal per case, because what the group
+ * asserts is that five paths answer ONE thing: writing it once is
+ * what makes that structural instead of a coincidence five cases
+ * happen to agree on today.
+ */
+const REFUSED_STATUS = 401;
+
+/** The body those same five refusals answer with. */
+const UNAUTHORIZED_BODY = { error: 'Unauthorized' };
+
+/**
+ * The argon2id hash of {@link PASSWORD}, computed once.
+ *
+ * Hashing is asynchronous and deliberately slow, so it happens in
+ * the group's own `beforeAll` and only for the one case that needs a
+ * credential a login could really have presented.
+ */
+let passwordHash = '';
+
+/**
+ * A store holding exactly one credential and no sessions.
+ *
+ * @returns The store, with {@link USERNAME} planted against the hash
+ *   of {@link PASSWORD}.
+ */
+async function storeWithCredential(): Promise<MemoryAuthStore> {
+  const store = createMemoryAuthStore();
+
+  await store.upsertUser({
+    username: USERNAME,
+    sub: SUBJECT,
+    passwordHash,
+  });
+
+  return store;
+}
+
+describe('buildAuthRouter — what each refusal answers', () => {
+  beforeAll(async () => {
+    passwordHash = await hashPassword(PASSWORD);
+  });
+
+  it('refuses a login that carried no body at all', async () => {
+    const app = buildAuthApp();
+
+    // No `.send`, so the request arrives with no content type and
+    // `express.json()` leaves `req.body` undefined — which the
+    // schema refuses like any other shape it was not given.
+    const refused = await request(app).post('/auth/login');
+
+    expect(refused.status).toBe(REFUSED_STATUS);
+    expect(refused.body).toStrictEqual(UNAUTHORIZED_BODY);
+    expect(refused.headers['content-type']).toMatch(/^application\/json/);
+  });
+
+  it('refuses a login whose body names no password', async () => {
+    const app = buildAuthApp();
+
+    const refused = await request(app)
+      .post('/auth/login')
+      .send({ user: USERNAME });
+
+    // The login name is the one a planted credential would carry, so
+    // the only thing wrong with this request is the missing field —
+    // and it is answered exactly as a wrong password is.
+    expect(refused.status).toBe(REFUSED_STATUS);
+    expect(refused.body).toStrictEqual(UNAUTHORIZED_BODY);
+    expect(refused.headers['content-type']).toMatch(/^application\/json/);
+  });
+
+  it('refuses a login whose password does not verify', async () => {
+    const inner = await storeWithCredential();
+    const counting = createCountingStore(inner);
+    const app = buildAuthApp(counting.store);
+
+    const refused = await request(app)
+      .post('/auth/login')
+      .send({ user: USERNAME, password: WRONG_PASSWORD });
+
+    expect(refused.status).toBe(REFUSED_STATUS);
+    expect(refused.body).toStrictEqual(UNAUTHORIZED_BODY);
+
+    // The two readings that separate this from the malformed cases
+    // above, which answer the identical bytes. The attempt reached
+    // the store — and the row it was refused against is really there,
+    // without which this would be an unknown login name refused just
+    // as flatly, at the identical cost of one lookup.
+    expect(counting.calls()).toBeGreaterThan(0);
+
+    const credential = await inner.findUserCredential(USERNAME);
+    expect(credential).not.toBeNull();
+
+    // And nothing was minted, which on a route whose success writes a
+    // row is the reading that says the refusal was the whole answer.
+    expect(inner.listSessions()).toStrictEqual([]);
+  });
+
+  it('answers a logout naming no session the same success', async () => {
+    const inner = createMemoryAuthStore();
+    const counting = createCountingStore(inner);
+    const app = buildAuthApp(counting.store);
+
+    const answered = await request(app)
+      .post('/auth/logout')
+      .send({ token: 'names-no-session' });
+
+    // `toStrictEqual` rather than a property check: the boolean
+    // `revokeSession` answers is dropped on purpose, so a body that
+    // grew a `revoked` field would be exactly the oracle RFC 7009
+    // §2.2 asks a revocation endpoint not to be.
+    expect(answered.status).toBe(200);
+    expect(answered.body).toStrictEqual({ ok: true });
+
+    // The success is a collapsed answer and not an early return: the
+    // handler did ask the store to revoke, and there was nothing in
+    // it to revoke.
+    expect(counting.calls()).toBeGreaterThan(0);
+    expect(inner.listSessions()).toStrictEqual([]);
+  });
+
+  it('refuses an introspection with no Authorization header', async () => {
+    const app = buildAuthApp();
+
+    const refused = await request(app)
+      .post('/auth/introspect')
+      .send({ token: 'a-token-this-store-never-issued' });
+
+    expect(refused.status).toBe(REFUSED_STATUS);
+    expect(refused.body).toStrictEqual(UNAUTHORIZED_BODY);
+    expect(refused.headers['content-type']).toMatch(/^application\/json/);
+  });
+
+  it('refuses an equal-length wrong introspection secret', async () => {
+    const app = buildAuthApp();
+
+    const refused = await request(app)
+      .post('/auth/introspect')
+      .set('Authorization', `Bearer ${WRONG_SECRET}`)
+      .send({ token: 'a-token-this-store-never-issued' });
+
+    // The same two constants the absent-header case asserts, which
+    // is the claim: presenting no credential and presenting the
+    // wrong one are one answer, and a caller cannot learn from the
+    // response which of the two it was.
+    expect(refused.status).toBe(REFUSED_STATUS);
+    expect(refused.body).toStrictEqual(UNAUTHORIZED_BODY);
+    expect(refused.headers['content-type']).toMatch(/^application\/json/);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // The POST /login attempt budget
