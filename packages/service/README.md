@@ -75,12 +75,20 @@ Two ways to combine them:
   payloads; `dispatch` checks the recipient's preferences and calls each
   enabled channel module. `email`/`push` are stubs (validate + log — the seam
   for future modules); `webhook` is the real reference implementation.
-- **Auth** — the framework middleware (`requireAuth`/`optionalAuth`) is fully
-  wired for bearer tokens against an RFC 7662 introspection endpoint and
-  fails closed; without `AUTH_INTROSPECT_URL`/`AUTH_INTROSPECT_SECRET` both
-  are no-op passthroughs. `src/auth/stub.ts` is a dev-only introspection
-  backend; a first-party credential strategy is not part of this package
-  yet.
+- **Auth** — presence-toggled on `AUTH_BASIC_USER` + `AUTH_BASIC_PASSWORD`.
+  Both set: `src/auth/` upserts that operator credential (argon2id) from a
+  managed dependency ordered behind Postgres, mounts `/auth`
+  (`login`/`logout`/`introspect`), and `requireAuth`/`optionalAuth` verify
+  bearer tokens in-process against this service's own session table — no
+  loopback HTTP hop per request, while `POST /auth/introspect` is served
+  anyway for a sibling service pointing its own `AUTH_INTROSPECT_URL` here
+  (gated on `AUTH_INTROSPECT_SECRET`): two introspection paths that never
+  meet. `bun run db:migrate` is the precondition for a first boot — against
+  an unmigrated database the boot aborts on the `auth-bootstrap` dependency
+  rather than at the first login. With the basic pair unset,
+  `AUTH_INTROSPECT_URL`/`AUTH_INTROSPECT_SECRET` point the middleware at
+  somebody else's RFC 7662 endpoint instead; with neither pair set both are
+  no-op passthroughs. Configured either way, they fail closed.
 - **Operator control plane** — with `control` configured, `/_control` exposes
   status/pause/resume/restart behind a shared token, and `stop` as well when
   `control.allowStop` opts in (see `lib/express/control/`; hardening notes
