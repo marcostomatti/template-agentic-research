@@ -1,16 +1,35 @@
 /**
  * @packageDocumentation
- * Source adapters — the contract every module in this directory satisfies.
+ * Source adapters — the contract every module in this directory
+ * satisfies, and the registry that selects one of them.
  *
- * Type-only in phase 1: no adapter ships yet (they arrive in phase 4), so
- * this file pins the shape they conform to and nothing else. Keeping
- * {@link SourceAdapter.parse} pure and separate from
- * {@link SourceAdapter.fetch} is the load-bearing part of the contract: it is
- * what lets every adapter be tested against a stored payload with no network
- * in the default suite. An adapter that fetches inside `parse` passes its
- * tests the day it is written and fails them the first time it runs offline.
+ * Both halves belong here. The contract says what an adapter IS;
+ * the registry is the list of the ones this service will actually
+ * run, and a lookup by id is how a `sources` row reaches one.
+ * Keeping {@link SourceAdapter.parse} pure and separate from
+ * {@link SourceAdapter.fetch} is the load-bearing part of the
+ * contract: it is what lets every adapter be tested against a
+ * stored payload with no network in the default suite. An adapter
+ * that fetches inside `parse` passes its tests the day it is
+ * written and fails them the first time it runs offline.
+ *
+ * {@link SOURCE_ADAPTERS} is EMPTY, and that is the current state
+ * rather than a placeholder waiting to be filled in. No module in
+ * this directory declares the five members yet: `html-text.ts` and
+ * `paged-list.ts` sit beside this file as the modules adapters
+ * reach for, and each says at the top of its own source that it
+ * fronts no source and appears in no registry. The first adapter
+ * adds its own line to that literal in the commit that lands it,
+ * which is the whole of what registration costs.
+ *
+ * Node-only, deliberately, and this is the file that could not be
+ * anything else: a registry names its adapters with value imports,
+ * which is exactly what the dual-context rule under `src/lib/`
+ * forbids. A workflow inlines the ONE adapter it needs, never the
+ * registry, and `tests/build/lib-splice.test.ts` reads `src/lib/`
+ * rather than this directory for that reason.
  */
-import type { SOURCE_KINDS } from '../db/schema/values.js';
+import { SOURCE_KINDS } from '../db/schema/values.js';
 
 /**
  * The kinds of source an adapter can front.
@@ -28,6 +47,12 @@ import type { SOURCE_KINDS } from '../db/schema/values.js';
  * types. Every other set in that module pairs its union with the tuple;
  * this one is the deliberate exception, and the tuple's own TSDoc records
  * the exception, so neither file reads as though the other forgot.
+ *
+ * The import is a VALUE import rather than a type-only one because
+ * {@link sourceAdapterContractErrors} reads the tuple itself: what the
+ * check refuses at registration and what the column refuses at insert are
+ * then the same list, and a kind added to that tuple needs no edit here to
+ * become registrable.
  */
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 
@@ -155,4 +180,253 @@ export interface SourceAdapter<Raw = unknown, Parsed = unknown> {
    * {@link CanonicalDocument} is produced here or nowhere.
    */
   toCanonical(parsed: Parsed): CanonicalDocument;
+}
+
+/**
+ * The registry's shape: adapters by the id they are selected by.
+ *
+ * {@link SourceAdapter} with its type parameters left at their
+ * defaults, which types the registry at the CONTRACT rather than at
+ * any one adapter's payload. That is the honest type for something
+ * reached by id — the id came out of a `sources` row, so nothing at
+ * the call site knows which adapter answered or what its `fetch`
+ * returns. An adapter declaring concrete parameters still satisfies
+ * it: the members are methods, and method parameters are bivariant.
+ */
+export type SourceAdapterRegistry = Readonly<Record<string, SourceAdapter>>;
+
+/**
+ * Every adapter this service can run, keyed by the id it is selected
+ * by. A `sources` row names one of these keys and nothing else does.
+ *
+ * REGISTERED STATICALLY, never by reading the directory, and that is
+ * the fetch policy rather than a matter of taste. A registry built
+ * from a directory listing turns "a file was added" into "the runner
+ * will now run it": the file lands, the list grows, and something
+ * reaches the network under a decision nobody made. Everything this
+ * platform is allowed to fetch rests on nothing running unless it
+ * was named, so the naming is an edit to this literal — made in the
+ * commit that adds the adapter, and read by whoever reviews it.
+ *
+ * The cost is a list that can drift from what the directory holds,
+ * and it is paid in a test rather than in code. The set-equality
+ * guard in `src/sources/index.test.ts` holds these keys against the
+ * modules sitting beside this file, so an adapter nobody registered
+ * fails naming itself. A guard is the right place for it precisely
+ * because the alternative — this module reading the directory to
+ * check — is the thing being refused.
+ *
+ * Empty today, and {@link listSourceIds} answering with nothing is
+ * the current state rather than a stub: no module in this directory
+ * declares the five members yet.
+ */
+export const SOURCE_ADAPTERS: SourceAdapterRegistry = {};
+
+/**
+ * The registered ids, sorted.
+ *
+ * Sorted because the order a literal happens to be written in is not
+ * information. This is what a command-line tool prints and what a
+ * test compares, and both want an answer that does not move when
+ * somebody rewraps the registry.
+ *
+ * @param registry - Which registry to read. Production passes
+ *   nothing and gets {@link SOURCE_ADAPTERS}; the parameter is a
+ *   test seam, because an empty registry cannot demonstrate that
+ *   anything was sorted and a sort nothing exercises is a sort
+ *   nobody checked.
+ * @returns The ids in sorted order, as a new array.
+ */
+export function listSourceIds(
+  registry: SourceAdapterRegistry = SOURCE_ADAPTERS,
+): string[] {
+  return Object.keys(registry).sort();
+}
+
+/**
+ * The adapter registered under an id, or null when none is.
+ *
+ * Null rather than a throw, so a caller handed an id out of a
+ * `sources` row can print what IS registered instead of a stack
+ * trace. An unknown id is a datum about a row; it is not a
+ * programming error.
+ *
+ * The lookup goes through `Object.hasOwn` rather than reading the
+ * key, and on a plain object that is load-bearing rather than
+ * defensive: `toString`, `valueOf` and `constructor` all answer
+ * something off the prototype chain, so a stored id spelling one of
+ * them would hand a function from `Object.prototype` back as though
+ * it were an adapter. The case is live today rather than
+ * hypothetical — the registry is empty, and the `in` operator still
+ * answers true for every one of those names.
+ *
+ * @param id - The id to look up, as a `sources` row spells it.
+ * @param registry - Which registry to read; {@link SOURCE_ADAPTERS}
+ *   by default, the argument being the same test seam
+ *   {@link listSourceIds} takes.
+ * @returns The adapter, or null when the id names none.
+ */
+export function getSourceAdapter(
+  id: string,
+  registry: SourceAdapterRegistry = SOURCE_ADAPTERS,
+): SourceAdapter | null {
+  if (!Object.hasOwn(registry, id)) {
+    return null;
+  }
+
+  return registry[id] ?? null;
+}
+
+/** What the check reports for something that is no module at all. */
+const NOT_A_MODULE = 'not a module object';
+
+/** What the check reports for an absent or unusable `id`. */
+const ID_MUST_BE_A_NON_EMPTY_STRING = 'id must be a non-empty string';
+
+/**
+ * The members every adapter has to declare as functions.
+ *
+ * A tuple rather than three checks written out, so "every member" in
+ * {@link sourceAdapterContractErrors} is literally every member: a
+ * further function member added to {@link SourceAdapter} joins the
+ * check by joining this list, and its sentence reads the same as its
+ * neighbours' without anybody writing one.
+ */
+const FUNCTION_MEMBERS = ['fetch', 'parse', 'toCanonical'] as const;
+
+/**
+ * Whether a value is one of the kinds a `sources` row may carry.
+ *
+ * @param value - The `kind` a module declared, whatever it declared.
+ * @returns True when the tuple holds it.
+ */
+function isSourceKind(value: unknown): value is SourceKind {
+  const kinds: readonly string[] = SOURCE_KINDS;
+
+  return typeof value === 'string' && kinds.includes(value);
+}
+
+/**
+ * One property off a module, without asserting the module has it.
+ *
+ * `Reflect.get` rather than a cast, because a cast would assert the
+ * shape this check exists to doubt: what arrives may be anything at
+ * all, and reading it as a declared record would make every member
+ * look present to the type checker while the check runs.
+ *
+ * A read that THROWS — an accessor that refuses, a proxy that traps
+ * every get — reports the member as absent rather than propagating.
+ * That is what keeps {@link sourceAdapterContractErrors} free of an
+ * ending it cannot describe: a check that could be taken down by the
+ * module it is checking says nothing about any of the five members,
+ * where an unreadable module failing all five says exactly what a
+ * reviewer needs to know.
+ *
+ * @param mod - The module under check.
+ * @param name - The member to read.
+ * @returns Whatever is there, as `unknown`; undefined when the read
+ *   itself refused.
+ */
+function memberOf(mod: object, name: string): unknown {
+  try {
+    return Reflect.get(mod, name);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A value rendered into a message, for any value at all.
+ *
+ * `JSON.stringify` is the right renderer for what a `kind` mistake
+ * actually carries — a misspelt string, a number, a shape somebody
+ * meant to write as a string — and is unusable on its own for the
+ * rest of them. It answers the VALUE `undefined` rather than a
+ * string for `undefined`, for a symbol and for a function, and it
+ * THROWS on a cycle. Both endings are reachable from a hand-written
+ * module, so both are handled here rather than at the call site.
+ *
+ * @param value - Anything, including values that refuse to render.
+ * @returns Its JSON rendering, or a bracketed type when it has none.
+ */
+function describeValue(value: unknown): string {
+  try {
+    const rendered = JSON.stringify(value);
+
+    return typeof rendered === 'string'
+      ? rendered
+      : `[${typeof value}]`;
+  } catch {
+    return `[unrenderable ${typeof value}]`;
+  }
+}
+
+/**
+ * Every member a module fails to satisfy, one sentence each. Empty
+ * when it satisfies the contract.
+ *
+ * A LIST rather than a boolean, and every member rather than the
+ * first one that failed: what a registry check is for is saying
+ * WHICH adapter is wrong and HOW, and a check that stopped at the
+ * first fault turns one review into five.
+ *
+ * It never throws, which is worth stating because the obvious
+ * implementation does — twice. The module most likely to fail this
+ * check is also the one most likely to hold a value that refuses to
+ * render and a member that refuses to be read, and a check that
+ * threw while describing one fault would report nothing at all
+ * about the members it had not reached yet. {@link describeValue}
+ * closes the first path and {@link memberOf} the second.
+ *
+ * Five members, all of them required, and that is the one divergence
+ * from the design this contract is ported from. There an adapter
+ * could omit its listing step, and the check carried a rule about
+ * which kinds were allowed to omit it. Listing is not a member here:
+ * an adapter fronting several endpoints runs the loop in
+ * `src/sources/paged-list.ts` inside its own
+ * {@link SourceAdapter.fetch}, so no optional member is left for a
+ * conditional rule to be about.
+ *
+ * @param mod - The module to check, however it arrived.
+ * @param expectedId - The registry key it was found under, when it
+ *   was found under one. Omitted for a module checked on its own,
+ *   where there is no key for its `id` to disagree with.
+ * @returns One sentence per member not satisfied, in member order.
+ */
+export function sourceAdapterContractErrors(
+  mod: unknown,
+  expectedId?: string,
+): string[] {
+  if (typeof mod !== 'object' || mod === null) {
+    return [NOT_A_MODULE];
+  }
+
+  const errors: string[] = [];
+  const id = memberOf(mod, 'id');
+
+  if (typeof id !== 'string' || id === '') {
+    errors.push(ID_MUST_BE_A_NON_EMPTY_STRING);
+  } else if (expectedId !== undefined && id !== expectedId) {
+    errors.push(
+      `id "${id}" does not match its registry key "${expectedId}"`,
+    );
+  }
+
+  const kind = memberOf(mod, 'kind');
+
+  if (!isSourceKind(kind)) {
+    const allowed = SOURCE_KINDS.join(' | ');
+
+    errors.push(
+      `kind must be one of ${allowed}, got ${describeValue(kind)}`,
+    );
+  }
+
+  for (const member of FUNCTION_MEMBERS) {
+    if (typeof memberOf(mod, member) !== 'function') {
+      errors.push(`${member} must be a function`);
+    }
+  }
+
+  return errors;
 }

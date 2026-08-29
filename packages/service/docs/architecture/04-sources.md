@@ -4,8 +4,9 @@ Everything the pipeline reads comes in through this directory. This
 document is the map of `src/sources/`: the contract an adapter
 satisfies, where the line between fetching and reading falls and what
 that line buys, what binds when an adapter is constructed rather than
-when it is called, and what the text reduction those adapters share
-guarantees about the body it produces.
+when it is called, how one adapter is registered and reached by id,
+and what the text reduction those adapters share guarantees about the
+body it produces.
 
 It is the document the Sources row of the behaviour table in
 `docs/architecture/00-overview.md` names, so a change to what a
@@ -15,20 +16,20 @@ is `.specs/2026-08-19-research-pipeline-port.md` — §2 for the
 and validation the contract leaves room for — and phase numbers
 throughout refer to the 7-phase sequencing in that design, §7.
 
-Two of the things `src/sources/` will hold are not here yet. The
-adapters that front a source and the runtime half of the registry
-that selects one both land later in phase 4, and each brings its own
-section here in the commit that lands it. What this document covers
-today is the contract they will satisfy and the two shared modules
-they will reach for, which is what the directory holds: the listing
-loop that gets the bytes, and the reduction that turns markup into
-the text a body holds.
+One of the things `src/sources/` will hold is not here yet: the
+adapters that front a source, which land later in phase 4 and bring
+their own section here in the commit that lands them. What this
+document covers today is the contract they will satisfy, the
+registry that will select one of them, and the two shared modules
+they will reach for — the listing loop that gets the bytes, and the
+reduction that turns markup into the text a body holds.
 
 ## The contract
 
 `SourceAdapter` in `src/sources/index.ts`, five members and nothing
-else. The file is type-only: it declares the shape and selects
-nothing, the selection being the registry's job.
+else. The file holds the registry too, which is the other half of
+what an adapter is: the contract says what one has to declare, and
+the registry is the list of the ones this service will run.
 
 | Member | What it is |
 | --- | --- |
@@ -203,6 +204,99 @@ the engine then runs what was approved deterministically: a model
 proposes, a person decides once, and no guess silently changes what
 the pipeline extracts. The propose step is phase 5's; the columns it
 targets and the shape of the answer are fixed here.
+
+## The registry
+
+`SOURCE_ADAPTERS` in `src/sources/index.ts`: a literal mapping an id
+onto the adapter it selects, with `listSourceIds` reading its keys in
+sorted order and `getSourceAdapter` reaching one by id. A `sources`
+row names one of those keys and nothing else does.
+
+### Registration is static, and that is the fetch policy
+
+The registry is written out. It is never built by reading the
+directory, and that is not a matter of taste: a registry assembled
+from a directory listing turns "a file was added" into "the runner
+will now run it". The file lands, the list grows, and something
+reaches the network under a decision nobody made.
+
+Everything this platform is allowed to fetch rests on nothing running
+unless it was named. So the naming is an edit to that literal, made
+in the commit that adds the adapter and read by whoever reviews it —
+which is the whole of what registration costs, and the whole of what
+it buys.
+
+### The drift a static list can carry is paid in a test
+
+The cost of writing the list out is that it can disagree with what
+the directory holds. `src/sources/index.test.ts` holds the registry's
+keys against the modules sitting beside it, in both directions: an
+adapter nobody registered fails naming itself, and a registered id
+with no module beside it fails as a key naming nothing.
+
+A test is the right place for that guard precisely because the
+alternative — this module reading the directory to check itself — is
+the thing being refused. A case that reads the directory fetches
+nothing, so it can afford a listing the runtime may not.
+
+### An unknown id is answered with null, not a throw
+
+A caller handed an id out of a `sources` row can then print what IS
+registered instead of a stack trace. An id that names no adapter is a
+datum about a row; it is not a programming error, and a row can be
+edited by anyone the seed script or an operator lets near it.
+
+### The lookup asks whether the key is an OWN key
+
+`toString`, `valueOf` and `constructor` all answer something off
+`Object.prototype`, so a lookup reading the key directly would hand a
+function back as though it were an adapter. The case is live rather
+than hypothetical, and the empty registry is what makes it live: the
+`in` operator answers true for every one of those names over an
+object holding nothing at all.
+
+### The contract check reports every member, not the first
+
+`sourceAdapterContractErrors` answers one sentence per member a
+module fails to satisfy, and an empty list for one that satisfies it.
+A list rather than a boolean, because what a registry check is for is
+saying WHICH adapter is wrong and HOW; a check stopping at the first
+fault turns one review into five.
+
+It never throws, which is worth stating because the obvious
+implementation does — twice. The module most likely to fail this
+check is also the one most likely to carry a value that refuses to
+render and a member that refuses to be read, and a check that threw
+while describing one fault would report nothing at all about the
+members it had not reached yet.
+
+The `kind` it accepts is the schema tuple itself rather than a copy,
+so what the check refuses at registration and what the `sources.kind`
+CHECK refuses at insert are one declaration read twice.
+
+### Five members, all required
+
+That is the one divergence from the design this contract is ported
+from. There an adapter could omit its listing step, and the check
+carried a rule about which kinds were allowed to omit it. Listing is
+not a member here: an adapter fronting several endpoints runs the
+loop in `src/sources/paged-list.ts` inside its own `fetch`, so no
+optional member is left for a conditional rule to be about.
+
+### The registry ships empty, and that is a state rather than a stub
+
+No module in this directory declares the five members yet. The two
+that sit beside it front no source and each says so at the top of its
+own file. The first adapter adds its own line to the literal, and the
+directory guard is what will notice if it forgets.
+
+### The registry is Node-only, and could not be anything else
+
+A registry names its adapters with value imports, which is exactly
+what the dual-context rule under `src/lib/` forbids. That is why the
+splice roster in `tests/build/lib-splice.test.ts` reads `src/lib/`
+and not this directory: a workflow inlines the ONE adapter it needs,
+never the list of all of them.
 
 ## The shared listing run
 
