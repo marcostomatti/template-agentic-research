@@ -92,7 +92,7 @@ Paths are relative to `packages/service`.
 | --- | --- |
 | `lib/` | The service framework: express, mcp, service-core, errors, logger — and reserved for it. Distinct from `src/lib/`. |
 | `src/db/` | Schema v2 and the drizzle client: the tables one file per concern under `src/db/schema/`, re-exported by the `src/db/schema.ts` barrel that drizzle-kit and the client both read. |
-| `src/lib/` | Pipeline libs, written dual-context so the workflow build can splice one into a Code node body. `schedule.ts` is the first and landed in phase 3, which is what proves the splice over a library this package ships rather than a fixture; the ported wave — parsing, gating, scoring, and the feature mechanisms — arrives in phase 4. Distinct from the framework `lib/`. |
+| `src/lib/` | Pipeline libs, written dual-context so the workflow build can splice one into a Code node body. `schedule.ts` is the first and landed in phase 3, which is what proves the splice over a library this package ships rather than a fixture; the ported wave lands in phase 4 — structured-text, delimited-record and message parsing, untrusted-text neutralization, entity-name validation, near-duplicate hashing, audit lines, chunk preparation, and the gating, scoring and feature mechanisms. Distinct from the framework `lib/`. |
 | `src/sources/` | The source adapter contract and the adapters that satisfy it (phase 4 onward), push capture included. |
 | `src/exports/` | Export renderers (phase 6): one per format a subscription can be rendered into. |
 | `src/routes/`, `src/mcp/` | The API surface itself — HTTP routes and MCP tools over the schema. |
