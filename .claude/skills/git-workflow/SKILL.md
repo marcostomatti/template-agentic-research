@@ -28,6 +28,46 @@ When pushing changes and creating PRs:
 2. If the branch already has an associated PR, push to whichever remote the branch is tracking.
 3. If the branch hasn't been pushed before, default to pushing to `origin`.
 
+## PR-body close-out discipline (measured, this repo)
+
+A PR body is the one piece of prose here that is OUTBOUND, unreviewable by any
+gate, and irreversible once `gh pr create` returns. Four checks, all cheap:
+
+1. **Sweep it for origin needles before the push.** `findForbiddenMatches(content,
+   path)` takes CONTENT, so one /tmp `.mjs` under bun can feed it the body file
+   alongside `git ls-files`, with a fragment-built planted control in the same run.
+   Re-run it immediately before `gh pr create` — a close-out sweep ordered ahead
+   of the tasks that finish the body swept a draft nobody will publish.
+2. **Pre-flight with a control.** `gh pr list --head <branch> --state all` returning
+   nothing is a zero-hit scan; bare `--state open`, or `gh pr view`, both miss a
+   CLOSED prior PR on the same head. Send a known-existing head through the
+   IDENTICAL command shape in the same call so the empty result is readable.
+   Without it, a broken filter is indistinguishable from "no PR yet" — and the
+   consequence is a duplicate PR.
+3. **Re-read the REMOTE after creating.** The sweep proves the FILE is clean; only
+   `gh pr view <n> --json body -q .body` diffed against the swept file (normalise
+   CRLF and the trailing newline) proves the swept bytes are the published ones.
+   It is the only check that catches a `--body-file` pointed at a stale draft.
+4. **Hold the four numbers three-dot.** GitHub computes
+   `additions`/`deletions`/`changedFiles` from the merge base, so the local side is
+   `git diff --numstat $(git merge-base main HEAD)..HEAD` summed — never
+   `main..HEAD` two-dot, which drifts the moment main moves. Sum `--numstat`, not
+   `--shortstat`, so a binary file shows as `-` instead of silently contributing
+   zero. Read the commits list's LAST oid against `git rev-parse HEAD` beside the
+   counts: a count can agree while the head differs.
+
+**Every suite figure in the body must come from a run at the PR's OWN head.** A
+loop that commits per task makes all plausible sources disagree and each was
+correct when written (measured 679, then 690, then 692 cases across one plan, no
+regression). Read the `pretest` stamp in the same capture, so the run is
+simultaneously the artifact-freshness check and the proof the tree is publishable.
+
+**Where the branch is carried-in red**, the hosted gate confirms the body's red
+claim and is simultaneously NOT evidence about its suite figures: `back.yml` runs
+the type-check before the suite under `bash -e`, so the job halts and vitest never
+runs. Report both halves, or a reader seeing a red `test` job assumes the suite
+is what failed.
+
 ## `gh pr create` branch detection
 
 If `gh pr create` says `you must first push the current branch to a remote` even though `git push -u` succeeded, create the PR with an explicit head ref:
