@@ -173,9 +173,8 @@ to it has a single row to keep true.
 | Scheduling | `workflows/src/ar-dispatch.json`, and the schedule state in `src/db/` | `docs/architecture/06-scheduling.md` |
 
 A document in the right-hand column arrives with the phase that delivers
-its behaviour, so most of that column is a reservation rather than a
-file: the number fixes the reading order, and the row is what a later
-phase fills.
+its behaviour, so a row can name a document that does not exist yet: the
+number fixes the reading order, and the row is what a later phase fills.
 
 Names in that column are text, never markdown links. A link check reads
 a link as a promise that the file exists, so a linked forward reference
