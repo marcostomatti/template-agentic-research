@@ -16,7 +16,10 @@ registered here alongside the rest; phase numbers throughout refer to
 the 7-phase sequencing in that design, §7. The deterministic-build and
 spliced-library rows are drawn from outside that design, from the
 build rules in `.specs/q03-port-phase-3-build-dispatch.md` §1 — the
-phase spec that lands the build system.
+phase spec that lands the build system — and the origin-path row
+likewise, from the parity-harness constraints in
+`.specs/q06-port-phase-4-lib-wave.md`, the phase spec that lands the
+seam that row polices.
 
 ## The register
 
@@ -34,6 +37,7 @@ phase spec that lands the build system.
 | No naming from the project this pipeline was ported from survives in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No vault path appears in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No real hostname appears in a tracked file | `tests/invariants/naming.test.ts` | 1 | Implemented |
+| The origin checkout a parity run reads is named in the environment and nowhere else — no tracked file records the path, and no default stands in for it | `tests/invariants/parity-origin-hygiene.test.ts`, over `tests/helpers/port-parity.ts` and every file under `tests/parity/`, with the roster it reads held set-equal against that directory so a file added later cannot go unscanned | 4 | Implemented |
 
 ## Reading the register
 
