@@ -9,12 +9,20 @@
  * session which is issued leaves the minted token unrecoverable from
  * the row it was written as.
  *
- * Three more about the request path, which are the three ways a
- * token that once named a session stops naming one: the clock has
- * moved past its expiry, it was revoked, or the clock reads the
- * expiry exactly. All three answer null, because a caller has the
- * same nothing to do about each and telling them apart would hand an
- * unauthenticated client a reading of the session table.
+ * Four more about the request path. One is what a token naming a
+ * live session answers: the subject, and no key beside it — in
+ * particular neither `passwordHash` nor `tokenHash`. That is a claim
+ * about the VALUE and the type does not make it, because a session
+ * row spread into the answer type-checks clean; only the
+ * named-property form is a compile error, and a spread is the shape
+ * a widening reaches for.
+ *
+ * The other three are the ways a token that once named a session
+ * stops naming one: the clock has moved past its expiry, it was
+ * revoked, or the clock reads the expiry exactly. All three answer
+ * null, because a caller has the same nothing to do about each and
+ * telling them apart would hand an unauthenticated client a reading
+ * of the session table.
  *
  * The store is the in-memory implementation from
  * `tests/helpers/memory-auth-store.ts` — a second implementation of
@@ -44,6 +52,14 @@
  * case reports is a session that stopped being accepted rather than
  * one that was never accepted at all.
  *
+ * The live-session case needs no such control — a function refusing
+ * everything is exactly what it fails against, which is why it is
+ * the accept guard the three refusals leave the section without.
+ * Its two absences are the vacuous half instead: `not.toHaveProperty`
+ * passes against any object lacking the key, a misspelt needle
+ * included, so it runs the same matcher over the credential row and
+ * the session row, which do carry those keys.
+ *
  * THE CLOCK IS FIXED AND INJECTED, and the verify cases are what it
  * is for. Expiry is a comparison against an instant, so against the
  * wall clock a case about an aged-out session has to let one arrive
@@ -60,18 +76,24 @@
  * a clock reading the expiry to the millisecond. Nothing but an
  * injected clock can be put there at all.
  *
- * The grid, measured over the six cases rather than predicted, and
- * every leg lands where it should. On the login half: ignoring the
- * `verifyPassword` result reddens ONE, the wrong-password case;
- * persisting the raw token instead of its digest reddens ONE, the
- * containment case; and testing the credential lookup against
- * `undefined` rather than `null` — the confusion a port answering
- * `T | null` invites — reddens ONE, the unknown-user case, which is
- * what says that case is about the guard rather than about a store
- * that had no row to give. Returning null unconditionally from
- * `issueSession` reddens all three, the two refusal cases only
- * through their in-band controls, which is what says those controls
- * are load-bearing rather than decorative.
+ * The grid, re-measured over the seven cases here rather than
+ * carried over. On the login half: ignoring the `verifyPassword`
+ * result reddens ONE, the wrong-password case; and testing the
+ * credential lookup against `undefined` rather than `null` — the
+ * confusion a port answering `T | null` invites — reddens ONE, the
+ * unknown-user case, which is what says that case is about the
+ * guard rather than about a store that had no row to give.
+ *
+ * The other two login legs are wide rather than isolating, and the
+ * width is itself the reading. Persisting the raw token instead of
+ * its digest reddens FIVE: the containment case that names it, plus
+ * every request case, because a row keyed by the token itself is
+ * one no `hashSessionToken` lookup ever finds again. Returning null
+ * unconditionally from `issueSession` reddens all SEVEN — the two
+ * login refusals through their in-band controls, which is what says
+ * those controls are load-bearing rather than decorative, and the
+ * request cases because `loginOrThrow` then has no session to give
+ * them.
  *
  * On the request half, each guard is separable and the grid shows
  * it. Relaxing the expiry comparison to a strict `<` reddens ONE,
@@ -79,10 +101,14 @@
  * the one that pins the half-open interval. Dropping the revocation
  * guard reddens ONE, the revoked case, though the clock has moved
  * nowhere. Dropping the expiry guard reddens TWO, the aged-out case
- * and the boundary one, and leaves the revoked case green. And
- * returning null unconditionally from `verifySession` reddens all
- * THREE, entirely through the before-the-refusal controls, since
- * every `toBeNull` in the three would pass against it.
+ * and the boundary one, and leaves the revoked case green. Widening
+ * the answer with a session-row spread reddens ONE, the live case,
+ * which is what makes its two absences load-bearing rather than a
+ * restatement of a type that permits exactly that spread. And
+ * returning null unconditionally from `verifySession` reddens FOUR:
+ * the live case directly, the three refusals only through their
+ * before-the-refusal controls, since every `toBeNull` in them would
+ * pass against it.
  */
 import type { AuthDeps, IssuedSession } from './service.js';
 import type {
@@ -349,6 +375,59 @@ describe('issueSession', () => {
 // ---------------------------------------------------------------------------
 
 describe('verifySession', () => {
+  it('answers the subject and nothing else for a live session', async () => {
+    const fixture = await movableFixture();
+    const issued = await loginOrThrow(fixture);
+
+    const claims = await verifySession(
+      fixture.store,
+      fixture.deps,
+      issued.token,
+    );
+
+    expect(claims).not.toBeNull();
+    // Narrowing rather than a non-null assertion, so a null here
+    // fails as this case's own assertion instead of as a TypeError
+    // on the line below it.
+    if (claims === null) {
+      return;
+    }
+
+    expect(claims.sub).toBe(SUBJECT);
+
+    // The containment claim, made about the VALUE rather than about
+    // the type. `VerifiedSession` has no spelling for either secret,
+    // but the type is not what stops one arriving: a session row
+    // SPREAD into the answer type-checks clean (measured — only the
+    // named-property form is TS2353), and that spread is what a
+    // reader reaches for the day a route wants one more field.
+    expect(claims).not.toHaveProperty('passwordHash');
+    expect(claims).not.toHaveProperty('tokenHash');
+
+    // And no third field either, whatever it might be called.
+    // `toStrictEqual` fails on an extra key even when it holds
+    // `undefined`, so this is more than a restatement of the two
+    // absences above.
+    expect(claims).toStrictEqual({ sub: SUBJECT });
+
+    // In-band control on those absences. `not.toHaveProperty` passes
+    // against any object not carrying the key, a misspelt needle
+    // included, so the same matcher is run over the two rows that DO
+    // carry them: the credential this login was taken over, and the
+    // session row it wrote.
+    const credential = await fixture.store.findUserCredential(USERNAME);
+
+    expect(credential).toHaveProperty('passwordHash');
+
+    const [row] = fixture.store.listSessions();
+
+    if (row === undefined) {
+      throw new Error('expected exactly one persisted session row');
+    }
+
+    expect(row).toHaveProperty('tokenHash');
+  });
+
   it('refuses a session the clock has moved past', async () => {
     const fixture = await movableFixture();
     const issued = await loginOrThrow(fixture);
