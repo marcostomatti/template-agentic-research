@@ -5,6 +5,7 @@
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
+    "predev": "bun run --filter '@ar/ui' build",
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
