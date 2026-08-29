@@ -202,6 +202,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'path.split(AUDIT_PATH_SEPARATOR).at(-1)',
     ],
   },
+  {
+    file: 'chunk.ts',
+    ownText: [
+      'truncateOnBoundary(cleaned, MAX_EXCERPT_CHARS)',
+      'sentence > limit * SENTENCE_BOUNDARY_SHARE',
+      'built.removed.truncated || capped.truncated',
+    ],
+  },
 ];
 
 /**
