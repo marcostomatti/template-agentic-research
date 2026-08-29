@@ -28,6 +28,24 @@ wanted in both places must be made in both repos.
   package; bare `lint`/`check-types`/`test` cover root files + `tools/`.
 - Runtime: bun-first (`packageManager` pinned). `@ar/ui`'s test toolchain
   additionally needs Node 22 on PATH (`bun x` shebang handling).
+- `.github/dependabot.yml` opens dependency PRs weekly for two ecosystems,
+  both rooted at `/`: `bun` covers every workspace manifest (one entry,
+  because the single root lockfile resolves them all) and `github-actions`
+  covers the workflow files. The identifier is `bun` and not `npm` because
+  the only lockfile here is `bun.lock`, which the npm ecosystem does not
+  read — an `npm` entry would resolve nothing at all. (Dependabot's bun
+  support wants bun >= 1.1.39; `packageManager` pins 1.3.9.) Each ecosystem
+  groups its `minor` and `patch` bumps into one PR and deliberately leaves
+  majors OUT of the group, so every major arrives alone and a red gate
+  names its own cause. `playwright`/`playwright-core` are the one `ignore`:
+  `@ar/ui` pins both to an exact `1.61.1` twice (its devDependencies plus
+  an `overrides` block) and `front.yml` spells that version into its
+  visual-baseline cache key three times as the literal `pw1.61.1`. Those
+  baselines are untracked and exist only in that cache, so a manifest bump
+  the key cannot follow restores 1.61.1 renderings to compare a 1.62
+  browser against — a false diff on every story whose rendering moved,
+  not the clean cache miss that would re-seed. Bump it by hand, cache key
+  first.
 - No prettier anywhere, root or package: ESLint is the only style gate and
   it does not reflow comments, so comment/TSDoc/markdown wrapping is
   hand-maintained. Match the surrounding file rather than a global number
