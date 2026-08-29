@@ -408,9 +408,9 @@ describe('static-SQL invariant — the generated migration', () => {
     // rather than as a count that moved.
     //
     // One case per entry rather than one sweep reporting all the
-    // misses together. The roster is eight hand-written entries, not a
-    // tree of unknown size, and a case per entry is what lets the run
-    // itself say which ids were exercised.
+    // misses together. The roster is a hand-written table short
+    // enough to read, not a tree of unknown size, and a case per
+    // entry is what lets the run itself say which ids were exercised.
     it(`carries the statement behind ${assertion.id}`, () => {
       EXERCISED_IDS.add(assertion.id);
 

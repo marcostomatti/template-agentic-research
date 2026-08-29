@@ -62,6 +62,8 @@ export const describeLivePg: (name: string, fn: () => void) => void = LIVE_DATAB
  * `createLivePool` hands it.
  */
 const TABLES = [
+  'auth_sessions',
+  'auth_users',
   'benchmark_cases',
   'briefings',
   'categories',

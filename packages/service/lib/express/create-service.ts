@@ -1,6 +1,7 @@
-import type { ServiceConfig } from './schema';
+import type { SessionVerifier } from './auth';
+import type { ResolvedServiceConfig, ServiceConfig } from './schema';
 import type { ServiceHandle, ServiceContext } from './types';
-import type { TypedClient } from '../service-core/index.js';
+import type { Logger, TypedClient } from '../service-core/index.js';
 import type { Server } from 'http';
 
 import express from 'express';
@@ -8,13 +9,37 @@ import express from 'express';
 import { errorHandler } from '../errors/index.js';
 import { createServiceLogger } from '../service-core/index.js';
 
-import { buildRequireAuth, buildOptionalAuth, passthroughMiddleware } from './auth';
+import {
+  buildOptionalAuthFrom,
+  buildRequireAuthFrom,
+  createIntrospectVerifier,
+  passthroughMiddleware,
+} from './auth';
 import { mountBuiltinRoutes } from './builtin-routes';
 import { buildClientsMap } from './clients-map';
 import { buildDepsMap } from './deps-map';
 import { applyMiddleware } from './middleware';
 import { ServiceConfigSchema } from './schema';
 import { gracefulStop, registerShutdown } from './shutdown';
+
+/**
+ * Resolves the parsed `auth` block to the single {@link SessionVerifier}
+ * both middleware are built over, or `null` when no `auth` block was
+ * supplied at all — the case that leaves `requireAuth` and `optionalAuth`
+ * as `passthroughMiddleware`.
+ *
+ * `ServiceConfigSchema` admits exactly one of the two forms, so these are
+ * mutually exclusive rather than ordered by precedence. The last guard is
+ * unreachable through that schema; it is what lets the two introspection
+ * fields stay `.optional()` there — the refinement pairs them — without a
+ * non-null assertion here.
+ */
+function resolveAuthVerifier(auth: ResolvedServiceConfig['auth'], logger: Logger): SessionVerifier | null {
+  if (auth == null) return null;
+  if (auth.verifier != null) return auth.verifier;
+  if (auth.introspectUrl == null || auth.introspectSecret == null) return null;
+  return createIntrospectVerifier(auth.introspectUrl, logger, auth.introspectSecret);
+}
 
 /**
  * Creates and starts an Express HTTP service.
@@ -71,14 +96,16 @@ export async function createService(config: ServiceConfig): Promise<ServiceHandl
   const app = express();
   applyMiddleware(app, resolved, logger);
 
+  const authVerifier = resolveAuthVerifier(resolved.auth, logger);
+
   const ctx: ServiceContext = {
     logger,
-    requireAuth: resolved.auth
-      ? buildRequireAuth(resolved.auth.introspectUrl, logger, resolved.auth.introspectSecret)
-      : passthroughMiddleware,
-    optionalAuth: resolved.auth
-      ? buildOptionalAuth(resolved.auth.introspectUrl, logger, resolved.auth.introspectSecret)
-      : passthroughMiddleware,
+    requireAuth: authVerifier == null
+      ? passthroughMiddleware
+      : buildRequireAuthFrom(authVerifier, logger),
+    optionalAuth: authVerifier == null
+      ? passthroughMiddleware
+      : buildOptionalAuthFrom(authVerifier, logger),
     deps: buildDepsMap(resolved.dependencies),
     clients: buildClientsMap(resolved.clients as TypedClient<unknown>[]),
     config: resolved,

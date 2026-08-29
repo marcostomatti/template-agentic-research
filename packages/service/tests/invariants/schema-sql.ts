@@ -256,11 +256,13 @@ export interface SchemaSqlAssertion {
 /**
  * The statements the generated migration must carry.
  *
- * Eight entries over the constraints the parent design calls
+ * Thirteen entries over the constraints the parent design calls
  * database-level: the approval gate on `research_pool`, the category
  * depth guard in both of its halves, the pair of constraints that
- * makes `documents.hash` dedupe, both partial scheduling indexes, and
- * the CHECK behind `sources.kind`.
+ * makes `documents.hash` dedupe, both partial scheduling indexes, the
+ * CHECK behind `sources.kind`, and the five holding the two auth
+ * tables together — three unique keys, the session-to-user foreign
+ * key, and the NOT NULL that bounds a session.
  *
  * A chosen sample and not the whole schema, which is the whole reason
  * {@link EmptyMigrationFileError} exists: a migration truncated to
@@ -323,9 +325,9 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
       'breaks through the other one unguarded.',
     pattern: /^[ \t]*CREATE OR REPLACE TRIGGER categories_enforce_depth_trigger\s+BEFORE INSERT OR UPDATE ON "public"\."categories"\s+FOR EACH ROW\s+EXECUTE FUNCTION categories_enforce_depth\(\);/m,
   },
-  // The only entry whose text does not name its own table, and so the
-  // only one anchored inside a CREATE TABLE. Two neighbours make that
-  // load-bearing rather than pedantic: ingested_files carries a
+  // The first of the two entries whose text does not name its own
+  // table, and so anchored inside a CREATE TABLE. Two neighbours make
+  // that load-bearing rather than pedantic: ingested_files carries a
   // `path_hash text NOT NULL` one table down, and the negated class
   // stops the match at the statement terminator so it can never drift
   // onto it.
@@ -380,6 +382,67 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
       'constrained column and the membership test; the members ' +
       'themselves are covered against their tuple elsewhere.',
     pattern: /^[ \t]*CONSTRAINT "sources_kind_check" CHECK \("sources"\."kind" in \(/m,
+  },
+  // The five auth entries are the whole of what a database enforces
+  // for the basic strategy. Everything else a verified token has to
+  // satisfy — not expired, not revoked — is a comparison somebody
+  // performs after the row is in hand, and a comparison is not a
+  // constraint. These are the shapes those comparisons stand on.
+  {
+    id: 'auth-users-username-unique',
+    description:
+      'UNIQUE on auth_users.username, which is what the bootstrap ' +
+      'upsert resolves its conflict against. Postgres refuses an ON ' +
+      'CONFLICT naming a column no unique constraint covers, so this ' +
+      'key going takes restart-idempotent bootstrapping with it.',
+    pattern: /^[ \t]*CONSTRAINT "auth_users_username_unique" UNIQUE\("username"\)/m,
+  },
+  {
+    id: 'auth-users-sub-unique',
+    description:
+      'UNIQUE on auth_users.sub, the subject identifier session ' +
+      'claims carry. One credential row per subject, or a verified ' +
+      'token is ambiguous about whose it is and the copy each session ' +
+      'took at mint time no longer names a single row.',
+    pattern: /^[ \t]*CONSTRAINT "auth_users_sub_unique" UNIQUE\("sub"\)/m,
+  },
+  {
+    id: 'auth-sessions-token-hash-unique',
+    description:
+      'UNIQUE on auth_sessions.token_hash, the key a presented token ' +
+      'is looked up by. It is what makes that lookup answer at most ' +
+      'one row: without it a hash can name several sessions that ' +
+      'disagree on subject or expiry, and a reader sees one of them.',
+    pattern: /^[ \t]*CONSTRAINT "auth_sessions_token_hash_unique" UNIQUE\("token_hash"\)/m,
+  },
+  // Both halves of the reference are pinned, because losing each
+  // leaves a different database behind. Without the key at all,
+  // user_id may name a credential row that is not there; with the key
+  // but not the cascade, the reference holds and deleting an operator
+  // is refused outright while any session it issued is still on file.
+  {
+    id: 'auth-sessions-user-fk',
+    description:
+      'Foreign key from auth_sessions.user_id to auth_users.id, ' +
+      'cascading on delete, so removing a credential takes the ' +
+      'sessions issued against it rather than being refused while ' +
+      'they stand. Pins the referenced table and column beside it.',
+    pattern: /^[ \t]*ALTER TABLE "auth_sessions" ADD CONSTRAINT "auth_sessions_user_id_auth_users_id_fk" FOREIGN KEY \("user_id"\) REFERENCES "public"\."auth_users"\("id"\) ON DELETE cascade/m,
+  },
+  // The second entry anchored inside a CREATE TABLE, and for the
+  // reason the documents one gives: a column line names its column
+  // and not its table, so unanchored this would report an expires_at
+  // belonging to anything. The negated class stops the match at the
+  // statement terminator so it cannot reach past the table it opened.
+  {
+    id: 'auth-sessions-expires-at-not-null',
+    description:
+      'NOT NULL on auth_sessions.expires_at, which is what makes ' +
+      'every session carry a bound at all. Nullable, the column ' +
+      'admits a row with no expiry, and what such a row means is ' +
+      'left to whoever reads it — a SQL comparison against NULL ' +
+      'answers unknown rather than expired.',
+    pattern: /^[ \t]*CREATE TABLE "auth_sessions" \([^;]*?^[ \t]*"expires_at" timestamp with time zone NOT NULL,/m,
   },
 ];
 

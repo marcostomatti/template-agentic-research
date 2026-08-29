@@ -23,7 +23,7 @@ the rules that span more than one of them.
 
 ## The roster
 
-Twenty-two tables. Each area below is one module, and that module's
+Twenty-four tables. Each area below is one module, and that module's
 header carries the argument for why its tables sit together.
 
 ### Domains — `src/db/schema/domains.ts`
@@ -86,6 +86,13 @@ header carries the argument for why its tables sit together.
 | `llm_calls` | One row per model call — the ledger a per-run ceiling is counted against, and what makes spend attributable to the pass that made it. |
 | `benchmark_cases` | Inputs somebody has judged, frozen with the case, so a change to a domain's scoring can be measured rather than assumed. |
 | `briefings` | A domain's periodic digest, kept as a row rather than only rendered and handed on. |
+
+### Auth — `src/db/schema/auth.ts`
+
+| Table | What it holds |
+| --- | --- |
+| `auth_users` | One operator credential: the login name a request presents, the argon2id hash it is checked against, and the `sub` that session claims carry. No pipeline row points at it, and only the bootstrap upsert writes it — replacing the hash on every boot and leaving `sub` and `created_at` where they were. |
+| `auth_sessions` | One issued session token, held as a SHA-256 hash so a reader of the table cannot mint a request from it. Carries its own copy of `sub`, so verifying a token is a single-row read; an expiry that bounds it; and a nullable `revoked_at` that keeps a revoked session distinguishable from a lapsed one. |
 
 ### Outside the pipeline — `src/db/schema/users.ts`
 
@@ -303,7 +310,7 @@ rule otherwise refuses to create.
 
 ## Which migration owns which constraint
 
-`drizzle/` holds three files and two mechanisms. Two of them were
+`drizzle/` holds four files and two mechanisms. Three of them were
 written by `db:generate`, which diffs `src/db/schema.ts` against the
 newest snapshot under `drizzle/meta/` and emits the difference;
 `0002_category_depth_guard.sql` was written by hand and is the only
@@ -311,7 +318,7 @@ migration here that was.
 
 | Owner | What it carries |
 | --- | --- |
-| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 22 tables, 150 columns. Every named key and constraint over a stored row: 13 UNIQUE, and 9 CHECK — the eight value-set checks generated from the tuples in `src/db/schema/values.ts`, plus the two-column `research_pool_approval_check`. All 31 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. Both partial dispatch-claim indexes. |
+| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 24 tables, 163 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 9 CHECK — the eight value-set checks generated from the tuples in `src/db/schema/values.ts`, plus the two-column `research_pool_approval_check`. All 32 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. Both partial dispatch-claim indexes. |
 | Hand-written — `0002_category_depth_guard.sql` | `categories_enforce_depth()` and the `BEFORE INSERT OR UPDATE` trigger on `categories` that calls it. Two statements, one rule, and the whole of the custom-owned DDL. |
 
 The snapshot decides that split, not taste. A table's entry in
@@ -337,9 +344,9 @@ children of the row being written, which no table definition states.
 
 Ownership says nothing about the reading. `readMigrationSql()` in
 `tests/invariants/schema-sql.ts` concatenates every `.sql` under
-`drizzle/` and its assertions run over the whole text, so six of them
-land in the generated migration and two in the hand-written one with
-nothing in the roster recording which. What does follow from the
+`drizzle/` and its assertions run over the whole text, so eleven of
+them land in the generated migrations and two in the hand-written one
+with nothing in the roster recording which. What does follow from the
 split is what a match there is worth. A generated statement is one of
 two tracked copies of one rule, and the module it came from is the
 other; the trigger is written down once, so that file is the only
