@@ -194,6 +194,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'hashes.slice(0, SHINGLE_SKETCH_SIZE)',
     ],
   },
+  {
+    file: 'audit-log.ts',
+    ownText: [
+      'Number.isNaN(date.getTime())',
+      'Object.hasOwn(values, field)',
+      'path.split(AUDIT_PATH_SEPARATOR).at(-1)',
+    ],
+  },
 ];
 
 /**

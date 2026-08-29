@@ -88,6 +88,7 @@ const PARITY_DIR = 'tests/parity';
  * HERE, naming itself, and gets registered in the commit that adds it.
  */
 const PARITY_FILES: readonly string[] = [
+  'audit-log.parity.test.ts',
   'fixtures.ts',
   'harness.parity.test.ts',
   'parse-csv.parity.test.ts',
