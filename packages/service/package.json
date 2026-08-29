@@ -36,7 +36,7 @@
     "docs:generate": "typedoc"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.10.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "drizzle-orm": "^0.45.1",

@@ -298,7 +298,7 @@ function formatSeedFailure(failure: SeedFailure): string {
  * @param path - Zod's own path for the issue.
  */
 function formatFieldPath(
-  path: readonly (string | number)[],
+  path: readonly PropertyKey[],
 ): string | null {
   if (path.length === 0) {
     return null;
@@ -309,9 +309,10 @@ function formatFieldPath(
       return `${rendered}[${segment}]`;
     }
 
+    const name = String(segment);
     return rendered === ''
-      ? segment
-      : `${rendered}.${segment}`;
+      ? name
+      : `${rendered}.${name}`;
   }, '');
 }
 

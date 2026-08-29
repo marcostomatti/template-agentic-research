@@ -25,6 +25,6 @@ export const MCPConfigSchema = z.object({
     port: z.number().int()
       .default(3001),
     path: z.string().default('/health'),
-  }).default({}),
+  }).prefault({}),
   logger: z.custom<LoggerOptions>().optional(),
 });
