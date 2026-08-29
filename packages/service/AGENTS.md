@@ -77,6 +77,18 @@ Two rules bind every phase of that port:
   table, so siblings import it directly and it stays out of the barrel.
   Three consumers pin the barrel's path (`drizzle.config.ts`,
   `src/db/index.ts`, `tests/live/live-postgres.ts`) — never move it.
+  Past the barrel line, a new `pgTable` is still half-added until it
+  reaches TWO more places, each owned by a different gate and neither the
+  schema file's own: the alphabetical `TABLES` list in
+  `tests/live/live-postgres.ts` (the live TRUNCATE roster) and the
+  table/column/constraint counts in `docs/architecture/02-schema.md`. The
+  `TABLES` omission is the quiet one — a missing name silently NARROWS
+  what a live run resets between cases (green, with leaked rows), while an
+  extra name makes every live file throw. Derive the roster instead of
+  eyeballing it: `grep -rhoE "pgTable\('[a-z_]+'" src/db/schema/ | sort`
+  held set-equal against the literals parsed out of the `TABLES` block,
+  plus a sortedness check and one in-neither control name. A count agrees
+  at the wrong membership; only the set diff names WHICH entry is missing.
 - **Errors**: throw `AppError` subclasses (`lib/errors`) or let Zod errors
   bubble — the registered handler maps them to typed JSON responses.
   Express 5 awaits an async handler's returned promise, so a rejection
@@ -88,6 +100,38 @@ Two rules bind every phase of that port:
   still in `src/index.ts` `/users` is a pre-Express-5 leftover,
   equivalent to letting the rejection through.
 - **Routes**: validate input at the boundary with zod (see the `api` skill).
+- **Logger**: `import type { Logger } from '../../lib/logger/node.js'`.
+  `ServiceLogger` from `lib/service-core` is `@deprecated` (a bare alias for
+  the same type) and NOTHING in the verification order reports it — `lint`,
+  `check-types` and the suite are all green, and the only signal is the
+  editor's TS6385. `lib/express/*` still uses the deprecated spelling, so
+  copying an import line out of the framework half is how the alias spreads;
+  `src/cron/index.ts` and `src/notifications/dispatch.ts` are the precedents
+  to copy instead. Grep a symbol for `@deprecated` at its DECLARATION before
+  copying any import from `lib/`.
+- **Claims-shaped values are a `type` alias, never an `interface`.** A TS
+  `interface` has NO implicit index signature and a `type` alias does, which
+  makes the two NON-interchangeable at any boundary onto a type that
+  declares one — `lib/express/auth.ts`'s `SessionClaims`
+  (`{ sub: string; [key: string]: unknown }`) being the one here. Measured,
+  both spellings in one probe: `interface X { readonly sub: string }` is
+  TS2322 *not assignable to type 'SessionClaims'* and the identical
+  `type X = { readonly sub: string }` assigns clean (`readonly` is not what
+  breaks it). Say why in the docblock: the next reader's instinct is to tidy
+  it into an interface, `lint` stays green through that, and `check-types`
+  reports it at the CONSUMER, a file the edit never touched.
+- **Rate limits**: spell the count `limit`, not `max` — `max` has been the
+  deprecated alias since express-rate-limit v7 and
+  `lib/express/middleware.ts`'s literal predates the rename, so copying its
+  wording spreads it. Two limiters on ONE route BOTH run, and each
+  `RateLimit-*` header goes to whichever middleware set it LAST, so a
+  route-level limiter that omits `standardHeaders`/`legacyHeaders` takes the
+  library defaults and the response ships draft-6 headers naming the
+  APP-WIDE limit beside legacy ones naming the route's — two contradictory
+  answers to one question, green everywhere. Restate `applyMiddleware`'s two
+  header settings on every route-level limiter. To key by address at all,
+  `app.set('trust proxy', <number>)` plus `X-Forwarded-For`: v8 throws
+  `ERR_ERL_PERMISSIVE_TRUST_PROXY` on the `true` form.
 - **Docs**: TSDoc on exported surfaces; see the `documentation` skill.
 - **Tracked markdown**: no author/date header — files open straight with
   `# Title`. Under `docs/architecture/`, `##` headings are noun labels
@@ -316,6 +360,38 @@ Verify those by deriving each claim from the artifact it describes (parse
 the roster out of the prose, compare it against the barrel or the
 directory) rather than by reading the doc and agreeing with it.
 
+`.env.example` is the exception to that map and is NOT gateless: it is
+listed in `SCAN_FILES` in `tests/invariants/naming-patterns.ts` (beside
+`docker-compose.yml`) precisely because it is copied verbatim by whoever
+stands the stack up, so the de-origination invariant opens it on every
+`bun run test`. Prove that coverage rather than assuming it --
+`collectScannedFiles` takes a `packageRoot` ARGUMENT, and calling it with
+none dies `ERR_INVALID_ARG_TYPE` on `paths[0]` from inside `join`, which
+reads like a broken module instead of a wrong call. Pair the membership
+assertion with an absent-path control in the same run. An example VALUE in
+that file can also be falsified while every sentence around it stays true,
+so a prose sweep keyed on words never reaches it: check each commented-out
+value against the WIRING's own conditions, since a presence toggle
+routinely makes two of them exact complements.
+
+`Dockerfile`'s build stage runs `bun run check-types` over a PARTIAL tree
+(`tsconfig` + `lib` + `src`) while the package tsconfig's `include` also
+names `tests`, so any colocated `src/**/*.test.ts` importing a shared
+fixture out of `tests/helpers/` type-checks locally and breaks the IMAGE --
+and no gate in either fan-out reports it, since nothing but a docker build
+ever type-checks that subset (measured: 10 TS2307 across four
+`src/auth/*.test.ts` files, plus 2 TS7006 cascades, tsc exiting 2). The
+Dockerfile has to COPY whatever `tests/` subtree `src/` reaches, and the
+helper's own imports have to stay inside the copied set. Two readings such
+a build owes. A `docker build` whose every layer prints CACHED is a REPLAY,
+not a measurement — it exits 0 without running a single RUN step, and the
+`check-types` layer is exactly the one a stale cache hides; take it with
+`--no-cache` and read the RUN steps' OWN output (a genuine run prints both
+`bun install` summaries and `$ tsc --noEmit`). And a build with no
+`--platform` targets the HOST arch, so on Apple Silicon every claim about a
+`linux-x64` artifact is unproven — `--platform linux/amd64` builds the
+actual deploy target and costs nothing measurable here.
+
 Neither `max-len` nor `max-lines` exists in any config, so the ~800-line
 file cap and the hand-maintained comment wrapping are review-quality
 conventions that turn no gate red. The absent-rule list is longer than it
@@ -386,6 +462,42 @@ hour. The rules:
    counterpart from the name.
 6. `fileParallelism: false` lives in `vitest.config.ts`, not on a script
    flag, so exported env vars can't re-parallelize the live files.
+
+`src/index.ts` cannot be imported by the isolated suite AT ALL: it resolves
+`src/config.ts` at import time and ends in a top-level `createService` call,
+so an import boots a service against a real database. Two complements cover
+it and neither is optional. The isolated one RE-ASSEMBLES the wiring shape
+over the in-memory store — same presence toggle, same 0-or-1 dependency
+array, same form precedence, same conditional mount — and its cost belongs
+in the file header: a divergence introduced in `src/index.ts` ITSELF stays
+invisible to a green run. Such a file must hand the SAME store to the
+bootstrap dependency, the router and the verifier, then assert the SUBJECT
+the guarded route saw rather than only its status (a service wired over two
+different stores answers the same 200); and a refusal case for an ABSENT
+credential exercises less of the path than one for a BAD credential, since
+`buildRequireAuthFrom` short-circuits on `extractBearer` returning null.
+
+The other complement is booting it by hand, which is the only evidence a
+WIRING change has:
+`( cd packages/service && env PORT=... DATABASE_URL=<live 5433> ... bun run
+src/index.ts )` in the background, curl the surfaces, kill it. Dependency
+ORDER is NOT readable from the running service (`/_control/*` is not mounted
+in this service's config and answers 404) — take it from boot-FAILURE
+attribution instead, which is three legs: an unreachable database must name
+the FIRST dependency, a reachable-but-UNMIGRATED one must name the later
+dependency that needed the schema, and the same unmigrated database with
+the feature toggled OFF must BOOT, which is the control saying leg 2 was
+that dependency rather than something else about an empty database. Each
+leg reads as one pino line (`dep=<name>` with `dependency failed to start`)
+plus the exit code, since `createService` calls `process.exit(1)` outside
+`NODE_ENV=test`. Make a SCRATCH database rather than using `ar_live`, and
+preflight-refuse a name that already exists so the trap's drop cannot reach
+somebody else's. Trap while doing it: `( ... ) & PID=$!` captures the
+SUBSHELL, not the server, so `kill "$PID"` leaves the child holding the port
+and the NEXT run's readiness poll is answered INSTANTLY by that orphan
+— every reading then lands on the stale service and looks like a
+real regression. Use `exec` inside the subshell, preflight-refuse a port
+already answering, and re-check `ps` for orphans AFTER the run.
 
 `describeLivePg` is one of two gates in that directory. `describeLiveN8n`,
 in `tests/live/live-n8n.ts`, keys the n8n cases to `AR_N8N_URL` the same
