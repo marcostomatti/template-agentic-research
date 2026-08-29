@@ -144,6 +144,125 @@ describe('createHttpLogger — authorization header redaction', () => {
   });
 });
 
+/**
+ * Every string leaf reachable from a parsed log line, in traversal order.
+ *
+ * This is the second reader the `x-api-key` cases below check the output with.
+ * It shares nothing with pino's redaction engine — no path syntax, no key
+ * names — so it still reports a header value that survived under some key the
+ * configured redact path does not name. A redactor cannot see its own path
+ * stop matching, so its report that a field is masked is not evidence the
+ * value left the line.
+ */
+function stringLeaves(value: unknown): string[] {
+  if (typeof value === 'string') {
+    return [value];
+  }
+  if (value === null || typeof value !== 'object') {
+    return [];
+  }
+  return Object.values(value as Record<string, unknown>).flatMap(stringLeaves);
+}
+
+describe('createHttpLogger — x-api-key header redaction', () => {
+  // `x-api-key` is the third default redact path and the only one spelled in
+  // bracket notation (`req.headers["x-api-key"]`), because the header name
+  // carries hyphens. The pino 10 bump did not move the engine underneath it:
+  // 9.14.0 and 10.3.1 both depend on `@pinojs/redact` ^0.4.0 and resolve to the
+  // same installed 0.4.0 copy, and both majors driven over this path out of
+  // their own store directories emit byte-identical output — the fast-redact
+  // replacement landed before 9.14.0, not at the major. Measured against that
+  // engine: the bracket form, the single-quoted form and even the bare dotted
+  // `req.headers.x-api-key` all resolve to this same key, while a wrong-cased
+  // or wrong-parented path leaks the value and throws NOTHING. Only an
+  // unterminated bracket is loud (`Invalid redaction path`). That silence is
+  // why the second case below re-reads the emitted line instead of asking the
+  // redactor whether it worked.
+  const API_KEY_SECRET = 'sk-live-redaction-sentinel-0001';
+  // Deliberately NOT a redacted path: this header must survive verbatim. It
+  // does double duty — it is the liveness control for both readers (a scan
+  // that finds nothing proves nothing) and the over-eager direction, since a
+  // redactor that masked every header would pass the absence assertion alone.
+  const UNLISTED_SECRET = 'sk-live-unlisted-sentinel-0002';
+
+  let stdoutChunks: string[];
+
+  beforeEach(() => {
+    stdoutChunks = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdoutChunks.push(typeof chunk === 'string'
+        ? chunk
+        : chunk.toString());
+      return true;
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const emitOneRequest = (): void => {
+    const middleware = createHttpLogger();
+
+    const req = Object.assign(Object.create(null), {
+      headers: {
+        'x-api-key': API_KEY_SECRET,
+        'x-echo-key': UNLISTED_SECRET,
+      },
+      method: 'GET',
+      url: '/api/data',
+      socket: { remoteAddress: '127.0.0.1' },
+    }) as unknown as IncomingMessage;
+
+    const res = Object.assign(new EventEmitter(), {
+      statusCode: 200,
+      setHeader: vi.fn(),
+      getHeader: vi.fn(),
+    }) as unknown as ServerResponse;
+
+    middleware(req, res, vi.fn());
+    res.emit('finish');
+  };
+
+  it('reports the x-api-key header as [Redacted] at its configured path', () => {
+    emitOneRequest();
+
+    // The redactor's OWN report: the placeholder literal sitting at the exact
+    // path `DEFAULT_REDACT_PATHS` names. Pinning it here keeps the censor
+    // string a checked constant, but on its own it says only that pino wrote
+    // what pino was asked to write.
+    expect(stdoutChunks.length).toBeGreaterThan(0);
+    const parsed = JSON.parse(stdoutChunks[0]!) as Record<string, unknown>;
+    const reqField = parsed['req'] as Record<string, unknown> | undefined;
+    const headers = reqField?.['headers'] as Record<string, unknown> | undefined;
+    expect(headers?.['x-api-key']).toBe('[Redacted]');
+  });
+
+  it('leaves no x-api-key value anywhere in the emitted line', () => {
+    emitOneRequest();
+
+    expect(stdoutChunks.length).toBeGreaterThan(0);
+    const raw = stdoutChunks[0]!;
+
+    // Controls first, so a reader that has gone blind fails as a control
+    // rather than passing as a clean result. Each reader proves itself on the
+    // SAME line it is about to clear.
+    expect(raw).toContain(UNLISTED_SECRET);
+    const leaves = stringLeaves(JSON.parse(raw));
+    expect(leaves).toContain(UNLISTED_SECRET);
+
+    // The claims. Neither consults the redact path: the raw scan is blind to
+    // structure and the leaf walk is blind to key names, so a value that moved
+    // to another field (a serializer, a `customProps` echo) fails here while
+    // the case above still reads `[Redacted]`. Both were proven to
+    // discriminate by mutating `node.ts`; because a case stops at its first
+    // failing assertion, the leaf walk was re-run with the raw scan removed to
+    // confirm it fails on its own.
+    expect(raw).not.toContain(API_KEY_SECRET);
+    expect(leaves.filter((leaf) => leaf.includes(API_KEY_SECRET))).toEqual([]);
+  });
+});
+
 describe('createHttpLogger — health route ignore', () => {
   let stdoutChunks: string[];
 

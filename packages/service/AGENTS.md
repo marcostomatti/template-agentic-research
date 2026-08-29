@@ -78,9 +78,15 @@ Two rules bind every phase of that port:
   Three consumers pin the barrel's path (`drizzle.config.ts`,
   `src/db/index.ts`, `tests/live/live-postgres.ts`) — never move it.
 - **Errors**: throw `AppError` subclasses (`lib/errors`) or let Zod errors
-  bubble — the registered handler maps them to typed JSON responses. Express
-  4 does NOT auto-forward async route errors: wrap async handlers in
-  try/catch + `next(err)` (see `src/index.ts` `/users`).
+  bubble — the registered handler maps them to typed JSON responses.
+  Express 5 awaits an async handler's returned promise, so a rejection
+  reaches that handler on its own: a bare `throw` in an `async` route
+  needs no try/catch and no `next(err)` (proved in
+  `lib/express/create-service.test.ts`). Catch explicitly only where the
+  route answers with a body the shared handler would not produce — the
+  wrappers in `lib/express/control/routes.ts` are that case; the one
+  still in `src/index.ts` `/users` is a pre-Express-5 leftover,
+  equivalent to letting the rejection through.
 - **Routes**: validate input at the boundary with zod (see the `api` skill).
 - **Docs**: TSDoc on exported surfaces; see the `documentation` skill.
 - **Tracked markdown**: no author/date header — files open straight with

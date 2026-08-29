@@ -28,6 +28,24 @@ wanted in both places must be made in both repos.
   package; bare `lint`/`check-types`/`test` cover root files + `tools/`.
 - Runtime: bun-first (`packageManager` pinned). `@ar/ui`'s test toolchain
   additionally needs Node 22 on PATH (`bun x` shebang handling).
+- `.github/dependabot.yml` opens dependency PRs weekly for two ecosystems,
+  both rooted at `/`: `bun` covers every workspace manifest (one entry,
+  because the single root lockfile resolves them all) and `github-actions`
+  covers the workflow files. The identifier is `bun` and not `npm` because
+  the only lockfile here is `bun.lock`, which the npm ecosystem does not
+  read — an `npm` entry would resolve nothing at all. (Dependabot's bun
+  support wants bun >= 1.1.39; `packageManager` pins 1.3.9.) Each ecosystem
+  groups its `minor` and `patch` bumps into one PR and deliberately leaves
+  majors OUT of the group, so every major arrives alone and a red gate
+  names its own cause. `playwright`/`playwright-core` are the one `ignore`:
+  `@ar/ui` pins both to an exact `1.61.1` twice (its devDependencies plus
+  an `overrides` block) and `front.yml` spells that version into its
+  visual-baseline cache key three times as the literal `pw1.61.1`. Those
+  baselines are untracked and exist only in that cache, so a manifest bump
+  the key cannot follow restores 1.61.1 renderings to compare a 1.62
+  browser against — a false diff on every story whose rendering moved,
+  not the clean cache miss that would re-seed. Bump it by hand, cache key
+  first.
 - No prettier anywhere, root or package: ESLint is the only style gate and
   it does not reflow comments, so comment/TSDoc/markdown wrapping is
   hand-maintained. Match the surrounding file rather than a global number
@@ -73,6 +91,24 @@ and line for each in one command, which turns "the ignores are fine" from an
 assumption into evidence. The blast radius of being wrong is an origin path
 on the remote.
 
+Both trees also sit outside EVERY gate, and the consequence is a legitimately
+EMPTY commit set. The root leaf config lists `.specs/**` and `.plans/**` in
+its `ignores` (an explicit-path `bun x eslint -f json <spec>` returns the
+*File ignored because of a matching ignore pattern* warning — the IGNORED
+shape, not covered-and-clean), and `gate:control-bytes` opens only TRACKED
+files, which these are not. So a spec/plan task has no green to lean on AND
+`git add -A` stages nothing: derive every claim from a measurement, then
+report the empty commit rather than manufacturing a tracked change to have
+something to push. The corollary runs the other way too — where a
+measurement makes a sentence in a TRACKED file over-broad, recording it only
+in `.specs/` leaves the repo asserting the opposite to the next reader, so
+qualify the tracked claim in the same commit.
+
+Their prose conventions are unenforced and therefore hand-owned: prose wraps
+at 77 cols in `.specs` (markdown tables exempt), and the dash/arrow are the
+NON-ASCII forms, not the ASCII `--`. Emit those from `String.fromCharCode`
+behind an ASCII placeholder token, never as a literal in the tool call.
+
 ## Security posture (carried from the templates, incident-derived)
 
 - Isolated vs live test split is structural: the default suite touches no
@@ -117,9 +153,12 @@ on the remote.
   so feeding it `git ls-files` applies the five declared needle SOURCES
   with no hand-transcription step and no exposure to the shimmed-`grep`
   trap (measured 676/676 tracked files, agreeing with the git grep at 1
-  hit). It carries its own liveness leg for free — the same matcher over an
-  in-memory planted sample built from fragments must return 5 hits naming
-  all five ids. Run BOTH readings and let their agreement be the result.
+  hit; the DENOMINATOR is a snapshot that moves with every added file, so
+  re-derive it and let `git ls-files | wc -l` agreeing with the probe's own
+  counter be the coverage reading). It carries its own liveness leg for
+  free — the same matcher over an in-memory planted sample built from
+  fragments must return 5 hits naming all five ids. Run BOTH readings and
+  let their agreement be the result.
   `git grep -P` DOES support lookbehind here (the ugrep shim is on bare
   `grep`, not on `git grep`), so the guarded needle is runnable as-is.
 - The correct outcome of that sweep is ONE hit, not zero, and a literal
@@ -139,6 +178,28 @@ on the remote.
   bare needle token pasted into a doc, a plan or a commit message becomes
   the very literal the law forbids, and this paragraph tripped that on its
   first draft.
+- NEVER print a `ForbiddenMatch` wholesale. The record carries `line`
+  verbatim by design, so a probe that dumps matches seeds the banned string
+  into terminal scrollback, the tool-result capture and any file the run is
+  redirected to — the one place nobody can go and fix it, which is the
+  exact reason the failure message is built from `patternId`. Print
+  `patternId` + `filePath` + `lineNumber` and nothing else; to show CONTEXT
+  around a legitimate hit, read the file separately and mask the needle with
+  a python `str.replace` built from fragments.
+- Read the unguarded near-neighbour controls by their file SET, never their
+  count: the invariant's own two files (`naming-patterns.ts` and its test)
+  hit ALL of them by construction, since they carry the fragments and the
+  false-positive fixtures. A control returning those 2 files alone is a DEAD
+  control reporting only the scanner — only the third-party members say the
+  guard discriminates against what is actually in the tree.
+- The whole sweep runs from ONE /tmp `.mjs` under bun rather than from
+  inside `packages/service`: `naming-patterns.ts` imports only node
+  builtins, so a probe importing it by ABSOLUTE path reaches
+  `findForbiddenMatches` with no cwd trap and no package graph. That lets
+  tracked files, an outbound PR body, the planted control and the near-miss
+  controls be ONE command whose output is a single verdict block — which
+  matters because the controls are only evidence when they ran against the
+  same matcher instance as the sweep.
 - Also true of ANY sweep needle here: prove it excludes its legitimate
   sibling before reading a count as an inventory. `specs/` sits inside
   `.specs/`, so a bare `git grep -E 'specs/'` returned 24 lines of which 18
@@ -199,9 +260,48 @@ red package never masks another and a single run gives the whole picture.
 - Classifying every line is what makes "no failures" a measurement, and the
   biggest bucket is not vitest: of 1888 lines, 1780 are `@ar/ui pretest`'s
   vite chunk-size table (two `│` apiece) and 49 are the framework's
-  deliberate pino error-path JSON. The `Exited with code 0` set is exactly
+  deliberate pino error-path JSON. Those three figures are a SNAPSHOT, not
+  an invariant — every test that builds a service over supertest adds its
+  own deliberate pino JSON, so a plan adding tests legitimately moves them
+  (measured 1906/67 and later 1999/1800/75 in one dependency-bump plan).
+  Re-derive the buckets per run and read the OTHER bucket, which is where an
+  unexplained line would sit. The `Exited with code 0` set is exactly
   FIVE and worth NAMING rather than counting — `@ar/service pretest`,
   `@ar/ui pretest`, `@ar/ui test`, `@ar/web test`, `@ar/service test`.
+- Of those buckets exactly one is assertable by MEMBERSHIP instead of by a
+  drifting count: the OTHER (unprefixed) bucket enumerates completely as the
+  two `$` echoes, the root vitest run's own nine-line block (banner, two
+  blanks, its two summary lines, `Start at`, `Duration`) and — only when
+  bun emits it — the trailing `error: script "<name>" exited with code N`.
+  Twelve lines when present. "No unexplained line" is a real measurement
+  only because this bucket is enumerable; assert its members, count the rest.
+- NEVER key "did this gate fail?" on that `error: script` line: bun does not
+  emit it for every failing fan-out. Measured in one sitting on one tree,
+  `test:all` exiting 1 printed it as the capture's last line while
+  `check-types:all` exiting 2 printed nothing of the kind. A reader keying
+  failure on it reads a red `check-types:all` as GREEN. The reliable markers
+  are the per-package `Exited with code N` set (both fan-outs print it in
+  full through a red) and the script's own exit code captured separately —
+  `bun run <gate> > <f> 2>&1; echo EXIT=$?` — never a grep of the capture.
+- vitest's summary lines CHANGE SHAPE when a run is red, so any regex keyed
+  on the green spelling silently misreads a red capture: `Test Files  47
+  passed | 5 skipped (52)` becomes `Test Files  3 failed | 45 passed | 5
+  skipped (53)`, and a needle like `Test Files +([0-9]+) passed` extracts the
+  FAILED count's neighbour or nothing at all. Same for the `Tests` line.
+  Capture the whole summary line and parse its segments, or quote it
+  verbatim; never key on the position of `passed`. The `tail -N` idiom fails
+  the same way — `tail -2` of a check-types:all capture shows two `Exited
+  with code 0` lines for a run that exited 2, because the failing package
+  sorts FIRST in the fan-out.
+- `--reporter=basic` no longer exists (vitest 4 removed it) and the failure
+  is indistinguishable from a red suite at the exit code: the run exits 1
+  having executed NOTHING, printing a `Failed to load custom Reporter from
+  basic` stack instead of any test result. It bites single-FILE runs too.
+  `--reporter=json --outputFile=<f>` DOES load and carries every file's
+  assertion list, so a per-file pass/fail/skip split is a `bun -e` group-by
+  away — which the default reporter cannot give you, since it names only
+  FAILING files. Appending such a flag to a DIRECT package script is fine
+  and is the exception to the never-append-to-a-fan-out rule.
 - A green capture carries NO per-file and no per-case line, so grepping one
   for a test file's NAME reports whether that file's code LOGS, never
   whether it ran (measured: all four `lib/express/control/*.test.ts` names
@@ -233,6 +333,32 @@ red package never masks another and a single run gives the whole picture.
   both that the artifacts under test are HEAD's and that the tree is clean —
   in one line of one run.
 
+- On a tree already RED from an earlier stage, "is this red mine?" is answered
+  by a before/after SET diff, never by a figure this file or an earlier commit
+  recorded: capture the diagnostic and failure sets BEFORE your change, then
+  `diff <(grep 'error TS' before) <(grep 'error TS' after)`. Empty is the
+  whole reading, and it works while both sides are red, where an exit code and
+  a count each say nothing. `git stash push -- <only your paths>` is the
+  fallback when no baseline was taken — reversible, unlike `git checkout`,
+  which silently destroys a file you authored. A carried-in red is STABLE
+  across a stage, and that stability is the reading a stage gate owes: diff
+  the SETS gate-to-gate and attribute the COUNT separately, since an unchanged
+  set under a moved count is the healthy shape and a moved SET under an
+  unchanged count is what the pairing exists to catch.
+- A before/after failure-set diff can also SHRINK, and a vanished failure
+  needs the same attribution as an added one: a `socket hang up` present
+  before and absent after turned out to be a flake, 3/3 green when the file
+  ran alone. supertest over a built service is where the flake lives here.
+- An env-gated live suite's CASE-level skip count cannot tell a CLOSED gate
+  from an armed-but-unusable one — read the FILE status instead. Measured on
+  `describeLiveN8n`: with `AR_N8N_URL` unset the file reports `1 skipped`, and
+  with it pointed at a closed loopback port (`http://127.0.0.1:9`) the file
+  flips to `1 failed` while the case line still reads `3 skipped`. The
+  closed-port form is the safe control for any env-gated suite: it proves the
+  ternary produced the skip (rather than a hardcoded `describe.skip` or cases
+  gutted to stubs) and the refusal happens before any request, so it reaches
+  no service.
+
 ### Which gate reads which file
 
 A fan-out's green SHAPE is invariant under any change to what it COVERS, so
@@ -254,9 +380,57 @@ matching anything prints exactly the same five lines.
   misleading reflex that presumes the half nobody measured. Ask with a plain
   explicit-path `-f json` run first.
 - `bun run gate:control-bytes` DOES open every tracked file, package-root
-  `README.md` and `AGENTS.md` included (676 scanned, and that count is its
-  own liveness control). So a docs-only commit is NOT gateless — it has
-  exactly one green worth reading, and it is neither fan-out.
+  `README.md` and `AGENTS.md` included (676 scanned at the time of writing,
+  and that count is its own liveness control). So a docs-only commit is NOT
+  gateless — it has exactly one green worth reading, and it is neither
+  fan-out.
+- That gate is BLIND to a file you just created, and it prints the same
+  count either way, so "the scanned count moved by the files I added" is a
+  false green until `git add`. It walks TRACKED files, and an untracked new
+  file is not one (measured 677 with a new file present AND with it stashed,
+  then 678 the moment it was staged). Stage first, then read the count as
+  the coverage proof. The pre-commit hook is NOT the same reading: its
+  `--staged` mode reports the STAGED file count, which says the hook ran and
+  nothing about repo-wide coverage.
+- Deriving that delta needs no checkout, worktree or stash: `isScannable` is
+  EXPORTED from `tools/control-byte-gate/control-byte-gate.ts` and that
+  module imports only node builtins, so a /tmp `.mjs` importing it by
+  ABSOLUTE path applies the gate's OWN selection to
+  `git ls-tree -r --name-only -z <base>` as well as to `git ls-files -z` at
+  HEAD. The HEAD-derived number agreeing with the count the gate just
+  printed is what says the derivation used the gate's selection rather than
+  a retyped guess, and it names WHICH paths arrived. Owe the delta against
+  the PLAN's base (`git merge-base main HEAD`), never against a figure an
+  earlier stage recorded — the two disagree by construction. Carry two
+  controls: a definitely-absent but scannable path (in NEITHER set, so
+  membership is discriminating) and a binary-allowlist path (`a/b.png`,
+  false, so the predicate is not simply answering true for everything).
+- `.github/**` joins package-root `AGENTS.md` in the read-by-no-fan-out-gate
+  set, for a different reason: ESLint here has no YAML plugin at all, so
+  `lint:all` never opens a `.yml` whatever the ignore patterns say, and
+  there is nothing for `check-types`/`test` to read either. A workflow or
+  Dependabot change has exactly one green worth running, the STAGED
+  `gate:control-bytes`, plus whatever you measure by hand. For YAML that
+  hand-check is `python3 -c "import yaml"` (PyYAML is present here): parse
+  the file and DUMP the parsed structure rather than reading the exit code,
+  because a comment-only mistake and a mis-indented key both parse.
+- The tracked `.claude/` tree is the THIRD member, and it is IGNORED rather
+  than un-targeted: an explicit-path `bun x eslint -f json
+  .claude/skills/**/*.md` returns the *File ignored because of a matching
+  ignore pattern* warning, so no `lint:all` line is evidence about it and
+  only `gate:control-bytes` opens it. This matters beyond de-origination:
+  a rule or skill file under `.claude/` can assert a version claim about
+  this repo's own manifest, which a bump in `packages/` silently falsifies.
+  Sweep `.claude/` explicitly; a `git ls-files packages/` denominator will
+  never reach it.
+- The ROOT `AGENTS.md` is the exception to all of the above: the root leaf
+  config ignores `packages/**`, but repo-root markdown IS in `eslint .`'s
+  target set, so an explicit-path `bun x eslint -f json AGENTS.md` returns
+  the covered-and-clean shape and a docs-only commit HERE has TWO greens —
+  `bun run lint` plus `gate:control-bytes`. The gate's scanned COUNT is not
+  one of them: it is invariant under an edit to an already-tracked file.
+  Root house wrap, measured over non-table lines: prose peaks at 70-76 with
+  a cap of 78, and the four `| ... |` workspace-map rows are exempt.
 - Proving a gate ran over YOUR work needs a different mechanism per gate,
   because the file-count control is invariant under any plan that only edits
   files already in the target list. For ESLint, per-PATH membership:

@@ -1,0 +1,297 @@
+import type { ServiceHandle } from '../types';
+import type { Response } from 'supertest';
+
+import request from 'supertest';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { createService } from '../create-service';
+
+// Tests run in test mode — no process.exit, ephemeral port
+process.env.NODE_ENV = 'test';
+
+// ---------------------------------------------------------------------------
+// Response headers installed by applyMiddleware
+//
+// Every value below was MEASURED over the stack applyMiddleware actually
+// builds, against the dependency version named on its own group — none of
+// it is recalled from either library's README, and neither library
+// documents its full default set in one place. A major of either is expected
+// to move these strings, which is the whole point of pinning them: the header
+// set is this service's security posture, and a silent change to it is the
+// failure mode a version bump has no other way of announcing.
+//
+// The three groups are kept apart because they have three different owners —
+// helmet, express-rate-limit, and Node/Express — and this plan bumps the
+// first two in separate stages, so each reconciles on its own without the
+// other's expectations being touched.
+// ---------------------------------------------------------------------------
+
+/**
+ * Every header `helmet()` sets with no options, measured against helmet
+ * 8.3.0.
+ *
+ * The 7.2.0 to 8.3.0 bump moved exactly ONE entry in here:
+ * `strict-transport-security` went from `max-age=15552000` (180 days) to
+ * `max-age=31536000` (365 days). No header was added, none was dropped and
+ * no other value was reworded — which is what this case going red while the
+ * completeness case below stayed green already reported, and what a direct
+ * diff of the two majors' middleware over a recording response confirmed
+ * independently.
+ *
+ * Two absences are as load-bearing as the entries: helmet still leaves
+ * `Cross-Origin-Embedder-Policy` off by default under 8, and it REMOVES
+ * Express's `X-Powered-By` rather than setting anything — see the dedicated
+ * case below.
+ */
+const HELMET_DEFAULT_HEADERS: Readonly<Record<string, string>> = {
+  'content-security-policy': 'default-src \'self\';base-uri \'self\';'
+    + 'font-src \'self\' https: data:;form-action \'self\';'
+    + 'frame-ancestors \'self\';img-src \'self\' data:;'
+    + 'object-src \'none\';script-src \'self\';'
+    + 'script-src-attr \'none\';'
+    + 'style-src \'self\' https: \'unsafe-inline\';'
+    + 'upgrade-insecure-requests',
+  'cross-origin-opener-policy': 'same-origin',
+  'cross-origin-resource-policy': 'same-origin',
+  'origin-agent-cluster': '?1',
+  'referrer-policy': 'no-referrer',
+  'strict-transport-security': 'max-age=31536000; includeSubDomains',
+  'x-content-type-options': 'nosniff',
+  'x-dns-prefetch-control': 'off',
+  'x-download-options': 'noopen',
+  'x-frame-options': 'SAMEORIGIN',
+  'x-permitted-cross-domain-policies': 'none',
+  'x-xss-protection': '0',
+};
+
+/**
+ * The rate-limit headers produced by the FALLBACK literal in
+ * `applyMiddleware` — `{ max: 100, windowMs: 60_000, standardHeaders:
+ * 'draft-6', legacyHeaders: false }` — measured on a request to a fresh
+ * service, against express-rate-limit 8.6.2.
+ *
+ * The 7.5.1 to 8.6.2 bump moved NOTHING in here: no name renamed, no value
+ * reworded, none added and none dropped. Recording that took two readings
+ * rather than one, because a case staying green across a major is on its
+ * own indistinguishable from a case that quietly stopped discriminating —
+ * the assertions below stayed green, and the two majors' own middleware
+ * driven side by side at `standardHeaders: 'draft-6'` over a recording
+ * response produced byte-identical output. So the version above is a
+ * re-measurement that found no change, not a change transcribed into the
+ * constant.
+ *
+ * These four are draft-6's spelling, draft-6 being what the fallback
+ * literal now names outright. They are listed one at a time rather than
+ * matched by prefix because a `startsWith('ratelimit')` assertion keeps
+ * passing across a draft change that renames every one of them, and the
+ * draft spelling is the client-visible contract. Measured under this same
+ * 8.6.2: draft-7 answers with `ratelimit-policy` plus a combined
+ * `ratelimit: limit=100, remaining=99, reset=60`, and draft-8 with a
+ * quoted `ratelimit: "100-in-1min"; r=99; t=60` — two header sets that
+ * share exactly one name with the four below.
+ *
+ * `ratelimit-remaining` is `99` rather than `100` because the request being
+ * measured is itself the first hit of the window, and `ratelimit-reset` is
+ * the whole window in seconds because the store is fresh — both hold only
+ * for the FIRST request against a given service instance, which is why
+ * `probeResponse` below builds a new one per case.
+ */
+const FALLBACK_RATE_LIMIT_HEADERS: Readonly<Record<string, string>> = {
+  'ratelimit-policy': '100;w=60',
+  'ratelimit-limit': '100',
+  'ratelimit-remaining': '99',
+  'ratelimit-reset': '60',
+};
+
+/**
+ * Headers on the measured response that `applyMiddleware` does NOT install:
+ * Node and Express put these on a 200 JSON response themselves.
+ *
+ * They are named rather than filtered by prefix so that the completeness
+ * case below can subtract a KNOWN set. Anything outside these three groups
+ * is a header some dependency started sending, which is exactly the finding
+ * that case exists to surface.
+ *
+ * `connection` is RUNNER-visible rather than universal: Node's HTTP server
+ * emits it, bun's `node:http` shim does not, so a throwaway probe run under
+ * `bun run` reports one fewer header than this suite sees. Measure this list
+ * from a vitest run, never from a probe.
+ */
+const TRANSPORT_OWNED_HEADERS: readonly string[] = [
+  'connection',
+  'content-length',
+  'content-type',
+  'date',
+  'etag',
+];
+
+describe('applyMiddleware — response headers on a built service', () => {
+  let handle: ServiceHandle | undefined;
+
+  afterEach(async () => {
+    if (handle) {
+      await handle.stop();
+      handle = undefined;
+    }
+  });
+
+  /**
+   * Starts a minimal service and returns the response to a single GET of the
+   * one route it registers.
+   *
+   * A FRESH service per call is not tidiness: `express-rate-limit` counts
+   * against a per-instance memory store, so a service shared across cases
+   * would answer the second case with `ratelimit-remaining: 98` and make
+   * these assertions a function of test ORDER.
+   *
+   * @param rateLimit - Passed through as `config.rateLimit`. Omit it to get
+   *   the fallback literal inside `applyMiddleware`, which is what every
+   *   case here but the last one measures.
+   * @returns The supertest response to `GET /probe`.
+   * @throws Error When the route does not answer 200.
+   */
+  async function probeResponse(
+    rateLimit?: { max: number; windowMs: number },
+  ): Promise<Response> {
+    handle = await createService({
+      serviceId: 'middleware-probe',
+      rateLimit,
+      register(app) {
+        app.get('/probe', (_req, res) => {
+          res.json({ ok: true });
+        });
+      },
+    });
+
+    const res = await request(handle.app).get('/probe');
+
+    // Vacuity guard. An error response carries a DIFFERENT header set —
+    // Express's finalhandler overwrites the CSP and no ETag is computed —
+    // so a case that quietly characterized a 404 would be pinning headers
+    // this service never serves on its success path.
+    if (res.status !== 200) {
+      throw new Error(`probe route answered ${res.status}, so the measured headers are not the success-path set`);
+    }
+
+    return res;
+  }
+
+  it('installs helmet\'s default headers with these exact values', async () => {
+    const res = await probeResponse();
+
+    // Expected to go RED at a helmet major, and to be re-measured rather
+    // than hand-edited when it does. Red here with the completeness case
+    // green means helmet reworded a value; both red means it added or
+    // dropped a header. The 7 -> 8 bump produced the first reading, on the
+    // HSTS max-age alone — see HELMET_DEFAULT_HEADERS above.
+    for (const [name, value] of Object.entries(HELMET_DEFAULT_HEADERS)) {
+      expect(res.headers[name], `helmet header ${name}`).toBe(value);
+    }
+  });
+
+  it('installs the RateLimit headers of the fallback rate-limit config', async () => {
+    const res = await probeResponse();
+
+    // Names the OTHER drafts' spelling rather than prefix-matching this
+    // one, and sits ahead of the value loop so that a draft change reports
+    // as itself: draft-7 and draft-8 both collapse the
+    // limit/remaining/reset trio into a single combined `ratelimit`, so the
+    // absence of that one name is what says this response is draft-6 and
+    // not merely RateLimit-ish. The loop below cannot make the call — it
+    // iterates over the names it expects and is blind to an added one — and
+    // it fails FIRST on a draft change, which would bury this reading.
+    expect(res.headers).not.toHaveProperty('ratelimit');
+
+    // This case was expected to go RED at the express-rate-limit major, on
+    // the premise that v8 moved the default draft and the `standardHeaders`
+    // encoding. It did not: every literal below survived the 7 to 8 bump
+    // untouched. What still reddens it is the fallback literal naming a
+    // different draft, or the library rewording a value. The value half
+    // (100, 99, 60) is derived from that literal's own max/windowMs, so it
+    // also fails if someone edits those numbers without saying so.
+    for (const [name, value] of Object.entries(FALLBACK_RATE_LIMIT_HEADERS)) {
+      expect(res.headers[name], `rate-limit header ${name}`).toBe(value);
+    }
+
+    // The other half of "standardHeaders: 'draft-6', legacyHeaders: false".
+    expect(res.headers).not.toHaveProperty('x-ratelimit-limit');
+    expect(res.headers).not.toHaveProperty('x-ratelimit-remaining');
+    expect(res.headers).not.toHaveProperty('x-ratelimit-reset');
+  });
+
+  it('sends nothing beyond those two sets and the transport-owned headers', async () => {
+    const res = await probeResponse();
+
+    // The completeness claim, and the only case here that can see a header
+    // being ADDED — the two value cases above iterate over what they expect
+    // and are blind to anything extra. The expected list is derived from the
+    // same three constants rather than retyped, so there is one place to
+    // reconcile per dependency.
+    const expected = [
+      ...Object.keys(HELMET_DEFAULT_HEADERS),
+      ...Object.keys(FALLBACK_RATE_LIMIT_HEADERS),
+      ...TRANSPORT_OWNED_HEADERS,
+    ].sort();
+
+    expect(Object.keys(res.headers).sort()).toEqual(expected);
+  });
+
+  it('removes the X-Powered-By header Express sets by default', async () => {
+    const res = await probeResponse();
+
+    // A MECHANISM case, not a literal one: helmet's `hidePoweredBy` unsets
+    // a header rather than setting one, so the completeness case above
+    // cannot see it — an absent name is absent either way. This one should
+    // survive a helmet major untouched; if it does not, helmet stopped
+    // doing something this service relies on it for. It survived 7 -> 8.
+    expect(res.headers).not.toHaveProperty('x-powered-by');
+  });
+
+  it('applies the stack app-wide, so unrouted requests carry it too', async () => {
+    handle = await createService({
+      serviceId: 'middleware-probe',
+      register() {},
+    });
+
+    const res = await request(handle.app).get('/no-such-route');
+    expect(res.status).toBe(404);
+
+    // Also a mechanism case: `applyMiddleware` mounts everything with
+    // `app.use` before any route exists, so the headers are a property of
+    // the app and not of a handler. Asserting NAMES and not values is
+    // deliberate — on this path Express's finalhandler overwrites the CSP
+    // with `default-src 'none'` and computes no ETag, both of which are
+    // Express's doing rather than a middleware regression.
+    const names = Object.keys(res.headers);
+    for (const name of [
+      ...Object.keys(HELMET_DEFAULT_HEADERS),
+      ...Object.keys(FALLBACK_RATE_LIMIT_HEADERS),
+    ]) {
+      expect(names, `header ${name} on an unrouted request`).toContain(name);
+    }
+  });
+
+  it('falls back to legacy X-RateLimit headers when a caller supplies rateLimit', async () => {
+    const res = await probeResponse({ max: 7, windowMs: 1_000 });
+
+    // The discriminating control for the RateLimit case above: it proves
+    // those `ratelimit-*` names come from the FALLBACK literal and not from
+    // express-rate-limit's own defaults, which is a claim no amount of
+    // measuring the fallback path alone can make.
+    //
+    // The cause is that `ServiceConfigSchema` models `rateLimit` as `max`
+    // plus `windowMs` and nothing else, so a caller-supplied block reaches
+    // the limiter without the `standardHeaders`/`legacyHeaders` choice the
+    // fallback literal carries, and express-rate-limit's own defaults
+    // answer instead. Those defaults did not move at the 7 to 8 bump —
+    // `standardHeaders` off, `legacyHeaders` on — so this case reads
+    // identically across it. Documented here because it is measured
+    // behaviour, not endorsed as a design.
+    expect(res.headers).not.toHaveProperty('ratelimit-limit');
+    expect(res.headers['x-ratelimit-limit']).toBe('7');
+    expect(res.headers['x-ratelimit-remaining']).toBe('6');
+    // Value deliberately unasserted: 7 and 8 both put an absolute epoch
+    // second here, so pinning it would pin the clock rather than the header.
+    expect(res.headers).toHaveProperty('x-ratelimit-reset');
+  });
+});

@@ -25,6 +25,20 @@ export interface Logger {
  * Each Zod issue's `path` is joined with `.` to produce dot-notation field names
  * (e.g. `"user.email"`). Top-level fields produce a name without a dot.
  *
+ * `issue.message` is copied VERBATIM; nothing here composes or rewords it.
+ * `errorHandler` answers a `ZodError` with `res.status(422).json(...)` over
+ * this error's `toJSON()`, and `toJSON()` spreads `details`, so zod's own
+ * wording is what an API consumer reads in the 422 body. A zod major that
+ * rewords an issue therefore changes this service's public error text with
+ * no diff in this file, and neither the type system nor the hand-built
+ * issue fixtures can see it: the zod 3-to-4 bump turned `Required` into
+ * `Invalid input: expected string, received undefined`.
+ *
+ * The characterization block in `__tests__/handler.test.ts` is the guard.
+ * It pins the exact strings against a REAL failing `safeParse`, so a
+ * reword arrives as one red case rather than as a silent change on the
+ * wire.
+ *
  * @param err - The `ZodError` to convert.
  * @returns A `ValidationError` ready to be thrown or returned.
  */

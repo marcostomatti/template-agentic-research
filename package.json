@@ -12,6 +12,9 @@
   "workspaces": [
     "packages/*"
   ],
+  "overrides": {
+    "zod": "4.5.1"
+  },
   "trustedDependencies": [
     "@swc/core",
     "unrs-resolver"

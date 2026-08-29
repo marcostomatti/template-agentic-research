@@ -618,13 +618,11 @@ describe('loadSeedBundle — a polarity outside the tuple', () => {
   });
 
   // Equality over the whole list for the reason the unknown-key case
-  // gives. The message is pinned at the offending value and nowhere
-  // else: the sentence around it is Zod's to word, while a refusal
-  // naming the row without the value is a reader sent to the right
-  // row to find nothing. The value is also what tells this refusal
-  // from one over the same member for another reason — a polarity
-  // that is not a string is refused too, by a message quoting
-  // nothing.
+  // gives. Zod 4 words an enum refusal around the ALLOWED set rather
+  // than the received value, so the message is pinned at the full
+  // option tuple: that wording is what tells this refusal from one
+  // over the same member for another reason — a polarity that is not
+  // a string is refused by a type message naming no options at all.
   it('reports the file and the field, and nothing else', () => {
     const directory = writeFixture(FIXTURE_ROWS_WITH_UNKNOWN_POLARITY);
 
@@ -632,7 +630,7 @@ describe('loadSeedBundle — a polarity outside the tuple', () => {
       {
         file: SEED_ROSTER.terms.file,
         field: 'terms[0].polarity',
-        message: expect.stringContaining(`'${POLARITY_OUTSIDE_TUPLE}'`),
+        message: expect.stringContaining('"positive"|"negative"|"ignore"'),
       },
     ]);
   });

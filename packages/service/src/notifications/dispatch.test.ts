@@ -20,7 +20,7 @@ function makeRegistry() {
   const registry = new ChannelRegistry();
   registry.register({
     kind: 'email',
-    payloadSchema: z.object({ to: z.string().email() }),
+    payloadSchema: z.object({ to: z.email() }),
     // no deliver — stub
   });
   const deliver = vi.fn(async () => {});

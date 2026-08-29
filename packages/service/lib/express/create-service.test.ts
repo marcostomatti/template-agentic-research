@@ -3,6 +3,7 @@ import type { ServiceContext , ServiceHandle } from './types';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { NotFoundError } from '../errors/index.js';
 import { createDependency } from '../service-core/index.js';
 
 import { passthroughMiddleware } from './auth';
@@ -304,5 +305,64 @@ describe('createService — error handler', () => {
     const res = await request(handle.app).get('/boom');
     expect(res.status).toBeGreaterThanOrEqual(500);
     expect(res.status).toBeLessThan(600);
+  });
+
+  // -------------------------------------------------------------------------
+  // Express 5 async-rejection forwarding
+  //
+  // Express 4 ignored a handler's return value, so a rejected promise from an
+  // `async` handler became an unhandled rejection and the request was never
+  // answered at all. Express 5 awaits it and routes the rejection down the
+  // same path a synchronous `next(err)` takes, which is what lets a handler
+  // drop the try/catch wrapper the convention used to require.
+  //
+  // Measured across the two majors directly, driving the same handler shape
+  // over a bare app from each: 4.22.2 answers nothing (the request times out,
+  // with the rejection logged as unhandled) and 5.2.1 answers 500 from the
+  // registered error handler. So the regression this pair guards against
+  // surfaces as a test TIMEOUT rather than an assertion diff — a red here
+  // that reads as "hung" is the interesting failure, not a flake.
+  // -------------------------------------------------------------------------
+
+  it('an async route handler that rejects is forwarded to the error handler', async () => {
+    handle = await createService({
+      serviceId: 'test-svc',
+      register(app) {
+        // No try/catch and no `next(err)`: the bare rejection is the subject.
+        app.get('/async-boom', async () => {
+          throw new Error('async test error');
+        });
+      },
+    });
+
+    const res = await request(handle.app).get('/async-boom');
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({
+      code: 'INTERNAL_ERROR',
+      message: 'An unexpected error occurred',
+    });
+  });
+
+  it('the forwarded rejection is the thrown error itself, not a wrapper', async () => {
+    // The case above cannot tell "the error handler ran" apart from "some 500
+    // came back": its body is the branch that answers ANY unrecognised value.
+    // An `AppError` subclass takes a different branch of the same handler, so
+    // its own status and `toJSON()` body coming back is what proves Express
+    // hands the rejected value over unchanged rather than substituting an
+    // error of its own.
+    handle = await createService({
+      serviceId: 'test-svc',
+      register(app) {
+        app.get('/async-not-found', async () => {
+          throw new NotFoundError('no such widget');
+        });
+      },
+    });
+
+    const res = await request(handle.app).get('/async-not-found');
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ code: 'NOT_FOUND', message: 'no such widget' });
   });
 });

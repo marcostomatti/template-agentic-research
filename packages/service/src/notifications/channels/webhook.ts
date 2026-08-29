@@ -20,7 +20,7 @@ import { channelRegistry } from '../registry.js';
 export const WebhookPayloadSchema = z.object({
   url: z.string().url(),
   method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).default('POST'),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   body: z.unknown().optional(),
 });
 
