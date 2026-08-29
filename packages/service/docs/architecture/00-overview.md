@@ -172,6 +172,7 @@ to it has a single row to keep true.
 | Exports | `src/exports/` | `docs/architecture/05-exports.md` |
 | Scheduling | `workflows/src/ar-dispatch.json`, and the schedule state in `src/db/` | `docs/architecture/06-scheduling.md` |
 | Auth | `src/auth/`, `src/db/schema/auth.ts` | `docs/architecture/07-auth.md` |
+| HTTP API | `src/http/`, `src/domains/`, `src/taxonomy/`, `src/personas/`, `src/settings/` | `docs/architecture/08-http-api.md` |
 
 A document in the right-hand column arrives with the phase that delivers
 its behaviour, so a name there can be a reservation rather than a file:
@@ -182,6 +183,12 @@ Names in that column are text, never markdown links. A link check reads
 a link as a promise that the file exists, so a linked forward reference
 is a broken link from the moment it is written — and a check that
 reports one per unwritten document is a check nobody keeps running.
+
+The left-hand column reserves as well, and the HTTP API row is the
+only one doing so today: it names five directories that land after
+the document naming them, because that document exists to state the
+rules those routes are built against rather than to describe routes
+already written.
 
 ### A behaviour change and its document land in the same commit
 
