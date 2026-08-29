@@ -88,6 +88,7 @@ const PARITY_DIR = 'tests/parity';
  * HERE, naming itself, and gets registered in the commit that adds it.
  */
 const PARITY_FILES: readonly string[] = [
+  'fixtures.ts',
   'harness.parity.test.ts',
 ];
 
