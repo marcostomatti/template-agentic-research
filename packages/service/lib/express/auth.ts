@@ -16,10 +16,12 @@ export interface SessionClaims {
 
 /**
  * Pluggable token → claims verifier — the **key-resolver seam**. The HTTP
- * `/introspect` adapter below is today's implementation; a local RS256/JWKS
- * adapter (verify offline, select the signing key by `kid`) can replace it later
- * WITHOUT changing `buildRequireAuth`/`buildOptionalAuth` or any call site. This
- * is the graduation path off central per-request introspection (see the auth
+ * `/introspect` adapter below is the one the chassis ships. An application that
+ * verifies its own tokens — from a session store it owns, or offline against
+ * RS256/JWKS selecting the signing key by `kid` — supplies its own verifier
+ * instead and reaches the same middleware through {@link buildRequireAuthFrom}
+ * and {@link buildOptionalAuthFrom}, with no HTTP hop per request. That is the
+ * graduation path off central per-request introspection (see the auth
  * architecture direction): shape the seam around "verify a token", never around
  * "a shared secret".
  */
@@ -84,12 +86,24 @@ export function createIntrospectVerifier(introspectUrl: string, logger: ServiceL
 }
 
 /**
- * Builds middleware that requires a valid session. Extracts the bearer token,
- * verifies it through the introspect seam, and either attaches the claims to
- * `res.locals.auth` and continues, or responds `401`.
+ * Builds middleware that requires a valid session over an already-constructed
+ * {@link SessionVerifier}. Extracts the bearer token, verifies it through the
+ * seam, and either attaches the claims to `res.locals.auth` and continues, or
+ * responds `401`. An absent or empty bearer header never reaches the verifier.
+ *
+ * This is the verifier-first form, and it is the one an application supplying
+ * its own adapter calls: it takes the seam rather than an introspection URL
+ * and a shared secret, neither of which a service verifying its own tokens
+ * has anything to put in.
+ *
+ * `logger` covers the one failure the seam itself does not own — a verifier
+ * that THROWS rather than resolving null. {@link createIntrospectVerifier}
+ * catches its own transport errors and answers null, so that path is
+ * unreachable through {@link buildRequireAuth}; a verifier reading a database
+ * is not. The request still travels on to the shared error handler; the
+ * warning is the only line naming auth as the origin.
  */
-export function buildRequireAuth(introspectUrl: string, logger: ServiceLogger, secret: string): RequestHandler {
-  const verifier = createIntrospectVerifier(introspectUrl, logger, secret);
+export function buildRequireAuthFrom(verifier: SessionVerifier, logger: ServiceLogger): RequestHandler {
   return async (req, res, next) => {
     try {
       const token = extractBearer(req);
@@ -103,18 +117,21 @@ export function buildRequireAuth(introspectUrl: string, logger: ServiceLogger, s
       res.locals['auth'] = claims;
       next();
     } catch (err) {
+      logger.warn({ err }, 'session verifier threw');
       next(err);
     }
   };
 }
 
 /**
- * Builds middleware that optionally validates a session: attaches
- * `res.locals.auth` when a valid token is present, but never rejects an
- * unauthenticated (or invalid-token) request.
+ * Builds middleware that optionally validates a session over an
+ * already-constructed {@link SessionVerifier}: attaches `res.locals.auth` when
+ * a valid token is present, but never rejects an unauthenticated (or
+ * invalid-token) request. The verifier-first counterpart of
+ * {@link buildOptionalAuth}; `logger` has the job it has in
+ * {@link buildRequireAuthFrom}.
  */
-export function buildOptionalAuth(introspectUrl: string, logger: ServiceLogger, secret: string): RequestHandler {
-  const verifier = createIntrospectVerifier(introspectUrl, logger, secret);
+export function buildOptionalAuthFrom(verifier: SessionVerifier, logger: ServiceLogger): RequestHandler {
   return async (req, res, next) => {
     try {
       const token = extractBearer(req);
@@ -124,7 +141,29 @@ export function buildOptionalAuth(introspectUrl: string, logger: ServiceLogger, 
       }
       next();
     } catch (err) {
+      logger.warn({ err }, 'session verifier threw');
       next(err);
     }
   };
+}
+
+/**
+ * Builds middleware that requires a valid session, verified over the auth
+ * service's HTTP introspection endpoint. A thin wrapper: it constructs
+ * {@link createIntrospectVerifier} and delegates to
+ * {@link buildRequireAuthFrom}, which is where the middleware itself lives.
+ * The signature is unchanged from before the seam-first form existed, so
+ * every call site through `resolved.auth.introspectUrl` still reads the same.
+ */
+export function buildRequireAuth(introspectUrl: string, logger: ServiceLogger, secret: string): RequestHandler {
+  return buildRequireAuthFrom(createIntrospectVerifier(introspectUrl, logger, secret), logger);
+}
+
+/**
+ * Builds middleware that optionally validates a session, verified over the
+ * auth service's HTTP introspection endpoint. The same thin wrapper as
+ * {@link buildRequireAuth}, over {@link buildOptionalAuthFrom}.
+ */
+export function buildOptionalAuth(introspectUrl: string, logger: ServiceLogger, secret: string): RequestHandler {
+  return buildOptionalAuthFrom(createIntrospectVerifier(introspectUrl, logger, secret), logger);
 }

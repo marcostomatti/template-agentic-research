@@ -46,13 +46,15 @@
  *
  * A STORE FAILURE IS AN ERROR AND NOT A REFUSAL. Nothing here catches
  * anything: a database that is down rejects, the rejection reaches
- * `buildRequireAuth`'s own `catch`, and the request becomes a `500`
- * through the shared error handler. Turning it into a null instead
- * would answer `401` for an outage — telling a caller its credential
- * was rejected when nothing looked at it, and hiding the outage
- * behind the one status an operator reads as somebody else's problem.
- * The introspection adapter's `null`-on-failure is not a precedent
- * for that: what it swallows is a network call to another service.
+ * the `catch` in `buildRequireAuthFrom` — the builder a supplied
+ * verifier is handed to — which warns and forwards, so the request
+ * becomes a `500` through the shared error handler. Turning it into a
+ * null instead would answer `401` for an outage — telling a caller
+ * its credential was rejected when nothing looked at it, and hiding
+ * the outage behind the one status an operator reads as somebody
+ * else's problem. The introspection adapter's `null`-on-failure is
+ * not a precedent for that: what it swallows is a network call to
+ * another service.
  *
  * The store arrives as a value rather than as a database handle for
  * the ordering `src/index.ts` has to satisfy. `createService` needs
