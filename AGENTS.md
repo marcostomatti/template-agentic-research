@@ -46,6 +46,37 @@ wanted in both places must be made in both repos.
   browser against — a false diff on every story whose rendering moved,
   not the clean cache miss that would re-seed. Bump it by hand, cache key
   first.
+- The install uses bun's ISOLATED linker: the repo-root `node_modules`
+  carries only the root's own devDeps and has NO `@ar` directory at all,
+  while each package's deps (and its `@ar/ui` symlink) sit under
+  `packages/<pkg>/node_modules`. Two consequences, both measured.
+  `ls node_modules/<dep>` at the root is not evidence a package dependency
+  is missing — look under the package, or the check reports absent for
+  everything the apps actually depend on. And `bun x <tool>` resolves a
+  DIFFERENT version per working directory: `bun x playwright --version`
+  prints the pinned 1.61.1 from `packages/ui` or `packages/web` and 1.62.1
+  from the root, whose `node_modules/.bin` carries no playwright at all —
+  the root resolves nothing and silently fetches the registry's latest.
+  So a CI step (or any command) invoking a PINNED tool through `bun x`
+  must run from a directory that pins it, or it runs a version the
+  lockfile never chose while looking identical in the log. Use
+  `bun add --cwd packages/<pkg> <name>` to add a workspace dependency; it
+  updates the root `bun.lock` in the same step.
+- Three surfaces are linted by NOTHING, each measured rather than assumed.
+  `.github/workflows/*.yml`: `eslint.base.mjs` scopes its blocks to
+  js/mjs/ts, md and json, so ESLint answers `File ignored because no
+  matching configuration was supplied` — one warning, zero errors, a PASS
+  that read no rules. A package-root markdown file under `packages/*` (an
+  `AGENTS.md`, a `README.md`): the root `eslint .` ignores `packages/**`
+  wholesale and no package lint script lists `*.md`, though the ROOT
+  `AGENTS.md` is itself a lint target. And any package-root config file
+  the package's own leaf script does not name. `bun run gate:control-bytes`
+  is the only automated gate over the first two, and only once TRACKED —
+  its `--staged` mode is the coverage proof a docs commit actually wants,
+  since the full run cannot say WHICH files it read. Validate a workflow
+  edit by hand: `yaml.safe_load` printing each job's resolved step list
+  (name, `working-directory`, first line of `run`) catches a mis-indented
+  step or a key landing on the wrong job, and nothing else will.
 - No prettier anywhere, root or package: ESLint is the only style gate and
   it does not reflow comments, so comment/TSDoc/markdown wrapping is
   hand-maintained. Match the surrounding file rather than a global number
@@ -161,6 +192,11 @@ behind an ASCII placeholder token, never as a literal in the tool call.
   let their agreement be the result.
   `git grep -P` DOES support lookbehind here (the ugrep shim is on bare
   `grep`, not on `git grep`), so the guarded needle is runnable as-is.
+- The needle set is SEVEN, not five: `packages/ui/eslint.config.mjs`
+  assembles two further ones — the banned import scope and the
+  design-extraction source repo — and its `no-restricted-imports` rule
+  reaches only `packages/ui` IMPORTS, never prose and never another
+  package. Sweep all seven whenever the manual half is run.
 - The correct outcome of that sweep is ONE hit, not zero, and a literal
   zero would itself be the finding: `NOTICE:10` carries the Apache-2.0
   §4(d) attribution that the `origin-project` needle's own description
@@ -231,6 +267,25 @@ red package never masks another and a single run gives the whole picture.
   echo occupies the same slot `lint:all` fills with `$ eslint .`. Classify
   every line, because an unaccounted line IS the tool's own output, and that
   is the only reading that makes "prints nothing" a measurement.
+- Read a RED `check-types:all` by its shape, not by an exit code: `tsc
+  --noEmit` exits **2** on a type error, so the per-package line reads
+  `@ar/<pkg> check-types: Exited with code 2` and a driver keying on 1
+  reads a red run as an unparsed one. The other half is the `&&` at the
+  front — a red ROOT short-circuits the fan-out entirely, so the capture
+  carries the two `$` echo lines and ZERO package lines. One red package
+  still leaves the other two printing `0` (the filter does not
+  short-circuit). A capture MISSING package lines is the root failing,
+  never three silent passes.
+- Proving a gate READ the files a change added is a set diff, not a count:
+  `eslint <paths> --format json` piped through a `filePath` print, or
+  `bun x tsc --showConfig` filtered to the non-`node_modules` entries of
+  the resolved `files` array, diffed against a filesystem walk of the
+  script's or tsconfig's OWN paths — both differences empty. A count says
+  how many files a scope read, never whether they were the right ones, and
+  a file added under a path the script does not list is invisible to a
+  count and obvious in the diff. Pick any live-control mutation's target
+  OUT of that read list rather than guessing a path, or the leg silently
+  lands on a file that does not exist.
 - Neither fan-out declares a lifecycle hook, so one exit-zero line per
   package is exact for both. `test:all` is the exception, and all three
   packages declare a `pretest` there: `@ar/service` and `@ar/ui` give two
@@ -267,16 +322,19 @@ red package never masks another and a single run gives the whole picture.
   are prefixed per package (`@ar/service test:  Test Files ...`) — a
   `^ *Test Files` anchor catches the root's summary alone and silently
   misses every package's.
-- Keying that same capture on vitest's failure glyphs (`×`/`✕`/`✗`) is a
-  ZERO-HIT scan with no in-band control, because a GREEN default-reporter
-  run emits no per-case glyph at all. The only two `✓` in an 1888-line
-  capture are `@ar/ui pretest`'s vite lines (`✓ 2092 modules transformed.`),
-  so reading one as proof the glyph vocabulary is present misattributes a
-  build line and makes a dead needle look live. Plant the control — a
-  throwaway file carrying `×`/`✕`/`✗` grepped in the SAME command — or use
-  Python (`re.compile('[×✕✗]')` over decoded text), which needs no PCRE and
-  dodges the shimmed-`grep` family entirely. The summary lines remain the
-  primary reading; the glyphs are a cross-check that must prove itself.
+- Keying that same capture on the runners' failure glyphs is a ZERO-HIT
+  scan without a live control, because a GREEN run emits no per-case
+  FAILURE glyph at all. Cover all five glyphs in one matcher (U+00D7 from
+  vitest, U+2718 from Playwright, plus U+2715/U+2716/U+2717) rather than
+  picking per runner — `@ar/web`'s single line carries BOTH runners'
+  output under one prefix. The free in-band control is the PASS glyph
+  `✓`: count it FIRST (31 in a green capture, from Playwright's per-test
+  lines plus the vite builds) — a capture read with the wrong codec, or a
+  runner that dropped its reporter, reads EXACTLY like a clean sweep
+  without it. Use Python (`re.compile('[×✕✖✗✘]')` over decoded text),
+  which needs no PCRE and dodges the shimmed-`grep` family entirely. The
+  summary lines remain the primary reading; the glyphs are a cross-check
+  that must prove itself.
 - Classifying every line is what makes "no failures" a measurement, and the
   biggest bucket is not vitest: of 1888 lines, 1780 are `@ar/ui pretest`'s
   vite chunk-size table (two `│` apiece) and 49 are the framework's
@@ -314,6 +372,11 @@ red package never masks another and a single run gives the whole picture.
   the same way — `tail -2` of a check-types:all capture shows two `Exited
   with code 0` lines for a run that exited 2, because the failing package
   sorts FIRST in the fan-out.
+- Playwright's summary line `27 passed (5.7s)` matches the same
+  `\d+ passed \(` shape as vitest's `Test Files  26 passed (26)`, so a
+  capture holding both runners needs its anchor on the trailing duration
+  or on Playwright's `Running N tests using M workers` banner, never on
+  the bare shape.
 - `--reporter=basic` no longer exists (vitest 4 removed it) and the failure
   is indistinguishable from a red suite at the exit code: the run exits 1
   having executed NOTHING, printing a `Failed to load custom Reporter from

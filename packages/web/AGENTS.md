@@ -210,6 +210,70 @@ about what keeps that promotion cheap.
   claim what is true of a read-only detail view AND four editors at
   once.
 
+## `@ar/ui` constraints this app is built around
+
+Each of these was measured against the library as shipped, and none of
+them may be "fixed" by editing `@ar/ui` — component gaps belong to q15.
+They are here because every one of them is invisible to `lint`,
+`check-types` and the unit suite.
+
+- **`Button` cannot be used with `asChild` AT ALL.** It always renders
+  `{iconLeading}{children}{iconTrailing}`, so Radix's `Slot` counts
+  three children and throws — which react-router catches into its error
+  boundary, i.e. the shell-down outcome. Every gate here is green over
+  it. The app-local answer is a bare `Link`: `tokens.css` already styles
+  `a` with the accent colour, an underline and a hover.
+- **The format ladder is unreachable.** The root barrel re-exports
+  `./lib` as `cn` ALONE, so `formatRelativeTime`, `formatDate` and the
+  rest are not importable — only the `Formatted*` COMPONENTS are. A
+  `@ar/ui` prop typed `string` that wants a relative time therefore takes
+  written prose, anchored in a comment to the stamp it stands for.
+- **Every list-shaped prop is declared MUTABLE** (`SearchSuggestion[]`,
+  `WorkspaceOption[]`, the table and grid props) while every accessor and
+  every `useCache` read hands back `readonly T[]`. Copy at the binding
+  (`[...data]`, or the `.map` a shape change needs anyway) rather than
+  casting: the fixture arrays are frozen ON PURPOSE, and a cast hands the
+  component the frozen array with the compile-time claim removed. The
+  mirror rule is for a helper BUILDING such a prop — it returns the
+  mutable type, because its array is constructed per call and owned by
+  nobody. Say which of the two a new module is in its docblock.
+- **`Select` cannot be drawn inert** — `SelectProps` has no `disabled`
+  and requires `onChange` — so on a surface with no write seam the choice
+  is a LIVE control or NO control, never a disabled one. Its trigger also
+  resolves as `options.find(o => o.value === value) ?? options[0]`, so a
+  value no option carries renders SOMEBODY ELSE'S option while the stored
+  value goes unmentioned. `WorkspaceSwitcher` resolves the same way. Any
+  option list built from a read independent of the read holding the value
+  must take that value as an argument and guarantee membership.
+- **`Field` computes `disabled` from its `state` VARIANT**, which
+  suppresses React's controlled-input warning by a presentation choice
+  rather than an intent. Pass `readOnly` alongside `state="disabled"`
+  whenever a fixture value is displayed in a field.
+- **`Grid`'s `cols` is a FIXED track count with no responsive form**, and
+  `cn` is tailwind-merge — so `<Grid cols="3" className="md:grid-cols-3">`
+  silently drops the variant's own class. Pick the BASE from the variant
+  and put only the breakpoint in `className`.
+- **`SmallStatCard` formats a numeric `value` with `short` defaulting to
+  TRUE**, so a count paints `1.2K` at 1200. Pass `short={false}` beside
+  the locale pin; neither is visible as wrong against fixtures small
+  enough to render identically either way.
+- **`Table` owns its sort state internally** (`initialSort` in, nothing
+  out), so marking a column `sortable` creates a reading of the page that
+  a shared link cannot carry — which contradicts this app's URL-as-state
+  rule. The accessor's own ordering is part of what a surface MEANS and
+  belongs in `data/`, not in a column.
+- **`renderCellContent('status')` names the dot** `text == null ? label
+  ?? tone : label`, so passing BOTH gives the indicator a `role="status"`
+  name a screen reader reads on top of the visible text. Pass `label`
+  only where it carries something the text does not.
+- **A `Readonly<Record<Union, T>>` over a cva PROP union is not
+  exhaustive** the way one over an app-owned union is: every
+  `VariantProps` member resolves to `T | null | undefined`, so a key set
+  to `undefined` type-checks and the component falls back to its own
+  default variant. The record still refuses a missing key and an excess
+  one; only a colocated "gives every member a value" test catches the
+  third case.
+
 ## The brand slot (CRITICAL)
 
 The rail's brand block is `WorkspaceMark` plus app-local lockup text,
@@ -299,6 +363,63 @@ Spec conventions:
 - Output (`test-results/`, `playwright-report/`) is gitignored at the
   repo root, and a failing run writes the first of those even with
   every artifact setting at its default.
+
+The locator vocabulary this shell forces, so it is not re-derived one
+strict-mode failure at a time. Deriving it up front is one throwaway
+spec printing `ariaSnapshot()` of the landmark plus `outerHTML` of the
+trigger — but delete it in the same step, because `tests/e2e/` IS the
+`testDir` and a leftover probe silently JOINS the suite and its count.
+
+- `AppShellTopbar` renders its `header` INSIDE `main`, so the band is
+  NOT a `banner` landmark and the only role-addressable handle on it is
+  the collapse `IconButton`'s accessible name.
+- The two rail navs carry distinct landmark names (`Main navigation`,
+  `Quick access`), and `settings` is deliberately in BOTH — so a bare
+  `getByRole('button', { name: 'Settings' })` matches two elements.
+  Scope every nav-item locator to its landmark. `NavItem` sets
+  `aria-current="page"`, which is how "no surface is active" becomes an
+  assertion rather than a screenshot.
+- A COLLAPSED `NavItem` keeps exactly the accessible name it had
+  expanded (the label element is dropped and `title` takes over), so
+  the rail's two states are byte-identical to a name locator. Collapse
+  evidence has to be TEXT (`toHaveText('')` covers every entry at
+  once); the accessible-name loop then becomes a separate and genuinely
+  valuable claim — the rail lost its labels, not its navigation.
+- Three separate causes make a correct-looking name locator match TWO
+  nodes. A slot wrapper holding one element carries the same exact text
+  as the element inside it (`PageHead`'s tag slot, `CellDoubleLine`
+  with no subtitle). `RowContextAction`'s trigger is labelled `Actions
+  for <entityName>`, so a row's summary sits in a SECOND cell's name —
+  address a row as `getByRole('row', { name })`, and assert the leading
+  cell as well wherever the row needle is also the menu's entity name,
+  or a row that stopped rendering its summary still matches. And
+  `WorkspaceMark` is a labelled `img` sitting beside a span repeating
+  the same name, so `WorkspaceSwitcher`'s trigger and every menu row
+  carry the domain name TWICE — `{ exact: true }` matches nothing there
+  and a substring match is the honest form, since the doubling is
+  `@ar/ui`'s composition rather than the app's promise.
+- Any Radix `Menu` (`WorkspaceSwitcher`, `ProfileMenu`,
+  `RowContextAction`) portals its panel, so it is reached as
+  `getByRole('menu')` rather than through the trigger's DOM ancestry;
+  rows are `menuitem` and must be scoped to the menu, since the menu
+  inherits the trigger's name. Which row is ACTIVE is not addressable
+  at all — `MenuItem` is a plain Radix `Item`, marked only by a CSS
+  class and a lazily-loaded glyph — so the trigger's own text is the
+  only assertion available for the current selection.
+- `EmptyState` draws its title in a `span`, so there is no heading role
+  and a text locator wants `{ exact: true }`.
+- `ThemeSwitcher` and the collapse control both name the state ON OFFER
+  (`Switch to dark theme` while light), so exactly one of each pair is
+  on the page at a time and `toHaveCount(0)` on the other half is a
+  real assertion.
+- Shell GEOMETRY is a CSS transition (`transition-[width]`), so a
+  `boundingBox()` read straight after a collapse click reports a
+  mid-animation number. Use `expect.poll` — a deterministic wait rather
+  than a sleep — and compare against a width measured in the test's own
+  Arrange, not against a token living in another package.
+- Keep a SAME-DAY stamp out of any text assertion: `formatRelativeTime`
+  opens with a same-calendar-day rung returning a local clock time, so
+  `FIXTURE_NOW` alone does not make that output deterministic.
 
 CI runs both runners from `.github/workflows/front.yml`'s `checks`
 job, with `working-directory: packages/web` on the browser install and
