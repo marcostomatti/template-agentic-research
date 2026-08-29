@@ -154,6 +154,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'items.slice(0, cap)',
     ],
   },
+  {
+    file: 'yaml-lite.ts',
+    ownText: [
+      'YAML_INTEGER.test(value)',
+      'YAML_TAB_INDENT.test(line)',
+      'Object.hasOwn(target, key)',
+    ],
+  },
 ];
 
 /**

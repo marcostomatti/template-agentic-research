@@ -90,6 +90,7 @@ const PARITY_DIR = 'tests/parity';
 const PARITY_FILES: readonly string[] = [
   'fixtures.ts',
   'harness.parity.test.ts',
+  'yaml-lite.parity.test.ts',
 ];
 
 /** Every package-relative path this invariant reads, harness first. */
