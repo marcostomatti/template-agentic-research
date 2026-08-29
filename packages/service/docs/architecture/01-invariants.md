@@ -16,7 +16,11 @@ registered here alongside the rest; phase numbers throughout refer to
 the 7-phase sequencing in that design, §7. The deterministic-build and
 spliced-library rows are drawn from outside that design, from the
 build rules in `.specs/q03-port-phase-3-build-dispatch.md` §1 — the
-phase spec that lands the build system.
+phase spec that lands the build system. The two auth rows come from
+outside it as well, from the acceptance criteria in
+`.specs/q07-auth-basic.md` — an item scheduled beside the seven
+phases rather than inside them, so its cell in the phase column
+names the item rather than a number.
 
 ## The register
 
@@ -34,6 +38,8 @@ phase spec that lands the build system.
 | No naming from the project this pipeline was ported from survives in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No vault path appears in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No real hostname appears in a tracked file | `tests/invariants/naming.test.ts` | 1 | Implemented |
+| No log line and no HTTP response carries the bootstrap password | `tests/auth/secret-logging.test.ts`, booting the service with a sentinel `AUTH_BASIC_PASSWORD` and reading stdout, stderr and the response body back across the bootstrap, a login, and a malformed login carrying the sentinel | q07 | Pending |
+| No file under `src/` or `lib/` outside `src/auth/` and `src/db/schema/auth.ts` names a password hash or a session-token hash | `tests/invariants/auth-containment.test.ts`, over the identifier roster and the walker in `tests/invariants/auth-containment.ts`, which refuses to report a result at all when it read no files | q07 | Pending |
 
 ## Reading the register
 
@@ -316,3 +322,89 @@ inside base64 hashes, so it counts as a hit only where a
 non-alphanumeric character precedes it. A row here states the
 property; the needle beside it states how much of that property a
 text search can actually hold.
+
+### The bootstrap password is the one secret nothing here can revoke
+
+Every other credential this strategy handles expires or can be taken
+away. A session token stops working on its own schedule, a logout
+revokes one with a single row write, and neither is worth anything
+once the row behind it is gone. The bootstrap password is none of
+that: it is typed into an environment file by hand, it is the input
+to every hash `auth_users` has ever stored, and it changes only when
+an operator edits that file and restarts the service. A copy that got
+out stays good until somebody notices and does both.
+
+Logs and error bodies are where it would get out unnoticed, because
+neither is a place anybody looks for a credential. Logs are shipped,
+retained, and read by people and systems that never touch the
+database; a 4xx body goes straight back to whoever sent the request,
+authenticated or not.
+
+Three paths could carry it to one, and each is closed today by
+something that exists for another reason — which is what makes the
+property worth a row rather than a note. `src/auth/bootstrap.ts` takes
+no logger, so there is no line the password could be built into, but a
+module can acquire one for an unrelated diagnostic. `POST /auth/login`
+parses its body with `safeParse` and answers a flat `401`, which keeps
+a `ZodError` off the shared handler and the `422` carrying `details`
+it would become there; driven over the installed zod no `details`
+entry echoes a submitted value, but that is a dependency's wording
+rather than a property this package owns, and a body authored here
+does not rest on it. And the route's own log lines are fixed strings
+tagged with the route name rather than messages built from the parsed
+body.
+
+None of the three reads as a leak in a diff, which is why the check is
+a sentinel rather than a review. A known `AUTH_BASIC_PASSWORD` boots
+the service, the bootstrap and a login and a malformed login all run,
+and stdout, stderr and the wire are read back for that one string. Its
+pass is a zero, so it carries a leg that logs the sentinel
+deliberately: a capture that reads nothing looks exactly like a
+capture with nothing in it.
+
+### A hash is contained by how few files may name it, and nothing else
+
+The stored hashes are not secret from the database. Anything holding
+SELECT reads both columns, which is what the argon2id parameters in
+`docs/architecture/07-auth.md` are chosen against. What this row
+constrains is how many places in the code may name one, because that
+number is what decides whether any later rule about a hash is
+checkable at all. A repository handing whole `auth_users` rows to its
+callers would spread `password_hash` past every rule about where it
+may travel, and nothing would report it: such a change type-checks, it
+lints, and the suite stays green.
+
+Identifiers are what the check holds, not values. A textual scan
+cannot follow a hash into a variable named something else, and does
+not need to — a column spreads by its name being copied, which is
+why the four spellings `passwordHash`, `password_hash`, `tokenHash`
+and `token_hash` are the whole roster.
+
+The scan walks `src/` and `lib/` less the two paths the rule permits,
+and what it leaves out is what keeps it a check somebody will leave
+on. `src/db/schema/auth.ts` declares the columns and `src/auth/` is
+the module the rule is about, so both are excluded by name. The trees
+it never opens name a hash just as legitimately: the generated
+migration and its snapshot under `drizzle/` spell both columns,
+`tests/` carries the store contract and the in-memory store behind the
+same port, and this document set argues about them in prose. A scan
+reporting any of those would be narrowed or switched off inside a
+phase, and a narrowed scan is one nobody afterwards knows the reach
+of.
+
+That makes this the mirror of the three de-origination rows above
+rather than a fourth one. They are the same shape — a needle over
+tracked text, run by the default suite — and the opposite rule:
+those hold a name out of the repository entirely, and this one holds
+two names inside two files. The difference is in what each has to
+prove about itself. An absence scan goes empty when its needle dies,
+which is the failure a planted sample catches; a containment scan goes
+empty when its walker reads no files, which is why the walker refuses
+to answer rather than report a zero it did not earn.
+
+Both auth rows read `Pending`, and that reports something narrower
+than it looks. Each property holds in the tree as it stands: no module
+outside the two permitted paths names a hash, and each of the three
+paths a password could reach a log or a response through is closed.
+What is missing is the artifact that would report either one stopping,
+and `q07` is the item accountable for landing both.
