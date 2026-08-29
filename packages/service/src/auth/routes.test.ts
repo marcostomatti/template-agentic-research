@@ -1,11 +1,34 @@
 /**
- * Three things about `buildAuthRouter` that only a running router
- * reports: the answer each refusal path writes, the rate limiter it
- * puts in front of `POST /login`, and the secret gate it puts in
- * front of `POST /introspect`. All of them are driven over supertest
- * against a router built by the real factory.
+ * Four things about `buildAuthRouter` that only a running router
+ * reports: the session it mints and takes away, the answer each
+ * refusal path writes, the rate limiter it puts in front of
+ * `POST /login`, and the secret gate it puts in front of
+ * `POST /introspect`. All of them are driven over supertest against
+ * a router built by the real factory.
  *
- * SIX REFUSALS COME FIRST, and what they pin is the UNIFORMITY of
+ * THREE CASES FOLLOW ONE SESSION FROM ITS MINT TO ITS REVOCATION,
+ * and they are the only ones here that log in successfully. A
+ * credential that verifies is answered `{ token, sub, expiresAt }`
+ * and nothing else — the whole key set is asserted rather than the
+ * three fields alone, because `tokenHash` and `passwordHash` are
+ * each one careless spread from that handler and neither has any
+ * business leaving this process. `expiresAt` is read as an ISO-8601
+ * STRING carrying the stopped clock plus the configured TTL, which
+ * is the arithmetic no response header reports. That token then
+ * introspects as `{ active: true, sub }`, which is
+ * `createIntrospectVerifier`'s input rather than a shape chosen
+ * here: it drops `active` and hands the rest on as claims, so a
+ * fourth key added to that response becomes a claim in whatever
+ * sibling service is asking. And a logout answers `{ ok: true }` —
+ * the same body an unknown token gets — after which the SAME token
+ * introspects as `{ active: false }`.
+ *
+ * Every case in that group builds its store and its router off one
+ * stopped clock. Behind two clocks the `revoked_at` the store stamps
+ * and the expiry the route computed are each a fact about how long
+ * the run took, and neither is a value a case could assert.
+ *
+ * SIX REFUSALS COME NEXT, and what they pin is the UNIFORMITY of
  * the answer rather than any one status. Three are `POST /login`: a
  * request carrying no body at all, one whose body names no password,
  * and one whose password does not verify. All three answer the same
@@ -89,7 +112,23 @@
  * does, so the case follows a change to either limiter instead of
  * pinning today's numbers.
  *
- * Anti-vacuity, refusals first. The credential case reads the store
+ * Anti-vacuity, the lifecycle first. `{ active: false }` is also
+ * what an unknown token is answered with, so the case about a
+ * revoked session reads the SAME token as active before it logs
+ * out; without that control it would pass against a route that had
+ * never issued anything. It then reads the stored row's
+ * `revoked_at`, because a logout that had DELETED the session would
+ * answer the identical `{ active: false }`. The login case reads
+ * the row for the same reason in the other direction — a route
+ * answering a token it never minted satisfies every assertion about
+ * the response. And the token is taken off that response through a
+ * reader that THROWS when there is none, since an absent token
+ * reaches `POST /introspect` as the string `undefined` and is
+ * answered `{ active: false }`, which is exactly what the last case
+ * is looking for and would be reading for a reason nothing in it
+ * names.
+ *
+ * Anti-vacuity for the refusals. The credential case reads the store
  * counter AND the planted row: an unknown login name is refused with
  * the identical bytes at the identical cost of one store call, so
  * without the row assertion this would be an unknown-user case
@@ -117,7 +156,7 @@
  * roll: every claim is about what happens inside a single window,
  * and a fresh router is how a case gets a fresh one.
  *
- * Eleven mutations of `routes.ts` were run against these sixteen
+ * Fifteen mutations of `routes.ts` were run against these nineteen
  * cases, and the split is worth reading rather than assuming,
  * because two legs are far wider than the setting they move.
  * Dropping the limiter from the route reddens EIGHT — every limiter
@@ -166,6 +205,32 @@
  * each of them reaches that same branch and reads its status. That
  * is the file saying its login refusal is load-bearing well outside
  * the case named after it, rather than three cases needing a fix.
+ *
+ * The four legs on the SUCCESS paths are all narrow and none of them
+ * reaches a case outside the lifecycle group. Answering a login with
+ * the token's stored HASH rather than the token — the one bug the
+ * never-stored rule exists against — leaves the login case GREEN,
+ * since the response surface and the expiry are untouched, and
+ * reddens the two cases that go on to USE the token. Dropping `sub`
+ * from the active introspection answer reddens those same two, on
+ * the body. Skipping the `revokeSession` call in the logout handler
+ * reddens the revocation case and the refusal group's logout one,
+ * which read it differently: one that the token went inactive, the
+ * other that the store was reached at all. And adding a fourth field
+ * to the login response reddens exactly the login case, on the key
+ * set, which is the whole reason that assertion is a key set rather
+ * than three field reads.
+ *
+ * The eleven legs above were re-run against the enlarged file and
+ * every split is unchanged, which is a claim about the lifecycle
+ * group rather than about them: it logs in once per case, spends no
+ * readable part of the attempt budget, reads no rate-limit header
+ * and always presents the introspection secret, so no limiter, gate
+ * or refusal mutation reaches it. The logout leg is the one worth
+ * naming — putting `revokeSession`'s boolean on the wire still
+ * reddens ONE case, because the revocation case revokes a session
+ * that really was live and reads back the `{ ok: true }` that
+ * mutation would still write.
  */
 import type { AuthStore } from './store.js';
 import type { ServiceHandle } from '../../lib/express/types.js';
@@ -313,6 +378,47 @@ function createCountingStore(
 }
 
 /**
+ * The TTL every router built here mints under, in seconds.
+ *
+ * Named rather than repeated as a literal because the lifecycle
+ * group derives the `expiresAt` it expects from it: the arithmetic
+ * the route does is only assertable against the two inputs it was
+ * given.
+ */
+const SESSION_TTL_SECONDS = 3600;
+
+/** Milliseconds in a second, for that expiry arithmetic. */
+const MS_PER_SECOND = 1000;
+
+/**
+ * Where {@link fixedNow} reads, so `expiresAt` is an exact value.
+ *
+ * The same instant `service.test.ts` and `verifier.test.ts` pin
+ * their clocks at. Nothing here moves it — expiry is those files'
+ * subject, and every session this one mints is live for the whole of
+ * the case that minted it.
+ */
+const FIXED_INSTANT = new Date('2026-01-02T03:04:05.000Z');
+
+/**
+ * A clock stopped at {@link FIXED_INSTANT}.
+ *
+ * Handed to the store and to the router BOTH wherever it is used at
+ * all. Behind two clocks a timestamp the store stamps and an expiry
+ * the route computed are each a fact about how long the run took,
+ * and no case could compare them.
+ *
+ * A fresh `Date` per read rather than the constant itself: `Date` is
+ * mutable, and a clock handing out one instance would make every row
+ * it stamped the same object as this constant.
+ *
+ * @returns The fixed instant, as a value nobody else holds.
+ */
+function fixedNow(): Date {
+  return new Date(FIXED_INSTANT.getTime());
+}
+
+/**
  * Builds an app carrying one freshly built auth router.
  *
  * A FRESH router per call is not tidiness. The limiter counts
@@ -329,18 +435,22 @@ function createCountingStore(
  *
  * @param store - What the router acts against. Defaults to an empty
  *   in-memory store, which every case that never logs in wants.
+ * @param clock - What the session rules read the present from.
+ *   Defaults to the wall clock, which every case that mints nothing
+ *   wants; the lifecycle group hands in {@link fixedNow} instead.
  * @returns The Express app, with the router mounted at `/auth`.
  */
 function buildAuthApp(
   store: AuthStore = createMemoryAuthStore(),
+  clock: () => Date = () => new Date(),
 ): Application {
   const app = express();
   app.set('trust proxy', 1);
   app.use(express.json());
   app.use('/auth', buildAuthRouter({
     store,
-    clock: () => new Date(),
-    ttlSeconds: 3600,
+    clock,
+    ttlSeconds: SESSION_TTL_SECONDS,
     introspectSecret: INTROSPECT_SECRET,
     logger: silentLogger,
   }));
@@ -373,15 +483,7 @@ async function login(
   return pending.send({ user: 'nobody', password: 'not-the-password' });
 }
 
-// ---------------------------------------------------------------------------
-// What each refusal answers
-//
-// Plain HTTP readings: a status and a body per refusal path, and no
-// claim about where inside a handler the refusal was decided. Six
-// cases, five of which answer one envelope.
-// ---------------------------------------------------------------------------
-
-/** The login name the credential case plants and then presents. */
+/** The login name every planted credential carries. */
 const USERNAME = 'auth-routes-user';
 
 /** The subject that credential carries. */
@@ -391,7 +493,218 @@ const SUBJECT = 'auth-routes-sub';
 const PASSWORD = 'auth-routes-password';
 
 /**
- * A password of the same length that it does not accept.
+ * The argon2id hash of {@link PASSWORD}, computed once.
+ *
+ * Assigned in a file-level `beforeAll` rather than at module scope
+ * because hashing is asynchronous and deliberately slow; both groups
+ * that plant a credential read the one value.
+ */
+let passwordHash = '';
+
+beforeAll(async () => {
+  passwordHash = await hashPassword(PASSWORD);
+});
+
+/**
+ * A store holding exactly one credential and no sessions.
+ *
+ * @param now - What the store stamps its own timestamps off.
+ *   Defaults to the wall clock; the lifecycle group hands in the
+ *   same {@link fixedNow} it builds its router with, which is what
+ *   makes a stamped `revoked_at` an assertable value.
+ * @returns The store, with {@link USERNAME} planted against the hash
+ *   of {@link PASSWORD}.
+ */
+async function storeWithCredential(
+  now: () => Date = () => new Date(),
+): Promise<MemoryAuthStore> {
+  const store = createMemoryAuthStore({ now });
+
+  await store.upsertUser({
+    username: USERNAME,
+    sub: SUBJECT,
+    passwordHash,
+  });
+
+  return store;
+}
+
+/**
+ * Posts the one login that {@link storeWithCredential} satisfies.
+ *
+ * @param app - The app to post to.
+ * @returns The supertest response.
+ */
+async function loginWithCredential(
+  app: Application,
+): Promise<request.Response> {
+  return request(app)
+    .post('/auth/login')
+    .send({ user: USERNAME, password: PASSWORD });
+}
+
+/**
+ * Reads the token out of a login response.
+ *
+ * The throw is the vacuity guard, and it is {@link parsePolicy}'s
+ * again: a login that answered no token would otherwise reach
+ * `POST /introspect` as the string `undefined`, which that route
+ * answers `{ active: false }` to — so the case after a logout would
+ * pass for a reason nothing in it names.
+ *
+ * The message reports the status and the field NAMES only. A login
+ * response that did carry a token carries a bearer credential, and
+ * a failure message is not a place to put one.
+ *
+ * @param response - The response to a `POST /auth/login`.
+ * @returns The token it carried.
+ * @throws Error When the body holds no non-empty string `token`.
+ */
+function tokenOf(response: request.Response): string {
+  const body = (response.body ?? {}) as Record<string, unknown>;
+  const token = body.token;
+
+  if (typeof token !== 'string' || token === '') {
+    const fields = Object.keys(body).join(', ');
+
+    throw new Error(
+      `expected a login token, read ${String(response.status)} [${fields}]`,
+    );
+  }
+
+  return token;
+}
+
+/**
+ * Asks `POST /introspect` about a token, with the secret presented.
+ *
+ * @param app - The app to post to.
+ * @param token - The bearer token to ask about.
+ * @returns The supertest response.
+ */
+async function introspect(
+  app: Application,
+  token: string,
+): Promise<request.Response> {
+  return request(app)
+    .post('/auth/introspect')
+    .set('Authorization', `Bearer ${INTROSPECT_SECRET}`)
+    .send({ token });
+}
+
+// ---------------------------------------------------------------------------
+// One session, from its mint to its revocation
+//
+// The only group here that logs in successfully, and the only place
+// the four success shapes are read at all. Every case builds its own
+// store and its own router off the same stopped clock, so what one
+// revokes is never what the next introspects.
+// ---------------------------------------------------------------------------
+
+describe('buildAuthRouter — one session over its whole life', () => {
+  it('mints a session and answers its three fields', async () => {
+    const store = await storeWithCredential(fixedNow);
+    const app = buildAuthApp(store, fixedNow);
+
+    const issued = await loginWithCredential(app);
+    const body = issued.body as Record<string, unknown>;
+
+    expect(issued.status).toBe(200);
+    expect(issued.headers['content-type']).toMatch(/^application\/json/);
+
+    // The exact wire surface, which is the reading that would catch a
+    // fourth field arriving beside these three. `tokenHash` and
+    // `passwordHash` are each one careless spread away, and neither
+    // has any business leaving this process — see the containment
+    // rule `src/auth/store.ts` states.
+    expect(Object.keys(body).sort())
+      .toStrictEqual(['expiresAt', 'sub', 'token']);
+
+    expect(tokenOf(issued).length).toBeGreaterThan(0);
+    expect(body.sub).toBe(SUBJECT);
+
+    // An ISO-8601 STRING and not the `Date` the route holds. `res.json`
+    // serialises a `Date` to these same characters, so what this pins
+    // is that the wire shape stopped depending on how Express happens
+    // to serialise one. The value is the whole expiry arithmetic:
+    // the clock the router was handed plus the TTL it was configured
+    // with, which no response header reports.
+    expect(body.expiresAt).toBe(
+      new Date(
+        FIXED_INSTANT.getTime() + SESSION_TTL_SECONDS * MS_PER_SECOND,
+      ).toISOString(),
+    );
+
+    // The row is really there. A route answering a token it had never
+    // minted would satisfy every assertion above.
+    expect(store.listSessions().map((row) => row.revokedAt))
+      .toStrictEqual([null]);
+  });
+
+  it('introspects a token it has just issued as active', async () => {
+    const store = await storeWithCredential(fixedNow);
+    const app = buildAuthApp(store, fixedNow);
+
+    const issued = await loginWithCredential(app);
+    const answered = await introspect(app, tokenOf(issued));
+
+    // `toStrictEqual` and not a property check, because this shape is
+    // `createIntrospectVerifier`'s input rather than a choice made
+    // here: it drops `active` and hands the rest on as claims, so a
+    // fourth key added to this response silently becomes a claim in
+    // whatever sibling service is asking.
+    expect(answered.status).toBe(200);
+    expect(answered.body).toStrictEqual({ active: true, sub: SUBJECT });
+  });
+
+  it('turns that same token inactive on logout', async () => {
+    const store = await storeWithCredential(fixedNow);
+    const app = buildAuthApp(store, fixedNow);
+
+    const token = tokenOf(await loginWithCredential(app));
+
+    // The in-band control, and the half that makes the rest of this
+    // case mean anything: `{ active: false }` is also what an unknown
+    // token gets, so without a live reading first this would pass
+    // against a route that had never issued anything.
+    const before = await introspect(app, token);
+    expect(before.body).toStrictEqual({ active: true, sub: SUBJECT });
+
+    const loggedOut = await request(app)
+      .post('/auth/logout')
+      .send({ token });
+
+    // The same body an unknown token is answered with, which is the
+    // uniformity RFC 7009 §2.2 asks for — read here against a
+    // revocation that really happened, where the refusal group reads
+    // it against one that had nothing to revoke.
+    expect(loggedOut.status).toBe(200);
+    expect(loggedOut.body).toStrictEqual({ ok: true });
+
+    const after = await introspect(app, token);
+    expect(after.status).toBe(200);
+    expect(after.body).toStrictEqual({ active: false });
+
+    // The row was stamped rather than removed, and stamped at the
+    // instant the store and the router share: revocation is an audit
+    // trail, and a logout that had deleted the row would answer the
+    // identical `{ active: false }` above.
+    expect(store.listSessions().map((row) => row.revokedAt))
+      .toStrictEqual([FIXED_INSTANT]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What each refusal answers
+//
+// Plain HTTP readings: a status and a body per refusal path, and no
+// claim about where inside a handler the refusal was decided. Six
+// cases, five of which answer one envelope.
+// ---------------------------------------------------------------------------
+
+/**
+ * A password of the same length that a planted credential does not
+ * accept.
  *
  * One letter's case apart and no shorter, so the refusal cannot be
  * something a length check below the verify would have reached
@@ -412,38 +725,7 @@ const REFUSED_STATUS = 401;
 /** The body those same five refusals answer with. */
 const UNAUTHORIZED_BODY = { error: 'Unauthorized' };
 
-/**
- * The argon2id hash of {@link PASSWORD}, computed once.
- *
- * Hashing is asynchronous and deliberately slow, so it happens in
- * the group's own `beforeAll` and only for the one case that needs a
- * credential a login could really have presented.
- */
-let passwordHash = '';
-
-/**
- * A store holding exactly one credential and no sessions.
- *
- * @returns The store, with {@link USERNAME} planted against the hash
- *   of {@link PASSWORD}.
- */
-async function storeWithCredential(): Promise<MemoryAuthStore> {
-  const store = createMemoryAuthStore();
-
-  await store.upsertUser({
-    username: USERNAME,
-    sub: SUBJECT,
-    passwordHash,
-  });
-
-  return store;
-}
-
 describe('buildAuthRouter — what each refusal answers', () => {
-  beforeAll(async () => {
-    passwordHash = await hashPassword(PASSWORD);
-  });
-
   it('refuses a login that carried no body at all', async () => {
     const app = buildAuthApp();
 
@@ -772,7 +1054,7 @@ describe('buildAuthRouter — the login limiter on a built service', () => {
         app.use('/auth', buildAuthRouter({
           store: createMemoryAuthStore(),
           clock: () => new Date(),
-          ttlSeconds: 3600,
+          ttlSeconds: SESSION_TTL_SECONDS,
           introspectSecret: INTROSPECT_SECRET,
           logger: silentLogger,
         }));
