@@ -34,9 +34,9 @@ const EnvSchema = z.object({
     .default('postgresql://ar:ar@localhost:5432/ar'),
   /** Redis — OFF by default; set a URL to register the dependency. */
   REDIS_URL: z.string().optional(),
-  /** RFC 7662 token introspection endpoint (see src/auth/ and specs/). */
+  /** RFC 7662 introspection endpoint at a SIBLING service (see src/auth/). */
   AUTH_INTROSPECT_URL: z.string().optional(),
-  /** Service-to-service secret for the introspection call (min 32 chars). */
+  /** Shared secret on the introspection call, either direction (min 32). */
   AUTH_INTROSPECT_SECRET: z.string().min(32)
     .optional(),
   /**

@@ -3,9 +3,10 @@
 An Express + MCP service template for small, mostly ad-hoc projects: a
 dependency-injected service core with health/control endpoints, Drizzle +
 Postgres by default, optional Redis, an interval cron runner, a
-preference-aware notification layer with channel stubs, token-wired auth
-middleware with a dev stub backend, an isolated-vs-live testing harness, and
-an agent task loop (`ralph`) with the skills/agents context to drive it.
+preference-aware notification layer with channel stubs, a first-party
+credential strategy behind token-wired auth middleware, an isolated-vs-live
+testing harness, and an agent task loop (`ralph`) with the skills/agents
+context to drive it.
 
 ## Overview & origins
 
