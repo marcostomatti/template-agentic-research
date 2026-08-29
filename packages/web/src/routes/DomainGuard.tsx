@@ -37,7 +37,7 @@
 
 import type { ReactNode } from 'react';
 
-import { Button, EmptyState } from '@ar/ui';
+import { EmptyState } from '@ar/ui';
 import { Link, useParams } from 'react-router';
 
 import { SINGLE_DOMAIN_BASE, domainBase } from './paths';
@@ -53,18 +53,26 @@ import { SINGLE_DOMAIN_BASE, domainBase } from './paths';
  * button repeating one of its entries.
  *
  * The link points at the single-domain base, whose index redirect then
- * takes the operator to the digest.
+ * takes the operator to the digest. It is a bare `Link` rather than the
+ * `<Button asChild>` wrapper an action slot usually carries, because
+ * that composition CRASHES: `asChild` hands the child to Radix's
+ * `Slot`, and `@ar/ui`'s `Button` always renders three children (its
+ * two icon slots either side of them), so `Slot` refuses with "Expected
+ * a single React element child or `Slottable`" and the refusal page
+ * becomes react-router's error boundary — which is the shell-down
+ * outcome this whole file exists to prevent. Measured with a
+ * `renderToStaticMarkup` probe: a plain `<Button>` renders and any
+ * `asChild` form throws, so the defect is `Button`'s and not this
+ * call's. Restore the button once `@ar/ui` grows a `Slottable` (it is
+ * the library's only `asChild` control with no working caller); until
+ * then `tokens.css` styles the anchor, so nothing here is invented.
  */
 const MALFORMED_DOMAIN = (
   <div className="flex min-h-dvh items-center justify-center p-6">
     <EmptyState
       title="Domain not found"
       description="That address is not a domain this deployment can read."
-      action={(
-        <Button asChild variant="secondary" size="sm">
-          <Link to={SINGLE_DOMAIN_BASE}>Back to the digest</Link>
-        </Button>
-      )}
+      action={<Link to={SINGLE_DOMAIN_BASE}>Back to the digest</Link>}
     />
   </div>
 );
