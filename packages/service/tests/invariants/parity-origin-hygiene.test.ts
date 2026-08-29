@@ -89,6 +89,7 @@ const PARITY_DIR = 'tests/parity';
  */
 const PARITY_FILES: readonly string[] = [
   'audit-log.parity.test.ts',
+  'chunk.parity.test.ts',
   'fixtures.ts',
   'harness.parity.test.ts',
   'html-text.parity.test.ts',

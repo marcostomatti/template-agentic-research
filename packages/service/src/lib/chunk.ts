@@ -96,9 +96,8 @@
  * and the final cap.
  *
  * A parity suite is what says so rather than this paragraph, and it
- * arrives with this library's own cases in
- * `tests/parity/chunk.parity.test.ts`. Its leg is the KERNEL — the
- * strips, the cuts, the excerpt build and the estimate — driven
+ * is `tests/parity/chunk.parity.test.ts`. Its leg is the KERNEL —
+ * the strips, the cuts, the excerpt build and the estimate — driven
  * against the original over neutral fixtures. {@link buildChunk}
  * itself sits outside that leg by construction: its header comes
  * from a roster the original does not have, so no one input can
@@ -129,8 +128,8 @@
  * ## What is preserved deliberately
  *
  * Five readings that look like faults until the argument for each is
- * read. All five are the original's, and each one earns a case of
- * its own in the suite that arrives with this library.
+ * read. All five are the original's, and each one has a case of its
+ * own in `tests/lib/chunk.test.ts`.
  *
  * {@link estimateTokens} takes a number as a CHARACTER COUNT and
  * anything else as text to measure, so a caller passing the text
@@ -751,11 +750,17 @@ function unusableEntry(index: number): string {
  * which is the original's reading and the reason nothing below has
  * to guard its own argument.
  *
- * The conversion can itself raise, on the two kinds of value the
- * language refuses to render: a symbol, and an object whose own
- * conversion throws. That is the original's exposure and it is kept.
- * It is also the one way anything here raises at all — every refusal
- * this module decides is RETURNED, never thrown.
+ * The conversion can itself raise, on ONE kind of value: an object
+ * whose own conversion throws. A symbol is not one of them, which is
+ * worth writing down because it reads as though it should be —
+ * `String()` called as a function special-cases a symbol and answers
+ * its description, where a template or a concatenation would refuse
+ * it. Measured rather than reasoned, and pinned in
+ * `tests/lib/chunk.test.ts`.
+ *
+ * That exposure is the original's and it is kept. It is also the one
+ * way anything here raises at all — every refusal this module
+ * decides is RETURNED, never thrown.
  *
  * @param value - Anything at all, including nothing.
  * @returns The text, or the empty string.
