@@ -30,6 +30,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "bun scripts/seed.ts",
     "approve": "bun scripts/approve.ts",
+    "scaffold": "bun scripts/scaffold.ts",
     "build:workflows": "bun scripts/build-workflows.ts",
     "deploy:external": "bun scripts/deploy-external.ts",
     "audit:workflows": "bun scripts/audit-workflows.ts",

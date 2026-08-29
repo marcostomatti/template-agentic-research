@@ -1,10 +1,16 @@
-# scripts — operator entry points
+# scripts — hand-run entry points
 
-This directory holds the commands an operator runs by hand: seeding,
-approving, building and deploying workflows, standing the stack up, and
-tearing it down again. Phase 1 landed the layout and the roster below, and
-each phase since has filled the rows it owns; the `Arrives in` column
-marks the ones that have landed.
+This directory holds the commands somebody runs by hand rather than the
+ones a service runs for itself: seeding, approving, building and deploying
+workflows, stamping out a new module, standing the stack up, and tearing
+it down again. Most of them are an operator's. `scaffold.ts` is the one a
+contributor runs instead, which is a difference in who types it rather
+than in how it is written — it takes its arguments, refuses them and
+reports what it did the way every other command here does.
+
+Phase 1 landed the layout and the roster below, and each phase since has
+filled the rows it owns; the `Arrives in` column marks the ones that have
+landed.
 
 Phase numbers throughout refer to the 7-phase sequencing in the parent
 design, `.specs/2026-08-19-research-pipeline-port.md` §7.
@@ -19,6 +25,7 @@ design, `.specs/2026-08-19-research-pipeline-port.md` §7.
 | `deploy-external.ts` | phase 3 — landed | `bun run deploy:external`. Uploads the `--external` build's artifacts to an n8n that already exists, over its public REST API — no container, no compose file, no shell on the host — upserting on the display name, so a rerun replaces rather than leaving a second copy. Refuses a dirty tree and an unset `AR_N8N_URL` or `AR_N8N_API_KEY` before it builds anything or makes a request. What it leaves is inert: `POST /workflows` stores a workflow inactive whatever the body carried, so an operator who has deployed has not yet armed anything. |
 | `activate-workflows.sh` | phase 3 — landed | `scripts/activate-workflows.sh`. Arms imported workflows on a local instance, where activation goes through the n8n CLI inside the container rather than the API — which is why this one wants a container and `deploy-external.ts` and `audit-workflows.ts` do not. Reads `workflows/dist/` to sort the artifacts an activation would arm from the manual-only ones it names and leaves alone, refuses a container that is not running, gives each armed workflow the `workflow_history` row a publish needs to publish against, then publishes. `AR_N8N_CONTAINER` names the container, defaulting to `ar-n8n`. |
 | `audit-workflows.ts` | phase 3 — landed | `bun run audit:workflows`. Lists every workflow an instance is holding and sorts it against the display names `workflows/src/` declares: known, stray, armed stray, missing, duplicate, and a verdict over them. Read-only unless asked otherwise, and it exits 0 whatever the verdict, which is a reading an operator acts on rather than a gate. `--deactivate` and `--prune` are the two flags that change anything, each refused without `--yes` beside it, and neither will touch a workflow the sources declare. |
+| `scaffold.ts` | phase 4 — landed | `bun run scaffold <generator> <name> <target-dir>`. Stamps out the file shapes this package makes repeatedly, so a new module starts from the conventions rather than from a blank file and somebody's memory of them. Three parts in the order a run reaches them: the command line is read into a request, refusing an unknown generator, a missing operand and a name that is not a safe file stem; a generator turns that request into files as values, with nothing written and no directory touched; and the half that reaches the filesystem writes nothing at all unless every path it was handed is free, so a rerun over a library somebody has since written cannot replace it with a placeholder. The target directory is an argument rather than a path resolved off the file, so the same command stamps a package and a throwaway fixture tree — and cannot write into the repository merely because it was run from inside it. |
 | `bootstrap.sh` | phase 7 | Brings the self-contained stack up and imports credentials. Idempotent. |
 | `panic.sh` | phase 7 | Stops everything in this project that can spend money, on every reachable host, in one command. |
 | `test-stack.sh` | phase 7 | Creates and destroys a disposable scratch stack, so verifying never touches anything live. |
@@ -63,6 +70,26 @@ The phase-7 group is deferred on purpose. Each of those scripts drives a
 stack — compose, credentials, a live instance — that does not exist until
 the pipeline it serves does, so writing one earlier would mean writing it
 against a shape still being decided.
+
+## `scaffold.ts` generators
+
+One row per generator the registry holds. The word in the first column is
+what an operator types, and `bun run scaffold` with nothing after it
+prints the same list — built from the registry rather than written out, so
+a usage line cannot name a generator the parser does not accept. This
+table is the prose half of that list and says what each one is for.
+
+| Generator | Emits |
+| --- | --- |
+| `lib` | `src/lib/<name>.ts` and `tests/lib/<name>.test.ts`. The module carries the three dual-context rules a spliceable library obeys rather than pointing at them, because the moment somebody is most likely to break one is while writing the file. Both halves are placeholders and say so: the export throws, and the case beside it asserts that it throws. That pairing is the point — a generated case that passed whatever the module did would leave a new library covered by nothing while reporting a green suite over it, where this one reddens the moment the library is written. |
+
+The pair rather than the module alone, because a library under `src/lib/`
+with no case file is not a shape this package has. What proves a library
+behaves is the default suite; what proves the copy spliced into a Code
+node behaves is a round trip under `tests/build/`, which builds a real
+artifact and runs the spliced body under the globals a node is given.
+A generator emitting only the source would leave the first of those to
+memory.
 
 ## `.ts` for logic, `.sh` for orchestration
 
