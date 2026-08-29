@@ -92,6 +92,7 @@ const PARITY_FILES: readonly string[] = [
   'harness.parity.test.ts',
   'parse-csv.parity.test.ts',
   'parse-eml.parity.test.ts',
+  'sanitize-md.parity.test.ts',
   'yaml-lite.parity.test.ts',
 ];
 

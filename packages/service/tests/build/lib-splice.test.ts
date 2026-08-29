@@ -178,6 +178,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'depth >= MAX_MULTIPART_DEPTH + 1',
     ],
   },
+  {
+    file: 'sanitize-md.ts',
+    ownText: [
+      '.split(PLACEHOLDER_PREFIX)',
+      'protectedSpans.push(rendered)',
+      'spans[Number(index)]',
+    ],
+  },
 ];
 
 /**
