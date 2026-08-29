@@ -1,9 +1,11 @@
 /**
- * The rate limiter `buildAuthRouter` puts in front of `POST /login`,
+ * Two things about `buildAuthRouter` that only a running router
+ * reports: the rate limiter it puts in front of `POST /login`, and
+ * the secret gate it puts in front of `POST /introspect`. Both are
  * driven over supertest against a router built by the real factory.
  *
- * Nothing else in the repository reports on this middleware. It has
- * no exported symbol, no type a signature could pin and no branch a
+ * Nothing else in the repository reports on the limiter. It has no
+ * exported symbol, no type a signature could pin and no branch a
  * coverage run would miss — `lint`, `check-types` and the rest of
  * the suite are all green against a router carrying no limiter at
  * all, which is exactly the state this file exists to distinguish
@@ -36,6 +38,19 @@
  * substring check on the function's source text, so nothing but a
  * case like this reports the opt-out.
  *
+ * One claim about the INTROSPECTION GATE, and it is about WHERE the
+ * refusal happens rather than about what it says. That route
+ * discloses a session's claims, so the secret check runs before the
+ * body is parsed and before the store is touched: a caller without
+ * the secret learns nothing and costs this service no read. Which
+ * headers match is `introspect-secret.test.ts`'s subject, so what
+ * this case adds over it is the store counter — a gate moved to
+ * AFTER the lookup answers a byte-identical `401` to a
+ * byte-identical request, and nothing in the response separates the
+ * two. Its in-band control is an authorized call on that same
+ * counter, since a store nothing ever calls answers `0` to
+ * everything.
+ *
  * One claim against the ASSEMBLED service, which is the only place
  * the word "stricter" means anything: `createService` installs an
  * app-wide limiter of its own and both run on this route. The
@@ -60,22 +75,34 @@
  * roll: every claim is about what happens inside a single window,
  * and a fresh router is how a case gets a fresh one.
  *
- * Five mutations of `routes.ts` were run against these nine cases,
+ * Eight mutations of `routes.ts` were run against these ten cases,
  * and the split is worth reading rather than assuming, because two
  * legs are far wider than the setting they move. Dropping the
- * limiter from the route reddens EIGHT — every case but the scoping
- * one, which asserts `/logout` is not limited and so cannot notice a
- * limiter that stopped existing. Raising the count from ten to a
- * hundred also reddens eight rather than the two budget cases,
+ * limiter from the route reddens EIGHT — every case but two: the
+ * scoping one, which asserts `/logout` is not limited and so cannot
+ * notice a limiter that stopped existing, and the gate one, which
+ * makes no login request at all. Raising the count from ten to a
+ * hundred reddens that same eight rather than the two budget cases,
  * because each keying case reads `RateLimit-Remaining` and so
- * inherits the count. The other three are narrow and matched:
- * mounting the limiter on the router with `use` instead of on the
- * route reddens the scoping case and the assembled-service one;
- * shortening the window to thirty seconds reddens the envelope case
- * (which reads `Retry-After`) and, again, the assembled-service one;
- * and adding a `keyGenerator` keyed on the exact `req.ip` reddens
- * exactly ONE, the /56 case, which is the whole reason that case is
- * written the way it is.
+ * inherits the count. The other three limiter legs are narrow and
+ * matched: mounting the limiter on the router with `use` instead of
+ * on the route reddens the scoping case and the assembled-service
+ * one; shortening the window to thirty seconds reddens the envelope
+ * case (which reads `Retry-After`) and, again, the
+ * assembled-service one; and adding a `keyGenerator` keyed on the
+ * exact `req.ip` reddens exactly ONE, the /56 case, which is the
+ * whole reason that case is written the way it is.
+ *
+ * The three gate legs each redden exactly one case, the gate's own,
+ * but through DIFFERENT assertions — which is what says its three
+ * readings are not restatements of each other. Deleting the gate
+ * fails on the status, `expected 200 to be 401`. Changing the
+ * refusal's status fails on that same assertion, `expected 403 to
+ * be 401`. And moving the gate to after `verifySession` leaves the
+ * status and the body untouched and fails on the counter alone,
+ * `expected 1 to be +0`. That last leg is the reason the counter is
+ * in the case at all: a gate running after the read is invisible to
+ * every assertion a refusal test would ordinarily carry.
  */
 import type { AuthStore } from './store.js';
 import type { ServiceHandle } from '../../lib/express/types.js';
@@ -107,6 +134,27 @@ process.env.NODE_ENV = 'test';
  * requirement.
  */
 const silentLogger = createLogger('auth-routes-test', { level: 'silent' });
+
+/**
+ * The `AUTH_INTROSPECT_SECRET` every router built here is configured
+ * with.
+ *
+ * A constant rather than a literal per call site so that the gate
+ * case can present it — and present a WRONG one of the same length,
+ * which is the refusal a compare that had reduced to a string
+ * equality would still get right.
+ */
+const INTROSPECT_SECRET = 'introspect-secret-for-this-file';
+
+/**
+ * A secret of exactly {@link INTROSPECT_SECRET}'s length that is not
+ * it.
+ *
+ * Which headers match is `introspect-secret.test.ts`'s subject, not
+ * this file's; equal length is chosen here only because it is the
+ * refusal with the least room for an accident.
+ */
+const WRONG_SECRET = 'x'.repeat(INTROSPECT_SECRET.length);
 
 /**
  * The two numbers a draft-6 `RateLimit-Policy` header carries.
@@ -211,7 +259,7 @@ function createCountingStore(): CountingStore {
  *   in-memory store, which every case that never logs in wants.
  * @returns The Express app, with the router mounted at `/auth`.
  */
-function buildLoginApp(
+function buildAuthApp(
   store: AuthStore = createMemoryAuthStore(),
 ): Application {
   const app = express();
@@ -221,7 +269,7 @@ function buildLoginApp(
     store,
     clock: () => new Date(),
     ttlSeconds: 3600,
-    introspectSecret: 'introspect-secret-for-this-file',
+    introspectSecret: INTROSPECT_SECRET,
     logger: silentLogger,
   }));
 
@@ -259,7 +307,7 @@ async function login(
 
 describe('buildAuthRouter — the POST /login attempt budget', () => {
   it('serves ten attempts in a window and refuses the eleventh', async () => {
-    const app = buildLoginApp();
+    const app = buildAuthApp();
     const statuses: number[] = [];
 
     for (let attempt = 1; attempt <= 11; attempt += 1) {
@@ -274,7 +322,7 @@ describe('buildAuthRouter — the POST /login attempt budget', () => {
   });
 
   it('answers a refusal in the router\'s own error envelope', async () => {
-    const app = buildLoginApp();
+    const app = buildAuthApp();
 
     for (let attempt = 1; attempt <= 10; attempt += 1) {
       await login(app);
@@ -295,7 +343,7 @@ describe('buildAuthRouter — the POST /login attempt budget', () => {
 
   it('refuses a rate-limited attempt before reaching the store', async () => {
     const counting = createCountingStore();
-    const app = buildLoginApp(counting.store);
+    const app = buildAuthApp(counting.store);
 
     const beforeAllowed = counting.calls();
     await login(app);
@@ -319,7 +367,7 @@ describe('buildAuthRouter — the POST /login attempt budget', () => {
   });
 
   it('keeps the budget on POST /login rather than on the router', async () => {
-    const app = buildLoginApp();
+    const app = buildAuthApp();
     const statuses: number[] = [];
 
     // Well past the login budget, so a limiter mounted on the router
@@ -337,7 +385,7 @@ describe('buildAuthRouter — the POST /login attempt budget', () => {
   });
 
   it('gives every router it builds a window of its own', async () => {
-    const spent = buildLoginApp();
+    const spent = buildAuthApp();
 
     for (let attempt = 1; attempt <= 11; attempt += 1) {
       await login(spent);
@@ -349,7 +397,7 @@ describe('buildAuthRouter — the POST /login attempt budget', () => {
     const exhausted = await login(spent);
     expect(exhausted.status).toBe(429);
 
-    const fresh = await login(buildLoginApp());
+    const fresh = await login(buildAuthApp());
     expect(fresh.status).toBe(401);
     expect(fresh.headers['ratelimit-remaining']).toBe('9');
   });
@@ -366,7 +414,7 @@ describe('buildAuthRouter — the POST /login attempt budget', () => {
 
 describe('buildAuthRouter — how the login limiter keys a caller', () => {
   it('spends one budget across two addresses in one IPv6 /56', async () => {
-    const app = buildLoginApp();
+    const app = buildAuthApp();
 
     const first = await login(app, '2001:db8:abcd:12::1');
     const second = await login(app, '2001:db8:abcd:99::1');
@@ -381,7 +429,7 @@ describe('buildAuthRouter — how the login limiter keys a caller', () => {
   });
 
   it('gives an address outside that /56 a window of its own', async () => {
-    const app = buildLoginApp();
+    const app = buildAuthApp();
 
     await login(app, '2001:db8:abcd:12::1');
     const outside = await login(app, '2001:db8:abcd:ff00::1');
@@ -393,7 +441,7 @@ describe('buildAuthRouter — how the login limiter keys a caller', () => {
   });
 
   it('leaves two IPv4 addresses on separate windows', async () => {
-    const app = buildLoginApp();
+    const app = buildAuthApp();
 
     const first = await login(app, '203.0.113.7');
     const second = await login(app, '203.0.113.8');
@@ -403,6 +451,52 @@ describe('buildAuthRouter — how the login limiter keys a caller', () => {
     // applied to a family it is not meant for.
     expect(first.headers['ratelimit-remaining']).toBe('9');
     expect(second.headers['ratelimit-remaining']).toBe('9');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The secret gate in front of POST /introspect
+//
+// WHERE the refusal happens, not what it says. Which headers match is
+// `introspect-secret.test.ts`'s subject and the refusal's status and
+// body belong to whatever pins the route's answers; the reading here
+// is the store counter, which is the only one that separates a gate
+// running first from one running after the read.
+// ---------------------------------------------------------------------------
+
+describe('buildAuthRouter — the POST /introspect secret gate', () => {
+  it('refuses a wrong secret before reaching the store', async () => {
+    const counting = createCountingStore();
+    const app = buildAuthApp(counting.store);
+
+    const beforeRefused = counting.calls();
+    const refused = await request(app)
+      .post('/auth/introspect')
+      .set('Authorization', `Bearer ${WRONG_SECRET}`)
+      .send({ token: 'a-token-this-store-never-issued' });
+    const refusedCost = counting.calls() - beforeRefused;
+
+    const beforeAuthorized = counting.calls();
+    const authorized = await request(app)
+      .post('/auth/introspect')
+      .set('Authorization', `Bearer ${INTROSPECT_SECRET}`)
+      .send({ token: 'a-token-this-store-never-issued' });
+    const authorizedCost = counting.calls() - beforeAuthorized;
+
+    expect(refused.status).toBe(401);
+    expect(refused.body).toStrictEqual({ error: 'Unauthorized' });
+    expect(refusedCost).toBe(0);
+
+    // The in-band control, and the half the case is written for. A
+    // gate moved to AFTER the lookup answers a byte-identical `401`
+    // to a byte-identical request, so the status and the body above
+    // hold just as well against a service that had already spent the
+    // read. Both calls send the SAME body naming the same unknown
+    // token, so the only difference between them is the header — and
+    // an authorized call is what says the counter can move at all.
+    expect(authorized.status).toBe(200);
+    expect(authorized.body).toStrictEqual({ active: false });
+    expect(authorizedCost).toBeGreaterThan(0);
   });
 });
 
@@ -428,7 +522,7 @@ describe('buildAuthRouter — the login limiter on a built service', () => {
           store: createMemoryAuthStore(),
           clock: () => new Date(),
           ttlSeconds: 3600,
-          introspectSecret: 'introspect-secret-for-this-file',
+          introspectSecret: INTROSPECT_SECRET,
           logger: silentLogger,
         }));
       },
