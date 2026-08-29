@@ -1,3 +1,4 @@
+import type { SessionVerifier } from './auth';
 import type { ControlConfig } from './control/types';
 import type { ServiceContext } from './types';
 import type { Dependency, ServicePlugin } from '../service-core/index.js';
@@ -24,26 +25,55 @@ export const ServiceConfigSchema = z.object({
   /** TCP port the HTTP server listens on. @default 3000 */
   port: z.number().default(3000),
   /**
-   * Session introspection configuration.
-   * When provided, `requireAuth` and `optionalAuth` validate sessions against
-   * `introspectUrl`, authenticating each introspect call with
-   * `introspectSecret`. When omitted, both middleware are no-ops.
+   * Session verification configuration — exactly one of two forms.
    *
-   * `introspectSecret` is required *within* this optional block: a config
-   * that sets `introspectUrl` but forgets the secret would otherwise boot
-   * successfully and then silently 401 every authenticated request forever
-   * — this schema rejects that config at boot instead. The secret is a
-   * shared credential between this service and whatever serves the
-   * RFC 7662 `/introspect` endpoint, not an end-user token. It comes from
-   * the consumer's own environment (an env var) and must NEVER be
-   * hardcoded or committed.
+   * `verifier` is the seam form: an application that verifies its own
+   * tokens (a session store it owns, or an offline JWKS check) supplies a
+   * {@link SessionVerifier}, and `requireAuth`/`optionalAuth` are built
+   * over it directly, with no HTTP hop per request. `introspectUrl` plus
+   * `introspectSecret` is the RFC 7662 form, where the chassis builds the
+   * introspection adapter behind that same seam. When the whole block is
+   * omitted, both middleware are no-ops.
    *
-   * The 32-byte floor exists because `.min(1)` let a consumer satisfy the
-   * schema with a literal like `"x"`, which made the JSDoc warning above
-   * purely advisory. Hold any real introspection backend to at least the
-   * same bar.
+   * `verifier` is declared here, and not only on the config interface,
+   * because a zod object STRIPS every key it does not declare. An
+   * interface-only field type-checks at the call site and is then dropped
+   * by this parse, so it reaches `createService` on no path at all and
+   * the service boots with passthrough auth — a field that silently
+   * disables the guard it was passed to enable. `control.allowStop` and
+   * `control.version` below are spelled out for the same reason.
+   *
+   * All three fields are `.optional()` and the `.refine` is what pairs
+   * them, because every half-configured block fails silently at runtime
+   * rather than at boot. A block setting `introspectUrl` and forgetting
+   * the secret would boot successfully and then 401 every authenticated
+   * request forever; a block setting both a verifier and an introspection
+   * pair would boot with one of them live and nothing saying which. So
+   * the refinement demands exactly one form: a verifier and neither
+   * introspection field, or both introspection fields and no verifier.
+   *
+   * `introspectSecret` is a shared credential between this service and
+   * whatever serves the RFC 7662 `/introspect` endpoint, not an end-user
+   * token. It comes from the consumer's own environment (an env var) and
+   * must NEVER be hardcoded or committed. The 32-byte floor exists
+   * because `.min(1)` let a consumer satisfy the schema with a literal
+   * like `"x"`, which made the warning purely advisory. Hold any real
+   * introspection backend to at least the same bar.
    */
-  auth: z.object({ introspectUrl: z.string(), introspectSecret: z.string().min(32) }).optional(),
+  auth: z.object({
+    verifier: z.custom<SessionVerifier>((val) => typeof (val as SessionVerifier | undefined)?.verify === 'function')
+      .optional(),
+    introspectUrl: z.string().optional(),
+    introspectSecret: z.string().min(32)
+      .optional(),
+  })
+    .refine(
+      (val) => (val.verifier !== undefined
+        ? val.introspectUrl === undefined && val.introspectSecret === undefined
+        : val.introspectUrl !== undefined && val.introspectSecret !== undefined),
+      { message: 'auth must supply either verifier or both introspectUrl and introspectSecret, never both forms' },
+    )
+    .optional(),
   /**
    * CORS configuration.
    * When provided, the CORS middleware allows the listed origins.

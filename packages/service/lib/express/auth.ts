@@ -152,8 +152,12 @@ export function buildOptionalAuthFrom(verifier: SessionVerifier, logger: Service
  * service's HTTP introspection endpoint. A thin wrapper: it constructs
  * {@link createIntrospectVerifier} and delegates to
  * {@link buildRequireAuthFrom}, which is where the middleware itself lives.
- * The signature is unchanged from before the seam-first form existed, so
- * every call site through `resolved.auth.introspectUrl` still reads the same.
+ * The signature is unchanged from before the seam-first form existed, so a
+ * consumer that reached this by hand, holding a URL and a secret, still reads
+ * the same. `createService` is no longer one of them: it resolves its `auth`
+ * block to a single verifier — supplied, or built here — and calls
+ * {@link buildRequireAuthFrom} directly, which is the one path both config
+ * forms share.
  */
 export function buildRequireAuth(introspectUrl: string, logger: ServiceLogger, secret: string): RequestHandler {
   return buildRequireAuthFrom(createIntrospectVerifier(introspectUrl, logger, secret), logger);
