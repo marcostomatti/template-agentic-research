@@ -168,6 +168,9 @@ describe('createService — DepsMap', () => {
 // ---------------------------------------------------------------------------
 
 describe('createService — auth', () => {
+  const INTROSPECT_URL = 'http://auth.test/introspect';
+  const INTROSPECT_SECRET = 'chassis-shared-secret-at-least-32-bytes';
+
   let handle: ServiceHandle | undefined;
 
   afterEach(async () => {
@@ -175,6 +178,7 @@ describe('createService — auth', () => {
       await handle.stop();
       handle = undefined;
     }
+    vi.unstubAllGlobals();
   });
 
   it('requireAuth is passthroughMiddleware when no auth config is provided', async () => {
@@ -201,6 +205,46 @@ describe('createService — auth', () => {
     });
 
     expect(capturedCtx!.optionalAuth).toBe(passthroughMiddleware);
+  });
+
+  it('builds the introspection verifier when the auth block supplies the pair', async () => {
+    // The complement of the two passthrough cases above, and a shape no
+    // other assertion in this package reached: a resolution answering null
+    // for the introspection form would leave requireAuth as
+    // passthroughMiddleware and admit every request, with nothing in the
+    // response saying the guard was never built.
+    const fetchMock = vi.fn().mockResolvedValue(
+      { ok: true, json: async () => ({ active: true, sub: 'usr_1' }) } as Response,
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    let capturedCtx: ServiceContext | undefined;
+
+    handle = await createService({
+      serviceId: 'test-svc',
+      auth: { introspectUrl: INTROSPECT_URL, introspectSecret: INTROSPECT_SECRET },
+      register(app, ctx) {
+        capturedCtx = ctx;
+        app.get('/guarded', ctx.requireAuth, (_req, res) => res.json({ ok: true }));
+      },
+    });
+
+    expect(capturedCtx!.requireAuth).not.toBe(passthroughMiddleware);
+
+    const res = await request(handle.app).get('/guarded')
+      .set('Authorization', 'Bearer session-token');
+
+    expect(res.status).toBe(200);
+    // Both configured fields reaching the adapter is what separates "some
+    // verifier was built" from "this pair was resolved" — a resolution
+    // reading either one from somewhere else answers the same 200.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      INTROSPECT_URL,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: `Bearer ${INTROSPECT_SECRET}` }) as unknown,
+      }),
+    );
   });
 
   it('throws at startup when auth.introspectUrl is set without introspectSecret', async () => {
