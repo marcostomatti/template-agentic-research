@@ -170,6 +170,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'Object.hasOwn(target, key)',
     ],
   },
+  {
+    file: 'parse-eml.ts',
+    ownText: [
+      'toByteString(raw, warnings)',
+      'decodeQuotedPrintable(rawBody, false)',
+      'depth >= MAX_MULTIPART_DEPTH + 1',
+    ],
+  },
 ];
 
 /**
