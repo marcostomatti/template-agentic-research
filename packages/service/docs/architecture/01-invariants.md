@@ -38,8 +38,8 @@ names the item rather than a number.
 | No naming from the project this pipeline was ported from survives in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No vault path appears in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No real hostname appears in a tracked file | `tests/invariants/naming.test.ts` | 1 | Implemented |
-| No log line and no HTTP response carries the bootstrap password | `tests/auth/secret-logging.test.ts`, booting the service with a sentinel `AUTH_BASIC_PASSWORD` and reading stdout, stderr and the response body back across the bootstrap, a login, and a malformed login carrying the sentinel | q07 | Pending |
-| No file under `src/` or `lib/` outside `src/auth/` and `src/db/schema/auth.ts` names a password hash or a session-token hash | `tests/invariants/auth-containment.test.ts`, over the identifier roster and the walker in `tests/invariants/auth-containment.ts`, which refuses to report a result at all when it read no files | q07 | Pending |
+| No log line and no HTTP response carries the bootstrap password | `tests/auth/secret-logging.test.ts`, booting the service with a sentinel `AUTH_BASIC_PASSWORD` and reading stdout, stderr and the response body back across the bootstrap, a login, and a malformed login carrying the sentinel | q07 | Implemented |
+| No file under `src/` or `lib/` outside `src/auth/` and `src/db/schema/auth.ts` names a password hash or a session-token hash | `tests/invariants/auth-containment.test.ts`, over the identifier roster and the walker in `tests/invariants/auth-containment.ts`, which refuses to report a result at all when it read no files | q07 | Implemented |
 
 ## Reading the register
 
@@ -402,9 +402,14 @@ which is the failure a planted sample catches; a containment scan goes
 empty when its walker reads no files, which is why the walker refuses
 to answer rather than report a zero it did not earn.
 
-Both auth rows read `Pending`, and that reports something narrower
-than it looks. Each property holds in the tree as it stands: no module
-outside the two permitted paths names a hash, and each of the three
-paths a password could reach a log or a response through is closed.
-What is missing is the artifact that would report either one stopping,
-and `q07` is the item accountable for landing both.
+Both auth rows read `Implemented`, and what each has behind that
+differs. The containment scan reads a static surface — every file
+under `src/` and `lib/` less the two permitted paths — and answers a
+zero over it. The logging row's artifact reads a running one: it
+boots a service over a sentinel password, drives the bootstrap, a
+malformed login and a valid login through it, and counts that string
+in everything the process wrote and in what the refusal wrote back.
+Each carries the leg its own kind of emptiness needs, a planted
+sample for the scan and a deliberately logged sentinel for the
+capture, because a zero found over nothing and a zero found over
+something read alike.
