@@ -69,7 +69,7 @@ jobs:
       # @ar/ui's toolchain needs Node 22 on PATH (`bun x` honors node
       # shebangs only when node exists; without it jest/test-storybook bins
       # crash under bun's runtime).
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -148,7 +148,7 @@ jobs:
 
       # The runner host deliberately has no system Node. See the note on the
       # checks job; same reasoning.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
