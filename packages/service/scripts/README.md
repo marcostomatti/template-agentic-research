@@ -82,14 +82,32 @@ table is the prose half of that list and says what each one is for.
 | Generator | Emits |
 | --- | --- |
 | `lib` | `src/lib/<name>.ts` and `tests/lib/<name>.test.ts`. The module carries the three dual-context rules a spliceable library obeys rather than pointing at them, because the moment somebody is most likely to break one is while writing the file. Both halves are placeholders and say so: the export throws, and the case beside it asserts that it throws. That pairing is the point — a generated case that passed whatever the module did would leave a new library covered by nothing while reporting a green suite over it, where this one reddens the moment the library is written. |
+| `source-adapter` | `src/sources/<id>.ts`, `src/sources/<id>.test.ts` and `src/sources/<id>-payload.json`. The skeleton declares every member of the `SourceAdapter` contract and is arranged around two of its rules: `fetch` is the only member that does I/O, so `parse` and `toCanonical` are pure and can be driven over a stored payload; and the endpoint and `parser_config` bind at construction rather than per call, so `parse` stays a function of the payload alone. Its operand is an id rather than a name, because that is what the registry keys on and what a `sources` row selects. Every member throws, and the cases assert the refusals, on the same reasoning as `lib`. |
 
-The pair rather than the module alone, because a library under `src/lib/`
-with no case file is not a shape this package has. What proves a library
-behaves is the default suite; what proves the copy spliced into a Code
-node behaves is a round trip under `tests/build/`, which builds a real
-artifact and runs the spliced body under the globals a node is given.
-A generator emitting only the source would leave the first of those to
-memory.
+The `lib` pair rather than the module alone, because a library under
+`src/lib/` with no case file is not a shape this package has. What proves
+a library behaves is the default suite; what proves the copy spliced into
+a Code node behaves is a round trip under `tests/build/`, which builds a
+real artifact and runs the spliced body under the globals a node is
+given. A generator emitting only the source would leave the first of
+those to memory.
+
+The `source-adapter` trio for the neighbouring reason, one file further:
+the cases read the payload on their very first run, so a generator
+stopping at the pair emits a suite that fails for a reason having nothing
+to do with the adapter. That fixture is an envelope — a `_readme` beside
+a `payload` key rather than inside it — because every JSON file this
+package commits carries a header saying which path owns it, and one
+written into the payload itself would reach `parse` as though the source
+had answered with it. The payload is `null`: a plausible-looking reply is
+one somebody can forget to replace.
+
+All three land in one directory rather than split across `src/` and
+`tests/` the way the `lib` pair is. A spliceable library is read by the
+build as well as by the suite, and an adapter is read by neither, so
+colocating follows this package's existing convention for a module whose
+cases are about that module alone (`src/cron/cron.test.ts`,
+`src/notifications/dispatch.test.ts`) and puts all three in one listing.
 
 ## `.ts` for logic, `.sh` for orchestration
 
@@ -118,10 +136,11 @@ land here. The failure it prevents is the quiet kind: a type error in an
 unchecked script does not turn `check-types:all` red, so the suite keeps
 reporting a clean result over a file it never looked at.
 
-The package's `lint` script was widened with it, and now reads
-`eslint src lib tests scripts` (`lint:fix` likewise). The reason is the
-same one, one gate over: an unlinted `.ts` file makes a green `lint:all` a
-statement about files it never read.
+The package's `lint` script was widened with it, and reads
+`eslint src lib workflows tests scripts` today (`lint:fix` likewise) —
+phase 3 added the `workflows` entry. The reason is the same one, one gate
+over: an unlinted `.ts` file makes a green `lint:all` a statement about
+files it never read.
 
 Both widenings were then proved by reading rather than assumed.
 `tsc -p tsconfig.json --showConfig` echoes the `include` array as tsc

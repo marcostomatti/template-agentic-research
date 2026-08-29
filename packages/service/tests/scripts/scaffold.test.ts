@@ -1,6 +1,6 @@
 /**
- * What `scripts/scaffold.ts` refuses, and what a `lib` run makes of
- * a name it accepts.
+ * What `scripts/scaffold.ts` refuses, and what each of its
+ * generators makes of a name it accepts.
  *
  * Refusals first, and for this command that order is more than a
  * habit — its whole hazard is on that side. Everything a generator
@@ -17,7 +17,12 @@
  * reading only that a refusal arrived passes for any of them. What
  * every refusal closes with is asserted apart from them and over
  * all of them at once, because `ScaffoldArgsError` appends it —
- * that is one claim about the class, not one per refusal.
+ * that is one claim about the class, not one per refusal. The
+ * missing-operand refusal is asserted twice, once per generator,
+ * because the word it quotes is read off the registry entry: `lib`
+ * takes a name and `source-adapter` takes an id, and a parser that
+ * had baked either word into the message would pass one of those
+ * two cases and fail the other.
  *
  * The names are a table rather than a case apiece, and it is walked
  * whole, so a name added to it is covered by the walk instead of by
@@ -47,6 +52,18 @@
  * import is built from both, so the failure those cases exist for
  * is one moved and the other not — which emits a well-formed pair
  * that does not resolve.
+ *
+ * A `source-adapter` run is read the same way, and its claims are
+ * that shape one generator over: the trio is a trio, the module
+ * declares every member of the contract, and the three files agree
+ * about each other — the case file imports the factory the module
+ * exports, names it by a specifier that resolves, names the payload
+ * by a path that resolves, and reads the key that payload carries.
+ * The one claim with no counterpart under `lib` is that `fetch` is
+ * the only member answering a promise, which is what the whole
+ * stored-payload seam rests on. It is a claim about the declared
+ * signatures rather than a proof of purity, and what it catches is
+ * the skeleton growing a second member able to await something.
  *
  * The spliceable claim is the one that leaves this process. The
  * refusal judges a transpiled library beside its transpiler's scan,
@@ -92,8 +109,11 @@ import { REFUSED_LIB_SAMPLES } from '../build/marker-fixtures.js';
 // The generator these cases drive, and the name they drive it with
 // ---------------------------------------------------------------------------
 
-/** The generator this file is about, as the registry keys it. */
+/** The first generator this file drives, as the registry keys it. */
 const GENERATOR = 'lib';
+
+/** The second, which takes an id where the first takes a name. */
+const ADAPTER_GENERATOR = 'source-adapter';
 
 /**
  * A name the pattern accepts, in two words.
@@ -190,6 +210,16 @@ const UNKNOWN_GENERATOR_ARGV: readonly string[] = [
 /** A generator with nothing after it to name. */
 const NO_NAME_ARGV: readonly string[] = [GENERATOR];
 
+/**
+ * The other generator, with nothing after it to name either.
+ *
+ * Here rather than beside the emission cases below, because what it
+ * is for is the OPERAND rather than the emission: the refusal reads
+ * that word off the registry entry, so the two generators are
+ * refused in two different words for the same mistake.
+ */
+const NO_ID_ARGV: readonly string[] = [ADAPTER_GENERATOR];
+
 /** A generator and a name, with nowhere to put the result. */
 const NO_TARGET_ARGV: readonly string[] = [GENERATOR, EMITTED_NAME];
 
@@ -215,6 +245,7 @@ const REFUSED_ARGUMENTS: readonly (readonly string[])[] = [
   NO_GENERATOR_ARGV,
   UNKNOWN_GENERATOR_ARGV,
   NO_NAME_ARGV,
+  NO_ID_ARGV,
   NO_TARGET_ARGV,
   EXTRA_ARGUMENT_ARGV,
   ...UNUSABLE_NAME_ARGVS,
@@ -231,7 +262,10 @@ const NO_GENERATOR_PROBLEM = 'no generator given';
 const UNKNOWN_GENERATOR_PROBLEM = `unknown generator '${UNKNOWN_GENERATOR}'`;
 
 /** What a generator with no name after it is refused with. */
-const NO_NAME_PROBLEM = 'lib takes a name, and none followed it';
+const NO_NAME_PROBLEM = 'no name followed lib';
+
+/** What the one taking an id is refused with, in its own word. */
+const NO_ID_PROBLEM = 'no id followed source-adapter';
 
 /** What a generator and a name with nowhere to go is refused with. */
 const NO_TARGET_PROBLEM = 'no target directory given';
@@ -265,6 +299,7 @@ const USAGE_LINES: readonly string[] = [
   '',
   'generators:',
   '  lib <name> — a spliceable library under src/lib/ and its case file',
+  '  source-adapter <id> — an adapter under src/sources/, cases and payload',
 ];
 
 // ---------------------------------------------------------------------------
@@ -361,9 +396,20 @@ describe('parseScaffoldArgs — a command line it cannot stamp', () => {
   // The refusal names the generator and what it wanted rather than
   // quoting anything, because there is nothing that was typed to
   // quote — and the operand comes off the registry entry, so a
-  // generator taking something other than a name says so here.
+  // generator taking something other than a name says so here. No
+  // article in front of that word, which is what lets one message
+  // serve an operand beginning with a vowel and one that does not.
   it('refuses a generator with no name after it', () => {
     expect(refusedProblem(NO_NAME_ARGV)).toBe(NO_NAME_PROBLEM);
+  });
+
+  // The same mistake against the other generator, and the pair is
+  // the claim: the operand is read off the registry entry rather
+  // than fixed, so one refusal says name and the other says id. A
+  // parser carrying either word as a literal passes one of these
+  // two cases and fails the other.
+  it('refuses one taking an id in that generator\'s own word', () => {
+    expect(refusedProblem(NO_ID_ARGV)).toBe(NO_ID_PROBLEM);
   });
 
   // The target directory is a required operand and not a default,
@@ -471,20 +517,26 @@ interface Emission {
 }
 
 /**
- * Stamp the `lib` pair into a fresh subdirectory of the fixture
+ * Stamp one generator into a fresh subdirectory of the fixture
  * root, through the parser rather than around it.
  *
  * A request is built the way a command line builds one, so what
- * these cases read is what `bun run scaffold lib <name> <dir>`
- * writes rather than what one function would emit if asked
+ * these cases read is what `bun run scaffold <generator> <name>
+ * <dir>` writes rather than what one function would emit if asked
  * directly.
  *
+ * @param generator - The generator to run, as the registry keys it.
+ * @param name - The name or id to hand it.
  * @param subdir - The subdirectory of the fixture root to stamp.
  * @returns Where it stamped and what it wrote there.
  */
-function emitInto(subdir: string): Emission {
+function emitInto(
+  generator: string,
+  name: string,
+  subdir: string,
+): Emission {
   const targetDir = join(FIXTURE_ROOT, subdir);
-  const argv = [GENERATOR, EMITTED_NAME, targetDir];
+  const argv = [generator, name, targetDir];
 
   return { targetDir, written: writeScaffold(parseScaffoldArgs(argv)) };
 }
@@ -515,7 +567,7 @@ function writeRefusalOver(targetDir: string): ScaffoldWriteError | null {
 }
 
 /** The one emission every claim about an emitted pair reads. */
-const EMITTED = emitInto('accepted-name');
+const EMITTED = emitInto(GENERATOR, EMITTED_NAME, 'accepted-name');
 
 /**
  * Both emitted paths, absolute, as a run under that target writes
@@ -803,5 +855,281 @@ describe('the library a lib run writes — spliceable', () => {
   it('is accepted where the control beside it is refused', () => {
     expect(SPLICE_PROBE.verdicts)
       .toStrictEqual([SPLICEABLE, REFUSED_AS_IMPORT]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The trio a source-adapter run writes
+// ---------------------------------------------------------------------------
+
+/**
+ * An id the pattern accepts, in two words.
+ *
+ * Hyphenated for the reason {@link EMITTED_NAME} is: a single word
+ * is spelled the same as a file stem and as an identifier, so a
+ * trio emitted for one would agree about its subject however the
+ * casing step behaved — including if it were not there at all.
+ */
+const ADAPTER_ID = 'sample-source';
+
+/** The Pascal-case identifier {@link ADAPTER_ID} is spelled as. */
+const ADAPTER_PASCAL = 'SampleSource';
+
+/** Where the stamped module lands, relative to the target. */
+const ADAPTER_PATH = `src/sources/${ADAPTER_ID}.ts`;
+
+/** Where the cases beside it land. */
+const ADAPTER_TEST_PATH = `src/sources/${ADAPTER_ID}.test.ts`;
+
+/** Where the payload those cases read lands. */
+const ADAPTER_PAYLOAD_PATH = `src/sources/${ADAPTER_ID}-payload.json`;
+
+/** All three, in the order the generator emits them. */
+const ADAPTER_PATHS: readonly string[] = [
+  ADAPTER_PATH,
+  ADAPTER_TEST_PATH,
+  ADAPTER_PAYLOAD_PATH,
+];
+
+/** The one source-adapter emission every claim below reads. */
+const ADAPTER_EMITTED = emitInto(ADAPTER_GENERATOR, ADAPTER_ID, 'accepted-id');
+
+/** All three, absolute, as a run under that target writes them. */
+const ADAPTER_ABSOLUTE_PATHS: readonly string[] = ADAPTER_PATHS
+  .map((path) => join(ADAPTER_EMITTED.targetDir, path));
+
+/** The module that emission wrote, by absolute path. */
+const ADAPTER_MODULE = join(ADAPTER_EMITTED.targetDir, ADAPTER_PATH);
+
+/** The case file it wrote beside it. */
+const ADAPTER_TEST = join(ADAPTER_EMITTED.targetDir, ADAPTER_TEST_PATH);
+
+/** The payload fixture it wrote beside both. */
+const ADAPTER_PAYLOAD = join(
+  ADAPTER_EMITTED.targetDir,
+  ADAPTER_PAYLOAD_PATH,
+);
+
+/** The module, read back off the filesystem. */
+const ADAPTER_MODULE_SOURCE = readFileSync(ADAPTER_MODULE, 'utf8');
+
+/** The case file, read back the same way. */
+const ADAPTER_TEST_SOURCE = readFileSync(ADAPTER_TEST, 'utf8');
+
+/**
+ * The payload fixture, read back and parsed.
+ *
+ * Typed as the envelope the generator writes rather than left
+ * `unknown`, so the claims reading it need no cast apiece. What
+ * actually holds it to that shape is the key-set case below.
+ */
+const ADAPTER_PAYLOAD_VALUE = JSON.parse(
+  readFileSync(ADAPTER_PAYLOAD, 'utf8'),
+) as Record<string, unknown>;
+
+/**
+ * Every member `SourceAdapter` declares, in the order the skeleton
+ * declares them.
+ *
+ * Written out rather than derived: the contract is a type and
+ * erases, so there is nothing at run time to read it off. That
+ * makes this the one list a member added to the contract has to be
+ * added to as well, and the case below is what reports a skeleton
+ * that never grew it.
+ */
+const ADAPTER_MEMBERS: readonly string[] = [
+  'id',
+  'kind',
+  'fetch',
+  'parse',
+  'toCanonical',
+];
+
+/**
+ * A member of the adapter object the skeleton returns.
+ *
+ * Anchored to that object's own indent, which is what leaves the
+ * options interface's properties two levels out and the
+ * concatenated refusal message inside the module's helper outside
+ * what this reads. Global, which `matchAll` requires.
+ */
+const MEMBER_PATTERN = /^ {4}(?:async )?(?<member>\w+)[(:]/gmu;
+
+/**
+ * Every member that object declares, in declaration order.
+ *
+ * @param source - The module's whole text.
+ * @returns The member names it writes.
+ */
+function membersOf(source: string): readonly string[] {
+  return [...source.matchAll(MEMBER_PATTERN)]
+    .map((match) => match.groups?.member ?? '');
+}
+
+/**
+ * A method of that object, with everything it declares about what
+ * it answers: the `async` modifier if it carries one, then the
+ * return type.
+ *
+ * The modifier is captured rather than skipped over, and that is
+ * the whole point of the pattern. A member marked `async` while
+ * declaring a plain return type is a type error, which nothing in
+ * this suite runs — so a pattern reading past the keyword reports
+ * `parse` unchanged after somebody made it await something.
+ *
+ * The methods are what this reads and the two value members are
+ * not, which is what the argument list separates. No parameter list
+ * here nests parentheses, so the lazy run to the closing one is
+ * exact rather than approximate.
+ */
+const ANSWER_PATTERN =
+  /^ {4}(?<modifier>async )?(?<member>\w+)\([^)]*\): (?<answer>[^{]+) \{$/gmu;
+
+/**
+ * What each of those methods declares it answers with.
+ *
+ * @param source - The module's whole text.
+ * @returns One entry per method, keyed by member name.
+ */
+function answersOf(source: string): Record<string, string> {
+  const declared: [string, string][] = [];
+
+  for (const match of source.matchAll(ANSWER_PATTERN)) {
+    declared.push([
+      match.groups?.member ?? '',
+      (match.groups?.modifier ?? '') + (match.groups?.answer ?? ''),
+    ]);
+  }
+
+  return Object.fromEntries(declared);
+}
+
+/**
+ * The relative import the emitted case file writes, which is the
+ * one naming its subject.
+ *
+ * Picked by being relative rather than by position, for the reason
+ * the `lib` section gives: the other three are the test runner and
+ * two node builtins.
+ */
+const ADAPTER_COVERED_IMPORT = importsOf(ADAPTER_TEST_SOURCE)
+  .find((entry) => entry.from.startsWith('.'));
+
+/** How the emitted case file spells the fixture it opens. */
+const FIXTURE_URL_PATTERN = /new URL\('(?<path>[^']+)'/u;
+
+/** That path, or the empty string when the case file stopped
+ * naming one — which fails the claim reading it rather than
+ * resolving to somewhere plausible. */
+const PAYLOAD_PATH_NAMED =
+  FIXTURE_URL_PATTERN.exec(ADAPTER_TEST_SOURCE)?.groups?.path ?? '';
+
+/** How that file guards the envelope key it goes on to read. */
+const READ_KEY_PATTERN = /!\('(?<key>[^']+)' in stored\)/u;
+
+/** The key it reads, or the empty string when the guard is gone. */
+const PAYLOAD_KEY_READ =
+  READ_KEY_PATTERN.exec(ADAPTER_TEST_SOURCE)?.groups?.key ?? '';
+
+describe('the trio a source-adapter run writes', () => {
+  // The layout, as three paths under the target. The payload is
+  // emitted with the pair rather than left to whoever writes the
+  // adapter, because the cases read it on their very first run: a
+  // generator stopping at two files emits a suite that fails for a
+  // reason having nothing to do with the adapter.
+  it('writes the module, its cases and its payload, and nothing else', () => {
+    expect(ADAPTER_EMITTED.written).toStrictEqual(ADAPTER_ABSOLUTE_PATHS);
+  });
+
+  // Every member of the contract, in order, off the object the
+  // skeleton returns. A skeleton short of one is not caught by
+  // anything else the generator does — it is the adapter written
+  // from it that fails to satisfy the interface, long afterwards.
+  it('declares every member of the adapter contract', () => {
+    expect(membersOf(ADAPTER_MODULE_SOURCE)).toStrictEqual(ADAPTER_MEMBERS);
+  });
+
+  // The arrangement the stored-payload seam rests on, read off the
+  // declared signatures: `fetch` is async and answers a promise,
+  // and the other two answer values, so neither of them can await
+  // anything. A claim about the shape rather than a proof of purity
+  // — what it catches is a second awaiting member beside `fetch`.
+  it('declares fetch as the only member answering a promise', () => {
+    expect(answersOf(ADAPTER_MODULE_SOURCE)).toStrictEqual({
+      fetch: `async Promise<${ADAPTER_PASCAL}Payload>`,
+      parse: `${ADAPTER_PASCAL}Record[]`,
+      toCanonical: 'CanonicalDocument',
+    });
+  });
+
+  // The id is what the registry keys on and what a `sources` row
+  // selects, so the operand an operator types has to reach the
+  // module as a value and not only as a filename.
+  it('carries the id it was given as a value in the module', () => {
+    expect(ADAPTER_MODULE_SOURCE)
+      .toContain(`const ADAPTER_ID = '${ADAPTER_ID}';`);
+  });
+
+  // The casing step, read from the end that lands in a signature.
+  it('exports a factory named for that id', () => {
+    expect(ADAPTER_MODULE_SOURCE)
+      .toContain(`export function create${ADAPTER_PASCAL}(`);
+  });
+
+  it('imports that same factory in the case file beside it', () => {
+    expect(ADAPTER_COVERED_IMPORT?.names).toBe(`create${ADAPTER_PASCAL}`);
+  });
+
+  // Resolved rather than compared as text, for the reason the `lib`
+  // section gives: what is asserted is where the specifier LANDS.
+  it('names the module beside it by a specifier that resolves', () => {
+    const specifier = ADAPTER_COVERED_IMPORT?.from ?? '';
+    const named = resolve(
+      dirname(ADAPTER_TEST),
+      specifier.replace(SPECIFIER_SUFFIX, '.ts'),
+    );
+
+    expect(named).toBe(ADAPTER_MODULE);
+  });
+
+  // And the third file, by the path the case file actually opens.
+  // The fixture's suffix is one constant in `scripts/scaffold.ts`
+  // that two of the three emissions read, so what this exists for
+  // is one of them changing and the other not.
+  it('names the payload fixture by a path that resolves', () => {
+    expect(resolve(dirname(ADAPTER_TEST), PAYLOAD_PATH_NAMED))
+      .toBe(ADAPTER_PAYLOAD);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The payload that run stores beside them
+// ---------------------------------------------------------------------------
+
+describe('the payload a source-adapter run writes', () => {
+  // A header beside the payload rather than inside it. Every JSON
+  // file this package commits carries a `_readme`, because a file
+  // met on its own says nothing about which path owns it; but one
+  // written into the payload would reach `parse` as though the
+  // source had answered with it.
+  it('writes a header beside the payload rather than inside it', () => {
+    expect(Object.keys(ADAPTER_PAYLOAD_VALUE))
+      .toStrictEqual(['_readme', 'payload']);
+  });
+
+  // No reply rather than a plausible one, for the reason every
+  // other half of this generator's output throws: a fixture that
+  // looked like an answer is one somebody can forget to replace.
+  it('stores no reply at all under that payload', () => {
+    expect(ADAPTER_PAYLOAD_VALUE.payload).toBeNull();
+  });
+
+  // The pairing between the fixture and the cases: the guard the
+  // case file writes reads one key out of the envelope, and this is
+  // the claim that the fixture is carrying the key it reads. A
+  // guard naming a key nothing writes refuses on every run, over a
+  // file the adapter itself never saw.
+  it('carries the key the case file beside it reads', () => {
+    expect(Object.keys(ADAPTER_PAYLOAD_VALUE)).toContain(PAYLOAD_KEY_READ);
   });
 });

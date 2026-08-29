@@ -111,6 +111,28 @@ const LIB_TEST_DIR = 'tests/lib';
 const LIB_TEST_TO_SOURCE = `../../${LIB_SOURCE_DIR}`;
 
 /**
+ * Where a source adapter lives, relative to a package root.
+ *
+ * One directory holds all three files an adapter is: the module, its
+ * cases and the payload they read. `src/lib/` splits its pair across
+ * two trees because a spliceable library is read by the build as
+ * well as by the suite, and an adapter is read by neither — so the
+ * whole shape sits in one place, and whoever opens the module has
+ * the other two in front of them.
+ */
+const SOURCE_DIR = 'src/sources';
+
+/**
+ * What a stored payload's filename ends in, after the adapter's id.
+ *
+ * A constant for the reason {@link LIB_TEST_TO_SOURCE} is one: the
+ * emitted case file resolves this path to read the fixture, so the
+ * name the generator writes and the name the cases open are one
+ * decision rather than two spellings that can drift apart.
+ */
+const PAYLOAD_SUFFIX = '-payload.json';
+
+/**
  * The identifier a file stem is spelled as in code.
  *
  * `yaml-lite` becomes `yamlLite`. The stem is already known to match
@@ -127,6 +149,23 @@ function toCamelCase(name: string): string {
   return first + rest
     .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
     .join('');
+}
+
+/**
+ * The identifier a file stem is spelled as when it names a type.
+ *
+ * `html-text` becomes `HtmlText`. Built from {@link toCamelCase}
+ * with its first letter raised rather than from a second pass over
+ * the stem, so the two spellings of one name cannot disagree about
+ * where its words are.
+ *
+ * @param name - The file stem, as the command line gave it.
+ * @returns The same words as one Pascal-case identifier.
+ */
+function toPascalCase(name: string): string {
+  const camel = toCamelCase(name);
+
+  return camel.slice(0, 1).toUpperCase() + camel.slice(1);
 }
 
 /**
@@ -265,6 +304,388 @@ const LIB_GENERATOR: ScaffoldGenerator = {
 };
 
 /**
+ * The adapter skeleton, as text.
+ *
+ * Arranged around the two rules `src/sources/index.ts` argues for,
+ * because a skeleton is where they are obeyed or lost. `fetch` is
+ * the only member that does I/O, so `parse` and `toCanonical` can
+ * be driven over a payload stored on disk and the cases beside the
+ * module need nothing standing up; and the configuration binds at
+ * construction rather than per call, so `parse` stays a function of
+ * the payload alone.
+ *
+ * Every member throws, for the reason {@link libSource} gives: a
+ * placeholder that answered something plausible would be
+ * indistinguishable from an adapter that works, and the calls
+ * written against it would pass.
+ *
+ * @param name - The adapter's id, which is also its file stem.
+ * @returns The whole of `src/sources/<id>.ts`.
+ */
+function sourceAdapterSource(name: string): string {
+  const pascal = toPascalCase(name);
+
+  return `/**
+ * @packageDocumentation
+ * ${name} — one sentence saying which source this fronts.
+ *
+ * Scaffolded by \`bun run scaffold source-adapter ${name} <dir>\`,
+ * and a scaffold until somebody replaces it: every member below
+ * throws, the cases beside it assert that they throw, and both go
+ * when the adapter is written.
+ *
+ * The contract is \`SourceAdapter\` in \`${SOURCE_DIR}/index.ts\`, and
+ * two of its rules are what this skeleton is arranged around.
+ *
+ * \`fetch\` is the only member that does I/O. \`parse\` and
+ * \`toCanonical\` are pure — no network, no clock, no filesystem —
+ * which is what lets both be driven over a payload stored on disk,
+ * and why the cases beside this file need nothing standing up. An
+ * adapter that reached the endpoint from \`parse\` would pass its
+ * cases the day it was written and fail them the first time it ran
+ * offline.
+ *
+ * Configuration binds at construction rather than per call. The
+ * endpoint and the \`parser_config\` of the \`sources\` row this
+ * adapter was reached through are handed to the factory once, so one
+ * adapter type serves every row of its kind with only its
+ * construction differing, and \`parse\` stays a function of the
+ * payload alone.
+ *
+ * Nothing here scores, decides or stores. An adapter answers with
+ * captured material; what is made of it belongs to its caller.
+ */
+import type {
+  CanonicalDocument,
+  SourceAdapter,
+  SourceKind,
+} from './index.js';
+
+/**
+ * This adapter's id: stable, and unique across the registry in
+ * \`${SOURCE_DIR}/index.ts\`. Spelled as the file stem, so the module
+ * a reader opens and the id a \`sources\` row selects are one word.
+ */
+const ADAPTER_ID = '${name}';
+
+/**
+ * Which transport family this adapter fronts, and the \`kind\` every
+ * \`sources\` row it can be constructed for carries.
+ *
+ * A placeholder. The set is \`SOURCE_KINDS\` in
+ * \`src/db/schema/values.ts\` — the same tuple the \`sources.kind\`
+ * CHECK is generated from — and the annotation holds this to a
+ * member of it, so a kind that is not one is a type error rather
+ * than a row this adapter is never selected for.
+ */
+const ADAPTER_KIND: SourceKind = 'url';
+
+/**
+ * The payload this source answers with: exactly what \`fetch\`
+ * returns, and exactly what \`documents.raw\` stores.
+ *
+ * \`unknown\` until somebody names it, and the first edit this module
+ * wants. Every member below is typed through it, so the shape lands
+ * in one place rather than in three signatures.
+ */
+export type ${pascal}Payload = unknown;
+
+/**
+ * One record \`parse\` pulls out of a payload, before anything has
+ * been mapped onto a \`documents\` row.
+ *
+ * Separate from the canonical shape on purpose: extraction and
+ * canonicalization are two steps, and a payload carrying fields no
+ * column takes is the ordinary case rather than the odd one.
+ */
+export type ${pascal}Record = unknown;
+
+/**
+ * What one adapter of this kind is constructed with: the \`sources\`
+ * row it fronts, in the two parts an adapter reads.
+ *
+ * Bound once rather than threaded through each call, which is the
+ * contract's own decision — a \`parse\` depending on two inputs
+ * would cost the stored-payload seam its cases rest on.
+ */
+export interface ${pascal}Options {
+  /**
+   * Where this source is read: the row's endpoint, and the only
+   * address \`fetch\` may open.
+   */
+  readonly endpoint: string;
+
+  /**
+   * The row's \`parser_config\` — selectors, paths, a field map:
+   * data this module executes, never code it runs.
+   */
+  readonly parserConfig: unknown;
+}
+
+/**
+ * The refusal every member below raises.
+ *
+ * It names the member and what that member was reached with, so a
+ * run that lands on a scaffold reports which step it stopped at
+ * rather than that something somewhere threw.
+ *
+ * @param member - The member that was called.
+ * @param saw - What it was called with, in a few words.
+ * @returns The error to throw.
+ */
+function unwritten(member: string, saw: string): Error {
+  return new Error(
+    ADAPTER_ID + ' is a scaffold: ' + member + ' was reached with ' +
+    saw + ', and there is nothing here to answer with. Replace ' +
+    'this module and the cases beside it.',
+  );
+}
+
+/**
+ * Construct the adapter for one \`sources\` row.
+ *
+ * @param options - That row's endpoint and parser configuration.
+ * @returns The adapter, ready to be fetched from.
+ */
+export function create${pascal}(
+  options: ${pascal}Options,
+): SourceAdapter<${pascal}Payload, ${pascal}Record> {
+  return {
+    id: ADAPTER_ID,
+    kind: ADAPTER_KIND,
+
+    /**
+     * Retrieve the source's own payload. The only member that does
+     * I/O, and the only one that touches the endpoint above.
+     */
+    async fetch(): Promise<${pascal}Payload> {
+      throw unwritten('fetch', 'endpoint ' + options.endpoint);
+    },
+
+    /**
+     * Extract records from a payload, under the configuration bound
+     * above. Pure: no I/O, no clock, no network.
+     */
+    parse(raw: ${pascal}Payload): ${pascal}Record[] {
+      throw unwritten('parse', 'a payload of type ' + typeof raw);
+    },
+
+    /**
+     * Map one extracted record onto the canonical shape. Pure, and
+     * the only member that has to know what a \`documents\` row
+     * holds — every member of \`CanonicalDocument\` is produced here
+     * or nowhere.
+     */
+    toCanonical(parsed: ${pascal}Record): CanonicalDocument {
+      throw unwritten('toCanonical', 'a record of type ' + typeof parsed);
+    },
+  };
+}
+`;
+}
+
+/**
+ * The case file that lands beside a scaffolded adapter.
+ *
+ * Colocated rather than under `tests/`, which is this package's
+ * convention wherever a module's cases are about that module alone
+ * — `src/cron/cron.test.ts` and `src/notifications/dispatch.test.ts`
+ * are the precedent — and it also puts the module, its cases and the
+ * payload they read in one directory listing.
+ *
+ * Its cases assert the scaffold refusals, so they redden the moment
+ * the adapter is written; what outlives them is the arrangement.
+ * `parse` is driven over a payload read off disk, which is the seam
+ * that keeps an adapter's cases in the fully isolated default suite.
+ *
+ * @param name - The adapter's id, which is also its file stem.
+ * @returns The whole of `src/sources/<id>.test.ts`.
+ */
+function sourceAdapterTest(name: string): string {
+  const pascal = toPascalCase(name);
+
+  return `/**
+ * Cases for \`${SOURCE_DIR}/${name}.ts\`.
+ *
+ * Scaffolded by \`bun run scaffold source-adapter ${name} <dir>\`
+ * and, like the module it covers, a placeholder. Each case below
+ * asserts that the adapter is still a scaffold, so they redden the
+ * moment somebody writes one — which is the reminder to write real
+ * cases here.
+ *
+ * What the arrangement is FOR outlives the placeholders. \`parse\`
+ * is driven over a payload read off disk rather than over one
+ * fetched, and that is the seam keeping this file in the fully
+ * isolated default suite: no network, no credentials, nothing to
+ * stand up. \`fetch\` is the one member that would need any of
+ * those, and it is asked only to refuse.
+ *
+ * House order when the real cases arrive: what the adapter refuses
+ * first — a payload it cannot read, a record carrying nothing a
+ * \`documents\` row takes — then the extraction those refusals
+ * bound.
+ */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import { describe, expect, it } from 'vitest';
+
+import { create${pascal} } from './${name}.js';
+
+/**
+ * The stored payload these cases drive \`parse\` over.
+ *
+ * Resolved from this file's own location rather than from the
+ * working directory: the suite is launched from the package and
+ * from the repository root alike, and only one of those makes a
+ * relative path name it.
+ */
+const PAYLOAD_PATH = fileURLToPath(
+  new URL('./${name}${PAYLOAD_SUFFIX}', import.meta.url),
+);
+
+/**
+ * What that file records, as \`fetch\` would have returned it.
+ *
+ * The fixture is an envelope and this reads the one key under it: a
+ * header written into the payload itself would be handed to
+ * \`parse\` as though the source had answered with it.
+ *
+ * @returns The payload the fixture stores.
+ * @throws Error When the file is no longer an envelope holding one,
+ * naming the file — a fixture edited into a shape nothing reads is
+ * otherwise a refusal from the adapter about an input it never got.
+ */
+function storedPayload(): unknown {
+  const stored: unknown = JSON.parse(readFileSync(PAYLOAD_PATH, 'utf8'));
+
+  if (typeof stored !== 'object' || stored === null) {
+    throw new Error(PAYLOAD_PATH + ' does not hold a JSON object');
+  }
+
+  if (!('payload' in stored)) {
+    throw new Error(PAYLOAD_PATH + ' holds no payload key');
+  }
+
+  return stored.payload;
+}
+
+/** The adapter these cases drive, constructed as a row would. */
+const ADAPTER = create${pascal}({
+  endpoint: 'https://example.invalid/${name}',
+  parserConfig: {},
+});
+
+/** What every member refuses with while this is a scaffold. */
+const SCAFFOLD_REFUSAL = '${name} is a scaffold';
+
+describe('${name} — what it says it is', () => {
+  // The two members the registry reads. Both are placeholders, and
+  // this is the case that notices either one being set.
+  it('carries the id and the kind it is registered under', () => {
+    expect({ id: ADAPTER.id, kind: ADAPTER.kind })
+      .toStrictEqual({ id: '${name}', kind: 'url' });
+  });
+});
+
+describe('${name} — a scaffold until it is written', () => {
+  // The one member that would open a socket, and the reason the two
+  // below it run with nothing standing up. Awaited as a rejection
+  // rather than caught as a throw: it is the async member, and a
+  // case reading it synchronously passes whatever it does.
+  it('refuses to fetch', async () => {
+    await expect(ADAPTER.fetch()).rejects.toThrow(SCAFFOLD_REFUSAL);
+  });
+
+  // The stored-payload seam, driven the way every later case here
+  // will be: a payload read off disk, handed to a pure function,
+  // with no network anywhere in the call.
+  it('refuses to parse the stored payload', () => {
+    expect(() => ADAPTER.parse(storedPayload())).toThrow(SCAFFOLD_REFUSAL);
+  });
+
+  it('refuses to canonicalize a record', () => {
+    expect(() => ADAPTER.toCanonical(null)).toThrow(SCAFFOLD_REFUSAL);
+  });
+});
+`;
+}
+
+/**
+ * The stored payload that lands beside a scaffolded adapter.
+ *
+ * An envelope rather than the payload alone. A fixture met on its
+ * own says nothing about which path owns it, which is why every
+ * JSON file this package commits carries a `_readme`; but a header
+ * written into the payload would be handed to `parse` as though the
+ * source had answered with it, so the header sits beside the payload
+ * instead of inside it.
+ *
+ * The payload is `null`, which is not a reply any source gives. A
+ * plausible one would be a fixture somebody could forget to
+ * replace.
+ *
+ * @param name - The adapter's id, which is also its file stem.
+ * @returns The whole of `src/sources/<id>-payload.json`.
+ */
+function sourceAdapterPayload(name: string): string {
+  return `{
+  "_readme": [
+    "PAYLOAD FIXTURE for \`${SOURCE_DIR}/${name}.ts\`.",
+    "",
+    "One reply from the source that adapter fronts, stored as its",
+    "\`fetch\` returned it, so \`parse\` and \`toCanonical\` can be",
+    "driven over it with no network — which is what keeps the cases",
+    "beside that module in the fully isolated default suite.",
+    "",
+    "An envelope, not the payload itself: everything the adapter is",
+    "handed sits under \`payload\`, and this key does not. A header",
+    "written into the payload would reach \`parse\` as though the",
+    "source had answered with it.",
+    "",
+    "Scaffolded, and a placeholder — \`payload\` is null, which is no",
+    "reply at all. Replace it with one the source really gave,",
+    "trimmed to what a case needs and carrying nothing personal: a",
+    "fixture is committed, and a payload pasted in whole is the",
+    "easiest way to commit somebody else's data by accident."
+  ],
+  "payload": null
+}
+`;
+}
+
+/**
+ * The generator behind `scaffold source-adapter <id> <dir>`.
+ *
+ * Three files rather than two. The module and its cases are the pair
+ * every generator here emits; the payload is what makes that pair
+ * runnable in a suite with no network, and a generator emitting the
+ * cases without it would emit a file that fails on its first run
+ * for a reason having nothing to do with the adapter.
+ *
+ * The operand is an id rather than a name, and that word reaches the
+ * refusals: `SourceAdapter.id` is what the registry keys on and what
+ * a `sources` row selects, so what an operator is asked for is the
+ * thing the module will be known by.
+ */
+const SOURCE_ADAPTER_GENERATOR: ScaffoldGenerator = {
+  name: 'source-adapter',
+  operand: 'id',
+  summary: 'an adapter under src/sources/, cases and payload',
+  generate: (name) => [
+    { path: `${SOURCE_DIR}/${name}.ts`, contents: sourceAdapterSource(name) },
+    {
+      path: `${SOURCE_DIR}/${name}.test.ts`,
+      contents: sourceAdapterTest(name),
+    },
+    {
+      path: `${SOURCE_DIR}/${name}${PAYLOAD_SUFFIX}`,
+      contents: sourceAdapterPayload(name),
+    },
+  ],
+};
+
+/**
  * Every generator this command can run, keyed by the word an
  * operator types.
  *
@@ -281,6 +702,7 @@ const LIB_GENERATOR: ScaffoldGenerator = {
  */
 export const GENERATORS: Readonly<Record<string, ScaffoldGenerator>> = {
   [LIB_GENERATOR.name]: LIB_GENERATOR,
+  [SOURCE_ADAPTER_GENERATOR.name]: SOURCE_ADAPTER_GENERATOR,
 };
 
 /**
@@ -407,9 +829,13 @@ export function parseScaffoldArgs(argv: readonly string[]): ScaffoldRequest {
   }
 
   if (name === undefined) {
+    // Article-free, and deliberately: the operand is read off the
+    // registry entry, so a message writing one in front of it says
+    // `a id` the moment a generator takes an operand starting with
+    // a vowel. This shape also matches its two neighbours here,
+    // which say what is missing rather than what was expected.
     throw new ScaffoldArgsError(
-      `${generatorName} takes a ${generator.operand}, and none ` +
-      'followed it',
+      `no ${generator.operand} followed ${generatorName}`,
     );
   }
 
