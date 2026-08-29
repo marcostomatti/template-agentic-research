@@ -9,6 +9,12 @@
  * are the two values this schema exists to keep contained, and the
  * containment is a rule about which modules may name the columns
  * rather than anything the database enforces.
+ *
+ * `sub` is the one value both tables hold, and the rule that keeps
+ * them agreeing is that it is written once and never rewritten. The
+ * session row carries its own copy so that verifying a token is a
+ * single-row read; that copy is only trustworthy because the value
+ * behind it cannot move.
  */
 import { bigint, bigserial, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
@@ -31,6 +37,18 @@ export const authUsers = pgTable('auth_users', {
   /**
    * The stable subject identifier session claims carry, written once
    * at insert and never rewritten by the bootstrap upsert.
+   *
+   * The upsert runs on every boot and replaces the hash, so leaving
+   * `sub` out of what it rewrites is what separates the credential
+   * from the identity: an operator rotating their password stays the
+   * same subject, and nothing downstream that keys on `sub` has to
+   * care that the row was touched.
+   *
+   * Rewriting it would fail quietly rather than loudly. Every live
+   * session in `auth_sessions` holds its own copy taken at mint time,
+   * so a token issued before the restart keeps verifying and keeps
+   * answering the old subject — a value the credential row no longer
+   * names. Nothing errors; the claims just stop meaning what they say.
    */
   sub: text('sub').notNull(),
 
@@ -92,6 +110,18 @@ export const authSessions = pgTable('auth_sessions', {
    * The subject this session authenticates, copied from
    * `auth_users.sub` at mint time so verifying a token reads one row
    * rather than joining on the request hot path.
+   *
+   * A deliberate denormalisation: `user_id` already reaches the same
+   * value through the foreign key, so the normalised read is a join,
+   * and it is a join every guarded request would pay. Carrying the
+   * copy makes one lookup by `token_hash` answer the whole of the
+   * claims the verifier owes its caller.
+   *
+   * The copy cannot drift, because the value it copies is never
+   * rewritten (see `auth_users.sub`). That immutability is what makes
+   * the denormalisation safe rather than merely fast: there is no
+   * update path that would have to keep the two columns in step, and
+   * so no window in which they disagree.
    */
   sub: text('sub').notNull(),
 
@@ -117,6 +147,18 @@ export const authSessions = pgTable('auth_sessions', {
    * When this session was revoked, or NULL if it was not. A timestamp
    * rather than a boolean so a revoked session stays distinguishable
    * from an expired one after the fact.
+   *
+   * NULL is the encoding of "not revoked", not a missing value: one
+   * column carries both the state and when it was entered, so there
+   * is no second flag to keep in step with the timestamp and no row
+   * that can say revoked without saying when.
+   *
+   * The two ways a token stops working stay separate reads — this
+   * column IS NULL, and `expires_at` still ahead of now. A boolean
+   * would collapse both into "not valid" and lose which applied: a
+   * session that ran out did so on its own schedule, while one that
+   * was revoked was taken away by a logout or by an operator pulling
+   * it, and only the timestamp says when that happened.
    */
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
 }, (table) => [
