@@ -155,6 +155,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
     ],
   },
   {
+    file: 'parse-csv.ts',
+    ownText: [
+      'stripByteOrderMark(asText(text))',
+      'recordHasContent(sawAny, field, record)',
+      'records.length < MINIMUM_RECORDS',
+    ],
+  },
+  {
     file: 'yaml-lite.ts',
     ownText: [
       'YAML_INTEGER.test(value)',
