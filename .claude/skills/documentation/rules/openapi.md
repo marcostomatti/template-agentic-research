@@ -34,13 +34,17 @@ import { generateOpenApiDocument } from './src/openapi.js';
 
 // inside register(app, ...) callback:
 const spec = generateOpenApiDocument();
-// @ts-expect-error — swagger-ui-express ships @types/express@5; project uses v4
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec));
 ```
 
-> **Note:** The `@ts-expect-error` is required because `swagger-ui-express` ships with
-> `@types/express@5` types while the project uses `@types/express@4`. This is a known
-> upstream type incompatibility.
+> **Note:** That line needs no `@ts-expect-error`.
+> `@types/swagger-ui-express` declares `@types/express: *`, so it resolves to
+> whichever major this package pins — `^5.0.6` since the Express 5 bump, which
+> is what the swagger types then resolve to as well. The directive this rule
+> used to carry dated from the `@types/express@4` pin, when that wildcard pulled
+> a second, newer major into the tree alongside it. Do not re-add it
+> defensively: an `@ts-expect-error` whose next line compiles clean is itself an
+> error (TS2578), so it cannot be left in place just in case.
 
 ---
 
