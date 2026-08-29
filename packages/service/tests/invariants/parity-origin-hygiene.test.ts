@@ -92,6 +92,7 @@ const PARITY_FILES: readonly string[] = [
   'fixtures.ts',
   'harness.parity.test.ts',
   'html-text.parity.test.ts',
+  'paged-list.parity.test.ts',
   'parse-csv.parity.test.ts',
   'parse-eml.parity.test.ts',
   'sanitize-md.parity.test.ts',

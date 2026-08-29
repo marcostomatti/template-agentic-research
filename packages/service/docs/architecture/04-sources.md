@@ -19,8 +19,10 @@ Two of the things `src/sources/` will hold are not here yet. The
 adapters that front a source and the runtime half of the registry
 that selects one both land later in phase 4, and each brings its own
 section here in the commit that lands it. What this document covers
-today is the contract they will satisfy and the reduction they will
-reach for, which is what the directory holds.
+today is the contract they will satisfy and the two shared modules
+they will reach for, which is what the directory holds: the listing
+loop that gets the bytes, and the reduction that turns markup into
+the text a body holds.
 
 ## The contract
 
@@ -201,6 +203,131 @@ the engine then runs what was approved deterministically: a model
 proposes, a person decides once, and no guess silently changes what
 the pipeline extracts. The propose step is phase 5's; the columns it
 targets and the shape of the answer are fixed here.
+
+## The shared listing run
+
+### A listing loop fronts no source either, and does the I/O
+
+`src/sources/paged-list.ts` is the second module here that declares
+no member of the contract, and it is not the same kind of helper as
+the reduction. That one is pure text; this one is the step that makes
+requests. What it is, is the loop an adapter runs INSIDE its own
+`fetch` when one `sources` row names several listing endpoints: the
+adapter supplies the four things one listing source differs from the
+next by — where the URL is, where the array is, how one item reads,
+and which field is that item's timestamp — and the bounds, the
+cursor and the notes live in the loop once.
+
+The same reading rule applies as for the reduction. A module in this
+directory is an adapter when it declares the five members and holds a
+registry entry, not because of where it sits.
+
+### The port is named for its mechanism, not for its subject
+
+The original this was ported from is named for the particular kind of
+listing it was written against, and that name is subject matter. This
+platform researches whatever a domain's rows say it researches, so a
+subject compiled into a filename under `src/` is the first thing
+another domain reads as somebody else's platform. The port is named
+for what the module IS — a cursor-paged list over several endpoints —
+and the vocabulary is renamed the whole way down, an ENDPOINT being
+one of the listing URLs a `parser_config` names and a RECORD being
+one item such a listing answers with.
+
+Renaming the whole way down rather than at the filename alone is the
+part worth stating: a half-renamed module is worse than either end,
+because the reader cannot tell which half is the mechanism. The
+module's own header records the rename and its reason, so a reader
+who finds the original does not read the difference as a mistake.
+
+PAGED is about the cursor and not about the endpoints. For the shape
+this was extracted from, one endpoint is one request — which is why
+the request bound is effectively on or off, said plainly rather than
+dressed up as paging that does not exist. The paging is ACROSS RUNS:
+each run takes the oldest records it has not seen, up to the row cap,
+and the next run resumes from the timestamp this one stored.
+
+### The cursor is per endpoint
+
+One timestamp shared across endpoints would let the endpoint with the
+newest record set a high-water mark that skips every older endpoint
+forever. The run would report success, and the corpus would have a
+permanent hole in it that nothing downstream could see.
+
+### An entity tag is only stored when the endpoint was fully consumed
+
+A conditional request is only safe to make about a listing that was
+read to the end. If the row cap stopped a run mid-endpoint and the
+tag were stored anyway, the next run's conditional would be answered
+with "unchanged" for a listing whose tail has never been read, and
+the remainder would never arrive.
+
+The stored shape says which state an endpoint is in by itself: an
+entry carrying a tag was finished, and an entry carrying only a
+timestamp was cut short.
+
+### The cursor never advances into a group sharing one timestamp
+
+Records that state the same instant are indistinguishable to a
+timestamp cursor, so advancing to that instant while leaving some of
+them untaken filters the rest out forever. The run backs the cursor
+out to the last instant before the group instead. When the group
+fills the whole row budget there is nothing to back out to, so the
+run says that in a note rather than moving past records it did not
+take — a bound an operator can raise, reported as one.
+
+### The row budget is divided before the run starts
+
+The row cap is divided by the endpoint count up front, so one large
+listing cannot starve the rest, and it is checked between endpoints
+so a long endpoint list cannot turn into a long list of requests. The
+consequence is worth knowing rather than discovering: an endpoint
+that answers nothing does NOT hand its share to the next one.
+
+### Nothing in a listing run throws for input reasons
+
+A transport failure, a status the source refused with, a body that
+will not parse, an endpoint handle that is not one: each stops THAT
+endpoint with a note and leaves the rest of the run alone. The notes
+come back in the result, so a partially successful run is legible
+rather than being either a silent success or a lost one.
+
+A stored cursor gets the same treatment. The column is free text, an
+operator can hand-edit it and another source may have written it, so
+anything that is not this module's own JSON decodes to NO CURSOR
+rather than to an error. The cost is one re-read, which the
+convergence upsert absorbs.
+
+### The transport is injected, and that is what keeps a run offline
+
+The one thing that throws is a call supplying no `fetch`. That is a
+divergence from the original, which falls back to whatever global its
+runtime offers, and it exists because of the isolated-suite law: a
+module that can reach a global transport is one an absent-minded case
+can put on the network without anybody writing a URL. Requiring the
+dependency makes the I/O visible in the call, and makes the law
+readable in the signature rather than only enforceable by trusting
+the test.
+
+### What a parity gate can and cannot decide here
+
+The cursor codec, the stamp coercion, the endpoint list and the
+payload unwrap are compared against their originals in
+`tests/parity/paged-list.parity.test.ts`, over inputs both sides are
+handed. The listing run is not, and cannot be: its transport is
+injected here and global there, and every note it produces was
+re-authored in this vocabulary, so two runs would part on every note
+over a port behaving exactly as intended. That half is characterized
+in `src/sources/paged-list.test.ts` instead — cases describing what
+the module DOES, which for a module with no parity gate is the only
+description there is.
+
+The two renamed keys are still inside the parity leg, and the way
+that is made honest is worth recording: the original's key names are
+discovered at run time by driving it with a recording proxy, never
+written down. The discovered names exist for the length of a case, so
+the leg measures the mechanism without carrying the subject matter
+the rename exists to leave behind.
 
 ## The text reduction
 
