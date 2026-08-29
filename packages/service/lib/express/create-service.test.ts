@@ -1,3 +1,4 @@
+import type { SessionClaims, SessionVerifier } from './auth';
 import type { ServiceContext , ServiceHandle } from './types';
 
 import request from 'supertest';
@@ -6,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NotFoundError } from '../errors/index.js';
 import { createDependency } from '../service-core/index.js';
 
-import { passthroughMiddleware } from './auth';
+import { getSession, passthroughMiddleware } from './auth';
 import { createService } from './create-service';
 
 // Tests run in test mode — no process.exit, ephemeral port
@@ -170,8 +171,31 @@ describe('createService — DepsMap', () => {
 describe('createService — auth', () => {
   const INTROSPECT_URL = 'http://auth.test/introspect';
   const INTROSPECT_SECRET = 'chassis-shared-secret-at-least-32-bytes';
+  const BOTH_FORMS = 'auth must supply either verifier or both introspectUrl and introspectSecret, '
+    + 'never both forms';
 
   let handle: ServiceHandle | undefined;
+
+  /**
+   * A {@link SessionVerifier} answering from a script and recording every
+   * token it was asked about — the seam form's counterpart to the `fetch`
+   * mock the introspection case installs.
+   *
+   * `asked` is the in-band control the verifier cases need: a zero on a
+   * stubbed `fetch` is also what a request refused before reaching any
+   * verifier reports, so the token list is what separates "answered
+   * without a transport" from "answered by nothing at all".
+   */
+  function scriptedVerifier(claims: SessionClaims): SessionVerifier & { readonly asked: string[] } {
+    const asked: string[] = [];
+    return {
+      asked,
+      verify(token: string): Promise<SessionClaims | null> {
+        asked.push(token);
+        return Promise.resolve(claims);
+      },
+    };
+  }
 
   afterEach(async () => {
     if (handle) {
@@ -245,6 +269,109 @@ describe('createService — auth', () => {
         headers: expect.objectContaining({ Authorization: `Bearer ${INTROSPECT_SECRET}` }) as unknown,
       }),
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // The two config forms, and the refusal of both at once
+  //
+  // The grid over the two cases below, measured against the whole of
+  // `lib/express` (159 cases) so a leg reaching another file is reported
+  // rather than assumed, and identical across two full passes:
+  //
+  // Resolving the verifier form to null — a service booting with
+  // passthrough auth on the form that has no URL to fall back to — reddens
+  // ONE, the verifier case, and nothing above notices. Neutralising the
+  // schema's two-form refinement to `() => true` reddens TWO, the
+  // both-forms case and the half-configured case below it; before the
+  // both-forms case existed that leg reddened only the second, so this is
+  // the assertion that pins what the refinement newly forbids rather than
+  // what it inherited.
+  //
+  // The `fetch` zero is reddened by no realistic mutation of the
+  // resolution, which is what the seam's own `asked` record beside it is
+  // for. Putting a hop back under the verifier form — artificial, since
+  // nothing in that branch has a URL to call — reddens ONE, this case.
+  // Rebuilding the claims off `sub` in the shared middleware reddens TWO,
+  // the wire reading here and the identity assertion in `auth.test.ts`,
+  // which is the pair saying the assembled service and the builder are one
+  // code path.
+  // -------------------------------------------------------------------------
+
+  it('builds both middleware over a supplied verifier, reaching no transport at all', async () => {
+    // The other admitted form, and the one the whole seam exists for: a
+    // service that verifies its own tokens takes no per-request HTTP hop.
+    // Nothing in the response says which form was resolved — a fall-through
+    // to the introspection branch, or to no verifier at all, answers 200 on
+    // this route just as readily — so the readings are the seam's own call
+    // record beside a `fetch` that was never reached.
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const claims: SessionClaims = { sub: 'usr_seam', email: 'seam@b.dev' };
+    const verifier = scriptedVerifier(claims);
+    let capturedCtx: ServiceContext | undefined;
+
+    handle = await createService({
+      serviceId: 'test-svc',
+      auth: { verifier },
+      register(app, ctx) {
+        capturedCtx = ctx;
+        app.get('/guarded', ctx.requireAuth, (_req, res) => {
+          res.json({ session: getSession(res) ?? null });
+        });
+      },
+    });
+
+    expect(capturedCtx!.requireAuth).not.toBe(passthroughMiddleware);
+    expect(capturedCtx!.optionalAuth).not.toBe(passthroughMiddleware);
+
+    const res = await request(handle.app).get('/guarded')
+      .set('Authorization', 'Bearer seam-token');
+
+    expect(res.status).toBe(200);
+    // The verifier THIS config supplied is the one that answered, asked for
+    // the token the request carried.
+    expect(verifier.asked).toEqual(['seam-token']);
+    expect(fetchMock).not.toHaveBeenCalled();
+    // And its claims are what the guarded route was handed, every field of
+    // them — a resolution that rebuilt `{ sub }` reaches the same 200.
+    expect(res.body.session).toStrictEqual({ sub: 'usr_seam', email: 'seam@b.dev' });
+  });
+
+  it('throws at startup when the auth block supplies a verifier and an introspect URL', async () => {
+    // The refusal the two-form refinement newly adds, and the one no other
+    // case reaches: both forms at once boots with exactly one of them live
+    // and nothing anywhere saying which. It TYPE-CHECKS — all three fields
+    // are optional on the schema's input shape, which is what lets the
+    // refinement pair them — so this parse is the only thing standing
+    // between a stale introspection env pair and a guard nobody chose.
+    const register = vi.fn();
+    const verifier = scriptedVerifier({ sub: 'usr_seam' });
+
+    // The complete overlap: a deployment that grew a local verifier and
+    // left its introspection pair in place.
+    await expect(
+      createService({
+        serviceId: 'test-svc',
+        auth: { verifier, introspectUrl: INTROSPECT_URL, introspectSecret: INTROSPECT_SECRET },
+        register,
+      }),
+    ).rejects.toThrow(BOTH_FORMS);
+
+    // ...and the URL alone beside the verifier, which is the other half of
+    // the refinement's verifier arm: a predicate checking only the secret
+    // would still reject the pair above and admit this one.
+    await expect(
+      createService({
+        serviceId: 'test-svc',
+        auth: { verifier, introspectUrl: INTROSPECT_URL },
+        register,
+      }),
+    ).rejects.toThrow(BOTH_FORMS);
+
+    // Refused at the parse rather than somewhere further in: `register`
+    // runs at step 7 of a boot neither config got past step 1 of.
+    expect(register).not.toHaveBeenCalled();
   });
 
   it('throws at startup when auth.introspectUrl is set without introspectSecret', async () => {
