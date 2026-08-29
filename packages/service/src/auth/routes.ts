@@ -52,6 +52,15 @@
  * its own two false answers — a client that can tell an unknown
  * token from a real one has been handed an oracle.
  *
+ * LOGIN IS ALSO THE ONE ROUTE HERE THAT RATE-LIMITS ITSELF, on top
+ * of the app-wide limiter `applyMiddleware` installs. Uniform
+ * refusals are the whole design above, and a refusal that costs the
+ * caller nothing is an invitation to make a great many of them —
+ * the flat `401` is what makes guessing uninformative, and the
+ * budget below is what makes it slow. The other two routes take the
+ * global limiter alone: neither accepts a credential, and neither
+ * can be made to answer differently by being asked more often.
+ *
  * NOTHING BUILT FROM A REQUEST BODY REACHES A LOG LINE HERE. The
  * two refusal paths that log at all log a fixed message and a fixed
  * route name, so a login attempt carrying a password in an
@@ -72,10 +81,40 @@ import type { Logger } from '../../lib/logger/node.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
+import expressRateLimit from 'express-rate-limit';
 import { z } from 'zod';
 
 import { matchesIntrospectSecret } from './introspect-secret.js';
 import { issueSession, revokeSession, verifySession } from './service.js';
+
+/**
+ * How many `POST /login` attempts one caller gets per window.
+ *
+ * Stricter than the limiter `applyMiddleware` installs across the
+ * whole app on BOTH axes rather than one: ten attempts where that
+ * one allows a hundred, over the fifteen minutes named below where
+ * it counts a minute. Either axis alone would be arguable, and a
+ * shorter window with a smaller count can be the more permissive of
+ * two limits; moving both leaves no reading in which this route is
+ * the looser one.
+ *
+ * Ten in fifteen minutes is roomy for the one operator whose
+ * credential this is — a mistyped password costs one of them, and
+ * there is no lockout to sit out once the window rolls — and no
+ * brute-force budget at all against an argon2id hash.
+ */
+const LOGIN_ATTEMPT_LIMIT = 10;
+
+/**
+ * How long that budget takes to refill, in milliseconds.
+ *
+ * express-rate-limit counts in fixed windows rather than sliding
+ * ones, so this is also the longest a caller that spent its budget
+ * on the first request of a window waits. Why fifteen minutes and
+ * not some other span is on {@link LOGIN_ATTEMPT_LIMIT}: the two
+ * numbers are one choice and neither reads as anything alone.
+ */
+const LOGIN_ATTEMPT_WINDOW_MS = 900_000;
 
 /**
  * What `POST /login` accepts.
@@ -167,7 +206,10 @@ export interface AuthRouterOptions {
  * - `POST /login` — exchanges `{ user, password }` for a session.
  *   `200` with `{ token, sub, expiresAt }`; `401` with
  *   `{ error: 'Unauthorized' }` for a malformed body, an unknown
- *   login name and a wrong password alike.
+ *   login name and a wrong password alike; `429` with
+ *   `{ error: 'Too Many Requests' }` once a caller has spent its
+ *   attempt budget, ahead of both the parse and the store. It is
+ *   the only route here that carries a limiter of its own.
  * - `POST /logout` — revokes the session named by `{ token }`.
  *   `200` with `{ ok: true }` whether or not the token named a live
  *   session; `400` with `{ error: 'Bad Request' }` when the body is
@@ -192,6 +234,66 @@ export function buildAuthRouter(options: AuthRouterOptions): RouterType {
   };
 
   /**
+   * The attempt budget in front of `POST /login`, and the only
+   * limiter any route here carries of its own.
+   *
+   * Built per router rather than once at module scope, because
+   * express-rate-limit's default store is a `Map` living on the
+   * middleware instance. One at module scope would give every
+   * router this factory ever builds a SHARED window, which in the
+   * suite makes a case's remaining budget a function of how many
+   * cases ran before it. Per router, a fresh router is a fresh
+   * window — and the deployment builds exactly one.
+   *
+   * That same per-instance store is the caveat worth stating for a
+   * deployment: the count is per PROCESS, so N replicas behind one
+   * load balancer offer an attacker N times the budget below. Fixing
+   * that means a shared store (Redis) and is a change to make when
+   * this service is first replicated, not before.
+   *
+   * NO `keyGenerator` IS PASSED, and that omission is the part of
+   * this call doing the most work. v8's default masks an IPv6 address
+   * down to its /56 network before keying, so two addresses out of
+   * one allocation share a window rather than earning two apiece;
+   * v7 keyed on the exact `req.ip` and did not. Any custom generator
+   * opts back out of that, and the library's own guard against doing
+   * so by accident is a substring check for `req.ip` in the
+   * function's SOURCE TEXT — read the address any other way and the
+   * opt-out is silent. `lib/express/middleware.ts` takes the default
+   * for the same reason and records the measurement behind it.
+   *
+   * The two header settings restate the global limiter's rather than
+   * taking the library's own defaults, which are the other way round
+   * (`legacyHeaders: true`, `standardHeaders: false`). BOTH limiters
+   * run on this route, and each header goes to whichever middleware
+   * set it last. Taking the defaults would therefore leave a
+   * response carrying draft-6 `RateLimit-*` naming the global limit
+   * of 100 beside legacy `X-RateLimit-*` naming this one of 10 — two
+   * contradictory answers to one question. Named alike, this limiter
+   * simply overwrites all four values with its own, which is the
+   * honest reading: the tighter limit is the one that binds.
+   * Measured on the first request to a fresh router behind the
+   * global limiter, `ratelimit-limit` is `10` and never `100`.
+   *
+   * `message` is an object rather than the default string `Too many
+   * requests, please try again later.`, which `res.send` writes as
+   * `text/plain` — an empty body to a client parsing the `{ error }`
+   * envelope every other refusal on this router answers with.
+   *
+   * `limit` and not `max`: they are one setting under two names, and
+   * `max` has been the deprecated spelling since v7. The global
+   * literal predates that rename; copying its wording here would
+   * spread it.
+   */
+  const loginRateLimit = expressRateLimit({
+    limit: LOGIN_ATTEMPT_LIMIT,
+    windowMs: LOGIN_ATTEMPT_WINDOW_MS,
+    standardHeaders: 'draft-6',
+    legacyHeaders: false,
+    message: { error: 'Too Many Requests' },
+  });
+
+  /**
    * POST /auth/login
    *
    * Exchanges a credential for a session token.
@@ -210,12 +312,22 @@ export function buildAuthRouter(options: AuthRouterOptions): RouterType {
    * it: the value a client parses stops depending on how Express
    * happens to serialise a `Date`.
    *
+   * {@link loginRateLimit} runs ahead of everything below, so a
+   * caller past its budget is answered without the body being
+   * parsed and without the store being touched. That ordering is
+   * the point of a limiter on this route in particular: the work an
+   * attempt costs this service is an argon2id verify, which is
+   * deliberately expensive, so an unbudgeted `/login` is a way to
+   * spend the service's CPU as well as a way to guess a password.
+   *
+   * - `429` with `{ error: 'Too Many Requests' }` once the caller
+   *   has spent its attempts for the window, whatever the body was.
    * - `401` with `{ error: 'Unauthorized' }` for a body that is not
    *   `{ user, password }`, a login name matching no row, and a
    *   password that does not verify.
    * - `200` with `{ token, sub, expiresAt }` otherwise.
    */
-  router.post('/login', async (req, res) => {
+  router.post('/login', loginRateLimit, async (req, res) => {
     const parsed = loginBodySchema.safeParse(req.body);
 
     if (!parsed.success) {
