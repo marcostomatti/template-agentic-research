@@ -32,16 +32,17 @@
  * construction today, so what that question is worth is what it
  * notices when the sweep stops being generated from the table at all.
  *
- * The last case asks something the roster deliberately does not. Every
- * entry there is one string the migration has to carry, which is a
- * question about the constraint rather than about what it lets through
- * — so the members behind `sources.kind` are compared against
- * `SOURCE_KINDS` itself, the tuple the CHECK was generated from. The
- * two sides are independent in the way that matters: one is TypeScript
- * somebody edits, the other is SQL a generator wrote, and widening the
- * first without re-running the second is exactly the state where the
- * union a caller programs against and the constraint the database
- * enforces stop describing the same set.
+ * The cases after the sweep ask something the roster deliberately does
+ * not. Every entry there is one string the migration has to carry,
+ * which is a question about the constraint rather than about what it
+ * lets through — so the members behind `sources.kind` and behind
+ * `source_config_proposals.status` are compared against the tuples
+ * those CHECKs were generated from, `SOURCE_KINDS` and
+ * `RESEARCH_POOL_STATUSES`. The two sides are independent in the way
+ * that matters: one is TypeScript somebody edits, the other is SQL a
+ * generator wrote, and widening the first without re-running the second
+ * is exactly the state where the union a caller programs against and
+ * the constraint the database enforces stop describing the same set.
  *
  * What that sweep is evidence about is the repository, never a
  * database. A constraint dropped at a psql prompt leaves every
@@ -57,12 +58,16 @@ import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { SOURCE_KINDS } from '../../src/db/schema/values.js';
+import {
+  RESEARCH_POOL_STATUSES,
+  SOURCE_KINDS,
+} from '../../src/db/schema/values.js';
 
 import {
   EmptyMigrationDirectoryError,
   EmptyMigrationFileError,
   SCHEMA_SQL_ASSERTIONS,
+  proposalStatusCheckMembers,
   readMigrationSql,
   sourceKindCheckMembers,
 } from './schema-sql.js';
@@ -469,5 +474,30 @@ describe('static-SQL invariant — the sources.kind value set', () => {
     const members = sourceKindCheckMembers(MIGRATION.text);
 
     expect(sorted(members)).toEqual(sorted(SOURCE_KINDS));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The source_config_proposals.status value set
+// ---------------------------------------------------------------------------
+
+describe('static-SQL invariant — the proposal status value set', () => {
+  // The case above, asked of the other tuple a CHECK in this schema
+  // is generated from. What it catches is the same thing: a tuple
+  // widened in `values.ts` without `db:generate` re-run leaves the
+  // union a caller programs against admitting a status the database
+  // refuses, and no other seam in this package reads both sides.
+  //
+  // `RESEARCH_POOL_STATUSES` constrains two columns, though, so it
+  // reaches the migrations as two CHECKs carrying identical value
+  // lists — and `proposalStatusCheckMembers` is keyed on this
+  // table's constraint name for that reason. What it answers about is
+  // this column's rendering rather than `research_pool`'s, which
+  // carries the same four literals out of an earlier migration and is
+  // read by nothing here.
+  it('names exactly the members of RESEARCH_POOL_STATUSES', () => {
+    const members = proposalStatusCheckMembers(MIGRATION.text);
+
+    expect(sorted(members)).toEqual(sorted(RESEARCH_POOL_STATUSES));
   });
 });

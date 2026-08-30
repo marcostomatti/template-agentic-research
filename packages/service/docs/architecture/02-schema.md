@@ -311,7 +311,7 @@ rule otherwise refuses to create.
 
 ## Which migration owns which constraint
 
-`drizzle/` holds four files and two mechanisms. Three of them were
+`drizzle/` holds two mechanisms. All but one of its files were
 written by `db:generate`, which diffs `src/db/schema.ts` against the
 newest snapshot under `drizzle/meta/` and emits the difference;
 `0002_category_depth_guard.sql` was written by hand and is the only
@@ -319,7 +319,7 @@ migration here that was.
 
 | Owner | What it carries |
 | --- | --- |
-| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 24 tables, 163 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 9 CHECK — the eight value-set checks generated from the tuples in `src/db/schema/values.ts`, plus the two-column `research_pool_approval_check`. All 32 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. Both partial dispatch-claim indexes. |
+| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_wooden_quentin_quire.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 25 tables, 173 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 11 CHECK — the nine value-set checks generated from the tuples in `src/db/schema/values.ts`, plus the two spanning two columns, `research_pool_approval_check` and `source_config_proposals_approval_check`. All 34 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. Both partial dispatch-claim indexes. |
 | Hand-written — `0002_category_depth_guard.sql` | `categories_enforce_depth()` and the `BEFORE INSERT OR UPDATE` trigger on `categories` that calls it. Two statements, one rule, and the whole of the custom-owned DDL. |
 
 The snapshot decides that split, not taste. A table's entry in
@@ -345,7 +345,7 @@ children of the row being written, which no table definition states.
 
 Ownership says nothing about the reading. `readMigrationSql()` in
 `tests/invariants/schema-sql.ts` concatenates every `.sql` under
-`drizzle/` and its assertions run over the whole text, so eleven of
+`drizzle/` and its assertions run over the whole text, so thirteen of
 them land in the generated migrations and two in the hand-written one
 with nothing in the roster recording which. What does follow from the
 split is what a match there is worth. A generated statement is one of
