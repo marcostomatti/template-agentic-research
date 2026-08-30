@@ -731,3 +731,120 @@ rather than translated after one, and the depth cap is the opposite
 case for the opposite reason: a trigger holds that one against every
 writer, so a check would be a second, weaker statement of a rule that
 already held.
+
+## Personas
+
+### A persona is met in its domain and written by its id
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /domains/:slug/personas` | `200` with one page of the domain's personas, role ascending, plus `meta`. `404` for an unknown slug, `422` for a segment that is not a slug and for the pagination faults every list route answers. |
+| `POST /domains/:slug/personas` | `201` with the stored row. `422` for a body the schema refuses, `404` for an unknown slug, `409` when the domain already carries that role. |
+| `PATCH /personas/:id` | `200` with the row afterwards. `422` for a body the schema refuses and for a segment that is not an id, `404` for an unknown id, `409` when the resulting role is taken. |
+| `DELETE /personas/:id` | `204` with no body. `404` for an unknown id, `422` for a segment that is not one. Never `409`: nothing hangs off a persona. |
+
+`src/personas/routes.ts` declares all four and decides none of them:
+each handler reads the address, derives the window, calls the matching
+function in `src/personas/service.ts` and chooses a status.
+
+The collection hangs off `/domains/:slug` because system text is
+written ABOUT the subject a domain names, and a caller holding a slug
+should not have to look an id up to read it. The two writes address
+`/personas/:id` instead, for the reason a category is written by id:
+the row carries its own `domain_id`, the one rule that spans a domain
+— a role unique within it — is the database's, and repeating the slug
+would let a request name a domain the row does not belong to.
+
+### This collection is paginated, and the taxonomy is the exception
+
+`GET /domains/:slug/personas` reads through the `?page`/`?perPage`
+schema every other list route on the surface reads through, and
+answers `meta` beside its rows. A domain carries three personas today,
+so the window is doing nothing yet — but nothing caps how many roles a
+pipeline may come to play, and a collection that grows unbounded is
+one a caller should be paging through before it has to.
+
+`GET /domains/:slug/categories` is the wave-1 list that departs from
+that rule, because a two-level tree has no page to describe. The two
+sit under the same path prefix and answer differently on purpose,
+which is the collections differing rather than the surface disagreeing
+with itself.
+
+### A role is unique within its domain, and both writes can propose one
+
+`personas_domain_id_role_unique` refuses a role the domain already
+carries, on an INSERT and on an UPDATE alike — measured against the
+live server. So a `409` carrying `code: 'CONFLICT'` is the answer from
+`POST /domains/:slug/personas` and from `PATCH /personas/:id` both,
+and the two are separate call sites rather than one rule stated twice.
+
+The key is per-domain and not global. The same role under a second
+domain is accepted, which is what makes a pipeline's roles a
+vocabulary each domain configures for itself rather than a registry
+the deployment shares.
+
+The refusal names the rule and never the role. A duplicate is the one
+refusal on this surface whose cause is a value the caller sent, so it
+is the one where quoting the value back would read most naturally and
+would be exactly the leak the validation rules above forbid.
+
+### `role` is patchable, which no other natural key here is
+
+`patchDomainSchema` refuses to carry a `slug` and
+`patchCategorySchema` a `key`, because both are references something
+else holds: a seed upserts on them, and a term seed row names its
+category by key. A persona's role is neither.
+
+Nothing in schema v2 points at `personas`, the seed upserts on
+`(domain, role)` so a re-run writes the row the file describes, and a
+run resolves the role it plays by name at its own start. A rename
+therefore changes which text the next run finds, for the same reason
+every other edit does, rather than leaving a dangling pointer for
+something else to trip over later.
+
+That is why a rename can collide, and it is the only wave-1 patch that
+can reach a unique key at all.
+
+### `systemText` is required on a create and may be empty
+
+An empty string is a legal value and means something: the role exists
+and has no instructions yet, which is a state an operator can act on.
+An ABSENT member is a request that forgot to say.
+
+Holding the member required and its value unconstrained is what keeps
+those two apart, which is why the create schema does not simply
+default it. On a patch both members are optional, since a patch names
+what to rewrite rather than stating a whole persona — so the same
+absent member is a `422` on one route and a legal call on the other.
+
+A patch carrying no member at all is legal and answers the stored row
+unchanged. `personas` has no `updated_at`, so an empty patch has
+literally nothing to set.
+
+### An edit lands on the following run, and nothing has to be told
+
+A run reads its personas at its own start, in one query alongside the
+domain's taxonomy, and nothing between the store port and that query
+keeps a copy. There is no cache to expire, no version to bump and
+nobody to notify, so a write here is visible to the next run because
+Postgres is the only place either of them looks.
+
+The other half of that rule is what a write does NOT do. A run already
+in flight keeps the text it started with, so what a run did stays
+attributable to one set of rows rather than to whichever edit landed
+partway through it.
+
+### A delete cannot be refused, and a create's `404` may be a lost race
+
+No foreign key in schema v2 points at `personas`, so removing one has
+neither a guard nor a cascade. There is no `?cascade=confirm` here and
+nothing for one to authorise, which is the difference from a domain's
+delete: that one is guarded because the database would otherwise
+silently take everything the domain accumulated.
+
+`POST /domains/:slug/personas` resolves the domain and only then
+writes, so a foreign-key refusal out of that write means the domain
+was deleted in between. The fact to report is the one the lookup
+itself reports — no domain carries that slug — so it is the same `404`
+rather than a `500`, and a caller re-issuing the request gets one
+answer for one state however the timing fell.
