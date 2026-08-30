@@ -90,6 +90,24 @@ Two ways to combine them:
   `AUTH_INTROSPECT_URL`/`AUTH_INTROSPECT_SECRET` point the middleware at
   somebody else's RFC 7662 endpoint instead; with neither pair set both are
   no-op passthroughs. Configured either way, they fail closed.
+- **The wave-1 HTTP surface** — four resource groups over schema v2, wired
+  from `src/index.ts` as five routers because the taxonomy contributes two:
+  `src/domains/`, `src/taxonomy/` (categories and terms), `src/personas/`
+  and `src/settings/`, over the shared route boundary in `src/http/`. Every
+  path is declared root-absolute and every router mounts at `/`, so the
+  string in the router is the string on the wire; the inventory is the
+  router table in `docs/architecture/08-http-api.md`. A success answers
+  `{ success: true, data, meta? }` built in `src/http/envelope.ts` (`meta`
+  on a paginated list and nowhere else); a failure answers the framework's
+  own `{ code, message, details? }` — one asymmetry, argued in that
+  document, rather than two error shapes on the wire. Every route sits
+  behind `ctx.requireAuth`, reads included, and the guard is on the MOUNT
+  rather than on each handler, so a route added to one of these routers
+  later inherits it. With the basic pair unset that guard is a passthrough,
+  so a local boot serves the whole surface uncredentialled; with it set, the
+  five mounts sitting at `/` are also what makes an unmatched path answer
+  `401` to a caller carrying no credential rather than Express's `404` — the
+  one answer outside the wave's own five prefixes that it changes.
 - **Operator control plane** — with `control` configured, `/_control` exposes
   status/pause/resume/restart behind a shared token, and `stop` as well when
   `control.allowStop` opts in (see `lib/express/control/`; hardening notes
