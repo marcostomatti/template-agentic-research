@@ -49,6 +49,21 @@
  * boundary that threw would take the workflow down with the row
  * standing and nothing judged.
  *
+ * ## And nothing it holds is repeated back, read off the answer
+ *
+ * The no-echo rule is the one claim in this file the module cannot
+ * be asked about. Every case above asserts the sentence the boundary
+ * MEANT to answer, and a template that pasted a value into one would
+ * satisfy all of them — the sentence would still be produced, still
+ * be the only one, and still be wrong in the one way an operator
+ * pasting `documents.parse_error` into a ticket cannot afford. So
+ * the section below plants a distinctive value in each member,
+ * collects what comes back, and re-reads THAT with scans written
+ * here that share nothing with the boundary. Two of them, because a
+ * whole-value scan misses a truncated echo while a stem scan cannot
+ * name which member leaked, and both are run over a planted sentence
+ * first so an empty answer is a reading rather than a dead matcher.
+ *
  * The bounds are driven off the exported ceilings rather than off
  * the numbers they currently hold, so re-tuning one moves both the
  * refusing case and the accepting one with it instead of leaving a
@@ -635,6 +650,336 @@ describe('nothing a member holds is converted', () => {
 
     expect(captureEnvelopeErrors(withMember('provenance', { at: hostile })))
       .toEqual([sentenceFor('provenanceValue')]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Nothing a member holds is repeated back
+// ---------------------------------------------------------------------------
+
+/**
+ * The stem every value this section plants carries.
+ *
+ * Assembled at run time rather than written as one literal, for two
+ * reasons the section rests on. Nothing in this tree was ever
+ * written against it, so a sentence carrying it can only have got it
+ * from a payload a case handed in. And it appears nowhere in this
+ * file whole, so a leak cannot be argued away by tuning a constant a
+ * grep would turn up.
+ */
+const SENTINEL_STEM = ['zq', 'wv', 'xk'].join('');
+
+/**
+ * The value planted in one position.
+ *
+ * Distinct per position, so a leak says which member it came out of,
+ * and stemmed, so one reading finds any of them.
+ *
+ * @param id - The position it is planted in.
+ * @returns The value.
+ */
+function sentinelFor(id: string): string {
+  return [SENTINEL_STEM, id, SENTINEL_STEM].join('_');
+}
+
+/** Every value this section plants, by the position it goes in. */
+const SENTINELS = {
+  payload: sentinelFor('payload'),
+  version: sentinelFor('version'),
+  sourceId: sentinelFor('sourceId'),
+  capturedAt: sentinelFor('capturedAt'),
+  provenanceNotObject: sentinelFor('provenanceNotObject'),
+  provenanceName: sentinelFor('provenanceName'),
+  provenanceValue: sentinelFor('provenanceValue'),
+  provenanceLength: sentinelFor('provenanceLength'),
+  provenanceCount: sentinelFor('provenanceCount'),
+  body: sentinelFor('body'),
+} as const;
+
+/**
+ * A run built by repeating one planted value past a ceiling.
+ *
+ * Repeated rather than padded, so every part of the run is planted
+ * material and an echo that kept any window of it kept something
+ * this file can find.
+ *
+ * @param planted - The value to repeat.
+ * @param length - The ceiling to pass.
+ * @returns The run.
+ */
+function runOfSentinel(planted: string, length: number): string {
+  return planted.repeat(Math.ceil((length + 1) / planted.length));
+}
+
+/** A provenance value past {@link MAX_PROVENANCE_TEXT_LENGTH}. */
+const LONG_PROVENANCE_TEXT = runOfSentinel(
+  SENTINELS.provenanceLength,
+  MAX_PROVENANCE_TEXT_LENGTH,
+);
+
+/**
+ * A provenance note of a given size, every value of it planted.
+ *
+ * The names are ordinary, so the note breaks the count rule and
+ * nothing else while every value in it is material a leak could
+ * carry.
+ *
+ * @param count - How many members to record.
+ * @returns The note.
+ */
+function provenanceOfPlanted(count: number): Record<string, unknown> {
+  const note: Record<string, unknown> = {};
+
+  for (let index = 0; index < count; index += 1) {
+    note[`p${String(index)}`] = SENTINELS.provenanceCount;
+  }
+
+  return note;
+}
+
+/** One payload full of planted values, and what it must answer. */
+interface SentinelProbe {
+  /** Stable label a failure prints. */
+  readonly id: string;
+
+  /** Every value planted in it, whole. */
+  readonly sentinels: readonly string[];
+
+  /** The payload, built fresh so no probe shares an object. */
+  readonly build: () => unknown;
+
+  /** The {@link FAULT_ENTRIES} ids it must answer, in order. */
+  readonly faults: readonly string[];
+}
+
+/**
+ * One probe per position a planted value can be read out of.
+ *
+ * Every entry declares the faults its payload answers as well as the
+ * values it plants, which is what stops the leak scan below passing
+ * for the wrong reason: a value sitting in a member nothing judged
+ * comes back clean whatever the boundary does with the ones it
+ * reads.
+ *
+ * The body is the one member no entry drives to a fault, and that is
+ * the contract rather than a gap — every value a sentinel can be
+ * written into is a body it accepts. So it is planted in the last
+ * entry instead, where it is read, accepted, and sitting there while
+ * three other members answer.
+ */
+const SENTINEL_PROBES: readonly SentinelProbe[] = [
+  {
+    id: 'payload',
+    sentinels: [SENTINELS.payload],
+    build: () => SENTINELS.payload,
+    faults: ['notObject'],
+  },
+  {
+    id: 'version',
+    sentinels: [SENTINELS.version],
+    build: () => withMember('version', SENTINELS.version),
+    faults: ['versionUnknown'],
+  },
+  {
+    id: 'sourceId',
+    sentinels: [SENTINELS.sourceId],
+    build: () => withMember('sourceId', SENTINELS.sourceId),
+    faults: ['sourceNotId'],
+  },
+  {
+    id: 'capturedAt',
+    sentinels: [SENTINELS.capturedAt],
+    build: () => withMember('capturedAt', SENTINELS.capturedAt),
+    faults: ['capturedAtShape'],
+  },
+  {
+    id: 'provenanceNotObject',
+    sentinels: [SENTINELS.provenanceNotObject],
+    build: () => withMember('provenance', [SENTINELS.provenanceNotObject]),
+    faults: ['provenanceNotObject'],
+  },
+  {
+    id: 'provenanceName',
+    sentinels: [SENTINELS.provenanceName],
+    build: () => withMember('provenance', {
+      [`${SENTINELS.provenanceName} `]: 'x',
+    }),
+    faults: ['provenanceName'],
+  },
+  {
+    id: 'provenanceValue',
+    sentinels: [SENTINELS.provenanceValue],
+    build: () => withMember('provenance', {
+      note: { at: SENTINELS.provenanceValue },
+    }),
+    faults: ['provenanceValue'],
+  },
+  {
+    id: 'provenanceLength',
+    sentinels: [LONG_PROVENANCE_TEXT],
+    build: () => withMember('provenance', { note: LONG_PROVENANCE_TEXT }),
+    faults: ['provenanceLength'],
+  },
+  {
+    id: 'provenanceCount',
+    sentinels: [SENTINELS.provenanceCount],
+    build: () => withMember(
+      'provenance',
+      provenanceOfPlanted(MAX_PROVENANCE_MEMBERS + 1),
+    ),
+    faults: ['provenanceCount'],
+  },
+  {
+    id: 'every-member-at-once',
+    sentinels: [
+      SENTINELS.sourceId,
+      SENTINELS.capturedAt,
+      SENTINELS.provenanceName,
+      SENTINELS.body,
+    ],
+    build: () => ({
+      version: CAPTURE_CONTRACT_VERSION,
+      sourceId: SENTINELS.sourceId,
+      capturedAt: SENTINELS.capturedAt,
+      provenance: { [`${SENTINELS.provenanceName} `]: 'x' },
+      body: SENTINELS.body,
+    }),
+    faults: ['sourceNotId', 'capturedAtShape', 'provenanceName'],
+  },
+];
+
+/**
+ * Every sentence carrying one of these values whole.
+ *
+ * The naming reading: a substring scan written here, sharing nothing
+ * with the module that produced the sentences. Case-insensitive,
+ * because a boundary that lowercased a value on the way into a
+ * message would have echoed it just the same.
+ *
+ * @param planted - The values a probe planted.
+ * @param sentences - What the boundary answered.
+ * @returns The sentences a value came out in.
+ */
+function plantedValueLeaks(
+  planted: readonly string[],
+  sentences: readonly string[],
+): readonly string[] {
+  return sentences.filter((sentence) => planted.some(
+    (value) => sentence.toLowerCase().includes(value.toLowerCase()),
+  ));
+}
+
+/**
+ * Every sentence carrying the stem, whatever else it kept.
+ *
+ * The total reading, and the one that catches an echo that kept only
+ * part of a value: every value planted anywhere in this section
+ * carries {@link SENTINEL_STEM}, so a sentence holding a window of
+ * one holds this.
+ *
+ * @param sentences - What the boundary answered.
+ * @returns The sentences the stem came out in.
+ */
+function stemLeaks(sentences: readonly string[]): readonly string[] {
+  return sentences.filter(
+    (sentence) => sentence.toLowerCase().includes(SENTINEL_STEM),
+  );
+}
+
+/**
+ * Every sentence the probes answer, collected into one list.
+ *
+ * @returns One entry per sentence, in no particular order.
+ */
+function everyPlantedAnswer(): readonly string[] {
+  return SENTINEL_PROBES.flatMap(
+    (probe) => [...captureEnvelopeErrors(probe.build())],
+  );
+}
+
+describe('nothing a member holds is repeated back', () => {
+  // Both readings first, over a sentence with a value planted in it
+  // by hand. Each answers an empty list when it is working and an
+  // empty list when it is dead, so the cases below are readings only
+  // once these have fired.
+  it('reads a planted value back out of a sentence, both ways', () => {
+    const whole = `a source ${SENTINELS.sourceId} is not an integer`;
+    const partial = `a source ${SENTINEL_STEM} is not an integer`;
+    const planted = [SENTINELS.sourceId];
+
+    expect(plantedValueLeaks(planted, [whole])).toEqual([whole]);
+    expect(stemLeaks([whole])).toEqual([whole]);
+
+    // Why there are two rather than one. An echo that kept a prefix
+    // of the value carries the stem and not the whole of it, so the
+    // naming reading misses exactly what the total reading is for.
+    expect(plantedValueLeaks(planted, [partial])).toEqual([]);
+    expect(stemLeaks([partial])).toEqual([partial]);
+  });
+
+  // The other direction, and the one an over-eager reading fails. A
+  // scan answering `leak` for anything would pass every case below,
+  // so both are run over the fifteen sentences the module is allowed
+  // to answer and must find nothing in any of them.
+  it('reads no leak out of the sentences the roster registers', () => {
+    const registered = FAULT_ENTRIES.map((entry) => entry.text);
+    const planted = SENTINEL_PROBES.flatMap((probe) => [...probe.sentinels]);
+
+    expect(registered.length).toBeGreaterThan(0);
+    expect(stemLeaks(registered)).toEqual([]);
+    expect(plantedValueLeaks(planted, registered)).toEqual([]);
+  });
+
+  // The input side. A value the boundary never read would come back
+  // clean for the wrong reason, so every probe is held to carrying
+  // its own values AND to answering the faults its member's rule
+  // produces — which is what says the value was read and judged
+  // rather than merely posted.
+  it('plants a value in a member the boundary reads and judges', () => {
+    // The stamp is the one member with a ceiling short enough to
+    // turn a value away before the pattern ever reads it, so the
+    // planted one is held under that ceiling deliberately.
+    expect(SENTINELS.capturedAt.length)
+      .toBeLessThanOrEqual(MAX_CAPTURED_AT_LENGTH);
+
+    for (const probe of SENTINEL_PROBES) {
+      const posted = JSON.stringify(probe.build());
+      const missing = probe.sentinels
+        .filter((value) => !posted.includes(value));
+
+      expect({ id: probe.id, missing })
+        .toEqual({ id: probe.id, missing: [] });
+      expect({ id: probe.id, answered: captureEnvelopeErrors(probe.build()) })
+        .toEqual({ id: probe.id, answered: probe.faults.map(sentenceFor) });
+    }
+  });
+
+  // The case itself: the answer re-read, rather than the answer
+  // asserted. Every sentence the probes produce is collected and
+  // handed to both readings, and neither may find anything.
+  it('answers no sentence carrying a value the payload handed in', () => {
+    const answered = everyPlantedAnswer();
+
+    expect(answered.length).toBeGreaterThan(0);
+    expect(stemLeaks(answered)).toEqual([]);
+
+    for (const probe of SENTINEL_PROBES) {
+      expect({
+        id: probe.id,
+        leaked: plantedValueLeaks(probe.sentinels, answered),
+      }).toEqual({ id: probe.id, leaked: [] });
+    }
+  });
+
+  // A third reading, from an angle a substring scan cannot reach: a
+  // scan finds only what it was told to look for, while `===`
+  // against the roster refuses anything the boundary assembled at
+  // all — including out of a value no probe planted.
+  it('answers nothing but the constants over a planted payload', () => {
+    const registered = FAULT_ENTRIES.map((entry) => entry.text);
+
+    expect(everyPlantedAnswer()
+      .filter((sentence) => !registered.includes(sentence))).toEqual([]);
   });
 });
 
