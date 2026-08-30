@@ -1,0 +1,60 @@
+{
+  "id": "ar-ingest",
+  "name": "AR Ingest",
+  "active": false,
+  "versionId": "00000000-0000-4000-8000-00000000a101",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "execute-workflow-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    },
+    {
+      "id": "load-domain-context",
+      "name": "Load Domain Context",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, 0],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH run AS (\n  SELECT domain_id\n  FROM runs\n  WHERE id = $1::bigint\n)\n-- The first node after the trigger, and the shape the parent design fixes for every\n-- workflow in this set (.specs/2026-08-19-research-pipeline-port.md, section 4): the\n-- domain's personas and taxonomy, read as ONE query answering exactly one row. Both\n-- halves of that are claims about this statement rather than house style, and both\n-- are readable off it.\n\n-- ONE QUERY, because the alternative is a lookup node per list, and a lookup node is\n-- a second branch that races whatever reads it. What is fetched is small by\n-- construction: a domain's personas, categories, terms and criteria are rows an\n-- operator wrote, so taking them together costs one round trip and nothing else.\n\n-- ONE ROW, because a Postgres node maps its statement over the items it was handed\n-- and passes on what the statement returned. A SELECT matching nothing returns no\n-- row, the node emits no item, and every node below it is then skipped with nothing\n-- written anywhere: the pass ends looking exactly like a pass that found no work.\n-- That is the failure this shape exists to make impossible. The outer SELECT names\n-- no FROM at all, so it produces one row whatever the database holds, and every list\n-- is a scalar subquery COALESCEd to an empty JSON array.\n\n-- Which leaves one thing for every node below to be careful about. An empty list\n-- here is a measured empty, an unresolvable run is not, and the two arrive spelled\n-- the same way. domain_id is the discriminator and the only one: NULL when the run\n-- id matched no row, a real id when the domain simply states no terms. Read it\n-- before reading a length.\n\n-- run_id is the parameter rather than a column read back, so it survives a run id\n-- that resolves to nothing. It has to travel because this node's answer REPLACES the\n-- item the trigger was handed: whatever the dispatcher sent is gone past here, and\n-- the run is what a ledger row and the closing update are charged to.\n\n-- Every list is ordered, which nothing downstream requires and every reader benefits\n-- from: two passes over one unchanged domain hand the nodes below the same lists in\n-- the same order, so a diff between two runs is about the documents rather than\n-- about the order a planner happened to return rows in.\nSELECT\n  $1::bigint AS run_id,\n  (SELECT domain_id FROM run) AS domain_id,\n\n  -- The domain row, cut to the members the nodes below read. feature_version is the\n  -- one that has to travel: the feature group holds each document's composed version\n  -- against the domain's, and fetching one integer separately is the lookup node\n  -- this shape exists to avoid. NULL rather than an empty object when the run id\n  -- resolved to nothing, which is the same discriminator domain_id carries.\n  (SELECT jsonb_build_object(\n     'id', d.id,\n     'slug', d.slug,\n     'name', d.name,\n     'settings', d.settings,\n     'feature_version', d.feature_version,\n     'embedding_model', d.embedding_model)\n     FROM domains d\n    WHERE d.id = (SELECT domain_id FROM run)) AS domain,\n\n  -- The personas. system_text is operator-owned prose and is the trusted half of\n  -- what prompt-frame.ts composes around an untrusted chunk; nothing in this\n  -- workflow writes it, and no node below may put a document's text where a persona\n  -- belongs.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'id', p.id,\n       'role', p.role,\n       'system_text', p.system_text)\n       ORDER BY p.role, p.id)\n       FROM personas p\n      WHERE p.domain_id = (SELECT domain_id FROM run)),\n    '[]'::jsonb) AS personas,\n\n  -- The categories, which are the buckets the terms below are filed under. key\n  -- rather than id is what a reader downstream matches on: features.ts builds a\n  -- column name out of it and static-gate.ts groups hits by it, so the surrogate\n  -- id travels for an operator's benefit and the key is what the libraries read.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'id', c.id,\n       'key', c.key,\n       'name', c.name,\n       'parent_id', c.parent_id)\n       ORDER BY c.key, c.id)\n       FROM categories c\n      WHERE c.domain_id = (SELECT domain_id FROM run)),\n    '[]'::jsonb) AS categories,\n\n  -- The terms, joined to their category's key rather than carrying category_id.\n  -- Four members and this exact spelling, because three libraries read this one\n  -- list and each reads a different subset of it: static-gate.ts takes pattern,\n  -- weight and polarity, features.ts takes pattern and category, and\n  -- feature-version.ts takes all four. A term list selected without the join\n  -- satisfies the first reader and starves the other two, with nothing failing.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'category', c.key,\n       'pattern', t.pattern,\n       'weight', t.weight,\n       'polarity', t.polarity)\n       ORDER BY c.key, t.pattern, t.id)\n       FROM terms t\n       JOIN categories c ON c.id = t.category_id\n      WHERE c.domain_id = (SELECT domain_id FROM run)),\n    '[]'::jsonb) AS terms,\n\n  -- The criteria, joined to their category the same way. Nothing in this workflow\n  -- reads them: they are ar-score's subject, and ar-score is invoked with a run of\n  -- its own and fetches its own context. They are selected here because the design\n  -- fixes the taxonomy as what this node fetches, and the taxonomy is these three\n  -- tables, so a node group added below reads them without a second lookup and\n  -- without a second branch to reason about.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'id', k.id,\n       'category', c.key,\n       'value', k.value,\n       'kind', k.kind)\n       ORDER BY c.key, k.kind, k.id)\n       FROM criteria k\n       JOIN categories c ON c.id = k.category_id\n      WHERE k.domain_id = (SELECT domain_id FROM run)),\n    '[]'::jsonb) AS criteria",
+        "options": {
+          "queryReplacement": "={{ $json.run_id }}"
+        }
+      }
+    },
+    {
+      "id": "invoked-never-scheduled",
+      "name": "Invoked Never Scheduled",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-460, -160],
+      "parameters": {
+        "width": 400,
+        "height": 720,
+        "content": "## Invoked, Never Scheduled\n\nThis workflow starts when `ar-dispatch` reaches it through Invoke Target Workflow, and the Execute Workflow Trigger on this canvas is the whole of what makes that possible. It holds no clock and may not acquire one: `ar-dispatch` carries the only Schedule Trigger in the system, and `tests/invariants/workflows.test.ts` counts them across every built workflow and names the one file allowed to hold one.\n\nScheduling this workflow is a row instead. A `topics` row says how often a domain should be pulled and when it is next due, the dispatcher claims it once `next_run_at` has passed, and this workflow is invoked for the claim. So changing the cadence is an UPDATE rather than an edit to this canvas.\n\n### What arrives, and what does not\n\nOne item carrying `run_id`, and nothing else. `Open Run` opens the `runs` row before the invocation and its `RETURNING` projection is the item forwarded here, so the claimed topic does not survive the hop: what this workflow knows about the pass it is running is the run, and the domain is read back off that. `Load Domain Context` is where that happens.\n\nThe trigger is typeVersion 1, which passes the caller's item through as it stands. Nothing here declares an input schema, so what the dispatcher sends is what the first node reads, and adding a schema later is a change to both ends rather than to this node alone.\n\n### Started by hand\n\nA run started from this canvas rather than by the dispatcher carries no `run_id`, and nothing pretends otherwise. `Load Domain Context` answers a null `domain_id` and four empty lists, which is a shape a node below can refuse by name. It is not an error worth suppressing: a pass with no run to charge has nowhere to write what it did."
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          { "node": "Load Domain Context", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  }
+}

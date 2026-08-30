@@ -228,8 +228,8 @@ const STATEMENT_BREAKPOINT = '--> statement-breakpoint';
 const WORKFLOW_SOURCE_DIR = 'workflows/src';
 
 /**
- * The execution order every workflow here declares, as the one that
- * has landed declares it.
+ * The execution order every workflow here declares, as the ones
+ * already landed declare it.
  *
  * A node-by-node order rather than the legacy one, and written out
  * because the member is not defaulted anywhere this package
@@ -267,7 +267,7 @@ const WORKFLOW_VERSION_ID = '00000000-0000-4000-8000-000000000000';
  */
 const CODE_NODE_TYPE = 'n8n-nodes-base.code';
 
-/** The version of that type the one landed workflow runs its Code node at. */
+/** The version of that type a landed workflow runs its Code node at. */
 const CODE_NODE_TYPE_VERSION = 2;
 
 /**

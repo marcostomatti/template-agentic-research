@@ -23,31 +23,34 @@ calls.
 ## The set
 
 Six workflows, one file each under `workflows/src/`. The delivered-in
-column is the phase that lands the file.
+column is the phase that lands the file, and says which of them have
+landed already.
 
 | Workflow | Delivered in | Role |
 | --- | --- | --- |
-| `ar-dispatch` | 3 | The only cron in the system. Claims schedulable rows that have come due and invokes the workflow each claimed row's kind asks for. |
-| `ar-ingest` | 5 | Pull adapters, dedupe, gate, and document to finding. |
+| `ar-dispatch` | 3 — landed | The only cron in the system. Claims schedulable rows that have come due and invokes the workflow each claimed row's kind asks for. |
+| `ar-ingest` | 5 — landed | Pull adapters, dedupe, gate, and document to finding. |
 | `ar-capture` | 5 | A generic push webhook: capture clients POST against a documented capture contract. |
 | `ar-score` | 5 | Scores findings against the domain's criteria. |
 | `ar-research` | 6 | Entity research, carrying the `validateEntityName` capability gate. |
 | `ar-digest` | 6 | Digests, and the export subscriptions the dispatcher schedules. |
 
-### One of the six is a file, and the other five are rows first
+### A workflow is a row here before it is a file
 
-`ar-dispatch` is the whole of `workflows/src/` through phase 3. The
-rest are listed here before they exist, for the reason the pending
-rows of `docs/architecture/01-invariants.md` are rows: the set is
-decided once, and the phase that lands a workflow lands it against a
-role already written down.
+A row carrying no `landed` beside its phase is listed here before it
+exists, for the reason the pending rows of
+`docs/architecture/01-invariants.md` are rows: the set is decided
+once, and the phase that lands a workflow lands it against a role
+already written down. So the roster answers what the set IS, and the
+column answers how much of it `workflows/src/` holds today.
 
-Two of those phases are the dispatcher's problem, which is why the
-column is worth reading rather than skipping. `ar-dispatch` invokes
-`ar-ingest` for a claimed topic and `ar-digest` for a claimed export
-subscription, and the two land a phase apart — so through phase 5 one
-of its targets exists and the other does not, and a tick records
-successes and failures side by side for nobody's mistake.
+Two of the delivered-in phases are the dispatcher's problem, which is
+why the column is worth reading rather than skipping. `ar-dispatch`
+invokes `ar-ingest` for a claimed topic and `ar-digest` for a claimed
+export subscription, and the two land a phase apart, so there is a
+stretch in which one of its targets exists and the other does not and
+a tick records successes and failures side by side for nobody's
+mistake.
 
 ### `ar-dispatch` is the only workflow with a clock
 

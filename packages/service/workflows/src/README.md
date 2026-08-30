@@ -1,9 +1,10 @@
 # workflows/src — n8n workflow sources
 
 This directory holds the **editable source** for every n8n workflow in the
-research pipeline. It holds one of them today. Phase 1 landed the layout
-and the rules below, phase 3 landed `ar-dispatch.json`, and the other five
-workflows in the roster arrive in phases 5 and 6.
+research pipeline. Phase 1 landed the layout and the rules below, phase 3
+landed `ar-dispatch.json`, and phases 5 and 6 land the rest. Which of the
+six are here is the roster's delivered-in column below, not a count in
+this paragraph.
 
 The build landed with that first workflow, which is what makes the rules
 below a description of what runs rather than a plan:
@@ -35,7 +36,7 @@ The 1:1 rule is what the surrounding tooling assumes:
 | Workflow | Delivered in | Role |
 | --- | --- | --- |
 | `ar-dispatch` | phase 3 — landed | The only cron in the system. Claims due schedulable rows and invokes the others via Execute Workflow. |
-| `ar-ingest` | phase 5 | Pull adapters → dedupe → gate → document to finding. |
+| `ar-ingest` | phase 5 — landed | Pull adapters → dedupe → gate → document to finding. |
 | `ar-capture` | phase 5 | Generic push webhook: external capture clients POST against a documented capture contract. |
 | `ar-score` | phase 5 | Scores findings against the domain's criteria. |
 | `ar-research` | phase 6 | Entity research; carries the `validateEntityName` capability gate. |
