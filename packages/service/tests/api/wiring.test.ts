@@ -72,11 +72,12 @@
  * and the reads answer `404` on the address, and the dataset the
  * next case sees is the one the boot built.
  *
- * FIVE LEGS WERE RUN AGAINST THESE TWENTY-FIVE CASES, and every one
- * of them is about a guard rather than about the surface. Adding a
- * row for a route no router declares reddens TWO — the table guard,
- * and the fabricated row's own case, which requests a path Express
- * never matched. Dropping a row reddens the table guard alone. Making
+ * TWELVE LEGS WERE RUN AGAINST THESE TWENTY-FIVE CASES, and every one
+ * of them is about a guard rather than about the surface. FIVE ARE
+ * ABOUT THE TABLE AND ABOUT WHAT A MOUNT SERVES. Adding a row for a
+ * route no router declares reddens TWO — the table guard, and the
+ * fabricated row's own case, which requests a path Express never
+ * matched. Dropping a row reddens the table guard alone. Making
  * {@link urlFor} answer its argument unchanged reddens the
  * substitution guard alone. Unmounting the settings router reddens
  * exactly its two cases, and through their envelope and content-type
@@ -85,10 +86,36 @@
  * not-`401` on its own would have missed it. And seeding a domain
  * into the boot reddens the last case alone.
  *
- * THE LEG THIS HEADER DOES NOT CARRY is the one dropping
- * `ctx.requireAuth` from a mount, which is the next task in this
- * stage; its figures belong here once measured. This paragraph is
- * what that task replaces.
+ * THE OTHER SEVEN DROP `ctx.requireAuth` FROM A MOUNT, and each
+ * reddens five cases or none, decided by the mount's POSITION rather
+ * than by the router behind it — which is where they part company
+ * with the unmount leg above, whose router lost its own two cases
+ * wherever it sat. Taken off the FIRST mount, exactly the five
+ * domains cases redden, every one at
+ * `expect(anonymous.status).toBe(401)` and none through a control:
+ * anonymously, `GET /domains` answered `200` with a listing in it,
+ * `POST /domains` and `PATCH /domains/:slug` `422` on the absent
+ * payload, and the two `:slug` reads `404`. Taken off the second,
+ * third, fourth or fifth mount it reddens NOTHING — four measured
+ * zeros rather than one, because all five mounts sit at `/` and the
+ * first guard still standing refuses every anonymous request before
+ * any later mount is reached. What makes those zeros a statement
+ * about position is the cumulative leg: dropping the guard from the
+ * first TWO mounts reddens NINE, the five domains cases plus the four
+ * categories ones, and stops there because the terms mount's guard is
+ * next in the fall-through.
+ *
+ * SO THIS FILE PINS THE SURFACE RATHER THAN THE FIVE MOUNTS. What it
+ * reports is that an anonymous request is refused before it reaches
+ * any wave-1 route, which is the claim `08-http-api.md` makes for it;
+ * the four later guards are redundancy no request can see while an
+ * earlier one stands, and a commit dropping all five would be caught
+ * by the domains cases alone. The seventh leg is the limit this
+ * header states, now measured rather than argued: dropping
+ * `ctx.requireAuth` from the first mount in `src/index.ts` ITSELF
+ * reddens nothing here, with `lint` and `check-types` green on it as
+ * well, so what covers that module is booting it by hand and nothing
+ * else.
  */
 import type {
   ServiceContext,
