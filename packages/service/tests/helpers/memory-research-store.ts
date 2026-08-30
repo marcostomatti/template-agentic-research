@@ -1,20 +1,30 @@
 /**
  * @packageDocumentation
  * The in-memory dataset every wave-1 store port is driven through in
- * the isolated suite. The domains half, the taxonomy half and the
- * personas half are all here — categories and terms together, and
- * the personas beside them; the settings half lands in this same
- * file, over this same dataset, when its stage arrives.
+ * the isolated suite. All four halves are here — the domains half,
+ * the taxonomy half with categories and terms together, the personas
+ * beside them, and the operator settings the deployment as a whole is
+ * configured by.
  *
  * ONE DATASET RATHER THAN FOUR FAKES, which is why this file is not
- * named for the one port it currently satisfies. `src/domains/store.ts`
+ * named for any one of the ports it satisfies. `src/domains/store.ts`
  * records that the taxonomy, personas and settings services all
  * resolve a `:slug` through {@link DomainStore.findDomainBySlug}
- * before doing anything of their own, and every one of their tables
- * hangs off `domains.id` with `ON DELETE CASCADE`. A domain deleted
- * through one port has to be gone from the others, and only shared
- * state makes that true: four independent fakes would agree with
- * each other right up until a case deleted something.
+ * before doing anything of their own, and the taxonomy and persona
+ * tables hang off `domains.id` with `ON DELETE CASCADE`. A domain
+ * deleted through one port has to be gone from the others, and only
+ * shared state makes that true: four independent fakes would agree
+ * with each other right up until a case deleted something.
+ *
+ * `operator_settings` IS THE ONE TABLE THAT HANGS OFF NOTHING, and
+ * it belongs in the shared dataset for the other direction of that
+ * same rule. It carries no `domain_id` and no foreign key, so a
+ * domain delete leaves it exactly as it was — including a
+ * `defaultDomainSlug` naming the domain that has just gone. That is
+ * the behaviour rather than an omission: `src/settings/store.ts`
+ * carries why a dangling slug reads as no default being set, and a
+ * settings fake standing on its own could not be asked the question
+ * at all.
  *
  * IT REFUSES WHAT POSTGRES REFUSES, as the {@link StoreRefusal} the
  * port declares and as nothing else. A fake that merely stores what
@@ -140,6 +150,42 @@
  * `NO ACTION` a cascade has to be careful of is on
  * `categories.parent_id` and reaches no other table.
  *
+ * THE SETTINGS HALF REFUSES NOTHING, AND THAT IS A MEASUREMENT
+ * RATHER THAN A SIMPLIFICATION. `operator_settings` carries two
+ * mechanisms and neither is reachable through the port: a second
+ * insert at the singleton id is 23505 naming
+ * `operator_settings_pkey` and any id but 1 is 23514 naming
+ * `operator_settings_singleton_check`, both seen firing against the
+ * live Postgres beside the control that makes them discriminating
+ * — the upsert run twice in the same transaction left ONE row
+ * carrying the second payload. But `SettingsStore` takes no id and
+ * writes the one it chose itself, so a caller can reach neither.
+ * This half has nothing to imitate, which is why it is the one half
+ * below that throws no {@link StoreRefusal} at all.
+ *
+ * SO A FIRST WRITE AND A REWRITE ARE ONE CALL, and holding one
+ * payload is how this half satisfies it. The drizzle implementation
+ * gets there by upserting on the singleton id; there is no row to
+ * count here and no second one to hold, which is the singleton
+ * being unexpressible rather than enforced — exactly what
+ * `src/settings/store.ts` says of the port's own shape.
+ *
+ * AND NULL IS NOT `{}` HERE, though `src/settings/service.ts`
+ * answers `{}` for both. A read before any write is null and a read
+ * after a write of `{}` is `{}`, because whether a row exists is a
+ * fact while treating the two as one state is a decision, and the
+ * port leaves that decision to its caller. A store collapsing them
+ * would leave nothing able to tell a never-configured deployment
+ * from a configured-to-nothing one.
+ *
+ * THERE IS NO SETTINGS COUNTER, which is where this half departs
+ * from the three above rather than copying them.
+ * `operator_settings.id` is `integer` with no default — measured
+ * off `information_schema.columns` — so nothing hands out a value
+ * and a refused write could not leave a gap even if one were
+ * reachable. The id-burn fidelity the other three halves owe has no
+ * subject here.
+ *
  * EVERY `Date` CROSSING THE BOUNDARY IS COPIED, in both directions.
  * `Date` is mutable, so a store holding the caller's instance, or
  * handing its own back, lets a caller write into stored state
@@ -156,7 +202,11 @@
  * JSON round trip here is that same disconnection, and it is what
  * makes {@link DomainPatch}'s whole-unit rule assertable at all: a
  * merge and an aliased payload are indistinguishable once a caller
- * can write through the object it sent.
+ * can write through the object it sent. `OperatorSettings` crosses
+ * the same kind of column and is copied by a helper of its own, for
+ * the reason `copyCategory`, `copyTerm` and `copyPersona` are three
+ * functions rather than one: what a copy promises is a fact about
+ * the shape it copies.
  *
  * IDS COME FROM 1 AND ARE NOT GAPLESS, which is the half a reader
  * would not predict. Measured against the live Postgres on a
@@ -181,6 +231,7 @@
  * than ahead of the key check alone.
  */
 import type { DomainSettings } from '../../src/db/schema/domains.js';
+import type { OperatorSettings } from '../../src/db/schema/settings.js';
 import type {
   DomainDependentCounts,
   DomainPatch,
@@ -195,6 +246,7 @@ import type {
   PersonaRecord,
   PersonaStore,
 } from '../../src/personas/store.js';
+import type { SettingsStore } from '../../src/settings/store.js';
 import type {
   CategoryPatch,
   CategoryRecord,
@@ -210,24 +262,23 @@ import type {
 import { StoreRefusal } from '../../src/db/store-errors.js';
 
 /**
- * The three implemented ports over one dataset, plus the one seam a
- * case needs that no port declares.
+ * All four wave-1 ports over one dataset, plus the one seam a case
+ * needs that no port declares.
  *
  * EVERY ONE OF THEM WHOLE rather than a `Pick` of it. The category
  * half stood behind a narrowed alias while the term methods were
  * unwritten, which was the honest statement of what existed rather
- * than a gap papered over with stubs; all twelve taxonomy methods
- * and all six persona ones are here now, so a caller wanting any of
- * the three ports entire can be handed this store. `SettingsStore`
- * joins them when its stage arrives, and until then this interface
- * is the statement that it has not.
+ * than a gap papered over with stubs; all twelve taxonomy methods,
+ * all six persona ones and both settings ones are here now, so a
+ * caller wanting any of the four ports entire can be handed this
+ * store.
  *
  * Nothing in `src/` is handed a {@link MemoryResearchStore} — a
  * service takes the port — so the seam below cannot become a way for
  * the code under test to route around it.
  */
 export interface MemoryResearchStore
-  extends DomainStore, TaxonomyStore, PersonaStore {
+  extends DomainStore, TaxonomyStore, PersonaStore, SettingsStore {
   /**
    * Plants what a domain has ACCUMULATED, for the delete guard to
    * read back through {@link DomainStore.countDomainDependents}.
@@ -352,6 +403,27 @@ function copySettings(settings: DomainSettings): DomainSettings {
 }
 
 /**
+ * An operator settings payload sharing no object with the one it was
+ * handed.
+ *
+ * A JSON round trip for the reason {@link copySettings} gives, and a
+ * function of its own rather than a widening of that one for the
+ * reason {@link copyCategory}, {@link copyTerm} and
+ * {@link copyPersona} are three functions with one body: what a copy
+ * promises is a fact about the shape it copies, and
+ * `notificationChannels` is this payload's one level down rather
+ * than the three `DomainSettings` carries.
+ *
+ * @param settings - The payload to copy.
+ * @returns An equal payload sharing nothing with it.
+ */
+function copyOperatorSettings(
+  settings: OperatorSettings,
+): OperatorSettings {
+  return JSON.parse(JSON.stringify(settings)) as OperatorSettings;
+}
+
+/**
  * The refusal every branch of the depth trigger produces.
  *
  * One function rather than three, because the trigger names no
@@ -454,6 +526,12 @@ export function createMemoryResearchStore(
   let nextCategoryId = 1;
   let nextTermId = 1;
   let nextPersonaId = 1;
+
+  // The whole of the settings half's state. Not a Map, because
+  // there is no key: `src/settings/store.ts` states a second
+  // configuration is something that port cannot express, and this
+  // is what that looks like where the rows are held.
+  let storedSettings: OperatorSettings | null = null;
 
   /**
    * Reads the clock and copies what it answered.
@@ -1564,6 +1642,62 @@ export function createMemoryResearchStore(
      */
     async deletePersona(id: number): Promise<boolean> {
       return personas.delete(id);
+    },
+
+    /**
+     * Reads the operator's configuration, or null before any write.
+     *
+     * NULL AND `{}` ARE TWO ANSWERS HERE, though
+     * `src/settings/service.ts` answers `{}` for both. What crosses
+     * this port is whether a row exists; collapsing that into the
+     * empty payload is a decision, and a store taking it would
+     * leave nothing able to tell a never-configured deployment from
+     * a configured-to-nothing one.
+     */
+    async readSettings(): Promise<OperatorSettings | null> {
+      return storedSettings === null
+        ? null
+        : copyOperatorSettings(storedSettings);
+    },
+
+    /**
+     * Writes the operator's configuration, whole.
+     *
+     * A FIRST WRITE AND A REWRITE ARE ONE CALL, and neither can be
+     * refused. The drizzle implementation gets there by upserting on
+     * the singleton id; this one gets there by holding one payload,
+     * and nothing here can hold a second.
+     *
+     * THE PAYLOAD REPLACES THE STORED ONE RATHER THAN MERGING INTO
+     * IT, which is the only way a member is ever cleared: under a
+     * merge, the request that omits a preference and the request
+     * that removes it would be the same bytes. The assignment below
+     * is the whole of the rule, exactly as a `jsonb` column in a
+     * drizzle `set` list is assigned rather than merged.
+     *
+     * THE ANSWER IS READ BACK OUT OF STORED STATE rather than echoed
+     * from the argument, so a caller sees what is held — and a
+     * second copy is taken on the way out, since handing the stored
+     * payload back would let a caller write into it through the
+     * deeply `readonly` the port declares.
+     *
+     * Only the second half of that is observable here, and the
+     * first is a MEASURED ZERO: the payload is copied in and copied
+     * out, so a copy of the argument and a copy of stored state are
+     * the same object graph, and the leg swapping one for the other
+     * reddens no case in
+     * `tests/helpers/memory-research-store.test.ts`. The claim has a
+     * subject only where the database can change what it stored
+     * — `jsonb` normalises key order and drops a duplicate key
+     * — so it is `src/settings/db-store.ts`'s `RETURNING` list
+     * that discharges it when that task lands.
+     */
+    async writeSettings(
+      settings: OperatorSettings,
+    ): Promise<OperatorSettings> {
+      storedSettings = copyOperatorSettings(settings);
+
+      return copyOperatorSettings(storedSettings);
     },
 
     setDomainDependents(

@@ -1,9 +1,9 @@
 /**
- * `tests/helpers/memory-research-store.ts` in all three ports it
+ * `tests/helpers/memory-research-store.ts` in all four ports it
  * implements — the claims that make it a second implementation of
  * `DomainStore`, of `TaxonomyStore` WHOLE with categories and terms
- * together, and of `PersonaStore`, rather than a bag that stores
- * what it is handed.
+ * together, of `PersonaStore` and of `SettingsStore`, rather than a
+ * bag that stores what it is handed.
  *
  * THAT IT REFUSES WHAT POSTGRES REFUSES. Every refusal case names
  * the `reason` a SQLSTATE classifies to and the constraint the
@@ -22,6 +22,8 @@
  * `personas_domain_id_role_unique`, which refuses on an INSERT and
  * on an UPDATE alike, and `personas_domain_id_domains_id_fk`, which
  * the insert alone can reach because `domainId` is not patchable.
+ * The settings half adds NONE, and that is a measurement rather than
+ * a gap — see below.
  *
  * THAT IT REFUSES THEM IN THE MEASURED ORDER. Four cases exist only
  * for that, because a request carrying two faults at once is the
@@ -83,10 +85,53 @@
  * thrown error, and offering a caller a tidy status the database
  * never gave is the failure being ruled out.
  *
+ * THAT THE SETTINGS HALF REFUSES NOTHING AT ALL, which no case here
+ * can assert directly and which is therefore stated rather than
+ * pinned. `operator_settings` carries two mechanisms — a second
+ * insert at the singleton id is 23505 naming
+ * `operator_settings_pkey`, and any id but 1 is 23514 naming
+ * `operator_settings_singleton_check` — and `SettingsStore` takes
+ * no id, so a caller can reach neither. There is no refusal case in
+ * this half because there is no refusal, and a fake inventing one
+ * would be offering a status the database never gives.
+ *
+ * THAT NULL AND `{}` ARE TWO ANSWERS, though `src/settings/service.ts`
+ * answers `{}` for both. A read before any write is null and a read
+ * after a write of `{}` is `{}`: whether a row exists is a fact, and
+ * collapsing it into the empty payload is a decision the port leaves
+ * to its caller. The two halves sit in ONE case body, because the
+ * null is worth nothing without the payload beside it — a store
+ * answering null for everything satisfies the first assertion alone.
+ *
+ * THAT A FIRST WRITE AND A REWRITE ARE ONE CALL, AND THE PAYLOAD IS
+ * REPLACED WHOLE. There is no row to create first and no count to
+ * read, so `holding exactly one payload` is asserted by what a read
+ * answers after two writes and by nothing else: under a merge it
+ * carries the two members the replacement does not, and under the
+ * empty rewrite it carries every member of what it replaced. That
+ * last case is the one a merge cannot survive — omitting a
+ * preference is how it is removed, so a merging store makes removal
+ * unexpressible.
+ *
+ * THAT A DOMAIN DELETE SPARES THE SETTINGS. `operator_settings`
+ * carries no `domain_id` and no foreign key, so the cascade that
+ * reaches a domain's personas and both levels of its taxonomy
+ * reaches nothing here — and a `defaultDomainSlug` naming the
+ * deleted domain is left dangling on purpose, which
+ * `src/settings/store.ts` records as reading like no default being
+ * set. The case carries the delete's own answer beside it, so a
+ * store that spared the settings by sparing everything would fail.
+ *
  * THAT NOTHING MUTABLE IS SHARED ACROSS THE BOUNDARY. Every `Date`,
- * every `settings` payload and every category, term and persona row is
- * copied in both directions, so a caller cannot write into stored
- * state through a field the port declares `readonly`. Each of those
+ * every `settings` payload — a domain's and the operator's alike
+ * — and every category, term and persona row is copied in both
+ * directions, so a caller cannot write into stored state through a
+ * field the port declares `readonly`. The operator's payload has
+ * THREE answer sites rather than two, and one case each: the
+ * argument a write was handed, the payload that write answered, and
+ * the payload a read handed out. The three legs are DISJOINT,
+ * reddening one case apiece, which is what says they are three
+ * claims rather than one written three times. Each of those
  * cases MUTATES what it was handed and reads the row back, and each
  * compares against a CONSTANT or a primitive captured beforehand
  * rather than against the record an earlier write answered: a store
@@ -135,12 +180,25 @@
  * taken over a planted message: a search that would find nothing
  * anywhere reports a clean refusal and a leaking one alike.
  *
- * MUTATION GRID, RE-DERIVED over the 162 cases here across 67 legs
+ * MUTATION GRID, RE-DERIVED over the 174 cases here across 76 legs
  * with `--reporter=json`, and read as the SET each leg reddened
- * rather than as a count. Every figure moves when the settings half
- * adds its cases to this file, exactly as the personas half moved
- * four of the fifty-two legs that stood before it and the term half
- * moved three before that.
+ * rather than as a count. Every figure below moves again when a
+ * later task adds a case to this file, so re-derive the whole grid
+ * rather than appending legs for the new rows.
+ *
+ * THE SETTINGS HALF MOVED EXACTLY THREE OF THE SIXTY-SEVEN LEGS
+ * THAT STOOD BEFORE IT, and all three gained the SAME single case:
+ * `is not created by a write to any other table`, the one settings
+ * case that deliberately plants through four other tables. Refusing
+ * a null parent as a missing one went 89 to 90, refusing every term
+ * insert as a duplicate 56 to 57, and refusing every persona insert
+ * as a duplicate 31 to 32; the other sixty-four legs' red sets are
+ * identical member for member. That is the narrowest a half has
+ * moved this file — the personas half moved four of fifty-two and
+ * the term half three before that — and the reason is structural
+ * rather than luck: `operator_settings` hangs
+ * off nothing, so only a settings case that writes elsewhere on
+ * purpose can reach another half's rules at all.
  *
  * THE PERSONAS HALF MOVED EXACTLY FOUR OF THOSE FIFTY-TWO, and every
  * case each of the four gained sits in a personas describe: accepting
@@ -187,17 +245,18 @@
  * list builds a fresh object with its own spread whatever the copy
  * helper does. Dropping the depth guard's early return on a null
  * parent reddens 1, and refusing a null parent as though it named a
- * missing row reddens 89 of the 162: the category half's whole-half
+ * missing row reddens 90 of the 174: the category half's whole-half
  * control, whose five survivors WITHIN that half are unchanged — the
  * reads and the refusal that plant no category at all.
  *
- * Twenty-five term legs redden between 0 and 56. Refusing every term
+ * Twenty-five term legs redden between 0 and 57. Refusing every term
  * insert as a duplicate is this half's whole-half control and reddens
- * 56, of which 55 are term cases — the four survivors unchanged, and
+ * 57, of which 55 are term cases — the four survivors unchanged, and
  * exactly the reads that write no term at all (an unknown category, an
  * unknown term, a patch and a delete naming neither) — while the
- * fifty-sixth is the persona case that seeds a lexicon to delete a
- * domain over. Making the key global rather than per category reddens
+ * other two are the persona case that seeds a lexicon to delete a
+ * domain over and the settings case that plants through four
+ * tables. Making the key global rather than per category reddens
  * 9 across five describes, which is the widening leg the
  * sibling-category acceptance case exists for. Accepting the duplicate
  * pattern reddens 5, and ALL FIVE are `refusalFrom` throwing rather
@@ -254,16 +313,20 @@
  * Both zeros are honest rather than holes, and both are pinned by
  * the port's TSDoc and by the drizzle half's own cases instead.
  *
- * Fifteen persona legs redden between 0 and 31, and every one of them
- * stays inside the personas describes — the mirror of the paragraph
- * above, and what says the two directions of the shared dataset are
- * not the same claim. Refusing every persona insert as a duplicate is
- * this half's whole-half control and reddens 31 of the 37, the six
- * survivors being exactly the cases that write no persona at all: an
- * unknown id on the read, the patch and the delete, the two list reads
- * that plant none (a domain holding nothing and an id no domain
- * carries), and the foreign-key containment case, which needs no
- * stored row to be refused. Accepting the duplicate role reddens 5,
+ * Fifteen persona legs redden between 0 and 32, and fourteen of them
+ * stay wholly inside the personas describes — the mirror of the
+ * paragraph above, and what says the two directions of the shared
+ * dataset are not the same claim. The fifteenth is the whole-half
+ * control, which reaches the one settings case that plants a
+ * persona. Refusing
+ * every persona insert as a duplicate is this half's whole-half
+ * control and reddens 32: 31 of the half's own 37, whose six
+ * survivors are exactly the cases that write no persona at all (an
+ * unknown id on the read, the patch and the delete, the two list
+ * reads that plant none — a domain holding nothing and an id no
+ * domain carries — and the foreign-key containment case, which
+ * needs no stored row to be refused), plus the settings case that
+ * plants a persona of its own. Accepting the duplicate role reddens 5,
  * and ALL FIVE are `refusalFrom` throwing rather than an assertion
  * failing — including the id-burn case, which would otherwise have
  * read the wrong id and passed for nobody's reason.
@@ -314,9 +377,51 @@
  * probe over an instrumented client reads. Measured that way on
  * `src/personas/db-store.ts` when it landed — one statement,
  * and a `select`.
+ *
+ * Nine settings legs redden between 0 and 8, and EVERY red one of
+ * them lands wholly inside the settings describes — nothing this
+ * half does reaches another's rules, which is the other direction of
+ * `operator_settings` hanging off nothing. Answering null however
+ * much was written is the whole-half control and reddens 8 of the
+ * 12; the four survivors are exactly the cases that never read the
+ * store back (the two that assert what a write ANSWERED, the one
+ * that asserts the absent read before writing, and the one that
+ * asserts the row is nobody's side effect), so the roster is the
+ * statement that the other eight read stored state at all.
+ *
+ * Answering null as an empty payload reddens 3 and merging rather
+ * than replacing reddens 3, and the two sets are DISJOINT: the null
+ * legs land on the cases that assert an absence and the merge leg on
+ * the whole rewrite describe, its answer case included. There is no
+ * merge-of-nothing control to sit beside it here, unlike the domain
+ * patch: `writeSettings` always writes, so a payload left standing
+ * is not a state this port has.
+ *
+ * The three copy legs redden ONE CASE EACH and are disjoint —
+ * storing the argument, answering the stored payload from the write,
+ * and answering it from the read. That is one leg per ANSWER SITE
+ * rather than one per helper, and it is what says the three cases
+ * are three claims: a store copying on the way into a write still
+ * aliases every reader to one another through the read. Clearing the
+ * settings on a domain delete and creating the row on a domain
+ * insert redden one apiece, the second being the widening leg the
+ * nobody's-side-effect case exists for.
+ *
+ * ECHOING THE ARGUMENT RATHER THAN READING STORED STATE BACK REDDENS
+ * NOTHING, and it is a MEASURED ZERO of a different kind from the
+ * three empty-patch ones above. The port says a write answers what
+ * is held rather than what was sent, and here the two are equal by
+ * construction: the payload is copied in and copied out, so a copy
+ * of the argument and a copy of the stored payload are the same
+ * object graph. The claim has a subject only where the database can
+ * change what it stored — `jsonb` normalises key order and drops
+ * a duplicate key — so it is `src/settings/db-store.ts`'s to
+ * discharge when that task lands, through its `RETURNING` list. No
+ * re-aiming of this leg reaches it from here.
  */
 import type { MemoryResearchStore } from './memory-research-store.js';
 import type { DomainSettings } from '../../src/db/schema/domains.js';
+import type { OperatorSettings } from '../../src/db/schema/settings.js';
 import type {
   DomainRecord,
   InsertDomainInput,
@@ -713,6 +818,82 @@ async function readPersona(
   }
 
   return row;
+}
+
+/**
+ * A complete operator settings payload: all three members
+ * `OperatorSettings` declares.
+ *
+ * A function rather than a constant, for the reason
+ * {@link domainInput} is one: the copy cases WRITE into the payload
+ * they submitted, which is the whole point of them, and a shared
+ * object would carry that write into every case after it.
+ *
+ * @returns A payload naming every member.
+ */
+function operatorInput(): OperatorSettings {
+  return {
+    defaultDomainSlug: RADAR,
+    digestFormat: 'obsidian_md',
+    notificationChannels: { email: true, webhook: false },
+  };
+}
+
+/**
+ * What the rewrite cases replace {@link operatorInput} with.
+ *
+ * ONE MEMBER, AND ONE THE STORED PAYLOAD ALSO CARRIES, which is what
+ * makes the whole-unit rule observable: under a merge the read
+ * answers three members where a replace answers one, and the value
+ * of the shared member is the same under both. A replacement naming
+ * a member the stored payload lacks would be answered identically by
+ * a merge that only added.
+ *
+ * @returns A payload naming `digestFormat` and nothing else.
+ */
+function operatorRewrite(): OperatorSettings {
+  return { digestFormat: 'rss' };
+}
+
+/**
+ * Reads the settings that must have been written.
+ *
+ * @param store - The store to read.
+ * @returns The stored payload.
+ * @throws When nothing has been written, for the reason
+ *   {@link readDomain} throws: a null would otherwise reach an
+ *   assertion as though it were a payload.
+ */
+async function readSettings(
+  store: MemoryResearchStore,
+): Promise<OperatorSettings> {
+  const settings = await store.readSettings();
+
+  if (settings === null) {
+    throw new Error('expected a stored settings payload');
+  }
+
+  return settings;
+}
+
+/**
+ * The channel record a payload must carry, ready to be written into.
+ *
+ * @param settings - The payload to reach into.
+ * @returns Its `notificationChannels`, cast writable — which is
+ *   exactly the promise a shared reference would break behind the
+ *   type system's back.
+ * @throws When the payload carries none, so a copy case cannot
+ *   quietly mutate nothing and pass for nobody's reason.
+ */
+function channelsOf(settings: OperatorSettings): Record<string, boolean> {
+  const channels = settings.notificationChannels;
+
+  if (channels === undefined) {
+    throw new Error('expected the payload to carry notificationChannels');
+  }
+
+  return channels as Record<string, boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -3186,5 +3367,186 @@ describe('the persona delete', () => {
     expect(await store.deletePersona(scorer.id)).toBe(true);
     expect((await refusalFrom(() => store.deleteCategory(root.id))).reason)
       .toBe('foreign-key-violation');
+  });
+});
+// ---------------------------------------------------------------------------
+// The one row the database pins, before it exists and after
+// ---------------------------------------------------------------------------
+
+describe('the settings read before any write', () => {
+  it('answers null, which a payload written empty is not', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.readSettings()).toBeNull();
+
+    // The positive control, in this body rather than in a sibling
+    // case, and the whole of what the null is worth: a store
+    // answering null for everything passes the assertion above, and
+    // an empty payload is a DIFFERENT answer — a row that was
+    // written carrying no members. `src/settings/service.ts` is
+    // where both become `{}` for a reader of the configuration.
+    await store.writeSettings({});
+
+    expect(await store.readSettings()).toStrictEqual({});
+  });
+
+  it('is not created by a write to any other table', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedLexicon(store, RADAR);
+
+    await addPersona(store, domain.id, SCORER);
+
+    // `operator_settings` hangs off nothing and is nobody's side
+    // effect: the row exists because an operator wrote it, and the
+    // four writes above reach four other tables.
+    expect(await store.readSettings()).toBeNull();
+  });
+});
+
+describe('the first settings write', () => {
+  it('answers the payload it was handed', async () => {
+    const store = createMemoryResearchStore();
+
+    const written = await store.writeSettings(operatorInput());
+
+    expect(written).toStrictEqual({
+      defaultDomainSlug: RADAR,
+      digestFormat: 'obsidian_md',
+      notificationChannels: { email: true, webhook: false },
+    });
+  });
+
+  it('stores what a later read answers', async () => {
+    const store = createMemoryResearchStore();
+
+    await store.writeSettings(operatorInput());
+
+    // Against a literal rather than against what the write answered:
+    // a store that lies CONSISTENTLY answers its own lie back, and
+    // the comparison would then hold one against itself.
+    expect(await readSettings(store)).toStrictEqual({
+      defaultDomainSlug: RADAR,
+      digestFormat: 'obsidian_md',
+      notificationChannels: { email: true, webhook: false },
+    });
+  });
+
+  it('needs no row written before it', async () => {
+    const store = createMemoryResearchStore();
+
+    // A first write and a rewrite are ONE call: there is nothing an
+    // operator has to create first, which is what lets the route be
+    // a single `PUT` rather than a read the caller branches on.
+    // The drizzle half gets there by upserting on the singleton id.
+    expect(await store.readSettings()).toBeNull();
+    expect(await store.writeSettings(operatorRewrite()))
+      .toStrictEqual({ digestFormat: 'rss' });
+  });
+});
+
+describe('a settings rewrite', () => {
+  it('answers the replacing payload whole rather than merged', async () => {
+    const store = createMemoryResearchStore();
+
+    await store.writeSettings(operatorInput());
+
+    const rewritten = await store.writeSettings(operatorRewrite());
+
+    expect(rewritten).toStrictEqual({ digestFormat: 'rss' });
+  });
+
+  it('stores the replacing payload whole rather than merged', async () => {
+    const store = createMemoryResearchStore();
+
+    await store.writeSettings(operatorInput());
+    await store.writeSettings(operatorRewrite());
+
+    // One payload afterwards rather than two: the port declares no
+    // count and no list, so this read is the whole of what `exactly
+    // one` can be asked here — and under a merge it answers the
+    // two members the replacement does not carry.
+    expect(await readSettings(store)).toStrictEqual({ digestFormat: 'rss' });
+  });
+
+  it('clears every member when the rewrite carries none', async () => {
+    const store = createMemoryResearchStore();
+
+    await store.writeSettings(operatorInput());
+    await store.writeSettings({});
+
+    // The maximal narrowing, and the case a merge cannot survive at
+    // all: omitting a preference is how it is removed, so a store
+    // merging into the stored payload would leave every member of
+    // it standing and make removal unexpressible.
+    expect(await readSettings(store)).toStrictEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The payload crossing the boundary, and the delete that spares it
+// ---------------------------------------------------------------------------
+
+describe('the operator settings crossing the boundary', () => {
+  it('does not store the object it was handed', async () => {
+    const store = createMemoryResearchStore();
+    const submitted = operatorInput();
+
+    await store.writeSettings(submitted);
+
+    channelsOf(submitted).email = false;
+
+    // Against a literal rather than against the record the write
+    // answered: a store holding the caller's object has aliased the
+    // two, and the comparison would hold one lie against itself.
+    expect((await readSettings(store)).notificationChannels)
+      .toStrictEqual({ email: true, webhook: false });
+  });
+
+  it('does not answer the object a write stored', async () => {
+    const store = createMemoryResearchStore();
+
+    const written = await store.writeSettings(operatorInput());
+
+    channelsOf(written).email = false;
+
+    expect((await readSettings(store)).notificationChannels)
+      .toStrictEqual({ email: true, webhook: false });
+  });
+
+  it('does not answer the object a read handed out', async () => {
+    const store = createMemoryResearchStore();
+
+    await store.writeSettings(operatorInput());
+
+    channelsOf(await readSettings(store)).email = false;
+
+    // The third answer site, and the one a write-only copy would
+    // leave open: a store copying on the way in and out of a write
+    // still aliases every reader to one another through the read.
+    expect((await readSettings(store)).notificationChannels)
+      .toStrictEqual({ email: true, webhook: false });
+  });
+});
+
+describe('the settings a domain delete leaves standing', () => {
+  it('keeps a defaultDomainSlug the delete left dangling', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    await store.writeSettings(operatorInput());
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // No `domain_id` and no foreign key reaches this table, so the
+    // cascade that took the domain reaches nothing here — and
+    // the slug is left naming a domain that has gone. That is not
+    // corruption and nothing repairs it: `src/settings/store.ts`
+    // carries why it reads as no default being set.
+    expect(await readSettings(store)).toStrictEqual({
+      defaultDomainSlug: RADAR,
+      digestFormat: 'obsidian_md',
+      notificationChannels: { email: true, webhook: false },
+    });
+    expect(await store.findDomainBySlug(RADAR)).toBeNull();
   });
 });
