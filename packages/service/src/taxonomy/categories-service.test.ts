@@ -1,11 +1,11 @@
 /**
  * `src/taxonomy/categories-service.ts` — what the four category
- * operations refuse. Driven over
- * `tests/helpers/memory-research-store.ts`, so every claim here is
- * answered with no database anywhere.
+ * operations refuse, and what they land when they accept. Driven
+ * over `tests/helpers/memory-research-store.ts`, so every claim
+ * here is answered with no database anywhere.
  *
- * Six claims, all of them about the ways this module says no; what
- * an accepted request LANDS is the next task's file-mate.
+ * Seven claims: six about the ways this module says no, and one
+ * about what it lands when it accepts.
  *
  * THAT AN ADDRESS NAMING NOTHING IS A 404 ON ALL FOUR OPERATIONS,
  * and that the two addresses are told apart. A `:slug` naming no
@@ -68,76 +68,137 @@
  * `detail` and the whole statement in the drizzle wrapper's
  * `message`, and every translation here passes it as `cause`.
  *
- * Mutation grid, measured over the 64 cases here with
- * `--reporter=json` and read as the failed `fullName` SET rather
- * than as a count. Eighteen legs in two classes, because a grid made
- * of one class leaves the other half green while looking thorough.
- * Every figure moves when the next task adds its positive cases to
- * this file, so re-run the whole grid rather than appending to it.
+ * THAT AN ACCEPTED CALL LANDS WHAT IT WAS TOLD AND NOTHING ELSE.
+ * Four sections at the end, one per operation, each reading its
+ * write back through `listCategories` rather than off the value the
+ * write answered — so the claim is about what is STORED and not
+ * about what one return happened to say. The read section pins the
+ * key order, the domain scope, the counted term count and the row
+ * key set; the create section is a three-row table landing a root
+ * two ways and a child one; the rename section pins that the key
+ * survived, and pins it through the READ ORDER, which no field
+ * comparison can; and the delete section pins that one row went and
+ * that its natural key went with it.
  *
- * Thirteen WIDENING legs. Rethrowing the unique refusal reddens 3 —
- * the 409, its containment row, and the row that reads the `cause`.
- * Rethrowing the depth refusal reddens 7: the five depth rows, the
- * sentence they share, and one containment row. Two legs sit INSIDE
- * that set rather than beside it, and the nesting is the reading:
- * answering the depth refusal a 409 reddens 6, the same set without
- * the containment row, while reporting its detail against `body`
- * instead of `parentId` reddens 7 — the five depth rows PLUS the two
- * absent-parent rows, which is a different seven and the one leg
- * that reaches every parent row at once. Giving both parent faults
- * the same code reddens exactly the 2 absent rows, which is the
- * whole of the evidence that the two are told apart.
+ * EVERY TERM COUNT HERE IS ZERO, and that is the dataset rather
+ * than a stub standing in for one. No method on
+ * `tests/helpers/memory-research-store.ts` writes a term, so no
+ * category it can hold has one and a counted zero is the true
+ * answer for all of them; a list mixing counts is unreachable from
+ * this file and is the term half's to write. What a zero can still
+ * carry is the claim `CategoryWithTermCount` actually makes — that
+ * the member is PRESENT on every row rather than absent for the
+ * buckets holding nothing, which is the one answer it forbids.
+ *
+ * Mutation grid, RE-DERIVED over the 88 cases here with
+ * `--reporter=json` and read as the failed `fullName` SET rather
+ * than as a count. Twenty-four legs in two classes, because a grid
+ * made of one class leaves the other half green while looking
+ * thorough. Every figure in it moved when the positive cases
+ * landed, so the whole grid was re-run rather than appended to, and
+ * every figure will move again for the next task that adds a case
+ * to this file.
+ *
+ * Nineteen WIDENING legs, and the refusal half of them is unchanged
+ * in SET even where a count moved. Rethrowing the unique refusal
+ * reddens 3 — the 409, its containment row, and the row that reads
+ * the `cause`. Rethrowing the depth refusal reddens 7: the five
+ * depth rows, the sentence they share, and one containment row. Two
+ * legs sit inside or across that set rather than beside it, and the
+ * relation is the reading: answering the depth refusal a 409
+ * reddens 6, a strict subset without the containment row, while
+ * reporting its detail against `body` reddens a DIFFERENT 7 — every
+ * parent row there is, the five depth rows plus the two
+ * absent-parent ones — and is the one leg reaching all of them at
+ * once. Giving both parent faults the same code reddens exactly the
+ * 2 absent rows, which is the whole of the evidence that the two
+ * are told apart.
  *
  * The address legs partition cleanly. Keying the foreign key on the
  * refusal instead of on the write reddens 1, the 409-not-422 case,
  * and nothing else in the file can see that fault. Skipping the
- * domain resolution reddens 3 on a list and 3 on a create — disjoint
- * except for the says-which-address case, which both reach —
- * dropping the 404 a delete answers reddens 2, and dropping
+ * domain resolution reddens 3 on a list and 3 on a create —
+ * disjoint except for the says-which-address case, which both reach
+ * — dropping the 404 a delete answers reddens 2, and dropping
  * `.strict()` from the create schema reddens 2. Each of the two
  * ordering cases is pinned by exactly one leg: resolving the slug
- * before parsing a create body reddens 1, and reading the row before
- * parsing a patch body reddens 1.
+ * before parsing a create body reddens 1, and reading the row
+ * before parsing a patch body reddens 1.
  *
- * The leak leg reddens exactly 1, and only after being narrowed to
- * the branch it belongs in: interpolating the submitted `name` into
- * the 409 reddens the key-already-carried containment row alone.
+ * The leak leg reddens exactly 1, and only once narrowed to the
+ * branch it belongs in AND left carrying its `cause`: interpolating
+ * the submitted `name` into the 409 reddens the key-already-carried
+ * containment row alone. A first attempt that dropped the `cause`
+ * along with the message reddened 2, the second of them the row
+ * pinning that the driver error stays off the wire — which reads as
+ * coverage and is really one leak plus one unrelated regression.
  *
- * ONE LEG MEASURED ZERO, and it is the one worth stating rather than
- * dropping. Copying the `StoreRefusal`'s OWN message into the 409
- * reddens NOTHING, because the in-memory store constructs its
+ * Five legs are new, aimed at what an accepted call lands, and
+ * three of them reach cases no refusal leg could. Ignoring the
+ * parent a create asked for reddens 12 across four sections — but
+ * NOT `stores a child of a root`, which compares the listed row
+ * against what the create answered and finds the two agreeing on
+ * the same wrong parent. That is the read-back shape's blind spot
+ * stated rather than left implied: a write that lies CONSISTENTLY
+ * is caught by the answered-row case and by nothing else, which is
+ * why every create row here has both. Ignoring the patch a caller
+ * supplied reddens 10, four of them renames. The three list legs
+ * are near-disjoint by construction and share only the term-count
+ * row: reading a taxonomy the call did not resolve reddens 4,
+ * dropping the term count from every row reddens 7, and handing the
+ * list back in reverse reddens 6.
+ *
+ * ONE LEG MEASURED ZERO, and it is the one worth stating rather
+ * than dropping. Copying the `StoreRefusal`'s OWN message into the
+ * 409 reddens NOTHING, because the in-memory store constructs its
  * refusal from a reason and a constraint name and there is no
  * submitted content in it to leak. The channel that carries one —
  * the driver's `detail`, which reads `Key (domain_id, key)=(...)
  * already exists.`, and the drizzle wrapper's `Failed query:` line
- * with its bound parameters — exists only behind `./db-store.ts`. So
- * the containment rows here pin what THIS module builds, their zeros
- * rest on the planted control and on the leak leg above, and the
- * driver half is owed by the live seam rather than covered here.
+ * with its bound parameters — exists only behind `./db-store.ts`.
+ * So the containment rows here pin what THIS module builds, their
+ * zeros rest on the planted control and on the leak leg above, and
+ * the driver half is owed by the live seam rather than covered
+ * here.
  *
  * Five NARROWING legs, aimed at the controls, which is what the
- * controls are for. Three redden 53 of 64 apiece — refusing every
- * slug as missing, requiring `parentId` on a create, and refusing
- * every create as a duplicate — and that breadth IS the reading:
- * every case plants its taxonomy through `createCategory`, so a leg
- * breaking creation collapses the file and says those cases reach
- * the subject at all rather than passing over an empty dataset.
- * The two narrow ones are the informative ones: refusing every
- * delete as holding children reddens 5, and answering 404 to every
- * patch reddens 6, both sets made almost entirely of controls.
+ * controls are for. Three redden an IDENTICAL 75 of 88 — refusing
+ * every slug as missing, requiring `parentId` on a create, and
+ * refusing every create as a duplicate — and the identity is the
+ * reading rather than three independent measurements: every case
+ * that reaches this module's subject at all plants its taxonomy
+ * through `createCategory` against a resolved slug, so any leg
+ * breaking that path collapses the file to the same 13 survivors.
+ * Those 13 are exactly the cases that call nothing: eleven table
+ * guards, the planted containment control, and the runtime read of
+ * the key-set pin. The two narrow legs are the informative ones —
+ * refusing every delete as holding children reddens 8 and answering
+ * 404 to every patch reddens 11, both sets made mostly of controls,
+ * and the second OVERLAPS the ignore-the-patch leg in 5 of its 11
+ * rather than nesting in it.
  *
- * What no module mutation reaches, by construction. The nine table
- * guards read only the tables beside them and are aimed at a later
- * edit — an operation added with no row, a depth branch dropped from
- * the fault list, a `create` row appearing under the patch-only
- * branch. The planted containment control is invisible for the same
- * reason and deliberately so: it proves the SEARCH, where the leak
- * leg proves the SUBJECT. And no leg touches
- * `src/http/validation.ts`, so every field path in the body table is
- * evidence about what this module ASKED FOR rather than about how
- * the masking is built.
+ * What no module mutation reaches, by construction. Eleven of the
+ * twelve table guards read only the table beside them and are aimed
+ * at a later edit — an operation added with no row, a depth branch
+ * dropped from the fault list, a `create` row appearing under the
+ * patch-only branch. The twelfth resolves two planted ids to say
+ * the create table lands both a root and a child, so it is the one
+ * guard the three broad narrowing legs reach. The planted
+ * containment control is invisible for the same reason as the
+ * eleven and deliberately so: it proves the SEARCH, where the leak
+ * leg proves the SUBJECT. The key-set drift guard is invisible to
+ * every leg here as well, and is owed by `check-types` rather than
+ * by the runner: a member added to `CategoryRecord` or to
+ * `CategoryWithTermCount` and to neither list is a TS2322 at
+ * `EVERY_KEY_LISTED`, measured by planting one. And no leg touches
+ * `src/http/validation.ts`, so every field path in the body table
+ * is evidence about what this module ASKED FOR rather than about
+ * how the masking is built.
  */
-import type { CategoryRecord } from './store.js';
+import type {
+  CategoryRecord,
+  CategoryWithTermCount,
+} from './store.js';
 import type { FieldError } from '../../lib/errors/index.js';
 import type {
   MemoryResearchStore,
@@ -989,9 +1050,10 @@ describe('the bodies these operations refuse', () => {
   it('accepts a body of each declared shape', async () => {
     // The positive control for the whole table, one call per
     // operation: a module refusing every body passes all eleven rows
-    // above and fails this. What the two operations DO with an
-    // accepted body is the next task's coverage; what this pins is
-    // that they take one at all.
+    // above and fails this. What it pins is that the two operations
+    // take a body at all; what they LAND with one is the four
+    // sections below, which read every write back through a second
+    // call rather than off the value the write answered.
     const { store, rootB } = await plantTaxonomy();
     const created = await createCategory(store, RADAR, {
       key: 'industries',
@@ -1220,5 +1282,493 @@ describe('what a refusal is allowed to say', () => {
     expect(refusal.cause).toBeInstanceOf(Error);
     expect(Object.keys(refusal.toJSON()).sort())
       .toEqual(['code', 'message']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a taxonomy read answers
+// ---------------------------------------------------------------------------
+
+/**
+ * The members `CategoryRecord` declares.
+ *
+ * Written out rather than derived, because an interface has no
+ * runtime form to read keys off — and pinned in BOTH directions,
+ * since a one-directional list is exactly as green as no list at all
+ * against the drift that matters. `satisfies` closes the direction
+ * where this names a member the record lacks;
+ * {@link EVERY_KEY_LISTED} closes the one where the record grows a
+ * member nothing here learned about. The second is the direction a
+ * key-set assertion exists for: a column added to a projection
+ * reaches every caller unasserted otherwise, and no field read in
+ * this file would notice.
+ */
+const CATEGORY_KEYS = [
+  'domainId',
+  'id',
+  'key',
+  'name',
+  'parentId',
+] as const satisfies readonly (keyof CategoryRecord)[];
+
+/** The same members, plus the one a list read adds to them. */
+const LISTED_KEYS = [
+  ...CATEGORY_KEYS,
+  'termCount',
+] as const satisfies readonly (keyof CategoryWithTermCount)[];
+
+/**
+ * `true` only while `L` names every key of `T`.
+ *
+ * The tuple wrapper is load-bearing rather than decoration: without
+ * it the union distributes over the conditional and the answer is
+ * `boolean`, which accepts `true` as an initializer and pins nothing
+ * at all.
+ *
+ * @typeParam T - The type whose keys must all be named.
+ * @typeParam L - The list naming them, as `typeof <the const>`.
+ */
+type CoversEveryKey<T, L extends readonly PropertyKey[]> =
+  [Exclude<keyof T, L[number]>] extends [never] ? true : false;
+
+/** Both lists above, held against the types they describe. */
+type EveryKeyListed =
+  CoversEveryKey<CategoryRecord, typeof CATEGORY_KEYS>
+  & CoversEveryKey<CategoryWithTermCount, typeof LISTED_KEYS>;
+
+/**
+ * The half of the drift guard `check-types` owns.
+ *
+ * A member added to `CategoryRecord` or to `CategoryWithTermCount`
+ * and to neither list above turns {@link EveryKeyListed} into
+ * `never`, and this initializer is then a TS2322 at this line —
+ * before any case can compare a record against a set that has
+ * quietly stopped describing it. Read in a case below, so it is a
+ * symbol this file uses rather than one lint reports.
+ */
+const EVERY_KEY_LISTED: EveryKeyListed = true;
+
+/** {@link CATEGORY_KEYS}, sorted at use rather than by hand. */
+const CATEGORY_KEY_SET: readonly string[] = [...CATEGORY_KEYS].sort();
+
+/** {@link LISTED_KEYS}, sorted. */
+const LISTED_KEY_SET: readonly string[] = [...LISTED_KEYS].sort();
+
+/**
+ * {@link RADAR}'s three keys, in the order a read has to answer
+ * them.
+ *
+ * Not the order {@link plantTaxonomy} writes them in, which is what
+ * makes the order assertable at all: the fixture stores
+ * `technologies`, `phrases`, `languages`, so a read handing rows
+ * back in the order they arrived answers this list reversed, and
+ * only a read that ordered by `key` answers it at all.
+ */
+const RADAR_KEYS = ['languages', 'phrases', 'technologies'];
+
+/** A domain whose taxonomy nobody has written yet. */
+const EMPTY_DOMAIN = 'example-ocean-health';
+
+/**
+ * Finds one answered row by its natural key.
+ *
+ * @param rows - What a read answered.
+ * @param key - The key to look for.
+ * @returns The row carrying it.
+ * @throws When no row does. A `find` answering `undefined` compares
+ *   equal to another `undefined`, so a case reading a stored row
+ *   back against a write that never landed would otherwise pass for
+ *   nobody's reason.
+ */
+function rowKeyed(
+  rows: readonly CategoryWithTermCount[],
+  key: string,
+): CategoryWithTermCount {
+  const found = rows.find((row) => row.key === key);
+
+  if (found === undefined) {
+    throw new Error('the answered list carries no row under that key');
+  }
+
+  return found;
+}
+
+describe('what a taxonomy read answers', () => {
+  it('holds both key sets against the types they describe', () => {
+    // The runtime half of the pin above. What it asserts is not the
+    // `true` — that is a constant — but that the symbol exists to be
+    // read: its VALUE is the statement `check-types` makes at the
+    // declaration, which is a TS2322 the moment either record grows
+    // a member neither list names.
+    expect(EVERY_KEY_LISTED).toBe(true);
+  });
+
+  it('answers every category in the domain, key ascending', async () => {
+    const { store } = await plantTaxonomy();
+    const listed = await listCategories(store, RADAR);
+
+    expect(listed.map((row) => row.key)).toEqual(RADAR_KEYS);
+  });
+
+  it('scopes the read to the domain it resolved', async () => {
+    // The two domains hold disjoint taxonomies, so a read issued
+    // against the table rather than against the id it just resolved
+    // answers four rows here — and would still be in key order,
+    // which is why the case above cannot stand in for this one.
+    const { store } = await plantTaxonomy();
+    const listed = await listCategories(store, TRANSIT);
+
+    expect(listed.map((row) => row.key)).toEqual(['modes']);
+  });
+
+  it('carries a counted term count on every row', async () => {
+    // EVERY COUNT IS ZERO HERE, AND THAT IS THE DATASET RATHER THAN
+    // A STUB. No method on `tests/helpers/memory-research-store.ts`
+    // writes a term, so no category it can hold has one and a zero
+    // is the true answer for all of them; a mixed list is the term
+    // half's to write, and this file cannot reach one. What a zero
+    // CAN carry is the claim `CategoryWithTermCount` actually makes
+    // — that the member is present on every row rather than absent
+    // for the buckets holding nothing, which is the one answer it
+    // forbids, since `0` and "not counted" would otherwise be the
+    // same value on the member whose whole job is telling an empty
+    // bucket from a full one.
+    const { store } = await plantTaxonomy();
+    const listed = await listCategories(store, RADAR);
+    const counted = listed.map((row) => ({
+      key: row.key,
+      present: Object.hasOwn(row, 'termCount'),
+      termCount: row.termCount,
+    }));
+
+    expect(counted).toEqual(RADAR_KEYS.map((key) => ({
+      key,
+      present: true,
+      termCount: 0,
+    })));
+  });
+
+  it('answers each row whole and nothing besides', async () => {
+    // The sorted key SET on every listed row, beside the fields the
+    // cases read. A member arriving by spread — a column nobody
+    // projected, a count taken twice under two names — is invisible
+    // to every field read in this file and is exactly what this
+    // line catches.
+    const { store } = await plantTaxonomy();
+    const listed = await listCategories(store, RADAR);
+
+    expect(listed.map((row) => Object.keys(row).sort()))
+      .toEqual(RADAR_KEYS.map(() => [...LISTED_KEY_SET]));
+  });
+
+  it('answers an empty taxonomy rather than refusing', async () => {
+    // The whole difference between a domain that is not there and
+    // one whose taxonomy has not been written yet. The first is the
+    // 404 the address section pins; this is the other, and it is the
+    // reason the read resolves the slug rather than issuing itself
+    // against whatever id a caller supplied.
+    const { store } = await plantTaxonomy();
+
+    await store.insertDomain({
+      slug: EMPTY_DOMAIN,
+      name: 'Ocean health',
+      settings: {},
+    });
+
+    await expect(listCategories(store, EMPTY_DOMAIN)).resolves.toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a create lands
+// ---------------------------------------------------------------------------
+
+/** The key every accepted create below writes, since none collide. */
+const NEW_KEY = 'industries';
+
+/** The label it carries. */
+const NEW_NAME = 'Industries';
+
+/** One accepted create, and the row it has to land. */
+interface CreateCase {
+  /** What makes this row different from every other. */
+  readonly label: string;
+
+  /** The body, unvalidated, exactly as a request would carry it. */
+  readonly body: (planted: PlantedTaxonomy) => unknown;
+
+  /** The parent the stored row has to end up under. */
+  readonly parentId: (planted: PlantedTaxonomy) => number | null;
+}
+
+/**
+ * The three shapes an accepted create arrives in.
+ *
+ * Two of them land the SAME row, and that is the claim rather than a
+ * duplicate: an absent `parentId` and an explicit `null` are ONE
+ * request to `createCategory`, which supplies the null itself where
+ * a case can reach the choice. A table carrying only the omission
+ * would be green against a schema that had stopped accepting the
+ * explicit null, and the two are different requests one operation
+ * along — a patch reads absent as "leave it" and null as "promote
+ * it", which is the third way a row can move.
+ */
+const CREATE_CASES: readonly CreateCase[] = [
+  {
+    label: 'a root, by omitting the parent',
+    body: () => ({ key: NEW_KEY, name: NEW_NAME }),
+    parentId: () => null,
+  },
+  {
+    label: 'a root, by naming null',
+    body: () => ({ key: NEW_KEY, name: NEW_NAME, parentId: null }),
+    parentId: () => null,
+  },
+  {
+    label: 'a child of a root',
+    body: ({ rootB }) => ({
+      key: NEW_KEY,
+      name: NEW_NAME,
+      parentId: rootB.id,
+    }),
+    parentId: ({ rootB }) => rootB.id,
+  },
+];
+
+describe('what a create lands', () => {
+  it('labels every row distinctly', () => {
+    const labels = CREATE_CASES.map((row) => row.label);
+
+    expect(labels.length).toBe(new Set(labels).size);
+  });
+
+  it('lands both a root and a child across the table', async () => {
+    // The anti-vacuity guard this table exists for: three rows that
+    // all landed roots would look thorough while never writing a
+    // parent at all, and having two shapes is the whole of what the
+    // one-level rule leaves this surface.
+    const planted = await plantTaxonomy();
+    const parents = CREATE_CASES.map((row) => row.parentId(planted));
+
+    expect({
+      roots: parents.some((id) => id === null),
+      children: parents.some((id) => id !== null),
+    }).toEqual({ roots: true, children: true });
+  });
+
+  for (const row of CREATE_CASES) {
+    it(`answers ${row.label}`, async () => {
+      const planted = await plantTaxonomy();
+      const created = await createCategory(
+        planted.store,
+        RADAR,
+        row.body(planted),
+      );
+
+      expect(created).toStrictEqual({
+        id: created.id,
+        domainId: planted.rootA.domainId,
+        key: NEW_KEY,
+        name: NEW_NAME,
+        parentId: row.parentId(planted),
+      });
+
+      // The id is the store's own — the body carried none — and the
+      // sorted key set beside it, since the record is the one field
+      // a whole-row compare cannot pin against itself.
+      expect(created.id).toBeGreaterThan(0);
+      expect(Object.keys(created).sort()).toEqual([...CATEGORY_KEY_SET]);
+    });
+
+    it(`stores ${row.label}`, async () => {
+      // Read back through the OTHER operation, so the claim is about
+      // what is stored rather than about what one call happened to
+      // answer: a create returning a row it never wrote passes the
+      // case above and fails this.
+      const planted = await plantTaxonomy();
+      const created = await createCategory(
+        planted.store,
+        RADAR,
+        row.body(planted),
+      );
+      const listed = await listCategories(planted.store, RADAR);
+
+      expect(rowKeyed(listed, NEW_KEY))
+        .toStrictEqual({ ...created, termCount: 0 });
+    });
+  }
+
+  it('leaves the root it was given as a parent alone', async () => {
+    // A write lands one row. The parent the third row above names is
+    // still a root afterwards and still carries what it carried,
+    // which no assertion over the created row could say.
+    const planted = await plantTaxonomy();
+
+    await createCategory(planted.store, RADAR, {
+      key: NEW_KEY,
+      name: NEW_NAME,
+      parentId: planted.rootB.id,
+    });
+
+    const listed = await listCategories(planted.store, RADAR);
+
+    expect(rowKeyed(listed, planted.rootB.key))
+      .toStrictEqual({ ...planted.rootB, termCount: 0 });
+  });
+
+  it('adds the row to the domain it was addressed at', async () => {
+    // The `:slug` reached the write rather than only the lookup: a
+    // create stamping the wrong domain id answers a plausible row
+    // and puts it in a taxonomy nobody asked for.
+    const planted = await plantTaxonomy();
+
+    await createCategory(planted.store, RADAR, {
+      key: NEW_KEY,
+      name: NEW_NAME,
+    });
+
+    const radar = await listCategories(planted.store, RADAR);
+    const transit = await listCategories(planted.store, TRANSIT);
+
+    expect(radar.map((one) => one.key)).toEqual(
+      [...RADAR_KEYS, NEW_KEY].sort(),
+    );
+    expect(transit.map((one) => one.key)).toEqual(['modes']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a rename moves and what it leaves alone
+// ---------------------------------------------------------------------------
+
+/**
+ * A label chosen for where it SORTS rather than for what it says.
+ *
+ * A list read is ordered by `key`, so a row renamed to a label
+ * that would sort first stays exactly where it was — and a
+ * re-key, or a store ordering by the label instead, moves it.
+ * That is the claim no field read can make from either side:
+ * `patched.key` says what one call answered about one row, and
+ * the order says where the whole collection put it.
+ */
+const RENAMED = 'Aardvark technologies';
+
+describe('what a rename moves and what it leaves alone', () => {
+  it('rewrites the label and leaves the key standing', async () => {
+    const { store, rootA } = await plantTaxonomy();
+    const patched = await patchCategory(store, rootA.id, { name: RENAMED });
+
+    expect(patched.name).toBe(RENAMED);
+    expect(patched.key).toBe(rootA.key);
+    expect(patched).toStrictEqual({ ...rootA, name: RENAMED });
+    expect(Object.keys(patched).sort()).toEqual([...CATEGORY_KEY_SET]);
+  });
+
+  it('stores the rename and nothing beside it', async () => {
+    // Read back through the list, so the claim is about what is
+    // stored rather than about what the patch answered.
+    const { store, rootA } = await plantTaxonomy();
+
+    await patchCategory(store, rootA.id, { name: RENAMED });
+
+    const listed = await listCategories(store, RADAR);
+
+    expect(rowKeyed(listed, rootA.key))
+      .toStrictEqual({ ...rootA, name: RENAMED, termCount: 0 });
+  });
+
+  it('leaves the read order where the key put it', async () => {
+    // The half a field read cannot make. The new label sorts before
+    // every key the fixture carries, so a row ordered by its NAME
+    // comes back first and a row ordered by its key does not move.
+    const { store, rootA } = await plantTaxonomy();
+
+    await patchCategory(store, rootA.id, { name: RENAMED });
+
+    const listed = await listCategories(store, RADAR);
+
+    expect(listed.map((one) => one.key)).toEqual(RADAR_KEYS);
+  });
+
+  it('leaves a renamed child under the parent it had', async () => {
+    // A rename is not a move, and the row that can show it is the
+    // one with somewhere to fall to: a child whose `parentId` went
+    // null would quietly become a root, which every assertion over a
+    // label is green against.
+    const { store, child, rootA } = await plantTaxonomy();
+    const patched = await patchCategory(store, child.id, { name: RENAMED });
+
+    expect(patched.parentId).toBe(rootA.id);
+    expect(patched).toStrictEqual({ ...child, name: RENAMED });
+  });
+
+  it('renames the row it named and no other', async () => {
+    // The whole taxonomy read back: three rows, one label moved. A
+    // patch reaching more rows than the id it was given answers the
+    // same row and is invisible to every case above.
+    const { store, rootA } = await plantTaxonomy();
+
+    await patchCategory(store, rootA.id, { name: RENAMED });
+
+    const listed = await listCategories(store, RADAR);
+
+    expect(listed.map((one) => ({ key: one.key, name: one.name })))
+      .toEqual([
+        { key: 'languages', name: 'Languages' },
+        { key: 'phrases', name: 'Phrases' },
+        { key: 'technologies', name: RENAMED },
+      ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a delete takes
+// ---------------------------------------------------------------------------
+
+describe('what a delete takes', () => {
+  it('takes the row it named and leaves its siblings', async () => {
+    // What the refusal section's control does not say: that delete
+    // ANSWERING is one claim and what it landed is another. Read
+    // back through the list, where a delete taking the whole domain
+    // and a delete taking the right row answer differently.
+    const { store, rootB } = await plantTaxonomy();
+
+    await deleteCategory(store, rootB.id);
+
+    const listed = await listCategories(store, RADAR);
+
+    expect(listed.map((one) => one.key))
+      .toEqual(RADAR_KEYS.filter((key) => key !== rootB.key));
+  });
+
+  it('leaves the other domain where it was', async () => {
+    const { store, rootB } = await plantTaxonomy();
+
+    await deleteCategory(store, rootB.id);
+
+    const listed = await listCategories(store, TRANSIT);
+
+    expect(listed.map((one) => one.key)).toEqual(['modes']);
+  });
+
+  it('frees the key the row it took was carrying', async () => {
+    // The natural key went with the row rather than outliving it,
+    // which the remaining rows cannot say on their own: an index
+    // keeping the entry answers the same list and refuses this
+    // create as a duplicate.
+    const { store, rootB } = await plantTaxonomy();
+
+    await deleteCategory(store, rootB.id);
+
+    const created = await createCategory(store, RADAR, {
+      key: rootB.key,
+      name: 'Phrases, again',
+    });
+
+    expect(created.key).toBe(rootB.key);
+
+    // A new row rather than the old one back: the id is the store's
+    // next, and a sequence does not roll back over a removed row.
+    expect(created.id).not.toBe(rootB.id);
   });
 });
