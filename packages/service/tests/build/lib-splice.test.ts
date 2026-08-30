@@ -242,6 +242,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'entry.toLowerCase() === lowered',
     ],
   },
+  {
+    file: 'parser-config.ts',
+    ownText: [
+      'segments.length > MAX_PATH_SEGMENTS',
+      'FALSE_WORDS.includes(word)',
+      'records.push(built.record)',
+    ],
+  },
 ];
 
 /**
