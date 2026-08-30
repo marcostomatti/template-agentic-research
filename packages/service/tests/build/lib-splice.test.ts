@@ -274,6 +274,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'names.length > MAX_PROVENANCE_MEMBERS',
     ],
   },
+  {
+    file: 'prompt-frame.ts',
+    ownText: [
+      'cutFenceStems(asText(text))',
+      'replace(EMBED_OR_LINK_RE, wrapAddress)',
+      'spellsFenceStem(trusted)',
+    ],
+  },
 ];
 
 /**
