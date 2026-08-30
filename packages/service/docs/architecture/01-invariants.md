@@ -9,21 +9,22 @@ whether it is enforced today.
 
 The design the register comes from is
 `.specs/2026-08-19-research-pipeline-port.md`. Its §5 fixes the set
-below, with the hostname row carried from the migration-hygiene rules
-in §6, the bounded-chunk row from the risk register in that same §6,
-the category-depth row from the schema-v2 table roster in §2, and the
-hash-dedupe row from the locked core vocabulary in §1, all registered
-here alongside the rest; phase numbers throughout refer to the
-7-phase sequencing in that design, §7. The deterministic-build and
-spliced-library rows are drawn from outside that design, from the
+below, with the hostname row carried from the migration-hygiene rules in
+§6, the bounded-chunk row from the risk register in that same §6, the
+category-depth row from the schema-v2 table roster in §2, the
+hash-dedupe row from the locked core vocabulary in §1, and the
+proposed-configuration row from the parsing and validation rules in §4,
+all registered here alongside the rest; phase numbers throughout refer
+to the 7-phase sequencing in that design, §7. The deterministic-build
+and spliced-library rows are drawn from outside that design, from the
 build rules in `.specs/q03-port-phase-3-build-dispatch.md` §1 — the
 phase spec that lands the build system — and the origin-path row
 likewise, from the parity-harness constraints in
 `.specs/q06-port-phase-4-lib-wave.md`, the phase spec that lands the
-seam that row polices. The two auth rows come from outside it as
-well, from the acceptance criteria in `.specs/q07-auth-basic.md` —
-an item scheduled beside the seven phases rather than inside them, so
-its cell in the phase column names the item rather than a number.
+seam that row polices. The two auth rows come from outside it as well,
+from the acceptance criteria in `.specs/q07-auth-basic.md` — an item
+scheduled beside the seven phases rather than inside them, so its cell
+in the phase column names the item rather than a number.
 
 ## The register
 
@@ -37,6 +38,7 @@ its cell in the phase column names the item rather than a number.
 | Building one tree twice writes byte-identical artifacts, and the git build stamp is the one value permitted to move with the checkout | `tests/build/build-workflows.test.ts`, spawning `scripts/build-workflows.ts` twice over a fixture source tree and holding the two output directories against each other | 3 | Implemented |
 | A library spliced into a Code node stands alone there — no value import, declaration-form exports only, no reliance on module scope | `scripts/build-workflows.ts`, refusing the first two through `assertSpliceable` in `scripts/workflow-markers.ts` and writing no artifact at all; `pretest` runs the build ahead of the default suite, and the third rule leaves nothing to refuse it on | 3 | Implemented |
 | Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
+| No proposed configuration reaches a source row without a recorded approval | `source_config_proposals_approval_check`, the CHECK in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 5 | Implemented |
 | A category is a root or the child of a root, and nothing deeper | A trigger in the hand-written migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts`, with the opt-in `tests/live/schema.live.test.ts` watching a database refuse the write | 2 | Implemented |
 | Every document carries a hash, and no two carry the same one | The NOT NULL and UNIQUE pair on `documents.hash` in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
 | No naming from the project this pipeline was ported from survives in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
@@ -255,18 +257,45 @@ phase 6 owes.
 
 ### Approval is a constraint, not a branch
 
-The gate on research is a CHECK constraint in the schema: a row cannot
-be recorded as researched unless it already carries its approval. The
-constraint refuses the write itself, so the gate holds for every
-writer — workflow, script, or API — and skipping it is not a code path
-anybody has to review for.
+Every approval row in the register says the same thing about a different
+subject. The gate on research is a CHECK constraint in the schema: a row
+cannot be recorded as researched unless it already carries its approval.
+The gate on source configuration is that mechanism one table over — a
+`source_config_proposals` row cannot record that its `parser_config` and
+`contract` were applied unless it already records that somebody approved
+them. Each constraint refuses the write itself, so each gate holds for
+every writer — workflow, script, or API — and skipping one is not a code
+path anybody has to review for.
 
-A branch inside a workflow would be the weaker form of the same rule.
-It can be edited by anyone who can open the executor's UI, that edit
-leaves no diff to review, and it binds only the writer it sits in.
-Until the service and its UI take approvals over, they are recorded
-through a small CLI (phase 2) — which is a client of the constraint,
-not a substitute for it.
+A branch inside a workflow would be the weaker form of the same rule. It
+can be edited by anyone who can open the executor's UI, that edit leaves
+no diff to review, and it binds only the writer it sits in. Until the
+service and its UI take approvals over, rulings on both gates are made
+through one small CLI — `scripts/approve.ts`, landed in phase 2 and
+taught the second gate in phase 5 — which is a client of the constraints
+and not a substitute for either.
+
+How far each constraint reaches is where they differ, and the difference
+is worth stating because their register cells look alike.
+`research_pool_approval_check` reads `researched_at` and `approved_at`
+on one row, so the property and the record of it are the same write and
+the CHECK is the whole of the gate.
+`source_config_proposals_approval_check` reads two timestamps on the
+proposal row and says nothing whatever about `sources`, so what it
+enforces is that the record of an application carries the record of an
+approval — not that the UPDATE onto the source went through the table at
+all. A writer that rewrites `sources.parser_config` directly is refused
+by nothing.
+
+The row is still worth writing against the CHECK rather than against
+that writer. What the database holds is the half no code path can route
+around, which is the half a register is for; the other half is
+`proposalToSourceUpdate` in `src/sources/config-proposer.ts`, which
+refuses to answer an UPDATE for a proposal carrying no `approved_at` —
+the same account the CHECK reads, never `status`, which neither
+consults. `docs/architecture/04-sources.md` carries that half and the
+path either side of it. What the register adds is why the database half
+is worth a row of its own.
 
 ### A hash and a depth cap are properties of a set, not of a row
 

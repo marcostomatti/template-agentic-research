@@ -183,9 +183,10 @@ indistinguishable in a red suite.
 
 ### A parser config is data the engine executes, never code
 
-Selectors, JSONPath, regex, a field map. The parse engine arriving in
-phase 5 performs the operations it implements against the payload,
-directed by that column; it evaluates nothing it finds there.
+Selectors, JSONPath, regex, a field map. The parse engine in
+`src/lib/parser-config.ts` performs the operations it implements
+against the payload, directed by that column; it evaluates nothing it
+finds there.
 
 That is what keeps an INSERT into `sources` an INSERT. A column whose
 contents could execute would turn every writer that reaches it — the
@@ -202,8 +203,169 @@ contract together. The proposal lands as a pending row for an
 operator to rule on. Only the approval writes those two columns, and
 the engine then runs what was approved deterministically: a model
 proposes, a person decides once, and no guess silently changes what
-the pipeline extracts. The propose step is phase 5's; the columns it
-targets and the shape of the answer are fixed here.
+the pipeline extracts. The section below is that path end to end,
+from what is asked to the UPDATE a ruling authorizes.
+
+## Configuration a model proposes and a person approves
+
+### The path, in the order a proposal travels it
+
+Four steps, and only the first two and the last are code in this
+directory. `src/sources/config-proposer.ts` holds them, and it fronts
+no source: it declares no member of the contract above, appears in no
+registry, and opens nothing. What it is about is the pair of
+`sources` columns an adapter reads — how records are taken out of a
+payload, and what a correct reading looks like — and the separate
+question of who is allowed to write them.
+
+Something is asked for an arrangement first. `ConfigProposer` is that
+something, as an interface: one method, handed the source it is
+proposing for and one sample payload, answering the two documents
+together. A model client over a `connectors` endpoint is the expected
+implementation and not the only one the shape admits, and nothing on
+the path asks which it was.
+
+`proposalToPendingRow` turns that answer into a
+`source_config_proposals` insert naming five columns and leaving
+every other one to its default. `status` is one it does not name, so
+a proposal is `pending` because the table says so rather than because
+the propose path said so; `approved_at` is another, and the value it
+answers has no such member at all, so a writer spreading it into an
+insert has nothing to spread. `proposeSourceConfig` is those two
+steps in one call, and the only place the seam is actually crossed.
+
+A person then rules on the row through `scripts/approve.ts`, against
+a database, with no member of this directory involved. Only after
+that does `proposalToSourceUpdate` turn the approved row into the
+UPDATE for its source — two columns, exactly as they were proposed —
+and refuse a row nobody approved.
+
+### No proposer is constructed by default
+
+`ConfigProposer` is declared here and implemented nowhere. There is
+no factory in the module, no default standing in for one, and nothing
+in this service builds one at startup: a run that wants a proposal
+builds its own from the `connectors` row naming the model endpoint it
+is entitled to call, and hands it in.
+
+That is what keeps the isolated suite offline, and it is the
+enforcement rather than a convention — the only thing in reach that
+could call a model server is a parameter, so the cases beside the
+module drive an injected stub and could not reach one if they tried.
+The transport `listing-api.ts` takes at construction is the same
+decision about the same kind of reach: a call to something outside is
+visible in the call that made it, or it does not happen. One file
+does build a real proposer,
+`tests/live/config-proposer.live.test.ts`, and it self-skips unless
+`AR_OLLAMA_URL` names a model server — which nothing in this
+repository exports and no compose service satisfies.
+
+### A proposer is shown four members of the row
+
+An id, a domain, a kind and an endpoint, copied out into a fresh
+object rather than handed over as the caller's row. The annotation is
+a floor — a caller holding a whole `sources` row satisfies it — and
+copying the members out is what makes it a ceiling.
+
+What it leaves out is the substance. `cursor` is where the last fetch
+stopped, which is state a proposal must not move. The health half is
+`src/lib/source-health.ts`'s answer and nobody else's. And the
+current `parser_config` and `contract` are withheld deliberately: a
+proposer answers what the sample payload says the arrangement should
+be, and handing it the arrangement that is currently failing gives it
+something to copy.
+
+The cost of that last omission is real and worth naming. A proposer
+cannot answer that the config is right and the source changed, and it
+cannot improve on a config by degrees. The comparison happens where
+the ruling does, with the pending row and the source row both in
+front of one person.
+
+### What is stored is what was answered
+
+Nothing on the propose path validates a proposal, and that is the
+column's own decision rather than an omission. `parserConfigErrors`
+in `src/lib/parser-config.ts` says whether a config is well-formed,
+and an operator reading the queue is who that answer is for: a
+malformed proposal is storable, says something true about what was
+asked, and is one to reject rather than one the table should refuse.
+Both documents travel from the proposer's answer to the insert unread
+and uncopied, which is what makes the approval an approval of this
+exact document.
+
+A proposer that throws, cannot be reached, or times out is let
+through untouched, for the same reason read from the other end.
+Catching it would merge two states that are not one: a proposer that
+could not be asked, and a proposer that answered something unusable.
+Only the second is a proposal. The first, caught, would put a pending
+row in front of an operator for a question nobody answered, and that
+row would read exactly like a model that had genuinely answered with
+nothing.
+
+### The ruling is a row, and the CLI is a client of it
+
+`scripts/approve.ts` is the whole operator surface until the service
+and its UI take approvals over. It rules on this gate and on
+`research_pool`, because they are one job — a person's ruling
+standing between a machine's suggestion and a machine acting on it —
+and a ruling therefore names which: `approve config 7` and
+`approve pool 7` are rulings on different rows. Both tables key on
+`bigserial`, so row 7 exists in each, and a subject inferred from the
+number would be a guess made silently on the one command that writes.
+`list` names neither and reports both queues, each under its own
+heading, which is where an operator learns the two words.
+
+It decides nothing about what may be written. Every approval it
+issues only ever stamps `approved_at`, which can satisfy the
+constraint below and never breach it, and every rejection leaves both
+of the row's timestamps exactly as it found them — so a run of the
+tool never meets a refusal at all, which is what being a client of a
+constraint means. The queue it reads is ordered oldest first on
+`proposed_at`, which is what makes several proposals for one source
+workable without a key refusing the later ones.
+
+### The database holds one half of the rule, and this module the other
+
+They are not the same rule, and reading them as one is how the gap
+between them goes unnoticed. `source_config_proposals_approval_check`
+reads the two timestamps on the proposal row, so a row cannot record
+that it was applied without recording that it was approved first. It
+is generated into the migration under `drizzle/` that
+`tests/invariants/schema-sql.test.ts` reads, and registered as an
+invariant in `docs/architecture/01-invariants.md`. What it does not
+reach is `sources` at all. Both columns it reads are on the proposal,
+so what it enforces is that the record of an application carries the
+record of an approval — not that the UPDATE onto the source passed
+through this table on its way. A writer that skips the table and
+rewrites `sources.parser_config` directly is refused by nothing.
+
+`proposalToSourceUpdate` is what stands in that gap on the apply
+path, and it keys on the same account the CHECK does: `approved_at`,
+never `status`, which the database does not consult either and which
+may disagree with it. The status column is the account of the row
+rather than the gate, so a row stamped `done` with no approval is
+storable, and a check reading it would open for one. The stamp is
+read so that a NULL column and a member a caller projected away come
+out as one answer — a row that cannot say it was approved is a row
+that was not.
+
+Its refusal is loud rather than an empty answer, and that is because
+both ways of getting this wrong are silent and permanent. An UPDATE
+with nothing in its SET clause is an error nowhere in the stack; an
+UPDATE carrying an unapproved arrangement makes every later pass of
+that source extract under something nobody agreed to, and store what
+it got. Neither is undone by anything downstream, which is the same
+argument the `flagged` column rests on, and the reason this module
+refuses where `src/lib/source-health.ts` refuses nothing.
+
+What it does not refuse is worth reading beside that. A proposal
+already applied is answered again, since re-applying writes the same
+two documents onto the same source and there is nothing to protect by
+refusing — the selection that skips applied rows belongs to whoever
+is walking the queue. A malformed `parser_config` somebody approved
+anyway is answered, because the approval is the gate and this is not
+a second one. And nothing here writes: the answer is a value, and
+whether the UPDATE happened is known only to whoever ran it.
 
 ## The registry
 
