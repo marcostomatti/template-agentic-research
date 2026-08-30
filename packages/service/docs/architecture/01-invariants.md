@@ -27,7 +27,7 @@ seam that row polices.
 | Invariant | Enforced by | Owning phase | Status |
 | --- | --- | --- | --- |
 | No workflow holds a send-capable node | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
-| A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/`, for what a model node may be fed — the half this row's phase and status are about; `tests/lib/chunk.test.ts`, landing in phase 4, for what a prepared chunk is before any workflow reaches for one | 6 | Pending |
+| A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/`, for what a model node may be fed — the half this row's phase and status are about; `tests/lib/chunk.test.ts`, landed in phase 4, for what a prepared chunk is before any workflow reaches for one | 6 | Pending |
 | A prepared chunk is capped at 6000 characters, and there is no raw-body fallback | `tests/lib/chunk.test.ts`, driving `buildChunk` over assemblies each of which would overrun the cap, and holding what it refuses to a closed roster of reasons in both directions | 4 | Implemented |
 | Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 6 | Unexercised |
 | Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |

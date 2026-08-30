@@ -79,8 +79,9 @@ export type SourceKind = (typeof SOURCE_KINDS)[number];
  * the row that most needs them is one whose payload yielded no record at
  * all, so {@link SourceAdapter.toCanonical} never ran to return a shape
  * they could have sat in. And `features`, `feature_version`, `embedding`
- * and `embedding_model` arrive with the feature port in phase 4,
- * computed from the stored row long after the capture that wrote it.
+ * and `embedding_model` are computed from the stored row long after
+ * the capture that wrote it, and nothing writes any of them yet:
+ * phase 4 landed the feature port but no writer.
  *
  * Each member below names its column and states only what the CONTRACT
  * adds. Why the database holds a column the way it does is argued once,
@@ -146,8 +147,8 @@ export interface CanonicalDocument {
  * Nothing in this interface takes configuration per call, which is a
  * decision rather than an omission. A source row's `parser_config`
  * (selectors/JSONPath/regex/field-map — data the engine executes, never
- * code) binds once when the adapter is constructed in phase 4, alongside
- * that row's endpoint. Two later-phase properties depend on it: one adapter
+ * code) binds once when the adapter is constructed, alongside that row's
+ * endpoint. Two later-phase properties depend on it: one adapter
  * type serves every row of its {@link SourceKind} with only its construction
  * differing, and {@link SourceAdapter.parse} stays a function of the payload
  * alone — threading the config through each call would make its output

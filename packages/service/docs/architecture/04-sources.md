@@ -17,12 +17,13 @@ and validation the contract leaves room for — and phase numbers
 throughout refer to the 7-phase sequencing in that design, §7.
 
 One of the things `src/sources/` will hold is not here yet: the
-adapters that front a source, which land later in phase 4 and bring
-their own section here in the commit that lands them. What this
-document covers today is the contract they will satisfy, the
-registry that will select one of them, and the two shared modules
-they will reach for — the listing loop that gets the bytes, and the
-reduction that turns markup into the text a body holds.
+adapters that front a source, which arrive with `ar-ingest` in
+phase 5 and bring their own section here in the commit that lands
+them. What this document covers is what phase 4 landed for them to
+be built against: the contract they will satisfy, the registry that
+will select one of them, and the two shared modules they will reach
+for — the listing loop that gets the bytes, and the reduction that
+turns markup into the text a body holds.
 
 ## The contract
 
@@ -43,7 +44,7 @@ the registry is the list of the ones this service will run.
 
 It does not score, does not decide, and does not store. Everything a
 capture leads to is somebody else's: the gate and the feature
-extraction are libraries under `src/lib/` — both later in phase 4 —
+extraction are libraries under `src/lib/` — both landed in phase 4 —
 the writing is a workflow node, and the scheduling that decided this
 source was due at all is `docs/architecture/06-scheduling.md`'s.
 
