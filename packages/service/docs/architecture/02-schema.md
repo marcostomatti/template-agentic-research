@@ -23,7 +23,7 @@ the rules that span more than one of them.
 
 ## The roster
 
-Twenty-four tables. Each area below is one module, and that module's
+Twenty-five tables. Each area below is one module, and that module's
 header carries the argument for why its tables sit together.
 
 ### Domains — `src/db/schema/domains.ts`
@@ -46,6 +46,7 @@ header carries the argument for why its tables sit together.
 | Table | What it holds |
 | --- | --- |
 | `sources` | One feed the pipeline is allowed to read: which transport family fronts it, what address to reach, how records are pulled out of the payload, what that payload has to contain, where the last fetch stopped, and its health. Adding a feed is an INSERT; only a new kind of feed needs a module. |
+| `source_config_proposals` | One proposed `parser_config` and `contract` for a source, held until a person rules on it. Only the approval writes those two columns onto the source row, and a named CHECK refuses a row that records having been applied while recording no approval — so a model may propose what the pipeline extracts and never decide it. |
 | `connectors` | One external service the pipeline calls — a model, a search endpoint, a notebook, an export target. Deployment-level rather than domain-scoped: which instance answers is a fact about where this is running, and a domain names the connector it wants where the choice actually varies. |
 
 ### Scheduling — `src/db/schema/scheduling.ts`
