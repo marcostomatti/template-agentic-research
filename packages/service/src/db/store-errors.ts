@@ -17,7 +17,11 @@
  * refused; deciding whether that is a 409, a 422 or a 404 is the
  * rules layer's job and varies by route — the same
  * `foreign-key-violation` is a 409 when a category still holds
- * children and a 422 when a `parentId` names a row in another domain.
+ * children and a 422 when a `parentId` names no row at all. Both are
+ * `categories_parent_id_categories_id_fk`, so which call was made is
+ * the only thing telling them apart. A parent in ANOTHER domain is
+ * not this reason: the depth trigger refuses that one as a
+ * `check-violation`, measured against the live Postgres.
  * Were this an `AppError`, an unmapped refusal escaping a service
  * would reach `errorHandler` and answer a plausible-looking status
  * that no rule ever authorised. As a plain `Error` it answers 500 and
