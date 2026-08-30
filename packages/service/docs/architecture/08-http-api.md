@@ -132,17 +132,35 @@ here as a known departure rather than patched from a route group.
 
 `page` is 1-based. Neither `limit`/`offset`, nor `pageSize`, nor
 `per_page` is accepted anywhere. The store ports take `limit` and
-`offset` because that is what SQL takes; the translation happens
-once, in `src/http/schemas.ts`, and no router declares a query
-schema of its own.
+`offset` because that is what SQL takes, and the translation
+happens once, in `src/http/schemas.ts`.
+
+No router declares a pagination vocabulary of its own. Three do
+declare a query schema for something else, and none of the three
+is a second spelling of a window: the confirmation on
+`DELETE /domains/:slug`, the empty one that refuses every parameter
+on `GET /domains/:slug/categories`, and the `?format` on
+`GET /categories/:id/terms`. Only the last competes with this
+schema on the same route, and it competes by REPLACING it — a
+request naming `?format` is judged against that schema instead,
+which is what makes `?format=seed&page=2` a refusal rather than a
+window silently dropped.
 
 One wave-1 list route is not paginated at all, and the capital is
 what keeps this rule true rather than nearly true:
 `GET /domains/:slug/categories` answers a domain's taxonomy WHOLE
 and refuses any query parameter it is sent, including `?page`. The
 Taxonomy section below carries the argument for both halves of
-that. Every other list route on the surface reads through the
-schema named above.
+that.
+
+A second route leaves the paginated class only when it is asked
+to. `GET /categories/:id/terms?format=seed` answers a document
+rather than a page and reads through no window at all, while the
+same route without `?format` is an ordinary paginated list. That
+is one route stepping out of this rule for one request, not a
+third parameter joining the two spellings above. Every other list
+route on the surface reads through the schema named above and
+through nothing else.
 
 Those names match `PaginationMeta` in
 `packages/ui/src/cache/types.ts`, which declares the same four
@@ -594,3 +612,122 @@ three different requests: absent leaves the row where it is, a
 number moves it under that root, and `null` promotes it to a root.
 Null is the only way back up, and it would be unexpressible if
 absent and null meant the same thing.
+
+### A term is met in its category and written by its id
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /categories/:id/terms` | `200` with one page of the category's lexicon, pattern ascending, plus `meta`. `404` for an unknown id, `422` for a segment that is not an id and for the pagination faults every list route answers. |
+| `GET /categories/:id/terms?format=seed` | `200` whose body is a seed document rather than an envelope. `404` for an unknown id, `422` for any other `?format` value and for `?format` sent beside any other parameter. |
+| `POST /categories/:id/terms` | `201` with the stored row for one term, or with `{ imported }` for a seed document. `404` for an unknown id, `409` when a single create names a taken pattern, `422` for a body either schema refuses and for a document row naming another category or repeating a pattern. |
+| `PATCH /terms/:id` | `200` with the row afterwards. `404` for an unknown id. `422` for a body the schema refuses, for a segment that is not an id, and for a `categoryId` naming no category or one in another domain. `409` when the resulting pattern is taken. |
+| `DELETE /terms/:id` | `204` with no body. `404` for an unknown id, `422` for a segment that is not one. Never `409`: nothing hangs off a term. |
+
+`src/taxonomy/terms-routes.ts` declares four routes over the six
+functions in `src/taxonomy/terms-service.ts`, and decides none of
+them. Two of the four carry two operations apiece, which is the
+whole of what this file adds over its siblings: `?format` picks
+between a page and a document, and the body's `terms` member picks
+between one term and a whole lexicon.
+
+The collection hangs off `/categories/:id` because a lexicon has no
+meaning apart from the bucket it scores for. The two writes address
+`/terms/:id` instead, for the reason a category is written by id:
+the row carries its own `category_id`, and repeating it in the path
+would let a request name a bucket the term does not sit in. A term
+is never addressed by a `:slug` at all — nothing relates it to a
+domain except through its category, and no rule on this surface
+needs one.
+
+### `?format=seed` and `?page` are exclusive, and sending both is a `422`
+
+They are two vocabularies for two different answers. Without
+`?format` the route answers one page in the paginated envelope every
+other list route uses; with `?format=seed` it answers the category's
+terms WHOLE, as the bytes `data/terms.json` carries — no envelope,
+no `meta` and no window, because a document describing a page would
+not import back into the category it came out of.
+
+A request carrying both is refused as an undeclared key naming
+`query` rather than served a document with the window dropped. A
+caller that sent `?page` believes it is reading a page, and a
+document is not one; this is the same fault
+`GET /domains/:slug/categories` refuses a bare `?page` for, reached
+from the other direction.
+
+The discrimination is on the member's PRESENCE and the refusal on
+its value, which is why `?format=csv` answers a detail naming
+`format` and not one naming `query`. A branch keyed on the value
+would have sent that request to the paginated parse, where `format`
+is undeclared, and left the caller looking for a typo it did not
+make.
+
+### A create is one term or a whole lexicon, and the body says which
+
+A body carrying `terms` is a seed document; anything else is one
+term. The discriminator is the member rather than a second path or a
+`?mode`, because the two bodies are already distinguishable and a
+caller holding a document should not have to describe it as well as
+send it. Both schemas are strict, so a body carrying `terms` beside
+`pattern` is refused rather than quietly read as one of the two.
+
+The two answer a duplicate pattern differently, and that is the
+substantive difference rather than a detail of the dispatch. A
+document is a lexicon being applied, so it upserts on
+`terms_category_id_pattern_unique` and rewrites the row it finds —
+which is what lets an export import back rather than accumulating a
+second row that would count the same match twice. A single `POST` is
+a caller stating that a pattern is not yet in the bucket, so a
+duplicate is a `409` rather than a silent rewrite of somebody else's
+weight.
+
+### An import is checked whole before any of it is written
+
+One malformed row in a hundred refuses the hundred, which is what
+makes a bulk import an operation rather than a batch of them. Three
+checks run before the single statement that writes: the schema over
+every row, the rule that each row's `categoryKey` names the category
+the path addressed, and the rule that one document states one row
+per pattern.
+
+The last of those is not tidiness. Postgres answers SQLSTATE 21000
+when one statement's values repeat the conflict target, the store's
+classifier deliberately does not recognise it, and the port states
+one-row-per-pattern as a precondition — so without the check the
+document would answer `500` naming neither colliding row.
+
+A detail from any of the three names the row by INDEX
+(`terms.0.polarity`, `terms.3.categoryKey`), which is how a caller
+finds the offending row in a long document. The index comes from the
+row's position and never from anything the row said, so the rule
+that a detail names a field path and never a submitted value holds
+here as everywhere else on this surface.
+
+### A bulk import answers a count, and the count is of rows submitted
+
+The port answers an upsert's rows in an UNSPECIFIED order, so putting
+them on the wire would hand a caller a list it cannot line up against
+the document it sent. Both ordered reads are one request away, so the
+answer is `{ imported }` and a caller wanting the stored rows re-reads
+the category.
+
+`imported` counts SUBMITTED rows and not new ones: a pattern the
+category already carried is rewritten rather than skipped, so a caller
+comparing the count against the category's size is reading it wrong.
+`GET /categories/:id/terms` answers that question.
+
+### A bucket move is this surface's own rule, not the database's
+
+Nothing in the schema relates a term to a domain. `terms` reaches
+`domains` only through `categories`, and no constraint follows that
+path, so Postgres accepts a move into another domain's taxonomy —
+measured. A term that landed there would go on scoring for a domain
+nobody put it in and would arrive in that domain's export.
+
+So `PATCH /terms/:id` reads both categories when the patch names one
+and refuses the pair that disagree, with a `422` naming `categoryId`.
+It is the one rule on the taxonomy surface checked BEFORE a write
+rather than translated after one, and the depth cap is the opposite
+case for the opposite reason: a trigger holds that one against every
+writer, so a check would be a second, weaker statement of a rule that
+already held.
