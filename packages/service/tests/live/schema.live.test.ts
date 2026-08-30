@@ -39,7 +39,7 @@
  *
  * Each refusal is pinned twice. The SQLSTATE is the class a caller
  * programs against, and it names no rule of its own: the depth cap
- * and the approval gate both answer `check_violation`, and the hash
+ * and the approval gates both answer `check_violation`, and the hash
  * key answers `unique_violation` alongside every other unique key on
  * its table, so a case asserting the code alone passes on a
  * neighbouring rule. The second pin is what names WHICH rule refused,
@@ -61,11 +61,17 @@
  * the shape a taxonomy is mostly made of is asserted on its own rather
  * than left standing as their precondition.
  *
- * The approval pair's accepted write answers a second question the
- * depth one cannot. It is the same UPDATE its refusal watched
- * rejected, aimed at a row that differs only in carrying an approval,
- * so accepting it is what pins that refusal to the row's state rather
+ * The approval gates' accepted writes answer a second question the
+ * depth one cannot. Each is the same UPDATE its refusal watched
+ * rejected, aimed at a row differing only in carrying an approval, so
+ * accepting it is what pins that refusal to the row's state rather
  * than to the statement — which a refusal on its own cannot say.
+ * How far that goes differs by table. `research_pool` takes two cases
+ * over two rows, and rests on those rows having differed in nothing
+ * else. `source_config_proposals` fits in one case over one row: a
+ * rejected statement leaves the row as it found it, so the write that
+ * is refused and the write that is taken are the same write, and the
+ * approval between them is the whole of the difference.
  *
  * The hash key is read from both ends inside one case, because a
  * repeat capture meets it both ways: refused where nothing absorbs
@@ -92,7 +98,14 @@ import type { Pool } from 'pg';
 import { eq, getTableName, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 
-import { categories, documents, domains, researchPool } from '../../src/db/schema.js';
+import {
+  categories,
+  documents,
+  domains,
+  researchPool,
+  sourceConfigProposals,
+  sources,
+} from '../../src/db/schema.js';
 
 import {
   applyMigrations,
@@ -137,6 +150,25 @@ interface DriverError {
    * only inside prose.
    */
   readonly column?: string;
+}
+
+/**
+ * The two timestamps `source_config_proposals_approval_check` reads,
+ * as the writes in the proposal case return them.
+ *
+ * Named rather than written inline because that case's two halves are
+ * one write issued twice, and the builder issuing it needs a return
+ * type its call sites can be compared through. Both members are
+ * nullable because that is what the table declares: the pending state
+ * every proposal starts in is the pair being NULL, and the rule under
+ * test is which of their four combinations the database will store.
+ */
+interface ApprovalStamps {
+  /** When a person ruled in favour, or NULL where nobody has yet. */
+  readonly approvedAt: Date | null;
+
+  /** When the ruled-on config was written onto the source, or NULL. */
+  readonly appliedAt: Date | null;
 }
 
 /**
@@ -668,6 +700,140 @@ describeLivePg('schema migrations (live Postgres)', () => {
     // admitted: `approved_at` still where the approval put it,
     // `researched_at` now beside it.
     expect(closed).toStrictEqual([{ approvedAt, researchedAt }]);
+  });
+
+  it('refuses applying a proposal nobody approved, and takes it once approved', async () => {
+    // The second approval gate in this schema, over the other subject
+    // `scripts/approve.ts` rules on: a proposal may record that its
+    // config was written onto the source only if it already records
+    // that a person ruled in favour. Both columns belong to the row
+    // being written, so a plain CHECK carries it, generated out of
+    // `src/db/schema/sources.ts` and named
+    // `source_config_proposals_approval_check` — the shape
+    // `research_pool_approval_check` above takes over its own subject.
+    //
+    // Refusal and acceptance sit in ONE case here where that pair
+    // takes two, and the difference is what this one can say that the
+    // pair cannot. A statement Postgres rejects leaves the row as it
+    // found it, so the write taken below is the SAME write against the
+    // SAME row, with an approval between them as the whole of the
+    // difference — where two rows have to be argued to differ in
+    // nothing else.
+    //
+    // The insert below is the near-miss the refusal rests on. Both
+    // timestamps NULL is the pending state every proposal is raised in
+    // and the same CHECK admits it, so what goes red is the pair the
+    // UPDATE would leave behind and not the act of writing
+    // `applied_at`.
+    //
+    // The constraint name is the second pin for a reason present on
+    // this table rather than a future one:
+    // `source_config_proposals_status_check` sits on it and answers
+    // the same SQLSTATE, so a case pinned on the code alone passes on
+    // a write that merely misspelled a status.
+    const domain = oneRow(
+      await db.insert(domains)
+        .values({ slug: 'config-proposal', name: 'Config proposal' })
+        .returning({ id: domains.id }),
+      'the config-proposal domain',
+    );
+    const source = oneRow(
+      await db.insert(sources)
+        .values({
+          domainId: domain.id,
+          kind: 'api',
+          endpoint: 'https://feed.example.invalid/items',
+        })
+        .returning({ id: sources.id }),
+      'the source the proposal below is made for',
+    );
+    const proposed = oneRow(
+      await db.insert(sourceConfigProposals)
+        .values({
+          domainId: domain.id,
+          sourceId: source.id,
+          proposedBy: 'the proposer this case stands in for',
+        })
+        .returning({
+          id: sourceConfigProposals.id,
+          approvedAt: sourceConfigProposals.approvedAt,
+          appliedAt: sourceConfigProposals.appliedAt,
+        }),
+      'the pending proposal the UPDATEs below approve and apply',
+    );
+
+    // The pending state this case is named for, read back rather than
+    // inferred. Give either column a default and the write below is
+    // accepted; without this that reports as the CHECK having gone
+    // rather than as the row having arrived already ruled on.
+    expect(proposed.approvedAt).toBeNull();
+    expect(proposed.appliedAt).toBeNull();
+
+    // Two distinct instants rather than one reused clock reading, so a
+    // stamp landing in the wrong column fails here instead of
+    // matching. The approval is the earlier of the two, which is the
+    // only order the path this rule guards can produce.
+    const approvedAt = new Date('2026-03-03T09:00:00.000Z');
+    const appliedAt = new Date('2026-03-04T09:00:00.000Z');
+
+    // One builder rather than a statement per call site, because the
+    // two halves of this case are a comparison and its halves have to
+    // be the same write: written out twice they can drift, and two
+    // statements compared against each other report nothing about
+    // either. `captureWrite` above carries that shape across two
+    // tables, where this one carries it across two states of one row.
+    function applyToSource(): Promise<ApprovalStamps[]> {
+      return db.update(sourceConfigProposals)
+        .set({ appliedAt })
+        .where(eq(sourceConfigProposals.id, proposed.id))
+        .returning({
+          approvedAt: sourceConfigProposals.approvedAt,
+          appliedAt: sourceConfigProposals.appliedAt,
+        });
+    }
+
+    const failure = await applyToSource().then(() => null, (thrown: unknown) => thrown);
+
+    // Both halves sit on the cause for the reason the depth cases
+    // record. The constraint name is what separates this rule from the
+    // status CHECK beside it, and unlike the text a trigger raises it
+    // is a name this repository chose — named in
+    // `src/db/schema/sources.ts` so the static-SQL invariant suite
+    // could grep for it, so it moves only in a diff.
+    expect(failure).toBeInstanceOf(Error);
+    const { cause } = failure as { cause?: DriverError };
+    expect(cause?.code).toBe('23514');
+    expect(cause?.constraint).toBe('source_config_proposals_approval_check');
+
+    const approved = await db.update(sourceConfigProposals)
+      .set({ approvedAt })
+      .where(eq(sourceConfigProposals.id, proposed.id))
+      .returning({
+        approvedAt: sourceConfigProposals.approvedAt,
+        appliedAt: sourceConfigProposals.appliedAt,
+      });
+
+    // The approval and the refused write's receipt, read in one go. An
+    // UPDATE matching no row resolves like one that wrote, so without
+    // the first stamp the apply below would run against a row still
+    // pending and be refused — a red reporting the CHECK as gone
+    // when what failed was this statement. The second is `applied_at`
+    // still NULL, which says the rejected statement above wrote
+    // nothing and left the row for this one to change.
+    expect(approved).toStrictEqual([{ approvedAt, appliedAt: null }]);
+
+    const applied = await applyToSource();
+
+    // The same write, taken. One row holding both stamps: the count
+    // says the UPDATE reached the row rather than none, and the pair
+    // is the state the CHECK admitted — `approved_at` still where
+    // the approval put it, `applied_at` now beside it.
+    //
+    // What it does not say is that the constraint is installed, for
+    // the reason the accepted writes above record: a table carrying no
+    // such rule takes this pair too. Only the refusal it is paired
+    // with tells the two apart.
+    expect(applied).toStrictEqual([{ approvedAt, appliedAt }]);
   });
 
   it('refuses a second document under a stored hash, and DO NOTHING adds no row', async () => {
