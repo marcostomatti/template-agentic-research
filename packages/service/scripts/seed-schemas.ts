@@ -9,6 +9,28 @@
  * re-exports every name here, so nothing outside these two files can
  * tell the two apart.
  *
+ * The TERM shape is the exception, and it is reached rather than
+ * declared. `src/taxonomy/seed-format.ts` owns the term row schema,
+ * the file schema around it and the serialiser that writes a
+ * document back out; the two names this module used to declare are
+ * re-exported from there, so a reader of `data/terms.json` and a
+ * reader of the bulk-import route are held to one declaration. They
+ * have to be. The HTTP surface accepts a terms document and answers
+ * one, and a lexicon that survives import, edit and export again
+ * round-trips only against ONE declaration of its bytes; two agree
+ * until the day one of them gains a member, and the failure is a
+ * document one reader takes and the other refuses. Every rule the
+ * paragraphs below state holds there too, `.strict()` included, and
+ * that module's own header carries the argument for each.
+ *
+ * That re-export NAMES its two symbols rather than being the bare
+ * `export *` the `seed-schemas.ts` / `seed-apply.ts` split uses,
+ * because the module it reaches is not a private half of this one:
+ * `serializeTermSeedDocument` is the HTTP surface's and belongs on no
+ * seed entry point. What the precedent promises is that a consumer
+ * cannot tell the declaration moved, and naming the two is what
+ * keeps `seed.ts`'s own `export *` surface exactly what it was.
+ *
  * Every object in every schema below is `.strict()`. Zod's default is
  * to STRIP an unknown key and report nothing, which is the failure
  * this module exists to avoid: a mistyped member validates, the row
@@ -71,8 +93,6 @@
 import type { DomainFieldType } from '../src/db/schema.js';
 
 import { z } from 'zod';
-
-import { TERM_POLARITIES } from '../src/db/schema/values.js';
 
 /**
  * The field types a domain's field contract may declare, mirroring
@@ -212,35 +232,6 @@ const categorySeedSchema = z.object({
 }).strict();
 
 /**
- * One row of `data/terms.json`: one pattern a category matches on,
- * and what a match is worth. Upserted by the (category, pattern) pair
- * `terms_category_id_pattern_unique` holds.
- *
- * `weight` is an integer and nothing more. Its sign is not consulted
- * — which way a match points is `polarity`'s to say — so a negative
- * weight means exactly what its positive means, and refusing one here
- * would refuse a row the database accepts and the matcher reads the
- * same way.
- *
- * `polarity` imports `TERM_POLARITIES` rather than restating its
- * three members. That tuple is the single declaration
- * `terms_polarity_check` is generated from, so widening it widens the
- * CHECK and this schema together and a seed can never name a polarity
- * the column would refuse.
- *
- * `notes` is required and nullable for the reason `parentKey` is: a
- * row with nothing recorded says so, rather than being
- * indistinguishable from a member left off.
- */
-const termSeedSchema = z.object({
-  categoryKey: z.string().min(1),
-  pattern: z.string().min(1),
-  weight: z.number().int(),
-  polarity: z.enum(TERM_POLARITIES),
-  notes: z.string().nullable(),
-}).strict();
-
-/**
  * One row of `data/topics.json`: a standing subject, the queries it
  * issues and how often it runs. Upserted by the (domain, name) pair
  * `topics_domain_id_name_unique` holds.
@@ -318,12 +309,12 @@ export const CategoriesFileSchema = z.object({
  * The whole of `data/terms.json`, once `stripUnderscoreKeys` has
  * cleared its header.
  *
- * Strict at this level for the reason {@link DomainsFileSchema}
- * gives.
+ * Re-exported rather than declared, for the reason the module header
+ * gives: the term shape has one declaration and this file is one of
+ * its two readers. Strict at this level and inside a row over there,
+ * for the reason {@link DomainsFileSchema} gives here.
  */
-export const TermsFileSchema = z.object({
-  terms: z.array(termSeedSchema),
-}).strict();
+export { TermsFileSchema } from '../src/taxonomy/seed-format.js';
 
 /**
  * The whole of `data/topics.json`, once `stripUnderscoreKeys` has
@@ -357,8 +348,11 @@ export type CategorySeed = z.infer<typeof categorySeedSchema>;
 /**
  * One validated `data/terms.json` row, as {@link TermsFileSchema}
  * yields it.
+ *
+ * Re-exported alongside the schema it is inferred from, so the two
+ * cannot come from different declarations.
  */
-export type TermSeed = z.infer<typeof termSeedSchema>;
+export type { TermSeed } from '../src/taxonomy/seed-format.js';
 
 /**
  * One validated `data/topics.json` row, as {@link TopicsFileSchema}

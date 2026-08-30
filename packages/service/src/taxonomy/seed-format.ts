@@ -17,14 +17,6 @@
  * `scripts/seed-apply.ts` already make between what a seed IS and
  * what applying one does.
  *
- * HALF DONE AT THIS COMMIT, and the half that is missing is the one
- * the paragraph above is about: this module holds the declaration,
- * and `scripts/seed-schemas.ts` still carries the private copy
- * `data/terms.json` is validated through. Folding that copy into a
- * bare re-export is the next commit, and this paragraph goes with
- * it. Until then the two ARE the doubling this module exists to
- * end, and nothing compares them.
- *
  * EVERY OBJECT HERE IS `.strict()`, carried over with the shape.
  * Zod's default is to STRIP an unknown key and report nothing, which
  * is the failure worth paying a refusal to avoid: a mistyped member

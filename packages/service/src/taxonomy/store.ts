@@ -324,10 +324,12 @@ export interface TermRecord {
  * `categoryKey` has been resolved, which is what lets the import path
  * hand rows straight to the store.
  *
- * `notes` is REQUIRED and nullable, matching the seed row schema in
- * `scripts/seed-schemas.ts` and for the reason that schema gives: a
- * row with nothing recorded says so, rather than being
- * indistinguishable from a member somebody left off.
+ * `notes` is REQUIRED and nullable, matching `termSeedSchema` in
+ * `src/taxonomy/seed-format.ts` and for the reason that schema
+ * gives: a row with nothing recorded says so, rather than being
+ * indistinguishable from a member somebody left off. That module is
+ * where the shape is declared for both readers, the seed pass
+ * reaching it through `scripts/seed-schemas.ts`.
  */
 export interface TermValues {
   /** What to look for. */
