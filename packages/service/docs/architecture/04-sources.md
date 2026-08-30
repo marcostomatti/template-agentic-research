@@ -305,13 +305,31 @@ The two other modules beside the registry front no source, declare
 none of the five members and each says so at the top of its own
 file.
 
-### The registry is Node-only, and could not be anything else
+### Nothing here is spliced into a workflow, the registry included
 
 A registry names its adapters with value imports, which is exactly
-what the dual-context rule under `src/lib/` forbids. That is why the
-splice roster in `tests/build/lib-splice.test.ts` reads `src/lib/`
-and not this directory: a workflow inlines the ONE adapter it needs,
-never the list of all of them.
+what the dual-context rule under `src/lib/` forbids, so the registry
+is Node-only and could not be anything else. The rest of the
+directory is out of reach for a different reason, and it is a rule
+rather than a preference: `assertMarkerPath` in
+`scripts/workflow-markers.ts` refuses a marker path holding a `..`
+segment, so `__INLINE:../sources/listing-api.ts__` is turned away by
+name. The marker grammar takes that path and the path rule reports
+it as `a .. segment` — which is the refusal that says which edit
+fixes it, rather than a malformed-marker report naming neither the
+file wanted nor the directory looked in. No module outside
+`src/lib/` is spliceable under any spelling, which is why the splice
+roster in `tests/build/lib-splice.test.ts` reads that directory and
+not this one.
+
+An adapter's extraction logic therefore reaches a Code node only by
+living in a dual-context library the adapter also calls. Both
+adapters here reach `parser-config.ts` and `markup-select.ts` under
+`src/lib/` to extract; a workflow wanting that same extraction
+inlines those two libraries by name, never the adapter around them.
+One implementation read from two sides, with the Node-only half of
+an adapter — its transport, its digest, its registry line —
+staying in this directory.
 
 ## The shared listing run
 

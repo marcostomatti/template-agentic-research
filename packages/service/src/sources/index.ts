@@ -24,9 +24,24 @@
  * Node-only, deliberately, and this is the file that could not be
  * anything else: a registry names its adapters with value imports,
  * which is exactly what the dual-context rule under `src/lib/`
- * forbids. A workflow inlines the ONE adapter it needs, never the
- * registry, and `tests/build/lib-splice.test.ts` reads `src/lib/`
- * rather than this directory for that reason.
+ * forbids. Nothing in this directory is spliced into a workflow
+ * either, and that is a rule rather than a preference.
+ * `assertMarkerPath` in `scripts/workflow-markers.ts` refuses a
+ * marker path holding a `..` segment, so
+ * `__INLINE:../sources/listing-api.ts__` is turned away by name:
+ * the grammar takes that path and the path rule reports it as
+ * `a .. segment`. No module outside `src/lib/` is spliceable under
+ * any spelling, which is why `tests/build/lib-splice.test.ts`
+ * reads that directory rather than this one.
+ *
+ * So an adapter's extraction logic reaches a Code node only by
+ * living in a dual-context library the adapter also calls. Both
+ * adapters here reach `parser-config.ts` and `markup-select.ts`
+ * under `src/lib/` to extract; a workflow wanting that same
+ * extraction inlines those two libraries by name, never the
+ * adapter around them. One implementation read from two sides,
+ * with the Node-only half of an adapter — its transport, its
+ * digest, its registry line — staying here.
  */
 import { SOURCE_KINDS } from '../db/schema/values.js';
 
