@@ -247,7 +247,7 @@ that were never shown the request.
 `zodToValidationError` in `lib/errors/handler.ts` copies
 `issue.message` VERBATIM — its own TSDoc says as much — and
 `errorHandler` answers a raw `ZodError` through it. Under the zod
-4.5.2 in this tree, a `.strict()` object rejecting an undeclared
+4.5.1 in this tree, a `.strict()` object rejecting an undeclared
 key produces one detail whose `field` is the empty string, whose
 `code` is `unrecognized_keys`, and whose `message` is
 `Unrecognized key: "<the submitted key>"` — the key quoted back

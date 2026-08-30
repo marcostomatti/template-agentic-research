@@ -36,6 +36,15 @@
  * rewords a message changes this service's wire text with no diff in
  * this package, which is what the 3-to-4 bump did to `Required`.
  *
+ * Two further rules keep submitted content out of the PATH, which
+ * is the other half of a detail and the half a vocabulary cannot
+ * protect. An `unrecognized_keys` issue names the object that
+ * refused rather than the key it refused. And any path segment
+ * below a prefix the caller listed in `options.openPaths` — an
+ * open record, whose keys the operator chose — is reported as
+ * `*`. Both are argued in `docs/architecture/08-http-api.md`;
+ * what each one rests on is measured, on the code that reads it.
+ *
  * `docs/architecture/08-http-api.md` carries the wave-1 wire contract
  * and the argument behind it. This module is where the validation
  * half of it is executed.
@@ -118,34 +127,125 @@ const BODY_ROOT_FIELD = 'body';
 const QUERY_ROOT_FIELD = 'query';
 
 /**
+ * What a detail shows in place of a path segment the operator
+ * chose rather than this service.
+ *
+ * A key inside an open record is submitted content in exactly the
+ * sense a value is, and `issue.path` carries it verbatim — measured
+ * under the zod 4.5.1 in this tree, a wrong-typed weight raises
+ * `invalid_type` at `['settings', 'scoringWeights', '<the
+ * submitted key>']`, and a key the record's own key schema refuses
+ * raises `invalid_key` at that same path. Masking the segment
+ * leaves a caller told which UNIT of its payload failed and how,
+ * and told back nothing it sent.
+ *
+ * `*` rather than a redaction word because it reads as a wildcard
+ * over the record's keys, which is what it is, and because no
+ * caller could mistake it for a key it had actually sent.
+ */
+const OPEN_SEGMENT = '*';
+
+/**
  * What a caller may tell the boundary parser about the value it is
  * parsing.
  *
- * It declares no member today, and is declared anyway so that the
- * signature route code is written against does not change when the
- * first one lands. The sanitiser's `openPaths` — the prefixes below
- * which an operator-chosen key collapses to `*`, argued in
- * `docs/architecture/08-http-api.md` — is what fills it.
- *
- * Spelled as a record of `never` rather than as an empty interface
- * because the two are not the same promise: `{}` admits `0` and `''`
- * as well as every object, while this admits `{}` and refuses any
- * member it has not declared. A caller cannot pass an option that
- * does not exist yet and have it silently ignored.
+ * @remarks
+ * Wave 1 has exactly three open prefixes, all of them named in
+ * `docs/architecture/08-http-api.md`: `settings.scoringWeights` and
+ * `settings.fieldContract` on a domain, and `notificationChannels`
+ * in operator settings. They are declared at the CALL SITE rather
+ * than here because the same record is reached under a different
+ * prefix by different routes — a settings PUT parses
+ * `notificationChannels` at its own root, while a domain PATCH
+ * parses its weights two segments down.
  */
-export type ParseOptions = Readonly<Record<string, never>>;
+export interface ParseOptions {
+  /**
+   * The dotted prefixes below which the payload is an OPEN record:
+   * a map whose keys the operator chose rather than this service.
+   *
+   * Every path segment strictly below one of them is reported as
+   * {@link OPEN_SEGMENT}. Prefixes are relative to the value being
+   * parsed, and the prefix itself is never masked — a fault
+   * against the record AS A WHOLE still names it, which is what
+   * separates `scoringWeights` (the record is not an object) from
+   * `scoringWeights.*` (one entry of it is wrong).
+   */
+  readonly openPaths?: readonly string[];
+}
+
+/**
+ * How many leading segments of a path this service named itself.
+ *
+ * @param segments - The path, one string per segment.
+ * @param openPaths - {@link ParseOptions.openPaths}.
+ * @returns The number of segments to keep as they are.
+ *   `segments.length` when no prefix matches, so a path with no
+ *   open record above it is returned unchanged and a caller that
+ *   passed no options pays nothing.
+ *
+ * @remarks
+ * A prefix as long as the path itself has nothing below it and is
+ * skipped rather than matched. That is what keeps an
+ * `invalid_type` raised against the record AS A WHOLE naming
+ * `settings.scoringWeights`, where masking from the prefix
+ * downwards would have answered `settings.*` and lost the one
+ * declared name in the path.
+ *
+ * Matching is segment-wise rather than over the joined string,
+ * because a string prefix would also match a declared sibling
+ * called `scoringWeightsV2` and mask a name that is this
+ * service's own. Where two prefixes both match, the SHORTEST
+ * wins: a caller that declared `a` open has said everything below
+ * `a` is the operator's, and a second, longer declaration cannot
+ * narrow that.
+ */
+function openCutoff(
+  segments: readonly string[],
+  openPaths: readonly string[],
+): number {
+  let cutoff = segments.length;
+
+  for (const prefix of openPaths) {
+    const prefixSegments = prefix.split('.');
+
+    if (prefixSegments.length >= cutoff) {
+      continue;
+    }
+
+    const matches = prefixSegments.every(
+      (segment, index) => segment === segments[index],
+    );
+
+    if (matches) {
+      cutoff = prefixSegments.length;
+    }
+  }
+
+  return cutoff;
+}
 
 /**
  * The dotted field path a detail names for one issue.
  *
  * @param path - `issue.path`, as zod built it.
+ * @param openPaths - {@link ParseOptions.openPaths}.
  * @param rootField - The name to use when the path is empty.
  * @returns `rootField` for a root-level issue, and the segments
  *   joined with `.` otherwise — so an object member is `settings`, a
  *   nested one `settings.weight`, and an array entry
- *   `terms.1.pattern`.
+ *   `terms.1.pattern`. Every segment below an open prefix is
+ *   {@link OPEN_SEGMENT} instead of itself.
  *
  * @remarks
+ * Segments below the cutoff are masked ONE FOR ONE rather than
+ * folded into a single `*`. The LENGTH of a path is structural and
+ * says nothing about what was submitted, and keeping it means
+ * `fieldContract.*.*` still tells a caller the fault was a member
+ * of one entry rather than the entry itself — which is the
+ * difference between two refusals it would otherwise have to guess
+ * between.
+ *
  * Every segment goes through `String` rather than through `join`'s
  * own conversion, which is not a formality: `join` throws a
  * `TypeError` on a symbol segment, and `issue.path` is typed
@@ -157,13 +257,18 @@ export type ParseOptions = Readonly<Record<string, never>>;
  */
 function toFieldPath(
   path: readonly PropertyKey[],
+  openPaths: readonly string[],
   rootField: string,
 ): string {
   if (path.length === 0) {
     return rootField;
   }
 
-  return path.map((segment) => String(segment)).join('.');
+  const segments = path.map((segment) => String(segment));
+  const cutoff = openCutoff(segments, openPaths);
+  const masked = segments.slice(cutoff).map(() => OPEN_SEGMENT);
+
+  return [...segments.slice(0, cutoff), ...masked].join('.');
 }
 
 /**
@@ -173,8 +278,9 @@ function toFieldPath(
  * @param issues - `error.issues`, in the order zod raised them. All
  *   of them: a body with three faults answers three details, so one
  *   round trip tells a caller everything that is wrong with it.
- * @param _options - What the caller asked for. Nothing is read from
- *   it yet; see {@link ParseOptions}.
+ * @param options - What the caller asked for; see
+ *   {@link ParseOptions}. Only `openPaths` is read, and only by
+ *   {@link toFieldPath}.
  * @param rootField - The name a root-level issue's field takes.
  * @returns One {@link FieldError} per issue, carrying the path, the
  *   fixed message for the issue's code, and that code.
@@ -185,24 +291,28 @@ function toFieldPath(
  * makes it the member a client can branch on while `message` stays
  * a string for a person to read.
  *
- * The bag arrives SECOND rather than last, which is deliberate and
- * is the only place in this module the order matters. This is where
- * the sanitiser's options are read, so the parameter is threaded
- * from the public functions today and unread today — and the two
- * unused-symbol gates disagree about exactly that shape. tsconfig's
- * `noUnusedParameters` honours the `_` prefix; ESLint's
- * `no-unused-vars` runs `args: 'after-used'` with no ignore pattern
- * here, so it reports any unread TRAILING parameter whatever it is
- * called. Sitting before `rootField`, which is read, satisfies both
- * without a suppression.
+ * `issue.keys` is not read, and that absence is the whole of how an
+ * `unrecognized_keys` detail avoids naming the key it refused.
+ * Measured under the zod 4.5.1 in this tree: that issue's `path` is
+ * already the CONTAINING object — empty at the root, `['head']` for
+ * a nested member, `['terms', 0]` for an array entry — while the
+ * offending names live in `keys` and, quoted, in `message`
+ * (`Unrecognized key: "<submitted>"`, or `Unrecognized keys: ...`
+ * when there is more than one, since zod raises ONE issue per
+ * container however many keys that container refused). So the
+ * container is what a field built out of `path` ALONE names, there
+ * is no branch on the code here, and the leak this module exists to
+ * close would be the line that added `keys` to a detail.
  */
 function toFieldErrors(
   issues: readonly core.$ZodIssue[],
-  _options: ParseOptions,
+  options: ParseOptions,
   rootField: string,
 ): FieldError[] {
+  const openPaths = options.openPaths ?? [];
+
   return issues.map((issue) => ({
-    field: toFieldPath(issue.path, rootField),
+    field: toFieldPath(issue.path, openPaths, rootField),
     message: ISSUE_MESSAGES[issue.code],
     code: issue.code,
   }));
@@ -255,8 +365,9 @@ function parseOrThrow<S extends ZodType>(
  * @param value - `req.body`. Typed `unknown` on purpose — Express
  *   types it `any`, and a boundary that accepts `any` is not one.
  * @param options - What the sanitiser should be told about this
- *   body. Defaults to none, and declares no member yet — see
- *   {@link ParseOptions}.
+ *   body: the `openPaths` prefixes below which a key is the
+ *   operator's rather than this service's. Defaults to none, which
+ *   is right for every body carrying no open record.
  * @returns The parsed body.
  * @throws ValidationError - With a detail per issue, each naming a
  *   field path and none carrying submitted content. A root-level
@@ -267,6 +378,15 @@ function parseOrThrow<S extends ZodType>(
  * router.post('/domains', async (req, res) => {
  *   const body = parseBody(createDomainSchema, req.body);
  *   res.status(201).json(ok(await createDomain(store, body)));
+ * });
+ * ```
+ *
+ * @example
+ * ```ts
+ * const OPEN = ['settings.scoringWeights', 'settings.fieldContract'];
+ *
+ * const body = parseBody(patchDomainSchema, req.body, {
+ *   openPaths: OPEN,
  * });
  * ```
  */
@@ -290,8 +410,9 @@ export function parseBody<S extends ZodType>(
  *   expecting numbers, and why `?page[]=1` is refused as the
  *   undeclared key `page[]`.
  * @param options - What the sanitiser should be told about this
- *   query. Defaults to none, and declares no member yet — see
- *   {@link ParseOptions}.
+ *   query. Defaults to none and stays there on this surface: every
+ *   parameter a query may carry is declared in `./schemas.ts`, so
+ *   no query path has an open record under it.
  * @returns The parsed query, defaults applied.
  * @throws ValidationError - With a detail per issue. A root-level
  *   issue names {@link QUERY_ROOT_FIELD}, so a misspelt parameter is
