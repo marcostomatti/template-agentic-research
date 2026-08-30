@@ -5,8 +5,8 @@ document is the map of `src/sources/`: the contract an adapter
 satisfies, where the line between fetching and reading falls and what
 that line buys, what binds when an adapter is constructed rather than
 when it is called, how one adapter is registered and reached by id,
-and what the text reduction those adapters share guarantees about the
-body it produces.
+what a client posting a capture has to send, and what the text
+reduction those adapters share guarantees about the body it produces.
 
 It is the document the Sources row of the behaviour table in
 `docs/architecture/00-overview.md` names, so a change to what a
@@ -19,10 +19,12 @@ throughout refer to the 7-phase sequencing in that design, §7.
 Two adapters front a source here, both landed in phase 5:
 `listing-api` over an `api` endpoint and `push-capture` over an
 envelope a client sent. What phase 4 landed for them to be built
-against is the rest of this document — the contract they satisfy,
-the registry that selects one of them, and the shared modules they
-reach for, which are the listing loop that gets the bytes and the
-reduction that turns markup into the text a body holds.
+against is most of what follows — the contract they satisfy, the
+registry that selects one of them, and the shared modules they reach
+for, which are the listing loop that gets the bytes and the reduction
+that turns markup into the text a body holds. The capture contract
+below is the exception: the boundary that judges one landed in phase
+5 beside the adapter constructed from it.
 
 ## The contract
 
@@ -506,6 +508,167 @@ inlines those two libraries by name, never the adapter around them.
 One implementation read from two sides, with the Node-only half of
 an adapter — its transport, its digest, its registry line —
 staying in this directory.
+
+## The capture contract
+
+### A push source sends its payload, and the envelope is the frame
+
+`push-capture` is the one adapter constructed from something that
+arrived rather than from an address to go and read. A `sources` row
+can name what a pull adapter should fetch; it cannot supply what a
+push client captured. The envelope is what the client supplies
+instead, and `src/lib/capture-contract.ts` is the boundary that
+decides whether this service will read one.
+
+That module sits under `src/lib/` and not in this directory, because
+`ar-capture` splices it into the Code node that judges an envelope
+and nothing here is spliceable. It is documented here all the same:
+what a capture may be is this document's own subject, and
+`push-capture.ts` is constructed from an accepted envelope. The
+module's row in the spliceable-library table of
+`docs/architecture/03-workflows.md` is a summary of the same thing
+rather than a second contract.
+
+Five members, all required, and `CAPTURE_ENVELOPE_MEMBERS` is where
+the names are declared rather than retyped.
+
+| Member | What the contract states |
+| --- | --- |
+| `version` | Which contract the client wrote to. An integer, compared for equality against `CAPTURE_CONTRACT_VERSION`, and the only member read before any other is judged. |
+| `sourceId` | The `sources` row this capture is posted against, as a positive integer — the same id `documents.source_id` carries. Whether a row by that id exists, is enabled, or is the one this client should be posting to are three questions for the workflow that has a database. |
+| `capturedAt` | When the CLIENT captured the material, as a UTC instant: the one spelling `toISOString` emits, three fraction digits or none, ending in `Z`. An offset form names the same instant and is refused anyway, so that a string sort and an instant sort over a corpus of stamps cannot disagree. |
+| `provenance` | How the capture was taken. Keyed, scalars only with `null` included, and bounded three ways — at most 32 members, a name of at most 64 characters under the class a parser config uses for a field, and text of at most 512. |
+| `body` | What was captured: text, a keyed object, or a list of them. Never read at this boundary and never converted here. An empty string is accepted, a capture that yielded no text being one to keep. |
+
+Every member is read by own key alone. An envelope inheriting one
+from a prototype has not stated it, which is what stops a payload
+carrying no data at all from reading as one stating all five.
+
+### The body is stored before the envelope is judged
+
+`ar-capture` writes `documents.raw` first, with a `parse_status` of
+`failed`, and only then asks whether the envelope is one the contract
+accepts. The ordering is the point rather than an implementation
+detail.
+
+A push source cannot be re-read. A feed that answered something
+unusable is fetched again on the next pass, so a refusal there costs
+one cycle; a capture refused before it was stored is gone, and
+whoever posted it has already moved on. So the row is written while
+the payload is still nothing but bytes, and every sentence the
+boundary returns lands in `documents.parse_error` on a row that
+already exists.
+
+What a refusal produces is a stored failure — a document an operator
+can read, replay against a corrected config, and promote — rather
+than a gap nobody can reconstruct. That is the keep half of
+fail-flag-keep arriving a step earlier than the boundary section
+above describes it. There the bytes are stored whatever the reading
+made of them; here they are stored before anything has decided that
+the envelope around them is readable at all.
+
+The key is the one thing that write cannot derive. `documents.hash`
+is NOT NULL and UNIQUE, and the digest that column eventually carries
+is over a url and a body neither of which has been read yet, so the
+row is keyed provisionally over the posted body under a prefix a
+content digest cannot hold — that digest being 64 hexadecimal
+characters, the separator is the whole of the guarantee. What the
+provisional key collapses is a second POST arriving before the first
+was promoted. Recognising a genuine repeat capture is
+`documents.hash`'s own job one group later, under the content digest
+an extraction produced.
+
+### A version this service does not accept is refused, never assumed
+
+`CAPTURE_CONTRACT_VERSION` is what this service accepts, and an
+envelope stating anything else is refused on that alone: the other
+four members are not looked at, and no fault about any of them is
+reported.
+
+A version says WHICH rules the rest of the envelope is judged by, so
+an envelope from a client this service has never met is not an
+envelope with an odd number in it. It is one whose members mean
+something the boundary does not know. Judged under these rules
+anyway, a client on a later contract that had moved `provenance`
+inside its body would be told its provenance was missing: a sentence
+naming a member the client did not get wrong, about a contract it was
+not writing to.
+
+Reporting that fault alone is the other half of the same decision.
+Five faults derived from rules that do not apply is worse than one
+sentence saying the rules do not apply, because an operator reading
+the five would go and fix them.
+
+A short list is not a clean bill, and the node running the boundary
+says so rather than leaving the silence to be read as agreement. The
+item it emits carries whether the version was the accepted one beside
+the verdict itself, so a reader can tell an envelope that broke one
+rule from one that was never judged by any of them.
+
+### How a client learns which version to send
+
+Out of band, and deliberately. The version is
+`CAPTURE_CONTRACT_VERSION` in `src/lib/capture-contract.ts`, which is
+1 today, and that constant is the authority rather than this
+sentence. An operator who creates a `push` row hands the client
+author the number along with the row id, which is already how the id
+travels: nothing on the wire announces either.
+
+Nothing on the request path answers the question either. The webhook
+responds as the request lands, before the boundary has run, so what a
+client gets back is an acknowledgement and never a verdict. And a
+refusal names the rule rather than the value, for the version as for
+every other member, so nothing this service writes spells a number
+back at whoever sent one.
+
+What does name the version is operator-facing. A refused pass writes
+a boundary entry into the `errors` of the `runs` row that closes it,
+carrying the version this service accepts beside the faults, so
+somebody reading that run can tell a client author what to change —
+travelling back the way the row id came.
+
+### Provenance is a note, and it is recorded beside the record
+
+`provenance` records how the capture was taken: which client, which
+version of it, what it was reading. The three bounds are what keep it
+a note rather than a second payload. Provenance is operator-facing —
+read beside a document by somebody deciding whether to trust it — and
+a nested structure of unbounded size read that way is a payload
+wearing a note's name. The body already has somewhere to be, is
+bounded by nothing, and is rendered to nobody until an extraction has
+run over it.
+
+Where it lands is `documents.raw`, and only for an accepted envelope.
+The node recording the verdict rewrites that column as two members:
+the note, which is the envelope with its body left out, and the
+record, which is that body. Nothing is lost by the move, the record
+being what was posted; what is gained is that the members the
+boundary accepted sit beside the material they describe. A refused
+envelope leaves the column exactly as it arrived, and the sentence it
+earned in `documents.parse_error` is the whole of what changed about
+the row.
+
+The key does not move with it. The provisional hash is a column
+rather than a derivation, so rewriting what it was derived from moves
+nothing, and a second POST of the same capture still lands on the
+same row.
+
+The client's stamp writes no column of its own.
+`documents.captured_at` is when this pipeline inserted the row and is
+the column's own default; `capturedAt` is when the client captured
+the material. Neither is derivable from the other — a client that
+captured something on a train and posted it an hour later is lying
+about neither — so the envelope's stamp is stored with the rest of
+the note, where a later reader can compare the two.
+
+One envelope becomes one document on this canvas, which is what makes
+where the note lands a question at all. `push-capture.ts` splits a
+list body into one document per entry and carries the note onto each,
+because whoever calls the adapter inserts. The workflow promotes a
+row keyed before anything read the body, so a reading split into
+several would leave every entry after the first with no row to be
+written to. A client with several items to capture posts several
+captures, and that is the contract the endpoint offers.
 
 ## The shared listing run
 
