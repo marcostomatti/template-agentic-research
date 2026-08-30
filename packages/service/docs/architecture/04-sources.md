@@ -16,14 +16,13 @@ is `.specs/2026-08-19-research-pipeline-port.md` — §2 for the
 and validation the contract leaves room for — and phase numbers
 throughout refer to the 7-phase sequencing in that design, §7.
 
-One of the things `src/sources/` will hold is not here yet: the
-adapters that front a source, which arrive with `ar-ingest` in
-phase 5 and bring their own section here in the commit that lands
-them. What this document covers is what phase 4 landed for them to
-be built against: the contract they will satisfy, the registry that
-will select one of them, and the two shared modules they will reach
-for — the listing loop that gets the bytes, and the reduction that
-turns markup into the text a body holds.
+Two adapters front a source here, both landed in phase 5:
+`listing-api` over an `api` endpoint and `push-capture` over an
+envelope a client sent. What phase 4 landed for them to be built
+against is the rest of this document — the contract they satisfy,
+the registry that selects one of them, and the shared modules they
+reach for, which are the listing loop that gets the bytes and the
+reduction that turns markup into the text a body holds.
 
 ## The contract
 
@@ -252,9 +251,10 @@ edited by anyone the seed script or an operator lets near it.
 `toString`, `valueOf` and `constructor` all answer something off
 `Object.prototype`, so a lookup reading the key directly would hand a
 function back as though it were an adapter. The case is live rather
-than hypothetical, and the empty registry is what makes it live: the
-`in` operator answers true for every one of those names over an
-object holding nothing at all.
+than hypothetical whatever the registry holds: the `in` operator
+answers true for every one of those names over the very object the
+lookup reads, so what a registered id happens to be spelt has no
+bearing on it.
 
 ### The contract check reports every member, not the first
 
@@ -284,26 +284,40 @@ not a member here: an adapter fronting several endpoints runs the
 loop in `src/sources/paged-list.ts` inside its own `fetch`, so no
 optional member is left for a conditional rule to be about.
 
-### The registry holds one entry, and that entry is a declaration
+### What is registered, and what registering one costs
 
-`listing-api.ts` is the first module here to declare the five
-members. It added its own line to the literal in the commit that
-landed it, which is the whole of what registration costs, and the
-directory guard is what notices an adapter that forgets.
+`listing-api` and `push-capture`, and they front different kinds:
+`api` for the cursor-paged listing loop run against the endpoint a
+row names, `push` for an envelope a client sent. No registered
+adapter declares the `url` or `rss` kind, so a row carrying one
+names an id nothing answers — a fact about the literal rather than
+an error, and the null `getSourceAdapter` returns is how a caller
+finds out.
+
+Registering an adapter is a line in that literal plus a case. The
+shipped ids are written out in `src/sources/index.test.ts` rather
+than derived from the literal being checked, so that expectation is
+what notices a registration at all, and the set-equality guard
+beside it notices the opposite mistake — a module written and never
+named. Nothing further is owed: the directory guard accounts for the
+module and the stored payload the id names, and the contract check
+walks whatever the registry holds, so both take a new entry without
+an edit.
 
 What is registered is not a working adapter, and that is where the
 contract and the registry pull against each other. Configuration
 binds at construction, so an adapter is per ROW; a registry is keyed
 by id and holds one entry per KIND of source. The entry therefore
 carries the id and the kind a `sources` row is matched against, is
-bound to no row, names no endpoint and holds a transport that
-refuses — so it can reach nothing even if something called it. A run
-builds its own adapter through that module's factory with the row it
-is for.
+bound to no row and names no endpoint, so it can reach nothing even
+if something called it — `listing-api`'s declaration is held to that
+by a transport that refuses, and `push-capture` has nothing to
+refuse with, no member of it opening a socket at all. A run builds
+its own adapter through that module's factory with the row it is
+for.
 
-The two other modules beside the registry front no source, declare
-none of the five members and each says so at the top of its own
-file.
+The other modules beside the registry front no source, declare none
+of the five members and each says so at the top of its own file.
 
 ### Nothing here is spliced into a workflow, the registry included
 

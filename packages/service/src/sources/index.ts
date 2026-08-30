@@ -234,6 +234,27 @@ export type SourceAdapterRegistry = Readonly<Record<string, SourceAdapter>>;
  * because the alternative — this module reading the directory to
  * check — is the thing being refused.
  *
+ * What stands registered is `listing-api` and `push-capture`, and
+ * they front different kinds: `api` for the cursor-paged listing
+ * loop run against the endpoint a row names, `push` for an envelope
+ * a client sent, which opens no socket at all. No registered adapter
+ * declares the `url` or `rss` kind, so a row carrying one names an
+ * id nothing here answers — which is a fact about this literal
+ * rather than an error, and {@link getSourceAdapter} answering null
+ * is how a caller finds out.
+ *
+ * Registering one is a line here plus a case, and the case is the
+ * half worth knowing about. The shipped ids are written out in
+ * `src/sources/index.test.ts` rather than read off this literal —
+ * a case deriving them from what it checks would agree with any
+ * edit to it — so that expectation is what notices a registration
+ * at all, and the set-equality guard beside it notices the opposite
+ * mistake, a module written and never named. Nothing further has to
+ * be remembered: the directory guard accounts for the module and
+ * the stored payload the id names, and the contract check walks
+ * whatever the registry holds, so both take a new entry without an
+ * edit.
+ *
  * What every entry holds is a DECLARATION rather than a working
  * adapter. That is the one place this contract and this registry
  * pull against each other, and it is worth naming here:
