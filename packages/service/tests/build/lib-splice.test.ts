@@ -234,6 +234,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'keys.map((key) => asNumber(values[key]))',
     ],
   },
+  {
+    file: 'validate-entity-name.ts',
+    ownText: [
+      'ENTITY_NAME_FORBIDDEN.test(raw)',
+      'trimmed.length > MAX_ENTITY_NAME_LENGTH',
+      'entry.toLowerCase() === lowered',
+    ],
+  },
 ];
 
 /**
