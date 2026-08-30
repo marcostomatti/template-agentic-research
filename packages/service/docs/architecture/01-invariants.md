@@ -10,24 +10,28 @@ whether it is enforced today.
 The design the register comes from is
 `.specs/2026-08-19-research-pipeline-port.md`. Its §5 fixes the set
 below, with the hostname row carried from the migration-hygiene rules
-in §6, the category-depth row from the schema-v2 table roster in §2,
-and the hash-dedupe row from the locked core vocabulary in §1, all
-registered here alongside the rest; phase numbers throughout refer to
-the 7-phase sequencing in that design, §7. The deterministic-build and
+in §6, the bounded-chunk row from the risk register in that same §6,
+the category-depth row from the schema-v2 table roster in §2, and the
+hash-dedupe row from the locked core vocabulary in §1, all registered
+here alongside the rest; phase numbers throughout refer to the
+7-phase sequencing in that design, §7. The deterministic-build and
 spliced-library rows are drawn from outside that design, from the
 build rules in `.specs/q03-port-phase-3-build-dispatch.md` §1 — the
-phase spec that lands the build system. The two auth rows come from
-outside it as well, from the acceptance criteria in
-`.specs/q07-auth-basic.md` — an item scheduled beside the seven
-phases rather than inside them, so its cell in the phase column
-names the item rather than a number.
+phase spec that lands the build system — and the origin-path row
+likewise, from the parity-harness constraints in
+`.specs/q06-port-phase-4-lib-wave.md`, the phase spec that lands the
+seam that row polices. The two auth rows come from outside it as
+well, from the acceptance criteria in `.specs/q07-auth-basic.md` —
+an item scheduled beside the seven phases rather than inside them, so
+its cell in the phase column names the item rather than a number.
 
 ## The register
 
 | Invariant | Enforced by | Owning phase | Status |
 | --- | --- | --- | --- |
 | No workflow holds a send-capable node | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
-| A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
+| A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/`, for what a model node may be fed — the half this row's phase and status are about; `tests/lib/chunk.test.ts`, landed in phase 4, for what a prepared chunk is before any workflow reaches for one | 6 | Pending |
+| A prepared chunk is capped at 6000 characters, and there is no raw-body fallback | `tests/lib/chunk.test.ts`, driving `buildChunk` over assemblies each of which would overrun the cap, and holding what it refuses to a closed roster of reasons in both directions | 4 | Implemented |
 | Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 6 | Unexercised |
 | Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
 | Building one tree twice writes byte-identical artifacts, and the git build stamp is the one value permitted to move with the checkout | `tests/build/build-workflows.test.ts`, spawning `scripts/build-workflows.ts` twice over a fixture source tree and holding the two output directories against each other | 3 | Implemented |
@@ -38,6 +42,7 @@ names the item rather than a number.
 | No naming from the project this pipeline was ported from survives in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No vault path appears in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No real hostname appears in a tracked file | `tests/invariants/naming.test.ts` | 1 | Implemented |
+| The origin checkout a parity run reads is named in the environment and nowhere else — no tracked file records the path, and no default stands in for it | `tests/invariants/parity-origin-hygiene.test.ts`, over `tests/helpers/port-parity.ts` and every file under `tests/parity/`, with the roster it reads held set-equal against that directory so a file added later cannot go unscanned | 4 | Implemented |
 | No log line and no HTTP response carries the bootstrap password | `tests/auth/secret-logging.test.ts`, booting the service with a sentinel `AUTH_BASIC_PASSWORD` and reading stdout, stderr and the response body back across the bootstrap, a login, and a malformed login carrying the sentinel | q07 | Implemented |
 | No file under `src/` or `lib/` outside `src/auth/` and `src/db/schema/auth.ts` names a password hash or a session-token hash | `tests/invariants/auth-containment.test.ts`, over the identifier roster and the walker in `tests/invariants/auth-containment.ts`, which refuses to report a result at all when it read no files | q07 | Implemented |
 
@@ -51,6 +56,13 @@ artifact is already written, the one that lands what it judges.
 ordinary `bun run test` today, and reads something the rule applies to;
 `Unexercised` when it exists and runs over nothing the rule applies to;
 and `Pending` when the row is still a reservation.
+
+An **Enforced by** cell can name an artifact from a phase other than
+the owning one. That happens where a property splits into halves and
+one half is already covered: the cell names both, so the row can be
+read without holding the rest of the register in mind, while **Owning
+phase** and **Status** stay with the half nothing enforces yet — the
+half the row is accountable for.
 
 ### A row is written before the artifact that enforces it
 
@@ -174,8 +186,8 @@ against, and spend nobody can attribute to a run is spend nobody can act
 on — a burn stays invisible until the provider is the one who reports
 it.
 
-The schedule-trigger row is the only one of the four the register marks
-`Implemented`, and what that means for it is a count and not a clock.
+The schedule trigger is the only one of the four the built tree already
+holds, and its row reads `Implemented` on a count rather than a clock.
 `tests/invariants/workflows.test.ts` holds the whole built tree to one
 node of one named type, carried by `ar-dispatch`. The two limits on that
 bound it from opposite sides: a workflow written with either of the
@@ -184,14 +196,62 @@ and a trigger left disabled is counted while it fires on nothing.
 `tests/invariants/workflow-rosters.ts` is where the type is fixed and
 each limit is argued beside the declaration it belongs to.
 
-The other properties are spread across two rows, and the two do not read
-alike. The ceiling, the ledger row and the retry setting are one row,
-and `tests/invariants/workflows.test.ts` holds every built workflow to
-all three today, so that row reads `Unexercised`: the assertions run on
-every pass and no built workflow has offered them a model node yet. The
-prepared-chunk row has nothing behind it and is still a reservation, so
-it reads `Pending`. Both name phase 6, and the reading is what says
-which kind of phase-6 work each is waiting on.
+The other properties are spread across rows that do not read alike. The
+ceiling, the ledger row and the retry setting are one row, and
+`tests/invariants/workflows.test.ts` holds every built workflow to all
+three today, so that row reads `Unexercised`: the assertions run on
+every pass and no built workflow has offered them a model node yet.
+
+The first property is two rows rather than one, because it is two
+claims about different things. What a model node may be fed is a
+property of a workflow, has nothing holding a workflow to it yet, and
+reads `Pending`; the bound on the chunk itself is a property of the
+library that assembles one, and reads `Implemented` from phase 4. The
+pending row names both artifacts anyway, because a reader who found
+only `tests/invariants/` there would take the whole property to be
+unenforced where half of it is already held; its phase and status stay
+with the half that is not. Where a row names phase 6, its reading is
+what says which kind of phase-6 work it is waiting on.
+
+### The chunk ceiling is a bill somebody already paid
+
+6000 is the only number in this register that came out of an invoice
+rather than out of a design. The library the row names carries a rule
+written after three model chains were each handed a document body
+verbatim: 2,323 prompt tokens per call averaged, a worst case around
+15,000 characters that were almost entirely message-format spacers and
+tracking parameters, 81 calls in one pass, 732,000 tokens in that
+pass, and a month's budget spent in 43 minutes. One tracked link is
+the same shape in miniature — roughly 40 characters of address wrapped
+in roughly 900 of tracking parameters, every one of them billed as
+input.
+
+So 6000 is the budget written down, and the two halves of the row are
+the two ways that budget was actually lost. The cap is enforced on the
+way OUT of `buildChunk`, over the assembled chunk, rather than trusted
+to the header assembly, the excerpt build and the stand-in texts above
+it: any of those can be widened by a later edit that looks local, and
+a ceiling nothing re-checks is an intention. And there is no raw-body
+fallback, because a fallback is what turns a reduction that failed
+into the exact call the ceiling exists to prevent — the largest input
+in the corpus, sent because something went wrong with it. An input
+that cannot be reduced comes back unusable carrying a reason, and the
+caller routes it to review.
+
+`tests/lib/chunk.test.ts` is what fails when either half stops
+holding, and each half needs a guard the assertions alone do not
+carry. A chunk inside the ceiling looks identical whether the cap
+fired or not, so every ceiling fixture declares a floor computed from
+its own pieces and a case of its own asserts each floor is above the
+cap. A refusal is read as its sentence rather than as a bare failure,
+and the sentences are held set-equal against what the cases produce in
+both directions, so a reason nothing reaches fails as loudly as one
+no roster entry registered.
+
+What `Implemented` means here is the library and not the pipeline. The
+row binds what `buildChunk` answers; it says nothing about a workflow
+that never calls it, which is what the row above it covers and what
+phase 6 owes.
 
 ### Approval is a constraint, not a branch
 

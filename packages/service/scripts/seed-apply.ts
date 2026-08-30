@@ -678,8 +678,8 @@ async function applyTopics(
  * beside it. `next_run_at` and `enabled` on a topic are absent, and
  * so are `feature_version` and `embedding_model` on a domain, so a
  * pass neither re-enables a topic somebody switched off nor clears a
- * pin the feature port (phase 4) wrote. A member the schema makes
- * optional because the column's default means the same as absence —
+ * pin a later writer put there. A member the schema makes optional
+ * because the column's default means the same as absence —
  * `settings` and `searchTerms` — is written as that default rather
  * than left out of the update, so the file states the whole row and a
  * settings block deleted from `domains.json` is deleted from the

@@ -17,9 +17,9 @@
  * content itself absorbs all three without any reader having to know
  * which of them happened.
  *
- * Nothing writes these rows yet. The adapters arrive in phase 4 and
- * the parse engine they run under in phase 5; what the table fixes
- * now is the shape they write into, which is the same shape
+ * Nothing writes these rows yet. The adapters and the parse engine
+ * they run under both arrive in phase 5; what the table fixes now
+ * is the shape they write into, which is the same shape
  * `CanonicalDocument` in `src/sources/index.ts` is now narrowed to,
  * member for column, so that no adapter is ever written against a
  * guess.
@@ -220,8 +220,8 @@ export const documents = pgTable('documents', {
    * that costs the most — the document is kept, the source's counter
    * climbs toward its threshold, and what the operator is shown is a
    * failure nobody can act on. Only the writer keeps the pair
-   * together, so an adapter reporting a failure (phase 4, under the
-   * engine that arrives in phase 5) records the reason in the same
+   * together, so an adapter reporting a failure (phase 5, under the
+   * engine that arrives with it) records the reason in the same
    * insert that sets the status.
    */
   parseError: text('parse_error'),
@@ -275,8 +275,9 @@ export const documents = pgTable('documents', {
    * It reads as present to everything that looks for a vector, and
    * there is no version for a recompute to find it stale by, so it
    * survives every pass the pin exists to trigger. Only the writer
-   * holds the two together: the featurizer that arrives with the
-   * feature port in phase 4 writes both in one statement or neither.
+   * holds the two together: phase 4 landed the feature port that
+   * computes a vector, but no writer yet, and the featurizer that
+   * lands one has to write both in one statement or neither.
    */
   featureVersion: integer('feature_version'),
 

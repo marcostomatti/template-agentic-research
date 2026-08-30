@@ -10,8 +10,8 @@ in `.claude/skills/` and are pointed to below.
 | --- | --- |
 | `lib/` | The framework: `express` (createService: DI, middleware, health, `/_control`, auth middleware, shutdown), `service-core` (dependencies, typed clients, circuit breaker, retry, http client), `mcp` (createMCP: stdio/HTTP transports + health), `logger` (pino), `errors` (AppError family + the error handler createService registers). Treat as library code — stable, well-tested, changed deliberately. |
 | `src/` | The service: `config.ts` (zod env, fail-fast), `routes/`, `db/` (Drizzle+Postgres, default on), `redis/` (opt-in via `REDIS_URL`), `cron/` (interval jobs as a managed dependency), `notifications/` (preference-aware dispatch + channel stubs), `auth/` (the basic credential strategy: argon2id bootstrap, the `/auth` routes, the local session verifier — see "Authentication" below), `mcp/` (MCP entry + tools). |
-| `src/lib/` | Pipeline libs, written dual-context so `scripts/build-workflows.ts` can splice one into an n8n Code node body — a node then runs the same function the suite imports rather than a second copy written for the canvas. Three rules are what that costs: no value imports, declaration-form exports only, and no reliance on module scope; the build refuses the first two by name. `schedule.ts` (the interval clamp and batch cap `ar-dispatch` applies) is the first and landed in phase 3; the ported wave arrives in phase 4. Distinct from the framework `lib/`. |
-| `src/sources/` | Source adapters: the `SourceAdapter` contract (`fetch` → `parse` → `toCanonical`, with I/O confined to the first step) and the adapters that satisfy it from phase 4 onward, push capture included. |
+| `src/lib/` | Pipeline libs, written dual-context so `scripts/build-workflows.ts` can splice one into an n8n Code node body — a node then runs the same function the suite imports rather than a second copy written for the canvas. Three rules are what that costs: no value imports, declaration-form exports only, and no reliance on module scope; the build refuses the first two by name. `schedule.ts` (the interval clamp and batch cap `ar-dispatch` applies) is the first and landed in phase 3; the ported wave landed in phase 4 — structured-text, delimited-record and message parsing, untrusted-text neutralization, entity-name validation, near-duplicate hashing, audit lines, chunk preparation, and the gating, scoring and feature mechanisms. Distinct from the framework `lib/`. |
+| `src/sources/` | Source adapters: the `SourceAdapter` contract (`fetch` → `parse` → `toCanonical`, with I/O confined to the first step), the static registry that selects one of them by id — written out rather than read off the directory, so nothing runs unless it was named — and the adapters that satisfy that contract from phase 5 onward, push capture included. Also the modules those adapters share, which declare no member of that contract and appear in no registry: `html-text.ts`, a pure markup-to-text reduction, and `paged-list.ts`, the cursor-paged loop an adapter runs inside its own `fetch` when one `sources` row names several listing endpoints. That one is the exception to the purity of the rest here — it makes the requests, through an injected transport it refuses to run without, which is how the isolated-suite law stays readable in a signature. |
 | `src/exports/` | Export renderers, one per format a subscription can be rendered into (phase 6). A renderer returns artifacts and never dispatches them — the email format renders a draft and stops there. |
 | `workflows/` | n8n workflow sources in `workflows/src/`, one JSON file per workflow. `ar-dispatch.json` landed in phase 3 and is the whole of the directory today: it claims due schedulable rows and invokes the workflows they belong to, and it holds the only schedule trigger across the workflow set. The other five in the roster arrive in phases 5 and 6. `workflows/src/README.md` carries that roster, the one-file-per-workflow rule and the marker forms a source may write. `bun run build:workflows` resolves those markers into the gitignored `workflows/dist/` (and `workflows/dist-external/` for a deploy), which is generated and never hand-edited. |
 | `data/` | Seed files only, applied to the database by `scripts/seed.ts` — nothing under it is read at runtime. The five JSON files here seed one worked example domain and stay domain-neutral; real subject matter reaches the database through an operator's own seeds. See `data/README.md`. |
@@ -408,7 +408,34 @@ two-hop builtin chain such as
 `createHash('sha256').update(t, 'utf8').digest()` is an ERROR even at 60
 columns. Write any chain past one `.` broken one call per line from the
 start, and run `bun run lint` in the package (seconds) BEFORE
-`check-types` — the shape errors are the ones no type probe surfaces. Re-derive the over-cap roster
+`check-types` — the shape errors are the ones no type probe surfaces. That
+rule forbids three links in ONE expression, not three links: a four-call
+`.replace(...).replace(...).replace(...).trim()` written one call per LINE
+lints clean, which is how every ported text pass here is written.
+
+A new module under `src/lib/` hits a predictable set of findings, and the
+regex ones are measured rather than inferred. `import/order` comes first —
+parent (`../x`) and sibling (`./y`) are SEPARATE groups needing a blank
+line between them, on top of the `type`-first-group rule. Then
+`no-useless-escape`, which reads a class by POSITION: `\-` is KEPT where a
+hyphen could open a range (`[A-Za-z0-9_.\- ]` is clean, another member
+following it) and is an ERROR where it cannot — last in the class,
+immediately before the `]`, so `[\p{L}\p{N} .,&'()\-]` is one error and
+dropping the backslash is the only repair that lints. An origin pattern of
+that second shape therefore does NOT port verbatim; the set it matches is
+unchanged and nothing else reports the edit, which is why it belongs in the
+port's `What is dropped` paragraph. The same rule flags `\/` INSIDE a class
+while requiring it outside one, so write `[\\/]`, never `[\\\/]`.
+`no-control-regex` does NOT fire on `\r`, `\n` or `\t` — a ported denylist
+naming the two line terminators ports as a literal — and is owed the
+`new RegExp` + `String.fromCharCode` construction only where a class
+reaches past those three. `no-misleading-character-class` fires on a class
+holding a zero-width JOINER between two other characters, the exact shape
+any ported invisible-character strip carries; the repair that keeps the
+match identical is an alternation built with `new RegExp` over the same
+code points, since reordering the class is fragile.
+
+Re-derive the over-cap roster
 (`wc -l scripts/*.ts | sort -rn`) rather than quoting one: phase 3 put five
 more files over it, `scripts/workflow-markers.ts` furthest by a wide margin,
 and any roster written down here goes stale on the next docs task without a
@@ -451,6 +478,28 @@ hour. The rules:
    separate database name, no volume.
 4. Destructive helpers must call `assertLiveDatabase` (refuses any database
    but `ar_live`). Never widen the truncate list implicitly.
+   That name is also the reason the live Postgres is SHARED across every
+   worktree and branch on one machine: there is one `ar_live` on port 5433,
+   and `applyMigrations` points the migrator at `./drizzle`, so whichever
+   checkout last ran `test:live` migrated it. A branch based on an older
+   `main` therefore reads `schema.live.test.ts`'s
+   `records every migration the journal names, in journal order` as RED
+   through no fault of its own — the ledger carries a sibling branch's rows
+   and the case renders them `unrecognized(<when>)`. Those numbers are
+   attributable rather than mysterious: they are journal `when` values, so
+   `git show <ref>:packages/service/drizzle/meta/_journal.json` across
+   `git branch -a` names the migration and the branch that applied it. Do
+   NOT repair it by deleting the ledger rows or dropping the extra tables —
+   that is the sibling worktree's working state, and greening one branch
+   reddens the other. Take the reading on an ISOLATED cluster instead:
+   every Postgres-gated file calls `applyMigrations` in `beforeAll`, so a
+   throwaway `postgres:16-alpine` with no volume is enough, and it must be
+   NAMED `ar_live` or `assertLiveDatabase` refuses the destructive helpers.
+   `bun run test:live` cannot be pointed at it — the script sets
+   `AR_LIVE_DATABASE_URL` in its own definition, which wins over the
+   environment — so the isolated leg is
+   `AR_LIVE_DATABASE_URL=<url> bun x vitest run tests/live` from inside the
+   package.
 5. Clean up after live runs: `stress:stop` removes only the stress
    containers. Leave no long-lived processes or scheduled jobs behind.
    `db:stop` is NOT its counterpart: it is `docker compose down`, which
@@ -533,6 +582,33 @@ added there as unrun until somebody runs it. `tests/live/live-n8n.ts`
 carries the rest — what a skipped-but-collected case still reports, and the
 one place the seam can be broken without touching the gate.
 
+A THIRD seam sits beside those two, in `tests/parity/`, gated the same way
+for a different reason. `bun run test:parity` runs
+`tests/parity/*.parity.test.ts`, where a file drives a ported library and
+the origin it was ported from over one set of neutral fixtures and diffs
+the answers. `describePortParity`, in `tests/helpers/port-parity.ts`, keys
+those files to `AR_PORT_PARITY_ORIGIN` — the origin checkout root, which is
+an operator's own local filesystem path and is recorded in no tracked file
+here — the harness TSDoc carries why. So this gate is armed unlike EITHER
+live one. `test:live` opens the Postgres gate from its own script
+definition; nothing in this package sets the parity variable, no compose
+service supplies it and no default stands in for it, so only an operator
+export arms it. A run with it unset reports the parity files SKIPPING, and
+that is the steady state of this command, of `bun run test` and of CI
+alike, not a broken setup.
+
+The arming is therefore per-MACHINE rather than per-command, which is the
+half that catches a reader out. `vitest.config.ts` declares no `include`
+override, so `tests/parity/` matches the default glob and a plain
+`bun run test` collects those files too: on a machine whose shell profile
+exports the variable, the default suite reaches an origin checkout outside
+this repository and CI's run does not, off the same tree. The closed-gate
+reading has to be FORCED there rather than observed —
+`env -u AR_PORT_PARITY_ORIGIN bun run test:parity` is the one command that
+shows the skip, and it is how a change to the gate itself gets read.
+Measured both ways at the seam's first file: 8 passed armed, 8 skipped
+unarmed, `Test Files 1 skipped (1)` naming the file rather than a count.
+
 Test files open with a `/** ... */` header stating what the file PROVES (not
 what it calls), and separate regions with `// ---` banner comments 78 chars
 wide. Table-driven suites carry their own anti-vacuity guards — pair samples
@@ -581,11 +657,11 @@ runs `bun scripts/build-workflows.ts`, so the tree is written in a bun
 process of its own before any worker opens it. bun keys that hook to the
 script NAME rather than to the launcher: it fires for the `test` script —
 `bun run test`, a path appended to it, and the root fan-out that runs the
-same script — and for no other. `test:live`, `test:watch` and a bare
-`bun x vitest run <path>` all read whatever the directory happens to hold,
-so `bun run test <path>` and `bun x vitest run <path>` are two ways of
-running one file that differ in exactly this. Rebuild by hand before reading
-a built artifact for any purpose.
+same script — and for no other. `test:live`, `test:parity`, `test:watch`
+and a bare `bun x vitest run <path>` all read whatever the directory
+happens to hold, so `bun run test <path>` and `bun x vitest run <path>` are
+two ways of running one file that differ in exactly this. Rebuild by hand
+before reading a built artifact for any purpose.
 
 Forgetting is loud rather than silent, but only in the run log.
 `loadBuiltWorkflows` refuses a tree that yielded no artifact, naming the
@@ -616,6 +692,21 @@ guard therefore does not fire — the constructor is reached anyway and raises
 property, never the global. A case that needs the real transpiler spawns
 `bun scripts/build-workflows.ts` as a subprocess;
 `docs/architecture/03-workflows.md` carries the argument for both halves.
+
+That transpiler also NORMALIZES string quotes to double, which decides how
+an `ownText` entry in `tests/build/lib-splice.test.ts` has to be picked. A
+snippet carrying a single-quoted literal is present in the shipped source
+and ABSENT from the spliced body, so the roster's own-library case passes
+while its text-arrived case fails over a library that is perfectly fine
+(measured: `.replace(SLUG_SEPARATOR_RE, '-')` and `typeof maxLen ===
+'number'` both vanish where `protectedSpans.push(rendered)` and
+`spans[Number(index)]` survive). Combined with the existing rule that the
+text must be an EXPRESSION — type annotations erase and lines reflow — the
+selection rule is: no string literal, no type annotation, and CHECK by
+transpiling before registering. Three lines of a /tmp `.mjs` building a
+real `new Bun.Transpiler({ loader: 'ts' })` and calling `transformSync`
+answers own/transpiled/other-library membership for a whole candidate list
+at once.
 
 Four known flakes live in the vendored framework `lib/` half, none in
 anything this port wrote, so a single red case naming one of them is not a
