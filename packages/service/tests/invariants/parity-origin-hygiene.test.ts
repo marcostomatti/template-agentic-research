@@ -88,6 +88,7 @@ const PARITY_DIR = 'tests/parity';
  * HERE, naming itself, and gets registered in the commit that adds it.
  */
 const PARITY_FILES: readonly string[] = [
+  'aggregate-score.parity.test.ts',
   'audit-log.parity.test.ts',
   'chunk.parity.test.ts',
   'fixtures.ts',

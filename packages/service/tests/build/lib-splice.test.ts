@@ -218,6 +218,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'Number.parseFloat(asText(raw))',
     ],
   },
+  {
+    file: 'aggregate-score.ts',
+    ownText: [
+      'anchored.every((entry) => entry.measured === null)',
+      'orZero(penalty.coefficient) * (measured / scale)',
+      'Math.round(penalized)',
+    ],
+  },
 ];
 
 /**
