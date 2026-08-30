@@ -1,15 +1,16 @@
 /**
  * `src/settings/service.ts` — what the two operator settings
- * operations refuse, and where a refused request stopped. Driven
- * over `tests/helpers/memory-research-store.ts`, so every claim
- * here is answered with no database anywhere.
+ * operations refuse, where a refused request stopped, and what an
+ * accepted one lands. Driven over
+ * `tests/helpers/memory-research-store.ts`, so every claim here is
+ * answered with no database anywhere.
  *
- * Four claims, all of them about saying no. The positive half
- * — the empty read before any write, a first write, a
- * rewrite replacing the payload as a unit, and a write clearing a
- * member by omitting it — is this file's successor's, and
- * the measured zero named at the end of the grid below is the
- * hand-off to it.
+ * Seven claims. Four are about saying no, and three about what a
+ * read and a write are FOR: the empty read before any write, a
+ * first write, and a rewrite that replaces the stored payload as a
+ * unit rather than merging into it — of which clearing a member by
+ * omitting it is the sharpest case, and the one a merge would make
+ * inexpressible.
  *
  * THAT A BODY IS PARSED HERE, NOT ABOVE. Every row of the refusal
  * table is submitted to a SERVICE function rather than to a
@@ -66,78 +67,146 @@
  * says the rows RUN and nothing about what they would catch, so
  * their zero rests on the planted control alone.
  *
- * Mutation grid, measured over the 36 cases here with
+ * THAT AN ABSENT ROW AND AN EMPTY PAYLOAD ARE ONE ANSWER. The read
+ * block takes both readings over one store — the port reporting
+ * whether a row exists, and the service answering the state that
+ * fact means — because the collapse is visible only in the pair.
+ * It is read again after a payload of `{}` has been written on
+ * purpose, which is what says the two really are two facts and one
+ * answer rather than one state described twice. And the read is put
+ * behind the recording proxy, because a read that CREATED the row
+ * it wanted would answer `{}` as readily.
+ *
+ * THAT A WRITE LANDS WHAT IT WAS HANDED AND NOTHING ELSE. Every
+ * write is asserted twice, against the payload as a literal and
+ * against what a later read hands out, since a module answering a
+ * payload it never stored passes the first alone. The maximal
+ * payload is typed `Required<OperatorSettings>` so a fourth member
+ * cannot be added to that interface while every key set read off it
+ * goes on describing three; the schema-against-interface drift
+ * guard is `./payload.test.ts`'s and is not restated here.
+ *
+ * THAT THE PAYLOAD IS REPLACED AND NEVER MERGED INTO. The rewrite
+ * table drives five stored-then-rewritten pairs, four of which a
+ * merge answers differently and one of which it answers
+ * identically — a merge of a payload naming the same member IS a
+ * replacement, so that row is the control making the other four
+ * narrowings OF something. The maximal row writes `{}` over a full
+ * payload: omission is the only way a member is cleared, so under a
+ * merge the request that omits a preference and the request that
+ * removes it would be the same bytes.
+ *
+ * Mutation grid, re-measured over the 58 cases here with
  * `--reporter=json` and read as the failed `fullName` SET rather
- * than as a count. Nine legs, and every figure is a measurement
- * over this case count that moves again when the positive half
- * lands.
+ * than as a count. Thirteen legs. Every figure moved when the
+ * positive half landed, legs it never touched included, so nothing
+ * below is inherited from the refusal-only grid this file carried.
  *
- * THE WIDEST LEG IS THE CONTROL THAT THE FILE REACHES THE PARSE
- * AT ALL. Handing the body over unparsed reddens 13: every schema
- * row of the refusal table, three of the four containment rows,
- * and both cases about where a schema fault stops. It is the leg
- * that says these rows are submitted to a SERVICE rather than
- * asserted against a schema somewhere else.
+ * THE WIDEST LEG IS NO LONGER THE PARSE. Looking a slug up even
+ * when none was supplied reddens 21 where it reddened 8, and the
+ * finding the refusal-only grid recorded is unchanged and wider: of
+ * those 21, not one is a refusal case. Every refusal row is refused
+ * under that leg too, for its own reason, so the rows named for
+ * saying no are blind to a module that says no to everything, and
+ * the six accepted controls plus thirteen of the fifteen new
+ * positive cases are the whole of the evidence that they are not.
  *
- * THE TWO SLUG-CHECK LEGS OVERLAP RATHER THAN COINCIDE, and that
- * is the reach table earning its place. Dropping the check
- * reddens 7 and moving it below the write reddens 4, sharing 3;
- * the four the first keeps are the ones where no refusal is built
- * at all, and the one the second keeps is the reach row for a
- * slug that IS there, whose recorded order flips. A file without
- * the recorded call order would have measured one identical set
- * for two different faults, which is what the sibling groups
- * record for their own guarded writes.
+ * HANDING THE BODY OVER UNPARSED STILL REDDENS 13, and it is the
+ * leg that says these rows are submitted to a SERVICE rather than
+ * asserted against a schema somewhere else: every schema row of the
+ * refusal table, three of the four containment rows, and both cases
+ * about where a schema fault stops. The positive half added none of
+ * them, since a valid body is a valid body parsed or not.
  *
- * THE ACCEPTED CONTROLS CARRY THE FILE, and one leg is the whole
- * of the evidence. Looking a slug up even when none was supplied
- * reddens 8, of which SIX are accepted controls and none is a
- * refusal case: every refusal row is refused under that leg too,
- * for its own reason, so the rows named for saying no are blind
- * to a module that says no to everything.
+ * THE TWO SLUG-CHECK LEGS ARE NESTED RATHER THAN OVERLAPPING, and
+ * that is the reach table earning its place. Dropping the check
+ * reddens 8 and moving it below the write reddens 4, the second set
+ * inside the first; the four the first keeps are the ones where no
+ * refusal is built at all. A file without the recorded call order
+ * would have measured one identical set for two different faults,
+ * which is what the sibling groups record for their own guarded
+ * writes.
  *
- * FOUR NARROW LEGS REDDEN EXACTLY ONE APIECE and each lands on
- * the case named for it: dropping the detail's `code`,
- * interpolating the submitted slug into the message, defaulting
- * the empty read to a payload, and stamping a member onto what is
- * written. Declaring no open path reddens 2, the masked field row
- * and the containment row beneath it.
+ * THE WHOLE-UNIT WRITE HAS A LEG NOW, and it is the zero this
+ * file's refusal half named as its hand-off. Merging the parsed
+ * payload into the stored one reddens 9 — seven rewrite cases and
+ * two reach rows, the second pair arriving only because a merge has
+ * to READ before it writes and the recorded call order says so.
+ * That incidental half was predicted here before it was measured;
+ * read the leg at seven for the rule it is aimed at.
  *
- * ONE OF THOSE FOUR NAMES A LIMIT OF THIS FILE rather than a
- * strength. Dropping the `code` reddens the refusal row and NOT
- * the distinctness case, because a detail carrying no code still
+ * A SHALLOW MERGE LEAVES THE OPEN RECORD'S ROW GREEN, which is what
+ * that row is for. `{ ...held, ...settings }` replaces
+ * `notificationChannels` wholesale, so only a leg merging INSIDE
+ * that member reaches the row — measured at 4, of which 2 are the
+ * pair named for it and 2 are the same incidental reach rows.
+ * `notificationChannels` is the one member of this payload a deep
+ * merge could plausibly reach, and without that row nothing here
+ * would report one.
+ *
+ * A STAMP LEG'S WIDTH IS DECIDED BY THE VALUE IT STAMPS rather than
+ * by the claim, which is worth knowing before any figure here is
+ * compared against a sibling file's. Stamping a `digestFormat` no
+ * row writes reddens 15; stamping the one the rewrite table writes
+ * reddens 7, because a stamp agreeing with what a row wrote is
+ * invisible to that row. The 15 is the honest width.
+ *
+ * FIVE NARROW LEGS REDDEN ONE OR TWO APIECE and each lands on the
+ * case named for it: dropping the detail's `code` (1),
+ * interpolating the submitted slug into the message (1), having
+ * the read create the row it did not find (1), defaulting the
+ * empty read to a payload (2 — the case named for it and the
+ * refusal-side case reading the same answer), and declaring no
+ * open path (2, the masked field row and the containment row
+ * beneath it).
+ *
+ * ONE OF THOSE NAMES A LIMIT OF THIS FILE rather than a strength.
+ * Dropping the `code` reddens the refusal row and NOT the
+ * distinctness case, because a detail carrying no code still
  * differs from `invalid_format` and the set is still of size two.
  * So the distinctness case pins that the two answers differ and
  * never that either code is meaningful; the row above it is what
  * pins the spelling, and neither stands in for the other.
  *
- * NINE CASES NO LEG REACHES, and they divide into three kinds.
- * Six are table guards reading only the table beside them, aimed
- * at a later edit rather than at this module: an outcome side
- * deleted whole, a declared member left unexercised, a reach
- * table that stopped spanning the range. One is the planted
- * containment control, invisible by construction and deliberately
- * so — it proves the SEARCH, where the leak legs prove the
- * SUBJECT. The last two are the accepted controls whose axis is a
- * well-formed slug that resolves: no leg here makes such a slug
- * refused, so their green says nothing, and they are the rows a
- * later widening leg would be aimed at.
+ * ONE MEASURED ZERO, AND IT IS NOT RE-AIMABLE. Answering the parsed
+ * argument rather than what the store handed back reddens nothing
+ * at all: this store copies the payload in and copies it out, so a
+ * copy of the argument and a copy of stored state are the same
+ * object graph. The claim has a subject only where the database can
+ * change what it stored — `jsonb` normalises key order and drops a
+ * duplicate key — so it is `src/settings/db-store.ts`'s `RETURNING`
+ * list that discharges it, which is what
+ * `tests/helpers/memory-research-store.ts` already says of its own
+ * `writeSettings`. Named rather than dropped, so the task landing
+ * that module has a sentence to answer.
  *
- * WHAT HAS NO LEG HERE AT ALL is the whole-unit write, and it is
- * not this module's rule to break. {@link putSettings} hands the
- * parsed payload over unaltered — which the stamping leg
- * does pin — and the REPLACEMENT of the stored payload is
- * `SettingsStore.writeSettings`'s own, asserted in
- * `tests/helpers/memory-research-store.test.ts` and owed again by
- * `src/settings/db-store.ts`. A merge leg written here would have
- * had to add a read, and would have reddened the reach rows for a
- * reason about nothing.
+ * FOURTEEN CASES NO LEG REACHES, and they divide into four kinds.
+ * Ten are table guards reading only the table beside them, aimed at
+ * a later edit rather than at this module: an outcome side deleted
+ * whole, a declared member left unexercised, a reach table that
+ * stopped spanning the range, a rewrite table that lost its
+ * disjoint row. One is the planted containment control, invisible
+ * by construction and deliberately so — it proves the SEARCH, where
+ * the leak legs prove the SUBJECT. Two are the accepted controls
+ * whose axis is a well-formed slug that resolves: no leg here makes
+ * such a slug refused, so their green says nothing.
+ *
+ * THE FOURTEENTH IS A CASE RATHER THAN A GUARD, and it is the
+ * stored-against-answered pair. Every leg that changes what is
+ * written changes what is answered by the same amount, so a write
+ * lying CONSISTENTLY passes it — the blind spot
+ * `src/taxonomy/categories-service.test.ts` states for its own
+ * create rows. It is not redundant with the case above it: that
+ * one compares the answer against a literal and this one compares
+ * the stored payload against the answer, so a lie has to be told
+ * twice and identically to get past the two.
  */
 import type { SettingsServiceStore } from './service.js';
 import type { FieldError } from '../../lib/errors/index.js';
 import type {
   MemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import type { OperatorSettings } from '../db/schema/settings.js';
 
 import { describe, expect, it } from 'vitest';
 
@@ -788,5 +857,349 @@ describe('what a refusal is allowed to say', () => {
 
     expect(Object.keys(refusal.toJSON()).sort())
       .toEqual(['code', 'details', 'message']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a read answers before any write
+// ---------------------------------------------------------------------------
+
+describe('what a read answers before any write', () => {
+  it('answers the defaults when no row has been written', async () => {
+    // The two readings the collapse is made of, taken over one
+    // store. The port reports the FACT — the table holds no row
+    // — and the service answers the STATE that fact means. Read
+    // apart rather than together, because a service that had lost
+    // the collapse would hand a caller the null straight through
+    // and nothing about the port's answer would have changed.
+    const store = await storeWithRadar();
+
+    expect(await store.readSettings()).toBeNull();
+    expect(await getSettings(store)).toStrictEqual({});
+  });
+
+  it('writes nothing to answer a read', async () => {
+    // A read that created the row it wanted would answer `{}` as
+    // well, and leave the deployment configured-to-nothing rather
+    // than never configured. Nothing in the answer separates the
+    // two, so the recording proxy is the whole of the evidence
+    // — the same reason the reach table above exists.
+    const store = await storeWithRadar();
+    const calls: string[] = [];
+
+    await getSettings(recordingStore(store, calls));
+
+    expect(calls).toEqual(['readSettings']);
+    expect(await store.readSettings()).toBeNull();
+  });
+
+  it('answers a written empty payload the same way', async () => {
+    // The collapse from its other side, and the pair that says it
+    // IS a collapse rather than a coincidence: the port now holds
+    // `{}` where a moment ago it held null, and the service
+    // answers one payload to both. A deployment configured to
+    // nothing and one never configured are two facts there and
+    // one answer here, which is the arrangement `./store.ts` and
+    // `./service.ts` argue for between them.
+    const store = await storeWithRadar();
+
+    await putSettings(store, {});
+
+    expect(await store.readSettings()).toStrictEqual({});
+    expect(await getSettings(store)).toStrictEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a first write lands
+// ---------------------------------------------------------------------------
+
+/**
+ * A deployment that has configured all three members.
+ *
+ * Typed `Required<OperatorSettings>` rather than by the interface
+ * itself, which is what keeps it MAXIMAL: every member there is
+ * optional, so the ordinary annotation would let a fourth be added
+ * and leave this literal — and every key set read off it below
+ * — quietly describing three of four. The stricter annotation
+ * makes that addition a `check-types` error at this line. The
+ * schema-against-interface drift guard is `./payload.test.ts`'s and
+ * is not restated here.
+ *
+ * The slug is {@link RADAR} rather than a free string, so every
+ * write of this payload passes the lookup instead of stopping at
+ * it.
+ */
+const FULL_SETTINGS: Required<OperatorSettings> = {
+  defaultDomainSlug: RADAR,
+  digestFormat: 'obsidian_md',
+  notificationChannels: { [OPERATOR_KEY]: true },
+};
+
+/** Every member {@link FULL_SETTINGS} names, sorted at use. */
+const SETTINGS_KEY_SET: readonly string[]
+  = Object.keys(FULL_SETTINGS).sort();
+
+/**
+ * A second digest format the tuple carries.
+ *
+ * Differing from {@link FULL_SETTINGS}'s, so a rewrite naming this
+ * member changes what is stored rather than writing it back.
+ */
+const OTHER_FORMAT = 'rss';
+
+describe('what a first write lands', () => {
+  it('answers the payload it was handed', async () => {
+    // The maximal payload, compared whole and then by key set.
+    // The second is not the first restated: a member arriving by
+    // spread carries a value no assertion here names, and a whole
+    // compare against a literal that does not carry it would
+    // report the difference only if some field read reached it.
+    const store = await storeWithRadar();
+    const written = await putSettings(store, FULL_SETTINGS);
+
+    expect(written).toStrictEqual(FULL_SETTINGS);
+    expect(Object.keys(written).sort()).toEqual([...SETTINGS_KEY_SET]);
+  });
+
+  it('stores the payload it answered', async () => {
+    // Read back through the OTHER operation, so the claim is
+    // about what is held rather than about what one call happened
+    // to answer: a write returning a payload it never stored
+    // passes the case above and fails this one. Compared for
+    // equality AND for separateness, since a store handing its
+    // own payload out satisfies the first while letting a caller
+    // write into what every later read answers.
+    const store = await storeWithRadar();
+    const written = await putSettings(store, FULL_SETTINGS);
+    const read = await getSettings(store);
+
+    expect(read).toStrictEqual(written);
+    expect(read).not.toBe(written);
+  });
+
+  it('creates the row the read before it could not find', async () => {
+    // The port's two states either side of one call, which is the
+    // half `getSettings` cannot report: it answers `{}` for a
+    // deployment that was never configured and for one whose
+    // configuration is empty, so a write that answered without
+    // storing anything is invisible to the service's own read.
+    const store = await storeWithRadar();
+
+    expect(await store.readSettings()).toBeNull();
+
+    await putSettings(store, FULL_SETTINGS);
+
+    expect(await store.readSettings()).toStrictEqual(FULL_SETTINGS);
+  });
+
+  it('stores no member the body did not name', async () => {
+    // A partial payload stays partial. A module stamping a
+    // default onto what it writes answers a plausible
+    // configuration and turns a preference nobody expressed into
+    // one somebody did — which the maximal payload above cannot
+    // report, because every member it could stamp is already
+    // there.
+    const store = await storeWithRadar();
+    const body = { digestFormat: OTHER_FORMAT };
+    const written = await putSettings(store, body);
+
+    expect(written).toStrictEqual(body);
+    expect(await getSettings(store)).toStrictEqual(body);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a rewrite replaces
+// ---------------------------------------------------------------------------
+
+/** A second channel name the operator chose, and no module here. */
+const SECOND_OPERATOR_KEY = 'operator chose another';
+
+/** One stored payload, and the payload written over it. */
+interface RewriteCase {
+  /** What makes this row different from every other. */
+  readonly label: string;
+
+  /** The payload written first. */
+  readonly first: OperatorSettings;
+
+  /**
+   * The payload written over it — and, whole, what has to be
+   * stored afterwards. There is no third expectation to declare:
+   * that the second payload IS the answer is the rule under test,
+   * and a column holding it separately would be two literals free
+   * to drift into agreeing.
+   */
+  readonly second: OperatorSettings;
+}
+
+/**
+ * Every shape a rewrite can take over a payload already stored.
+ *
+ * THE FIVE ROWS SPLIT THREE WAYS UNDER A MERGE, measured rather
+ * than predicted. A SHALLOW merge reddens the first three; the
+ * fourth needs a merge reaching INSIDE `notificationChannels`,
+ * because spreading two payloads replaces that member wholesale;
+ * and the fifth is reddened by neither, since a merge of a payload
+ * naming the same member IS a replacement. That last row is the
+ * control saying the others are narrowings OF something, the shape
+ * `src/domains/service.test.ts` states beside its own
+ * replaces-rather-than-merges case.
+ *
+ * The rows differ along the axis a merge would collapse. One
+ * replaces a payload with one sharing no member, one drops two of
+ * three, one drops all three, one replaces the open record's
+ * contents under a key it did not carry, and one rewrites the
+ * single member it found. Only the fourth can report a deep merge,
+ * and nothing else in this package would.
+ */
+const REWRITE_CASES: readonly RewriteCase[] = [
+  {
+    label: 'nothing the stored payload named',
+    first: { defaultDomainSlug: RADAR },
+    second: { digestFormat: OTHER_FORMAT },
+  },
+  {
+    label: 'one member of the three stored',
+    first: FULL_SETTINGS,
+    second: { digestFormat: OTHER_FORMAT },
+  },
+  {
+    label: 'no member at all',
+    first: FULL_SETTINGS,
+    second: {},
+  },
+  {
+    label: 'another key under the open record',
+    first: { notificationChannels: { [OPERATOR_KEY]: true } },
+    second: { notificationChannels: { [SECOND_OPERATOR_KEY]: false } },
+  },
+  {
+    label: 'a new value for the one member stored',
+    first: { digestFormat: FULL_SETTINGS.digestFormat },
+    second: { digestFormat: OTHER_FORMAT },
+  },
+];
+
+/**
+ * The members a rewrite clears by leaving them out.
+ *
+ * @param row - The rewrite.
+ * @returns Every key the stored payload carried that the payload
+ *   written over it does not name.
+ */
+function clearedBy(row: RewriteCase): string[] {
+  return Object.keys(row.first).filter((key) => !(key in row.second));
+}
+
+/**
+ * Every member a row names, on either side of the rewrite.
+ *
+ * @param row - The rewrite.
+ * @returns The two key lists concatenated, duplicates and all.
+ */
+function membersOf(row: RewriteCase): string[] {
+  return [...Object.keys(row.first), ...Object.keys(row.second)];
+}
+
+/**
+ * Whether a rewrite shares no member with what it replaces while
+ * still naming one of its own.
+ *
+ * @param row - The rewrite.
+ * @returns True while the two payloads are disjoint and the second
+ *   is not simply empty.
+ */
+function isDisjointRewrite(row: RewriteCase): boolean {
+  return Object.keys(row.second).length > 0
+    && clearedBy(row).length === Object.keys(row.first).length;
+}
+
+describe('what a rewrite replaces', () => {
+  it('labels every rewrite distinctly', () => {
+    // Two rows sharing a label would run under one case name, and
+    // the second's failure would read as the first's.
+    const labels = REWRITE_CASES.map((row) => row.label);
+
+    expect([...new Set(labels)].sort()).toEqual([...labels].sort());
+  });
+
+  it('names every member the payload declares', () => {
+    // Paired by name rather than counted, so a member no row
+    // clears or writes is this case failing rather than a table
+    // that quietly covers two of three.
+    const named = REWRITE_CASES.flatMap(membersOf);
+
+    expect([...new Set(named)].sort()).toEqual([...SETTINGS_KEY_SET]);
+  });
+
+  it('spans a rewrite that clears nothing and one that clears all', () => {
+    // The range is what makes the table discriminating. Without
+    // the clears-nothing row there is no control a merge leaves
+    // green; without the clears-everything row the maximal case
+    // — emptying the configuration — is untested, and it is
+    // the one a merge makes inexpressible.
+    const cleared = REWRITE_CASES.map((row) => clearedBy(row).length);
+
+    expect(Math.min(...cleared)).toBe(0);
+    expect(Math.max(...cleared)).toBe(SETTINGS_KEY_SET.length);
+  });
+
+  it('carries a disjoint rewrite that is not the empty one', () => {
+    // Without one, a merge is distinguishable only by the row
+    // writing `{}` — and a merge of nothing is a replacement, so
+    // the rule would be pinned by a row that cannot see it.
+    expect(REWRITE_CASES.filter(isDisjointRewrite)).not.toEqual([]);
+  });
+
+  for (const row of REWRITE_CASES) {
+    it(`answers ${row.label}`, async () => {
+      // Compared against the payload as it was WRITTEN rather
+      // than against anything derived from the stored one: a
+      // merge answers both payloads' members and fails here,
+      // which is the whole of the whole-unit rule at this layer.
+      const store = await storeWithRadar();
+
+      await putSettings(store, row.first);
+
+      const rewritten = await putSettings(store, row.second);
+
+      expect(rewritten).toStrictEqual(row.second);
+    });
+
+    it(`holds ${row.label} afterwards`, async () => {
+      // Read back through `getSettings`, so the claim is about
+      // what is stored: a module answering the replacement while
+      // storing the merge passes the case above and fails this
+      // one, and no assertion over the write's own answer could
+      // tell the two apart.
+      const store = await storeWithRadar();
+
+      await putSettings(store, row.first);
+      await putSettings(store, row.second);
+
+      expect(await getSettings(store)).toStrictEqual(row.second);
+    });
+  }
+
+  it('clears a member by leaving it out of the next write', async () => {
+    // Absent rather than present and empty, which is the
+    // difference a caller reads and the one a key set is needed
+    // for: `JSON.stringify` drops an `undefined` member outright,
+    // so a stored payload carrying `defaultDomainSlug: undefined`
+    // and one carrying nothing at that key reach the wire
+    // identically. Omission is the only way a member is cleared
+    // at all, per `SettingsStore.writeSettings`, so this is what
+    // the whole-unit rule is FOR rather than a consequence of it.
+    const store = await storeWithRadar();
+
+    await putSettings(store, FULL_SETTINGS);
+    await putSettings(store, { digestFormat: OTHER_FORMAT });
+
+    const read = await getSettings(store);
+
+    expect(Object.keys(read).sort()).toEqual(['digestFormat']);
+    expect('defaultDomainSlug' in read).toBe(false);
   });
 });
