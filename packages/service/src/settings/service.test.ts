@@ -177,8 +177,10 @@
  * duplicate key — so it is `src/settings/db-store.ts`'s `RETURNING`
  * list that discharges it, which is what
  * `tests/helpers/memory-research-store.ts` already says of its own
- * `writeSettings`. Named rather than dropped, so the task landing
- * that module has a sentence to answer.
+ * `writeSettings`. Both modules have landed since, and
+ * `tests/live/api.live.test.ts` is where the claim is now a case: a
+ * payload written with its keys out of jsonb order is answered in
+ * the database's order.
  *
  * FOURTEEN CASES NO LEG REACHES, and they divide into four kinds.
  * Ten are table guards reading only the table beside them, aimed at

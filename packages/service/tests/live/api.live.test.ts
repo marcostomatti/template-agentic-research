@@ -1,9 +1,10 @@
 /**
  * The wave-1 stores driven against a real Postgres, through the real
  * migrations: a domain written, a taxonomy hung off it, a lexicon
- * written into a bucket of that taxonomy, and every mechanism those
- * tables refuse a write with. Self-skips when AR_LIVE_DATABASE_URL
- * is unset — run via:
+ * written into a bucket of that taxonomy, personas hung off the
+ * domain, the operator settings singleton written twice into one
+ * row, and every mechanism those tables refuse a write with.
+ * Self-skips when AR_LIVE_DATABASE_URL is unset — run via:
  *
  *   bun run stress:start && bun run test:live && bun run stress:stop
  *
@@ -21,7 +22,7 @@
  * target naming the wrong key, a `RETURNING` list drifted from the
  * `SELECT` beside it — each is reported here and nowhere else.
  *
- * SEVEN READINGS BELOW ARE THINGS AN IN-MEMORY MAP CANNOT DO, which
+ * NINE READINGS BELOW ARE THINGS AN IN-MEMORY MAP CANNOT DO, which
  * is the same argument put sharply enough to be checkable.
  *
  * THE IDENTITY AND THE STAMPS ARE THE DATABASE'S. `id` is a
@@ -35,14 +36,16 @@
  * JSONB REORDERS WHAT IT STORES. A settings payload written with its
  * members in one order is answered with them in another, because
  * jsonb holds keys by length and then by bytes rather than by
- * insertion — measured here at the top level and inside
- * `scoringWeights`. That is the reading which says the `RETURNING`
- * list READ the stored row rather than echoing the argument it was
- * handed, and it is exactly the measured zero the in-memory store
- * and the service suites hand over by name: where a store copies its
- * argument in and copies it out again, answering the argument and
- * answering the stored value are the same object graph, so no leg
- * over there can tell the two apart.
+ * insertion — measured here on `domains.settings` at the top level
+ * and inside `scoringWeights`, and again on the whole of
+ * `operator_settings.settings`, which is all that port deals in.
+ * That is the reading which says the `RETURNING` list READ the
+ * stored row rather than echoing the argument it was handed, and it
+ * is exactly the measured zero the in-memory store and the service
+ * suites hand over by name: where a store copies its argument in and
+ * copies it out again, answering the argument and answering the
+ * stored value are the same object graph, so no leg over there can
+ * tell the two apart.
  *
  * THE TERM COUNT IS A GROUPED LEFT JOIN, and the member it exists
  * for is the EMPTY bucket. `count(terms.id)` answers 0 for a
@@ -57,6 +60,27 @@
  * id it already had, which is what lets import, export and
  * re-import settle instead of accumulating a second row that would
  * then count the same match twice.
+ *
+ * THE EMPTY PATCH IS A BRANCH THAT EXISTS BECAUSE THIS
+ * IMPLEMENTATION THROWS. `personas` carries no timestamp column, so
+ * a patch naming no member leaves an empty update list, and drizzle
+ * answers that with `No values to set` rather than with a harmless
+ * statement — where an in-memory map would hand the row back
+ * without noticing it had been asked for nothing. The port declares
+ * the call legal and owes the stored row, so the drizzle half reads
+ * instead of writing, and the leg deleting that early return
+ * reddens nothing at all over there: writing every member back to
+ * itself is indistinguishable from not writing.
+ *
+ * THE SINGLETON IS THE DATABASE'S, AND THE ROW COUNT IS PAST THE
+ * PORT. `SettingsStore` has no count, no list and no method taking
+ * an id, so a second configuration is not something an
+ * implementation must remember not to write — it is something that
+ * interface cannot express, and equally something no reading
+ * through it could report. The settings case writes twice and then
+ * counts the table directly, which is the only place the id the
+ * module chose, the primary key its second write conflicts on and
+ * the CHECK standing behind both can be seen holding.
  *
  * THE MECHANISMS ARE THE DATABASE'S, AND THE FAKE ONLY IMITATES
  * THEM. `tests/helpers/memory-research-store.ts` refuses a
@@ -112,30 +136,35 @@
  * as a reading of its own rather than leaving it to a comment.
  *
  * WHAT IS STILL MISSING IS NAMED RATHER THAN LEFT TO BE NOTICED.
- * The refusals land here: the depth trigger, the `parent_id`
- * `NO ACTION`, all four natural keys and the domain cascade each
- * have a case, and two of them write `personas` through
- * `createDbPersonaStore`. What has no case yet is a persona read
- * back WHOLE against its own key set and the `operator_settings`
- * singleton, both of which are the next task's; nothing below
- * writes `operator_settings` at all. One further read has no live
- * case anywhere in the plan and is named here so it can be picked
- * up rather than silently missed:
+ * The two halves the refusal pass handed forward are discharged: a
+ * persona is written, read back whole against its own key set,
+ * listed, paged, patched and deleted, and the `operator_settings`
+ * singleton is written twice into one row and counted. What is left
+ * has no live case anywhere in the plan and is named here so it can
+ * be picked up rather than silently missed:
  * `DomainStore.countDomainDependents` is one `UNION ALL` over three
  * LABELLED aggregates, and a branch coming back out of order would
  * attribute one table's count to another with nothing reporting it.
  * Reaching that needs a `topics`, a `sources` and a `findings` row
  * planted with raw SQL, which no port method here writes. This
- * paragraph is the missing half named rather than left to be
- * noticed, and each half goes when it lands.
+ * paragraph is that half named rather than left to be noticed, and
+ * it goes when it lands.
  *
- * FOURTEEN MUTATIONS WERE RUN AGAINST THESE SIXTEEN CASES, each leg
- * twice, with every red SET identical across the two passes and no
- * leg reddening nothing. The figures are a measurement over this
- * case list and nothing else: the task after this one adds a
- * persona read and the settings singleton, and every number here
- * moves when they land, so the successor re-derives the grid rather
- * than inheriting it.
+ * TWENTY-TWO MUTATIONS WERE RUN AGAINST THESE NINETEEN CASES, each
+ * leg twice, with every red SET identical across the two passes and
+ * no leg reddening nothing. The figures are a measurement over this
+ * case list and nothing else, so a task adding a case here
+ * re-derives the whole grid rather than inheriting any of it.
+ *
+ * THE FOURTEEN STANDING LEGS DID NOT MOVE, AND THAT IS A READING
+ * RATHER THAN THE ABSENCE OF ONE. Three cases landed on top of the
+ * sixteen a predecessor measured, and every standing leg's red set
+ * came back identical member for member — because what the persona
+ * and settings cases write outside their own tables is a domain
+ * apiece, and nothing they do reaches a domain's settings payload,
+ * its dependents or its taxonomy. A half writing through more
+ * tables would have moved them, which is why the SET and not the
+ * count is what says nothing shifted underneath.
  *
  * THE TWO LEGS A PREDECESSOR RECORDED AS ONE READING ARE TWO NOW,
  * and the refusal cases are what separated them. Counting
@@ -192,6 +221,32 @@
  * behind one, so the two legs measure different halves of the same
  * containment boundary.
  *
+ * THE EIGHT NEW LEGS COLLAPSE TO THREE READINGS, ONE PER CASE, and
+ * what separates the legs sharing a case is which ASSERTION failed
+ * rather than which case did. All four settings legs redden the
+ * settings case alone: dropping the `ON CONFLICT` clause raises
+ * `operator_settings_pkey` at the second write and reaches no
+ * assertion at all, answering the write's own argument instead of
+ * the `RETURNING` row fails the key ORDER, dropping the `now()`
+ * stamp fails the rewritten `updated_at`, and collapsing an absent
+ * row's null to `{}` fails the very first line of the case. Four
+ * faults, four lines, one case — a report quoting the count alone
+ * would read as one leg written out four times.
+ *
+ * THE TWO PERSONA LIST LEGS SHARED AN ASSERTION UNTIL THE CASE WAS
+ * REORDERED, which is that finding from the other side. A dropped
+ * `WHERE` and an `ORDER BY` on the wrong column both fail a
+ * comparison of one domain's list, so with that read first the two
+ * legs were one line apart and told apart only by their diffs;
+ * asserting the OTHER domain's list ahead of it gives the scope leg
+ * a line of its own, since a single-row list has no order to get
+ * wrong. The remaining pair is the persona patch, and they are as
+ * far apart as two legs in one case can be: deleting the
+ * empty-patch early return throws drizzle's own `No values to set`
+ * — the only leg here whose subject is a call that cannot be made
+ * at all — while dropping `systemText` from the `set` list fails
+ * the retuned text.
+ *
  * THE KEY-SET PIN IS A `check-types` LEG rather than a red case, and
  * was measured the same way: a fabricated member on `DomainRecord`
  * answers TS2322 at {@link EVERY_KEY_LISTED} with all sixteen cases
@@ -207,10 +262,12 @@
  * rule the case stands for is in that name too.
  */
 import type { DomainSettings } from '../../src/db/schema/domains.js';
+import type { OperatorSettings } from '../../src/db/schema/settings.js';
 import type { DomainStore } from '../../src/domains/index.js';
 import type { DomainRecord } from '../../src/domains/store.js';
 import type { StoreWindow } from '../../src/http/schemas.js';
-import type { PersonaStore } from '../../src/personas/store.js';
+import type { PersonaRecord, PersonaStore } from '../../src/personas/store.js';
+import type { SettingsStore } from '../../src/settings/store.js';
 import type {
   CategoryRecord,
   CategoryWithTermCount,
@@ -222,9 +279,14 @@ import type { Pool } from 'pg';
 
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 
+import {
+  OPERATOR_SETTINGS_ID,
+  operatorSettings,
+} from '../../src/db/schema.js';
 import { StoreRefusal } from '../../src/db/store-errors.js';
 import { createDbDomainStore } from '../../src/domains/index.js';
 import { createDbPersonaStore } from '../../src/personas/db-store.js';
+import { createDbSettingsStore } from '../../src/settings/db-store.js';
 import { createDbTaxonomyStore } from '../../src/taxonomy/db-store.js';
 
 import {
@@ -414,8 +476,31 @@ const RESEARCHER = 'researcher';
 /** A second role, for the rename that collides with the first. */
 const SCORER = 'scorer';
 
+/**
+ * A third role, and the one a list read answers FIRST.
+ *
+ * It sorts ahead of both the others while being written after them,
+ * so an answer in insertion order and an answer in role order are
+ * two different lists rather than one.
+ */
+const DRAFTER = 'drafter';
+
 /** The system text a planted persona carries. */
 const SYSTEM_TEXT = 'Survey the field and report what changed.';
+
+/** What a patch rewrites that text to. */
+const RETUNED_TEXT = 'Survey the field and say what an operator should read.';
+
+/**
+ * The system text of a role that has none yet.
+ *
+ * AN EMPTY STRING IS A LEGAL VALUE HERE, and `personas.system_text`
+ * is `NOT NULL`, so this is a value being written rather than a
+ * member left off: the role exists and has no instructions. Nothing
+ * on the port treats it as an absence, and a round trip is where a
+ * store quietly defaulting it would show.
+ */
+const NO_TEXT = '';
 
 /**
  * The text a refused persona write carries.
@@ -424,6 +509,54 @@ const SYSTEM_TEXT = 'Survey the field and report what changed.';
  * wrote anyway is only visible where the two disagree.
  */
 const REFUSED_TEXT = 'Written by a request the database refused.';
+
+/**
+ * The operator configuration the settings case writes first.
+ *
+ * Its member order is chosen to be one jsonb will NOT keep, exactly
+ * as {@link SENT_SETTINGS} is for `domains.settings`: keys are held
+ * by length and then by bytes, so `digestFormat` (13) comes back
+ * ahead of `defaultDomainSlug` (17) and `notificationChannels` (20),
+ * and `email` (5) ahead of `webhook` (7) inside the nested record.
+ *
+ * `defaultDomainSlug` names a domain the case deliberately never
+ * plants. No foreign key reaches inside a jsonb payload, and this
+ * port resolves no domain — `src/settings/service.ts` checks the
+ * slug on the way IN — so what is stored here is whatever the app
+ * layer allowed through, which is a fact only a database can report.
+ */
+const SENT_OPERATOR_SETTINGS: OperatorSettings = {
+  notificationChannels: { webhook: true, email: false },
+  defaultDomainSlug: RADAR,
+  digestFormat: 'rss',
+};
+
+/** The order {@link SENT_OPERATOR_SETTINGS} was written in. */
+const SENT_OPERATOR_ORDER: readonly string[] = [
+  'notificationChannels',
+  'defaultDomainSlug',
+  'digestFormat',
+];
+
+/** The order jsonb answers it in. Measured, not derived. */
+const STORED_OPERATOR_ORDER: readonly string[] = [
+  'digestFormat',
+  'defaultDomainSlug',
+  'notificationChannels',
+];
+
+/** The same reordering inside `notificationChannels`. */
+const STORED_CHANNEL_ORDER: readonly string[] = ['email', 'webhook'];
+
+/**
+ * What the second write replaces the whole payload with.
+ *
+ * It names ONE member, and a different value for it than the first
+ * write stored — so the same answer reports both halves of the
+ * whole-unit rule: the member that is rewritten, and the two that
+ * are cleared by being left out. A merge would answer all three.
+ */
+const REWRITTEN_SETTINGS: OperatorSettings = { digestFormat: 'pdf' };
 
 /**
  * An id no category carries in any case below.
@@ -482,6 +615,21 @@ const TERM_KEYS = [
 ] as const satisfies readonly (keyof TermRecord)[];
 
 /**
+ * Every member `PERSONA_COLUMNS` in `src/personas/db-store.ts`
+ * projects, which on this table is every column it has.
+ *
+ * `personas` carries no `created_at` and no `updated_at`, so the
+ * record and the row are the same four members and a timestamp
+ * arriving would be a schema change this set reports.
+ */
+const PERSONA_KEYS = [
+  'domainId',
+  'id',
+  'role',
+  'systemText',
+] as const satisfies readonly (keyof PersonaRecord)[];
+
+/**
  * `true` only while `L` names every key of `T`.
  *
  * The tuple wrapper is load-bearing rather than decoration: without
@@ -495,12 +643,13 @@ const TERM_KEYS = [
 type CoversEveryKey<T, L extends readonly PropertyKey[]> =
   [Exclude<keyof T, L[number]>] extends [never] ? true : false;
 
-/** All four lists above, held against the types they describe. */
+/** All five lists above, held against the types they describe. */
 type EveryKeyListed =
   CoversEveryKey<DomainRecord, typeof DOMAIN_KEYS>
   & CoversEveryKey<CategoryRecord, typeof CATEGORY_KEYS>
   & CoversEveryKey<CategoryWithTermCount, typeof LISTED_KEYS>
-  & CoversEveryKey<TermRecord, typeof TERM_KEYS>;
+  & CoversEveryKey<TermRecord, typeof TERM_KEYS>
+  & CoversEveryKey<PersonaRecord, typeof PERSONA_KEYS>;
 
 /**
  * The half of the drift guard `check-types` owns.
@@ -527,6 +676,9 @@ const LISTED_KEY_SET: readonly string[] = [...LISTED_KEYS].sort();
 
 /** {@link TERM_KEYS}, sorted. */
 const TERM_KEY_SET: readonly string[] = [...TERM_KEYS].sort();
+
+/** {@link PERSONA_KEYS}, sorted. */
+const PERSONA_KEY_SET: readonly string[] = [...PERSONA_KEYS].sort();
 
 /**
  * The unique key on `domains.slug`.
@@ -645,6 +797,51 @@ function termNamed(
 }
 
 /**
+ * One `operator_settings` row, as the table itself declares it.
+ *
+ * Derived from the table rather than written out, so a column added
+ * to `src/db/schema/settings.ts` moves this type with it.
+ * `src/settings/store.ts` says no timestamp crosses that port and
+ * declares no record type at all — the payload IS what a read and a
+ * write deal in — so three of these four members are reachable only
+ * by reading past the port, which is what the settings case below
+ * does and why it says so.
+ */
+type SettingsRow = typeof operatorSettings.$inferSelect;
+
+/**
+ * The single row a read past the port was supposed to answer.
+ *
+ * A read that came back empty breaks the case in its SETUP, where a
+ * missing row and a wrong value otherwise read alike — so the
+ * refusal names what was being read rather than leaving every
+ * assertion below it to fail against an undefined.
+ *
+ * It guards the empty result and NOT the length, deliberately: that
+ * the table holds one row is the singleton claim the settings case
+ * makes for itself, one line above each call, and a helper throwing
+ * on it would take the file's own assertion out of the file.
+ *
+ * @param rows - Whatever the read answered.
+ * @param read - What was being read, quoted back in the refusal.
+ * @returns Its first row, without the `undefined`
+ *   `noUncheckedIndexedAccess` gives the index access.
+ * @throws Error When the read answered no row at all.
+ */
+function oneRow<T>(rows: readonly T[], read: string): T {
+  const [row] = rows;
+
+  if (row === undefined) {
+    throw new Error(
+      `[api-live] reading ${read} answered no row, so every `
+      + 'assertion below it would be about nothing.',
+    );
+  }
+
+  return row;
+}
+
+/**
  * The refusal a live write was supposed to raise.
  *
  * Throws on both of the shapes that are not one. A call that
@@ -713,9 +910,9 @@ describeLivePg('wave-1 stores (live Postgres)', () => {
   let pool: Pool;
   let db: ReturnType<typeof createLiveDb>;
 
-  // All three stores are built before the pool exists, which is the
+  // All four stores are built before the pool exists, which is the
   // ordering the thunk in each of them is there for: `src/index.ts`
-  // builds all four wave-1 stores while `createService` is still
+  // builds these same four while `createService` is still
   // registering, and that is before the Postgres dependency has
   // started. Constructing them here touches nothing — a store that
   // resolved `db` eagerly would capture an undefined and fail every
@@ -723,12 +920,13 @@ describeLivePg('wave-1 stores (live Postgres)', () => {
   //
   // `createDbDomainStore` comes through `src/domains/index.js` and
   // not through the module declaring it, which is the containment
-  // rule that barrel states about itself. Taxonomy and personas
-  // carry no barrel, so those two constructors are deep imports; see
-  // `ls src/*/index.ts`.
+  // rule that barrel states about itself. Taxonomy, personas and
+  // settings carry no barrel, so those three constructors are deep
+  // imports; see `ls src/*/index.ts`.
   const domainStore: DomainStore = createDbDomainStore(() => db);
   const taxonomyStore: TaxonomyStore = createDbTaxonomyStore(() => db);
   const personaStore: PersonaStore = createDbPersonaStore(() => db);
+  const settingsStore: SettingsStore = createDbSettingsStore(() => db);
 
   beforeAll(async () => {
     pool = createLivePool();
@@ -785,6 +983,24 @@ describeLivePg('wave-1 stores (live Postgres)', () => {
     });
 
     return { domain, root, child };
+  }
+
+  /**
+   * Every `operator_settings` row, read past the port.
+   *
+   * `SettingsStore` has no count, no list and no method taking an
+   * id, so how many rows the table holds is a question no reading
+   * through it can ask — which is the singleton rule working
+   * rather than a gap, since a second configuration is something
+   * that interface cannot express. Asking it anyway is the whole
+   * point of taking the reading here: the CHECK and the primary key
+   * are the database's, and this is where they can be seen holding.
+   *
+   * @returns Whatever `operator_settings` holds, unfiltered, so an
+   *   extra row is a length rather than something a `WHERE` hid.
+   */
+  async function settingsRows(): Promise<readonly SettingsRow[]> {
+    return await db.select().from(operatorSettings);
   }
 
   it('meets an empty database in every case', async () => {
@@ -1078,6 +1294,292 @@ describeLivePg('wave-1 stores (live Postgres)', () => {
       .toStrictEqual(LEXICON_PATTERNS);
     expect(termNamed(listed, REWRITTEN.pattern)).toStrictEqual(after);
     expect(termNamed(listed, untouched.pattern)).toStrictEqual(untouched);
+  });
+
+  it('writes a persona and reads it back whole', async () => {
+    const domain = await plantDomain();
+    const created = await personaStore.insertPersona({
+      domainId: domain.id,
+      role: RESEARCHER,
+      systemText: SYSTEM_TEXT,
+    });
+
+    // The whole key set beside the field reads, for the reason the
+    // domain write gives: no field assertion notices a member
+    // ARRIVING, and every column of `personas` is prose an operator
+    // wrote, one envelope away from the wire.
+    expect(keysOf(created)).toStrictEqual(PERSONA_KEY_SET);
+    expect(typeof created.id).toBe('number');
+    expect(created.domainId).toBe(domain.id);
+    expect(created.role).toBe(RESEARCHER);
+    expect(created.systemText).toBe(SYSTEM_TEXT);
+
+    // Read back through the id every `/personas/:id` request enters
+    // by, and compared whole: the read and the write are pinned to
+    // one projection rather than to two that agree today.
+    expect(present(
+      await personaStore.findPersonaById(created.id),
+      'findPersonaById after the insert',
+    )).toStrictEqual(created);
+
+    // AN EMPTY SYSTEM TEXT IS A VALUE AND SURVIVES AS ONE. The
+    // column is `NOT NULL` and the port admits the empty string —
+    // the role exists and has no instructions yet — so a store
+    // defaulting it, trimming it away or refusing it reddens here
+    // and nowhere a member is merely read.
+    const drafter = await personaStore.insertPersona({
+      domainId: domain.id,
+      role: DRAFTER,
+      systemText: NO_TEXT,
+    });
+
+    expect(drafter.systemText).toBe(NO_TEXT);
+    expect(present(
+      await personaStore.findPersonaById(drafter.id),
+      'findPersonaById after the empty-text insert',
+    ).systemText).toBe(NO_TEXT);
+
+    // A second domain carrying a persona of its own, which is what
+    // the scope reading needs: a `WHERE` that had stopped narrowing
+    // would answer three rows below while every count still added
+    // up.
+    const other = await domainStore.insertDomain({
+      slug: TRANSIT,
+      name: TRANSIT_NAME,
+      settings: {},
+    });
+    const elsewhere = await personaStore.insertPersona({
+      domainId: other.id,
+      role: SCORER,
+      systemText: SYSTEM_TEXT,
+    });
+
+    // Scoped to the domain that was asked for, and asserted BEFORE
+    // the order below rather than after it: a scope fault and an
+    // order fault both fail a read of this domain's list, so taking
+    // the other domain's first is what leaves each of the two a
+    // line of its own to fail at.
+    expect(await personaStore.listPersonas(other.id, WHOLE))
+      .toStrictEqual([elsewhere]);
+
+    // Ordered by `role` ascending, so the drafter comes first even
+    // though the researcher was written first — an answer in
+    // insertion order is a different list, not the same one.
+    expect(await personaStore.listPersonas(domain.id, WHOLE))
+      .toStrictEqual([drafter, created]);
+
+    // The window narrows that order rather than reordering it.
+    const page = await personaStore
+      .listPersonas(domain.id, { limit: 1, offset: 1 });
+
+    expect(page).toStrictEqual([created]);
+    expect(await personaStore.countPersonas(domain.id)).toBe(2);
+    expect(await personaStore.countPersonas(other.id)).toBe(1);
+
+    // An id no domain carries is an empty list and a zero rather
+    // than a failure to read: nothing points at a row that is not
+    // there, and whether the domain existed was answered by
+    // `findDomainBySlug` before any of this was called.
+    expect(await personaStore.listPersonas(ABSENT_ID, WHOLE))
+      .toStrictEqual([]);
+    expect(await personaStore.countPersonas(ABSENT_ID)).toBe(0);
+  });
+
+  it('answers an empty persona patch without writing', async () => {
+    const domain = await plantDomain();
+    const created = await personaStore.insertPersona({
+      domainId: domain.id,
+      role: RESEARCHER,
+      systemText: SYSTEM_TEXT,
+    });
+
+    // THE BRANCH THAT EXISTS ONLY BECAUSE THIS IMPLEMENTATION
+    // THROWS. `personas` has no timestamp to stamp, so a patch
+    // naming no member leaves literally nothing to set and drizzle
+    // answers an empty update list with `No values to set` — where
+    // an in-memory map would happily hand the row back. The port
+    // declares the call legal and owes the stored row, so this is
+    // what says the drizzle half reads instead of writing, and it
+    // is a reading the isolated suite cannot take: over there,
+    // deleting the early return reddens nothing at all.
+    expect(await personaStore.updatePersona(created.id, {}))
+      .toStrictEqual(created);
+
+    const patched = present(
+      await personaStore.updatePersona(created.id, {
+        role: SCORER,
+        systemText: RETUNED_TEXT,
+      }),
+      'updatePersona naming both members',
+    );
+
+    expect(keysOf(patched)).toStrictEqual(PERSONA_KEY_SET);
+    expect(patched.id).toBe(created.id);
+    expect(patched.domainId).toBe(domain.id);
+    expect(patched.role).toBe(SCORER);
+    expect(patched.systemText).toBe(RETUNED_TEXT);
+
+    // The answered row and the stored row are two claims: a write
+    // lying consistently satisfies the first on its own.
+    expect(present(
+      await personaStore.findPersonaById(created.id),
+      'findPersonaById after the patch',
+    )).toStrictEqual(patched);
+
+    // THE RENAME MOVED THE ROW RATHER THAN ADDING ONE, so the role
+    // it left behind is free again and takes an insert. That is the
+    // index the refusal case reads, from the accepting side, and it
+    // is why `PersonaPatch` may carry `role` where the sibling
+    // patches may not carry their own natural keys.
+    const successor = await personaStore.insertPersona({
+      domainId: domain.id,
+      role: RESEARCHER,
+      systemText: NO_TEXT,
+    });
+
+    expect(successor.role).toBe(RESEARCHER);
+    expect(successor.id).not.toBe(created.id);
+    expect(await personaStore.countPersonas(domain.id)).toBe(2);
+
+    // An id no row carries is null rather than a refusal, on the
+    // patch as on the read: a row may go between a read and a
+    // write, and what that means is the caller's to decide.
+    const absent = await personaStore
+      .updatePersona(ABSENT_ID, { role: DRAFTER });
+
+    expect(absent).toBeNull();
+    expect(await personaStore.findPersonaById(ABSENT_ID)).toBeNull();
+
+    // Nothing hangs off a persona — no foreign key in schema v2
+    // points at this table — so this delete cannot be refused, and
+    // a second one answers false rather than throwing.
+    expect(await personaStore.deletePersona(created.id)).toBe(true);
+    expect(await personaStore.deletePersona(created.id)).toBe(false);
+    expect(await personaStore.findPersonaById(created.id)).toBeNull();
+    expect(await personaStore.countPersonas(domain.id)).toBe(1);
+  });
+
+  it('writes the settings singleton twice into one row', async () => {
+    // AN ABSENT ROW IS NULL HERE AND `{}` ONE LAYER UP. The port
+    // reports which of the two states the database is in and
+    // `src/settings/service.ts` is the single place they become one
+    // answer — a store collapsing them here would leave nothing
+    // able to tell a never-configured deployment from a
+    // configured-to-nothing one.
+    expect(await settingsStore.readSettings()).toBeNull();
+    expect(await settingsRows()).toStrictEqual([]);
+
+    const first = await settingsStore
+      .writeSettings(SENT_OPERATOR_SETTINGS);
+
+    // The VALUES survive whole, which is what leaves the ORDER
+    // below a separate claim rather than a restatement of this one.
+    expect(first).toStrictEqual(SENT_OPERATOR_SETTINGS);
+
+    // The control first: the payload really was written in an order
+    // jsonb does not keep. Without it the reordering assertion is
+    // equally green against a constant that was already sorted.
+    expect(Object.keys(SENT_OPERATOR_SETTINGS))
+      .toStrictEqual(SENT_OPERATOR_ORDER);
+    expect(STORED_OPERATOR_ORDER).not.toStrictEqual(SENT_OPERATOR_ORDER);
+
+    // And the order did not survive, at both depths. That is the
+    // reading which says the `RETURNING` list read the stored row
+    // rather than echoing the argument it was handed, and it is the
+    // measured zero the in-memory store and the settings service
+    // suite both hand over by name: where a store copies a payload
+    // in and copies it out again, answering the argument and
+    // answering stored state are the same object graph, so no leg
+    // over there can tell the two apart.
+    expect(Object.keys(first)).toStrictEqual(STORED_OPERATOR_ORDER);
+    expect(Object.keys(present(
+      first.notificationChannels ?? null,
+      'the stored notificationChannels record',
+    ))).toStrictEqual(STORED_CHANNEL_ORDER);
+
+    const inserted = oneRow(await settingsRows(), 'operator_settings');
+
+    // THE ID IS THE MODULE'S OWN CONSTANT, which is what puts both
+    // of this table's mechanisms out of a caller's reach: the
+    // singleton CHECK cannot refuse a value the store chose, and
+    // the primary key's conflict is what the second write below is
+    // for.
+    expect(inserted.id).toBe(OPERATOR_SETTINGS_ID);
+    expect(inserted.settings).toStrictEqual(first);
+
+    // Both stamps come from the column defaults on ONE statement,
+    // so they are equal. Compared as ISO strings rather than
+    // through `String(date)`, which truncates a `timestamptz` to
+    // whole seconds and would report almost anything as equal.
+    expect(inserted.updatedAt.toISOString())
+      .toBe(inserted.createdAt.toISOString());
+
+    // NO CONSTRAINT REACHES INSIDE THE PAYLOAD. The stored
+    // `defaultDomainSlug` names a domain that does not exist and
+    // the database is content: a jsonb member is out of every
+    // foreign key's reach, so checking the slug is the app layer's
+    // on the way IN and nothing here repairs it afterwards.
+    expect(await domainStore.countDomains()).toBe(0);
+
+    // The plain read agrees with the write's own `RETURNING`, which
+    // says the reordering is the column's and not one statement's.
+    expect(present(
+      await settingsStore.readSettings(),
+      'readSettings after the first write',
+    )).toStrictEqual(first);
+
+    // A FIRST WRITE AND A REWRITE ARE ONE STATEMENT. This second
+    // write conflicts on the id the first one took, and
+    // `ON CONFLICT (id) DO UPDATE` absorbs the conflict rather than
+    // raising it — where a store branching on a read would be two
+    // statements with a gap, in which two first writes both read an
+    // empty table and the primary key refuses the loser.
+    const second = await settingsStore.writeSettings(REWRITTEN_SETTINGS);
+
+    expect(second).toStrictEqual(REWRITTEN_SETTINGS);
+
+    // THE PAYLOAD IS WRITTEN AS A WHOLE UNIT AND NEVER MERGED. The
+    // rewrite names one member and a different value for it, so one
+    // answer reports both halves of that rule: the member rewritten
+    // and the two cleared by being left out. A merge would answer
+    // all three, and omitting a preference and removing one would
+    // be the same request.
+    expect(second.digestFormat).not.toBe(first.digestFormat);
+    expect(second.defaultDomainSlug).toBeUndefined();
+    expect(second.notificationChannels).toBeUndefined();
+
+    const after = await settingsRows();
+
+    // THE ROW COUNT IS THE SINGLETON, AND THE PORT CANNOT ANSWER
+    // IT. `SettingsStore` has no count, no list and no method
+    // taking an id, so a second configuration is not something an
+    // implementation must remember not to write — and it is also
+    // not something any reading through that port could report.
+    // This one is taken past it, which is the only place the claim
+    // can be made at all.
+    expect(after).toHaveLength(1);
+
+    const rewritten = oneRow(after, 'operator_settings after the rewrite');
+
+    expect(rewritten.id).toBe(inserted.id);
+    expect(rewritten.settings).toStrictEqual(REWRITTEN_SETTINGS);
+
+    // `created_at` still means when this deployment was FIRST
+    // configured, and `updated_at` moved with the rewrite. That
+    // comparison is a CLOCK comparison read at millisecond
+    // resolution, since node-postgres truncates a `timestamptz` to
+    // a JavaScript `Date`: the reads between the two writes are
+    // what put the two stamps further apart than the resolution
+    // they are read at.
+    expect(rewritten.createdAt.toISOString())
+      .toBe(inserted.createdAt.toISOString());
+    expect(rewritten.updatedAt.getTime())
+      .toBeGreaterThan(inserted.updatedAt.getTime());
+
+    expect(present(
+      await settingsStore.readSettings(),
+      'readSettings after the rewrite',
+    )).toStrictEqual(REWRITTEN_SETTINGS);
   });
 
   it('refuses a category whose parent is itself a child', async () => {

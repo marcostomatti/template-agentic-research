@@ -311,7 +311,9 @@
  * same reason: the early return exists because drizzle throws on an
  * empty update list, and this store has no such throw to observe.
  * Both zeros are honest rather than holes, and both are pinned by
- * the port's TSDoc and by the drizzle half's own cases instead.
+ * the ports' TSDoc and by the branch in `src/taxonomy/db-store.ts`
+ * — by no case anywhere, unlike their persona sibling below, whose
+ * live seam does now carry one.
  *
  * Fifteen persona legs redden between 0 and 32, and fourteen of them
  * stay wholly inside the personas describes — the mirror of the
@@ -367,12 +369,17 @@
  * reddens NOTHING, the same honest zero the category and term legs
  * measure, for the same reason: the early return exists because
  * drizzle throws on an empty update list, and this store has no
- * such throw to observe. Three measured zeros now, and all three
- * are pinned by the ports' TSDoc and by the drizzle halves'
- * branches — never by a case here or there. No db-store in this
- * package carries a colocated test file, and the branch is
- * unobservable in the answered row, in the stored row and in a
- * statement COUNT anyway: what separates it from a write that sets
+ * such throw to observe. Three measured zeros now, and the persona
+ * one is the only one any case reaches. The live seam in
+ * `tests/live/api.live.test.ts` patches a live persona with no
+ * member and is answered the stored row, and deleting that early
+ * return from `src/personas/db-store.ts` reddens it with drizzle's
+ * own `No values to set`. The category and term zeros keep the
+ * weaker pinning — the ports' TSDoc and the branches themselves
+ * — since no db-store here carries a colocated test file and no
+ * live case patches either table with an empty patch. The branch
+ * is also unobservable in the answered row, in the stored row and
+ * in a statement COUNT: what separates it from a write that sets
  * every member back to itself is the statement TEXT, which only a
  * probe over an instrumented client reads. Measured that way on
  * `src/personas/db-store.ts` when it landed — one statement,
@@ -416,11 +423,13 @@
  * object graph. The claim has a subject only where the database can
  * change what it stored — `jsonb` normalises key order and drops
  * a duplicate key — so it is `src/settings/db-store.ts`'s to
- * discharge through its `RETURNING` list, which it now does: that
- * store's upsert was driven against the live Postgres with a
- * payload whose keys were submitted out of order, and the answer
- * came back in the database's order rather than the caller's. No
- * re-aiming of this leg reaches it from here.
+ * discharge through its `RETURNING` list, which it now does in a
+ * case rather than in a probe somebody ran once:
+ * `tests/live/api.live.test.ts` writes a payload whose keys are
+ * submitted out of jsonb order and asserts the answer comes back in
+ * the database's order, at both depths and off the plain read as
+ * well as off the write. No re-aiming of this leg reaches it from
+ * here.
  */
 import type { MemoryResearchStore } from './memory-research-store.js';
 import type { DomainSettings } from '../../src/db/schema/domains.js';
