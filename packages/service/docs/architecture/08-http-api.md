@@ -128,13 +128,21 @@ here as a known departure rather than patched from a route group.
 
 ## Pagination
 
-### Every list route takes `?page` and `?perPage`, and no other spelling
+### Every PAGINATED list takes `?page` and `?perPage`, and nothing else
 
 `page` is 1-based. Neither `limit`/`offset`, nor `pageSize`, nor
 `per_page` is accepted anywhere. The store ports take `limit` and
 `offset` because that is what SQL takes; the translation happens
 once, in `src/http/schemas.ts`, and no router declares a query
 schema of its own.
+
+One wave-1 list route is not paginated at all, and the capital is
+what keeps this rule true rather than nearly true:
+`GET /domains/:slug/categories` answers a domain's taxonomy WHOLE
+and refuses any query parameter it is sent, including `?page`. The
+Taxonomy section below carries the argument for both halves of
+that. Every other list route on the surface reads through the
+schema named above.
 
 Those names match `PaginationMeta` in
 `packages/ui/src/cache/types.ts`, which declares the same four
@@ -475,3 +483,114 @@ The delete is the exception and reads its query first, for the
 reason above: that route is one keystroke from a destructive call,
 so a misspelt confirmation is the half of the request worth
 answering.
+## Taxonomy
+
+### A category is met in its domain and written by its id
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /domains/:slug/categories` | `200` with every category in the domain, key ascending, each carrying a `termCount`. No `meta`. `404` for an unknown slug, `422` for a segment that is not a slug or for any query parameter at all. |
+| `POST /domains/:slug/categories` | `201` with the stored row. `422` for a body the schema refuses and for a parent the depth rule or the foreign key refuses, `404` for an unknown slug, `409` when the key is taken. |
+| `PATCH /categories/:id` | `200` with the row afterwards. `422` for a body the schema refuses, for a segment that is not an id, and for a parent either rule refuses. `404` for an unknown id. |
+| `DELETE /categories/:id` | `204` with no body. `404` for an unknown id, `422` for a segment that is not one, `409` while the category holds children. |
+
+`src/taxonomy/categories-routes.ts` declares all four and decides
+none of them: each handler reads the address, calls the matching
+function in `src/taxonomy/categories-service.ts` and chooses a
+status.
+
+The collection hangs off `/domains/:slug` because a taxonomy has no
+meaning apart from the domain it describes, and a caller holding a
+slug should not have to look an id up to read one. The two writes
+address `/categories/:id` instead: the row carries its own
+`domain_id`, every rule that needs one is the database's, and
+repeating the slug would let a request name a domain the row does not
+belong to — a disagreement the router would then have to answer
+for.
+
+### The category list takes no window, and refuses a query for one
+
+There is no `?page` and no `?perPage` here, and no `meta` in the
+answer. The taxonomy is shallow, operator-authored and capped at two
+levels; there is no page to describe, and a domain whose categories
+did not fit in one response would be a domain nobody could read.
+
+This is the one list route on the wave-1 surface that departs from
+the pagination rules above, which is why a query parameter sent to
+it is a `422` naming `query` rather than a value quietly dropped.
+Every OTHER list route takes `?page`, so a caller sending one here
+is expecting a page: stripping it would answer the whole taxonomy
+and look like a first page with nothing after it.
+
+### A count of zero is a counted zero
+
+Every row on the list carries `termCount`, which is what makes the
+list readable as a lexicon rather than as a list of names — an
+operator is scanning for the bucket with nothing in it, or the one
+with far too much.
+
+A category holding no terms contributes no row to a grouped count,
+so an implementation has to fill the missing groups back in.
+Answering an absent member instead would make `0` and "not counted"
+the same value, on the one member whose whole job is telling an
+empty bucket from a full one.
+
+### The depth cap is the database's, and this surface only translates it
+
+A category is a root or the child of a root. The rule is a trigger
+on `categories`, so it holds against every writer including the seed
+and a psql prompt, and no route checks a proposed parent before
+writing it — a check here would be a second, weaker statement of
+the same rule, with the first one to disagree doing so silently.
+
+What the surface owns is the way out. The trigger raises SQLSTATE
+23514, the store classifies it as a `check-violation`, and the
+service turns it into a `422` whose one detail names `parentId`,
+carries the code `depth_violation` and states the one-level rule.
+That code is this package's own and not zod's: no request schema can
+raise a rule the database holds, so no zod code describes it.
+
+All three branches of the trigger — a parent that is itself a
+child, a parent in another domain, and a parent given to a row that
+already has children — arrive as ONE reason carrying no
+constraint name, because a `RAISE ... USING ERRCODE` names none. So
+the detail states the cap they all enforce rather than the branch
+that fired, which would otherwise be right a third of the time.
+
+### One constraint name answers `422` and `409`, and the method decides
+
+`categories_parent_id_categories_id_fk` refuses a `parentId` naming
+no row AND a delete of a category still holding children. The two
+are indistinguishable on the refusal itself — same SQLSTATE, same
+constraint, measured against the live server — so the service takes
+the write as an argument and the status follows from which call
+raised it: `422` naming `parentId` out of a create or a patch, `409`
+out of a delete.
+
+### A delete takes the terms and leaves the children
+
+`terms` and `criteria` cascade on `category_id`; `parent_id` is
+`NO ACTION`. So removing a bucket removes the lexicon written into
+it, and removing a bucket that still has sub-buckets is refused.
+
+That asymmetry is what makes losing a sub-tree an explicit decision:
+reparent or remove the children, and the delete goes through. There
+is no `?cascade=confirm` here, unlike `DELETE /domains/:slug`. A
+domain's delete is guarded because the database would silently take
+everything; a category's is guarded by the database itself, so a
+confirmation would authorise nothing the caller could not do by
+moving the children first.
+
+### `key` is not patchable, and `parentId` distinguishes three requests
+
+`key` is what the seed upserts on and what a term seed row names in
+`categoryKey`, and neither reference is a foreign key the database
+would follow. A re-key is therefore a separate operation with a
+fan-out of its own rather than a member on a patch — the same
+argument `slug` gets on a domain.
+
+`parentId` is nullable AND optional on the patch, because those are
+three different requests: absent leaves the row where it is, a
+number moves it under that root, and `null` promotes it to a root.
+Null is the only way back up, and it would be unexpressible if
+absent and null meant the same thing.

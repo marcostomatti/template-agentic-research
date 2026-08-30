@@ -127,10 +127,20 @@ const DEFAULT_PER_PAGE = 50;
 const MAX_PER_PAGE = 200;
 
 /**
- * The `?page` / `?perPage` window every list route in wave 1 is read
- * through, and the only pagination vocabulary any of them accepts.
- * Neither `limit`/`offset`, nor `pageSize`, nor `per_page` is a
- * spelling of anything here.
+ * The `?page` / `?perPage` window every PAGINATED list route in wave
+ * 1 is read through, and the only pagination vocabulary any of them
+ * accepts. Neither `limit`/`offset`, nor `pageSize`, nor `per_page`
+ * is a spelling of anything here.
+ *
+ * One wave-1 list route is not among them.
+ * `GET /domains/:slug/categories` answers a domain's taxonomy WHOLE
+ * — the taxonomy is shallow, operator-authored and capped at two
+ * levels, so there is no page to describe — and
+ * `src/taxonomy/categories-routes.ts` therefore parses its query
+ * against an empty strict schema of its own rather than against
+ * this one, so a `?page` sent there is refused rather than quietly
+ * dropped. That is the one route this schema does not reach, and
+ * `docs/architecture/08-http-api.md` records it beside these rules.
  *
  * `page` is 1-based and defaults to 1; `perPage` defaults to 50 and
  * is refused above {@link MAX_PER_PAGE}. Both are coerced, because a
