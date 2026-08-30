@@ -95,8 +95,12 @@ Paths are relative to `packages/service`.
 | `src/lib/` | Pipeline libs, written dual-context so the workflow build can splice one into a Code node body. `schedule.ts` is the first and landed in phase 3, which is what proves the splice over a library this package ships rather than a fixture; the ported wave — parsing, gating, scoring, and the feature mechanisms — arrives in phase 4. Distinct from the framework `lib/`. |
 | `src/sources/` | The source adapter contract and the adapters that satisfy it (phase 4 onward), push capture included. |
 | `src/exports/` | Export renderers (phase 6): one per format a subscription can be rendered into. |
-| `src/routes/`, `src/mcp/` | The API surface itself — HTTP routes and MCP tools over the schema. |
-| `src/http/` | The shared boundary under that surface, one declaration each: the success envelope and the pagination meta derived from the window and the store's count, the slug/id param and pagination query schemas, and the boundary parser whose validation details name a field path and never a submitted value. Arrives with the wave-1 route groups; see `docs/architecture/08-http-api.md`. |
+| `src/routes/`, `src/mcp/` | The MCP tools over the schema, and the template's one starter route. The wave-1 HTTP routes are not here: each resource group holds its own router, below. |
+| `src/http/` | The shared boundary under that surface, one declaration each: the success envelope and the pagination meta derived from the window and the store's count, the slug/id param and pagination query schemas, and the boundary parser whose validation details name a field path and never a submitted value. The four groups below are its only readers today; see `docs/architecture/08-http-api.md`. |
+| `src/domains/` | A domain and its settings, addressed by slug — and the arrangement the three groups below copy: a port, one drizzle implementation of it, the rules as plain functions over the port, and a router. The port is what lets every rule be exercised with no database, so the live suite is left proving only that real Postgres agrees. |
+| `src/taxonomy/` | The categories a domain scores under and the terms each one carries. One port over both halves, because a term has no address that does not go through a category; two services, because the two halves have different rules. The one-level depth cap is enforced by a database trigger, and this surface only translates its refusal. |
+| `src/personas/` | The system text a run plays, one row per domain and role. Nothing between the port and a run keeps a copy: a run reads its personas at its own start, so an edit lands on the following run and there is no invalidation path to get wrong. |
+| `src/settings/` | Operator-level preferences, held in the single `operator_settings` row the schema pins by id. An absent row and an empty payload are the same state — the defaults apply — which is why a read before any write is answered `{}` and never a 404. Per-domain settings stay on the domain row. |
 | `workflows/src/` | n8n workflow sources, one JSON file per workflow (phase 3 onward). See `workflows/src/README.md`. |
 | `workflows/dist/`, `workflows/dist-external/` | Build output. Gitignored, and never hand-edited. |
 | `scripts/` | Operator entry points: `seed.ts` applies the `data/` bundle, `approve.ts` lists the rows waiting on a ruling and approves or rejects one. Workflow build, deploy, activation and audit landed in phase 3; the stack-lifecycle scripts and the doc-link check arrive in phase 7. See `scripts/README.md`. |
@@ -185,11 +189,13 @@ a link as a promise that the file exists, so a linked forward reference
 is a broken link from the moment it is written — and a check that
 reports one per unwritten document is a check nobody keeps running.
 
-The left-hand column reserves as well, and the HTTP API row is the
-only one doing so today: it names five directories that land after
-the document naming them, because that document exists to state the
-rules those routes are built against rather than to describe routes
-already written.
+The left-hand column may reserve as well, and today none of it does.
+The HTTP API row named five directories ahead of the code, because
+that document was written to state the rules those routes are built
+against rather than to describe routes already written. All five
+have since landed and the Layout table above names each of them, so
+every path in the column resolves. A reservation there is discharged
+by the commit that creates the directory, not by a later pass.
 
 ### A behaviour change and its document land in the same commit
 
