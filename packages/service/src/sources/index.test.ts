@@ -203,11 +203,14 @@ const CASE_SUFFIX = '.test.ts';
  * the edit is made to cost a sentence somebody has to write and a
  * reviewer can disagree with, rather than a name in a list.
  *
- * None of the three declares a member of the contract and each says
- * so at the top of its own source, but the registry module is on
- * the roster for a different reason than the two helpers: it is no
- * kind of source at all, it is where the contract, the registry and
- * this check live.
+ * None of them declares a member of the contract and each says so
+ * at the top of its own source, and they are not on the roster for
+ * one reason. The registry module is no kind of source at all: it
+ * is where the contract, the registry and this check live. The
+ * helpers are what an adapter reaches for. And the propose seam
+ * serves the other gate this directory touches — what a source's
+ * arrangement will be, ruled on before it is written — which is
+ * about a source rather than a reading of one.
  *
  * Naming them is the cost of the guard and is meant to be paid: a
  * module that satisfies no contract and appears in no registry is
@@ -221,6 +224,14 @@ const NON_ADAPTER_MODULES = [
       'the contract, the registry and this check itself, which is '
       + 'what every adapter is measured against rather than one of '
       + 'the things being measured',
+  },
+  {
+    module: 'config-proposer.ts',
+    reason:
+      'the seam a proposed parser_config and contract are ruled on '
+      + 'through, holding no proposer of its own and fronting no '
+      + 'source: what it is about is who may write two columns of a '
+      + 'sources row, not how anything is read',
   },
   {
     module: 'html-text.ts',

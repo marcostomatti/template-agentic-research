@@ -16,10 +16,13 @@
  * {@link SOURCE_ADAPTERS} holds the adapters this service ships. Each
  * of them added its own line to that literal in the commit that
  * landed it, which is the whole of what registration costs. The other
- * two modules beside this file are not adapters and are not in it:
- * `html-text.ts` and `paged-list.ts` are what an adapter reaches for,
- * and each says at the top of its own source that it fronts no source
- * and appears in no registry.
+ * modules beside this file are not adapters and are not in it.
+ * `html-text.ts` and `paged-list.ts` are what an adapter reaches for;
+ * `config-proposer.ts` is the seam a proposed `parser_config` and
+ * `contract` are ruled on through, which is about who may write two
+ * columns of a `sources` row rather than about reading one. Each says
+ * at the top of its own source that it fronts no source and appears
+ * in no registry.
  *
  * Node-only, deliberately, and this is the file that could not be
  * anything else: a registry names its adapters with value imports,
