@@ -147,12 +147,47 @@ Two rules bind every phase of that port:
   reference to resolve. `ARCHITECTURE.md` is the one tracked markdown file
   here that carries links: it indexes the doc set, so a commit landing a new
   architecture doc adds its row in the same commit.
+  That `<=74` is a CEILING and not the house width: each file under
+  `docs/architecture/` has its own measured population and they disagree in
+  opposite directions, so re-measure the file you are editing rather than
+  reflowing to a sibling's shape. Measured, `08-http-api.md` runs prose to
+  70 and `###` headings to 73 while `01-invariants.md` runs prose to 72 and
+  headings to 70. Measure in CHARACTERS: `awk`'s `length($0)` counts BYTES,
+  so every em dash on a line costs three, and a line that measures 74 in
+  awk may be 72 characters and perfectly legal — wrap against the
+  character count and keep awk only as the confirmation that the byte
+  ceiling did not move. No doc in the set uses a fenced code block at all,
+  so a JSON or shell example belongs in prose plus inline code, and the
+  only non-ASCII characters in the tree are U+2014 and U+00A7.
 - **Two layout maps, neither derived from the other**: the coarse `## Layout`
   table above (package-level orientation) and the finer one in
   `docs/architecture/00-overview.md` (per-area detail and rationale). A
   change that adds a directory updates BOTH, keeps them non-contradictory
   rather than identical, and inserts the row adjacent to its parent so the
   table still reads as a tree.
+  Non-contradictory-rather-than-identical is operationalisable rather than
+  aspirational, and the cheap discipline is a REGISTER split rather than a
+  content one: this file's rows carry the file inventory plus the surface
+  facts a reader working in the directory needs (which file do I open, how
+  many endpoints, is there a barrel), and `00-overview.md`'s carry the
+  design rationale with NO file names (why one port covers both taxonomy
+  halves, why nothing caches a persona). Equal granularity in both is fine
+  and keeps either table usable alone; what the rule forbids is the same
+  SENTENCE, which is exactly what a copy-paste insert produces and what
+  then drifts into two competing descriptions of one fact.
+- **A row added to either map owes a DISCHARGE sweep**, and the stale
+  sentences name none of the paths being added, so no symbol or path grep
+  finds them. Three shapes, each measured: an ARRIVAL clause beside a
+  reserved row (`Arrives with the wave-1 route groups`); the paragraph
+  legitimising left-hand-column reservations, which is falsified a SECOND
+  time when the code lands, by a different commit from the one that wrote
+  it; and the SIBLING row whose scope the new rows silently narrow (`The
+  API surface itself` became over-broad once four router-holding
+  directories landed beside it). The needles are the reservation vocabulary
+  (`reserv`, `arrives with`, `lands after`) over the JOINED prose and, for
+  the third, reading the rows ADJACENT to the insert point as a set.
+  Repair by stating the discharge as a measurement — every path in the
+  column existence-checked with a fabricated sibling asserted absent.
 
 ## Operator control plane
 
@@ -538,6 +573,26 @@ to `n8n-deploy.live.test.ts` rather than to a Postgres file that silently
 stopped being armed. Note also that a skipped file is still IMPORTED, so
 collection proves the module parses and nothing more — never read a
 `1 skipped` as evidence about a change under `tests/live/`.
+The other half a `confirm file X RAN rather than skipped` step owes is that
+the ran-reading is a claim about the GATE being OPEN, and its control is
+the same file under
+`env -u AR_LIVE_DATABASE_URL bun x vitest run tests/live/<f>.live.test.ts`,
+which flips an identical case list from `✓` to `↓` in one
+command that reaches no service. It is cheaper than pointing the URL at a
+closed loopback port and it discriminates an OPEN gate from a describe that
+was never gated at all, which the plain ran-reading cannot. Note the URL is
+set INSIDE the `test:live` script definition, so unsetting it in the shell
+does nothing to `bun run test:live` and the closed leg has to be the direct
+`bun x vitest` invocation.
+
+A mutation grid over a live-gated file comes back ALL ZEROS when the runner
+forgets that env var, and the shape is worse than the pass-the-module-not-
+the-test-file trap because `numTotalTests` is NON-ZERO: with the URL absent
+the file reports `passed`, every assertion `skipped`, the full case count
+and `failed` at 0 for every leg, so the usual guard (assert the base run's
+total is non-zero) passes. Assert instead that the base run has ZERO
+SKIPPED assertions as well as zero failed, and pass the URL explicitly in
+the runner's `env` rather than relying on inheritance.
 
 There is also nothing here to point that gate at, which is why rule 3 is one
 an n8n case cannot satisfy rather than one it breaks. `docker-compose.yml`
@@ -593,6 +648,31 @@ not let compile-cleanliness constrain a mutation leg. Read such a leg by
 the ` > `-joined NAMES a `--reporter=verbose` run prints, never by the
 failure count; `test-delta-signatures-by-task-shape` covers why the count
 can hold constant across structurally different legs.
+`--reporter=verbose` prints per-CASE lines and NO per-file line at all
+(vitest 4.1.11), so a step asking to read `the per-file lines` has to
+DERIVE the split by grouping the case lines on their `<path> > ` prefix.
+The per-file `# path (N tests)` line comes from the DEFAULT reporter under
+a two-reporter PAIR and never from verbose: passing
+`--reporter=default --reporter=json --outputFile=<f>` gives the human
+summary, the per-file lines AND the machine-readable per-file split in one
+capture, where `--reporter=json` alone leaves stdout at a single 42-byte
+`JSON report written to` line. Two readings then come free from a verbose
+capture with no second command — it IS the collected roster, so the
+collected-vs-disk set equality is the grouped file set held against
+`git ls-files` rather than a `vitest list --filesOnly` run, and bun echoes
+the FORWARDED arguments into its `$` line, which is how an appended flag is
+shown to have reached the runner rather than having been eaten by
+`bun run`.
+
+No `db-store.ts` in this package carries a colocated test file, so a claim
+handed forward to `the drizzle half's own cases` is handed to files that do
+not exist. A branch that exists only because the other implementation
+throws (an empty-patch early return, a `RETURNING` list) is pinnable at the
+LIVE SEAM and nowhere else, and each such zero is discharged per TABLE:
+landing one table's case leaves the siblings' zeros exactly as they were.
+Its leg fails as a THROW carrying drizzle's own message rather than as an
+assertion diff, so a grid runner reading only counts cannot tell it from an
+ordinary red — read `failureMessages`.
 
 The default suite READS `workflows/dist/` and never builds it. `pretest`
 runs `bun scripts/build-workflows.ts`, so the tree is written in a bun

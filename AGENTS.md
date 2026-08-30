@@ -184,6 +184,17 @@ Their prose conventions are unenforced and therefore hand-owned: prose wraps
 at 77 cols in `.specs` (markdown tables exempt), and the dash/arrow are the
 NON-ASCII forms, not the ASCII `--`. Emit those from `String.fromCharCode`
 behind an ASCII placeholder token, never as a literal in the tool call.
+The schedule table in `.specs/README.md` is gitignored like the rest, so
+each parallel leg holds its OWN copy and git never reconciles them —
+every row about the other leg's items is stale in your copy by
+construction, with no merge, no gate and no diff that would ever report it
+(measured: ten diff lines between two legs' copies at the same moment,
+including one leg's guess at the other's row). A close-out task should
+update ONLY its own row; repairing a sibling row from your copy
+manufactures a second authority for the same fact. Say in the report which
+sibling rows you measured stale and where the current values live
+(`diff <other-checkout>/.specs/README.md .specs/README.md` is the whole
+reading).
 
 ## Security posture (carried from the templates, incident-derived)
 
@@ -272,6 +283,32 @@ behind an ASCII placeholder token, never as a literal in the tool call.
   the repo whose prose it restricts). Report the result bucketed by needle
   SOURCE with the law each bucket answers to, never as one number against
   the five-needle figure.
+- The `packages/ui/eslint.config.mjs` bucket is derivable ONLY by a TEXT
+  PARSE of its declaring module, unlike the five whose `FORBIDDEN_PATTERNS`
+  is exported: importing that config resolves its plugin imports fine but
+  `Object.keys(mod)` is `['default']` alone and its two needle consts are
+  unreachable at runtime, so a regex over the file TEXT is the whole
+  derivation. Guard it or the bucket reports a clean sweep for free —
+  assert the roster is exactly 2, that each parsed fragment count is 2, and
+  that each derived value is long enough to discriminate, since an empty
+  needle matches every line and an empty roster answers zero over anything,
+  both silently.
+- The CASE FLAG alone decides whether that bucket reads as clean, and the
+  only genuine leak in it is the one a case-sensitive matcher misses.
+  Measured over 831 tracked files: case-sensitive answers 6 and
+  case-insensitive 7, the single extra being exactly the
+  `packages/ui/scripts/compare-design.mjs` docblock recorded below as the
+  third leak shape, while all 6 of the case-sensitive set are legitimate.
+  So a case-sensitive sweep here returns nothing BUT legitimate hits and
+  looks perfectly discriminating. Print the case SPLIT and the
+  capitalised-spelling-only members, never one total. Read the `four are
+  legitimate origin prose ... and two are LAW STATEMENTS` clause above as
+  SIX of the seven rather than as the whole accounting, or a reader holding
+  it against a 7-hit run reports a regression nobody made. Unlike the five,
+  this bucket needs no unguarded near-neighbour control: both needles are
+  non-zero against the real tree in the same output that reports the
+  result, which is the in-band positive control the guarded five have to
+  manufacture.
 - NEVER print a `ForbiddenMatch` wholesale. The record carries `line`
   verbatim by design, so a probe that dumps matches seeds the banned string
   into terminal scrollback, the tool-result capture and any file the run is
@@ -315,6 +352,18 @@ behind an ASCII placeholder token, never as a literal in the tool call.
   COUNTS beside it (752 vs 780 here) — a base-side walk that resolved
   nothing produces an empty base set and reports every real hit as ADDED,
   which reads exactly like the branch having introduced all of them.
+- That base walk carries its OWN liveness control whenever the tree has a
+  carried-in hit, and it is stronger than the file-count reading beside it:
+  the legitimate `NOTICE` attribution appears on BOTH sides, so a
+  `git show <base>:<f>` loop that resolved nothing would surface it as
+  ADDED rather than as a silent zero. On a tree whose expected answer is a
+  literal zero that control does not exist and the counts are the whole
+  reading, so say which of the two a run had. Cost, so the shape is not
+  avoided for the wrong reason: 780 base-side `git show` spawns plus 831
+  HEAD-side disk reads ran in 16s wall under bun — cheap enough to be
+  the default over a worktree or a stash, and `readFileSync(p, 'utf8')`
+  over a binary tracked file is lossy but never throws, so the probe's read
+  counter equals `git ls-files | wc -l` exactly with no allowlist.
 - A THIRD leak shape survives both automated halves: a docblock in a script
   naming the design source's HTML file (`packages/ui/scripts/
   compare-design.mjs:11`, pre-existing, matched case-insensitively on a
@@ -331,6 +380,22 @@ behind an ASCII placeholder token, never as a literal in the tool call.
   controls be ONE command whose output is a single verdict block — which
   matters because the controls are only evidence when they ran against the
   same matcher instance as the sweep.
+- The planted control for those five is DERIVABLE from the needles
+  themselves, which removes the guessing step that silently turns a control
+  dead: `FORBIDDEN_PATTERNS` is exported and each entry's `source` IS the
+  regex text, so stripping a leading lookbehind and unescaping gives a
+  plantable literal per needle with no hand-transcription and nothing
+  banned typed into the probe. A control built from GUESSED fragments
+  answered 0 of 5 ids while looking exactly like a clean sweep. It needs
+  TWO guards beyond "all five ids returned", because the id SET alone is
+  satisfiable by a sample no needle discriminates on: `findForbiddenMatches`
+  splits on newlines and the guarded needle's lookbehind is satisfied by a
+  line START as readily as by a non-alphanumeric character, so plant ONE
+  literal PER LINE behind a short marker and assert exactly one hit on each
+  plant's own line, then pair it with a CLEAN sample through the same
+  matcher answering 0. The `packages/ui` bucket wants the same per-line
+  shape, which is also what proves its two needles are DISTINCT from each
+  other where an id-set equality cannot.
 - Also true of ANY sweep needle here: prove it excludes its legitimate
   sibling before reading a count as an inventory. `specs/` sits inside
   `.specs/`, so a bare `git grep -E 'specs/'` returned 24 lines of which 18
@@ -417,6 +482,19 @@ red package never masks another and a single run gives the whole picture.
   are prefixed per package (`@ar/service test:  Test Files ...`) — a
   `^ *Test Files` anchor catches the root's summary alone and silently
   misses every package's.
+- Both figures in that bullet are SNAPSHOTS of the app half, and the naive
+  grep's OWNER has already flipped: measured 13 matching lines on a run
+  whose every gate exited 0, of which 9 are `Validation failed` route
+  refusals and only 4 the framework's. Quote the rule, re-derive the
+  number. The grep is also not decomposable by `msg` — a pino record is
+  a nested object and the grep is line-shaped, so two `request errored`
+  records match through the serialised `err.message` (also inside `stack`)
+  while their own `msg` carries neither word and sits at level 30. Parse
+  each line as JSON and classify on `level`, which is the one attribution
+  that does not move as resource groups land: measured 169 records split
+  147/18/4 across levels 30/40/50, level 50 being exactly the framework's
+  four vendored error-path records and level 40 the app's route refusals
+  plus one framework case.
 - Keying that same capture on the runners' failure glyphs is a ZERO-HIT
   scan without a live control, because a GREEN run emits no per-case
   FAILURE glyph at all. Cover all five glyphs in one matcher (U+00D7 from
@@ -479,6 +557,18 @@ red package never masks another and a single run gives the whole picture.
   classification whose `other` bucket is enumerable — measured 121 lines
   as 108 deliberate pino JSON, 4 summary, 2 `$` echoes, 1 banner, 4 blank
   and exactly the 2 pretest build lines.
+- Two refinements to the figures above, both measured at a much larger
+  suite. The pass-glyph 31 is the one number in this file that is NOT a
+  snapshot: it held at 31 with the fan-out grown to 2709 vitest cases,
+  because vitest's default reporter contributes exactly ZERO of them
+  — 27 come from `@ar/web test:` (Playwright's per-test lines) and 2
+  apiece from the `@ar/ui` and `@ar/web` pretest vite builds. Decompose it
+  BY PREFIX rather than quoting the total, and do not "re-derive" a correct
+  31 as though it tracked suite size. And that package-scope `other` bucket
+  is INVARIANT at its nine lines however far the suite grows, so it is
+  assertable by MEMBERSHIP exactly as the fan-out's own unprefixed bucket
+  is: only the pino and summary buckets scale, measured 169+4+9 = 182 at
+  86 files / 1899 cases against the 108+4+9 = 121 recorded at 65.
 - A package-scope `bun run test` capture also carries TWO file-level
   readings free in the run you already did. The summary's PARENTHESISED
   total is a third member of the `vitest list --filesOnly` set equality
@@ -490,6 +580,11 @@ red package never masks another and a single run gives the whole picture.
   exactly the env-gated roster, and any file skipped that is NOT in it is a
   non-live suite that has quietly gone `.skip`. Prefer that over the
   skipped CASE count, which is comparable only against HEAD's own run.
+- That live roster is SEVEN files now rather than the six the example
+  quotes — `tests/live/api.live.test.ts` landed with the wave-1 live
+  seam. The MEMBERSHIP rule the bullet states is unchanged and still the
+  right reading; only its illustrative count moved, so re-derive it from
+  `git ls-files` rather than quoting either number.
 - Of those buckets exactly one is assertable by MEMBERSHIP instead of by a
   drifting count: the OTHER (unprefixed) bucket enumerates completely as the
   two `$` echoes, the root vitest run's own nine-line block (banner, two
@@ -497,6 +592,25 @@ red package never masks another and a single run gives the whole picture.
   bun emits it — the trailing `error: script "<name>" exited with code N`.
   Twelve lines when present. "No unexplained line" is a real measurement
   only because this bucket is enumerable; assert its members, count the rest.
+- Read that capture with `splitlines()` and NEVER `split` on a newline:
+  every capture here ends with a trailing newline, so `split` yields a
+  PHANTOM final empty element that inflates this bucket by exactly one
+  — the one bucket asserted by MEMBERSHIP, so the inflation lands
+  precisely where it is read as a finding. Measured on a GREEN `test:all`:
+  12 under `split` against 11 under `splitlines`, where 11 is the
+  enumeration above with bun's `error: script` line correctly ABSENT, so
+  the `split` reading reports a green fan-out as RED with nothing else in
+  the capture disagreeing. `wc -l` agrees with `splitlines` and is the free
+  cross-check; run it in the same command as the capture.
+- Derive the package-NAME denominator for any of these set equalities from
+  `packages/*/package.json`'s `name` field and never from the directory
+  names: the directories are `service`/`ui`/`web` while every fan-out line
+  prints `@ar/service`, so a directory-derived denominator either compares
+  the wrong strings or reconstructs them by concatenation — at which
+  point a package renamed in its manifest but not on disk still comes back
+  set-equal. One `json.load` per package, with a fabricated `@ar/nope`
+  asserted absent in the same probe so the equality is shown
+  discriminating.
 - NEVER key "did this gate fail?" on that `error: script` line: bun does not
   emit it for every failing fan-out. Measured in one sitting on one tree,
   `test:all` exiting 1 printed it as the capture's last line while
@@ -606,6 +720,28 @@ matching anything prints exactly the same five lines.
   script edit, never an ignore-pattern change, and `--no-ignore` is a
   misleading reflex that presumes the half nobody measured. Ask with a plain
   explicit-path `-f json` run first.
+- BOTH not-covered shapes exist here and they need OPPOSITE repairs, so
+  classify before proposing either. Measured over eleven paths in
+  `packages/service` that neither package gate reads: the eight markdown
+  files (package-root `AGENTS.md`, `ARCHITECTURE.md`, `README.md`,
+  `docs/SEEDING.md` and four under `docs/architecture/`) answer the
+  covered-and-clean shape and are un-TARGETED by the script's pathspec,
+  while the three `drizzle/` artifacts answer `File ignored because of a
+  matching ignore pattern` against an explicit `drizzle/**` at that
+  package's `eslint.config.mjs:7`. The one-word-script-edit rule above is
+  true of the first half and false of the second, and the two are
+  byte-identical from the fan-out.
+- An explicit-path `-f json` run and the SCRIPT's own pathspec answer
+  DIFFERENT questions, and a gate-coverage claim owes BOTH. The explicit
+  run proves ESLint does not IGNORE the file and says nothing about
+  whether the gate REACHES it, because the run supplies the paths itself;
+  only running the script's own pathspec (`bun x eslint src lib workflows
+  tests scripts -f json` from inside the package) and holding its reported
+  `filePath` set against the changed paths puts the pathspec under test on
+  the gate's side. Measured on one branch: the script's run reported 220
+  entries at 0 errors and covered all 54 changed `.ts` files, and the same
+  54 handed explicitly came back 54/54 set-equal. Only the second reading
+  survives a task quietly dropping `tests` or `scripts` from the script.
 - `bun run gate:control-bytes` DOES open every tracked file, package-root
   `README.md` and `AGENTS.md` included (676 scanned at the time of writing,
   and that count is its own liveness control). So a docs-only commit is NOT
@@ -640,6 +776,21 @@ matching anything prints exactly the same five lines.
   having staged nothing. The reading with coverage in it is the FULL run
   derived through `isScannable` (measured 780 == 780 over `git ls-files`,
   and 775 to 774 naming exactly the removed path on a deletion).
+- That `tracked == scanned` equality is an IDENTITY in this repo, so it
+  cannot report a selection that has widened and must not be quoted as the
+  coverage measurement on its own. Measured at one HEAD: 832 tracked == 832
+  scanned == the 832 the gate itself printed, with EXACTLY ZERO tracked
+  paths excluded — `ALLOWLISTED_PATHS` is empty and not one tracked
+  file carries a `BINARY_EXTENSIONS` member (the whole tracked extension
+  set is ts/tsx/md/json/mjs/css/yml/sql/example/sh/html plus 13
+  extensionless, and `bun.lock` is `lock` rather than the binary `lockb`).
+  So the three-way agreement would hold under a predicate answering true
+  for every string, and the two controls named above carry the whole
+  discrimination — both of them SYNTHETIC, with no real subject in the
+  tree. Report it as an identity plus its synthetic controls, expect the
+  excluded count to stay 0 until the first tracked binary asset lands, and
+  re-derive the denominator: it moved 780 -> 831 -> 832 across three
+  recorded readings.
 - The clause beside it — "confirm the ignored trio is absent from
   `git status --short --untracked-files=all`" — is evaluated against an
   EMPTY capture on a clean tree, where a grep returns 0 for every needle
@@ -699,6 +850,27 @@ matching anything prints exactly the same five lines.
   INSIDE the package with a BARE pathspec — the repo-root-relative form
   matches nothing there and prints a zero that reads as "no test files
   exist".
+- A `--listFilesOnly` membership proof needs a REAL-BUT-EXCLUDED control
+  and not only the fabricated-absent sibling above: a path nothing on disk
+  backs is absent for the trivial reason, so its zero says the predicate is
+  not answering true for every STRING and nothing about whether it
+  discriminates among files that EXIST. `workflows/` is the free one in
+  `packages/service` and it pays twice — it sits INSIDE the eslint
+  script's target list and OUTSIDE tsconfig's `include`, so one path shows
+  the two gates' scopes genuinely differ AND that tsc's read list excludes
+  real on-disk files rather than merely missing ones (measured:
+  `workflows/dist/ar-dispatch.json`, two `.md` and one `.sql` all present
+  on disk and all absent from the read list).
+- macOS BSD `xargs` HAS NO `-a`, and the failure is loud at the exit code
+  while SILENT in the capture: `xargs -a <list> bun x eslint -f json` into
+  a redirect exits 1 with a usage banner on stderr and writes ZERO bytes,
+  so a reader keying on the JSON file alone parses whatever was there
+  before and attributes a previous run's answer to this one. Feed the list
+  on stdin instead. Two disciplines make any capture-into-a-file probe
+  honest and both cost one token: `rm -f` the capture before re-running so
+  a stale file cannot read as fresh, and print `EXIT=$?` beside the
+  capture's BYTE COUNT in the same command — the byte count is what
+  separates an aborted tool from a tool that legitimately found nothing.
 
 ## Workflow
 
@@ -709,3 +881,41 @@ docs, test, chore, perf, ci). Run the verification order before any PR.
 work) completes and lands on `main`, push and tag it `v<N>` (annotated,
 sequential — `v0` was the umbrella reintegration) so versions trace back to
 the plan that produced them.
+
+**Take the mergeability reading BEFORE the push.**
+`git merge-tree --write-tree origin/main HEAD` is one command, needs no
+checkout, worktree or stash, exits 1 on conflict, and prints the conflicted
+paths as stage1/2/3 index entries followed (after the first blank line) by
+the `Auto-merging` / `CONFLICT (content)` block naming each one. Doing it
+first is what lets a PR body NAME the conflicts and their shape instead of
+the reviewer discovering a red merge box, and it is the same reading
+`gh pr view --json mergeable` gives only once the PR exists and is
+therefore too late to write about. Expect the complementary-additions shape
+here: the recurring conflicts are `docs/architecture/` tables both sides
+appended rows to, which want both sides kept.
+
+**A conflicting PR dispatches NO workflow at all**, so `no checks reported`
+on a fresh PR is a MERGE-STATE reading and not a trigger or changed-path
+bug to debug: GitHub cannot compute `refs/pull/N/merge` while
+`mergeStateStatus` is `DIRTY`, and the trigger blocks and path filters are
+both green and explain nothing. Read
+`gh pr view <n> --json mergeable,mergeStateStatus` FIRST. Two consequences
+for the outbound body — a branch behind `main` has no hosted green, so
+the local gate captures are the whole of the evidence and the body has to
+say so rather than leaving a reader to assume CI agreed; and a job that
+RAN and went red is a different state from one that was never created.
+
+**Do not predict your own `v<N>` tag.** Tags here are assigned by MERGE
+order across parallel legs, so the next free number is already taken by
+whichever leg merged first and the qNN-to-vNN reflex claims another leg's
+tag. `git tag --list 'v*' | sort -V | tail` plus
+`git log -1 --format='%h %s' <tag>` is the check, and an honest close-out
+row states what is TRUE at the commit (built, gates green at `<sha>`, PR
+and tag pending) rather than a number the push task will discover.
+
+**Compare a published PR body in BYTES on both sides**, or the two figures
+disagree by exactly the multi-byte characters and a correct edit reads as
+never having published: measured on a body carrying em dashes, python's
+`len(str)` answered 17543 where `len(bytes)` answered 17603, a 60-byte gap
+that is entirely U+2014. Normalise CRLF and the trailing newline, compare
+the BYTES, and print both lengths beside the boolean.
