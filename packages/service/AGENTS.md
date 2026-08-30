@@ -252,7 +252,34 @@ two-hop builtin chain such as
 `createHash('sha256').update(t, 'utf8').digest()` is an ERROR even at 60
 columns. Write any chain past one `.` broken one call per line from the
 start, and run `bun run lint` in the package (seconds) BEFORE
-`check-types` — the shape errors are the ones no type probe surfaces. Re-derive the over-cap roster
+`check-types` — the shape errors are the ones no type probe surfaces. That
+rule forbids three links in ONE expression, not three links: a four-call
+`.replace(...).replace(...).replace(...).trim()` written one call per LINE
+lints clean, which is how every ported text pass here is written.
+
+A new module under `src/lib/` hits a predictable set of findings, and the
+regex ones are measured rather than inferred. `import/order` comes first —
+parent (`../x`) and sibling (`./y`) are SEPARATE groups needing a blank
+line between them, on top of the `type`-first-group rule. Then
+`no-useless-escape`, which reads a class by POSITION: `\-` is KEPT where a
+hyphen could open a range (`[A-Za-z0-9_.\- ]` is clean, another member
+following it) and is an ERROR where it cannot — last in the class,
+immediately before the `]`, so `[\p{L}\p{N} .,&'()\-]` is one error and
+dropping the backslash is the only repair that lints. An origin pattern of
+that second shape therefore does NOT port verbatim; the set it matches is
+unchanged and nothing else reports the edit, which is why it belongs in the
+port's `What is dropped` paragraph. The same rule flags `\/` INSIDE a class
+while requiring it outside one, so write `[\\/]`, never `[\\\/]`.
+`no-control-regex` does NOT fire on `\r`, `\n` or `\t` — a ported denylist
+naming the two line terminators ports as a literal — and is owed the
+`new RegExp` + `String.fromCharCode` construction only where a class
+reaches past those three. `no-misleading-character-class` fires on a class
+holding a zero-width JOINER between two other characters, the exact shape
+any ported invisible-character strip carries; the repair that keeps the
+match identical is an alternation built with `new RegExp` over the same
+code points, since reordering the class is fragile.
+
+Re-derive the over-cap roster
 (`wc -l scripts/*.ts | sort -rn`) rather than quoting one: phase 3 put five
 more files over it, `scripts/workflow-markers.ts` furthest by a wide margin,
 and any roster written down here goes stale on the next docs task without a
@@ -295,6 +322,28 @@ hour. The rules:
    separate database name, no volume.
 4. Destructive helpers must call `assertLiveDatabase` (refuses any database
    but `ar_live`). Never widen the truncate list implicitly.
+   That name is also the reason the live Postgres is SHARED across every
+   worktree and branch on one machine: there is one `ar_live` on port 5433,
+   and `applyMigrations` points the migrator at `./drizzle`, so whichever
+   checkout last ran `test:live` migrated it. A branch based on an older
+   `main` therefore reads `schema.live.test.ts`'s
+   `records every migration the journal names, in journal order` as RED
+   through no fault of its own — the ledger carries a sibling branch's rows
+   and the case renders them `unrecognized(<when>)`. Those numbers are
+   attributable rather than mysterious: they are journal `when` values, so
+   `git show <ref>:packages/service/drizzle/meta/_journal.json` across
+   `git branch -a` names the migration and the branch that applied it. Do
+   NOT repair it by deleting the ledger rows or dropping the extra tables —
+   that is the sibling worktree's working state, and greening one branch
+   reddens the other. Take the reading on an ISOLATED cluster instead:
+   every Postgres-gated file calls `applyMigrations` in `beforeAll`, so a
+   throwaway `postgres:16-alpine` with no volume is enough, and it must be
+   NAMED `ar_live` or `assertLiveDatabase` refuses the destructive helpers.
+   `bun run test:live` cannot be pointed at it — the script sets
+   `AR_LIVE_DATABASE_URL` in its own definition, which wins over the
+   environment — so the isolated leg is
+   `AR_LIVE_DATABASE_URL=<url> bun x vitest run tests/live` from inside the
+   package.
 5. Clean up after live runs: `stress:stop` removes only the stress
    containers. Leave no long-lived processes or scheduled jobs behind.
    `db:stop` is NOT its counterpart: it is `docker compose down`, which
@@ -451,6 +500,21 @@ guard therefore does not fire — the constructor is reached anyway and raises
 property, never the global. A case that needs the real transpiler spawns
 `bun scripts/build-workflows.ts` as a subprocess;
 `docs/architecture/03-workflows.md` carries the argument for both halves.
+
+That transpiler also NORMALIZES string quotes to double, which decides how
+an `ownText` entry in `tests/build/lib-splice.test.ts` has to be picked. A
+snippet carrying a single-quoted literal is present in the shipped source
+and ABSENT from the spliced body, so the roster's own-library case passes
+while its text-arrived case fails over a library that is perfectly fine
+(measured: `.replace(SLUG_SEPARATOR_RE, '-')` and `typeof maxLen ===
+'number'` both vanish where `protectedSpans.push(rendered)` and
+`spans[Number(index)]` survive). Combined with the existing rule that the
+text must be an EXPRESSION — type annotations erase and lines reflow — the
+selection rule is: no string literal, no type annotation, and CHECK by
+transpiling before registering. Three lines of a /tmp `.mjs` building a
+real `new Bun.Transpiler({ loader: 'ts' })` and calling `transformSync`
+answers own/transpiled/other-library membership for a whole candidate list
+at once.
 
 Four known flakes live in the vendored framework `lib/` half, none in
 anything this port wrote, so a single red case naming one of them is not a

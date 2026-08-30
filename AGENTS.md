@@ -174,8 +174,13 @@ behind an ASCII placeholder token, never as a literal in the tool call.
   is exported from `tests/invariants/naming-patterns.ts`, so a `bun -e`
   importing it and intersecting against
   `git diff --name-only <base>..HEAD` names exactly which changed files the
-  automated scan covers and which the manual sweep still owes (surface: 125
-  files). The two non-obvious members: `lib/**/__tests__/*.test.ts` ARE
+  automated scan covers and which the manual sweep still owes (surface: 143
+  of 803 tracked files at the q06 tip — re-derive it, both halves move).
+  It answers paths relative to the PACKAGE root, not repo-relative and not
+  absolute, so the intersection needs a `packages/service/` prefix. Without
+  it the result is EMPTY and the manual half reads as owing every tracked
+  file, a plausible-looking number nothing contradicts (measured 0 against
+  143). The two non-obvious members: `lib/**/__tests__/*.test.ts` ARE
   scanned (they sit under the `lib` root, so "tests are out" is true only
   of `tests/`), and `scripts/README.md` IS scanned (a `.md` inside a scan
   root, so "READMEs are out" is true only of the package-root one).
@@ -197,8 +202,8 @@ behind an ASCII placeholder token, never as a literal in the tool call.
   design-extraction source repo — and its `no-restricted-imports` rule
   reaches only `packages/ui` IMPORTS, never prose and never another
   package. Sweep all seven whenever the manual half is run.
-- The correct outcome of that sweep is ONE hit, not zero, and a literal
-  zero would itself be the finding: `NOTICE:10` carries the Apache-2.0
+- The correct outcome of the FIVE-needle half is ONE hit, not zero, and a
+  literal zero would itself be the finding: `NOTICE:10` carries the Apache-2.0
   §4(d) attribution that the `origin-project` needle's own description
   names as the reason `NOTICE` sits outside the scan surface. It is the
   positive control against the real tree — needle, pathspec and case flags
@@ -214,6 +219,31 @@ behind an ASCII placeholder token, never as a literal in the tool call.
   bare needle token pasted into a doc, a plan or a commit message becomes
   the very literal the law forbids, and this paragraph tripped that on its
   first draft.
+- The SEVEN-needle sweep's correct answer is EIGHT hits, not that one, and
+  reading it as one scores a clean tree as dirty. The two needles assembled
+  in `packages/ui/eslint.config.mjs` add seven more (measured at the q06
+  tip): both `NOTICE` files, `packages/ui/README.md` twice,
+  `packages/ui/AGENTS.md`, `packages/ui/scripts/compare-design.mjs`, and
+  the root `AGENTS.md` bullet that STATES the banned import scope. Every
+  one is `packages/ui` attribution/provenance prose or the rule's own
+  self-reference. Report the five-needle and two-needle halves separately
+  with the eight-hit total named, or every close-out re-opens the same
+  closed question — and note neither ui needle fires in the config that
+  DECLARES it, since those literals are assembled at run time, so "the
+  config contains its own needle" is a dead control. Extract them by
+  parsing the `const <ID> = [...].join('<sep>');` declarations out of the
+  config's source text; the same parser covers all seven and builds the
+  masking table for showing context around a legitimate hit.
+- Separate a pre-existing hit from one the branch introduced with a
+  merge-base hit-set DIFF, the only leg that can: `git archive <merge-base>
+  | tar -x -C /tmp/<fresh-dir>` — never `rm -rf` the directory first, which
+  the permission layer denies outright, and a fresh unique name needs no
+  cleanup — then run the IDENTICAL matcher over
+  `git ls-tree -r --name-only -z <base>` and over `git ls-files`, and diff
+  the `patternId`/path/line sets BOTH ways. Measured at the q06 wrap: 752
+  files / 8 hits at the base against 803 / 8 at the tip, 0 added and 0
+  removed. The totals agreeing is the weaker reading — a hit moving between
+  two files leaves the count unchanged.
 - NEVER print a `ForbiddenMatch` wholesale. The record carries `line`
   verbatim by design, so a probe that dumps matches seeds the banned string
   into terminal scrollback, the tool-result capture and any file the run is
@@ -336,24 +366,42 @@ red package never masks another and a single run gives the whole picture.
   summary lines remain the primary reading; the glyphs are a cross-check
   that must prove itself.
 - Classifying every line is what makes "no failures" a measurement, and the
-  biggest bucket is not vitest: of 1888 lines, 1780 are `@ar/ui pretest`'s
-  vite chunk-size table (two `│` apiece) and 49 are the framework's
-  deliberate pino error-path JSON. Those three figures are a SNAPSHOT, not
-  an invariant — every test that builds a service over supertest adds its
-  own deliberate pino JSON, so a plan adding tests legitimately moves them
-  (measured 1906/67 and later 1999/1800/75 in one dependency-bump plan).
+  biggest bucket is not vitest: of 3763 lines, 3562 are the `@ar/ui`
+  library build's vite chunk-size table and 75 are the framework's
+  deliberate pino error-path JSON, leaving 115 other `@ar/`-prefixed and 11
+  unprefixed. Those figures are a SNAPSHOT, not an invariant — every test
+  that builds a service over supertest adds its own deliberate pino JSON,
+  so a plan adding tests legitimately moves them (measured 1888/1780/49,
+  then 1999/1800/75 in one dependency-bump plan, then the figures above).
   Re-derive the buckets per run and read the OTHER bucket, which is where an
-  unexplained line would sit. The `Exited with code 0` set is exactly
-  SIX and worth NAMING rather than counting — `@ar/service pretest`,
-  `@ar/ui pretest`, `@ar/web pretest`, `@ar/ui test`, `@ar/web test`,
-  `@ar/service test`.
+  unexplained line would sit. Two rules make the classifier honest and both
+  were measured wrong first. The vite table's separator is U+2502 (box
+  drawings light vertical), NOT the ASCII pipe, so a rule keyed on `|`
+  scores ONE vite line instead of 3562 and silently tips the rest into
+  whichever bucket runs next — the sum still reconciles and every count
+  still looks plausible. And pino lines carry the `@ar/service test:`
+  prefix themselves, so a generic `@ar/`-prefixed bucket tested BEFORE the
+  pino rule scores pino at zero, the same way. Attribute a moved bucket by
+  EMITTING SCRIPT: the vite figure is 1781 + 1781, the `@ar/ui` build
+  printed once by `@ar/ui pretest` and once nested inside `@ar/web
+  pretest`, so it can only move from that package, and `@ar/service
+  pretest` emits two lines whatever the package holds — which is why
+  landing modules under `src/lib/` or `src/sources/` cannot move any line
+  bucket at all. The six `Exited with code 0` SCRIPTS are worth NAMING
+  rather than counting — `@ar/service pretest`, `@ar/ui pretest`,
+  `@ar/web pretest`, `@ar/ui test`, `@ar/web test`, `@ar/service test` —
+  but a `grep -c 'Exited with code'` over the capture returns EIGHT, not
+  six, because `@ar/web`'s pretest also emits doubled-prefix
+  `@ar/web pretest: @ar/ui build`/`postbuild` lines that match the needle.
 - Of those buckets exactly one is assertable by MEMBERSHIP instead of by a
   drifting count: the OTHER (unprefixed) bucket enumerates completely as the
-  two `$` echoes, the root vitest run's own nine-line block (banner, two
+  two `$` echoes, the root vitest run's own nine-line block (banner, FOUR
   blanks, its two summary lines, `Start at`, `Duration`) and — only when
   bun emits it — the trailing `error: script "<name>" exited with code N`.
-  Twelve lines when present. "No unexplained line" is a real measurement
-  only because this bucket is enumerable; assert its members, count the rest.
+  ELEVEN lines on green, twelve when that last one is present; a reader
+  asserting twelve on a green run gets a false red. "No unexplained line"
+  is a real measurement only because this bucket is enumerable; assert its
+  members, count the rest.
 - NEVER key "did this gate fail?" on that `error: script` line: bun does not
   emit it for every failing fan-out. Measured in one sitting on one tree,
   `test:all` exiting 1 printed it as the capture's last line while

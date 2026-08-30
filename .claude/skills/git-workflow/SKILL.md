@@ -43,18 +43,44 @@ gate, and irreversible once `gh pr create` returns. Four checks, all cheap:
    CLOSED prior PR on the same head. Send a known-existing head through the
    IDENTICAL command shape in the same call so the empty result is readable.
    Without it, a broken filter is indistinguishable from "no PR yet" — and the
-   consequence is a duplicate PR.
+   consequence is a duplicate PR. The control's PR must be CLOSED or MERGED, not
+   merely one that HAS a PR: `--state all` exists precisely because the open-only
+   form misses a non-open prior PR, so an OPEN control proves only that the
+   command can find something and says nothing about the half whose failure
+   produces the duplicate. Measured opening one PR, the subject printed `<none>`
+   beside `25 MERGED` and `11 CLOSED` from two known heads.
 3. **Re-read the REMOTE after creating.** The sweep proves the FILE is clean; only
    `gh pr view <n> --json body -q .body` diffed against the swept file (normalise
    CRLF and the trailing newline) proves the swept bytes are the published ones.
    It is the only check that catches a `--body-file` pointed at a stale draft.
-4. **Hold the four numbers three-dot.** GitHub computes
-   `additions`/`deletions`/`changedFiles` from the merge base, so the local side is
-   `git diff --numstat $(git merge-base main HEAD)..HEAD` summed — never
-   `main..HEAD` two-dot, which drifts the moment main moves. Sum `--numstat`, not
+4. **Hold the four numbers three-dot, against the REMOTE base.** GitHub computes
+   `additions`/`deletions`/`changedFiles` from the base branch as the REMOTE has
+   it, so the local side is
+   `git diff --numstat $(git merge-base origin/main HEAD)..HEAD` summed after a
+   fetch — never `main..HEAD` two-dot, which drifts the moment main moves, and
+   never local `main` without checking. PRINT the local and remote merge-bases
+   against each other rather than assuming they agree: measured at one tip, local
+   `main` was 62 commits BEHIND `origin/main` (an ancestor, not diverged) while
+   both merge-bases with HEAD still resolved to the SAME commit — a coincidence
+   that would not survive the local branch moving past the fork point, and a
+   diverged local `main` otherwise attributes somebody else's commits to this
+   PR's diff with every number still looking plausible. Sum `--numstat`, not
    `--shortstat`, so a binary file shows as `-` instead of silently contributing
-   zero. Read the commits list's LAST oid against `git rev-parse HEAD` beside the
-   counts: a count can agree while the head differs.
+   zero, and report the binary count beside the totals. Read the commits list's
+   LAST oid against `git rev-parse HEAD` beside the counts: a count can agree
+   while the head differs.
+5. **A CONFLICTING PR schedules NO workflow run at all**, so `gh pr checks <n>`
+   printing `no checks reported` is ambiguous between a run that has not
+   scheduled yet and one that never will. GitHub builds a `pull_request` run
+   against `refs/pull/<n>/merge`, which it cannot create for a PR that does not
+   merge cleanly — so the reading is a ref existence check, not a guess:
+   `git ls-remote origin 'refs/pull/<n>/*'` answers `head` alone where a
+   MERGEABLE control PR answers `head` AND `merge`. Read
+   `gh pr view <n> --json mergeable` beside the checks. Name the conflict set
+   with `git merge-tree --write-tree --name-only origin/main HEAD`, which
+   changes no worktree state. Do NOT rebase to clear it as an afterthought
+   inside a PR task: every commit oid moves, and a body whose suite figures were
+   measured at the pre-rebase tip stops describing the head it is attached to.
 
 **Every suite figure in the body must come from a run at the PR's OWN head.** A
 loop that commits per task makes all plausible sources disagree and each was
