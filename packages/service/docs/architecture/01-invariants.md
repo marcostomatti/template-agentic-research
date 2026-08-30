@@ -20,7 +20,9 @@ phase spec that lands the build system. The two auth rows come from
 outside it as well, from the acceptance criteria in
 `.specs/q07-auth-basic.md` — an item scheduled beside the seven
 phases rather than inside them, so its cell in the phase column
-names the item rather than a number.
+names the item rather than a number. The request-echo row is that
+shape again, drawn from the binding constraints in
+`.specs/q08-api-wave-1.md`.
 
 ## The register
 
@@ -40,6 +42,7 @@ names the item rather than a number.
 | No real hostname appears in a tracked file | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No log line and no HTTP response carries the bootstrap password | `tests/auth/secret-logging.test.ts`, booting the service with a sentinel `AUTH_BASIC_PASSWORD` and reading stdout, stderr and the response body back across the bootstrap, a login, and a malformed login carrying the sentinel | q07 | Implemented |
 | No file under `src/` or `lib/` outside `src/auth/` and `src/db/schema/auth.ts` names a password hash or a session-token hash | `tests/invariants/auth-containment.test.ts`, over the identifier roster and the walker in `tests/invariants/auth-containment.ts`, which refuses to report a result at all when it read no files | q07 | Implemented |
+| No request body content reaches a response body or a log line through a validation detail | `tests/api/request-echo.test.ts`, submitting one sentinel through every wave-1 write route as a field value, as an unrecognized key, as an open-record key and as a query parameter, and counting it in each answer and in everything the process wrote — with a third boot mounting a route that leaks the same sentinel through four channels as the control on the count | q08 | Implemented |
 
 ## Reading the register
 
@@ -413,3 +416,70 @@ Each carries the leg its own kind of emptiness needs, a planted
 sample for the scan and a deliberately logged sentinel for the
 capture, because a zero found over nothing and a zero found over
 something read alike.
+
+### A refusal names the field, and never the value it refused
+
+A validation failure is the one refusal that has to be specific about
+the request, or the caller cannot act on it. The cheapest way to be
+specific is to quote what arrived, which is what makes `details` a leak
+channel rather than a diagnostic: a `422` body goes straight back to
+whoever sent the request, and the line the handler logs beside it goes
+to everyone who reads logs. Those are the two destinations the
+bootstrap-password row above names, reached by a route that has nothing
+to do with auth.
+
+q07 closed the channel on one route by never opening it.
+`POST /auth/login` parses with `safeParse` and answers a flat `401`, so
+no `ZodError` reaches the shared handler and no `details` is ever built.
+Wave 1 cannot answer that way on any of its nineteen routes: a `422`
+naming the field IS the answer, so the rule moves off the route and onto
+the boundary every route parses through.
+`docs/architecture/08-http-api.md` carries the mechanism —
+`src/http/validation.ts` building each detail out of `issue.path` and a
+message vocabulary declared in this repo, the container named in place
+of an undeclared key, the segment below an open record collapsed to
+`*`. What the register adds is why the property is worth a row.
+
+It is worth one because nothing about a violation reads as a violation.
+`zodToValidationError` in `lib/errors/handler.ts` copies `issue.message`
+verbatim, so a handler that lets a `ZodError` escape rather than
+throwing its own `ValidationError` quotes the request back with no code
+change anywhere and every gate green. The open records are the same
+fault one layer down: an operator-chosen key lands in `issue.path`
+itself, where no vocabulary reaches it, so a parse that forgets which
+paths are open leaks through a field name rather than through a message.
+Both are one line, in a module every later wave adds routes to.
+
+So the check is a sentinel rather than a review, on the argument the
+bootstrap-password row makes. One string is submitted through every
+wave-1 write route — as a field value, as an unrecognized key, as a
+key inside an open record, and as a query parameter — and counted in
+each answer and in everything the process wrote while answering. Its
+pass is a zero, so a third boot mounts a route that leaks the same
+string to the console, to stderr, into a thrown message and into a
+detail, and the same counter reports all four: a capture that stopped
+reading and a surface that leaks nothing read alike.
+
+What `Implemented` means here is two zeros over different channels and
+one measurement that is not a zero. `errorHandler` logs an `AppError`'s
+`code`, `cause` and `message` and not its `details`, so a leak in a
+detail reaches the response alone and a leak in a constructed message
+reaches both — the two zeros are separate claims rather than one
+written twice. The exception is the query string: `applyMiddleware`
+builds its `pino-http` with no `redact` option, and the default request
+serialiser records the raw URL and the parsed query, so a query
+parameter lands in the log twice per request by design. The query rows
+claim the response body alone, which holds because `?page`, `?perPage`,
+`?cascade` and `?format` are the whole vocabulary this surface takes
+from a query string.
+
+One channel is out of reach of that artifact, and what closes it is
+something else. Both links of the error drizzle throws carry the
+caller's bytes — the bound `params:` line, and the database's own
+`Key (slug)=(<the submitted slug>) already exists.` beneath it — and
+`errorHandler` logs an unhandled error with its `cause`. What keeps that
+off a log line is the wrapper each `db-store.ts` puts over every write,
+translating a driver failure into a `StoreRefusal` carrying a reason and
+a constraint name and nothing else. No sentinel reaches it here: a
+conflict needs a stored row to collide with, and every window this row's
+artifact opens is over an empty store.

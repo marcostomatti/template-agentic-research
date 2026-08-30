@@ -13,10 +13,8 @@
  * app with no `pino-http` in it, so none of them can see a log line
  * at all. The rule is that no request body content reaches a
  * response body or a log line through a validation detail, and
- * `docs/architecture/01-invariants.md` is where it is registered
- * — by the task after this one, so at this commit that register
- * carries no row naming this file and a grep for one finds
- * nothing. That is the sentence the registering commit deletes.
+ * `docs/architecture/01-invariants.md` registers it, with this
+ * file named as the artifact that fails when it stops holding.
  *
  * THE FOUR CHANNELS, and where each has a subject. A FIELD VALUE
  * goes at a declared member: on seven of the nine body-bearing
