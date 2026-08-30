@@ -123,7 +123,11 @@ const BUILT_WORKFLOWS = loadBuiltWorkflows();
  * and the artifact an entry does name was built from a source under
  * `workflows/` — which that scan reads.
  */
-const PHASE_3_AND_5_WORKFLOW_IDS = ['ar-dispatch', 'ar-ingest'] as const;
+const PHASE_3_AND_5_WORKFLOW_IDS = [
+  'ar-capture',
+  'ar-dispatch',
+  'ar-ingest',
+] as const;
 
 // ---------------------------------------------------------------------------
 // The send-free rule
@@ -218,19 +222,21 @@ function withSendNodePlanted(workflow: BuiltWorkflow): BuiltWorkflow {
 }
 
 // ---------------------------------------------------------------------------
-// The one schedule trigger
+// The one schedule trigger, and the webhook that is not one
 // ---------------------------------------------------------------------------
 
 /**
  * The workflow the one schedule trigger belongs to, by id.
  *
  * Declared rather than read off {@link PHASE_3_AND_5_WORKFLOW_IDS},
- * whose first entry spells the same id. The two are separate claims
- * that used to coincide, that roster having held one workflow: it
- * says which artifacts the build is expected to produce, this says
- * which one of them schedules. `ar-ingest` is what parted them, and
- * the entries phases 5 and 6 have still to deliver part them
- * further, none of those being a schedule — so the roster grows and
+ * which names this id among its entries and no longer names it
+ * first. The two are separate claims that used to coincide, that
+ * roster having held one workflow: it says which artifacts the build
+ * is expected to produce, this says which one of them schedules.
+ * `ar-ingest` parted them, `ar-capture` parted them further with a
+ * trigger of its own that starts a run and sets no clock, and the
+ * entries phases 5 and 6 have still to deliver part them further
+ * again, none of those being a schedule — so the roster grows and
  * this stays a set of one, which is the property itself and is what
  * a value derived from a list that grew with it would stop
  * asserting.
@@ -242,6 +248,45 @@ function withSendNodePlanted(workflow: BuiltWorkflow): BuiltWorkflow {
  * `workflows/src/README.md`.
  */
 const SCHEDULE_TRIGGER_WORKFLOW_ID = 'ar-dispatch';
+
+/**
+ * The trigger type `ar-capture` is started by.
+ *
+ * Written out here rather than read off the artifact that carries
+ * it, for the reason {@link SEND_PLANT} gives about spelling a type
+ * twice: two spellings are what leave a case able to ask whether
+ * they still agree. A type read off the tree would agree with the
+ * tree by construction, and the question the case below asks —
+ * whether what starts that workflow is the trigger setting no clock
+ * — would be answering itself.
+ *
+ * Here rather than in `workflow-rosters.ts` because no matcher there
+ * is keyed to it. {@link SCHEDULE_TRIGGER_TYPE} already argues the
+ * type, naming a webhook as one of the three legitimate triggers
+ * that start a run and decide nothing about when one starts, so an
+ * export beside that one would be a roster entry no rule reads. All
+ * that is asked of the string is that {@link isScheduleTrigger}
+ * answer no to it, which is a claim about the schedule roster rather
+ * than about a webhook one.
+ */
+const WEBHOOK_TRIGGER_TYPE = 'n8n-nodes-base.webhook';
+
+/**
+ * The workflow the webhook trigger belongs to, by id.
+ *
+ * Declared beside {@link SCHEDULE_TRIGGER_WORKFLOW_ID} and read the
+ * same way, by id and never by file name, and kept apart from
+ * {@link PHASE_3_AND_5_WORKFLOW_IDS} for the reason that one gives:
+ * a roster growing with every source that lands cannot also answer
+ * which of its entries carries what. The two ids are what the case
+ * below turns into a per-workflow expectation, and every entry the
+ * roster names beyond them is expected to carry a trigger of neither
+ * kind — so an `ar-score` joining the roster arrives with its own
+ * row already written, and one landing with a schedule or a webhook
+ * reddens here rather than passing under a count that happened to
+ * stay at one.
+ */
+const WEBHOOK_TRIGGER_WORKFLOW_ID = 'ar-capture';
 
 // ---------------------------------------------------------------------------
 // The retry guard in front of a model call
@@ -1273,6 +1318,104 @@ describe('workflow invariants — built tree', () => {
 
     expect(found).toEqual([`${SCHEDULE_TRIGGER_WORKFLOW_ID}.json`]);
   });
+
+  // The same one-trigger rule read per workflow rather than over the
+  // tree, and what asks for a second reading is `ar-capture`. Its
+  // webhook is the first trigger in this tree that is neither a
+  // schedule nor the execute-workflow trigger `ar-ingest` carries,
+  // and all the case above can say about it is that a flat count of
+  // schedule triggers did not move — which is the answer a tree
+  // holding no webhook at all gives too.
+  //
+  // So the webhook is asserted present. `ar-capture` carrying
+  // exactly one node of {@link WEBHOOK_TRIGGER_TYPE}, held beside a
+  // schedule count of zero for that same artifact, is what leaves
+  // not counted as a schedule a claim with a subject rather than a
+  // count that stayed still.
+  //
+  // Three readings in one comparison, so a failure names which
+  // moved. The webhook counts say which artifact is started by a
+  // request. The schedule counts say `ar-dispatch` is still the only
+  // one started by a clock, which is the case above read per
+  // workflow instead of as a list of file names, and is where a
+  // second schedule prints beside the workflow that grew it. And
+  // {@link isScheduleTrigger} is asked about the type directly,
+  // which is the not-counted half with no tree in front of it.
+  //
+  // That last reading is the one `workflow-rosters.test.ts` already
+  // makes, over a webhook planted as a node rather than over one the
+  // tree holds, and it is restated here rather than left next door
+  // for what it costs: nothing, and a failure that names the matcher
+  // and the artifact in one comparison instead of sending a reader
+  // to another file to find out which of the two moved. It adds no
+  // coverage that control does not already have. What this case adds
+  // over it is the subject — that the planted type is the type an
+  // artifact in the built tree is actually started by.
+  //
+  // The expectation is derived from
+  // {@link PHASE_3_AND_5_WORKFLOW_IDS} and the two id constants
+  // rather than written out per file, so the roster stays the one
+  // place a workflow is named. Every entry beyond those two is
+  // expected to carry neither trigger, which is what makes this a
+  // claim about the whole tree instead of about three artifacts that
+  // happen to be in it: an `ar-score` joining the roster arrives
+  // with its row already written, and one landing with a trigger of
+  // either kind reddens here rather than passing under a count that
+  // happened to stay at one.
+  //
+  // What it rests on is the roster case above, which is what says
+  // those ids are the artifacts the tree holds; a workflow missing
+  // from the tree entirely reddens there first. What it does not
+  // reach is the limit the case above names: a trigger left
+  // `disabled` is in the artifact and on no clock, and neither a
+  // type nor a count over one parts that tree from a running one.
+  //
+  // Measured over `tests/invariants/`, five legs, 150 cases, and
+  // only the first reddens anything else. {@link isScheduleTrigger}
+  // widened onto the webhook type reddens three: this case, the
+  // one-trigger case above, and the planted webhook next door —
+  // three readings of one matcher, and the split above is what says
+  // which is which. The remaining four redden this case alone.
+  // {@link WEBHOOK_TRIGGER_TYPE} misspelt and the trigger
+  // `ar-capture` carries renamed in the built artifact are the pair
+  // that earns the second spelling: one moves the constant, one
+  // moves the tree, and the flat count above reads both as a clean
+  // tree. {@link WEBHOOK_TRIGGER_WORKFLOW_ID} moved onto another
+  // roster entry, and pointed at
+  // {@link SCHEDULE_TRIGGER_WORKFLOW_ID} so both ids name one
+  // workflow, each redden the columns rather than the type reading,
+  // which is what says the per-workflow half is not riding on it.
+  it(
+    'counts the webhook in ar-capture as no schedule and ar-dispatch as the one',
+    () => {
+      const perWorkflow = BUILT_WORKFLOWS.map((workflow) => ({
+        file: workflow.file,
+        webhooks: workflow.nodeTypes
+          .filter((type) => type === WEBHOOK_TRIGGER_TYPE).length,
+        schedules: workflow.nodeTypes
+          .filter((type) => isScheduleTrigger(type)).length,
+      }));
+      const control = {
+        perWorkflow,
+        theWebhookTypeIsAScheduleTrigger: isScheduleTrigger(
+          WEBHOOK_TRIGGER_TYPE,
+        ),
+      };
+
+      expect(control).toEqual({
+        perWorkflow: PHASE_3_AND_5_WORKFLOW_IDS.map((id) => ({
+          file: `${id}.json`,
+          webhooks: id === WEBHOOK_TRIGGER_WORKFLOW_ID
+            ? 1
+            : 0,
+          schedules: id === SCHEDULE_TRIGGER_WORKFLOW_ID
+            ? 1
+            : 0,
+        })),
+        theWebhookTypeIsAScheduleTrigger: false,
+      });
+    },
+  );
 
   // The first of the three guards in front of a model call, read
   // over built output: not one model node in any built workflow left
