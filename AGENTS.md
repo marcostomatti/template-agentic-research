@@ -465,12 +465,13 @@ red package never masks another and a single run gives the whole picture.
   prefix themselves, so a generic `@ar/`-prefixed bucket tested BEFORE the
   pino rule scores pino at zero, the same way. Attribute a moved bucket by
   EMITTING SCRIPT: the vite figure is 1781 + 1781, the `@ar/ui` build
-  printed once by `@ar/ui pretest` and once nested inside `@ar/web
-  pretest`, so it can only move from that package, and `@ar/service
-  pretest` emits two lines whatever the package holds — which is why
-  landing modules under `src/lib/` or `src/sources/` cannot move any line
-  bucket at all. The `Exited with code 0` set is exactly
-  SIX and worth NAMING rather than counting — `@ar/service pretest`,
+  printed once by `@ar/ui pretest` and once nested inside `@ar/web pretest`,
+  so it can only move from that package, and `@ar/service pretest` emits one
+  line per workflow SOURCE beside its summary — three lines over a tree
+  holding one workflow and four over two — so a landed workflow moves the
+  other-`@ar/` bucket by exactly one, while a module under `src/lib/` or
+  `src/sources/` moves no bucket at all. The `Exited with code 0` set is
+  exactly SIX and worth NAMING rather than counting — `@ar/service pretest`,
   `@ar/ui pretest`, `@ar/web pretest`, `@ar/ui test`, `@ar/web test`,
   `@ar/service test`.
 - Confirming that SET needs an ANCHORED matcher, because a substring count
