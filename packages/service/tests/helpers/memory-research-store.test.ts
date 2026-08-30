@@ -304,9 +304,16 @@
  * reddens NOTHING, the same honest zero the category and term legs
  * measure, for the same reason: the early return exists because
  * drizzle throws on an empty update list, and this store has no
- * such throw to observe. Three measured zeros now, all three
- * pinned by the ports' TSDoc and by the drizzle halves' own cases
- * instead.
+ * such throw to observe. Three measured zeros now, and all three
+ * are pinned by the ports' TSDoc and by the drizzle halves'
+ * branches — never by a case here or there. No db-store in this
+ * package carries a colocated test file, and the branch is
+ * unobservable in the answered row, in the stored row and in a
+ * statement COUNT anyway: what separates it from a write that sets
+ * every member back to itself is the statement TEXT, which only a
+ * probe over an instrumented client reads. Measured that way on
+ * `src/personas/db-store.ts` when it landed — one statement,
+ * and a `select`.
  */
 import type { MemoryResearchStore } from './memory-research-store.js';
 import type { DomainSettings } from '../../src/db/schema/domains.js';
