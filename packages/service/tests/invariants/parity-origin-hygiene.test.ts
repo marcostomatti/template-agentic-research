@@ -101,6 +101,7 @@ const PARITY_FILES: readonly string[] = [
   'sanitize-md.parity.test.ts',
   'shingle.parity.test.ts',
   'static-gate.parity.test.ts',
+  'validate-entity-name.parity.test.ts',
   'yaml-lite.parity.test.ts',
 ];
 
