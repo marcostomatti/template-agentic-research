@@ -303,13 +303,13 @@ checked.
 
 What breaking it costs splits in two, and only the louder half is
 reachable offline. `tests/build/schedule-splice.test.ts` puts the one
-library this repository splices through the shipped build and then
-through `new Function`, which supplies no `require` and no `module`
-exactly as a Code node does not: an `import.meta` is refused when
-that function is constructed, and a `require` raises when its line
-runs. Module-level state is invisible in both contexts — it lives as
-long as the process that imported the file, and as long as the one
-execution that ran the spliced copy, and neither reports the
+library a workflow source here names through the shipped build and
+then through `new Function`, which supplies no `require` and no
+`module` exactly as a Code node does not: an `import.meta` is refused
+when that function is constructed, and a `require` raises when its
+line runs. Module-level state is invisible in both contexts — it
+lives as long as the process that imported the file, and as long as
+the one execution that ran the spliced copy, and neither reports the
 difference.
 
 The five declaration forms are the whole of what is spliceable, and a
@@ -317,6 +317,65 @@ sixth is the standing gap. `export async function` declares a name the
 way the others do, but the word after `export` is `async`, which is
 not one of the five: it is neither refused nor stripped, and would
 survive into a node body to fail there. No library writes one.
+
+### The set of spliceable libraries is a directory, not a list
+
+Every module under `src/lib/` is written to those three rules, so
+every one of them is something a `__INLINE:` marker could name.
+Which part of the pipeline each was written FOR is a separate
+question, and it is answered here because a marker is the only place
+the two ever meet: a source names a library by path, and neither
+side of that string records what the library is for.
+
+| Library | The workflow area it serves |
+| --- | --- |
+| `schedule.ts` | `ar-dispatch`: the interval clamp and the batch cap it applies to what it has claimed. |
+| `parse-csv.ts` | Delimited text a source answers with, on the pull path and the capture path alike. |
+| `parse-eml.ts` | Message-format bodies — a file handed to `ar-capture`, and any `multipart/` an ingest source answers with. |
+| `yaml-lite.ts` | Configuration somebody edits by hand, wherever a later phase reads one. |
+| `shingle.ts` | `ar-ingest`'s dedupe: the sketch two bodies are held against each other by. |
+| `static-gate.ts` | `ar-ingest`'s gate — the free decision that runs before anything is spent on a document. |
+| `chunk.ts` | The prepared chunk a model node is fed, in `ar-ingest` and in `ar-research`. |
+| `features.ts` | The deterministic vector `documents.features` stores, computed as a document is ingested. |
+| `aggregate-score.ts` | `ar-score`: the one total a digest orders findings by. |
+| `validate-entity-name.ts` | `ar-research`: the capability gate in front of the one step that gets tools bound. |
+| `sanitize-md.ts` | Untrusted text on its way into anything that renders it — a digest, a note, a research brief. |
+| `audit-log.ts` | The on-disk half of a run's ledger, for whatever workflow writes one. |
+
+One row of that table is a workflow's today: `ar-dispatch` writes the
+only library marker there is. Every other library is written down
+here ahead of the workflow that will name it, the way the rows of
+the set at the top of this document are, and the phase that lands
+each of those workflows is the phase that writes its markers. A
+library waiting for one is not waiting to be exercised — the default
+suite imports it, and a build reads it.
+
+`tests/build/lib-splice.test.ts` is where that roster lives, and the
+first thing the file does is hold it set-equal against what `src/lib/`
+holds: the listing taken whole, with no extension filter and no
+exemption list, so anything landing in that directory is something
+the roster has to account for whether or not it is a library. Set
+equality rather than a count, because a count is satisfied by a
+roster naming one file twice, and by a directory that lost one file
+and gained another.
+
+That case runs ahead of every case reading a build, and the order is
+the point. A library left unregistered is not a library that fails a
+check — it is one no marker names and no case reads, green from every
+direction, and the roster is the only thing that makes the omission
+visible. So the roster is a declaration held against the directory
+rather than a list somebody maintains, and the table above adds only
+what a directory listing cannot say.
+
+What registration buys is a real build. That file spawns the command
+an operator runs, over a tree carrying this package's own `src/lib/`
+and a source writing one `__INLINE:` marker per entry, and reads each
+node body the build wrote for three things: the library's own text
+arrived, the module boundary it was declared behind did not, and
+what arrived is something a Code node could construct. Driving a
+spliced copy is depth rather than breadth and stays with
+`tests/build/schedule-splice.test.ts`, over the one library a
+workflow source names.
 
 ### A retired form is refused rather than left to pass through
 
