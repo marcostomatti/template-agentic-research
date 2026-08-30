@@ -180,6 +180,110 @@
       }
     },
     {
+      "id": "select-model-connector",
+      "name": "Select Model Connector",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2420, 0],
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH\n-- Where the address of the model this pass calls is read, and the only node in this\n-- group that can read it. A Code node opens no connection and a spliced library\n-- imports nothing, so the endpoint and the model name arrive here as data or the\n-- nodes below have nothing to call.\n\n-- ONE READ FOR THE PASS. executeOnce is set on this node, so it runs against the\n-- first item it was handed and answers once. Gate Documents above answers one item\n-- per new document, and which service this deployment calls is a fact about the\n-- deployment rather than about a document, so without the setting this statement\n-- would run once per document and hand the same row down again for each of them.\n\n-- ONE ROW OUT, whatever the table holds. Every member below is a scalar subquery and\n-- the outer SELECT names no FROM, so this node answers exactly one item however few\n-- connectors are configured. A deployment with no llm row at all answers one item\n-- carrying a null endpoint, which the node below reads as a service that cannot be\n-- reached rather than as a node that did not run.\n\n-- A pass with nothing gated in never reaches this node at all, executeOnce having no\n-- first item to run against. That is the ordinary quiet pass: no connector is read,\n-- no chunk is prepared and no call is made.\n\n-- One parameter, the run, read off the item this node was handed. It travels for the\n-- reason it travels everywhere on this canvas: the ledger row below is charged to the\n-- run and not to a document.\nconnector AS (\n  -- The llm connector, by kind. connectors is not domain scoped: which model endpoint\n  -- answers is a fact about the deployment rather than about any one domain, so there\n  -- is no domain to narrow this by and nothing on a domain row names one.\n\n  -- Ordered by id and capped at one, which is a decision rather than a formality. The\n  -- natural key is the kind and the name together, so a deployment may configure two\n  -- llm connectors and nothing stored anywhere says which of them this pass wants.\n  -- The oldest wins, and a deployment moving to a second endpoint reconfigures the\n  -- row it has rather than adding a rival to it. Naming one per domain would be a\n  -- column on domains and an operator decision, not a read of a key nobody declared.\n  SELECT c.id, c.name, c.config\n  FROM connectors c\n  WHERE c.kind = 'llm'\n  ORDER BY c.id\n  LIMIT 1\n)\n\nSELECT\n-- Two members read out of the config object, and both are read the way Write\n-- Documents reads the members of a reading: a value that is not a string is not text\n-- whatever it would coerce to, and the empty string is an absence rather than a\n-- value. connectors.config carries no type annotation, its shape being the client\n-- business and different for each kind, so nothing has validated either of these and\n-- this projection is where they are first read as text.\n\n-- A null endpoint means there is nowhere to reach. The node below refuses on it by\n-- name, which is the last place a pass can stop before a call is attempted against an\n-- address nobody configured.\n\n-- A null model is an ordinary state and not a refusal. A gateway that routes, or a\n-- runtime serving whatever it was started with, takes no model name, and\n-- llm_calls.model is nullable for exactly that: the row still counts as a call while\n-- saying nothing about which model made it.\n\n-- connector_id and connector_name are carried for a reader rather than for a caller.\n-- Nothing below binds either one, and a total over the ledger that wants to know\n-- which service answered has the model name and this pass execution to go on. They\n-- travel because the node that made a call and the row that named the service should\n-- be readable together on the canvas.\n  $1::bigint AS run_id,\n  (SELECT c.id FROM connector c) AS connector_id,\n  (SELECT c.name FROM connector c) AS connector_name,\n  (SELECT nullif(CASE WHEN jsonb_typeof(c.config -> 'endpoint') = 'string'\n                      THEN c.config ->> 'endpoint'\n                 END, '')\n     FROM connector c) AS endpoint,\n  (SELECT nullif(CASE WHEN jsonb_typeof(c.config -> 'model') = 'string'\n                      THEN c.config ->> 'model'\n                 END, '')\n     FROM connector c) AS model",
+        "options": {
+          "queryReplacement": "={{ $json.run_id }}"
+        }
+      }
+    },
+    {
+      "id": "apply-call-ceiling",
+      "name": "Apply Call Ceiling",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 0],
+      "parameters": {
+        "jsCode": "// Where a pass decides how much it is going to spend, and the first\n// node in this workflow that decides anything about money. Nothing\n// above it opens a connection to a model and nothing below it can\n// reduce what this one lets through. The ceiling is applied here,\n// before a chunk is prepared, because preparing one is work and the\n// cheapest call is the one that was never staged.\n//\n// THE CEILING IS A DECLARED CONSTANT. MAX_MODEL_CALLS_PER_RUN below is\n// an integer written into this source, which is what\n// docs/architecture/01-invariants.md means by an explicit per run\n// ceiling: a bound a reviewer finds by reading the declarations rather\n// than by following the arithmetic. It is deliberately not a settings\n// marker. ENV_DEFAULTS in scripts/workflow-markers.ts is where a value\n// an operator tunes per deployment lives, and moving this one there is\n// that edit plus its own entry in that table rather than something to\n// imply here.\n//\n// WHAT THE CEILING BOUNDS is calls, and it bounds them from above only.\n// A document staged here can still be refused by the node below, which\n// builds the chunk and frames it, so a pass may make fewer calls than\n// this number and can never make more.\n//\n// WHAT SURVIVES THE GATE, and the reading is two fields rather than\n// one. Gate Documents wrote gate_decision and gate_score onto every new\n// document, and src/lib/static-gate.ts maps a document worth attention\n// onto its review decision while leaving the score null for the two it\n// could not read at all: one with no usable chunk, and one in a\n// language the term set does not cover. Both carry the same decision as\n// a document that scored over the threshold. Staging on the decision\n// alone would spend on both of them, which is exactly the fail closed\n// property that library states about itself, so a real score is the\n// second half of the test.\n//\n// WHAT REVIEW MEANS HERE. That library calls the passing decision\n// review because the gate itself sends nothing anywhere, and says in as\n// many words that what a passing score is worth doing belongs to the\n// caller. This workflow is that caller and it answers a model call,\n// which is what reading a document costs when nobody has read it yet. A\n// document the gate could not read stays parked for a person, which is\n// the outcome the null score is protecting.\n//\n// THE BUDGET GOES TO THE HIGHEST SCORES, with the arrival order as the\n// tiebreak, so two passes over one unchanged batch spend on the same\n// documents. The arrival order is already ascending by document id,\n// Mark Near Duplicates having walked the writes in stream order, so the\n// tiebreak needs no id reading and sidesteps the text versus number\n// comparison that node had to make.\n//\n// WHAT THE CEILING DROPS DOES NOT COME BACK, which is why the order\n// above is a policy rather than a formality. A document gated in and\n// left outside the bound keeps its row, its score and its reason, and\n// gains no finding. A later pass fetches the same item, the exact key\n// on documents.hash recognises it, and it is not a new document any\n// more, so nothing offers it a second time. That is unlike the cap in\n// ar-dispatch, which drops rows that were claimed and rescheduled and\n// come round again a whole interval later. Here the drop is permanent.\n//\n// THE CONNECTOR IS REFUSED RATHER THAN PASSED ON. A deployment with no\n// llm connector, or one whose config states no endpoint, has nowhere to\n// send a call. This node stops the pass by name instead of emitting\n// nothing, because emitting nothing is indistinguishable from a pass\n// that found nothing worth reading, and a deployment in that state\n// would go on producing no findings quietly for as long as nobody\n// looked. What the refusal costs is the run row, which the group that\n// closes it never reaches. Everything above this node is committed\n// already: the documents, the health counters and the flags all landed\n// before the stream got here.\n//\n// CARDINALITY. This node is handed one item, the connector, and answers\n// one per document it stages. The decisions are read back off Gate\n// Documents by name, for the reason everything on this canvas is: the\n// Postgres node in front of this one replaced the item that held them.\n\n// Twenty five documents, which is the same order of magnitude as the\n// dispatcher batch cap and is chosen against the same asymmetry. A pass\n// is started cheaply and then charged once per document for as long as\n// nobody looks at the bill.\nconst MAX_MODEL_CALLS_PER_RUN = 25;\n\n// The decision a document worth attention carries. Spelled here because\n// this node splices no library: src/lib/static-gate.ts declares it as\n// GATE_DECISION_REVIEW, and that file already records that the workflow\n// spells its gate names a second time. A rename there is an edit here.\nconst GATE_REVIEW = 'manual_review';\n\n// A score this node can compare, which is a number and never anything\n// that would coerce to one. null is the gate saying it could not read\n// the document, and the sort below would put a null last on some\n// engines and first on others while neither answer is a reading.\nfunction scoreOf(row) {\n  return typeof row.gate_score === 'number' && Number.isFinite(row.gate_score)\n    ? row.gate_score\n    : null;\n}\n\nconst connector = $input.first();\n\nif (connector === undefined) {\n  throw new Error(\n    '[ar-ingest] Apply Call Ceiling was handed no connector item, which '\n    + 'Select Model Connector answers whatever the table holds',\n  );\n}\n\nconst endpoint = connector.json.endpoint;\n\nif (typeof endpoint !== 'string' || endpoint === '') {\n  throw new Error(\n    '[ar-ingest] Apply Call Ceiling has no endpoint to spend against: '\n    + 'connectors holds no llm row whose config states one',\n  );\n}\n\n// Staged in the order the budget is spent in, and the pair is what\n// makes that order stable: the score decides, and the position in the\n// stream this node was handed settles a tie.\nconst staged = [];\n\nfor (const [position, item] of $('Gate Documents').all().entries()) {\n  const row = item.json;\n  const score = scoreOf(row);\n\n  if (row.gate_decision !== GATE_REVIEW || score === null) {\n    continue;\n  }\n\n  staged.push({ position, score, row });\n}\n\nstaged.sort((a, b) => b.score - a.score || a.position - b.position);\n\n// Sliced rather than filtered, so the bound is the one declared above\n// and never a property of what happened to arrive. What is carried\n// forward is the four ids a row below is written against and the body\n// the node below reduces to a chunk. The gate fields stop here, having\n// already done everything they were read for.\nreturn staged.slice(0, MAX_MODEL_CALLS_PER_RUN).map((entry) => ({\n  json: {\n    run_id: entry.row.run_id,\n    domain_id: entry.row.domain_id,\n    source_id: entry.row.source_id,\n    document_id: entry.row.document_id,\n    body: entry.row.body,\n  },\n}));"
+      }
+    },
+    {
+      "id": "prepare-model-prompt",
+      "name": "Prepare Model Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 0],
+      "parameters": {
+        "jsCode": "__INLINE:chunk.ts__\n__INLINE:prompt-frame.ts__\n// Where a document becomes the one payload a model may receive. Both\n// libraries above are spliced in whole and are wired together here,\n// which is the only place they can meet: src/lib/chunk.ts reduces a\n// body to a bounded chunk and refuses the ones that are not worth a\n// call, and src/lib/prompt-frame.ts takes that chunk and fences it so\n// that everything inside the fence is read as data and never as\n// instructions. Nothing below states a reduction rule or a framing rule\n// of its own.\n//\n// AND NOTHING ELSE GOES FORWARD, which is the whole reason this node\n// exists as a separate one. The item it answers carries the two framed\n// halves, the four ids a ledger row and a finding are written against,\n// and the measurements of the prompt. The body does not survive it. So\n// no expression below can reach for the stored text, and the model node\n// is fed a prepared chunk because there is nothing else on the item to\n// feed it.\n//\n// THE TRUSTED HALF AND THE UNTRUSTED HALF ARRIVE AS TWO MEMBERS, and\n// that is the framing library structural claim rather than a\n// convenience. A caller wiring a model node has to decide which channel\n// each half goes in. Two members make that decision visible on this\n// canvas: the model node below puts system in the system message and\n// data in the prompt, and neither can be confused for the other by an\n// expression that reached for one string.\n//\n// THE PERSONA IS A ROW AND NEVER A LITERAL. It arrives from the domain\n// personas, fetched by Load Domain Context at the top of this pass, and\n// personas in src/db/schema/domains.ts argues at length why no prompt\n// string is written into a workflow file at all: one file serves every\n// domain, the text is what an operator tunes most, and a prompt fixed\n// on a canvas is lost at the next import. The role read is the\n// researcher, which is the role that reads documents.\n//\n// NO HEADER, and that is a decision about this workflow rather than a\n// limit of the library. buildChunk takes a roster of fields and the\n// values already resolved for them, and writes a header line per field\n// so a model does not have to guess what is known. At ingest nothing\n// has resolved a field yet: the domain field contract names what a\n// finding must carry, and filling that roster here would write a line\n// per field saying it was looked for and not found, which is not true\n// and costs characters on every call. So the chunk is the excerpt, and\n// the field contract is read where it can be read honestly, by whatever\n// validates the answer.\n//\n// TWO REFUSALS, and they are answered differently because they are\n// faults of different things. A chunk refusal is about one document: no\n// prose survived the boilerplate removal, or what survived is too short\n// to be worth reading. That document is skipped and the pass carries\n// on. A persona refusal is about the operator own text, is identical\n// for every document in the pass, and would otherwise be a run that\n// quietly made no calls at all, so it stops the pass by name. Which of\n// the three the framing library refused is what parts them, and\n// CHUNK_EMPTY_REASON is the one that belongs to the document.\n//\n// WHAT A SKIPPED DOCUMENT LOSES is worth stating rather than meeting.\n// It keeps its row, its gate score and its gate reason, and gains no\n// finding. The chunk library says such a document should be routed to\n// review, and no column in this schema holds that routing today: the\n// three gate fields live on the item and nowhere else. So the refusal\n// is visible in this execution and in no row, and the workflow that\n// gains a column for it is the workflow that gains a reader.\n//\n// THE MEASUREMENTS ARE OF THE WHOLE PROMPT, not of the chunk.\n// llm_calls.prompt_chars asks how large the prompt was, and the prompt\n// is both halves: a persona is characters somebody is charged for\n// exactly as a document is. estimateTokens is the chunk library own\n// arithmetic over that count, so the two are one reading expressed\n// twice, which is what the est_ in that column name is about.\n//\n// THE TWO COUNTS THE FRAMING ANSWERS travel with the item and nothing\n// writes them. fence_cuts above zero is a document that spelled this\n// framing fence, which ordinary prose does not do, so it is a document\n// written to break out of one. No column holds either count. They are\n// carried because the reading belongs beside the call that was made\n// from the text.\n//\n// CARDINALITY. One item in, at most one out, and fewer whenever a chunk\n// was refused. Nothing below pairs against the node above this one:\n// every item carries its own document_id, and the ledger below pairs\n// against THIS node by position.\n\n// The role whose system text this workflow speaks with. personas.role\n// is free text and carries no CHECK, the roles a pipeline plays growing\n// with the pipeline, so this is a lookup into rows an operator wrote\n// rather than a member of a closed set. The seed writes three: this one\n// reads documents, and the other two belong to workflows that judge and\n// to workflows that write.\nconst PERSONA_ROLE = 'researcher';\n\n// The system text of the persona holding a role, or the empty string\n// where there is none. Every member is typed on the way out, because\n// these entries came back through jsonb and nothing has validated them:\n// a row whose system_text is not text is a row an operator has not\n// finished, and it refuses below with the same sentence a missing row\n// does.\nfunction personaText(entries, role) {\n  for (const entry of entries) {\n    if (entry !== null && typeof entry === 'object' && entry.role === role\n      && typeof entry.system_text === 'string') {\n      return entry.system_text;\n    }\n  }\n\n  return '';\n}\n\nconst context = $('Load Domain Context').first().json;\nconst personas = Array.isArray(context.personas)\n  ? context.personas\n  : [];\nconst persona = personaText(personas, PERSONA_ROLE);\n\n// A pass with no researcher persona, or one whose text is not text.\n// Both are the same fault from here and both are pass wide, so this\n// refuses before a single chunk is built rather than once per document.\nif (persona === '') {\n  throw new Error(\n    '[ar-ingest] Prepare Model Prompt has no system text for the '\n    + PERSONA_ROLE + ' persona: the domain states none, or the row it '\n    + 'states holds no text',\n  );\n}\n\nconst items = [];\n\nfor (const item of $input.all()) {\n  const row = item.json;\n  const built = buildChunk({ body: row.body });\n\n  if (!built.usable) {\n    continue;\n  }\n\n  const framed = promptFrame(persona, built.chunk);\n\n  if (!framed.usable) {\n    // A framing refusal that is not about the chunk is about the\n    // persona, and a persona fault repeats on every document in the\n    // pass. Refusing by name here is what parts an operator text fault\n    // from a run that found nothing to say.\n    if (framed.reason !== CHUNK_EMPTY_REASON) {\n      throw new Error(\n        '[ar-ingest] Prepare Model Prompt cannot frame the ' + PERSONA_ROLE\n        + ' persona: ' + framed.reason,\n      );\n    }\n\n    continue;\n  }\n\n  const promptChars = framed.system.length + framed.data.length;\n\n  // What the model node is fed, and what the two nodes after it read.\n  // The body is not here and neither is the chunk before it was framed:\n  // the fenced form is the only spelling of the document text that\n  // leaves this node.\n  items.push({\n    json: {\n      run_id: row.run_id,\n      domain_id: row.domain_id,\n      source_id: row.source_id,\n      document_id: row.document_id,\n      system: framed.system,\n      data: framed.data,\n      prompt_chars: promptChars,\n      est_tokens: estimateTokens(promptChars),\n      fence_cuts: framed.fenceCuts,\n      forms_defanged: framed.formsDefanged,\n    },\n  });\n}\n\nreturn items;"
+      }
+    },
+    {
+      "id": "extract-finding-fields",
+      "name": "Extract Finding Fields",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [3080, 0],
+      "retryOnFail": false,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.data }}",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "SystemMessagePromptTemplate",
+              "message": "={{ $json.system }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "model-endpoint",
+      "name": "Model Endpoint",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [3080, 220],
+      "retryOnFail": false,
+      "credentials": {
+        "openAiApi": {
+          "id": "ar-model",
+          "name": "AR Model"
+        }
+      },
+      "parameters": {
+        "model": "={{ $('Select Model Connector').first().json.model }}",
+        "options": {
+          "baseURL": "={{ $('Select Model Connector').first().json.endpoint }}",
+          "timeout": 60000,
+          "maxRetries": 0
+        }
+      }
+    },
+    {
+      "id": "ledger-model-call",
+      "name": "Ledger Model Call",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [3300, 0],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH\n-- Where a call is accounted for. One row per call, charged to the run that made it,\n-- and src/db/schema/runs.ts argues at length what that buys: the runs row accounts\n-- for a pass as a whole, and these rows account for the same work one call at a time,\n-- which is the granularity the question of what a call cost is asked at.\n\n-- THE ATTRIBUTION IS THE POINT. run_id is what charges a call to a pass, and it is\n-- the column the design this port draws from declared and never filled: its ledger\n-- inserts named the item a call was about, or named nothing at all, so the spend\n-- could be summed and no pass could be held to any of it. A total without it says\n-- that something is burning and not which step, which schedule or which batch.\n\n-- THE CEILING AND THIS ROW ARE ONE PROPERTY read from two ends. Apply Call Ceiling\n-- states what a pass WILL do, and these rows are what it did, so a ceiling that\n-- quietly stopped being applied reads exactly like a pass whose input happened to be\n-- small. Neither half is enforced by anything in this schema: a call whose row was\n-- never written is missing from every total at once and no constraint can notice,\n-- which is why the property is asserted over the built artifact instead.\n\n-- ONE ROW OUT PER CALL. The insert sits in a CTE and the outer SELECT names no FROM,\n-- so this node answers exactly one item for every item it was handed, and the group\n-- below reads a document that was called about whether or not the call came back with\n-- anything. An INSERT ... RETURNING on its own would emit nothing for a statement\n-- that wrote no row.\n\n-- THREE PARAMETERS, in declaration order: the run, the model name, and the prepared\n-- item this call was made from. The first two are read off Select Model Connector,\n-- which answered one row for the whole pass, so neither is a per call reading and\n-- neither needs pairing.\n\n-- THE THIRD IS BOUND BY POSITION, and this is the one pairing on this canvas that is\n-- not a name or an id. Extract Finding Fields replaced the item that carried the\n-- measurements, the way every node in the middle of this chain replaces what it was\n-- handed, and it answers one item per item it ran on, so the item at this position in\n-- its output was made from the item at the same position in Prepare Model Prompt. The\n-- paired item form would read the same members through the links a node records,\n-- which depends on that node recording them; the position depends on the cardinality,\n-- which the setting on that node fixes.\n\n-- What being wrong about it would cost is small and worth saying rather than leaving\n-- to be discovered: two calls in the same pass would swap their sizes. The run total,\n-- which is what this ledger is read for, is exact either way. The ids are the members\n-- where a swap would matter, and they are read out of the same object, so a\n-- mis-pairing files the whole row under the wrong document rather than half of it.\n\n-- BOUND AS ONE JSONB VALUE rather than as a member per column. Fewer values for the\n-- comma splitter to get wrong, and the members are read out here where a comment can\n-- say what each one is, instead of in an expression no gate reads.\nprepared AS (\n  SELECT $3::jsonb AS item\n),\n\n-- What the row says about the call, cast once. prompt_chars and est_tokens are in the\n-- signal class the schema calls out: null means nothing measured this call, and zero\n-- is a real reading rather than a stand in for one, a call declined before it was\n-- sent having sent no characters. Neither is COALESCEd to zero for exactly that\n-- reason.\n\n-- The node name is a literal, and known by construction rather than looked up: the\n-- step that made the call is the node above this one and its own name is the one fact\n-- it cannot fail to have. It moves if that node is renamed, and every row already\n-- written keeps the old name, which is a fact about totals over a long window that\n-- nothing in the schema can hold together.\n\n-- The model is nullable and arrives so. A gateway that routes, or a runtime serving\n-- whatever it was started with, takes no model name, and what is stored here is what\n-- was asked for rather than what served it.\ncall AS (\n  SELECT\n    nullif($2::text, '') AS model,\n    (p.item ->> 'prompt_chars')::integer AS prompt_chars,\n    (p.item ->> 'est_tokens')::integer AS est_tokens\n  FROM prepared p\n),\n\n-- The write. No conflict target and no ON CONFLICT clause: a ledger has no key to\n-- collide on, every call being its own event, and two calls made about one document\n-- in two passes are two rows on purpose.\nwritten AS (\n  INSERT INTO llm_calls (run_id, node, model, prompt_chars, est_tokens)\n  SELECT\n    $1::bigint,\n    'Extract Finding Fields',\n    c.model,\n    c.prompt_chars,\n    c.est_tokens\n  FROM call c\n  RETURNING id\n)\n\nSELECT\n-- The item this node answers, and it is about the document rather than about the\n-- call. The three ids come back out of the prepared item so the group below has the\n-- row a finding is written against, and the answer the model gave is deliberately not\n-- among them: it is untrusted text, it is reachable off Extract Finding Fields by\n-- name, and routing it through a SQL parameter to get it here would be a round trip\n-- that changes nothing about it.\n\n-- llm_call_id is the ledger row this call left behind. Nothing below reads it today.\n-- It travels because the row and the item it was written for are otherwise joined by\n-- nothing at all, this table carrying no reference to a document.\n  $1::bigint AS run_id,\n  (SELECT (p.item ->> 'domain_id')::bigint FROM prepared p) AS domain_id,\n  (SELECT (p.item ->> 'source_id')::bigint FROM prepared p) AS source_id,\n  (SELECT (p.item ->> 'document_id')::bigint FROM prepared p) AS document_id,\n  (SELECT w.id FROM written w) AS llm_call_id",
+        "options": {
+          "queryReplacement": "={{ $('Select Model Connector').first().json.run_id }}, {{ $('Select Model Connector').first().json.model }}, {{ JSON.stringify($('Prepare Model Prompt').all()[$itemIndex].json) }}"
+        }
+      }
+    },
+    {
       "id": "invoked-never-scheduled",
       "name": "Invoked Never Scheduled",
       "type": "n8n-nodes-base.stickyNote",
@@ -237,6 +341,18 @@
         "width": 400,
         "height": 980,
         "content": "## The Free Decision Runs First\n\nTwo decisions are taken between a document being written and a model being asked about it, and both are free. `Mark Near Duplicates` says whether this pass captured something the domain already has, and `Gate Documents` says whether the domain's own terms make it worth reading. Neither opens a socket and neither writes a row.\n\nThe group below this one is where a pass starts costing something. Every document that reaches it went through here first, which is what makes the ordering on this canvas a spending rule rather than a preference.\n\n### A duplicate is marked, not dropped\n\n`documents.hash` already refuses an item captured twice byte for byte, so what is left here is the pair that reads the same and does not hash the same: a listing that re-renders, a page that gained a timestamp, one item carried by two feeds under different wrappers. `src/lib/shingle.ts` sketches both bodies and says whether they overlap enough to be one document.\n\nA document that converges keeps its row and carries the id of the earlier one it matched. Nothing is merged and nothing is deleted, and only the earlier row goes on to be spent on. Which pair the pass thought were the same thing stays readable afterwards, which a merge would not leave behind.\n\n### Two things a null means here\n\nA document nothing could be compared against is not a document unlike everything else. `src/lib/shingle.ts` refuses to judge a body too short to fill a sketch, because overlap is measured against the smaller of two sketches and a short body would otherwise read as a perfect match for any longer one containing it. That refusal arrives as a null similarity beside a compared count of zero, never as a similarity of zero.\n\nThe gate draws the same line. A document with no body to score and one in a language the term set cannot read are both parked for a person with a null score, where a confident zero would drop them.\n\n### What a domain with no terms gets\n\nEvery document ignored. The threshold is the library's default and a term set that matches nothing scores zero against it, so a domain nobody has written `terms` rows for spends nothing at all. That is the safe direction for a gate on spending, and each document says so: the reason recorded beside it carries the score, the threshold it was compared against and that no term matched."
+      }
+    },
+    {
+      "id": "three-rules-in-front-of-a-call",
+      "name": "Three Rules In Front Of A Call",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2180, -760],
+      "parameters": {
+        "width": 400,
+        "height": 1080,
+        "content": "## Three Rules In Front Of A Call\n\nEvery model call this port makes carries the same three rules, and this group is the first place they bind. A per run ceiling is declared and applied before anything is prepared. A row is written to `llm_calls` for the call that was made, charged to the run that made it. And the model node declares `retryOnFail: false`, so a call that fails is a call that happened once.\n\n`docs/architecture/01-invariants.md` holds the three as one register row, and `tests/invariants/workflows.test.ts` reads them off the built artifact rather than off this source: a ceiling is a named constant a reviewer can find, a ledger row is an INSERT the node making the call runs, and the retry setting is a node member.\n\n### The call goes through a model node, not an HTTP request\n\nThe endpoint speaks a chat completions API and could be reached with the same HTTP Request node this workflow already uses three groups above. It is not. A call made that way is invisible to all three guards, every one of which finds the nodes that spend by their type: a workflow spending through an ordinary API node would carry no ceiling anybody checks and no ledger row anybody misses.\n\n### The address is a row, not a build setting\n\n`connectors` holds one row per external service this deployment calls, and the `llm` row is where the endpoint and the model name come from. The design this port draws from read both out of an environment variable baked into the artifact at build time, so pointing the pipeline at another model meant a rebuild and a redeploy of every workflow that named it, and asking where it currently pointed meant reading the built file. Here it is an UPDATE and a SELECT.\n\n### The persona is a row too, and it is the trusted half\n\nA prompt is two channels here and not one string. `Prepare Model Prompt` answers the domain's own persona text and the fenced document as separate members, and the node below puts each in its own channel. Everything inside the fence is stated to be data that is read and never followed, and every active form in it is defanged on the way through. What the model is fed past that is the prepared chunk, because the body does not survive that node.\n\n### What the ceiling drops does not come back\n\nA document gated in and left outside the ceiling keeps its row, its score and its reason, and gains no finding. A later pass fetches the same item, the exact key on `documents.hash` recognises it, and it is not a new document any more, so nothing offers it a second time. That is why the budget is spent in score order rather than in the order the stream happened to arrive in."
       }
     }
   ],
@@ -308,6 +424,72 @@
       "main": [
         [
           { "node": "Gate Documents", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Gate Documents": {
+      "main": [
+        [
+          {
+            "node": "Select Model Connector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Model Connector": {
+      "main": [
+        [
+          {
+            "node": "Apply Call Ceiling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Call Ceiling": {
+      "main": [
+        [
+          {
+            "node": "Prepare Model Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Model Prompt": {
+      "main": [
+        [
+          {
+            "node": "Extract Finding Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Finding Fields": {
+      "main": [
+        [
+          {
+            "node": "Ledger Model Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model Endpoint": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Extract Finding Fields",
+            "type": "ai_languageModel",
+            "index": 0
+          }
         ]
       ]
     }
