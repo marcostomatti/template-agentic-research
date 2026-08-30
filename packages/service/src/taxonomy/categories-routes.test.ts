@@ -69,8 +69,10 @@
  * applies no window, so it answers the same resource envelope the two
  * writes that carry a body do, and there is no `meta` for a caller to
  * read a page out of. Every row carries the record's five members
- * plus a `termCount`, and every count is zero — the dataset rather
- * than a stub, since no method on the in-memory store writes a term.
+ * plus a `termCount`, and every count is zero — because no case in
+ * THIS file writes a term, rather than because the in-memory store
+ * cannot: its term half plants them, and a mixed list is
+ * `tests/helpers/memory-research-store.test.ts`'s to read back.
  * What only this layer can add is that the member SURVIVED
  * serialisation at all: `JSON.stringify` drops an `undefined`
  * outright, so an uncounted bucket would reach a caller with no
@@ -945,11 +947,11 @@ describe('a taxonomy read that lands', () => {
     for (const row of listed.body.data) {
       expect(keysOf(row)).toStrictEqual(LISTED_KEY_SET);
     }
-    // THE COUNT IS ZERO ON EVERY ROW, AND THAT IS THE DATASET
-    // RATHER THAN A STUB: no method on
-    // `tests/helpers/memory-research-store.ts` writes a term, so no
-    // category it can hold has one and a zero is the true answer
-    // for all of them. What only this layer can add is that the
+    // THE COUNT IS ZERO ON EVERY ROW BECAUSE NO CASE HERE WRITES A
+    // TERM, and not because the store cannot: its term half plants
+    // them and `tests/helpers/memory-research-store.test.ts` reads
+    // a mixed list back. A zero is the true answer for every row
+    // this file plants. What only this layer can add is that the
     // member SURVIVED — `JSON.stringify` drops an `undefined`
     // outright, so a store answering an uncounted bucket as absent
     // reaches a caller with no member at all, and `0` and "not

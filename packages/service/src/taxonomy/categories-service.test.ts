@@ -80,12 +80,12 @@
  * comparison can; and the delete section pins that one row went and
  * that its natural key went with it.
  *
- * EVERY TERM COUNT HERE IS ZERO, and that is the dataset rather
- * than a stub standing in for one. No method on
- * `tests/helpers/memory-research-store.ts` writes a term, so no
- * category it can hold has one and a counted zero is the true
- * answer for all of them; a list mixing counts is unreachable from
- * this file and is the term half's to write. What a zero can still
+ * EVERY TERM COUNT HERE IS ZERO, and that is this file's fixtures
+ * rather than a stub standing in for one. No case here writes a
+ * term — the in-memory store's term half can, and
+ * `tests/helpers/memory-research-store.test.ts` reads a mixed list
+ * back through this same method — so a counted zero is the true
+ * answer for every row planted here. What a zero can still
  * carry is the claim `CategoryWithTermCount` actually makes — that
  * the member is PRESENT on every row rather than absent for the
  * buckets holding nothing, which is the one answer it forbids.
@@ -1422,11 +1422,12 @@ describe('what a taxonomy read answers', () => {
   });
 
   it('carries a counted term count on every row', async () => {
-    // EVERY COUNT IS ZERO HERE, AND THAT IS THE DATASET RATHER THAN
-    // A STUB. No method on `tests/helpers/memory-research-store.ts`
-    // writes a term, so no category it can hold has one and a zero
-    // is the true answer for all of them; a mixed list is the term
-    // half's to write, and this file cannot reach one. What a zero
+    // EVERY COUNT IS ZERO HERE BECAUSE NO CASE IN THIS FILE WRITES
+    // A TERM, and not because the store cannot: its term half
+    // plants them, and a mixed list read back through this same
+    // method is
+    // `tests/helpers/memory-research-store.test.ts`'s claim. What a
+    // zero
     // CAN carry is the claim `CategoryWithTermCount` actually makes
     // — that the member is present on every row rather than absent
     // for the buckets holding nothing, which is the one answer it

@@ -11,7 +11,10 @@
  * the alias to `TaxonomyStore` whole; until they do, a caller wanting
  * the port entire cannot be handed this store, which is the honest
  * statement of what has been built rather than five real methods
- * beside seven that throw.
+ * beside seven that throw. The in-memory implementation is no longer
+ * narrowed the same way — it satisfies the port whole — so the two
+ * are matched on the category surface alone until this half catches
+ * up.
  *
  * THE DATABASE ARRIVES AS A THUNK, for the ordering reason
  * `src/domains/db-store.ts` sets out at length: the store is a value
@@ -101,9 +104,10 @@ import { classifyPgError } from '../db/store-errors.js';
  * A `Pick` OF THE PORT RATHER THAN A LIST OF ITS OWN, so a signature
  * here cannot drift from the thing it is naming: a hand-copied one
  * would go on type-checking against a port that had moved under it.
- * The same shape `tests/helpers/memory-research-store.ts` picks for
- * the same reason, so the two implementations are narrowed to one
- * another's surface rather than each to its own.
+ * The shape `tests/helpers/memory-research-store.ts` picked for the
+ * same reason while its own term half was unwritten; that half has
+ * landed, so this alias is now the narrower of the two and the
+ * category surface is where the two implementations still meet.
  */
 export type DbCategoryStore = Pick<
   TaxonomyStore,

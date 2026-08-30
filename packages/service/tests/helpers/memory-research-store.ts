@@ -1,9 +1,10 @@
 /**
  * @packageDocumentation
  * The in-memory dataset every wave-1 store port is driven through in
- * the isolated suite. The domains half and the taxonomy's CATEGORY
- * half are here; the terms, personas and settings halves land in
- * this same file, over this same dataset, as their stages arrive.
+ * the isolated suite. The domains half and the taxonomy half are
+ * both here, categories and terms together; the personas and
+ * settings halves land in this same file, over this same dataset, as
+ * their stages arrive.
  *
  * ONE DATASET RATHER THAN FOUR FAKES, which is why this file is not
  * named for the one port it currently satisfies. `src/domains/store.ts`
@@ -64,6 +65,52 @@
  * `deleteCategory` inside the cascade would refuse a delete Postgres
  * takes.
  *
+ * A CATEGORY'S TERMS GO WITH IT, and a domain's go two levels down.
+ * `terms.category_id` is `ON DELETE CASCADE`, so removing a category
+ * takes its terms — measured, the delete answers and its rows are
+ * gone — and removing a domain takes its categories, which take
+ * theirs. None of that is refused: the guard above is about
+ * CHILDREN, and a term is not a child.
+ *
+ * THE TERM HALF HAS ONE KEY AND ONE FOREIGN KEY, AND NO SINGLE CALL
+ * CAN REACH BOTH. `terms_category_id_pattern_unique` is
+ * `(category_id, pattern)` and `terms_category_id_categories_id_fk`
+ * is that same `category_id`, so a write naming a category that does
+ * not exist cannot also duplicate a pattern inside it — there is
+ * nothing stored there to duplicate. So this half has no measured
+ * refusal ORDER of its own the way the category half does: the order
+ * below is copied from that half and is unobservable either way,
+ * which is stated rather than dressed up as a measurement.
+ *
+ * THE UPSERT REWRITES THREE COLUMNS AND KEEPS THE STORED ROW'S ID.
+ * Measured against the live Postgres: an `ON CONFLICT ... DO UPDATE`
+ * on that key answered the STORED id, with `weight`, `polarity` and
+ * `notes` rewritten from the submitted row. A term therefore keeps
+ * its id across a re-import, which is what lets import, export and
+ * re-import settle instead of accumulating a second row that would
+ * count the same match twice.
+ *
+ * AND IT BURNS AN ID FOR EVERY SUBMITTED ROW, INCLUDING THE ROWS IT
+ * DOES NOT INSERT. Measured on the same statement: a two-row batch
+ * moved the sequence by two while writing one new row and rewriting
+ * one stored one, and a two-row batch refused outright by the
+ * foreign key moved it by two as well. So the counter here advances
+ * once per SUBMITTED row, ahead of every check, and a conflicting
+ * row leaves the id it took unused.
+ *
+ * A REPEAT INSIDE ONE DOCUMENT IS NOT A `StoreRefusal`, and it is
+ * the one refusal here deliberately left untranslated. Postgres
+ * answers SQLSTATE 21000 when a statement's values carry the same
+ * conflict target twice, `classifyPgError` does not recognise it,
+ * and `src/taxonomy/store.ts` states the no-repeat rule as a
+ * PRECONDITION its caller checks. A plain `Error` is thrown for it
+ * rather than nothing at all, because a fake quietly applying the
+ * last of the colliding rows would be ACCEPTING what the database
+ * refuses — the one thing this file exists to rule out. Measured
+ * beside the foreign key: a batch that both repeated a pattern and
+ * named a missing category answered 21000 and not 23503, so the
+ * repeat is what fires first.
+ *
  * EVERY `Date` CROSSING THE BOUNDARY IS COPIED, in both directions.
  * `Date` is mutable, so a store holding the caller's instance, or
  * handing its own back, lets a caller write into stored state
@@ -94,7 +141,11 @@
  * own and burns ids the same way, the DEPTH trigger included:
  * measured on that table, two refused inserts between two accepted
  * ones left a gap of two, so its counter advances ahead of every
- * check rather than ahead of the key check alone.
+ * check rather than ahead of the key check alone. `terms` carries a
+ * third sequence and burns it the same way — measured there too, a
+ * duplicate pattern between two accepted inserts left a gap of one
+ * — with the `ON CONFLICT` rewrite above as the case a reader would
+ * not predict.
  */
 import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type {
@@ -110,42 +161,32 @@ import type {
   CategoryRecord,
   CategoryWithTermCount,
   InsertCategoryInput,
+  InsertTermInput,
   TaxonomyStore,
+  TermPatch,
+  TermRecord,
+  TermValues,
 } from '../../src/taxonomy/store.js';
 
 import { StoreRefusal } from '../../src/db/store-errors.js';
 
 /**
- * The half of `TaxonomyStore` this file implements today: the five
- * category methods, and none of the seven term ones.
- *
- * A `Pick` OF THE PORT RATHER THAN A LIST OF ITS OWN, so a signature
- * here cannot drift from the thing being imitated — a hand-copied
- * method would go on type-checking against a port that had moved
- * under it. The term half lands in its own stage and widens this to
- * `TaxonomyStore` whole; until it does, a caller wanting the port
- * entire cannot be handed this store, which is the honest statement
- * of what has been built rather than a gap to paper over with stubs.
- */
-export type MemoryCategoryStore = Pick<
-  TaxonomyStore,
-  | 'listCategoriesWithTermCounts'
-  | 'findCategoryById'
-  | 'insertCategory'
-  | 'updateCategory'
-  | 'deleteCategory'
->;
-
-/**
  * Both implemented ports over one dataset, plus the one seam a case
  * needs that no port declares.
  *
+ * `TaxonomyStore` WHOLE rather than a `Pick` of it. The category
+ * half stood behind a narrowed alias while the term methods were
+ * unwritten, which was the honest statement of what existed rather
+ * than a gap papered over with stubs; all twelve are here now, so
+ * the alias is gone and a caller wanting the port entire can be
+ * handed this store.
+ *
  * Nothing in `src/` is handed a {@link MemoryResearchStore} — a
- * service takes the port — so the seam cannot become a way for the
- * code under test to route around it.
+ * service takes the port — so the seam below cannot become a way for
+ * the code under test to route around it.
  */
 export interface MemoryResearchStore
-  extends DomainStore, MemoryCategoryStore {
+  extends DomainStore, TaxonomyStore {
   /**
    * Plants what a domain has ACCUMULATED, for the delete guard to
    * read back through {@link DomainStore.countDomainDependents}.
@@ -201,6 +242,23 @@ const CATEGORY_KEY_UNIQUE = 'categories_domain_id_key_unique';
  * no row, and a delete of a category that still holds children.
  */
 const CATEGORY_PARENT_FK = 'categories_parent_id_categories_id_fk';
+
+/**
+ * The natural key on `terms`, spelled as `src/db/schema/taxonomy.ts`
+ * spells it. The one key both term writes and the upsert's conflict
+ * target all name.
+ */
+const TERM_KEY_UNIQUE = 'terms_category_id_pattern_unique';
+
+/**
+ * The foreign key from `terms.category_id`.
+ *
+ * Unlike {@link CATEGORY_PARENT_FK} this name stands for ONE rule,
+ * so a service reading it needs no help from which method raised it:
+ * `terms.category_id` cascades on delete, so there is no
+ * children-hold-the-delete refusal to share the name with.
+ */
+const TERM_CATEGORY_FK = 'terms_category_id_categories_id_fk';
 
 /** Three zeros: what a domain nothing points at has accumulated. */
 const NO_DEPENDENTS: DomainDependentCounts = {
@@ -269,6 +327,23 @@ function copyCategory(row: CategoryRecord): CategoryRecord {
 }
 
 /**
+ * A term record whose members belong to nobody else.
+ *
+ * A shallow copy is the whole of it, for the reason
+ * {@link copyCategory} gives: every member of `TermRecord` is a
+ * number, a string or null, so there is nothing one level down to
+ * reach. The copy still has to happen, or a caller handed the stored
+ * object could rewrite `pattern` straight through the `readonly` the
+ * port declares.
+ *
+ * @param row - The stored row.
+ * @returns A copy safe to hand across the port.
+ */
+function copyTerm(row: TermRecord): TermRecord {
+  return { ...row };
+}
+
+/**
  * A domain record whose mutable members belong to nobody else.
  *
  * @param row - The stored row.
@@ -299,8 +374,10 @@ export function createMemoryResearchStore(
   const domains = new Map<number, DomainRecord>();
   const dependents = new Map<number, DomainDependentCounts>();
   const categories = new Map<number, CategoryRecord>();
+  const terms = new Map<number, TermRecord>();
   let nextDomainId = 1;
   let nextCategoryId = 1;
+  let nextTermId = 1;
 
   /**
    * Reads the clock and copies what it answered.
@@ -405,6 +482,107 @@ export function createMemoryResearchStore(
           ? -1
           : 1;
       });
+  }
+
+  /**
+   * One category's terms, unordered.
+   *
+   * A fresh array every call, which is what lets {@link orderedTerms}
+   * sort it in place without reaching into stored state.
+   *
+   * @param categoryId - The category to read.
+   * @returns Its terms. Empty for a category holding none AND for an
+   *   id no category carries — nothing points at a row that is not
+   *   there, which is the answer `countTerms` is read for.
+   */
+  function termsOf(categoryId: number): TermRecord[] {
+    return [...terms.values()].filter((row) => row.categoryId === categoryId);
+  }
+
+  /**
+   * One category's terms, ordered as `TaxonomyStore.listTerms`
+   * promises.
+   *
+   * By `pattern` ascending, compared by code unit — and the port is
+   * explicit that this is NOT the same promise a server makes. A
+   * pattern is free text carrying case, spaces and punctuation, and
+   * a database orders it under its own collation, so the agreement
+   * measured for slugs and taxonomy keys does not carry here on its
+   * own reasoning. It was measured anyway: this container's
+   * `en_US.utf8` ordered a mixed-case, punctuation-heavy set of
+   * patterns exactly as `<` did, both sides. That is a fact about a
+   * deployment's locale rather than about this port, which is why
+   * the seed serialiser sorts for itself rather than trusting any
+   * read order.
+   *
+   * @param categoryId - The category to read.
+   * @returns Its terms, pattern ascending. The order is total
+   *   because the pattern is unique within the category, so there is
+   *   no tie-break to forget.
+   */
+  function orderedTerms(categoryId: number): TermRecord[] {
+    return termsOf(categoryId).sort((left, right) => {
+      if (left.pattern === right.pattern) {
+        return 0;
+      }
+
+      return left.pattern < right.pattern
+        ? -1
+        : 1;
+    });
+  }
+
+  /**
+   * @param categoryId - The category to look within.
+   * @param pattern - The pattern to look for.
+   * @returns The row carrying that pair, or undefined. At most one
+   *   can, which is what `terms_category_id_pattern_unique`
+   *   guarantees and what the three writes below enforce.
+   */
+  function termByPattern(
+    categoryId: number,
+    pattern: string,
+  ): TermRecord | undefined {
+    return termsOf(categoryId).find((row) => row.pattern === pattern);
+  }
+
+  /**
+   * Refuses a `categoryId` that names no stored category.
+   *
+   * @param categoryId - The bucket a term write is asking for.
+   * @throws A `foreign-key-violation` {@link StoreRefusal} naming
+   *   `terms_category_id_categories_id_fk`. Unlike the category
+   *   half's foreign key this one refuses exactly one thing, so a
+   *   service can read it off the refusal without knowing which call
+   *   it made.
+   */
+  function guardTermCategory(categoryId: number): void {
+    if (!categories.has(categoryId)) {
+      throw new StoreRefusal({
+        reason: 'foreign-key-violation',
+        constraint: TERM_CATEGORY_FK,
+      });
+    }
+  }
+
+  /**
+   * Removes every term in one category, as `ON DELETE CASCADE` does.
+   *
+   * Reached from both deletes rather than from `deleteCategory`
+   * alone: a domain delete removes its categories, and the cascade
+   * on `terms.category_id` fires for each of them. Unlike the
+   * children guard this is not a rule that can refuse anything, so
+   * sharing it between the two is safe in the way reusing
+   * `deleteCategory` there would not be.
+   *
+   * @param categoryId - The category being removed.
+   */
+  function dropTermsOf(categoryId: number): void {
+    for (const [termId, row] of terms) {
+      if (row.categoryId === categoryId) {
+        terms.delete(termId);
+      }
+    }
   }
 
   /**
@@ -627,12 +805,20 @@ export function createMemoryResearchStore(
      * fake reusing its own guard here would refuse a delete Postgres
      * takes, and would do it only for the domains whose taxonomy has
      * more than one level.
+     *
+     * IT REACHES TWO LEVELS DOWN, because each category it removes
+     * cascades onto its own terms. Measured: a domain delete left
+     * zero rows in `categories` and zero in `terms`. The term drop
+     * IS shared with `deleteCategory` below — {@link dropTermsOf} —
+     * which is safe precisely where reusing the guarded category
+     * delete is not, since removing terms refuses nothing.
      */
     async deleteDomain(id: number): Promise<boolean> {
       dependents.delete(id);
 
       for (const [categoryId, row] of categories) {
         if (row.domainId === id) {
+          dropTermsOf(categoryId);
           categories.delete(categoryId);
         }
       }
@@ -644,19 +830,19 @@ export function createMemoryResearchStore(
      * Every category in one domain, key ascending, each with its
      * term count.
      *
-     * THE COUNT IS ZERO FOR EVERY ROW, and that is a fact about the
-     * dataset rather than a stub standing in for one. No method on
-     * this store writes a term, so no category it can hold has one,
-     * and a counted zero is the true answer for all of them — which
-     * is what `CategoryWithTermCount` asks for, an absent member
-     * being the one answer it forbids. The term half brings the
-     * collection this count is taken over.
+     * THE COUNT IS COUNTED, over the same `terms` collection the
+     * term half below writes to. A category holding none answers a
+     * counted zero rather than an absent member, which is the one
+     * answer `CategoryWithTermCount` forbids — `JSON.stringify`
+     * drops an `undefined` outright, so a bucket that was never
+     * counted and a bucket holding nothing would otherwise reach a
+     * caller as the same thing.
      */
     async listCategoriesWithTermCounts(
       domainId: number,
     ): Promise<readonly CategoryWithTermCount[]> {
       return orderedCategories(domainId).map(
-        (row) => ({ ...copyCategory(row), termCount: 0 }),
+        (row) => ({ ...copyCategory(row), termCount: termsOf(row.id).length }),
       );
     },
 
@@ -777,10 +963,13 @@ export function createMemoryResearchStore(
      * naming no row carries, and the two are told apart by which call
      * raised them and by nothing else.
      *
-     * ITS TERMS AND ITS CRITERIA WOULD GO WITH IT — both cascade on
-     * `category_id` — and there is nothing here to take, since no
-     * method on this store writes either. The term half joins the
-     * cascade in this same place.
+     * ITS TERMS GO WITH IT, which is `terms.category_id` being
+     * `ON DELETE CASCADE` and is measured: the delete answers and
+     * the category's rows are gone. Holding terms is therefore no
+     * reason to refuse — only children are — and the two are checked
+     * in that order here because only one of them can refuse
+     * anything. Its CRITERIA would go the same way, and there is
+     * still nothing to take: no method on this store writes one.
      */
     async deleteCategory(id: number): Promise<boolean> {
       if (hasChildren(id)) {
@@ -790,7 +979,253 @@ export function createMemoryResearchStore(
         });
       }
 
+      dropTermsOf(id);
+
       return categories.delete(id);
+    },
+
+    /**
+     * One category's terms, pattern ascending, windowed only when a
+     * window was given.
+     *
+     * AN ABSENT WINDOW READS THE WHOLE CATEGORY, which is the
+     * export's call rather than a default standing in for one. A
+     * `?format=seed` document is about the category as a whole, and
+     * serving it by counting first and then asking for a window that
+     * size would be two reads whose answers can disagree — a term
+     * written in between is simply missing from a document claiming
+     * to be the category.
+     */
+    async listTerms(
+      categoryId: number,
+      window?: StoreWindow,
+    ): Promise<readonly TermRecord[]> {
+      const ordered = orderedTerms(categoryId);
+      const rows = window === undefined
+        ? ordered
+        : ordered.slice(window.offset, window.offset + window.limit);
+
+      return rows.map(copyTerm);
+    },
+
+    /**
+     * How many terms one category holds, ignoring any window.
+     *
+     * An id no category carries answers zero rather than failing,
+     * which is correct rather than a special case.
+     */
+    async countTerms(categoryId: number): Promise<number> {
+      return termsOf(categoryId).length;
+    },
+
+    /** One term by its id, or null. */
+    async findTermById(id: number): Promise<TermRecord | null> {
+      const row = terms.get(id);
+
+      return row === undefined
+        ? null
+        : copyTerm(row);
+    },
+
+    /**
+     * Inserts one term, asserting a new row rather than upserting.
+     *
+     * The id comes off the counter first, so every refusal below
+     * burns one exactly as the sequence does — measured on `terms`,
+     * where a duplicate pattern between two accepted inserts left a
+     * gap of one and a foreign-key refusal moved the sequence by one
+     * as well.
+     *
+     * The key is checked ahead of the foreign key, matching
+     * `insertCategory` above. NOTHING CAN OBSERVE THAT ORDER HERE,
+     * and saying so is the honest half: both mechanisms are about
+     * `category_id`, so a write naming a category that does not
+     * exist cannot also duplicate a pattern inside it. The order is
+     * copied from the half where it WAS measured rather than
+     * measured here.
+     */
+    async insertTerm(input: InsertTermInput): Promise<TermRecord> {
+      const id = nextTermId;
+
+      nextTermId += 1;
+
+      if (termByPattern(input.categoryId, input.pattern) !== undefined) {
+        throw new StoreRefusal({
+          reason: 'unique-violation',
+          constraint: TERM_KEY_UNIQUE,
+        });
+      }
+
+      guardTermCategory(input.categoryId);
+
+      const row: TermRecord = {
+        id,
+        categoryId: input.categoryId,
+        pattern: input.pattern,
+        weight: input.weight,
+        polarity: input.polarity,
+        notes: input.notes,
+      };
+
+      terms.set(row.id, row);
+
+      return copyTerm(row);
+    },
+
+    /**
+     * Writes a whole lexicon into one category, rewriting the terms
+     * it already carries.
+     *
+     * A CONFLICTING ROW KEEPS THE STORED ROW'S ID and rewrites
+     * `weight`, `polarity` and `notes` — measured against the live
+     * Postgres, where the statement answered the stored id. The
+     * conflict target itself is what the row was matched ON, so
+     * there is nothing in `categoryId` or `pattern` to rewrite.
+     *
+     * ONE ID PER SUBMITTED ROW, TAKEN AHEAD OF EVERY CHECK. Measured
+     * on the same statement: a two-row batch moved the sequence by
+     * two while inserting one row and rewriting one, and a two-row
+     * batch refused outright by the foreign key moved it by two as
+     * well. So the counter advances by the whole length here and a
+     * conflicting row leaves the id it took unused, which is what
+     * keeps this fake's ids as gappy as a deployment's.
+     *
+     * AN EMPTY LIST TOUCHES NOTHING, the foreign key included: no
+     * statement runs, so a `categoryId` naming no category is not
+     * refused. The port states it, and it is why the early return
+     * sits above the counter as well as above the checks.
+     *
+     * A REPEATED CONFLICT TARGET IS NOT A `StoreRefusal` — see this
+     * module's header — and it is checked before the foreign key
+     * because that is the order measured: a batch both repeating a
+     * pattern and naming a missing category answered 21000 and not
+     * 23503. The message names the constraint and the count and no
+     * part of the document, so a logger reaching it learns nothing
+     * about what was submitted.
+     */
+    async upsertTerms(
+      categoryId: number,
+      rows: readonly TermValues[],
+    ): Promise<readonly TermRecord[]> {
+      if (rows.length === 0) {
+        return [];
+      }
+
+      const firstId = nextTermId;
+
+      nextTermId += rows.length;
+
+      const patterns = new Set(rows.map((row) => row.pattern));
+
+      if (patterns.size !== rows.length) {
+        throw new Error(
+          `${rows.length} rows carry ${patterns.size} patterns, `
+          + `and ${TERM_KEY_UNIQUE} admits one row per pattern`,
+        );
+      }
+
+      guardTermCategory(categoryId);
+
+      return rows.map((values, index) => {
+        const existing = termByPattern(categoryId, values.pattern);
+        const row: TermRecord = {
+          id: existing === undefined
+            ? firstId + index
+            : existing.id,
+          categoryId,
+          pattern: values.pattern,
+          weight: values.weight,
+          polarity: values.polarity,
+          notes: values.notes,
+        };
+
+        terms.set(row.id, row);
+
+        return copyTerm(row);
+      });
+    },
+
+    /**
+     * Rewrites the supplied members of one term.
+     *
+     * A PATCH NAMING NO MEMBER WRITES NOTHING and answers the stored
+     * row, for the reason `updateCategory` above gives: `terms`
+     * carries no `updated_at` either, so an empty patch has nothing
+     * to set and drizzle throws on an empty update list.
+     *
+     * BOTH HALVES OF THE NATURAL KEY ARE PATCHABLE, so what is
+     * checked is the RESULTING pair rather than either member: a
+     * rename, a bucket move and both at once are one rule with one
+     * refusal. A row is not in conflict with itself — measured, an
+     * update writing a term's own pattern back over it is accepted
+     * — so the row found under the resulting pair is a refusal only
+     * when it is a different row.
+     *
+     * A CATEGORY IN ANOTHER DOMAIN IS NOT REFUSED HERE, measured:
+     * nothing in the schema relates a term to a domain, so the move
+     * is accepted and that rule belongs to `./terms-service.ts`. A
+     * category that does not exist IS refused, by the foreign key.
+     */
+    async updateTerm(
+      id: number,
+      patch: TermPatch,
+    ): Promise<TermRecord | null> {
+      const existing = terms.get(id);
+
+      if (existing === undefined) {
+        return null;
+      }
+
+      if (
+        patch.categoryId === undefined
+        && patch.pattern === undefined
+        && patch.weight === undefined
+        && patch.polarity === undefined
+        && patch.notes === undefined
+      ) {
+        return copyTerm(existing);
+      }
+
+      const categoryId = patch.categoryId ?? existing.categoryId;
+      const pattern = patch.pattern ?? existing.pattern;
+      const holder = termByPattern(categoryId, pattern);
+
+      if (holder !== undefined && holder.id !== id) {
+        throw new StoreRefusal({
+          reason: 'unique-violation',
+          constraint: TERM_KEY_UNIQUE,
+        });
+      }
+
+      guardTermCategory(categoryId);
+
+      const updated: TermRecord = {
+        ...existing,
+        categoryId,
+        pattern,
+        weight: patch.weight ?? existing.weight,
+        polarity: patch.polarity ?? existing.polarity,
+        // Absent and null are different requests, which is why the
+        // test is against `undefined` rather than a nullish default:
+        // absent leaves the note alone and null clears it.
+        notes: patch.notes === undefined
+          ? existing.notes
+          : patch.notes,
+      };
+
+      terms.set(id, updated);
+
+      return copyTerm(updated);
+    },
+
+    /**
+     * Deletes one term.
+     *
+     * Nothing hangs off a term, so this is the one delete on the
+     * taxonomy surface with neither a guard nor a cascade.
+     */
+    async deleteTerm(id: number): Promise<boolean> {
+      return terms.delete(id);
     },
 
     setDomainDependents(
