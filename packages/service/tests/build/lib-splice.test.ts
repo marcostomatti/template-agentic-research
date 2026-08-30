@@ -226,6 +226,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'Math.round(penalized)',
     ],
   },
+  {
+    file: 'features.ts',
+    ownText: [
+      'Array.from(new Set(keyed)).sort()',
+      'categoryColumns.set(column.member, column.key)',
+      'keys.map((key) => asNumber(values[key]))',
+    ],
+  },
 ];
 
 /**
