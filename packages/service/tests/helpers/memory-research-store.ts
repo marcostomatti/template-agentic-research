@@ -1690,7 +1690,10 @@ export function createMemoryResearchStore(
      * subject only where the database can change what it stored
      * — `jsonb` normalises key order and drops a duplicate key
      * — so it is `src/settings/db-store.ts`'s `RETURNING` list
-     * that discharges it when that task lands.
+     * that discharges it, and now does: that store's upsert was
+     * driven against the live Postgres with a payload whose keys
+     * were submitted out of order, and the answer came back in the
+     * database's order rather than the caller's.
      */
     async writeSettings(
       settings: OperatorSettings,

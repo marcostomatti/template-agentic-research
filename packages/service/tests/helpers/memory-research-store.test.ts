@@ -416,7 +416,10 @@
  * object graph. The claim has a subject only where the database can
  * change what it stored — `jsonb` normalises key order and drops
  * a duplicate key — so it is `src/settings/db-store.ts`'s to
- * discharge when that task lands, through its `RETURNING` list. No
+ * discharge through its `RETURNING` list, which it now does: that
+ * store's upsert was driven against the live Postgres with a
+ * payload whose keys were submitted out of order, and the answer
+ * came back in the database's order rather than the caller's. No
  * re-aiming of this leg reaches it from here.
  */
 import type { MemoryResearchStore } from './memory-research-store.js';
