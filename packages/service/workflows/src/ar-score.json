@@ -1,0 +1,64 @@
+{
+  "id": "ar-score",
+  "name": "AR Score",
+  "active": false,
+  "versionId": "00000000-0000-4000-8000-00000000a501",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "execute-workflow-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 0],
+      "parameters": {}
+    },
+    {
+      "id": "load-domain-context",
+      "name": "Load Domain Context",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, 0],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH handover AS (\n  SELECT nullif($1::jsonb, 'null'::jsonb) AS item\n),\nclaim AS (\n  SELECT\n    CASE\n      WHEN h.item ->> 'domain_id' ~ '^[0-9]{1,18}$'\n      THEN (h.item ->> 'domain_id')::bigint\n    END AS domain_id\n  FROM handover h\n)\n-- The first node after the trigger, and the shape the parent design fixes for every\n-- workflow in this set (.specs/2026-08-19-research-pipeline-port.md, section 4): the\n-- domain's personas and taxonomy, read as ONE query answering exactly one row. Both\n-- halves are argued in full on ar-ingest's Load Domain Context, which asks the same\n-- question of the same tables and is not repeated here. What is written out below is\n-- the half that differs, which is how this canvas gets a domain at all.\n\n-- It is handed one. ar-ingest reads its domain back off the runs row a dispatcher\n-- wrote, and ar-capture resolves one through the source a posted envelope claims.\n-- This workflow is invoked by both of those, and each of them puts the domain it had\n-- already resolved onto the item it hands over. So the resolution happened in the\n-- caller, and what is left here is to read the claim and fetch against it.\n\n-- The whole hand-over item binds as ONE jsonb parameter rather than one parameter per\n-- member. An item reaching this trigger by hand may be anything at all,\n-- JSON.stringify makes every one of those a valid jsonb literal, and the members are\n-- then read where a comment can say what each one is instead of inside an expression\n-- no gate reads. The nullif is the other half of that: JSON.stringify(null) binds the\n-- JSON null literal rather than SQL NULL, so an invocation carrying no item at all\n-- would otherwise arrive here as a value.\n\n-- ->> answers NULL for every jsonb that is not an object, so an item that is not one\n-- needs no guard in front of the read: the pattern test is handed NULL, the CASE\n-- answers NULL, and nothing raises over a shape somebody else chose. It renders a\n-- number as text as readily as a string, which is what lets one read cover both\n-- spellings an id can arrive in. A bigint projected as a top-level column comes back\n-- as a JSON string and one taken out of a jsonb_agg array comes back as a number, and\n-- a caller is free to hand over either.\n\n-- The digit bound is {1,18} rather than +, and the difference between them is a\n-- raise. A longer run of digits matches + and then overflows the bigint cast, which\n-- is an error this node could not survive: eighteen digits sits inside bigint's\n-- nineteen, and no domains id is going to reach it.\n\n-- Three readings come out of this row and they are not two. A null domain_id means\n-- the item named no domain this statement could read. A domain_id with a null domain\n-- means it named one that matches no domains row. A domain row means the pass\n-- resolved, and an empty list beside it is a domain that states no personas, no\n-- categories, no terms or no criteria. Read them in that order: a length says nothing\n-- until both have been read.\n\n-- Nothing here refuses, which is the shape both callers already have. Every finding\n-- this pass is asked about is a row somebody else already wrote, so a refusal at the\n-- top of this workflow leaves those rows unscored with nothing recording why. What\n-- this answers instead is a row saying what it could and could not resolve, and what\n-- a pass that resolved nothing records is the closing group's to decide.\n\n-- The hand-over item is not echoed forward whole. This node's answer REPLACES the\n-- item the trigger was handed, and what a caller puts on it besides the domain is the\n-- subject list and one provenance member: finding_ids says exactly which rows this\n-- pass is to score, and ingest_run_id or capture_document_id says which pass wrote\n-- them. Whatever node below needs them reaches all of it at\n-- $('Execute Workflow Trigger').first().json, which is the handle every node here has\n-- on the invocation, and reading that list is the selection group's rather than this\n-- node's. domain_id travels because it is the parameter rather than a column read\n-- back, so it survives an item that resolved to nothing.\n\n-- Every list is ordered, which nothing downstream requires and every reader benefits\n-- from: two passes over one unchanged domain hand the nodes below the same lists in\n-- the same order, so a diff between two runs is about the findings rather than about\n-- the order a planner happened to return rows in.\nSELECT\n  (SELECT domain_id FROM claim) AS domain_id,\n\n  -- The domain row, cut to the members the nodes below read. feature_version is the\n  -- one that has to travel: the feature group this canvas is still to grow holds each\n  -- document's stored version against the domain's and recomputes only where the two\n  -- disagree, so fetching that one integer separately would be the lookup node this\n  -- shape exists to avoid. NULL rather than an empty object when the item named no\n  -- domain this statement could resolve, which is the second of the three readings\n  -- above.\n  (SELECT jsonb_build_object(\n     'id', d.id,\n     'slug', d.slug,\n     'name', d.name,\n     'settings', d.settings,\n     'feature_version', d.feature_version,\n     'embedding_model', d.embedding_model)\n     FROM domains d\n    WHERE d.id = (SELECT domain_id FROM claim)) AS domain,\n\n  -- The personas. system_text is operator-owned prose and is the trusted half of what\n  -- prompt-frame.ts composes around an untrusted chunk. No node on this canvas makes\n  -- a model call and none is planned to: what scores a finding here is criteria rows,\n  -- terms and deterministic libraries, which is what lets a score be reproduced from\n  -- the rows it was read against. They are selected because the design fixes personas\n  -- and taxonomy as what this node fetches, and because a canvas that grows a judging\n  -- step should not grow a second lookup with it.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'id', p.id,\n       'role', p.role,\n       'system_text', p.system_text)\n       ORDER BY p.role, p.id)\n       FROM personas p\n      WHERE p.domain_id = (SELECT domain_id FROM claim)),\n    '[]'::jsonb) AS personas,\n\n  -- The categories, which are the buckets the terms below are filed under. key rather\n  -- than id is what a reader downstream matches on: features.ts builds a column name\n  -- out of it and static-gate.ts groups hits by it, so the surrogate id travels for\n  -- an operator's benefit and the key is what the libraries read.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'id', c.id,\n       'key', c.key,\n       'name', c.name,\n       'parent_id', c.parent_id)\n       ORDER BY c.key, c.id)\n       FROM categories c\n      WHERE c.domain_id = (SELECT domain_id FROM claim)),\n    '[]'::jsonb) AS categories,\n\n  -- The terms, joined to their category's key rather than carrying category_id. Four\n  -- members and this exact spelling, because the libraries reading this one list each\n  -- read a different subset of it: features.ts takes pattern and category,\n  -- feature-version.ts takes all four, and static-gate.ts takes pattern, weight and\n  -- polarity. A term list selected without the join satisfies one reader and starves\n  -- the others, with nothing failing.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'category', c.key,\n       'pattern', t.pattern,\n       'weight', t.weight,\n       'polarity', t.polarity)\n       ORDER BY c.key, t.pattern, t.id)\n       FROM terms t\n       JOIN categories c ON c.id = t.category_id\n      WHERE c.domain_id = (SELECT domain_id FROM claim)),\n    '[]'::jsonb) AS terms,\n\n  -- The criteria, joined to their category the same way. This is the workflow they\n  -- were being fetched for: ar-ingest and ar-capture both select them, and both say\n  -- the same thing about them, that they are ar-score's subject and that nothing on\n  -- those canvases reads them. Here they are what the pass is about. value is what\n  -- the domain stated and kind is which way the statement points, and what a kind\n  -- means for a score is the scoring group's to state rather than this node's.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'id', k.id,\n       'category', c.key,\n       'value', k.value,\n       'kind', k.kind)\n       ORDER BY c.key, k.kind, k.id)\n       FROM criteria k\n       JOIN categories c ON c.id = k.category_id\n      WHERE k.domain_id = (SELECT domain_id FROM claim)),\n    '[]'::jsonb) AS criteria",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json ?? null) }}"
+        }
+      }
+    },
+    {
+      "id": "two-callers-no-clock",
+      "name": "Two Callers No Clock",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-460, -160],
+      "parameters": {
+        "width": 400,
+        "height": 960,
+        "content": "## Two Callers, No Clock\n\nThis workflow is invoked, and by two workflows rather than by the dispatcher. `ar-ingest` reaches it at the end of a pull pass and `ar-capture` at the end of a push one, each through an Execute Workflow node that waits for it. `ar-dispatch` does not invoke it at all, and nothing schedules a scoring pass: a pass exists where findings were just written, which is a thing that has happened rather than a time that has come.\n\nIt holds no clock and may not acquire one: `ar-dispatch` carries the only Schedule Trigger in the system, and `tests/invariants/workflows.test.ts` counts them across every built workflow and names the one file allowed to hold one. The Execute Workflow Trigger here registers nothing when a workflow is activated, so `scripts/activate-workflows.sh` reports this file manual-only and leaves it inactive. That is the outcome rather than a gap: what starts this workflow is a caller, and a caller needs no registration.\n\n### What arrives\n\nOne item, and three members of it are the hand-over. `domain_id` says whose criteria to score against, `finding_ids` says exactly which rows, and one provenance member says which pass wrote them: `ingest_run_id` from one caller, `capture_document_id` from the other.\n\nNeither of those is spelled `run_id`, and both callers say why on the nodes that write them. A member with that name is what a first node written to this shape resolves its domain out of, and the run this workflow will account for is its own rather than the caller's. So provenance travels under a name that cannot be mistaken for one, and nothing in the schema keeps the two apart.\n\n`Load Domain Context` reads the first of the three and no more. The subject list stays where it arrived, reachable at `$('Execute Workflow Trigger').first().json`, and reading it belongs to the group that selects the findings rather than to the node that fetches the taxonomy.\n\n### Started by hand\n\nA run started from this canvas rather than by a caller carries no `domain_id`, and nothing pretends otherwise. `Load Domain Context` answers a null `domain_id`, a null domain row and four empty lists, which is a shape a node below can refuse by name. It is not an error worth suppressing: a pass with no domain has no criteria to score against and no findings it was asked about."
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Domain Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
