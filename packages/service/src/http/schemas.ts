@@ -64,14 +64,17 @@ import { z } from 'zod';
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
 /**
- * The `:slug` that names a domain, and the `slug` a create body
- * supplies for one.
+ * The `:slug` that names a domain, the `slug` a create body
+ * supplies for one, and the slug a stored payload refers to one
+ * BY — `OperatorSettings.defaultDomainSlug`, held to this same
+ * shape in `src/settings/payload.ts`.
  *
  * A value schema rather than an object schema: a route composes it
  * into whatever it is parsing — `z.object({ slug: slugParamSchema })`
  * over `req.params` — so the `field` path in a 422 detail names the
- * parameter, and one declaration serves both the path segment and the
- * body member without either being a special case of the other.
+ * parameter, and one declaration serves the path segment, the body
+ * member and the reference without any of them being a special
+ * case of the others.
  *
  * @see {@link SLUG_PATTERN} for what the shape is and what it costs.
  */
