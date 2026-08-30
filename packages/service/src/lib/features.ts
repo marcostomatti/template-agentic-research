@@ -36,6 +36,17 @@
  * bare keys a domain naming a quantity `12` would get a record
  * whose key order silently stopped being {@link featureKeys}'s.
  *
+ * Both of those are about a COLUMN, and one thing a row order can
+ * still move is a COUNT. A pattern filed under two categories
+ * counts for the first category the term set names, so the same
+ * rows arriving in another order move its hits between two columns
+ * that both still exist — measured, and pinned by a case of its
+ * own in `tests/lib/features.test.ts`. That is a taxonomy fault
+ * this module reports by counting rather than by refusing, for the
+ * reason {@link extractFeatures} gives, and it is invisible to the
+ * key list and to a digest over it. It is one of the drifts the
+ * term-set half of the version pin exists for.
+ *
  * VERSIONING. {@link FEATURE_MECHANISM_VERSION} changes whenever
  * the MEANING of the vector changes, and it pins TWO inputs, not
  * one:
