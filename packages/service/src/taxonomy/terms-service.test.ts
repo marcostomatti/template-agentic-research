@@ -1,18 +1,21 @@
 /**
- * `src/taxonomy/terms-service.ts` — the ways the six term
- * operations say no. Driven over
+ * `src/taxonomy/terms-service.ts` — what the six term operations
+ * refuse, and what they land when they do not. Driven over
  * `tests/helpers/memory-research-store.ts`, so every claim here is
  * answered with no database anywhere.
  *
- * REFUSALS ONLY, and the next task adds what an accepted call
- * lands. Every figure in the mutation grid below is a measurement
- * over the 89 cases this file holds TODAY, so all of them move
- * when that task lands and the whole grid is re-derived rather
- * than appended to. The controls each section already carries are what
- * keeps a refusal-only file from being green against a module that
- * refuses everything; they are not a substitute for that task.
+ * BOTH HALVES NOW, and the second one is what changed the first.
+ * The mutation grid below was re-derived whole over the 125 cases
+ * this file holds rather than extended with legs for the new rows:
+ * every figure in a refusal-only grid moves when acceptance cases
+ * land, and the sentence characterising its SHAPE moves with them.
+ * It used to read that the controls were the load-bearing
+ * assertions here, since not one narrowing leg reddened a case
+ * named for the refusal it exercises. That is no longer true, and
+ * the reason is that the controls have been replaced by cases that
+ * assert what the accepted call actually wrote.
  *
- * Seven claims.
+ * Eleven claims.
  *
  * THAT AN ADDRESS NAMING NOTHING IS A 404 ON EVERY OPERATION, and
  * that the two addresses are told apart. A `:id` naming no category
@@ -81,15 +84,52 @@
  * rows submitting a sentinel as a `categoryKey` and as a repeated
  * pattern are what say an index is all that travels.
  *
- * Mutation grid, measured over the 89 cases here with
- * `--reporter=json` and read as the failed `fullName` SET rather
- * than as a count. Seventeen legs in two classes, because a grid
- * made of one class leaves the other half green while looking
- * thorough. Every figure moves when the positive cases land, so
- * that task re-derives the whole grid rather than appending legs
- * for its own rows.
+ * THAT A CREATE LANDS THE ROW IT ANSWERED. Every row of the create
+ * table is asserted twice — the answered record against a literal
+ * built from the fixture, and the stored record read back through
+ * {@link listTerms} against what the write answered — because a
+ * create returning a row it never wrote passes the first and fails
+ * the second. The three rows are the three ways `notes` arrives,
+ * since an omitted note and an explicit null are ONE request here
+ * and two requests one operation along.
  *
- * Twelve WIDENING legs. Rethrowing the unique refusal reddens 4 —
+ * THAT AN IMPORT WRITES EVERY ROW AND REWRITES RATHER THAN
+ * DUPLICATES. The document deliberately restates the pattern the
+ * fixture planted, so one document covers both halves of an upsert:
+ * two rows go in, one lands on the term that was already there and
+ * keeps its id. A second import of the same three patterns with
+ * every weight moved is what says a lexicon settles rather than
+ * accumulating — the ids are held against the first import's, since
+ * a store deleting and reinserting answers the same weights under
+ * ids every caller holding one had just lost. The answered rows are
+ * compared as a SET: `upsertTerms` promises no order, and pinning
+ * the submitted one would assert what the port refuses to say.
+ *
+ * THAT A PATCH MOVES ONE MEMBER AND ONE ROW. A polarity flip and a
+ * bucket move are the two edits that change what a domain scores,
+ * and both are compared against the row as it was rather than
+ * field by field, so a patch reaching a second member is a red case
+ * rather than a plausible answer. The move is read back on BOTH
+ * sides — a write that filled the new bucket without emptying the
+ * old one answers exactly what the answered-row case asserts.
+ *
+ * THAT AN EXPORT IS THE SERIALISER'S BYTES OVER THE STORED ROWS.
+ * The expectation is derived at runtime from rows read through the
+ * store, so nothing in it comes back through the module under test,
+ * and it is taken a second time over the SAME rows reversed —
+ * which is the only case that can see the sort, since the store
+ * already answers pattern order and an unsorted serialiser is
+ * otherwise indistinguishable. The remaining cases cover what only
+ * the module can supply: the category key stamped on every row,
+ * because no term carries one.
+ *
+ * Mutation grid, measured over the 125 cases here with
+ * `--reporter=json` and read as the failed `fullName` SET rather
+ * than as a count. Twenty-three legs in two classes, because a grid
+ * made of one class leaves the other half green while looking
+ * thorough.
+ *
+ * Nineteen WIDENING legs. Rethrowing the unique refusal reddens 4 —
  * the 409, the read proving the stored term survived it, its
  * containment row and the row reading the `cause` — and answering
  * that refusal a 404 instead reddens 1, a strict subset, since the
@@ -127,58 +167,86 @@
  * that check's whole contribution is refusing before the statement
  * runs rather than after it — the same class of unobservable
  * claim `updateCategory`'s empty-patch early return is. The
- * re-aimed leg is the null guard itself: dropping it lets an
- * absent bucket fall into the cross-domain comparison and be
- * reported as a move, which reddens 1 — the same case the shared-
- * code leg reaches, and the whole of the evidence that the two
- * bucket faults are told apart.
+ * re-aimed leg is the null guard itself: letting a null bucket
+ * fall into the cross-domain comparison reddens 1 — the same case
+ * the shared-code leg reaches, and the whole of the evidence that
+ * the two bucket faults are told apart.
  *
  * The leak leg reddens exactly 1: interpolating the submitted
- * pattern into the 409 reddens the pattern-already-carried
- * containment row alone. That row plants its OWN term so the
- * pattern it submits is a sentinel — a first draft collided with
- * the fixture's `rust`, counted only the note, and left this leg
- * measuring zero against a channel that was genuinely open.
+ * pattern into the 409, with its `cause` preserved so the leg is
+ * aimed at the message alone, reddens the pattern-already-carried
+ * containment row and nothing else. That row plants its OWN term
+ * so the pattern it submits is a sentinel — a first draft collided
+ * with the fixture's planted one, counted only the note, and left
+ * this leg measuring zero against a channel that was genuinely
+ * open.
  *
  * ONE LEG MEASURES ZERO AND STAYS THAT WAY. Copying the
  * `StoreRefusal`'s OWN message into the 409 reddens NOTHING,
  * because the in-memory store builds its refusal from a reason and
  * a constraint name and there is no submitted content in it to
- * leak. The channel that carries one — the driver `detail` reading
- * `Key (category_id, pattern)=(...) already exists.`, and the
- * drizzle wrapper's `Failed query:` line with its bound parameters
- * — exists only behind `./db-store.ts`. So the containment rows
- * here pin what THIS module builds, their zeros rest on the
- * planted control and on the leak leg above, and the driver half
- * is owed by the live seam.
+ * leak. The channel that carries one — the driver `detail` naming
+ * the key and the submitted value, and the drizzle wrapper's
+ * failed-query line with its bound parameters — exists only behind
+ * `./db-store.ts`. So the containment rows here pin what THIS
+ * module builds, their zeros rest on the planted control and on
+ * the leak leg above, and the driver half is owed by the live seam.
  *
- * Four NARROWING legs, aimed at the controls, which is what the
- * controls are for. Refusing every create as a duplicate reddens
- * 78 of 89, and the SURVIVORS are the reading rather than the
+ * Six of the nineteen are aimed at the acceptance half, and their
+ * sets say which claims are separable. Defaulting an omitted note
+ * to the empty string reddens 3, two create rows plus one export
+ * case, which is the note travelling all the way to the bytes.
+ * Writing only the first row of a document reddens 7, six of the
+ * document section and again one export case. Dropping `categoryId`
+ * from the patch that is written reddens 3, the whole bucket-move
+ * half of the patch section and nothing else.
+ *
+ * The two export legs are NESTED rather than independent, and
+ * quoting the two counts side by side would read as two readings.
+ * Stamping the category id instead of its key reddens 4; reading
+ * the export through a window reddens 6, that same set plus the
+ * order case and the note case. Report the nesting, not the pair.
+ *
+ * THE SERIALISER'S SORT IS PINNED BY ONE CASE AND NO OTHER, which
+ * is the finding of the export half. Dropping the sort from
+ * `./seed-format.ts` reddens exactly 1 — the case handing the same
+ * rows over reversed — while the case asserting the document's
+ * pattern order stays GREEN, because the store already answers
+ * pattern order and an unsorted serialiser hands it straight
+ * through. A file with only the order case would report a sorted
+ * document and be measuring the store.
+ *
+ * Four NARROWING legs, and this is where the file stopped being a
+ * refusal-only one. Refusing every create as a duplicate reddens
+ * 111 of 125, and the SURVIVORS are the reading rather than the
  * count: every case that reaches this module's subject at all
  * plants its term through {@link createTerm}, so what is left is
- * exactly the ten table guards plus the planted containment
- * control — the cases that call nothing. The other three are
- * narrow and land entirely on positive controls: refusing every
- * import reddens 5, answering 404 to every patch reddens 5, and
- * answering 404 to every delete reddens 1. Not one of those 11
- * reds is a case named for the refusal it exercises, which is the
- * shape of a refusal-only file — the controls are the load-bearing
- * assertions here, and the task that adds positive cases is what
- * changes that.
+ * exactly the thirteen table guards plus the planted containment
+ * control — the cases that call nothing. The other three land on
+ * their own sections rather than on controls alone: refusing every
+ * import reddens 16, of which nine are the document section and two
+ * the export round trips; answering 404 to every patch reddens 13,
+ * eight of them the patch section; and answering 404 to every
+ * delete still reddens 1, since nothing accepted here deletes.
  *
- * What no module mutation reaches, by construction. The ten table
- * guards read only the table beside them and are aimed at a later
- * edit — an operation added with no row, a document fault dropped
- * from the reason list, a body operation left uncovered. The
- * planted containment control is invisible for the same reason and
+ * What no module mutation reaches, by construction. The thirteen
+ * table guards read only the table beside them and are aimed at a
+ * later edit — an operation added with no row, a document fault
+ * dropped from the reason list, a body operation left uncovered,
+ * a create table that stopped carrying a noted row. The planted
+ * containment control is invisible for the same reason and
  * deliberately so: it proves the SEARCH, where the leak leg proves
- * the SUBJECT. And no leg touches `src/http/validation.ts`, so
- * every field path in the body and document tables is evidence
- * about what this module ASKED FOR rather than about how the
- * masking is built.
+ * the SUBJECT. The key-set guard is the third, and its value is a
+ * statement `check-types` makes rather than one any leg here can
+ * move: planting a member on `TermRecord` answers TS2322 at the
+ * pin's own line with all 125 cases still green, measured. And no
+ * leg touches `src/http/validation.ts`, so every field path in the
+ * body and document tables is evidence about what this module
+ * ASKED FOR rather than about how the masking is built.
  */
+import type { TermSeed } from './seed-format.js';
 import type { CategoryRecord, TermRecord } from './store.js';
+import type { TermPage } from './terms-service.js';
 import type { FieldError } from '../../lib/errors/index.js';
 import type {
   MemoryResearchStore,
@@ -196,6 +264,7 @@ import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
 
+import { serializeTermSeedDocument } from './seed-format.js';
 import {
   createTerm,
   deleteTerm,
@@ -1196,7 +1265,7 @@ describe('the bodies these operations refuse', () => {
     // operation: a module refusing every body passes all thirteen
     // rows above and fails this. What it pins is that the three
     // operations take a body at all; what they LAND with one is the
-    // task after this file.
+    // three acceptance sections below.
     const { store, languages, planted } = await plantLexicon();
     const created = await createTerm(store, languages.id, {
       pattern: FRESH_PATTERN,
@@ -1491,5 +1560,878 @@ describe('what a refusal is allowed to say', () => {
     }));
 
     expect(refusal.cause).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a create lands
+// ---------------------------------------------------------------------------
+
+/**
+ * The members `TermRecord` declares.
+ *
+ * Written out rather than derived, because an interface has no
+ * runtime form to read keys off — and pinned in BOTH directions,
+ * since a one-directional list is exactly as green as no list at all
+ * against the drift that matters. `satisfies` closes the direction
+ * where this names a member the record lacks;
+ * {@link EVERY_KEY_LISTED} closes the one where the record grows a
+ * member nothing here learned about. The second is the direction a
+ * key-set assertion exists for: a column added to a projection
+ * reaches every caller unasserted otherwise, and no field read in
+ * this file would notice.
+ */
+const TERM_KEYS = [
+  'categoryId',
+  'id',
+  'notes',
+  'pattern',
+  'polarity',
+  'weight',
+] as const satisfies readonly (keyof TermRecord)[];
+
+/** The two members a page carries around its rows. */
+const PAGE_KEYS = [
+  'rows',
+  'total',
+] as const satisfies readonly (keyof TermPage)[];
+
+/**
+ * `true` only while `L` names every key of `T`.
+ *
+ * The tuple wrapper is load-bearing rather than decoration: without
+ * it the union distributes over the conditional and the answer is
+ * `boolean`, which accepts `true` as an initializer and pins nothing
+ * at all.
+ *
+ * @typeParam T - The type whose keys must all be named.
+ * @typeParam L - The list naming them, as `typeof <the const>`.
+ */
+type CoversEveryKey<T, L extends readonly PropertyKey[]> =
+  [Exclude<keyof T, L[number]>] extends [never] ? true : false;
+
+/** Both lists above, held against the types they describe. */
+type EveryKeyListed =
+  CoversEveryKey<TermRecord, typeof TERM_KEYS>
+  & CoversEveryKey<TermPage, typeof PAGE_KEYS>;
+
+/**
+ * The half of the drift guard `check-types` owns.
+ *
+ * A member added to `TermRecord` or to `TermPage` and to neither
+ * list above turns {@link EveryKeyListed} into `never`, and this
+ * initializer is then a TS2322 at this line — before any case can
+ * compare a record against a set that has quietly stopped describing
+ * it. Read in a case below, so it is a symbol this file uses rather
+ * than one lint reports.
+ */
+const EVERY_KEY_LISTED: EveryKeyListed = true;
+
+/** {@link TERM_KEYS}, sorted at use rather than by hand. */
+const TERM_KEY_SET: readonly string[] = [...TERM_KEYS].sort();
+
+/** {@link PAGE_KEYS}, sorted. */
+const PAGE_KEY_SET: readonly string[] = [...PAGE_KEYS].sort();
+
+/**
+ * Finds one answered row by the pattern it carries.
+ *
+ * @param rows - What a read answered.
+ * @param pattern - The pattern to look for.
+ * @returns The row carrying it.
+ * @throws When no row does. A `find` answering `undefined` compares
+ *   equal to another `undefined`, so a case reading a stored row
+ *   back against a write that never landed would otherwise pass for
+ *   nobody's reason.
+ */
+function termPatterned(
+  rows: readonly TermRecord[],
+  pattern: string,
+): TermRecord {
+  const found = rows.find((row) => row.pattern === pattern);
+
+  if (found === undefined) {
+    throw new Error('no answered row carries that pattern');
+  }
+
+  return found;
+}
+
+/** The note a create states when it states one. */
+const CREATED_NOTE = 'Kept for the borrow checker';
+
+/** One accepted create, and the note the row has to end up with. */
+interface CreateCase {
+  /** What makes this row different from every other. */
+  readonly label: string;
+
+  /** The body, unvalidated, exactly as a request would carry it. */
+  readonly body: unknown;
+
+  /** The note the stored row has to carry afterwards. */
+  readonly notes: string | null;
+}
+
+/**
+ * The three shapes an accepted create arrives in.
+ *
+ * Two of them land the SAME row, and that is the claim rather than a
+ * duplicate: an absent `notes` and an explicit `null` are ONE
+ * request to {@link createTerm}, which supplies the null itself
+ * where a case can reach the choice. A table carrying only the
+ * omission would be green against a schema that had stopped
+ * accepting the explicit null, and the two are different requests
+ * one operation along — a patch reads absent as "leave the note" and
+ * null as "clear it", which is the third way the member moves.
+ */
+const CREATE_CASES: readonly CreateCase[] = [
+  {
+    label: 'a term whose body left the note off',
+    body: { pattern: FRESH_PATTERN, weight: 1, polarity: 'positive' },
+    notes: null,
+  },
+  {
+    label: 'a term whose body states one',
+    body: {
+      pattern: FRESH_PATTERN,
+      weight: 1,
+      polarity: 'positive',
+      notes: CREATED_NOTE,
+    },
+    notes: CREATED_NOTE,
+  },
+  {
+    label: 'a term whose body nulls it outright',
+    body: {
+      pattern: FRESH_PATTERN,
+      weight: 1,
+      polarity: 'positive',
+      notes: null,
+    },
+    notes: null,
+  },
+];
+
+describe('what a create lands', () => {
+  it('holds both key sets against the types they describe', () => {
+    // The runtime half of the pin above. What it asserts is not the
+    // `true` — that is a constant — but that the symbol exists to be
+    // read: its VALUE is the statement `check-types` makes at the
+    // declaration, which is a TS2322 the moment either type grows a
+    // member neither list names.
+    expect(EVERY_KEY_LISTED).toBe(true);
+  });
+
+  it('labels every row distinctly', () => {
+    const labels = CREATE_CASES.map((row) => row.label);
+
+    expect(labels.length).toBe(new Set(labels).size);
+  });
+
+  it('carries both a noted row and a bare one', () => {
+    // The anti-vacuity guard this table exists for: three rows that
+    // all landed a null note would look thorough while never storing
+    // a note at all, and `notes` is the one member a create decides
+    // rather than copies.
+    const notes = CREATE_CASES.map((row) => row.notes);
+
+    expect({
+      noted: notes.some((note) => note !== null),
+      bare: notes.some((note) => note === null),
+    }).toEqual({ noted: true, bare: true });
+  });
+
+  for (const row of CREATE_CASES) {
+    it(`answers ${row.label}`, async () => {
+      const { store, languages } = await plantLexicon();
+      const created = await createTerm(store, languages.id, row.body);
+
+      expect(created).toStrictEqual({
+        id: created.id,
+        categoryId: languages.id,
+        pattern: FRESH_PATTERN,
+        weight: 1,
+        polarity: 'positive',
+        notes: row.notes,
+      });
+
+      // The id is the store's own — no body here carries one — and
+      // the sorted key set beside it, since the record is the one
+      // field a whole-row compare cannot pin against itself.
+      expect(created.id).toBeGreaterThan(0);
+      expect(Object.keys(created).sort()).toEqual([...TERM_KEY_SET]);
+    });
+
+    it(`stores ${row.label}`, async () => {
+      // Read back through the OTHER operation, so the claim is about
+      // what is stored rather than about what one call happened to
+      // answer: a create returning a row it never wrote passes the
+      // case above and fails this.
+      const { store, languages } = await plantLexicon();
+      const created = await createTerm(store, languages.id, row.body);
+      const page = await listTerms(store, languages.id, WHOLE_PAGE);
+
+      expect(termPatterned(page.rows, FRESH_PATTERN)).toStrictEqual(created);
+    });
+  }
+
+  it('leaves the row the category was already carrying', async () => {
+    // A write lands one row. The term the fixture planted is still
+    // there and still says what it said, which no assertion over the
+    // created row could report.
+    const { store, languages, planted } = await plantLexicon();
+
+    await createTerm(store, languages.id, {
+      pattern: FRESH_PATTERN,
+      weight: 1,
+      polarity: 'positive',
+    });
+
+    const page = await listTerms(store, languages.id, WHOLE_PAGE);
+
+    expect(termPatterned(page.rows, PLANTED_PATTERN)).toStrictEqual(planted);
+  });
+
+  it('writes into the category the path addressed', async () => {
+    // The `:id` reached the WRITE rather than only a lookup: a
+    // create stamping another bucket answers a perfectly plausible
+    // row and files it in a lexicon nobody asked for.
+    const { store, languages, tooling } = await plantLexicon();
+
+    await createTerm(store, languages.id, {
+      pattern: FRESH_PATTERN,
+      weight: 1,
+      polarity: 'positive',
+    });
+
+    const here = await listTerms(store, languages.id, WHOLE_PAGE);
+    const there = await listTerms(store, tooling.id, WHOLE_PAGE);
+
+    expect(here.rows.map((one) => one.pattern))
+      .toEqual([PLANTED_PATTERN, FRESH_PATTERN]);
+    expect(there.rows).toEqual([]);
+  });
+
+  it('counts the new row in the total a page reports', async () => {
+    // `total` is a second question rather than the length of the
+    // rows in hand, so a create the count never saw would leave a
+    // page claiming to be the whole of a category it is not.
+    const { store, languages } = await plantLexicon();
+
+    await createTerm(store, languages.id, {
+      pattern: FRESH_PATTERN,
+      weight: 1,
+      polarity: 'positive',
+    });
+
+    const page = await listTerms(store, languages.id, WHOLE_PAGE);
+
+    expect(page.total).toBe(2);
+    expect(Object.keys(page).sort()).toEqual([...PAGE_KEY_SET]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a document lands
+// ---------------------------------------------------------------------------
+
+/** The note one row of the lexicon below carries. */
+const IMPORTED_NOTE = 'Applied from the lexicon';
+
+/**
+ * The three rows every accepted document below states.
+ *
+ * ONE OF THEM IS THE PATTERN THE FIXTURE ALREADY PLANTED, which is
+ * what makes this table the rewrite claim rather than three inserts:
+ * a bulk import upserts on `terms_category_id_pattern_unique`, so
+ * the planted row here has to land on the term {@link plantLexicon}
+ * created and not beside it. The other two are new, so one document
+ * covers both halves of what an upsert does.
+ *
+ * The three weights are distinct, which is what lets a re-import be
+ * read at all: a document rewriting every weight to one value would
+ * be green against a store writing any of them anywhere.
+ */
+const LEXICON = [
+  {
+    categoryKey: LANGUAGES,
+    pattern: 'go',
+    weight: 2,
+    polarity: 'positive',
+    notes: null,
+  },
+  {
+    categoryKey: LANGUAGES,
+    pattern: PLANTED_PATTERN,
+    weight: 9,
+    polarity: 'negative',
+    notes: IMPORTED_NOTE,
+  },
+  {
+    categoryKey: LANGUAGES,
+    pattern: FRESH_PATTERN,
+    weight: 1,
+    polarity: 'ignore',
+    notes: null,
+  },
+];
+
+/** {@link LEXICON}'s patterns, as a read has to answer them. */
+const LEXICON_PATTERNS = ['go', PLANTED_PATTERN, FRESH_PATTERN].sort();
+
+/**
+ * The same three patterns with every weight moved, for a second
+ * import.
+ *
+ * A REWRITE OF THE WHOLE DOCUMENT rather than of one row, because
+ * the claim is that a re-import settles rather than accumulates:
+ * every row conflicts, so a store inserting on conflict leaves six
+ * rows where this expects three.
+ */
+const REWRITTEN = LEXICON.map((row) => ({ ...row, weight: row.weight + 10 }));
+
+/** The four members a document states about one term. */
+interface StatedTerm {
+  /** What the row looks for. */
+  readonly pattern: string;
+
+  /** How much a match is worth. */
+  readonly weight: number;
+
+  /** Which way it points. */
+  readonly polarity: string;
+
+  /** Why it is here, or null. */
+  readonly notes: string | null;
+}
+
+/**
+ * Orders two stated rows by pattern.
+ *
+ * @param left - One row.
+ * @param right - The other.
+ * @returns The usual negative, zero or positive.
+ */
+function byPattern(left: StatedTerm, right: StatedTerm): number {
+  if (left.pattern === right.pattern) {
+    return 0;
+  }
+
+  return left.pattern < right.pattern
+    ? -1
+    : 1;
+}
+
+/**
+ * What rows state about themselves, pattern ascending.
+ *
+ * Neither the id nor the bucket, which are the store's to issue and
+ * the path's to name: this is the half a document and a stored row
+ * can be compared on directly.
+ *
+ * @param rows - Document rows or stored terms.
+ * @returns One stated row apiece, ordered.
+ */
+function statedBy(rows: readonly StatedTerm[]): StatedTerm[] {
+  return [...rows]
+    .map((row) => ({
+      pattern: row.pattern,
+      weight: row.weight,
+      polarity: row.polarity,
+      notes: row.notes,
+    }))
+    .sort(byPattern);
+}
+
+describe('what a document lands', () => {
+  it('writes every row the document carried', async () => {
+    // Compared as a SET rather than in order: `upsertTerms` answers
+    // its rows in an UNSPECIFIED order by contract, so a case
+    // pinning the submitted order would assert something the port
+    // deliberately refuses to promise.
+    const { store, languages } = await plantLexicon();
+    const imported = await importTerms(store, languages.id, {
+      terms: LEXICON,
+    });
+
+    expect(imported.length).toBe(LEXICON.length);
+    expect(imported.map((row) => row.pattern).sort())
+      .toEqual([...LEXICON_PATTERNS]);
+  });
+
+  it('stores every row the document carried', async () => {
+    // Read back through the module's own read, where the order IS
+    // promised, so the claim is about the stored lexicon rather than
+    // about what one call answered.
+    const { store, languages } = await plantLexicon();
+
+    await importTerms(store, languages.id, { terms: LEXICON });
+
+    const page = await listTerms(store, languages.id, WHOLE_PAGE);
+
+    expect(statedBy(page.rows)).toEqual(statedBy(LEXICON));
+    expect(page.total).toBe(LEXICON.length);
+  });
+
+  it('answers each row whole and nothing besides', async () => {
+    // The sorted key set on every answered row. A member arriving by
+    // spread — a `categoryKey` carried through from the document, a
+    // column nobody projected — is invisible to every field read
+    // above and is exactly what this line catches.
+    const { store, languages } = await plantLexicon();
+    const imported = await importTerms(store, languages.id, {
+      terms: LEXICON,
+    });
+
+    expect(imported.map((row) => Object.keys(row).sort()))
+      .toEqual(LEXICON.map(() => [...TERM_KEY_SET]));
+  });
+
+  it('rewrites the row the category already carried', async () => {
+    // The upsert, and the whole difference from a create. The
+    // planted term keeps its id and takes the document's weight,
+    // polarity and note — where a create asserting a new row is
+    // refused for the same pattern, which the section above pins.
+    const { store, languages, planted } = await plantLexicon();
+
+    await importTerms(store, languages.id, { terms: LEXICON });
+
+    const page = await listTerms(store, languages.id, WHOLE_PAGE);
+
+    expect(termPatterned(page.rows, PLANTED_PATTERN)).toStrictEqual({
+      id: planted.id,
+      categoryId: languages.id,
+      pattern: PLANTED_PATTERN,
+      weight: 9,
+      polarity: 'negative',
+      notes: IMPORTED_NOTE,
+    });
+  });
+
+  it('adds no row for a pattern it rewrote', async () => {
+    // The count the case above cannot make: a rewrite that also
+    // inserted would answer the same row under the same pattern and
+    // leave the category one term heavier.
+    const { store, languages } = await plantLexicon();
+
+    await importTerms(store, languages.id, { terms: LEXICON });
+
+    const page = await listTerms(store, languages.id, WHOLE_PAGE);
+
+    expect(page.rows.map((row) => row.pattern))
+      .toEqual([...LEXICON_PATTERNS]);
+    expect(page.total).toBe(LEXICON.length);
+  });
+
+  it('rewrites the weights a second import states', async () => {
+    // Import, then import the same three patterns with every weight
+    // moved. This is what makes a lexicon a thing that can be edited
+    // and applied again rather than one that can only be applied.
+    const { store, languages } = await plantLexicon();
+
+    await importTerms(store, languages.id, { terms: LEXICON });
+    await importTerms(store, languages.id, { terms: REWRITTEN });
+
+    const page = await listTerms(store, languages.id, WHOLE_PAGE);
+
+    expect(statedBy(page.rows)).toEqual(statedBy(REWRITTEN));
+
+    // The two documents genuinely differ, so the line above is a
+    // rewrite rather than a comparison that would hold either way.
+    expect(statedBy(REWRITTEN)).not.toEqual(statedBy(LEXICON));
+  });
+
+  it('keeps every id a re-import writes over', async () => {
+    // The claim the weights cannot make on their own: the second
+    // document lands on the SAME rows. A store deleting and
+    // reinserting answers the same weights under new ids, which
+    // every assertion above is green against and which would strand
+    // a `terms.id` a caller was holding.
+    const { store, languages } = await plantLexicon();
+
+    await importTerms(store, languages.id, { terms: LEXICON });
+
+    const first = await listTerms(store, languages.id, WHOLE_PAGE);
+
+    await importTerms(store, languages.id, { terms: REWRITTEN });
+
+    const second = await listTerms(store, languages.id, WHOLE_PAGE);
+
+    expect(second.rows.map((row) => row.id))
+      .toEqual(first.rows.map((row) => row.id));
+    expect(second.total).toBe(first.total);
+  });
+
+  it('leaves another category untouched', async () => {
+    // The document named one bucket and the path named the same one.
+    // A write reaching the table rather than the category would fill
+    // this one too, and every assertion above would still hold.
+    const { store, languages, tooling } = await plantLexicon();
+
+    await importTerms(store, languages.id, { terms: LEXICON });
+
+    const page = await listTerms(store, tooling.id, WHOLE_PAGE);
+
+    expect(page).toStrictEqual({ rows: [], total: 0 });
+  });
+
+  it('answers an empty list for a document stating none', async () => {
+    // The empty document is legal and writes nothing, which the port
+    // states rather than leaving to its implementations — and it is
+    // the shape an export of an empty category round-trips through.
+    const { store, languages, planted } = await plantLexicon();
+    const imported = await importTerms(store, languages.id, { terms: [] });
+    const page = await listTerms(store, languages.id, WHOLE_PAGE);
+
+    expect(imported).toEqual([]);
+    expect(page.rows).toEqual([planted]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a patch moves
+// ---------------------------------------------------------------------------
+
+/** The note a patched term starts out carrying. */
+const STANDING_NOTE = 'Written when the term went in';
+
+describe('what a patch moves', () => {
+  it('flips the polarity and leaves the rest standing', async () => {
+    // The one member whose whole job is to invert what a match is
+    // worth. Everything else is compared against the row as it was,
+    // so a patch reaching a second member answers a plausible term
+    // and quietly changes what the domain scores.
+    const { store, planted } = await plantLexicon();
+    const patched = await patchTerm(store, planted.id, {
+      polarity: 'negative',
+    });
+
+    expect(patched.polarity).toBe('negative');
+    expect(planted.polarity).toBe('positive');
+    expect(patched).toStrictEqual({ ...planted, polarity: 'negative' });
+    expect(Object.keys(patched).sort()).toEqual([...TERM_KEY_SET]);
+  });
+
+  it('stores the polarity it flipped', async () => {
+    // Read back through the module's own read, so the claim is about
+    // the stored row rather than about what the patch answered.
+    const { store, planted, languages } = await plantLexicon();
+
+    await patchTerm(store, planted.id, { polarity: 'negative' });
+
+    const page = await listTerms(store, languages.id, WHOLE_PAGE);
+
+    expect(termPatterned(page.rows, PLANTED_PATTERN))
+      .toStrictEqual({ ...planted, polarity: 'negative' });
+  });
+
+  it('moves the term into the bucket the patch named', async () => {
+    // A bucket move is an UPDATE rather than a delete and an insert,
+    // which is why the id is compared against the row as it was: a
+    // move that reissued the row would answer the same pattern under
+    // an id every caller holding one had just lost.
+    const { store, planted, tooling } = await plantLexicon();
+    const moved = await patchTerm(store, planted.id, {
+      categoryId: tooling.id,
+    });
+
+    expect(moved.categoryId).toBe(tooling.id);
+    expect(moved.id).toBe(planted.id);
+    expect(moved).toStrictEqual({ ...planted, categoryId: tooling.id });
+  });
+
+  it('stores the move on both sides of it', async () => {
+    // Two categories, one term. A move writing the new bucket
+    // without leaving the old one answers exactly what the case
+    // above asserts and puts the term in two lexicons at once.
+    const { store, planted, languages, tooling } = await plantLexicon();
+
+    await patchTerm(store, planted.id, { categoryId: tooling.id });
+
+    const left = await listTerms(store, languages.id, WHOLE_PAGE);
+    const arrived = await listTerms(store, tooling.id, WHOLE_PAGE);
+
+    expect(left).toStrictEqual({ rows: [], total: 0 });
+    expect(arrived.rows)
+      .toEqual([{ ...planted, categoryId: tooling.id }]);
+    expect(arrived.total).toBe(1);
+  });
+
+  it('frees the pattern the move took out of the bucket', async () => {
+    // The natural key went with the row rather than outliving it,
+    // which neither read above can say: an index keeping the entry
+    // answers the same two lists and refuses this create as a
+    // duplicate.
+    const { store, planted, languages, tooling } = await plantLexicon();
+
+    await patchTerm(store, planted.id, { categoryId: tooling.id });
+
+    const created = await createTerm(store, languages.id, {
+      pattern: PLANTED_PATTERN,
+      weight: 1,
+      polarity: 'ignore',
+    });
+
+    expect(created.pattern).toBe(PLANTED_PATTERN);
+
+    // A new row rather than the old one back: a sequence does not
+    // roll back over a row that moved.
+    expect(created.id).not.toBe(planted.id);
+  });
+
+  it('clears a note by naming null', async () => {
+    // Null and absent are two requests, and this is the one that
+    // reaches the column. A module treating null as absent answers
+    // the note it was asked to remove.
+    const { store, languages } = await plantLexicon();
+    const noted = await createTerm(store, languages.id, {
+      pattern: FRESH_PATTERN,
+      weight: 1,
+      polarity: 'positive',
+      notes: STANDING_NOTE,
+    });
+    const patched = await patchTerm(store, noted.id, { notes: null });
+
+    expect(noted.notes).toBe(STANDING_NOTE);
+    expect(patched).toStrictEqual({ ...noted, notes: null });
+  });
+
+  it('leaves a note the patch never named alone', async () => {
+    // The other half of the same three-way, and the one that says
+    // the member is absent rather than nulled: a patch carrying no
+    // `notes` at all writes no `notes` at all.
+    const { store, languages } = await plantLexicon();
+    const noted = await createTerm(store, languages.id, {
+      pattern: FRESH_PATTERN,
+      weight: 1,
+      polarity: 'positive',
+      notes: STANDING_NOTE,
+    });
+    const patched = await patchTerm(store, noted.id, { weight: 8 });
+
+    expect(patched).toStrictEqual({ ...noted, weight: 8 });
+  });
+
+  it('patches the term it named and no other', async () => {
+    // The whole category read back: two terms, one weight moved. A
+    // patch reaching more rows than the id it was given answers the
+    // same row and is invisible to every case above.
+    const { store, languages, planted } = await plantLexicon();
+    const other = await createTerm(store, languages.id, {
+      pattern: FRESH_PATTERN,
+      weight: 1,
+      polarity: 'positive',
+    });
+
+    await patchTerm(store, other.id, { weight: 8 });
+
+    const page = await listTerms(store, languages.id, WHOLE_PAGE);
+
+    expect(page.rows).toEqual([planted, { ...other, weight: 8 }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What an export writes
+// ---------------------------------------------------------------------------
+
+/**
+ * A pattern whose capital sorts it ahead of every lowercase one.
+ *
+ * What makes the document's order assertable at all: a code-unit
+ * compare files this first, where a case-insensitive or linguistic
+ * one files it last. `./seed-format.ts` states that its comparator
+ * is a plain code-unit compare precisely so two exports of the same
+ * rows agree on any server, and this is the pattern that can tell
+ * the two apart.
+ */
+const CAPITAL_PATTERN = 'Zig';
+
+/** A third pattern, for the middle of that order. */
+const MIDDLE_PATTERN = 'go';
+
+/** The note the middle row carries, so one row states one. */
+const EXPORTED_NOTE = 'Kept for the toolchain';
+
+/** The three patterns an exported document has to carry, in order. */
+const EXPORT_PATTERNS = [
+  CAPITAL_PATTERN,
+  MIDDLE_PATTERN,
+  PLANTED_PATTERN,
+];
+
+/** What a parsed export is read back through. */
+interface ParsedDocument {
+  /** The rows it states. */
+  readonly terms: readonly TermSeed[];
+}
+
+/**
+ * The fixture plus two more terms, written in an order no read
+ * answers back.
+ *
+ * The three go in as the planted pattern, then the capital one, then
+ * the middle one — so id order, insertion order and pattern order
+ * are three different orders and a document following the wrong one
+ * is visible.
+ *
+ * @returns The planted lexicon, with `languages` holding three
+ *   terms.
+ */
+async function plantExportable(): Promise<PlantedLexicon> {
+  const planted = await plantLexicon();
+
+  await createTerm(planted.store, planted.languages.id, {
+    pattern: CAPITAL_PATTERN,
+    weight: 5,
+    polarity: 'negative',
+    notes: null,
+  });
+  await createTerm(planted.store, planted.languages.id, {
+    pattern: MIDDLE_PATTERN,
+    weight: 2,
+    polarity: 'ignore',
+    notes: EXPORTED_NOTE,
+  });
+
+  return planted;
+}
+
+/**
+ * Turns stored rows into the seed rows a document is built from.
+ *
+ * @param rows - What the store holds.
+ * @param categoryKey - The key the export stamps on every row, since
+ *   no term carries one: `terms` holds a `category_id`, and an id
+ *   the database issued means nothing to a file.
+ * @returns One seed row apiece, in the order they arrived.
+ */
+function seedRowsOf(
+  rows: readonly TermRecord[],
+  categoryKey: string,
+): TermSeed[] {
+  return rows.map((row) => ({
+    categoryKey,
+    pattern: row.pattern,
+    weight: row.weight,
+    polarity: row.polarity,
+    notes: row.notes,
+  }));
+}
+
+describe('what an export writes', () => {
+  it('writes the bytes the serialiser writes for those rows', async () => {
+    // The whole claim, and it is a claim about BYTES rather than
+    // about a shape: indent, key order, row order and the single
+    // trailing newline are each a choice `./seed-format.ts` makes,
+    // and two documents compared for equality are compared on all of
+    // them. The expectation is derived from the STORED rows read
+    // through the store, so nothing in it comes back through the
+    // module under test.
+    const { store, languages } = await plantExportable();
+    const stored = await storedTerms(store, languages.id);
+    const text = await exportTermsAsSeed(store, languages.id);
+
+    expect(text)
+      .toBe(serializeTermSeedDocument(seedRowsOf(stored, LANGUAGES)));
+
+    // The document was built at all: an export answering the empty
+    // string would satisfy nothing here, but one answering an empty
+    // document over a category holding three terms would.
+    expect(stored.length).toBe(EXPORT_PATTERNS.length);
+    expect(text.endsWith('\n')).toBe(true);
+  });
+
+  it('writes those bytes whatever order the rows arrive in', async () => {
+    // The order is the SERIALISER's and not the store's, which is
+    // what makes the round trip rest on this repository rather than
+    // on the collation a deployment happens to run under. The same
+    // rows handed over backwards serialise to the same bytes, and
+    // the second assertion is what says the two inputs differed.
+    const { store, languages } = await plantExportable();
+    const stored = await storedTerms(store, languages.id);
+    const reversed = [...stored].reverse();
+    const text = await exportTermsAsSeed(store, languages.id);
+
+    expect(text)
+      .toBe(serializeTermSeedDocument(seedRowsOf(reversed, LANGUAGES)));
+    expect(reversed.map((row) => row.pattern))
+      .not.toEqual(stored.map((row) => row.pattern));
+  });
+
+  it('stamps the category key on every row it writes', async () => {
+    // No term carries a `categoryKey` — the column is a
+    // `category_id` — so the member is the category row's key
+    // stamped on the way out, and every row of one export carries
+    // the same one. That is the single-category scope which makes an
+    // export of `data/terms.json`'s rows not that file.
+    const { store, languages } = await plantExportable();
+    const stored = await storedTerms(store, languages.id);
+    const text = await exportTermsAsSeed(store, languages.id);
+    const parsed = JSON.parse(text) as ParsedDocument;
+
+    expect(parsed.terms.map((row) => row.categoryKey))
+      .toEqual(EXPORT_PATTERNS.map(() => LANGUAGES));
+    expect(stored.some((row) => Object.hasOwn(row, 'categoryKey')))
+      .toBe(false);
+  });
+
+  it('orders the document by pattern and not by id', async () => {
+    // Three orders and the document follows exactly one of them. The
+    // ids are read back in document order and are deliberately NOT
+    // ascending, which is what says the rows were sorted rather than
+    // handed over in the order they were written.
+    const { store, languages } = await plantExportable();
+    const stored = await storedTerms(store, languages.id);
+    const text = await exportTermsAsSeed(store, languages.id);
+    const parsed = JSON.parse(text) as ParsedDocument;
+    const ids = parsed.terms.map(
+      (row) => termPatterned(stored, row.pattern).id,
+    );
+
+    expect(parsed.terms.map((row) => row.pattern)).toEqual(EXPORT_PATTERNS);
+    expect(ids).not.toEqual([...ids].sort((left, right) => left - right));
+  });
+
+  it('carries both a stated note and a null one', async () => {
+    // The anti-vacuity guard the byte comparison needs: a document
+    // whose every note were null would compare equal under a
+    // serialiser that dropped the member, and `JSON.stringify` drops
+    // an `undefined` outright — which is the reason `notes` is
+    // required AND nullable in the seed shape.
+    const { store, languages } = await plantExportable();
+    const text = await exportTermsAsSeed(store, languages.id);
+    const parsed = JSON.parse(text) as ParsedDocument;
+
+    expect(parsed.terms.map((row) => row.notes))
+      .toEqual([null, EXPORTED_NOTE, null]);
+  });
+
+  it('writes an empty category as a document with no rows', async () => {
+    // The shape the port's empty-list contract round-trips through,
+    // and the one an operator meets before writing any lexicon at
+    // all. An export refusing here would make an empty bucket
+    // indistinguishable from a bucket that is not there.
+    const { store, tooling } = await plantLexicon();
+    const text = await exportTermsAsSeed(store, tooling.id);
+
+    expect(text).toBe(serializeTermSeedDocument([]));
+
+    await expect(importTerms(store, tooling.id, JSON.parse(text)))
+      .resolves.toEqual([]);
+  });
+
+  it('writes a document its own import accepts back', async () => {
+    // Export, import, export: the bytes settle rather than drifting,
+    // which is the whole of what one declaration of the shape buys.
+    // The import upserts on the natural key, so the second export is
+    // over the same three rows and not over six.
+    const { store, languages } = await plantExportable();
+    const text = await exportTermsAsSeed(store, languages.id);
+    const imported = await importTerms(store, languages.id, JSON.parse(text));
+    const again = await exportTermsAsSeed(store, languages.id);
+
+    expect(imported.length).toBe(EXPORT_PATTERNS.length);
+    expect(again).toBe(text);
   });
 });
