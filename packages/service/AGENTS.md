@@ -469,8 +469,8 @@ hour. The rules:
 
 1. New tests mock or fake external systems by default. If a fake gets
    nontrivial, give the fake its own contract tests.
-2. Live tests go in `tests/live/*.live.test.ts`, gated through
-   `describeLivePg` or `describeLiveN8n` by the service they need (env-var
+2. Live tests go in `tests/live/*.live.test.ts`, gated through whichever
+   `describeLive*` in that directory keys on the service they need (env-var
    opt-in → `describe.skip` otherwise; keep the explicit type annotation —
    inference breaks `tsc` with TS2742).
 3. Live tests run only against the `--profile stress` compose services
@@ -548,27 +548,29 @@ and the NEXT run's readiness poll is answered INSTANTLY by that orphan
 real regression. Use `exec` inside the subshell, preflight-refuse a port
 already answering, and re-check `ps` for orphans AFTER the run.
 
-`describeLivePg` is one of two gates in that directory. `describeLiveN8n`,
-in `tests/live/live-n8n.ts`, keys the n8n cases to `AR_N8N_URL` the same
-way, and the two are armed differently — which is the part to know before
-reading a run. `test:live` sets `AR_LIVE_DATABASE_URL` in its own script
-definition and sets nothing else, so it opens the Postgres gate itself and
-leaves the n8n one shut; nothing here exports `AR_N8N_URL`, and a value an
-operator put in `.env` for the deploy commands does not reach a worker. A
-live run with the stress container up therefore reports the n8n file
+`describeLivePg` is one of the gates in that directory, and the others are
+armed differently — which is the part to know before reading a run.
+`describeLiveN8n`, in `tests/live/live-n8n.ts`, keys the n8n cases to
+`AR_N8N_URL`, and `describeLiveOllama`, in `tests/live/live-ollama.ts`,
+keys the config-proposer case to `AR_OLLAMA_URL`, both the same way.
+`test:live` sets `AR_LIVE_DATABASE_URL` in its own script definition and
+sets nothing else, so it opens the Postgres gate itself and leaves every
+other one shut; nothing here exports either of those settings, and a value
+an operator put in `.env` for the deploy commands does not reach a worker.
+A live run with the stress container up therefore reports those files
 skipping while the Postgres files run, which is that command's steady state
 rather than a broken setup, and the skip count a plain `bun run test` prints
-now has two sources behind it.
+has a source in each of them.
 
 To see WHICH file skipped, pass the flag through rather than retyping the
 URL: `bun run test:live --reporter=verbose` APPENDS to the script's own
 inline `AR_LIVE_DATABASE_URL`, so the per-case reading costs nothing and
-honours the never-export-it-by-hand rule. The default summary's `1 skipped`
-cannot name a file; only the verbose `↓` lines show all three skips belong
-to `n8n-deploy.live.test.ts` rather than to a Postgres file that silently
-stopped being armed. Note also that a skipped file is still IMPORTED, so
-collection proves the module parses and nothing more — never read a
-`1 skipped` as evidence about a change under `tests/live/`.
+honours the never-export-it-by-hand rule. The default summary's skip count
+cannot name a file; only the verbose `↓` lines say which skips belong to
+the n8n and config-proposer files rather than to a Postgres file that
+silently stopped being armed. Note also that a skipped file is still
+IMPORTED, so collection proves the module parses and nothing more — never
+read a `1 skipped` as evidence about a change under `tests/live/`.
 
 There is also nothing here to point that gate at, which is why rule 3 is one
 an n8n case cannot satisfy rather than one it breaks. `docker-compose.yml`
@@ -581,9 +583,12 @@ gate debt recorded rather than behaviour a gate here proves: treat a case
 added there as unrun until somebody runs it. `tests/live/live-n8n.ts`
 carries the rest — what a skipped-but-collected case still reports, and the
 one place the seam can be broken without touching the gate.
+`tests/live/live-ollama.ts` records the same arrangement for the
+config-proposer case: no compose service supplies a model server either,
+nothing starts one, and `.env.example` names neither of its two settings.
 
-A THIRD seam sits beside those two, in `tests/parity/`, gated the same way
-for a different reason. `bun run test:parity` runs
+A seam of another kind sits beside the live ones, in `tests/parity/`, gated
+the same way for a different reason. `bun run test:parity` runs
 `tests/parity/*.parity.test.ts`, where a file drives a ported library and
 the origin it was ported from over one set of neutral fixtures and diffs
 the answers. `describePortParity`, in `tests/helpers/port-parity.ts`, keys

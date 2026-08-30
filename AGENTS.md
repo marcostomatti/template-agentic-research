@@ -191,12 +191,14 @@ behind an ASCII placeholder token, never as a literal in the tool call.
   external service; the live files self-skip unless the service they need is
   configured, and the Postgres half runs only against the no-volume `ar_live`
   DB on port 5433, whose destructive helpers refuse any other database name.
-  There are TWO gates now, armed differently — `describeLivePg` keys on
-  `AR_LIVE_DATABASE_URL`, which `bun run test:live` sets in its own script
-  definition, and `describeLiveN8n` keys on `AR_N8N_URL`, which nothing here
-  exports and no compose service satisfies. So a live run's steady state is
-  the Postgres files running and the n8n file skipping, and "the live suite"
-  is two things whenever a skip count is being read.
+  The gates in that directory are armed differently, and only one is armed
+  by anything here — `describeLivePg` keys on `AR_LIVE_DATABASE_URL`, which
+  `bun run test:live` sets in its own script definition, while
+  `describeLiveN8n` keys on `AR_N8N_URL` and `describeLiveOllama` on
+  `AR_OLLAMA_URL`, neither of which anything here exports and no compose
+  service satisfies. So a live run's steady state is the Postgres files
+  running and every other gated file skipping, and "the live suite" is more
+  than one thing whenever a skip count is being read.
 - Security findings route to a private advisory, never a public tracker —
   and are never searched for on a public tracker first (see the
   `qa-bug-reporter` agent).
@@ -577,19 +579,19 @@ red package never masks another and a single run gives the whole picture.
   cross a percentage threshold that run. What IS stable is a skeleton diff —
   strip the pino JSON, normalise durations/ports/timestamps, then `difflib`
   the rest.
-- `@ar/service` reporting skipped tests is the expected steady state, and it
-  now has TWO sources behind it: the Postgres-gated files self-skipping
-  without `AR_LIVE_DATABASE_URL`, and the n8n-gated file self-skipping
-  without `AR_N8N_URL`. A run with zero skipped means a live service leaked
-  into the default suite, not that something improved. The count is not the
-  check — it moves with every case added under `tests/live/`, so compare it
-  against HEAD's own run rather than against a number quoted here or in a
-  plan. When the tree IS HEAD there is nothing to compare and nothing to
-  stash: `@ar/service`'s `pretest` prints `1 built, stamped <sha>` a few
-  lines above the vitest banner, so that sha held against
-  `git rev-parse --short HEAD`, plus the ABSENCE of a `-dirty` suffix, says
-  both that the artifacts under test are HEAD's and that the tree is clean —
-  in one line of one run.
+- `@ar/service` reporting skipped tests is the expected steady state, and
+  every gate under `tests/live/` is a source of it: the Postgres-gated files
+  self-skipping without `AR_LIVE_DATABASE_URL`, the n8n-gated file without
+  `AR_N8N_URL`, and the proposer-gated file without `AR_OLLAMA_URL`. A run
+  with zero skipped means a live service leaked into the default suite, not
+  that something improved. The count is not the check — it moves with every
+  case added under `tests/live/`, so compare it against HEAD's own run
+  rather than against a number quoted here or in a plan. When the tree IS
+  HEAD there is nothing to compare and nothing to stash: `@ar/service`'s
+  `pretest` prints `1 built, stamped <sha>` a few lines above the vitest
+  banner, so that sha held against `git rev-parse --short HEAD`, plus the
+  ABSENCE of a `-dirty` suffix, says both that the artifacts under test are
+  HEAD's and that the tree is clean — in one line of one run.
 
 - On a tree already RED from an earlier stage, "is this red mine?" is answered
   by a before/after SET diff, never by a figure this file or an earlier commit

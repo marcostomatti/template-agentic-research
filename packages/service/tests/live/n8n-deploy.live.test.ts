@@ -85,11 +85,11 @@
  * out, reaching `workflow-markers.ts` and `node:` builtins and
  * stopping there.
  *
- * That is worth writing down because the two gates in this directory
- * key on different settings. A machine that exported `AR_N8N_URL` and
- * not `AR_LIVE_DATABASE_URL` runs every case here with the Postgres
- * ones still skipped, so what the one setting consents to is an
- * instance written to and no database touched at all, and the
+ * That is worth writing down because the gates in this directory key
+ * on different settings. A machine that exported `AR_N8N_URL` and not
+ * `AR_LIVE_DATABASE_URL` runs every case here with the Postgres ones
+ * still skipped, so what the one setting consents to is an instance
+ * written to and no database touched at all, and the
  * `fileParallelism: false` in `vitest.config.ts`, held for the files
  * that do truncate between cases, is something this one inherits
  * rather than needs. The limit is what it uploads rather than what it
