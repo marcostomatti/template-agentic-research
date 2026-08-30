@@ -323,8 +323,8 @@ learns nothing it had not already sent.
 
 Every request schema is strict, matching `scripts/seed-schemas.ts`:
 a typo in a JSONB unit is refused rather than silently stripped and
-then wondered about later. Strictness is what makes a settings
-PATCH trustworthy as a whole-unit replacement.
+then wondered about later. Strictness is what makes a settings PUT
+trustworthy as a whole-unit replacement.
 
 Its whole cost is the `unrecognized_keys` issue above, which is the
 one issue kind that carries submitted content. So the two decisions
