@@ -376,12 +376,19 @@ export function createMemoryResearchStore(
    * One domain's categories, ordered as
    * `TaxonomyStore.listCategoriesWithTermCounts` promises.
    *
-   * By `key` ascending, compared by code unit for the reason
-   * {@link orderedDomains} gives: a taxonomy key carries the same
-   * restricted alphabet a slug does, and the live server's
-   * `en_US.utf8` orders that alphabet exactly as `<` does (measured,
-   * both sides). The order is total because the key is unique within
-   * the domain, so there is no tie-break to forget.
+   * By `key` ascending, compared by code unit — but NOT for the
+   * reason {@link orderedDomains} gives, which is the alphabet a
+   * slug is held to. A taxonomy key is free text: `categorySeedSchema`
+   * in `scripts/seed-schemas.ts` holds it to non-empty and so does
+   * `createCategorySchema` in `src/taxonomy/categories-service.ts`,
+   * so a key may carry case, spaces and punctuation. What makes the
+   * comparison right anyway is measured rather than argued — the live
+   * server's `en_US.utf8` ordered a mixed-case, punctuation-heavy set
+   * of keys exactly as `<` did (measured, both sides) — and that is a
+   * fact about a deployment's collation rather than about this port,
+   * so a reader holding this order against a real server should
+   * re-measure rather than infer. The order is total because the key
+   * is unique within the domain, so there is no tie-break to forget.
    *
    * @param domainId - The domain to read.
    * @returns Its categories, key ascending.
