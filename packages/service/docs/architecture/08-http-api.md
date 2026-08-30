@@ -103,13 +103,37 @@ Measured against a service built by `createService` in this tree:
 | No bearer, or one the verifier rejects, with the guard armed | `401` `{ error: 'Unauthorized' }` from `buildRequireAuthFrom` in `lib/express/auth.ts` |
 | The app-wide rate limit exceeded | `429` `text/html`, express-rate-limit's own default string `Too many requests, please try again later.` |
 | A body that is not parseable JSON | `500` `{ code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' }` |
-| No route matched the path | `404` `text/html`, Express's own page |
+| No route matched the path | `404` `text/html`, Express's own page — but `401` first for a caller with no credential, per the claim below |
 
-Wave 1 changes none of them, so two things follow for a client. It
-cannot assume every response body is JSON, and it cannot assume
-every JSON body is one of the two envelopes above. The `401` is the
-one every wave-1 route can answer, because every one of them sits
-behind the guard.
+Wave 1 changes one of the four and leaves three untouched, so two
+things follow for a client. It cannot assume every response body is
+JSON, and it cannot assume every JSON body is one of the two
+envelopes above. The `401` is the one every wave-1 route can
+answer, because every one of them sits behind the guard.
+
+### An unmatched path answers `401` before it answers `404`
+
+The five wave-1 mounts sit at `/` rather than under a prefix, so
+each one's `ctx.requireAuth` runs for every request that REACHES
+it and not only for the ones its router matches. A path no route
+matches therefore falls through all five guards before it can
+reach Express's own page.
+
+Measured both ways against a service carrying an auth block: with the
+wave-1 mounts absent, `/nope` answers `404` `text/html` with and
+without a credential; with them in, it answers `401` to a caller
+carrying none and the same `404` `text/html` to a credentialled one.
+The three other rows above are unchanged, and so are `/health`,
+`/users` and `/me` — which is what `src/index.ts` mounting the five
+LAST buys, since a mount above `/users` would have guarded a starter
+route this wave does not touch.
+
+It is a disclosure narrowing rather than a loss: an uncredentialled
+caller learns that the port is guarded instead of which paths exist on
+it, and nothing is withheld that a credential does not reveal. The
+cost sits on the other side of the same mechanism — a credentialled
+request the fifth router serves runs the verifier five times, once per
+mount it falls through.
 
 `parseApiError` in `lib/errors/client.ts` is the reference client
 reading, and it separates them the same way: only the `500` body
