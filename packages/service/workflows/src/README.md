@@ -37,7 +37,7 @@ The 1:1 rule is what the surrounding tooling assumes:
 | --- | --- | --- |
 | `ar-dispatch` | phase 3 — landed | The only cron in the system. Claims due schedulable rows and invokes the others via Execute Workflow. |
 | `ar-ingest` | phase 5 — landed | Pull adapters → dedupe → gate → document to finding. |
-| `ar-capture` | phase 5 | Generic push webhook: external capture clients POST against a documented capture contract. |
+| `ar-capture` | phase 5 — landed | Generic push webhook: external capture clients POST against a documented capture contract. |
 | `ar-score` | phase 5 | Scores findings against the domain's criteria. |
 | `ar-research` | phase 6 | Entity research; carries the `validateEntityName` capability gate. |
 | `ar-digest` | phase 6 | Digests plus the export subscriptions the dispatcher schedules. |
