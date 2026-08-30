@@ -36,6 +36,26 @@
       }
     },
     {
+      "id": "select-active-sources",
+      "name": "Select Active Sources",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [440, 0],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n-- One row per source, and every node group below this one is built on that. A\n-- Postgres node maps its statement over the items it was handed and passes on what\n-- the statement returned, so this node takes the one context item above it and\n-- answers as many items as the domain has sources worth reading. An HTTP Request node\n-- runs once per input item, so a pass over four sources makes four requests because\n-- this statement answered four rows, and nothing below it has to loop.\n\n-- Which also means this node's answer REPLACES the context item, the way that item\n-- replaced the one the trigger was handed. The personas and the taxonomy are not\n-- gone, but they are no longer in $json: a node below reaches them as $('Load Domain\n-- Context').first().json, for the same reason ar-dispatch's Invoke Target Workflow\n-- reads its workflow id off Plan Dispatch rather than off the item the Postgres node\n-- in front of it wrote. run_id is the exception and is echoed into every row from the\n-- parameter, because a ledger row and a closing update are charged to the run rather\n-- than to a source.\n\n-- Two parameters, in declaration order: the run and the domain, both read off that\n-- one item. Neither is asked of the database again here. The pair came out of a\n-- single read of the runs row a moment ago, so a second lookup would re-read a row\n-- nothing has changed, and deriving the domain a second way is how the two start\n-- being able to disagree.\n\n-- One SELECT over one table, and that is a property of this schema rather than of the\n-- statement. The design this one is ported from held a feed's configuration in a\n-- hand-written module and its cursor in a table of its own, so the equivalent read\n-- joined what a person had edited to what a run had written, and adding a feed meant\n-- a deploy. Here everything that varies per feed is a column on the row: the whole of\n-- a source is one row, and this is the whole of the selection.\n\n-- Eleven of the twelve columns, and enabled is the omission. It is the WHERE clause's\n-- business rather than a reader's below: a row that reached this projection is\n-- enabled by construction, and carrying the column onward is an invitation to branch\n-- on it a second time.\n\n  $1::bigint AS run_id,\n\n  -- Which feed this is and how to reach it. kind is what selects the adapter for the\n  -- row, and the two ids are what a document written from this source is filed under.\n  -- endpoint is NOT NULL and may still be empty, which is a source somebody has not\n  -- finished configuring rather than one that needs no address.\n  s.id AS source_id,\n  s.domain_id,\n  s.kind,\n  s.endpoint,\n\n  -- The arrangement, from both of its ends: how to read this source, and what a\n  -- correct reading of it looks like. Data the parse engine is directed by, and never\n  -- anything it evaluates, which is what keeps adding a feed an INSERT. Both default\n  -- to an empty object, so a source nobody has configured yet arrives here shaped\n  -- like every other one and the adapter's own defaults apply.\n  s.parser_config,\n  s.contract,\n\n  -- Where the last fetch stopped, in whatever spelling the adapter that wrote it\n  -- chose. NULL means this source has never been fetched, or that its adapter keeps\n  -- no cursor at all. It stays NULL rather than becoming an empty string, which an\n  -- adapter would hand back to its source as a real position.\n  s.cursor,\n\n  -- The four members src/lib/source-health.ts reads, selected here so the health node\n  -- group can work a source's next counters out of the item it already holds rather\n  -- than out of a second SELECT. flagged is in that list even though the WHERE clause\n  -- below has already fixed it at false: reading it off the row keeps the library's\n  -- input a reading, where a Code node restating the constant would be this\n  -- statement's own predicate written down a second time, somewhere it can stop\n  -- agreeing.\n  s.consecutive_failures,\n  s.last_success_at,\n  s.last_failure_at,\n  s.flagged\nFROM sources s\n-- enabled AND NOT flagged, and the sticky note beside this node carries the argument\n-- for why those are two columns rather than one. What belongs on the statement is\n-- that both are NOT NULL with a default, so this predicate partitions the domain's\n-- sources rather than quietly dropping the rows whose flag was never set: a nullable\n-- boolean compares UNKNOWN, and a row that is neither selected nor excluded is the\n-- one nobody goes looking for.\nWHERE s.domain_id = $2::bigint\n  AND s.enabled\n  AND NOT s.flagged\n-- A NULL domain_id selects nothing, which is where a pass started by hand ends: no\n-- request is made and no row is written anywhere. Three different situations reach\n-- zero rows here and this statement parts none of them, those being no run behind the\n-- id, a domain with no sources, and a domain whose sources are all switched off or\n-- flagged. domain_id on the context item is the discriminator, which is why Load\n-- Domain Context answers one row whatever the database holds and this node does not\n-- have to.\n\n-- Ordered by id, which nothing below requires and every reader benefits from, for the\n-- reason the lists in the node above are ordered: two passes over one unchanged\n-- domain hand the nodes below the same sources in the same order.\nORDER BY s.id",
+        "options": {
+          "queryReplacement": "={{ $json.run_id }}, {{ $json.domain_id }}"
+        }
+      }
+    },
+    {
       "id": "invoked-never-scheduled",
       "name": "Invoked Never Scheduled",
       "type": "n8n-nodes-base.stickyNote",
@@ -46,6 +66,18 @@
         "height": 720,
         "content": "## Invoked, Never Scheduled\n\nThis workflow starts when `ar-dispatch` reaches it through Invoke Target Workflow, and the Execute Workflow Trigger on this canvas is the whole of what makes that possible. It holds no clock and may not acquire one: `ar-dispatch` carries the only Schedule Trigger in the system, and `tests/invariants/workflows.test.ts` counts them across every built workflow and names the one file allowed to hold one.\n\nScheduling this workflow is a row instead. A `topics` row says how often a domain should be pulled and when it is next due, the dispatcher claims it once `next_run_at` has passed, and this workflow is invoked for the claim. So changing the cadence is an UPDATE rather than an edit to this canvas.\n\n### What arrives, and what does not\n\nOne item carrying `run_id`, and nothing else. `Open Run` opens the `runs` row before the invocation and its `RETURNING` projection is the item forwarded here, so the claimed topic does not survive the hop: what this workflow knows about the pass it is running is the run, and the domain is read back off that. `Load Domain Context` is where that happens.\n\nThe trigger is typeVersion 1, which passes the caller's item through as it stands. Nothing here declares an input schema, so what the dispatcher sends is what the first node reads, and adding a schema later is a change to both ends rather than to this node alone.\n\n### Started by hand\n\nA run started from this canvas rather than by the dispatcher carries no `run_id`, and nothing pretends otherwise. `Load Domain Context` answers a null `domain_id` and four empty lists, which is a shape a node below can refuse by name. It is not an error worth suppressing: a pass with no run to charge has nowhere to write what it did."
       }
+    },
+    {
+      "id": "flagged-is-not-disabled",
+      "name": "Flagged Is Not Disabled",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [420, -760],
+      "parameters": {
+        "width": 400,
+        "height": 880,
+        "content": "## Flagged Is Not Disabled\n\nTwo columns keep a source out of this pass, and they are not one column written twice. `Select Active Sources` reads both: `enabled AND NOT flagged`.\n\n`flagged` is the pipeline's own reading, and the flag half of fail-flag-keep. `src/lib/source-health.ts` decides it: handed a source's counters and one fetch outcome, it answers a `flagged` of true once `consecutive_failures` has reached the threshold. Skipping the row is what makes setting the flag worth anything. A rotted feed that goes on being fetched spends a request every pass, stores payloads nothing can read, and buries the sources still worth reading underneath them.\n\nNothing on this canvas clears it. `source-health.ts` sets the flag and has no member that unsets it, and no node here writes `flagged = false`. A flag the same automation could clear is a source that alternates quietly between working and not with nobody told, and the repair is usually a new `parser_config`, which is a pending row and an approval of its own. Clearing it is an operator's act, taken once what broke has been fixed.\n\n### Switching a source off is a column of its own\n\n`enabled` is the operator's outright, and the two are separate because they answer different questions. `flagged` says the pipeline believes this feed has stopped working; `enabled` says whether it may be read at all. Collapsing them would let the detector switch off a feed an operator deliberately turned on, and leave nowhere to record a suspect source still worth reading.\n\n### What a skipped source costs\n\nNothing on this pass and nothing after it. A source this node does not select produces no item, so nothing is requested for it, no document is written under it, and its counter and its two stamps stay where the last pass left them. Which sources a domain is skipping is a question for the table, and the rows are the answer.\n\nA domain whose sources are all switched off or flagged selects nothing at all, and the chain below is skipped whole. The `runs` row still closes: `ar-dispatch` opened it and waits for this workflow to return, so a pass with nothing to fetch ends looking like the pass it was."
+      }
     }
   ],
   "connections": {
@@ -53,6 +85,13 @@
       "main": [
         [
           { "node": "Load Domain Context", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Load Domain Context": {
+      "main": [
+        [
+          { "node": "Select Active Sources", "type": "main", "index": 0 }
         ]
       ]
     }
