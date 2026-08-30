@@ -232,6 +232,39 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * fault in the first.
    */
   AR_EXPORT_WORKFLOW_ID: 'ar-digest',
+
+  /**
+   * The workflow `ar-ingest` invokes to score the findings one of its
+   * passes produced.
+   *
+   * Not one of the dispatcher's pair. `AR_TOPIC_WORKFLOW_ID` and
+   * `AR_EXPORT_WORKFLOW_ID` above are a ROUTING choice made on the
+   * kind of a claimed row, and an operator repointing either one
+   * sends a whole class of work somewhere else. This is a pipeline
+   * step: a pass that wrote findings hands them to the workflow that
+   * scores findings, and there is no second answer to pick from. It
+   * is a setting for the reason those two are ids rather than names.
+   * What an Execute Workflow node addresses is whatever the INSTANCE
+   * stores a workflow under, and `scripts/deploy-external.ts` upserts
+   * by display NAME and reads the id back off the instance, so an
+   * instance that assigned something else is repointed here rather
+   * than by editing a tracked artifact and rebuilding.
+   *
+   * `ar-score` is the id the roster in `workflows/src/README.md`
+   * reserves for the scoring path: criteria, features, and the one
+   * total a digest orders by. That is what a finding needs next,
+   * which is why the id is the default here rather than something an
+   * operator supplies.
+   *
+   * A name nothing answers for is a BUILD failure and not a run-time
+   * one. The marker in `ar-ingest.json` is resolved against the chain
+   * {@link envSources} builds, this table stands behind it, and a
+   * setting with no entry is {@link UnresolvedSettingError} before an
+   * artifact exists. A workflow id written into a source as a literal
+   * fails later and further away, on an instance, in a workflow
+   * nobody is watching.
+   */
+  AR_SCORE_WORKFLOW_ID: 'ar-score',
 };
 
 /**
