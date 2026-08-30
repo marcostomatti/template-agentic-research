@@ -1,8 +1,9 @@
 /**
  * The wave-1 stores driven against a real Postgres, through the real
- * migrations: a domain written, a taxonomy hung off it, and a
- * lexicon written into a bucket of that taxonomy. Self-skips when
- * AR_LIVE_DATABASE_URL is unset — run via:
+ * migrations: a domain written, a taxonomy hung off it, a lexicon
+ * written into a bucket of that taxonomy, and every mechanism those
+ * tables refuse a write with. Self-skips when AR_LIVE_DATABASE_URL
+ * is unset — run via:
  *
  *   bun run stress:start && bun run test:live && bun run stress:stop
  *
@@ -20,7 +21,7 @@
  * target naming the wrong key, a `RETURNING` list drifted from the
  * `SELECT` beside it — each is reported here and nowhere else.
  *
- * FOUR READINGS BELOW ARE THINGS AN IN-MEMORY MAP CANNOT DO, which
+ * SEVEN READINGS BELOW ARE THINGS AN IN-MEMORY MAP CANNOT DO, which
  * is the same argument put sharply enough to be checkable.
  *
  * THE IDENTITY AND THE STAMPS ARE THE DATABASE'S. `id` is a
@@ -57,6 +58,41 @@
  * re-import settle instead of accumulating a second row that would
  * then count the same match twice.
  *
+ * THE MECHANISMS ARE THE DATABASE'S, AND THE FAKE ONLY IMITATES
+ * THEM. `tests/helpers/memory-research-store.ts` refuses a
+ * duplicate key, a two-level category and a delete of a category
+ * holding children because it was written to — which is the whole
+ * point of it, and also why nothing over there can say whether what
+ * it was told is true. Every refusal below is read for its SQLSTATE
+ * and for the name that SQLSTATE arrived with: the four natural
+ * keys each name themselves, the `parent_id` foreign key names
+ * itself for BOTH the refusals it raises, and the depth trigger
+ * names nothing at all, because a `RAISE ... USING ERRCODE` sets no
+ * constraint. A schema whose index was declared over one column
+ * instead of two, or whose trigger stopped firing, is green in
+ * every isolated suite and red here.
+ *
+ * THE CASCADE OUTRUNS THE `NO ACTION` BESIDE IT. The foreign key on
+ * `categories.parent_id` refuses a delete of a category that still
+ * holds children — one case below raises exactly that — and
+ * dropping the DOMAIN takes parent and child together anyway,
+ * because `NO ACTION` is checked at the END of the statement and the
+ * cascade has removed both by then. The two readings sit beside
+ * each other on purpose: an implementation looping the port's own
+ * guarded single delete satisfies the first and fails the second,
+ * and it looks right on every taxonomy that is only one level deep.
+ *
+ * THE DRIVER ERROR IS THE ONLY LIVE CONTROL A CONTAINMENT ZERO HAS
+ * HERE. `src/db/store-errors.ts` takes no message parameter, so a
+ * `StoreRefusal` cannot carry a submitted value — but asserting
+ * that against an in-memory store is a zero with nothing behind it,
+ * since its refusals are built from a reason and a constraint name
+ * this repository chose and there was never anything to leak. A
+ * live refusal keeps the pg error on `cause`, whose `detail` spells
+ * the submitted slug verbatim, so the duplicate-slug case counts a
+ * known positive and a zero with the same function over the same
+ * string.
+ *
  * THE SCHEMA COMES FROM THE MIGRATIONS. `applyMigrations` in the
  * `beforeAll` below runs the real `drizzle/*.sql` rather than
  * pushing the schema, which is what `bun run db:migrate` does to a
@@ -75,56 +111,90 @@
  * carries and be sure of it. The first case takes that precondition
  * as a reading of its own rather than leaving it to a comment.
  *
- * THIS COMMIT LANDS THE ROUND TRIP AND NOTHING ELSE, and the
- * paragraphs a reader arriving from `tests/live/auth.live.test.ts`
- * will look for are deliberately absent rather than forgotten. No
- * case here provokes a REFUSAL: the depth trigger, the `parent_id`
- * `NO ACTION` that refuses a delete of a category still holding
- * children, the four natural keys and the domain cascade are the
- * next task's, and the personas and settings stores are the one
- * after that — nothing below writes `personas` or
- * `operator_settings`. One further read has no live case anywhere in
- * the plan and is named here so it can be picked up rather than
- * silently missed: `DomainStore.countDomainDependents` is one
- * `UNION ALL` over three LABELLED aggregates, and a branch coming
- * back out of order would attribute one table's count to another
- * with nothing reporting it. Reaching that needs a `topics`, a
- * `sources` and a `findings` row planted with raw SQL, which no port
- * method here writes. This paragraph is the missing half named
- * rather than left to be noticed, and it goes when they land.
+ * WHAT IS STILL MISSING IS NAMED RATHER THAN LEFT TO BE NOTICED.
+ * The refusals land here: the depth trigger, the `parent_id`
+ * `NO ACTION`, all four natural keys and the domain cascade each
+ * have a case, and two of them write `personas` through
+ * `createDbPersonaStore`. What has no case yet is a persona read
+ * back WHOLE against its own key set and the `operator_settings`
+ * singleton, both of which are the next task's; nothing below
+ * writes `operator_settings` at all. One further read has no live
+ * case anywhere in the plan and is named here so it can be picked
+ * up rather than silently missed:
+ * `DomainStore.countDomainDependents` is one `UNION ALL` over three
+ * LABELLED aggregates, and a branch coming back out of order would
+ * attribute one table's count to another with nothing reporting it.
+ * Reaching that needs a `topics`, a `sources` and a `findings` row
+ * planted with raw SQL, which no port method here writes. This
+ * paragraph is the missing half named rather than left to be
+ * noticed, and each half goes when it lands.
  *
- * SEVEN MUTATIONS WERE RUN AGAINST THESE NINE CASES, each leg twice,
- * with every red SET identical across the two passes. The figures
- * are a measurement over this case list and nothing else: the two
- * tasks named above add cases to this file, and every number here
+ * FOURTEEN MUTATIONS WERE RUN AGAINST THESE SIXTEEN CASES, each leg
+ * twice, with every red SET identical across the two passes and no
+ * leg reddening nothing. The figures are a measurement over this
+ * case list and nothing else: the task after this one adds a
+ * persona read and the settings singleton, and every number here
  * moves when they land, so the successor re-derives the grid rather
  * than inheriting it.
  *
- * TWO LEGS COLLAPSE INTO ONE READING rather than counting as two.
- * Counting `count(*)` instead of `count(terms.id)`, and ordering the
- * category list by id instead of by `key`, redden the IDENTICAL two
- * — the taxonomy case and the term-count case — because each of
- * those compares a whole ordered list of whole rows, so either fault
- * moves the same assertion and only the diff inside it says which.
- * Ordering the term list by id reddens two as well, the term read
- * and the rewrite, the second through a standing-rows control rather
+ * THE TWO LEGS A PREDECESSOR RECORDED AS ONE READING ARE TWO NOW,
+ * and the refusal cases are what separated them. Counting
+ * `count(*)` instead of `count(terms.id)` and ordering the category
+ * list by id instead of by `key` each redden THREE and share only
+ * two: the count leg reaches the cascade case, which compares the
+ * surviving domain's listed row whole, while the ordering leg
+ * reaches the depth case, which compares the ordered key list the
+ * refused write is absent from. Dropping the category list's
+ * `WHERE` reddens three as well and is a third set again: it alone
+ * reaches the duplicate-key case, and it reaches neither the
+ * term-count case nor the depth one. All three share the taxonomy
+ * case and nothing else, so what looked like one reading is now
+ * three overlapping ones and the overlap is a single assertion.
+ * Ordering the term list by id still reddens two, the term read and
+ * the rewrite, the second through a standing-rows control rather
  * than through its own subject.
  *
- * THE OTHER FOUR REDDEN EXACTLY ONE APIECE, and that narrowness is
- * what says each claim is isolated. Answering the insert's own
- * `settings` argument instead of the stored payload reddens the
- * jsonb case alone, because every other case stores `{}` — where an
- * echo and a read are the same value. Stamping `updated_at` from
- * `created_at` instead of `now()` reddens the patch case alone.
- * Dropping the `WHERE` from the category list reddens the taxonomy
- * case alone, which is the only one that plants a second domain.
- * Naming the wrong `ON CONFLICT` target reddens the rewrite case
- * alone: against a target no row collides on, the first pass still
- * lands and only a second pass has anything to conflict with.
+ * THREE OF THE ROUND-TRIP LEGS STILL REDDEN EXACTLY ONE APIECE, and
+ * that narrowness is what says each claim is isolated. Answering
+ * the insert's own `settings` argument instead of the stored
+ * payload reddens the jsonb case alone, because every other case
+ * stores `{}` — where an echo and a read are the same value.
+ * Stamping `updated_at` from `created_at` instead of `now()`
+ * reddens the patch case alone. Naming the wrong `ON CONFLICT`
+ * target reddens the rewrite case alone: against a target no row
+ * collides on, the first pass still lands and only a second pass
+ * has anything to conflict with.
+ *
+ * THE CLASSIFIER LEGS SPLIT BY MECHANISM, WHICH IS WHAT SAYS THE
+ * FOUR KEY CASES ARE FOUR CLAIMS RATHER THAN ONE WRITTEN OUT FOUR
+ * TIMES. Leaving 23505 unclassified reddens exactly the four
+ * natural-key cases, 23503 exactly the `NO ACTION` case and 23514
+ * exactly the depth case. Dropping the constraint name from every
+ * refusal reddens FIVE — those four plus the `NO ACTION` case —
+ * and pointedly not the depth case, which asserts the name is
+ * undefined precisely because a trigger names nothing. Its staying
+ * green under a leg that makes EVERY name undefined is invisibility
+ * BY CONSTRUCTION rather than a coverage hole, and naming it as
+ * that is what stops the five being read as a missing sixth.
+ *
+ * THREE LEGS REACH ONE STATEMENT EACH, AND ONE OF THEM IS A SECOND
+ * FAULT AT A CASE ANOTHER LEG ALREADY REDDENED. Clearing a
+ * category's children before deleting it reddens the `NO ACTION`
+ * case, the same single case the unclassified 23503 reddens: one is
+ * a rule that stopped being translated and the other a rule that
+ * stopped firing, and only the assertion inside the case says
+ * which. Dropping the `WHERE` from `deleteDomain` reddens the
+ * cascade case, through the control that the second domain kept
+ * what it had. Unwrapping `insertPersona` from its `refusing`
+ * translation reddens the persona key case alone, and that width is
+ * the reading worth holding against the 23505 leg's four: the
+ * shared classifier stands behind every store and the wrapper
+ * behind one, so the two legs measure different halves of the same
+ * containment boundary.
  *
  * THE KEY-SET PIN IS A `check-types` LEG rather than a red case, and
  * was measured the same way: a fabricated member on `DomainRecord`
- * answers TS2322 at {@link EVERY_KEY_LISTED} with all nine cases
+ * answers TS2322 at {@link EVERY_KEY_LISTED} with all sixteen cases
  * still green, which is what says the `satisfies` lists close only
  * the direction that does not matter.
  *
@@ -140,6 +210,7 @@ import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type { DomainStore } from '../../src/domains/index.js';
 import type { DomainRecord } from '../../src/domains/store.js';
 import type { StoreWindow } from '../../src/http/schemas.js';
+import type { PersonaStore } from '../../src/personas/store.js';
 import type {
   CategoryRecord,
   CategoryWithTermCount,
@@ -151,7 +222,9 @@ import type { Pool } from 'pg';
 
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 
+import { StoreRefusal } from '../../src/db/store-errors.js';
 import { createDbDomainStore } from '../../src/domains/index.js';
+import { createDbPersonaStore } from '../../src/personas/db-store.js';
 import { createDbTaxonomyStore } from '../../src/taxonomy/db-store.js';
 
 import {
@@ -306,6 +379,63 @@ const REWRITTEN = {
 } as const satisfies TermValues;
 
 /**
+ * The key a category that never lands would have carried.
+ *
+ * Every write naming it below is one the database refuses, so the
+ * taxonomy read that follows is a reading of what was NOT stored
+ * rather than a formality.
+ */
+const GRANDCHILD_KEY = 'runtimes';
+
+/** Its label. */
+const GRANDCHILD_NAME = 'Runtimes';
+
+/**
+ * A second child of the root, and the depth case's control.
+ *
+ * The refused write and this one differ in their parent and in
+ * nothing else, which is what says the trigger refused the DEPTH
+ * rather than the write, the key or the domain.
+ */
+const SIBLING_KEY = 'languages';
+
+/** Its label. */
+const SIBLING_NAME = 'Languages';
+
+/**
+ * The role every persona case plants first.
+ *
+ * `personas.role` carries no CHECK — the roles a pipeline plays
+ * grow with the pipeline — so this is a fixture rather than a
+ * member of any closed set.
+ */
+const RESEARCHER = 'researcher';
+
+/** A second role, for the rename that collides with the first. */
+const SCORER = 'scorer';
+
+/** The system text a planted persona carries. */
+const SYSTEM_TEXT = 'Survey the field and report what changed.';
+
+/**
+ * The text a refused persona write carries.
+ *
+ * Different from {@link SYSTEM_TEXT} on purpose: a refusal that
+ * wrote anyway is only visible where the two disagree.
+ */
+const REFUSED_TEXT = 'Written by a request the database refused.';
+
+/**
+ * An id no category carries in any case below.
+ *
+ * `resetTables` restarts every sequence and no case here plants
+ * anywhere near this many rows, so a `parentId` naming it is a
+ * parent that genuinely is not there rather than one that merely
+ * has not been written yet.
+ */
+const ABSENT_ID = 9999;
+
+/**
  * Every member `DOMAIN_COLUMNS` in `src/domains/db-store.ts`
  * projects.
  *
@@ -399,6 +529,50 @@ const LISTED_KEY_SET: readonly string[] = [...LISTED_KEYS].sort();
 const TERM_KEY_SET: readonly string[] = [...TERM_KEYS].sort();
 
 /**
+ * The unique key on `domains.slug`.
+ *
+ * The four key names here are spelled in `src/db/schema/`, so each
+ * is a name this repository chose rather than one Postgres derived
+ * — which is what makes asserting them a reading of the migration
+ * and not of the driver. A derived name would not be greppable in
+ * this repository at all.
+ */
+const DOMAIN_SLUG_KEY = 'domains_slug_unique';
+
+/** The unique key on `(categories.domain_id, categories.key)`. */
+const CATEGORY_KEY_UNIQUE = 'categories_domain_id_key_unique';
+
+/** The unique key on `(terms.category_id, terms.pattern)`. */
+const TERM_PATTERN_KEY = 'terms_category_id_pattern_unique';
+
+/** The unique key on `(personas.domain_id, personas.role)`. */
+const PERSONA_ROLE_KEY = 'personas_domain_id_role_unique';
+
+/**
+ * The foreign key `categories.parent_id` opens.
+ *
+ * ONE NAME COVERS TWO REFUSALS, which is why `src/taxonomy/store.ts`
+ * has the service tell them apart by the call it made rather than
+ * by anything on the refusal: an insert naming a parent that does
+ * not exist and a delete of a category still holding children are
+ * both this key and both a `foreign-key-violation`. One case below
+ * raises the pair and compares them.
+ */
+const PARENT_FK = 'categories_parent_id_categories_id_fk';
+
+/**
+ * Every enumerable field a `StoreRefusal` carries, sorted.
+ *
+ * `message`, `stack` and `cause` are NON-enumerable on an `Error`,
+ * so these three are what a logger walking a refusal writes. A
+ * fourth arriving here would have come off the driver error a live
+ * refusal is built from, which is a submitted value one property
+ * read from a log line — the reason `src/db/store-errors.ts` takes
+ * no message parameter at all.
+ */
+const REFUSAL_KEY_SET: readonly string[] = ['constraint', 'name', 'reason'];
+
+/**
  * The sorted key set of one answered record.
  *
  * @param row - Whatever a store handed back.
@@ -471,6 +645,54 @@ function termNamed(
 }
 
 /**
+ * The refusal a live write was supposed to raise.
+ *
+ * Throws on both of the shapes that are not one. A call that
+ * ANSWERED leaves every assertion below it about a refusal nobody
+ * built, and a thrown value that is not a `StoreRefusal` is the one
+ * thing every implementation of these ports promises never to
+ * raise — so rethrowing it here is what says a driver error crossed
+ * the port translated rather than raw, which is the containment
+ * boundary each `db-store.ts` wraps its writes in.
+ *
+ * @param run - The call expected to be refused.
+ * @returns The refusal it raised.
+ * @throws Error When the call answered instead.
+ */
+async function refusalFrom(
+  run: () => Promise<unknown>,
+): Promise<StoreRefusal> {
+  try {
+    await run();
+  } catch (err) {
+    if (err instanceof StoreRefusal) {
+      return err;
+    }
+
+    throw err;
+  }
+
+  throw new Error(
+    '[api-live] expected a StoreRefusal and the call answered, so '
+    + 'the refusal asserted below was never raised at all.',
+  );
+}
+
+/**
+ * How many times a needle occurs in some text.
+ *
+ * A count rather than a boolean, so a zero can be read beside a
+ * known positive taken by the same function in the same case.
+ *
+ * @param haystack - The text to search.
+ * @param needle - The string to count.
+ * @returns The number of occurrences.
+ */
+function countOccurrences(haystack: string, needle: string): number {
+  return haystack.split(needle).length - 1;
+}
+
+/**
  * The domain, the root and the child one case plants.
  *
  * Named rather than inlined so the plant helper below has a return
@@ -491,7 +713,7 @@ describeLivePg('wave-1 stores (live Postgres)', () => {
   let pool: Pool;
   let db: ReturnType<typeof createLiveDb>;
 
-  // Both stores are built before the pool exists, which is the
+  // All three stores are built before the pool exists, which is the
   // ordering the thunk in each of them is there for: `src/index.ts`
   // builds all four wave-1 stores while `createService` is still
   // registering, and that is before the Postgres dependency has
@@ -501,10 +723,12 @@ describeLivePg('wave-1 stores (live Postgres)', () => {
   //
   // `createDbDomainStore` comes through `src/domains/index.js` and
   // not through the module declaring it, which is the containment
-  // rule that barrel states about itself. Taxonomy carries no barrel,
-  // so its constructor is a deep import; see `ls src/*/index.ts`.
+  // rule that barrel states about itself. Taxonomy and personas
+  // carry no barrel, so those two constructors are deep imports; see
+  // `ls src/*/index.ts`.
   const domainStore: DomainStore = createDbDomainStore(() => db);
   const taxonomyStore: TaxonomyStore = createDbTaxonomyStore(() => db);
+  const personaStore: PersonaStore = createDbPersonaStore(() => db);
 
   beforeAll(async () => {
     pool = createLivePool();
@@ -854,5 +1078,362 @@ describeLivePg('wave-1 stores (live Postgres)', () => {
       .toStrictEqual(LEXICON_PATTERNS);
     expect(termNamed(listed, REWRITTEN.pattern)).toStrictEqual(after);
     expect(termNamed(listed, untouched.pattern)).toStrictEqual(untouched);
+  });
+
+  it('refuses a category whose parent is itself a child', async () => {
+    const { domain, root, child } = await plantTaxonomy();
+
+    // The trigger `drizzle/0002_category_depth_guard.sql` installs
+    // is what refuses this, and it refuses as a CHECK violation
+    // naming NOTHING: a `RAISE ... USING ERRCODE` sets no
+    // constraint, so `reason` is the whole discriminator and a
+    // service reading a name here would read undefined. That is a
+    // fact about what the server raises rather than about what the
+    // schema says, and this is the only place it can be taken.
+    const refusal = await refusalFrom(() => taxonomyStore.insertCategory({
+      domainId: domain.id,
+      key: GRANDCHILD_KEY,
+      name: GRANDCHILD_NAME,
+      parentId: child.id,
+    }));
+
+    expect(refusal.reason).toBe('check-violation');
+    expect(refusal.constraint).toBeUndefined();
+
+    // Nothing off the driver error came with it. The name is present
+    // and undefined rather than absent, which is what the port's
+    // optional `constraint` is describing.
+    expect(keysOf(refusal)).toStrictEqual(REFUSAL_KEY_SET);
+
+    // The control, and it differs from the refused write in its
+    // PARENT alone: what the trigger declined is the third level,
+    // not the write, the key or the domain.
+    const sibling = await taxonomyStore.insertCategory({
+      domainId: domain.id,
+      key: SIBLING_KEY,
+      name: SIBLING_NAME,
+      parentId: root.id,
+    });
+
+    expect(sibling.parentId).toBe(root.id);
+
+    // And the refused row is not standing. A trigger that fired
+    // after the write rather than before it would leave a third
+    // level in the taxonomy while the caller read a refusal.
+    const listed = await taxonomyStore
+      .listCategoriesWithTermCounts(domain.id);
+
+    expect(listed.map((row) => row.key))
+      .toStrictEqual([CHILD_KEY, SIBLING_KEY, ROOT_KEY]);
+  });
+
+  it('refuses a delete of a category holding children', async () => {
+    const { domain, root, child } = await plantTaxonomy();
+
+    // `categories.parent_id` is `NO ACTION`, so the root cannot go
+    // while the child points at it — the asymmetry that makes
+    // removing a level an explicit decision rather than a cascade
+    // that takes a subtree and its terms with it.
+    const refusal = await refusalFrom(
+      () => taxonomyStore.deleteCategory(root.id),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe(PARENT_FK);
+
+    // THE SAME KEY, RAISED BY THE OTHER CALL. An insert naming a
+    // parent no row carries is refused by this very constraint, so
+    // the two refusals are indistinguishable from each other and
+    // `src/taxonomy/categories-service.ts` tells a 409 from a 422 by
+    // which call it made. Asserting the pair together is what turns
+    // that from a claim about the schema into a measurement.
+    const missing = await refusalFrom(() => taxonomyStore.insertCategory({
+      domainId: domain.id,
+      key: GRANDCHILD_KEY,
+      name: GRANDCHILD_NAME,
+      parentId: ABSENT_ID,
+    }));
+
+    expect(missing.reason).toBe(refusal.reason);
+    expect(missing.constraint).toBe(refusal.constraint);
+
+    // Both rows stood through it.
+    expect(await taxonomyStore.findCategoryById(root.id))
+      .toStrictEqual(root);
+    expect(await taxonomyStore.findCategoryById(child.id))
+      .toStrictEqual(child);
+
+    // The control is the SAME call on the SAME row: refused while
+    // the child pointed at it, accepted once the child had gone.
+    // Nothing about the row changed in between.
+    expect(await taxonomyStore.deleteCategory(child.id)).toBe(true);
+    expect(await taxonomyStore.deleteCategory(root.id)).toBe(true);
+    expect(await taxonomyStore.listCategoriesWithTermCounts(domain.id))
+      .toStrictEqual([]);
+  });
+
+  it('refuses a second domain under a slug already taken', async () => {
+    const first = await plantDomain();
+    const refusal = await refusalFrom(() => domainStore.insertDomain({
+      slug: RADAR,
+      name: TRANSIT_NAME,
+      settings: {},
+    }));
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe(DOMAIN_SLUG_KEY);
+
+    // NOTHING THE CALLER SUBMITTED IS ON THE REFUSAL, and this is
+    // the one place that zero has a live positive control. The pg
+    // error a link down spells `Key (slug)=(...) already exists.`
+    // with the submitted slug in it, and `errorHandler` logs an
+    // unhandled error together with its `cause` — so the count of
+    // zero below is read beside a known positive taken by the same
+    // function over the same string, rather than against a fixture
+    // that happens to agree. No in-memory store can supply that
+    // control: its refusals are built from a reason and a name it
+    // chose, so there is nothing there to have leaked.
+    const carried = String(
+      (refusal.cause as { detail?: unknown } | undefined)?.detail,
+    );
+
+    expect(countOccurrences(carried, RADAR)).toBe(1);
+    expect(countOccurrences(JSON.stringify(refusal), RADAR)).toBe(0);
+    expect(countOccurrences(refusal.message, RADAR)).toBe(0);
+
+    // THE REFUSED INSERT BURNED AN ID. A `bigserial` is read while
+    // the row is formed and the index refuses it afterwards, and a
+    // sequence does not roll back — so the next domain is id 3 and
+    // not id 2. The reset is what makes that deterministic here, and
+    // it is the fidelity `tests/helpers/memory-research-store.ts`
+    // had to be written to imitate rather than one it would have.
+    const second = await domainStore.insertDomain({
+      slug: TRANSIT,
+      name: TRANSIT_NAME,
+      settings: {},
+    });
+
+    expect(first.id).toBe(FIRST_ID);
+    expect(second.id).toBe(first.id + 2);
+    expect(await domainStore.countDomains()).toBe(2);
+
+    // And the refusal wrote nothing: the stored row is the first
+    // one, under the name the first write gave it.
+    expect(present(
+      await domainStore.findDomainBySlug(RADAR),
+      'findDomainBySlug after the refused duplicate',
+    )).toStrictEqual(first);
+  });
+
+  it('refuses a key the domain already carries', async () => {
+    const { domain, root } = await plantTaxonomy();
+    const refusal = await refusalFrom(() => taxonomyStore.insertCategory({
+      domainId: domain.id,
+      key: ROOT_KEY,
+      name: GRANDCHILD_NAME,
+      parentId: null,
+    }));
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe(CATEGORY_KEY_UNIQUE);
+
+    // The control says the key is PER-DOMAIN rather than global:
+    // the same key, under a second domain, lands. A unique index
+    // over `key` alone would refuse this too, and every count in
+    // every other case here would still add up.
+    const other = await domainStore.insertDomain({
+      slug: TRANSIT,
+      name: TRANSIT_NAME,
+      settings: {},
+    });
+    const otherRoot = await taxonomyStore.insertCategory({
+      domainId: other.id,
+      key: ROOT_KEY,
+      name: ROOT_NAME,
+      parentId: null,
+    });
+
+    expect(otherRoot.key).toBe(root.key);
+    expect(otherRoot.domainId).toBe(other.id);
+    expect(await taxonomyStore.listCategoriesWithTermCounts(domain.id))
+      .toHaveLength(2);
+  });
+
+  it('refuses a pattern the bucket already carries', async () => {
+    const { root, child } = await plantTaxonomy();
+    const planted = await taxonomyStore.insertTerm({
+      categoryId: child.id,
+      ...REWRITTEN,
+    });
+    const refusal = await refusalFrom(() => taxonomyStore.insertTerm({
+      categoryId: child.id,
+      pattern: REWRITTEN.pattern,
+      weight: 1,
+      polarity: 'positive',
+      notes: null,
+    }));
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe(TERM_PATTERN_KEY);
+
+    // A single create asserts a NEW row and says so by refusing;
+    // `upsertTerms` over the same key takes the conflict instead,
+    // which is the other case in this file. Two intents, one index.
+    expect(termNamed(
+      await taxonomyStore.listTerms(child.id),
+      REWRITTEN.pattern,
+    )).toStrictEqual(planted);
+
+    // The control: per-BUCKET rather than per-table. The same
+    // pattern lands in the root, which holds none of its own.
+    const elsewhere = await taxonomyStore.insertTerm({
+      categoryId: root.id,
+      pattern: REWRITTEN.pattern,
+      weight: 1,
+      polarity: 'positive',
+      notes: null,
+    });
+
+    expect(elsewhere.pattern).toBe(planted.pattern);
+    expect(elsewhere.categoryId).toBe(root.id);
+    expect(await taxonomyStore.countTerms(child.id)).toBe(1);
+    expect(await taxonomyStore.countTerms(root.id)).toBe(1);
+  });
+
+  it('refuses a role the domain already carries', async () => {
+    const domain = await plantDomain();
+    const other = await domainStore.insertDomain({
+      slug: TRANSIT,
+      name: TRANSIT_NAME,
+      settings: {},
+    });
+    const planted = await personaStore.insertPersona({
+      domainId: domain.id,
+      role: RESEARCHER,
+      systemText: SYSTEM_TEXT,
+    });
+    const refusal = await refusalFrom(() => personaStore.insertPersona({
+      domainId: domain.id,
+      role: RESEARCHER,
+      systemText: REFUSED_TEXT,
+    }));
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe(PERSONA_ROLE_KEY);
+
+    // Per-domain, exactly as the taxonomy key is: the same role
+    // under a second domain lands, so what the index refuses is a
+    // domain naming one role twice and not a role being reused.
+    const elsewhere = await personaStore.insertPersona({
+      domainId: other.id,
+      role: RESEARCHER,
+      systemText: REFUSED_TEXT,
+    });
+
+    expect(elsewhere.role).toBe(planted.role);
+    expect(elsewhere.domainId).toBe(other.id);
+
+    // THE ONE WAVE-1 PATCH THAT REACHES ITS OWN NATURAL KEY. A
+    // rename onto a role the domain already carries raises the same
+    // index on an UPDATE as it does on an INSERT, which is why
+    // `PersonaPatch` carries `role` where `CategoryPatch` refuses to
+    // carry `key` — the rename is legal, and it is the database
+    // rather than the port that says which renames are not.
+    const second = await personaStore.insertPersona({
+      domainId: domain.id,
+      role: SCORER,
+      systemText: SYSTEM_TEXT,
+    });
+    const renamed = await refusalFrom(
+      () => personaStore.updatePersona(second.id, { role: RESEARCHER }),
+    );
+
+    expect(renamed.reason).toBe(refusal.reason);
+    expect(renamed.constraint).toBe(refusal.constraint);
+
+    // Neither refused write left anything behind: the first row
+    // still carries the text the accepted write gave it, the
+    // renamed row still carries its own role, and the domain holds
+    // the two personas it was given.
+    expect(present(
+      await personaStore.findPersonaById(planted.id),
+      'findPersonaById after the refused duplicate role',
+    ).systemText).toBe(SYSTEM_TEXT);
+    expect(present(
+      await personaStore.findPersonaById(second.id),
+      'findPersonaById after the refused rename',
+    ).role).toBe(SCORER);
+    expect(await personaStore.countPersonas(domain.id)).toBe(2);
+    expect(await personaStore.countPersonas(other.id)).toBe(1);
+  });
+
+  it('takes the taxonomy and the personas with the domain', async () => {
+    const { domain, root, child } = await plantTaxonomy();
+
+    await taxonomyStore.upsertTerms(child.id, LEXICON);
+
+    const persona = await personaStore.insertPersona({
+      domainId: domain.id,
+      role: RESEARCHER,
+      systemText: SYSTEM_TEXT,
+    });
+
+    // A second domain carrying a taxonomy and a persona of its own,
+    // so the zeros below are a cascade scoped to one domain rather
+    // than a statement that emptied the tables.
+    const other = await domainStore.insertDomain({
+      slug: TRANSIT,
+      name: TRANSIT_NAME,
+      settings: {},
+    });
+    const otherRoot = await taxonomyStore.insertCategory({
+      domainId: other.id,
+      key: ROOT_KEY,
+      name: ROOT_NAME,
+      parentId: null,
+    });
+    const otherPersona = await personaStore.insertPersona({
+      domainId: other.id,
+      role: RESEARCHER,
+      systemText: SYSTEM_TEXT,
+    });
+
+    // The control that the zeros are REMOVALS. Without it a cascade
+    // that took nothing is indistinguishable from one that took
+    // everything, because both leave the same counts behind.
+    expect(await taxonomyStore.listCategoriesWithTermCounts(domain.id))
+      .toHaveLength(2);
+    expect(await taxonomyStore.countTerms(child.id))
+      .toBe(LEXICON.length);
+    expect(await personaStore.countPersonas(domain.id)).toBe(1);
+
+    // THE ROOT STILL HOLDS ITS CHILD, AND THE DELETE TAKES BOTH.
+    // The case above proves `categories.parent_id` refuses a delete
+    // of this very row, and the cascade is not refused: `NO ACTION`
+    // is checked at the END of the statement, by which point the
+    // domain's own `ON DELETE CASCADE` has removed parent and child
+    // together. An implementation looping the port's guarded single
+    // delete would be refused here, and one that does so looks
+    // right on every taxonomy that is only one level deep.
+    expect(await domainStore.deleteDomain(domain.id)).toBe(true);
+
+    expect(await domainStore.findDomainBySlug(RADAR)).toBeNull();
+    expect(await taxonomyStore.findCategoryById(root.id)).toBeNull();
+    expect(await taxonomyStore.findCategoryById(child.id)).toBeNull();
+    expect(await taxonomyStore.listCategoriesWithTermCounts(domain.id))
+      .toStrictEqual([]);
+    expect(await taxonomyStore.listTerms(child.id)).toStrictEqual([]);
+    expect(await taxonomyStore.countTerms(child.id)).toBe(0);
+    expect(await personaStore.findPersonaById(persona.id)).toBeNull();
+    expect(await personaStore.countPersonas(domain.id)).toBe(0);
+
+    // And the second domain kept everything it had. A cascade that
+    // had stopped narrowing would answer every zero above while
+    // taking the whole database with it.
+    expect(await domainStore.countDomains()).toBe(1);
+    expect(await taxonomyStore.listCategoriesWithTermCounts(other.id))
+      .toStrictEqual([{ ...otherRoot, termCount: 0 }]);
+    expect(await personaStore.findPersonaById(otherPersona.id))
+      .toStrictEqual(otherPersona);
   });
 });
