@@ -31,9 +31,9 @@ in the phase column names the item rather than a number.
 | Invariant | Enforced by | Owning phase | Status |
 | --- | --- | --- | --- |
 | No workflow holds a send-capable node | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
-| A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/`, for what a model node may be fed — the half this row's phase and status are about; `tests/lib/chunk.test.ts`, landed in phase 4, for what a prepared chunk is before any workflow reaches for one | 6 | Pending |
+| A model node is fed a prepared chunk and nothing else | `tests/workflows/ar-ingest.test.ts`, driving the built body of the node that assembles a prompt and holding what it hands on to the framed halves, the four ids and the measurements — the half this row's phase and status are about; `tests/lib/chunk.test.ts`, landed in phase 4, for what a prepared chunk is before any workflow reaches for one | 5 | Implemented |
 | A prepared chunk is capped at 6000 characters, and there is no raw-body fallback | `tests/lib/chunk.test.ts`, driving `buildChunk` over assemblies each of which would overrun the cap, and holding what it refuses to a closed roster of reasons in both directions | 4 | Implemented |
-| Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 6 | Unexercised |
+| Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 5 | Implemented |
 | Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
 | Building one tree twice writes byte-identical artifacts, and the git build stamp is the one value permitted to move with the checkout | `tests/build/build-workflows.test.ts`, spawning `scripts/build-workflows.ts` twice over a fixture source tree and holding the two output directories against each other | 3 | Implemented |
 | A library spliced into a Code node stands alone there — no value import, declaration-form exports only, no reliance on module scope | `scripts/build-workflows.ts`, refusing the first two through `assertSpliceable` in `scripts/workflow-markers.ts` and writing no artifact at all; `pretest` runs the build ahead of the default suite, and the third rule leaves nothing to refuse it on | 3 | Implemented |
@@ -60,11 +60,12 @@ ordinary `bun run test` today, and reads something the rule applies to;
 and `Pending` when the row is still a reservation.
 
 An **Enforced by** cell can name an artifact from a phase other than
-the owning one. That happens where a property splits into halves and
-one half is already covered: the cell names both, so the row can be
-read without holding the rest of the register in mind, while **Owning
-phase** and **Status** stay with the half nothing enforces yet — the
-half the row is accountable for.
+the owning one. That happens where a property splits into halves that
+land separately: the cell names both, so the row can be read without
+holding the rest of the register in mind, while **Owning phase** and
+**Status** stay with the half the row is accountable for — the one
+nothing enforces yet, or, once everything does, the one that landed
+last.
 
 ### A row is written before the artifact that enforces it
 
@@ -107,14 +108,14 @@ check nothing runs is indistinguishable from one that passes.
 ### A check with no subject runs, passes, and enforces nothing
 
 A check the gate never collects is one kind of empty. There is a second,
-and the suite reaches it on every run: a check that is collected, runs,
-walks its whole input, and finds nothing the rule is about. Landing the
-spine ahead of the behaviour it guards is what produces one — the guards
-over model calls walk every built workflow, match no node, and pass, and
-will until phase 6 delivers a workflow that makes a model call. That
-pass says the built tree holds no counterexample, and it says exactly as
-much over a tree with nothing to hold to the rule. Nothing in the run
-parts the two.
+and the suite reached it on every run for two phases: a check that is
+collected, runs, walks its whole input, and finds nothing the rule is
+about. Landing the spine ahead of the behaviour it guards is what
+produces one — the guards over model calls walked every built workflow,
+matched no node, and passed, from phase 3 writing them to phase 5
+landing the first node they could read. Such a pass says the built tree
+holds no counterexample, and it says exactly as much over a tree with
+nothing to hold to the rule. Nothing in the run parts the two.
 
 Neither of the other readings reports that honestly. `Implemented` would
 report the property as held, where what holds it is that nothing has
@@ -126,18 +127,20 @@ phase that lands the subject rather than the phase that lands the check
 becomes `Implemented` when its subject arrives, with nothing about the
 check moving for it.
 
-The refusal that keeps the workflow rows honest does not reach this one.
-Those assertions read built output through a reader that refuses an
-empty tree, which is what stops an absence check passing over no
-workflows at all, and what makes the green on the send-capable-node and
-schedule-trigger rows a reading over a tree with nodes in it. No refusal
-can do the same here: a built tree carrying no model node is what phase
-3 delivers rather than a mistake to fail on. What stands behind an
-unexercised row meanwhile is whatever a planted sample can reach — the
-matcher that finds its subject, driven over planted types in
+The refusal that keeps the workflow rows honest does not reach an
+unexercised one. Those assertions read built output through a reader
+that refuses an empty tree, which is what stops an absence check passing
+over no workflows at all, and what makes the green on the
+send-capable-node and schedule-trigger rows a reading over a tree with
+nodes in it. No refusal can do the same for a rule whose subject has not
+landed: a built tree carrying no model node was what phase 3 delivered
+rather than a mistake to fail on. What stands behind such a row
+meanwhile is whatever a planted sample can reach — the matcher that
+finds its subject, driven over planted types in
 `tests/invariants/workflow-rosters.test.ts`, and the reads behind it,
 driven over planted statements and bodies where they are driven at all.
-None of that says anything about the two composed over a real node.
+None of that says anything about the two composed over a real node,
+which is what phase 5 supplied and what moved the row.
 
 ## Why each row is here
 
@@ -188,8 +191,8 @@ against, and spend nobody can attribute to a run is spend nobody can act
 on — a burn stays invisible until the provider is the one who reports
 it.
 
-The schedule trigger is the only one of the four the built tree already
-holds, and its row reads `Implemented` on a count rather than a clock.
+The schedule trigger was the first of the four the built tree held, and
+its row reads `Implemented` on a count rather than a clock.
 `tests/invariants/workflows.test.ts` holds the whole built tree to one
 node of one named type, carried by `ar-dispatch`. The two limits on that
 bound it from opposite sides: a workflow written with either of the
@@ -201,19 +204,20 @@ each limit is argued beside the declaration it belongs to.
 The other properties are spread across rows that do not read alike. The
 ceiling, the ledger row and the retry setting are one row, and
 `tests/invariants/workflows.test.ts` holds every built workflow to all
-three today, so that row reads `Unexercised`: the assertions run on
-every pass and no built workflow has offered them a model node yet.
+three. That row read `Unexercised` while the assertions ran on every
+pass over a tree carrying no model node; phase 5 gave them one in
+`ar-ingest`, and the row reads `Implemented` with nothing about the
+check having moved for it.
 
 The first property is two rows rather than one, because it is two
 claims about different things. What a model node may be fed is a
-property of a workflow, has nothing holding a workflow to it yet, and
-reads `Pending`; the bound on the chunk itself is a property of the
+property of a workflow, and phase 5 landed both the workflow and what
+holds it to that; the bound on the chunk itself is a property of the
 library that assembles one, and reads `Implemented` from phase 4. The
-pending row names both artifacts anyway, because a reader who found
-only `tests/invariants/` there would take the whole property to be
-unenforced where half of it is already held; its phase and status stay
-with the half that is not. Where a row names phase 6, its reading is
-what says which kind of phase-6 work it is waiting on.
+workflow row names both artifacts anyway, because a reader who found
+only the workflow half there would take the property to begin at the
+node rather than at the library the node calls; its phase and status
+stay with the half its own phase landed.
 
 ### The chunk ceiling is a bill somebody already paid
 
@@ -253,7 +257,7 @@ no roster entry registered.
 What `Implemented` means here is the library and not the pipeline. The
 row binds what `buildChunk` answers; it says nothing about a workflow
 that never calls it, which is what the row above it covers and what
-phase 6 owes.
+phase 5 landed with `ar-ingest`.
 
 ### Approval is a constraint, not a branch
 
