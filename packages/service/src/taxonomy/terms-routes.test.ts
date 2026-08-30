@@ -21,15 +21,15 @@
  * value.
  *
  * WHAT ONLY THIS LAYER CAN DECIDE AT ALL is which of the two
- * operations each doubled route ran, and five of the nineteen cases
+ * operations each doubled route ran, and five of the twenty cases
  * are about exactly that. `?format` picks between a page and a
  * document, and the body's `terms` member picks between one term
  * and a lexicon; neither discriminator exists in the service, which
  * is handed a call already made.
  *
- * NINETEEN CASES IN TWO HALVES — eight refusals, then eleven
- * answers, with two of the eleven guarding the shapes the other
- * nine are held to.
+ * TWENTY CASES IN TWO HALVES — eight refusals, then twelve
+ * answers, with two of the twelve guarding the shapes the other ten
+ * are held to.
  *
  * EIGHT REFUSALS, GROUPED BY WHICH PART OF THE REQUEST WAS WRONG.
  *
@@ -73,7 +73,7 @@
  * something was thrown: `StoreRefusal` is deliberately not an
  * `AppError`, so an untranslated one answers `500`.
  *
- * ELEVEN ANSWERS, AND EACH READ AS A WHOLE SHAPE.
+ * TWELVE ANSWERS, AND EACH READ AS A WHOLE SHAPE.
  *
  * THE PAGE. A lexicon read is `200` carrying `data` AND `meta`,
  * which is this router's difference from the sibling categories one
@@ -134,6 +134,17 @@
  * page: nothing hangs off a term, so this is the one delete on the
  * taxonomy surface with neither a guard nor a cascade.
  *
+ * THE ROUND TRIP. The last case is the two doubled routes read as
+ * one claim: `data/terms.json`'s rows for ONE of its three
+ * categories, serialised, POSTed as a document and read back with
+ * `?format=seed`, with the two byte strings asserted identical. It
+ * is the only case here that spans two routes, and it is what the
+ * two branches exist for — a lexicon an operator exports,
+ * edits and applies again. Its fixture is a category holding
+ * NOTHING, since a bucket with rows already in it would export them
+ * beside the document's and the two strings would differ for a
+ * reason about neither end.
+ *
  * THE KEY SET IS ASSERTED ON EVERY ANSWER, which is the discipline
  * the positive half is built around rather than a detail of it. A
  * body carrying a store-assigned id has no whole-body literal
@@ -164,38 +175,38 @@
  * `404` an id naming no category gets, the document read is paired
  * with the same path carrying no `?format`, the create with no note
  * is paired with one that states a note, the three-row document is
- * paired with a document declaring none, and the delete that lands
- * is followed by the identical request answering `404`.
+ * paired with a document declaring none, the delete that lands is
+ * followed by the identical request answering `404`, and the
+ * round-tripped document is paired with the seed FILE posted whole,
+ * which is the same rows with the header still on them and is
+ * refused `422`.
  *
  * WHAT THIS FILE DOES NOT CLAIM. That the router sits behind
- * `ctx.requireAuth` is `tests/api/wiring.test.ts`'s claim. That a
- * document POSTED here comes back byte for byte is the round-trip
- * case the next task adds over this same file, and every figure in
- * the grid below moves when it arrives. What a refusal may CONTAIN
- * is `terms-service.test.ts`'s at this layer and
- * `tests/api/request-echo.test.ts`'s across the surface: none of
- * the requests below submits a sentinel, because the details these
- * eight refusal paths build are made of member names, this
+ * `ctx.requireAuth` is `tests/api/wiring.test.ts`'s claim. What a
+ * refusal may CONTAIN is `terms-service.test.ts`'s at this layer
+ * and `tests/api/request-echo.test.ts`'s across the surface: none
+ * of the requests below submits a sentinel, because the details
+ * these eight refusal paths build are made of member names, this
  * service's own sentences and a row index.
  *
- * MUTATION GRID, re-measured over all nineteen cases by mutating
+ * MUTATION GRID, re-measured over all twenty cases by mutating
  * `terms-routes.ts` and reading the failed `fullName` SET from a
- * `--reporter=json` run rather than a count. Sixteen legs, and
- * every figure below moved when the positive half landed — a grid
- * is a measurement over a case list, so it belongs to the file as
- * it stands rather than to the task that first wrote it. The SHAPE
- * moved with them, which the numbers hide: on the refusal half
- * alone the two status legs landed almost entirely through
- * controls, and each of them now reddens a case named for the
- * answer it changes.
+ * `--reporter=json` run rather than a count. Sixteen legs, and six
+ * of them moved when the round trip landed — a grid is a
+ * measurement over a case list, so it belongs to the file as it
+ * stands rather than to the task that first wrote it. What the six
+ * have in common is the shape of that case: it is the only one
+ * here that spans BOTH doubled routes, so it joins the red set of
+ * every leg touching either the bulk write or the seed read, and
+ * of none touching the paginated one.
  *
  * THE STATUS LEGS. Answering a single create with `200` reddens
- * FOUR — the create that lands, plus the three refusals whose
- * `201` controls it breaks. Answering a bulk import with `200`
- * reddens FOUR the same way, and the two sets overlap in the two
- * cases that send both body shapes. Answering the `204` as a `200`
- * with a body reddens THREE: the delete that lands, and the `204`
- * controls of the term `404` and the not-an-id case.
+ * FOUR — the create that lands, plus the three refusals
+ * whose `201` controls it breaks. Answering a bulk import with
+ * `200` reddens FIVE the same way, and the two sets overlap in the
+ * two cases that send both body shapes. Answering the `204` as a
+ * `200` with a body reddens THREE: the delete that lands, and the
+ * `204` controls of the term `404` and the not-an-id case.
  *
  * THE DISCRIMINATION LEGS, which is what this file exists for.
  * Branching on the VALUE of `?format` rather than on the member's
@@ -205,11 +216,12 @@
  * `.strict()` from the seed query reddens ONE and skipping that
  * parse altogether reddens TWO, the first set inside the second, so
  * the pair reads as one narrowing rather than two legs. Treating
- * every body as a single term reddens FIVE and treating every
+ * every body as a single term reddens SIX and treating every
  * object body as a document reddens FIVE; they share only the two
- * cases that send BOTH shapes in one body and differ in three
- * apiece, which is the two halves of one choice measured from
- * either side.
+ * cases that send BOTH shapes in one body and differ in four and
+ * three, which is the two halves of one choice measured from
+ * either side. The round trip sits in the first set and not the
+ * second, because a document is what it sends.
  *
  * THE ENVELOPE LEGS. Dropping the paginated envelope reddens
  * EIGHT and dropping only its `meta` reddens SEVEN, the second set
@@ -217,23 +229,24 @@
  * reads its row back through `body.data` and survives an envelope
  * that lost nothing but the window. Six of those eight are cases
  * about something else reading a list as a control. Answering the
- * seed document through `ok()` reddens TWO and answering a bulk
- * import with the rows it wrote reddens THREE, one of which is the
+ * seed document through `ok()` reddens THREE and answering a bulk
+ * import with the rows it wrote reddens FOUR, one of which is the
  * case named for the count.
  *
- * THE ZERO THIS GRID USED TO CARRY IS CLOSED. Answering the seed
- * document through `res.json` of its parsed form — same shape,
- * different bytes — reddened NOTHING while no case read the
- * document's BYTES, and now reddens ONE: the indent, the key order
- * and the trailing newline are what make a document import back,
- * and the seed case compares the response text against the
- * serialiser's own output rather than parsing it.
+ * THE BYTE LEG, which is this grid's only leg about a
+ * representation rather than a shape. Answering the seed document
+ * through `res.json` of its parsed form — same document,
+ * different bytes — reddens TWO, and they are exactly the
+ * two cases that read `res.text`: the seed read, and the round
+ * trip. It reddened NOTHING while every case parsed the body, and
+ * the indent, the key order and the trailing newline are what a
+ * document has to keep to import back at all.
  *
  * THE ADDRESS LEGS, where the leg has to be picked to match the
  * claim. Replacing `readId` with a bare `Number(...)` reddens ONE,
  * the not-an-id case, and that is the leg that says the SCHEMA is
- * load-bearing. Taking the segment RAW reddens SEVENTEEN of
- * nineteen instead — a wider leg measuring a wider fault, and
+ * load-bearing. Taking the segment RAW reddens EIGHTEEN of twenty
+ * instead — a wider leg measuring a wider fault, and
  * useful for the opposite reason: the two survivors are exactly the
  * two guard cases, which call nothing, so it is the control saying
  * every other case reaches the router at all. Skipping the list's
@@ -242,9 +255,9 @@
  * THE TWO CASES NO LEG REDDENS are those same guards, and they are
  * invisible to every module mutation by construction: one reads the
  * key-set type pin and the other the fixture table beside it.
- * Their own liveness is `check-types`, not vitest — planting a
- * member on `TermImportSummary` answered TS2322 at
- * {@link EVERY_KEY_LISTED} with all nineteen cases still green.
+ * Their own liveness is `check-types`, not vitest —
+ * planting a member on `TermImportSummary` answered TS2322 at
+ * {@link EVERY_KEY_LISTED} with all twenty cases still green.
  */
 import type { TermSeed } from './seed-format.js';
 import type { TermRecord } from './store.js';
@@ -259,6 +272,9 @@ import type {
 } from '../http/envelope.js';
 import type { Application } from 'express';
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import express from 'express';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
@@ -272,6 +288,7 @@ import {
 
 import {
   serializeTermSeedDocument,
+  termSeedSchema,
   TermsFileSchema,
 } from './seed-format.js';
 import { buildTermsRouter } from './terms-routes.js';
@@ -299,6 +316,18 @@ const STORED_KEY = 'phrases';
 
 /** A second category in the same domain, holding no terms. */
 const OTHER_KEY = 'tools';
+
+/**
+ * The one category of `data/terms.json` the round trip is scoped
+ * to, which is the same one {@link withLexicon} plants under.
+ *
+ * That agreement is what lets the file's own rows be posted
+ * UNMODIFIED: `importTerms` refuses a row naming a category other
+ * than the one the path addressed, so a document's `categoryKey`
+ * has to be the addressed category's key rather than whichever one
+ * the document was written under.
+ */
+const SEED_FILE_KEY = STORED_KEY;
 
 /** The pattern the fixture plants, and the one a create collides on. */
 const STORED_PATTERN = 'alpha';
@@ -514,6 +543,26 @@ const FOREIGN_ROW_BODY = {
     field: 'terms.0.categoryKey',
     message: FOREIGN_KEY_RULE,
     code: 'foreign_category_key',
+  }],
+};
+
+/**
+ * The whole body `data/terms.json` answers with when it is posted
+ * WHOLE, header and all.
+ *
+ * `body` and not `_readme`: `src/http/validation.ts` names the
+ * object an undeclared key was found in and never the key itself,
+ * so the one member no route accepts stays out of the detail that
+ * refuses it. The same answer `TermsFileSchema` gives a seed pass
+ * whose loader forgot to strip the header, reached over HTTP.
+ */
+const SEED_FILE_HEADER_BODY = {
+  code: 'VALIDATION_ERROR',
+  message: 'Validation failed',
+  details: [{
+    field: 'body',
+    message: 'Carries a key this endpoint does not declare.',
+    code: 'unrecognized_keys',
   }],
 };
 
@@ -926,6 +975,79 @@ function seedDocument(): { terms: readonly TermSeed[] } {
       },
     ],
   };
+}
+
+/**
+ * `data/terms.json`, at the path this file reads it from.
+ *
+ * The round-trip fixture below is that file's own rows rather than
+ * a hand-copy of them, because the claim it makes is about THAT
+ * document: a lexicon an operator already has, leaving through
+ * `?format=seed` and coming back through a bulk import. A copy
+ * agrees with the file until the day somebody edits one of them.
+ */
+const SEED_FILE_PATH = fileURLToPath(
+  new URL('../../data/terms.json', import.meta.url),
+);
+
+/** That file, parsed and otherwise untouched. */
+const SEED_FILE: unknown = JSON.parse(readFileSync(SEED_FILE_PATH, 'utf8'));
+
+/**
+ * Every row it carries, with its header stripped.
+ *
+ * A NON-strict object is the whole of the stripping: zod drops an
+ * undeclared key by default, so `_readme` is gone before
+ * `termSeedSchema` reads a row — which is what
+ * `stripUnderscoreKeys` does for a seed pass, and the reason
+ * `TermsFileSchema` itself cannot be used here at all. It is
+ * strict, and the file on disk carries two top-level members.
+ */
+const ALL_SEED_ROWS: readonly TermSeed[] = z.object({
+  terms: z.array(termSeedSchema),
+}).parse(SEED_FILE).terms;
+
+/**
+ * The rows for ONE of the three categories that file spans.
+ *
+ * What an export is scoped to, and therefore what a document has to
+ * be built from for the two ends to be comparable at all.
+ */
+const SEED_FILE_ROWS: readonly TermSeed[] = ALL_SEED_ROWS.filter(
+  (row) => row.categoryKey === SEED_FILE_KEY,
+);
+
+/**
+ * A domain carrying ONE category, keyed as `data/terms.json` names
+ * one of its three, and holding no terms at all.
+ *
+ * A fixture of its own rather than {@link withLexicon}, and the
+ * emptiness is the reason: a round trip is a claim about a document
+ * that leaves and comes back, so a category already holding rows
+ * would export them beside the ones the document put there and the
+ * two byte strings would differ for a reason that says nothing
+ * about either end.
+ *
+ * @returns The app, plus the id the empty category was given.
+ */
+async function withSeedCategory(): Promise<{
+  app: Application;
+  categoryId: number;
+}> {
+  const store = createMemoryResearchStore();
+  const domain = await store.insertDomain({
+    slug: 'example-tech-radar',
+    name: 'Example Tech Radar',
+    settings: {},
+  });
+  const category = await store.insertCategory({
+    domainId: domain.id,
+    key: SEED_FILE_KEY,
+    name: 'Phrases',
+    parentId: null,
+  });
+
+  return { app: buildTermsApp(store), categoryId: category.id };
 }
 
 // ---------------------------------------------------------------------------
@@ -1382,8 +1504,8 @@ describe('a seed read that lands', () => {
     // green. The expectation is the serialiser's own output, so
     // what is pinned here is that the route forwarded those bytes
     // unaltered — the bytes themselves are `./seed-format.test.ts`'s
-    // claim, and a document that survives the round trip is the
-    // case beside this one.
+    // claim, and a document that survives the whole round trip is
+    // the last case in this file.
     expect(exported.text).toBe(serializeTermSeedDocument([
       { categoryKey: STORED_KEY, ...FIRST_TERM },
       { categoryKey: STORED_KEY, ...SECOND_TERM },
@@ -1671,5 +1793,78 @@ describe('a delete that lands', () => {
     expect(listed.body.meta.total).toBe(1);
     expect(again.status).toBe(404);
     expect(again.body).toStrictEqual(NO_SUCH_TERM_BODY);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The round trip: a document posted here, and read back byte for byte
+// ---------------------------------------------------------------------------
+
+describe('a document posted and read back', () => {
+  it('answers the bytes the import was handed', async () => {
+    const { app, categoryId } = await withSeedCategory();
+    const path = termsPath(categoryId);
+    const document = serializeTermSeedDocument(SEED_FILE_ROWS);
+
+    const imported = await request(app)
+      .post(path)
+      .type('application/json')
+      .send(document);
+    const exported = await request(app)
+      .get(path)
+      .query({ format: 'seed' });
+    // The control, along the axis under test and through the SAME
+    // operation: the file WHOLE, which is the same rows with the
+    // header still on them, is refused 422. That is what makes the
+    // absence below a removal this fixture had to make rather than
+    // a detail of how it happened to be built.
+    const withHeader = await request(app)
+      .post(path)
+      .type('application/json')
+      .send(readFileSync(SEED_FILE_PATH, 'utf8'));
+
+    expect(imported.status).toBe(201);
+    // Every row reached the category. Without this the case is
+    // green against an import that wrote nothing, since an export
+    // of an empty category compares equal to an empty document.
+    expect(imported.body.data.imported).toBe(SEED_FILE_ROWS.length);
+    expect(exported.status).toBe(200);
+    expect(exported.type).toBe('application/json');
+    // THE WHOLE CLAIM, and it is about BYTES rather than about a
+    // shape: what went in is character for character what came
+    // out. The indent, the key order inside each row, the row
+    // order and the single trailing newline are each a choice
+    // `./seed-format.ts` makes, and a route that re-serialised the
+    // document — or a store that handed the rows back in its
+    // own order — would lose one of them while every assertion
+    // in this file over a PARSED body stayed green.
+    expect(exported.text).toBe(document);
+
+    // THE SINGLE-CATEGORY SCOPE, stated because it is the reason
+    // this document is not `data/terms.json`. That file's rows span
+    // three categories and an export answers ONE: `categoryKey` is
+    // stamped from the category row the path addressed, so a
+    // document holding two categories' rows could not be exported
+    // by any route. The fixture is therefore the file's rows for
+    // one key, and the second assertion is what says the filter
+    // narrowed something rather than answering the file back.
+    expect(SEED_FILE_ROWS.length).toBeGreaterThan(0);
+    expect(SEED_FILE_ROWS.length).toBeLessThan(ALL_SEED_ROWS.length);
+    // Both `notes` shapes travel, which is what lets the byte
+    // comparison fail at all: `JSON.stringify` drops an `undefined`
+    // outright, so a document whose every note were null would
+    // still compare equal under a serialiser that lost the member.
+    expect(SEED_FILE_ROWS.some((row) => row.notes === null)).toBe(true);
+    expect(SEED_FILE_ROWS.some((row) => row.notes !== null)).toBe(true);
+    // THE `_readme` HEADER IS ABSENT, and no export could rebuild
+    // it: the loader clears every underscore key before anything is
+    // validated, so no row survives carrying one and nothing on the
+    // way out knows the file ever had a header. The document above
+    // therefore has ONE top-level member where the file on disk has
+    // two, and posting the file itself is the refusal beside it.
+    expect(Object.hasOwn(SEED_FILE as object, '_readme')).toBe(true);
+    expect(keysOf(JSON.parse(document))).toStrictEqual(DOCUMENT_KEY_SET);
+    expect(withHeader.status).toBe(422);
+    expect(withHeader.body).toStrictEqual(SEED_FILE_HEADER_BODY);
   });
 });
