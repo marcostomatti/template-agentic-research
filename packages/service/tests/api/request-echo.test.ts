@@ -2,17 +2,21 @@
  * One sentinel string is submitted through every wave-1 WRITE route
  * — as a field value, as an unrecognized key, as a key inside an
  * open record and as a query parameter — and counted in what came
- * back and in everything the process wrote while answering.
+ * back and in everything the process wrote while answering. One
+ * more request, to a route planted to echo, is what says the
+ * counting works.
  *
  * WHAT THIS FILE PROVES THAT ITS SIBLINGS DO NOT is containment
  * across the WHOLE surface in one reading. Each resource group's
  * `*-routes.test.ts` carries a containment row of its own, but each
  * is scoped to its own router and each builds a bare `express()`
  * app with no `pino-http` in it, so none of them can see a log line
- * at all. `docs/architecture/01-invariants.md` names this file as
- * the enforcing artifact for the rule that no request body content
- * reaches a response body or a log line through a validation
- * detail.
+ * at all. The rule is that no request body content reaches a
+ * response body or a log line through a validation detail, and
+ * `docs/architecture/01-invariants.md` is where it is registered
+ * — by the task after this one, so at this commit that register
+ * carries no row naming this file and a grep for one finds
+ * nothing. That is the sentence the registering commit deletes.
  *
  * THE FOUR CHANNELS, and where each has a subject. A FIELD VALUE
  * goes at a declared member: on seven of the nine body-bearing
@@ -32,20 +36,20 @@
  * every write route including the four `DELETE`s, which carry no
  * body and would otherwise have no row here.
  *
- * TWO WINDOWS, AND THE SPLIT IS THE FILE'S ONE REAL FINDING. The
- * body channels and the query channel are captured under separate
- * boots because their answers about the process output DIFFER, and
- * a single window would have had to weaken the body claim to
- * accommodate the query one. Over the twenty-one body rows the
- * capture holds the sentinel ZERO times. Over the fourteen query
- * rows it holds it FIFTY-FOUR, and none of those is a handler's
- * doing: `applyMiddleware` builds `pino-http` with no `redact`
- * option, and its request serialiser records the raw `url` AND the
- * parsed `query` object, so every occurrence in a request URL lands
- * in the capture exactly twice. The query channel's containment
- * claim is therefore about the RESPONSE BODY alone, and the log
- * half of it is a measurement about the transport that this file
- * states rather than a zero it asserts. Nothing on the wave-1
+ * TWO OF THE THREE WINDOWS ASSERT A ZERO, AND THE SPLIT BETWEEN THEM
+ * IS THE FILE'S ONE REAL FINDING. The body channels and the query
+ * channel are captured under separate boots because their answers
+ * about the process output DIFFER, and a single window would have had
+ * to weaken the body claim to accommodate the query one. Over the
+ * twenty-one body rows the capture holds the sentinel ZERO times.
+ * Over the fourteen query rows it holds it FIFTY-FOUR, and none of
+ * those is a handler's doing: `applyMiddleware` builds `pino-http`
+ * with no `redact` option, and its request serialiser records the raw
+ * `url` AND the parsed `query` object, so every occurrence in a
+ * request URL lands in the capture exactly twice. The query channel's
+ * containment claim is therefore about the RESPONSE BODY alone, and
+ * the log half of it is a measurement about the transport that this
+ * file states rather than a zero it asserts. Nothing on the wave-1
  * surface takes a secret in a query string — `?page`, `?perPage`,
  * `?cascade` and `?format` are the whole vocabulary — so the
  * finding is a boundary on the claim rather than a defect in it.
@@ -60,6 +64,40 @@
  * request header `pino-http` writes out — and only the body's zero
  * covers the detail. A file asserting one of them has said nothing
  * about the other.
+ *
+ * THE THIRD WINDOW IS A PLANTED LEAK, AND IT IS WHAT MAKES BOTH
+ * ZEROS READINGS. A zero-hit scan is satisfied by a needle that
+ * stopped matching, by a capture that stopped reading and by a
+ * window that never opened, and none of those is distinguishable
+ * from a surface that leaks nothing. So a third boot is assembled
+ * by the SAME function over the SAME five mounts with one route
+ * added — {@link plantLeakingRoute}, mounted where a sixth wave-1
+ * router would go — and that route does on purpose everything the
+ * surface is forbidden to do. It writes the submitted body to the
+ * console, to stderr, into the message of the error it throws and
+ * into that error's one detail, and each of those is then counted
+ * with the same {@link countSentinel} both zeros are counted with.
+ *
+ * FOUR CHANNELS RATHER THAN ONE PLANT, because this file makes
+ * four claims and one leak would prove one of them.
+ * {@link PLANTED_LEAKS} declares where each is expected to land
+ * and the cases read it row by row. Two of the four exist because
+ * nothing else in the package can reach them: no module under
+ * `src/` writes to the console, and the framework writes to stderr
+ * on no healthy boot, so those two patches had no live control at
+ * all before this window and their mutation legs were measured
+ * zeros. The other two are the channel split above made
+ * checkable — the thrown MESSAGE lands in both texts and the
+ * DETAIL lands in the response alone, because
+ * `lib/errors/handler.ts` logs the one and not the other.
+ *
+ * WHAT THE PLANTED WINDOW DOES NOT DO is assert a containment
+ * claim of its own, and it reaches no store: its route reads the
+ * body, writes it out four times and throws. It is also invisible
+ * to every mutation of `src/http/validation.ts` by construction,
+ * which is the point rather than a limit — a control that moved
+ * with the subject would be a second measurement of the subject
+ * instead of evidence that the instrument works.
  *
  * HOW THE CAPTURE WORKS is `tests/auth/secret-logging.test.ts`'s
  * mechanism, unchanged and for its reasons. pino picks its
@@ -90,46 +128,49 @@
  * than Express's own page. Each window asserts the capture holds
  * the framework's `listening` line and a `request completed` record
  * for one of its own rows, which is what says the window was open
- * across both the boot and the requests. And the query window's
- * fifty-four is itself a live positive control for the search: the
- * same counter over the same kind of capture returns a known
- * non-zero in the same run as the body window's zero.
+ * across both the boot and the requests. And the search itself has
+ * TWO live positive controls rather than none: the planted window
+ * above, which is the direct one, and the query window's
+ * fifty-four, which is the same counter over the same kind of
+ * capture returning a known non-zero in the same run as the body
+ * window's zero.
  *
- * SIXTEEN MUTATIONS WERE RUN AGAINST THESE FORTY-FOUR CASES, and
- * five of them land on a module rather than on this file's own
- * fixture. Adding `issue.keys` to a detail's message reddens TEN —
- * the nine unrecognized-key rows and, less obviously, the query row
- * for `DELETE /domains/:slug`, which is the only write route that
- * parses a query at all and whose strict schema raises the same
- * issue about the sentinel KEY. So one query row is on the
- * sanitiser's subject and not only on the transport. Copying
- * `issue.message` verbatim reddens the IDENTICAL ten: two legs,
- * one reading. Dropping the open-path collapse and ignoring
- * `options.openPaths` each redden the same THREE open-record cases,
- * likewise one reading in two spellings. And a domains handler
- * interpolating `req.body` into the error it throws reddens FOUR —
- * all three `POST /domains` body rows AND the body window's capture
- * case, because `errorHandler` logs an `AppError`'s `message`.
- * That last red is what says the capture's zero has a live subject
- * rather than only its controls.
+ * TWENTY MUTATIONS WERE RUN AGAINST THESE FIFTY-ONE CASES, twice
+ * each with no red set moving between the runs, and NONE of them
+ * is a measured zero. The two this file used to carry were both
+ * discharged by the planted window, which is the clearest single
+ * statement of what that window bought.
  *
- * TWO OF THE SIXTEEN ARE MEASURED ZEROS and both are worth naming.
- * Logging `details` alongside `{ code, cause }` in
- * `lib/errors/handler.ts` reddens NOTHING, which is the
- * two-zeros-are-different-channels claim measured rather than
- * argued: no detail here carries the sentinel, so widening what is
- * logged reaches nothing, and the response half is the only half
- * that covers a detail at all. Dropping the console patch also
- * reddens nothing — no module under `src/` writes to the console
- * today, so that patch is there for the edit nobody has made yet
- * and its zero is a blind spot closed in advance rather than
- * coverage.
+ * SIX LAND ON A MODULE. Adding `issue.keys` to a detail's message
+ * reddens TEN — the nine unrecognized-key rows and, less
+ * obviously, the query row for `DELETE /domains/:slug`, which is
+ * the only write route that parses a query at all and whose strict
+ * schema raises the same issue about the sentinel KEY. So one
+ * query row is on the sanitiser's subject and not only on the
+ * transport. Copying `issue.message` verbatim reddens the
+ * IDENTICAL ten: two legs, one reading. Dropping the open-path
+ * collapse and ignoring `options.openPaths` each redden the same
+ * THREE open-record cases, likewise one reading in two spellings.
+ * A domains handler rethrowing its refusal with `req.body`
+ * interpolated into the message — same status, code, `details` and
+ * `cause`, so the leg carries one claim rather than two — reddens
+ * FIVE: all three `POST /domains` body rows, the body window's
+ * capture case, and the planted window's head-to-head. And logging
+ * `details` beside `{ code, cause }` in `lib/errors/handler.ts`
+ * reddens TWO, both of them planted cases. That leg WAS the first
+ * measured zero: no wave-1 detail carries the sentinel, so
+ * widening what is logged reached nothing until a planted detail
+ * gave it a subject.
  *
- * THE OTHER NINE ARE FIXTURE LEGS, and three of them report
- * something a reader would otherwise get wrong. Restoring a stream
- * with a bound copy reddens the streams guard alone — but the leg
- * has to be aimed at the DELETE branch of {@link redirectStream},
- * because `write` is INHERITED on both streams here, so
+ * THE OTHER FOURTEEN ARE FIXTURE LEGS, and four of them report
+ * something a reader would otherwise get wrong. Dropping the
+ * console patch reddens TWO, and it was the second measured zero
+ * for the same reason: no module under `src/` writes to the
+ * console, so that patch had no live control until the planted
+ * route wrote one line through it. Restoring a stream with a bound
+ * copy reddens the streams guard alone — but the leg has to be
+ * aimed at the DELETE branch of {@link redirectStream}, because
+ * `write` is INHERITED on both streams here, so
  * `getOwnPropertyDescriptor` answers undefined and the
  * `defineProperty` line is never reached in this file at all.
  * Dropping one query row from the table reddens the CHANNEL guard
@@ -139,29 +180,65 @@
  * no sentinel reddens the sent-bytes guard ALONE — its thirteen
  * response zeros stay green and so does the transport count, which
  * is derived from the same URLs, so thirteen rows go vacuous at
- * once and one guard is the whole of what reports it. The
- * remaining six: a fabricated route reddens three, a substitution
- * that answers its argument unchanged reddens two, a sink that
- * records nothing reddens both capture cases through their
- * `listening` and `request completed` controls, reading the
- * transport count as one site rather than two reddens the query
- * capture case, two open-record rows sharing a path redden the
- * distinct-path case, and keying a window by label rather than by
- * channel-and-label reddens thirty-six.
+ * once and one guard is the whole of what reports it.
  *
- * WHAT IS STILL OWED, and it is the next task's: a PLANTED-LEAK leg
- * proving the body search would find the sentinel if a route echoed
- * it. The grid says which rows need it and which do not. Twelve of
- * the twenty-one body rows have a live module leg above — the nine
- * unrecognized-key rows and the three open-record ones — and a
- * thirteenth, `POST /domains` in the field-value channel, reddens
- * under the echoing handler. The other EIGHT field-value rows are
- * reddened by no module leg at all, and that is structural rather
- * than a gap in the grid: zod puts a submitted VALUE in no issue
- * path and no issue message, so those rows pin a channel closed
- * UPSTREAM of the sanitiser and their green says nothing about it.
- * Until the planted leg lands they rest on the per-row sent-bytes
- * control alone.
+ * KEYING A WINDOW BY LABEL ALONE REDDENS ONE, and the figure is
+ * worth stating because it is the opposite of what the collapse
+ * looks like it should cost. `keyOf` answering {@link labelOf}
+ * collapses each route's three body rows onto one entry and leaves
+ * two cases reading a sibling channel's answer — but every answer
+ * on this surface is equally JSON, equally a failure envelope and
+ * equally sentinel-free, so no row's own assertions can tell that
+ * it read somebody else's. The uniqueness guard is the whole of
+ * what reports it. Measured at 1 for that spelling AND for
+ * {@link routeLabelOf}, which drops the note as well; a figure of
+ * thirty-six recorded by this file's predecessor reproduces at
+ * neither, and the general shape is that planting a collision in a
+ * table whose rows all answer alike is invisible to every row.
+ *
+ * THE REMAINING FIXTURE LEGS: a fabricated route reddens three, a
+ * substitution that answers its argument unchanged reddens two,
+ * reading the transport count as one site rather than two reddens
+ * the query capture case, two open-record rows sharing a path
+ * redden the distinct-path case, and a sink that records nothing
+ * reddens FIVE — both capture cases through their `listening` and
+ * `request completed` controls, plus three planted ones. The
+ * planted CONSOLE row stays green under that last leg, which is
+ * the reading in it: the console patch and the stream sink are two
+ * mechanisms, and only a leg per mechanism says so.
+ *
+ * FOUR LEGS AIM AT THE PLANT ITSELF, since a control nothing can
+ * break is not one. Not mounting the planted route reddens SIX —
+ * every planted case except the table guard, which reads only the
+ * table and is the survivor that says the other six reach the
+ * window at all. Dropping the console write reddens TWO and
+ * dropping the stderr write another TWO, each its own channel row
+ * plus the head-to-head. And making the planted route leak a
+ * constant instead of the submitted body reddens TWO: the markers
+ * still land where the table says, so the per-channel rows stay
+ * green and only the two counts that tie a marker to a sentinel
+ * report it — which is what those two totals are for.
+ *
+ * THE HEAD-TO-HEAD CASE IS IN EIGHT OF THE TWENTY RED SETS, more
+ * than any other case in the file. That is what a control looks
+ * like when it is load-bearing: every leg that touches what the
+ * process writes is reported by it — the module leak, the leg
+ * widening what is logged, the leg dropping the console patch, the
+ * sink, and all four plant legs.
+ *
+ * WHICH ROWS HAVE A LIVE SUBJECT AND WHICH REST ON THE CONTROLS.
+ * Twelve of the twenty-one body rows are reddened by a module leg
+ * above — the nine unrecognized-key rows and the three
+ * open-record ones — and a thirteenth, `POST /domains` in the
+ * field-value channel, reddens under the echoing handler. The
+ * other EIGHT field-value rows are reddened by no module leg at
+ * all, and that is structural rather than a gap in the grid: zod
+ * puts a submitted VALUE in no issue path and no issue message, so
+ * those rows pin a channel closed UPSTREAM of the sanitiser and
+ * their green says nothing about it. What they rest on is the
+ * per-row sent-bytes control and the planted window — which is
+ * exactly the difference between a zero nobody can read and a zero
+ * measured with an instrument shown working in the same run.
  *
  * WHAT IS OUT OF REACH HERE is the driver channel, and it is out of
  * reach by construction rather than by omission. A `ConflictError`
@@ -176,8 +253,9 @@
  * window. Every `:slug` and every `:id` names a row that does not
  * exist and every body is one the schema refuses or one whose
  * address does not resolve, so each window's requests answer `422`
- * or `404` and leave the dataset the boot built. The last case
- * reads both stores directly rather than trusting that.
+ * or `404` and leave the dataset the boot built. The planted route
+ * is the same: it reaches no store at all. The last case reads all
+ * three stores directly rather than trusting any of that.
  *
  * NO AUTH BLOCK IS CONFIGURED, and the five mounts still spell
  * `app.use(ctx.requireAuth, router)` exactly as `src/index.ts` does.
@@ -191,7 +269,7 @@ import type { ServiceHandle } from '../../lib/express/index.js';
 import type {
   MemoryResearchStore,
 } from '../helpers/memory-research-store.js';
-import type { Router } from 'express';
+import type { Application, Router } from 'express';
 import type { Response } from 'supertest';
 
 import process from 'node:process';
@@ -199,6 +277,7 @@ import process from 'node:process';
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { ValidationError } from '../../lib/errors/index.js';
 import { createService } from '../../lib/express/index.js';
 import { buildDomainsRouter } from '../../src/domains/index.js';
 import { buildPersonasRouter } from '../../src/personas/routes.js';
@@ -345,6 +424,27 @@ function isPristine(stream: StdioStream): boolean {
  */
 function countSentinel(text: string): number {
   return text.split(SENTINEL).length - 1;
+}
+
+/**
+ * Counts occurrences of a planted leak's marker.
+ *
+ * How one planted write is read out of a text holding four of
+ * them: each prefixes what it leaks with its own token, so this
+ * attributes an occurrence to the channel that wrote it where
+ * {@link countSentinel} only counts. What ties the two readings
+ * together is that their totals must agree — every marker here is
+ * written immediately ahead of the submitted body, so a marker
+ * count above a sentinel count would be a planted write that
+ * leaked nothing.
+ *
+ * @param text - Whatever is being searched.
+ * @param marker - The token a planted leak prefixes its write
+ *   with.
+ * @returns How many times that marker occurs in it.
+ */
+function countMarker(text: string, marker: string): number {
+  return text.split(marker).length - 1;
 }
 
 /** The four positions a sentinel is submitted in. */
@@ -645,6 +745,113 @@ const ALL_PROBES: readonly EchoProbe[] = [...BODY_PROBES, ...QUERY_PROBES];
 const DEFAULT_SENTINEL_QUERY = `${SENTINEL}=${SENTINEL}`;
 
 /**
+ * The path the planted-leak control mounts its route at.
+ *
+ * Outside every wave-1 path shape on purpose: no router registers
+ * it, so the request below reaches the planted route through the
+ * same five `/` mounts every other row falls through, and the
+ * route-set guard above never sees it.
+ */
+const PLANTED_PATH = '/planted-leak-control';
+
+/** One deliberate leak the planted route writes. */
+interface PlantedLeak {
+  /** What the case reading it is named for. */
+  readonly channel: string;
+  /**
+   * The token this leak prefixes the sentinel with, so a capture
+   * holding several of them can be read one leak at a time.
+   */
+  readonly marker: string;
+  /** How many times it puts the sentinel in the CAPTURE. */
+  readonly captured: number;
+  /** How many times it puts the sentinel in the RESPONSE BODY. */
+  readonly answered: number;
+}
+
+/**
+ * Every channel the planted route leaks the sentinel through, and
+ * where each one lands.
+ *
+ * The reason this file's zeros are readings rather than assertions
+ * about nothing: each row is a leak the real surface does not make,
+ * written through the mechanism the real surface would use, and
+ * measured with the same {@link countSentinel} every zero above is
+ * measured with. A counter that had stopped matching, a capture
+ * that had stopped reading and a window that never opened all
+ * answer zero over the wave-1 rows and are each caught here.
+ *
+ * The four rows are not interchangeable — they are the four
+ * channels the file makes a claim about. CONSOLE is the only live
+ * control the console patch has at all: no module under `src/`
+ * writes to the console today, so without this row that patch's
+ * mutation leg is a measured zero. STDERR is the same for the
+ * second stream, which the framework never writes to on a healthy
+ * boot. MESSAGE is a service-constructed `AppError` message, which
+ * `lib/errors/handler.ts` logs AND answers, so it is the one row
+ * reaching both. DETAIL is the counterpart that reaches the body
+ * ALONE: that same handler logs `{ code, cause }` and the message
+ * and does NOT log `details`, so the header's claim that the two
+ * zeros cover different channels is measured here rather than
+ * argued.
+ */
+const PLANTED_LEAKS = [
+  {
+    channel: 'a console line',
+    marker: 'planted-console-leak',
+    captured: 1,
+    answered: 0,
+  },
+  {
+    channel: 'a stderr write',
+    marker: 'planted-stderr-leak',
+    captured: 1,
+    answered: 0,
+  },
+  {
+    channel: 'the message of the error it throws',
+    marker: 'planted-message-leak',
+    captured: 1,
+    answered: 1,
+  },
+  {
+    // Twice in the body: once in the detail's `field` and once in
+    // its `message`, which is both halves of what a detail carries.
+    channel: 'a detail of the error it throws',
+    marker: 'planted-detail-leak',
+    captured: 0,
+    answered: 2,
+  },
+] as const satisfies readonly PlantedLeak[];
+
+/** What {@link countSentinel} must answer over the planted capture. */
+const PLANTED_CAPTURED_TOTAL = PLANTED_LEAKS
+  .reduce((total, leak) => total + leak.captured, 0);
+
+/** What it must answer over the planted response body. */
+const PLANTED_ANSWERED_TOTAL = PLANTED_LEAKS
+  .reduce((total, leak) => total + leak.answered, 0);
+
+/**
+ * The one row the planted window submits.
+ *
+ * An {@link EchoProbe} so it travels the same `captureProbes` path
+ * every other row does — the same URL builder, the same sent-bytes
+ * control and the same response map. Its channel is `field value`
+ * because that is where its sentinel sits in the body it sends; it
+ * is deliberately absent from {@link ALL_PROBES}, so no coverage
+ * guard reads it and the route set stays exactly the wave-1
+ * surface.
+ */
+const PLANTED_PROBE = {
+  channel: 'field value',
+  method: 'post',
+  path: PLANTED_PATH,
+  note: 'planted leak',
+  body: { plantedValue: SENTINEL },
+} as const satisfies EchoProbe;
+
+/**
  * The one spelling of a route's label, so the table and the routers
  * are compared in one vocabulary.
  *
@@ -825,6 +1032,55 @@ function registeredWriteLabels(): string[] {
     .map((route) => labelFor(route.method, route.path));
 }
 
+/**
+ * Mounts the route that deliberately leaks, on the app a window
+ * was built over.
+ *
+ * Everything the wave-1 handlers are forbidden to do, done on
+ * purpose and in one place. The submitted body is serialised once
+ * and written out four times: to the console, to stderr, into the
+ * message of the error this route throws and into that error's
+ * one detail. `createService` registers `errorHandler` LAST, so
+ * the throw reaches the same handler every wave-1 refusal reaches
+ * and is answered in the same envelope — which is what makes the
+ * planted response a control on the readers the real rows use and
+ * not only on the counter.
+ *
+ * Mounted AFTER the five routers, exactly where a sixth wave-1
+ * router would go. No router matches {@link PLANTED_PATH}, so the
+ * request falls through all five `/` mounts to reach it.
+ *
+ * @param app - The application a window's `register` was handed.
+ */
+function plantLeakingRoute(app: Application): void {
+  app.post(PLANTED_PATH, async (req) => {
+    const submitted = JSON.stringify(req.body);
+
+    // Reaches the capture only through the five console patches:
+    // under vitest the console does NOT route through
+    // `process.stdout.write`, so this row is the one live control
+    // those patches have.
+    console.log(`${PLANTED_LEAKS[0].marker} ${submitted}`);
+
+    // The second stream, which nothing on a healthy boot writes
+    // to — so it is the one live control the stderr redirect has.
+    process.stderr.write(`${PLANTED_LEAKS[1].marker} ${submitted}\n`);
+
+    await Promise.resolve();
+
+    // `errorHandler` logs an `AppError`'s message and answers its
+    // `toJSON()`, so the third marker lands in BOTH texts and the
+    // fourth — inside `details`, which that handler does not log —
+    // lands in the response alone.
+    throw new ValidationError(`${PLANTED_LEAKS[2].marker} ${submitted}`, [
+      {
+        field: `${PLANTED_LEAKS[3].marker} ${submitted}`,
+        message: `${PLANTED_LEAKS[3].marker} ${submitted}`,
+      },
+    ]);
+  });
+}
+
 /** What one capture window produced. */
 interface EchoWindow {
   /** Everything written to stdout and stderr inside the window. */
@@ -854,10 +1110,16 @@ interface EchoWindow {
  * deployment writes.
  *
  * @param probes - The rows to submit, in order.
+ * @param plant - Mounts one extra route on the app, for the window
+ *   whose job is to leak. Absent for the two windows that assert a
+ *   zero, so the only difference between them and the planted one
+ *   is the route that echoes — which is exactly the antecedent
+ *   those zeros are read against.
  * @returns The captured output, each row's response, and the store.
  */
 async function captureProbes(
   probes: readonly EchoProbe[],
+  plant?: (app: Application) => void,
 ): Promise<EchoWindow> {
   const chunks: string[] = [];
   const originalConsole = new Map<ConsoleMethod, unknown>();
@@ -896,6 +1158,10 @@ async function captureProbes(
         app.use(ctx.requireAuth, buildTermsRouter({ store }));
         app.use(ctx.requireAuth, buildPersonasRouter({ store }));
         app.use(ctx.requireAuth, buildSettingsRouter({ store }));
+
+        // Where a sixth wave-1 router would be mounted. Absent
+        // for both windows that assert a zero.
+        if (plant !== undefined) plant(app);
       },
     });
 
@@ -931,6 +1197,16 @@ let bodyWindow: EchoWindow | undefined;
 
 /** The query window, or undefined before `beforeAll` has run. */
 let queryWindow: EchoWindow | undefined;
+
+/**
+ * The planted window, or undefined before `beforeAll` has run.
+ *
+ * Assembled by the same function over the same five mounts, with
+ * one route added that echoes what it was sent. It asserts no zero
+ * — it is what says the two zeros above were read by a counter
+ * that still matches and a capture that was still open.
+ */
+let plantedWindow: EchoWindow | undefined;
 
 /**
  * One of the two windows, or a throw.
@@ -1030,6 +1306,11 @@ beforeAll(async () => {
   // out of the body rows' zero. See the header.
   bodyWindow = await captureProbes(BODY_PROBES);
   queryWindow = await captureProbes(QUERY_PROBES);
+  // The third differs from the first in exactly one thing: a route
+  // that echoes. Its own boot rather than a mount added to one of
+  // the others, so neither zero above is measured over a service
+  // carrying a leak.
+  plantedWindow = await captureProbes([PLANTED_PROBE], plantLeakingRoute);
 });
 
 // ---------------------------------------------------------------------------
@@ -1297,12 +1578,119 @@ describe('the capture over the query rows', () => {
 });
 
 // ---------------------------------------------------------------------------
-// What the two windows left behind
+// The planted leak, which is what makes the zeros above readings
 // ---------------------------------------------------------------------------
 
-describe('the stores behind the two windows', () => {
-  it('hold nothing either window submitted', async () => {
-    const windows = [openedWindow(bodyWindow), openedWindow(queryWindow)];
+describe('the planted-leak control', () => {
+  it('answers the sentinel where every wave-1 row answers none', () => {
+    const window = openedWindow(plantedWindow);
+    const response = answerTo(window, PLANTED_PROBE);
+
+    // Read through the SAME two classifiers the forty-four rows
+    // are read through, so a control that answered Express's own
+    // page would not pass for a route that echoed.
+    expect(response.type).toBe('application/json');
+    expect(isFailureEnvelope(response)).toBe(true);
+
+    // The same sent-bytes control every other row carries.
+    expect(countSentinel(sentBytesOf(PLANTED_PROBE))).toBeGreaterThan(0);
+
+    // The claim: `countSentinel` over a response body finds what is
+    // there. Every zero asserted above is this call answering zero,
+    // so without this the whole file is a zero-hit scan whose needle
+    // is never shown matching anything.
+    expect(PLANTED_ANSWERED_TOTAL).toBeGreaterThan(0);
+    expect(countSentinel(response.text)).toBe(PLANTED_ANSWERED_TOTAL);
+
+    // And the two independent counts agree, which is what says each
+    // marker was written ahead of a body that carried the sentinel
+    // rather than ahead of nothing.
+    const tagged = PLANTED_LEAKS.reduce(
+      (total, leak) => total + countMarker(response.text, leak.marker),
+      0,
+    );
+
+    expect(tagged).toBe(PLANTED_ANSWERED_TOTAL);
+  });
+
+  it('writes the sentinel where the body window wrote none', () => {
+    const window = openedWindow(plantedWindow);
+
+    // The window was open across the boot and the request, exactly
+    // as each window above asserts of itself.
+    expect(window.text).toContain('"msg":"listening"');
+    expect(window.text).toContain('"msg":"request completed"');
+
+    // The claim, and its head-to-head: the same counter over the
+    // same kind of capture, produced by the same function over the
+    // same five mounts, answers a known non-zero here and zero
+    // there. A patch that had stopped capturing, or a counter that
+    // had stopped matching, would answer zero in both.
+    expect(PLANTED_CAPTURED_TOTAL).toBeGreaterThan(0);
+    expect(countSentinel(window.text)).toBe(PLANTED_CAPTURED_TOTAL);
+    expect(countSentinel(openedWindow(bodyWindow).text)).toBe(0);
+
+    const tagged = PLANTED_LEAKS.reduce(
+      (total, leak) => total + countMarker(window.text, leak.marker),
+      0,
+    );
+
+    expect(tagged).toBe(PLANTED_CAPTURED_TOTAL);
+  });
+
+  for (const leak of PLANTED_LEAKS) {
+    it(`${leak.channel} lands where the table says`, () => {
+      const window = openedWindow(plantedWindow);
+      const response = answerTo(window, PLANTED_PROBE);
+
+      // Per channel rather than in total, because the four are the
+      // four claims this file makes about where a leak can go and
+      // a total is satisfied by any three of them.
+      expect(countMarker(window.text, leak.marker)).toBe(leak.captured);
+      expect(countMarker(response.text, leak.marker)).toBe(leak.answered);
+    });
+  }
+
+  it('plants a distinct channel in each row it declares', () => {
+    const markers = PLANTED_LEAKS.map((leak) => leak.marker);
+
+    // A row copied and left unedited would read as a second live
+    // control and be neither.
+    expect(new Set(markers).size).toBe(markers.length);
+
+    for (const leak of PLANTED_LEAKS) {
+      expect(leak.captured + leak.answered).toBeGreaterThan(0);
+    }
+
+    // The two-zeros-are-different-channels claim, as a property of
+    // the table rather than as prose: one row reaches the capture
+    // and not the body, and one reaches the body and not the
+    // capture. `lib/errors/handler.ts` logs an `AppError`'s message
+    // and not its `details`, which is the whole of why.
+    const captureOnly = PLANTED_LEAKS
+      .filter((leak) => leak.captured > 0 && leak.answered === 0);
+    const answerOnly = PLANTED_LEAKS
+      .filter((leak) => leak.answered > 0 && leak.captured === 0);
+
+    expect(captureOnly.length).toBeGreaterThan(0);
+    expect(answerOnly.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the three windows left behind
+// ---------------------------------------------------------------------------
+
+describe('the stores behind the three windows', () => {
+  it('hold nothing any window submitted', async () => {
+    const windows = [
+      openedWindow(bodyWindow),
+      openedWindow(queryWindow),
+      // The planted route reaches no store at all — it reads the
+      // body, writes it out four times and throws — so the window
+      // that leaks is as inert as the two that do not.
+      openedWindow(plantedWindow),
+    ];
 
     for (const window of windows) {
       // What lets one boot serve a whole window. Every row was
