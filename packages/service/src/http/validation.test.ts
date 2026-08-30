@@ -3,7 +3,7 @@
  * reads a request through, and the only place a failed parse becomes
  * a refusal.
  *
- * Six claims, and every one of them is a promise to a caller that
+ * Seven claims, and every one of them is a promise to a caller that
  * sees a status and a body and nothing else. That a parse which
  * succeeds answers the SCHEMA'S value rather than the one submitted,
  * defaults applied and coercions done, so a handler never re-reads
@@ -16,13 +16,24 @@
  * path. And that the message a detail carries is drawn from a fixed
  * vocabulary of this repo's own rather than from zod.
  *
- * The last two are the sanitiser's, and both are about the PATH
+ * Two of them are the sanitiser's, and both are about the PATH
  * rather than the message, because a path is the other place
  * submitted content arrives. That an `unrecognized_keys` detail
  * names the object which refused, never the key it refused. And
  * that every path segment below a prefix the caller declared open —
  * a record whose keys the operator chose and this service never
  * did — is reported as `*`.
+ *
+ * The seventh is the other six read from outside, and it is a claim
+ * about the ENVELOPE rather than about a detail. One sentinel
+ * string, submitted at every site a request can carry one — as a
+ * field value, as an enum member, as an undeclared key and as a key
+ * of an open record — occurs zero times in `JSON.stringify` of the
+ * `ValidationError` the parser throws: `toJSON()` whole, `code` and
+ * `message` included, since a leak into either reaches a caller as
+ * surely as one into a detail. Counted rather than merely searched
+ * for, so a row expecting four sites' worth of nothing cannot pass
+ * on a reading that stopped at the first match.
  *
  * The vocabulary claim is the reason the module exists, so it is
  * asserted against zod rather than against a literal alone: every
@@ -34,7 +45,7 @@
  * imported, so a reword in the module is a red case here and not a
  * silent agreement.
  *
- * The four tables are shaped by which half of a claim they can
+ * The five tables are shaped by which half of a claim they can
  * carry. Every row of the refusal table has a non-empty
  * `issue.path`, so it says nothing about the root and both parsers
  * must answer it identically — which is why each row is driven
@@ -57,67 +68,107 @@
  * lean on the refusal table for it instead, which already carries
  * every code they raise.
  *
+ * The containment table is the fifth and is not shaped like the
+ * other four: every row submits the SAME string and what varies is
+ * where it went. Four rows for the four sites, so a leak names the
+ * channel it came out of, and a fifth submitting all four at once,
+ * which is the only row that says they cannot leak in combination.
+ * Each row also declares the sites it submits and is held to it —
+ * the sentinel occurs in the serialised value exactly once per site
+ * named — because a row that quietly stopped submitting one would
+ * be answered an envelope with nothing to find and would pass.
+ *
+ * Its zeros are worth nothing on their own: a search that had
+ * stopped matching answers zero for a leaking parser just as fast.
+ * So four planted-leak legs build the same envelope around details
+ * this module did not produce, and assert the search finds the
+ * sentinel in a detail's field (the unmasked path zod itself
+ * produced for the open-record row), in a detail's message (the
+ * wording zod itself raised for the undeclared-key row, read back
+ * off zod rather than pasted), in the envelope's own message, and
+ * once per occurrence rather than once per envelope.
+ *
  * Both outcomes are represented and guarded. A file of nothing but
  * refusals is fully green against a parser that refuses everything,
  * and a file of nothing but accepts against one that accepts
  * everything; the accepted rows and the refused rows are each
  * other's control.
  *
- * Mutation grid, measured over the 74 cases in this file with
- * `--reporter=json`. Eight legs on the module, and the two narrow
- * ones are what is worth reading rather than counting. Answering
- * only the first issue reddens only `two faults in one body`, which
- * is therefore the whole of what pins a body with two faults
- * costing one round trip. Naming a query's root `body` reddens
- * exactly the two query-root cases, so the body and query rows are
- * each other's control and neither could be dropped.
+ * Mutation grid, re-measured whole over the 93 cases in this file
+ * with `--reporter=json`, because the containment table's 19 cases
+ * moved every figure the previous eight legs had recorded. Eight
+ * legs on the module, and the two narrow ones are what is worth
+ * reading rather than counting. Answering only the first issue
+ * reddens 2 — `two faults in one body` and the at-once containment
+ * row, which are together what pins a body with more than one
+ * fault costing one round trip rather than one per fault. Naming a query's root `body` reddens exactly the
+ * two query-root cases, so the body and query rows are each other's
+ * control and neither could be dropped.
  *
- * The wide legs. Dropping the field path reddens 25; handing zod's
- * own message back reddens 34, and that is the leg which shows the
+ * The wide legs. Dropping the field path reddens 31; handing zod's
+ * own message back reddens 37, and that is the leg which shows the
  * wording controls catching a passthrough independently of the
- * literals. Leaving the root unnamed reddens 5 — the two root rows
- * plus the three other cases whose fault is against a root.
+ * literals. Leaving the root unnamed reddens 8 — the two root rows
+ * plus the six other cases whose fault is against a root.
  * Returning the submitted value instead of the parsed one reddens
  * 3 — the defaulted query, the coerced query and the options-bag
  * case — and not the four identity rows, which cannot see it at
  * all; that is the measurement behind this file keeping a
  * defaulting and a coercing schema in the accepted table.
  *
- * The two sanitiser legs are what this file was extended for.
- * Neutralising the collapse reddens 11: the five masked rows
- * through both their legs, plus the shortest-prefix case — and NOT
- * the two leak controls, which expect the UNMASKED field and are
+ * The two sanitiser legs are what this file was extended for, and
+ * they are what the containment table now rests on. Neutralising
+ * the collapse reddens 15: the five masked rows through both their
+ * legs, the shortest-prefix case, and the open-record-key and
+ * at-once containment rows through both of THEIRS — but NOT the
+ * two leak controls, which expect the UNMASKED field and are
  * invisible to that leg by construction, which is exactly what
  * makes them controls rather than duplicates. Appending
  * `issue.keys` to the path — the leak the other rule exists to
- * prevent — reddens 12: five of the six undeclared-key rows
- * through both legs, the sixth through one, and the query-root
- * case. That asymmetry is the reading worth keeping. On `a key a
- * strict object below an open record does not declare` the
- * appended key lands BELOW an open prefix and is masked to `*`, so
- * the field moves and nothing leaks — the two rules compose, and
- * that row is where the measurement says so.
+ * prevent — reddens 17: five of the six undeclared-key rows
+ * through both legs, the sixth through one, the query-root case,
+ * and the undeclared-key and at-once containment rows through
+ * both of theirs plus the envelope-shape row. That asymmetry is
+ * the reading worth keeping. On `a key a strict object below an
+ * open record does not declare` the appended key lands BELOW an
+ * open prefix and is masked to `*`, so the field moves and nothing
+ * leaks — the two rules compose, and that row is where the
+ * measurement says so.
  *
- * What no module mutation reaches, and why. The 11 table guards
- * read only the tables beside them and are aimed at a later edit
- * rather than at the module. The 7 cross-parser agreement rows
- * compare two parsers to each other, so any change degrading both
- * equally is invisible to them by construction — they pin that the
- * pair share one implementation, not what that implementation
- * says. The two `422` and envelope rows assert the framework's
- * contract rather than this module's. `would have carried the key
- * had the message come from zod` asserts what ZOD does, which is
- * the fact the vocabulary answers to rather than a behaviour of
- * this module. And `leaves the value it was handed untouched`
- * needs a leg that mutates its argument, which none of the eight
- * does.
+ * So each of the two channels that CAN leak is caught by the
+ * containment reading on its own: the path by the collapse leg,
+ * the wording by the keys leg and by the zod-message leg. The
+ * wording leg is the sharper reading of the two, because it
+ * reddens the undeclared-key containment row and NOT the field
+ * value, enum member or open-record rows — zod's own message for
+ * those three carries nothing that was submitted, measured in the
+ * same run.
  *
- * Not here, and deliberately: the sentinel containment table, which
- * submits ONE string through every submission site at once and
- * asserts it reaches no part of the thrown error, with a
- * planted-leak leg showing the search would have found it. That is
- * the next task in this stage. The containment legs here are
- * per-row and per-name; that one is the whole-envelope reading.
+ * What no module mutation reaches, and why — 39 of the 93. The 15
+ * table guards read only the tables beside them and are aimed at a
+ * later edit rather than at the module. The 7 cross-parser
+ * agreement rows compare two parsers to each other, so any change
+ * degrading both equally is invisible to them by construction —
+ * they pin that the pair share one implementation, not what that
+ * implementation says. The two `422` and envelope rows assert the
+ * framework's contract rather than this module's. `would have
+ * carried the key had the message come from zod` asserts what ZOD
+ * does, which is the fact the vocabulary answers to rather than a
+ * behaviour of this module. And `leaves the value it was handed
+ * untouched` needs a leg that mutates its argument, which none of
+ * the eight does.
+ *
+ * Two members of that 39 are worth naming rather than counting,
+ * because they read as a coverage hole and are not one. The four
+ * planted-leak legs never call this module at all: they are the
+ * control ON the search, and a leg that could redden them would be
+ * measuring the wrong thing. And the containment legs for a field
+ * value and for an enum member are reached by nothing in the grid
+ * because no mutation of this module can make either arrive — zod
+ * puts a submitted value in no path and in no message it raises,
+ * measured. They pin a channel closed upstream, and they are what
+ * would redden the day a detail started carrying `input` or
+ * `received`.
  */
 import type { ParseOptions } from './validation.js';
 import type { FieldError } from '../../lib/errors/index.js';
@@ -661,6 +712,154 @@ const SANITISED_CASES: readonly SanitisedCase[] = [
 ];
 
 /**
+ * One string, submitted at every site a request can carry one, and
+ * the only string this file searches a whole refusal envelope for.
+ *
+ * Distinctive enough that any occurrence in a serialised error is
+ * unambiguous, and legal at once as a key, as an enum submission
+ * and as a field value — which is what lets all four sites carry
+ * the SAME string and makes one search cover them together.
+ */
+const SENTINEL = 'sentinel-value-no-detail-may-repeat';
+
+/**
+ * The four places a request can put a string, named so the table
+ * below can be held against them.
+ *
+ * Not four spellings of one claim: each is a different channel out
+ * of the parser, and a rule closing one says nothing about the
+ * others. A field VALUE and an enum member reach zod as data and
+ * appear in no issue's path at all. An undeclared KEY appears in
+ * zod's own wording and nowhere else. An open-record key appears
+ * in the PATH, which no message vocabulary can reach.
+ */
+const CONTAINMENT_SITES = [
+  'a field value',
+  'an enum member',
+  'an open-record key',
+  'an unrecognized key',
+];
+
+/**
+ * A body carrying all four sites at once: a declared field whose
+ * type can be wrong, a declared enum, an open record, and the
+ * strictness that refuses everything else.
+ *
+ * One schema for the whole table, so a row differs from its
+ * neighbours only in WHERE the sentinel went — which is the axis
+ * the table is about.
+ */
+const containmentSchema = z.object({
+  weight: z.number(),
+  polarity: z.enum(['positive', 'negative']),
+  scoringWeights: z.record(z.string(), z.number()),
+}).strict();
+
+/** What a route declares open for {@link containmentSchema}. */
+const CONTAINMENT_OPTIONS: ParseOptions = { openPaths: ['scoringWeights'] };
+
+/**
+ * The body whose ONLY fault is an undeclared key spelled by the
+ * sentinel.
+ *
+ * Named rather than inlined because two readings need the same
+ * value: the table row that asserts the refusal contains it, and
+ * the planted leg that reads zod's own wording for it back out of
+ * zod. A second literal would let the two drift and the leg would
+ * still pass.
+ */
+const UNDECLARED_SENTINEL_BODY = {
+  weight: 1,
+  polarity: 'positive',
+  scoringWeights: {},
+  [SENTINEL]: 1,
+};
+
+/**
+ * One value carrying {@link SENTINEL} at one or more of
+ * {@link CONTAINMENT_SITES}, and the fields the refusal names.
+ *
+ * `sites` is what the row CLAIMS to submit and is checked against
+ * the value rather than believed: the sentinel occurs in the
+ * serialised value exactly `sites.length` times.
+ *
+ * `fields` is not decoration either. It is what says the row was
+ * still refused, and where — a value that quietly started passing
+ * would contain the sentinel in an envelope that was never built,
+ * which is the one way a containment assertion can be green for
+ * nothing.
+ */
+interface ContainmentCase {
+  readonly label: string;
+  readonly sites: readonly string[];
+  readonly value: unknown;
+  readonly fields: readonly string[];
+}
+
+/**
+ * One sentinel, every site it can be submitted at, and the fields
+ * the caller is answered with instead.
+ *
+ * The four single-site rows say WHICH channel leaked when one does.
+ * The fifth submits all four at once and is the only row that says
+ * they cannot leak in combination: a parser answering one detail
+ * out of four, or masking the path of the one row that reaches it,
+ * would satisfy every other row here.
+ *
+ * The field expectations are measured rather than predicted. Zod
+ * raises the four issues in the schema's own declaration order with
+ * `unrecognized_keys` last, so the at-once row reads `weight`,
+ * `polarity`, `scoringWeights.*`, `body` — one detail per site, and
+ * the collapse acting on exactly the one path that carries an
+ * operator-chosen segment.
+ *
+ * Rows are driven through `parseBody` alone, for the reason the
+ * sanitised table gives: what a parser names a ROOT is that table's
+ * claim, and nothing here varies by it.
+ */
+const CONTAINMENT_CASES: readonly ContainmentCase[] = [
+  {
+    label: 'the sentinel as a field value',
+    sites: ['a field value'],
+    value: { weight: SENTINEL, polarity: 'positive', scoringWeights: {} },
+    fields: ['weight'],
+  },
+  {
+    label: 'the sentinel as an enum member',
+    sites: ['an enum member'],
+    value: { weight: 1, polarity: SENTINEL, scoringWeights: {} },
+    fields: ['polarity'],
+  },
+  {
+    label: 'the sentinel as an open-record key',
+    sites: ['an open-record key'],
+    value: {
+      weight: 1,
+      polarity: 'positive',
+      scoringWeights: { [SENTINEL]: 'heavy' },
+    },
+    fields: ['scoringWeights.*'],
+  },
+  {
+    label: 'the sentinel as an unrecognized key',
+    sites: ['an unrecognized key'],
+    value: UNDECLARED_SENTINEL_BODY,
+    fields: ['body'],
+  },
+  {
+    label: 'the sentinel at every site at once',
+    sites: CONTAINMENT_SITES,
+    value: {
+      weight: SENTINEL,
+      polarity: SENTINEL,
+      scoringWeights: { [SENTINEL]: 'heavy' },
+      [SENTINEL]: 1,
+    },
+    fields: ['weight', 'polarity', 'scoringWeights.*', 'body'],
+  },
+];
+
+/**
  * The details a refused parse answered with.
  *
  * A parse that SUCCEEDED answers an empty list rather than throwing,
@@ -699,6 +898,67 @@ function zodMessagesFor(schema: ZodType, value: unknown): string[] {
   return result.error.issues.map((issue) => issue.message);
 }
 
+/**
+ * How many times {@link SENTINEL} occurs in a string.
+ *
+ * A count rather than a boolean, because one function has to answer
+ * both halves of the reading: zero over an answered envelope, and a
+ * known positive number over a planted one and over the row's own
+ * value. A containment assertion written as `not.toContain` could
+ * only ever say the first, and a search that had quietly stopped
+ * matching would satisfy it.
+ */
+function sentinelHits(text: string): number {
+  return text.split(SENTINEL).length - 1;
+}
+
+/**
+ * The whole refusal a parse answered with, serialised exactly as
+ * `errorHandler` puts it on the wire.
+ *
+ * `toJSON()` rather than the details alone: the envelope also
+ * carries `code` and `message`, and a leak into either reaches a
+ * caller just as surely as one into a detail.
+ *
+ * Throws when the run was NOT refused, rather than answering an
+ * empty string. A row whose value quietly started passing then
+ * fails here naming that, instead of reporting zero occurrences of
+ * a sentinel in an envelope nothing ever built.
+ */
+function envelopeOf(run: () => unknown): string {
+  try {
+    run();
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      return JSON.stringify(err.toJSON());
+    }
+
+    throw err;
+  }
+
+  throw new Error('expected the parse to be refused, and it was not');
+}
+
+/**
+ * The same envelope, built by hand around details this module did
+ * not produce.
+ *
+ * What the planted-leak legs search. It goes through the
+ * framework's own `ValidationError.toJSON()` and the same
+ * `JSON.stringify`, so a leg says the SEARCH would find a leak in a
+ * real envelope rather than in a string assembled for the occasion.
+ *
+ * @param details - The details to plant.
+ * @param message - The envelope's own message, defaulting to the
+ *   one {@link parseBody} throws.
+ */
+function plantedEnvelope(
+  details: readonly FieldError[],
+  message = 'Validation failed',
+): string {
+  return JSON.stringify(new ValidationError(message, [...details]).toJSON());
+}
+
 /** The outcomes this file carries rows for, deduplicated and sorted. */
 function outcomesCovered(): string[] {
   const outcomes = [
@@ -724,6 +984,7 @@ describe('the case tables', () => {
       ...REFUSAL_CASES.map((row) => row.label),
       ...ROOT_CASES.map((row) => row.label),
       ...SANITISED_CASES.map((row) => row.label),
+      ...CONTAINMENT_CASES.map((row) => row.label),
     ];
 
     expect(labels.length).toBe(new Set(labels).size);
@@ -814,6 +1075,44 @@ describe('the case tables', () => {
 
       return row.submitted.some((name) => expected.includes(name));
     });
+
+    expect(leaking.map((row) => row.label)).toEqual([]);
+  });
+
+  it('submits the sentinel at every site a request has', () => {
+    const sites = CONTAINMENT_CASES.flatMap((row) => row.sites);
+
+    expect([...new Set(sites)].sort()).toEqual(CONTAINMENT_SITES);
+  });
+
+  it('carries one containment row submitting every site at once', () => {
+    const whole = CONTAINMENT_CASES.filter(
+      (row) => row.sites.length === CONTAINMENT_SITES.length,
+    );
+
+    expect(whole.length).toBe(1);
+  });
+
+  it('has every containment row submit its declared sites and no more', () => {
+    // The anti-vacuity guard for the search: a row that stopped
+    // submitting the sentinel at one of its sites would be answered
+    // an envelope with nothing to find and would pass its own
+    // containment leg. Held against the VALUE, so the count cannot
+    // be kept true by editing the list.
+    const disagreeing = CONTAINMENT_CASES.filter(
+      (row) => sentinelHits(JSON.stringify(row.value)) !== row.sites.length,
+    );
+
+    expect(disagreeing.map((row) => row.label)).toEqual([]);
+  });
+
+  it('expects no containment field to repeat the sentinel', () => {
+    // Aimed at a later edit, like its sanitised counterpart: a row
+    // repaired by pasting the field a leaking parser answered would
+    // be green everywhere else in this file and red only here.
+    const leaking = CONTAINMENT_CASES.filter(
+      (row) => row.fields.some((field) => field.includes(SENTINEL)),
+    );
 
     expect(leaking.map((row) => row.label)).toEqual([]);
   });
@@ -1065,5 +1364,124 @@ describe('the collapse to `*`', () => {
       slug: 'example-tech-radar',
       settings: { scoringWeights: { [OPERATOR_KEY]: 2 }, fieldContract: {} },
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// One sentinel, submitted at every site a request has
+// ---------------------------------------------------------------------------
+
+describe('one sentinel, submitted at every site', () => {
+  for (const row of CONTAINMENT_CASES) {
+    it(`refuses ${row.label}, naming fields of its own`, () => {
+      const details = refusalOf(
+        () => parseBody(containmentSchema, row.value, CONTAINMENT_OPTIONS),
+      );
+
+      // WHICH fields, not merely that there were some. This is what
+      // says the value still fails and where, and it is the reading
+      // the containment leg beside it rests on.
+      expect(details.map((detail) => detail.field)).toEqual(row.fields);
+    });
+
+    it(`keeps ${row.label} out of the whole envelope`, () => {
+      const envelope = envelopeOf(
+        () => parseBody(containmentSchema, row.value, CONTAINMENT_OPTIONS),
+      );
+
+      // The control on the control: the value really did carry the
+      // sentinel once per site it names, so a row that stopped
+      // submitting one cannot pass by searching an envelope for a
+      // string nobody sent.
+      expect(sentinelHits(JSON.stringify(row.value))).toBe(row.sites.length);
+      expect(sentinelHits(envelope)).toBe(0);
+    });
+  }
+
+  it('is searched over the envelope, not over the details alone', () => {
+    // What the zeros above were measured over, pinned whole. The
+    // right-hand side is built through the framework's own error
+    // rather than by reading this one, so an envelope that had lost
+    // its `code`, its `message` or a detail would not be answering
+    // the same string.
+    const envelope = envelopeOf(
+      () => parseBody(
+        containmentSchema,
+        UNDECLARED_SENTINEL_BODY,
+        CONTAINMENT_OPTIONS,
+      ),
+    );
+
+    expect(envelope).toBe(plantedEnvelope([
+      { field: 'body', message: AN_UNDECLARED_KEY, code: 'unrecognized_keys' },
+    ]));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The planted leak that makes those zeros mean something
+// ---------------------------------------------------------------------------
+
+describe('a sentinel planted in an envelope', () => {
+  it('is found in a detail field', () => {
+    // The field zod's own path produces for the open-record row,
+    // which is exactly what the collapse to `*` removes. The row
+    // above asserts `scoringWeights.*`; this is that path unmasked,
+    // and this leg is what says the search would have caught it.
+    const planted = plantedEnvelope([
+      {
+        field: `scoringWeights.${SENTINEL}`,
+        message: MISSING_OR_WRONG_TYPE,
+        code: 'invalid_type',
+      },
+    ]);
+
+    expect(sentinelHits(planted)).toBe(1);
+  });
+
+  it('is found in a detail message', () => {
+    // Not a hypothetical wording. This is the string zod raised for
+    // the undeclared-key row, read back off zod here rather than
+    // pasted, and the one `zodToValidationError` copies verbatim —
+    // so the leg proves the search would find the leak the
+    // vocabulary exists to close, in the form it would arrive in.
+    const raised = zodMessagesFor(
+      containmentSchema,
+      UNDECLARED_SENTINEL_BODY,
+    );
+
+    expect(raised.length).toBe(1);
+    expect(raised.filter((message) => sentinelHits(message) > 0))
+      .toEqual(raised);
+
+    const planted = plantedEnvelope(raised.map((message) => ({
+      field: 'body',
+      message,
+      code: 'unrecognized_keys',
+    })));
+
+    expect(sentinelHits(planted)).toBe(raised.length);
+  });
+
+  it('is found in the envelope message, which is not a detail', () => {
+    // `details` is not the only member a caller reads, and a search
+    // narrowed to it would pass every case above and fail here.
+    expect(sentinelHits(plantedEnvelope([], SENTINEL))).toBe(1);
+  });
+
+  it('is counted at every occurrence rather than the first', () => {
+    // The at-once row expects zero out of four sites, so the search
+    // has to keep counting rather than stop at the first match. A
+    // reading that answered a boolean would report the same thing
+    // for one leak and for four.
+    const planted = plantedEnvelope(
+      CONTAINMENT_SITES.map((site) => ({
+        field: SENTINEL,
+        message: `Refused ${site}.`,
+        code: 'custom',
+      })),
+    );
+
+    expect(sentinelHits(planted)).toBe(CONTAINMENT_SITES.length);
   });
 });
