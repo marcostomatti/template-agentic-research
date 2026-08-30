@@ -371,3 +371,107 @@ Waves 2 and 3 extend the same root on the same terms: `/topics`,
 `/sources`, `/connectors`, `/exports`, `/findings`, `/documents`,
 `/entities`, `/runs` and `/spend` arrive as further routers,
 mounted the same way and answering under every rule above.
+
+## Domains
+
+### Five endpoints over one table, addressed by slug
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /domains` | `200` with a page of rows, slug ascending, plus `meta`. `422` for a window the pagination schema refuses. |
+| `POST /domains` | `201` with the stored row. `422` for a body the schema refuses, `409` when the slug is taken. |
+| `GET /domains/:slug` | `200` with the row. `404` for an unknown slug, `422` for a segment that is not a slug. |
+| `PATCH /domains/:slug` | `200` with the row afterwards. `422` for a body the schema refuses, `404` for an unknown slug. |
+| `DELETE /domains/:slug` | `204` with no body. `404` for an unknown slug, `409` while the domain holds rows it accumulated. |
+
+`src/domains/routes.ts` declares all five and decides none of them:
+each handler reads the address, derives the window, calls the
+matching function in `src/domains/service.ts` and chooses a status.
+Wave 3 exposes those same functions as MCP tools, so a rule that
+lived in a handler would be a rule that surface could not reach.
+
+### A create answers `201` and carries no `Location` header
+
+The answer is a resource that did not exist when the request was
+made, which is what `201` says and `200` does not.
+
+No `Location`, because the created row travels in the body and its
+`slug` IS the address every other route in this group takes. A
+header would restate what the caller sent and already has back.
+
+### A delete answers `204`, so the counts travel in the refusal
+
+A removed resource has no representation to carry. The numbers
+worth reading are the ones the guard refused with, and by the time
+a delete succeeds they describe nothing that still exists.
+
+### `settings` is replaced whole and is never merged
+
+A `PATCH` supplying `settings` stores exactly that payload. An
+absent member of it is cleared rather than left standing, and a
+patch omitting `settings` altogether leaves the stored payload
+alone. Those are two different requests and they are meant to be.
+
+A merge would make clearing a member unexpressible, since the
+request that omits a weight and the request that removes it would
+be the same bytes. It would also make a whole-unit contract read
+like a field-level one at exactly the point an operator is tuning
+scoring.
+
+`slug` is not patchable at all. It is what every other surface
+addresses the domain by — a route path, the seed's upsert key, an
+operator's `defaultDomainSlug` — and none of those references is
+a foreign key the database would follow, so a rename is a separate
+operation with its own fan-out rather than a member on a patch.
+
+### `featureVersion` and `embeddingModel` are answered, never accepted
+
+Both appear on every domain body and on neither request schema.
+They are the feature pipeline's own pins: a bumped
+`feature_version` claims vectors were recomputed, and every stale
+vector then reads as current. An operator editing a domain has no
+business moving either.
+
+### A delete refuses while the domain holds rows it accumulated
+
+`topics`, `sources` and `findings` are counted, and a non-zero
+count in any of them is a `409` whose `details` is
+`{ topics, sources, findings }` — three facts about the database
+rather than anything about the request. The domain's categories,
+terms, criteria and personas are not counted: those are what it was
+CONFIGURED with, and losing a lexicon written for a subject being
+discarded is the outcome anybody expects.
+
+The guard prevents nothing at the database. Every foreign key onto
+`domains.id` is `ON DELETE CASCADE`, so the statement takes all of
+it either way. What the guard buys is that the loss was EXPLICIT,
+and the counts are in the refusal so that reading is possible
+before the confirmation is sent.
+
+### `?cascade=confirm` is the only spelling that gets past it
+
+A word rather than a boolean, and that word rather than `true` or
+`1`, because a query string is where a confirmation is easiest to
+arrive at by accident: a stale form field, a copied URL, a client
+that sends every parameter it knows.
+
+Any other value of `cascade` is a `422` naming `cascade`, and any
+other query parameter is a `422` naming `query`. Both are
+deliberate. A caller that wrote `?cascade=yes` meant to get past
+the guard, and answering it the guard's own `409` would send it
+looking for rows to remove instead of for the typo it made; a
+caller that wrote `?casacde=confirm` and had it stripped would
+have a delete it believed it confirmed.
+
+### The address is checked before the payload, except on a delete
+
+A `PATCH` carrying both an unroutable slug and a malformed body is
+answered about the slug. A request that has not named a resource
+has not yet asked anything about a payload, and answering the
+payload first tells a caller what is wrong with a body it was
+never going to be allowed to send.
+
+The delete is the exception and reads its query first, for the
+reason above: that route is one keystroke from a destructive call,
+so a misspelt confirmation is the half of the request worth
+answering.
