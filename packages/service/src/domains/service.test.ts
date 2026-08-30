@@ -1,10 +1,11 @@
 /**
- * `src/domains/service.ts` — the refusals. What the five domain
- * operations do when they are asked for something they will not do,
- * driven over `tests/helpers/memory-research-store.ts` so every
- * claim here is answered with no database anywhere.
+ * `src/domains/service.ts` — what the five domain operations refuse,
+ * and what they land when they accept. Driven over
+ * `tests/helpers/memory-research-store.ts`, so every claim here is
+ * answered with no database anywhere.
  *
- * Five claims, one per way this module can say no.
+ * Six claims: five about the ways this module says no, and one about
+ * the writes it lets through.
  *
  * THAT A SLUG NAMING NO ROW IS A 404 ON EVERY OPERATION THAT TAKES
  * ONE, from the same private helper, so the three cannot answer a
@@ -43,57 +44,84 @@
  * envelope — a search that would find nothing anywhere reports a
  * clean refusal and a leaking one alike.
  *
- * Mutation grid, measured over the 41 cases here with
+ * THAT AN ACCEPTED REQUEST LANDS WHAT THE CALLER ASKED FOR AND
+ * NOTHING ELSE. Three sections at the end, one per way this module
+ * could quietly do something other than what it was told: the
+ * caller's `limit` and `offset` reaching the read rather than a
+ * window this layer decided on, a settings patch REPLACING the
+ * stored payload rather than merging into it, and a confirmed delete
+ * taking the row the guarded call left standing. Each is read back
+ * through a second call rather than off the value the write
+ * answered, so the claim is about what is stored and not about what
+ * one return happened to say.
+ *
+ * Mutation grid, measured over the 52 cases here with
  * `--reporter=json` and read as the failed `fullName` SET rather
- * than as a count. Eleven legs in two classes, because the two
+ * than as a count. Thirteen legs in two classes, because the two
  * halves of this file are reddened by opposite mutations and a grid
  * made of one class leaves the other half green while looking
  * thorough.
  *
- * The seven WIDENING legs each redden the refusal they aim at, and
- * three of them spill into the containment block — which is what
- * says those rows read a real refusal rather than an empty
- * envelope. Rethrowing the store refusal instead of translating it
- * reddens 2: the 409 case and the containment row that reads it.
- * Letting `requireDomain` answer null reddens 5, all three 404 rows
- * plus both containment rows naming a missing slug. Neutralising
- * the delete guard reddens 3, and moving the guard AFTER the delete
- * reddens the SAME three — the in-memory dataset drops a deleted
- * domain's counts with it, which is why the recording wrapper is
- * what separates those two faults and no reading of the rows could.
- * Dropping `openPaths` from the create parse reddens 3, the two
- * masked rows and the open-record containment row; dropping
- * `.strict()` from the create schema reddens 2. And taking the list
- * total from the page rather than from the count reddens both
- * `listDomains` cases.
+ * Nine WIDENING legs. Rethrowing the store refusal instead of
+ * translating it reddens 2: the 409 case and the containment row
+ * that reads it. Letting `requireDomain` answer null reddens 6 —
+ * all three 404 rows, both containment rows naming a missing slug,
+ * and the confirmed delete. Neutralising the delete guard reddens 4,
+ * and moving the guard AFTER the delete reddens the SAME four: the
+ * in-memory dataset drops a deleted domain's counts with it, which
+ * is why the recording wrapper is what separates those two faults
+ * and no reading of the rows could. Dropping `openPaths` from the
+ * create parse reddens 3, the two masked rows and the open-record
+ * containment row; dropping `.strict()` from the create schema
+ * reddens 2. Merging a patched settings payload into the stored one
+ * reddens 2 of the 3 patch rows and leaves the name-only row green
+ * BY CONSTRUCTION — a merge is invisible where nothing is being
+ * merged away, which is what makes that row the standing-payload
+ * control rather than a third copy of the same claim.
  *
- * The four NARROWING legs are aimed at the controls, which is what
- * the controls are for. Refusing every slug as missing reddens 8,
- * and only three are the row-level controls: the other five are the
- * whole delete block and the accepted-body control, none of which
- * can reach its own subject through a 404. Holding every domain to
- * hold rows reddens 2, both of them controls. Resolving the slug
- * before parsing a patch reddens exactly 1, the ordering case,
- * which is the whole of the evidence that the case pins the order
- * rather than restating a refusal. And withholding the empty
- * settings object a create supplies reddens 1, the create control,
- * which is what makes that supply load-bearing rather than tidy.
+ * The last two widening legs redden an IDENTICAL set of five, and
+ * that is the grid's one blind spot rather than a coincidence worth
+ * leaving unsaid: taking the list total from the page in hand, and
+ * ignoring the window the caller asked for, both redden the two
+ * `listDomains` cases and the three narrowed window rows. Every
+ * window narrow enough to catch a dropped `offset` is also narrow
+ * enough to catch a total taken from the page, so no row here
+ * separates the two faults and only the assertion that fails inside
+ * each does. `reads the whole collection` is green under both, and
+ * is what the other three rows read as narrowings OF.
  *
- * What no module mutation reaches, by construction. The six table
+ * Four NARROWING legs, aimed at the controls, which is what the
+ * controls are for. Refusing every slug as missing reddens 12, and
+ * only three are the row-level controls: the other nine are the
+ * whole delete block, the accepted-body control, all three patch
+ * rows and the confirmed delete, none of which can reach its own
+ * subject through a 404. Holding every domain to hold rows reddens
+ * 2, both of them controls. Resolving the slug before parsing a
+ * patch reddens exactly 1, the ordering case, which is the whole of
+ * the evidence that the case pins the order rather than restating a
+ * refusal. And withholding the empty settings object a create
+ * supplies reddens 1, the create control, which is what makes that
+ * supply load-bearing rather than tidy.
+ *
+ * What no module mutation reaches, by construction. The nine table
  * guards read only the tables beside them and are aimed at a later
  * edit — an operation added with no row, an outcome side deleted
- * whole, an open record left bracketed from one side. The planted
- * control is invisible for the same reason and deliberately so: it
- * proves the SEARCH, where a leg making this module leak would
- * prove the SUBJECT. And no leg touches `src/http/validation.ts`,
- * so every field path below is evidence about what this module
- * ASKED FOR rather than about how the masking is built.
+ * whole, an open record left bracketed from one side, a window table
+ * that stopped reaching one of the four domains it stores. The
+ * planted control is invisible for the same reason and deliberately
+ * so: it proves the SEARCH, where a leg making this module leak
+ * would prove the SUBJECT. And no leg touches
+ * `src/http/validation.ts`, so every field path below is evidence
+ * about what this module ASKED FOR rather than about how the
+ * masking is built.
  */
 import type { DomainDependentCounts } from './store.js';
 import type { FieldError } from '../../lib/errors/index.js';
 import type {
   MemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import type { DomainSettings } from '../db/schema/domains.js';
+import type { StoreWindow } from '../http/schemas.js';
 
 import { describe, expect, it } from 'vitest';
 
@@ -740,7 +768,7 @@ describe('the bodies these operations refuse', () => {
     // The positive control for every row above, one per operation:
     // a module refusing every body passes the whole table and fails
     // this. Coverage of what the two operations DO with an accepted
-    // body is a separate concern and lands beside it.
+    // body is the three sections below.
     const store = await storeHolding(RADAR);
     const created = await createDomain(store, {
       slug: TRANSIT,
@@ -898,4 +926,280 @@ describe('what a refusal is allowed to say', () => {
       expect(refusal.toJSON().code).toBe(refusal.code);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// The window a list read honours
+// ---------------------------------------------------------------------------
+
+/** A third domain, invented in the same neutral register. */
+const CLIMATE = 'example-climate-signals';
+
+/** A fourth, so a window can start and stop inside the collection. */
+const HARDWARE = 'example-open-hardware';
+
+/**
+ * The four slugs the window cases store, planted in an order that is
+ * not their own.
+ *
+ * Deliberately unsorted: `DomainStore.listDomains` promises slug
+ * order rather than insertion order, and a window read over rows
+ * planted already-sorted is green against a store that never ordered
+ * anything.
+ */
+const PLANTED = [TRANSIT, RADAR, HARDWARE, CLIMATE];
+
+/** The same four, as the port promises to answer them. */
+const IN_SLUG_ORDER = [CLIMATE, HARDWARE, RADAR, TRANSIT];
+
+/** A window wide enough to hold whatever a case here stored. */
+const WHOLE_COLLECTION: StoreWindow = { limit: 50, offset: 0 };
+
+/** One window, and the page it has to answer with. */
+interface WindowCase {
+  /** What makes this row different from every other. */
+  readonly label: string;
+  /** The window, as `toStoreWindow` would have derived it. */
+  readonly window: StoreWindow;
+  /** The slugs it covers, in the order they come back. */
+  readonly slugs: readonly string[];
+}
+
+/**
+ * The windows over {@link PLANTED} this module has to pass through
+ * untouched.
+ *
+ * The service re-checks no bound and re-slices nothing — the window
+ * arrives already derived, per its own header — so what these rows
+ * pin is that the caller's `limit` and `offset` reach the read
+ * rather than a window this layer decided on.
+ */
+const WINDOW_CASES: readonly WindowCase[] = [
+  {
+    label: 'the whole collection',
+    window: WHOLE_COLLECTION,
+    slugs: IN_SLUG_ORDER,
+  },
+  {
+    label: 'a first page shorter than the collection',
+    window: { limit: 2, offset: 0 },
+    slugs: [CLIMATE, HARDWARE],
+  },
+  {
+    label: 'a window starting and stopping inside the collection',
+    window: { limit: 2, offset: 1 },
+    slugs: [HARDWARE, RADAR],
+  },
+  {
+    label: 'a last page shorter than its own limit',
+    window: { limit: 3, offset: 3 },
+    slugs: [TRANSIT],
+  },
+];
+
+describe('the window a list read honours', () => {
+  it('labels every row distinctly', () => {
+    const labels = WINDOW_CASES.map((row) => row.label);
+
+    expect(labels.length).toBe(new Set(labels).size);
+  });
+
+  it('reaches every stored domain across the table', () => {
+    // Otherwise a table of windows that all happen to start at the
+    // first row would look thorough while never asking for one of
+    // the four.
+    const reached = new Set(WINDOW_CASES.flatMap((row) => [...row.slugs]));
+
+    expect([...reached].sort()).toEqual([...IN_SLUG_ORDER].sort());
+  });
+
+  it('drops the first row in one window and the last in another', () => {
+    // The two guards the table exists for, asserted about the table
+    // itself: a store ignoring `offset` passes every row whose page
+    // starts at the first domain, and one ignoring `limit` passes
+    // every row whose page runs to the last.
+    const dropsLeading = WINDOW_CASES.some(
+      (row) => row.slugs[0] !== IN_SLUG_ORDER[0],
+    );
+    const dropsTrailing = WINDOW_CASES.some(
+      (row) => row.slugs.at(-1) !== IN_SLUG_ORDER.at(-1),
+    );
+
+    expect({ dropsLeading, dropsTrailing })
+      .toEqual({ dropsLeading: true, dropsTrailing: true });
+  });
+
+  for (const row of WINDOW_CASES) {
+    it(`reads ${row.label}`, async () => {
+      const store = await storeHolding(...PLANTED);
+      const page = await listDomains(store, row.window);
+
+      expect(page.rows.map((domain) => domain.slug)).toEqual([...row.slugs]);
+
+      // The collection rather than the page, on every row: a total
+      // taken from the rows in hand is correct for the first window
+      // above and wrong for the other three.
+      expect(page.total).toBe(PLANTED.length);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// What a patch replaces and what it leaves standing
+// ---------------------------------------------------------------------------
+
+/**
+ * What the patched domain is configured with before any patch.
+ *
+ * Two members rather than one, so a merge has something to leave
+ * behind: a stored payload of a single key is indistinguishable from
+ * an empty one once a replacement has landed on that same key.
+ */
+const STORED_SETTINGS: DomainSettings = {
+  scoringWeights: { recency: 0.5, novelty: 0.25 },
+  findingsDisplayName: 'Signals',
+};
+
+/**
+ * What a settings patch replaces it with.
+ *
+ * DISJOINT FROM {@link STORED_SETTINGS}, and that is the whole
+ * design of these cases. A replacement sharing a key would leave a
+ * merge and a replacement answering the same bytes for that key, so
+ * the rule under test would be unobservable exactly where it
+ * matters.
+ */
+const REPLACEMENT_SETTINGS: DomainSettings = {
+  verdictVocabulary: ['adopt', 'hold'],
+};
+
+/**
+ * A store holding {@link RADAR} with {@link STORED_SETTINGS},
+ * written through {@link createDomain} rather than planted.
+ *
+ * Through the service on purpose: the payload then reaches the
+ * dataset the way a request would put it there, so a create that
+ * dropped or reshaped `settings` is a red patch case rather than a
+ * fixture nobody would question.
+ *
+ * @returns The store.
+ */
+async function storeHoldingConfigured(): Promise<MemoryResearchStore> {
+  const store = createMemoryResearchStore();
+
+  await createDomain(store, {
+    slug: RADAR,
+    name: 'Tech radar',
+    settings: STORED_SETTINGS,
+  });
+
+  return store;
+}
+
+describe('what a patch replaces and what it leaves standing', () => {
+  it('replaces the stored payload rather than merging into it', async () => {
+    const store = await storeHoldingConfigured();
+    const before = await getDomain(store, RADAR);
+
+    // The control, in this body rather than a sibling: a merge is
+    // observable only while the stored payload holds members the
+    // patch does not, so the case says what was there before it
+    // says what replaced it.
+    expect(before.settings).toStrictEqual(STORED_SETTINGS);
+
+    const patched = await patchDomain(store, RADAR, {
+      settings: REPLACEMENT_SETTINGS,
+    });
+    const reread = await getDomain(store, RADAR);
+
+    expect(patched.settings).toStrictEqual(REPLACEMENT_SETTINGS);
+
+    // Read back, so the claim is about what is STORED rather than
+    // about what one call happened to answer.
+    expect(reread.settings).toStrictEqual(REPLACEMENT_SETTINGS);
+
+    // The symmetric half: a patch naming settings leaves the label
+    // alone, which is what says the whole-unit rule is about the
+    // payload and not about the row.
+    expect(patched.name).toBe('Tech radar');
+  });
+
+  it('clears every member when the payload is empty', async () => {
+    // The sharpest form of the same rule, and the reason the schema
+    // lets an empty object through at all: a request clearing every
+    // weight and a request leaving them alone would otherwise be
+    // the same bytes.
+    const store = await storeHoldingConfigured();
+    const patched = await patchDomain(store, RADAR, { settings: {} });
+    const reread = await getDomain(store, RADAR);
+
+    expect(patched.settings).toStrictEqual({});
+    expect(reread.settings).toStrictEqual({});
+  });
+
+  it('leaves the payload standing when only the name moves', async () => {
+    const store = await storeHoldingConfigured();
+    const patched = await patchDomain(store, RADAR, { name: 'Renamed' });
+    const reread = await getDomain(store, RADAR);
+
+    expect(patched.name).toBe('Renamed');
+    expect(patched.settings).toStrictEqual(STORED_SETTINGS);
+    expect(reread.settings).toStrictEqual(STORED_SETTINGS);
+
+    // The sorted key SET beside the fields the cases read. A member
+    // arriving on the record by spread — a hash, a column nobody
+    // projected — is invisible to every field read in this file and
+    // is exactly what this line catches.
+    expect(Object.keys(patched).sort()).toEqual([
+      'createdAt', 'embeddingModel', 'featureVersion', 'id',
+      'name', 'settings', 'slug', 'updatedAt',
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A delete the caller confirmed
+// ---------------------------------------------------------------------------
+
+describe('a delete the caller confirmed', () => {
+  it('removes the row the guarded call left standing', async () => {
+    // TWO OUTCOMES IN ONE BODY, because neither is worth much on its
+    // own: a refusal that left the row is interesting only beside a
+    // confirmation that takes it, and a confirmed delete is
+    // interesting only beside a guard that stopped one.
+    //
+    // What this case cannot say is WHERE the guarded call stopped. A
+    // module that deleted the row and then threw leaves a dataset
+    // this reads as a refusal, because the planted counts go with
+    // the row; `stops before the delete rather than after it` above
+    // is the reading that separates those two faults, and it needs
+    // the recording wrapper to do it.
+    const store = await storeHolding(RADAR, TRANSIT);
+    const radar = await getDomain(store, RADAR);
+
+    store.setDomainDependents(radar.id, { findings: 3 });
+
+    await refusalFrom(() => deleteDomain(store, RADAR, {
+      cascadeConfirmed: false,
+    }));
+
+    const guarded = await listDomains(store, WHOLE_COLLECTION);
+
+    expect(guarded.rows.map((row) => row.slug)).toEqual([RADAR, TRANSIT]);
+    expect(guarded.total).toBe(2);
+
+    await expect(deleteDomain(store, RADAR, { cascadeConfirmed: true }))
+      .resolves.toBeUndefined();
+
+    const confirmed = await listDomains(store, WHOLE_COLLECTION);
+
+    // TRANSIT is the control: the confirmation takes the domain it
+    // named and not the table.
+    expect(confirmed.rows.map((row) => row.slug)).toEqual([TRANSIT]);
+    expect(confirmed.total).toBe(1);
+
+    const refusal = await refusalFrom(() => getDomain(store, RADAR));
+
+    expect(refusal).toBeInstanceOf(NotFoundError);
+  });
 });
