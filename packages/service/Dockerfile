@@ -30,7 +30,12 @@ COPY packages/service/tsconfig.json ./packages/service/
 COPY packages/service/lib ./packages/service/lib
 COPY packages/service/src ./packages/service/src
 
-# tests/ is not part of the image; its include globs simply match nothing.
+# tests/ stays out of the image, but src/ carries colocated *.test.ts
+# files importing the shared in-memory fakes, so tests/helpers has to
+# come along for the type-check to resolve them. The rest of tests/ is
+# absent and its include glob simply matches nothing.
+COPY packages/service/tests/helpers ./packages/service/tests/helpers
+
 WORKDIR /app/packages/service
 RUN bun run check-types
 

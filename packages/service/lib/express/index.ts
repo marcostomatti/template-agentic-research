@@ -1,7 +1,9 @@
 export { createService } from './create-service';
 export {
   buildRequireAuth,
+  buildRequireAuthFrom,
   buildOptionalAuth,
+  buildOptionalAuthFrom,
   createIntrospectVerifier,
   getSession,
   passthroughMiddleware,

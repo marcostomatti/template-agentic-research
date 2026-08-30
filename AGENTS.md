@@ -90,6 +90,51 @@ wanted in both places must be made in both repos.
   parens, not after the `=>`), and `import/order` lists `type` as the FIRST
   group, so an `import type` sits above the `node:` builtins in its own
   blank-line-separated block.
+- Four more `sharedRules.mjs` behaviours, each invisible until `lint` runs
+  and each the likeliest single finding on a new module. `import/order`
+  treats parent (`../x`) and sibling (`./y`) as SEPARATE groups, so a module
+  importing both needs a blank line between them, and within the single
+  `type` group the order is by GROUP first and alphabetical only inside it
+  (a sibling `./store.js` type import sorts BEFORE a parent `../db/index.js`
+  one — the opposite of a string compare). `no-unused-vars` does NOT have
+  `ignoreRestSiblings` on, so the idiomatic omit-a-key `const { key,
+  ...rest } = obj;` is an error. `@stylistic/newline-per-chained-call` is
+  `{ ignoreChainWithDepth: 2 }`, so a TWO-deep chain is legal on one line
+  and only the third call forces the break — measure rather than
+  pre-breaking, since a gratuitously split chain is equally green and reads
+  as if the rule demanded it. And `implicit-arrow-linebreak: beside` forbids
+  any newline between `=>` and its expression INCLUDING inside call parens,
+  which `eslint --fix` resolves by JOINING the lines — silently undoing
+  hand-maintained wrapping into a 95-130 char one-liner. Run
+  `awk 'length > 79'` over any file after a `lint:fix`; nothing else reports
+  the reflow. The repairs that keep both the rule and the width are a
+  `function` declaration (no `func-style` rule is configured anywhere here)
+  or hoisting a nested callback's inner list to a module-scope const.
+- The two unused-symbol gates disagree by POSITION, so a uniform-signature
+  design is lint-green and `check-types` RED. The recommended
+  `args: 'after-used'` on `@typescript-eslint/no-unused-vars` never reports
+  a parameter sitting BEFORE a used one, while tsconfig's
+  `noUnusedParameters` reports every unused parameter whatever its position
+  (measured: TS6133 on the middle parameter of a three-parameter function
+  whose third is read).
+  So a family of functions given ONE signature needs the `_` prefix that tsc
+  honours and eslint never asked for (precedent: `_ctx` in
+  `lib/express/builtin-routes.ts`, `_req, _res` in `passthroughMiddleware`).
+  A green `lint` is no evidence about an unused symbol here at all.
+- Two more places `lint` and `check-types` disagree, in both directions.
+  `NodeJS.WriteStream` — and every other member of the ambient `NodeJS`
+  namespace — is a `no-undef` ESLint ERROR here while tsc resolves it fine,
+  no config in the repo declaring that global; spell the type structurally
+  (`typeof process.stdout | typeof process.stderr`) rather than reaching for
+  an `eslint-disable`. And `isolatedModules` is on repo-wide, so NO spelling
+  of an AMBIENT `const enum` member from a dependency compiles — direct
+  access, destructuring, index access, a namespace import and a cast through
+  `unknown` were each measured TS2748, with `lint` and a `bun -e` runtime
+  probe green for every one of them. NAPI-RS ships its enums that way
+  (`@node-rs/argon2`'s `Algorithm` is the first here), so expect it on the
+  next native dependency; the repair is `import type` plus the numeric
+  literal annotated with it (`const ARGON2ID: Algorithm = 2;`), which tsc
+  still membership-checks.
 - Control characters appear in tracked files only as escapes, never as
   raw bytes — a raw NUL makes `git diff` render `Bin` forever and makes
   POSIX grep report no match for text that is present, both silently.
@@ -219,21 +264,19 @@ behind an ASCII placeholder token, never as a literal in the tool call.
   bare needle token pasted into a doc, a plan or a commit message becomes
   the very literal the law forbids, and this paragraph tripped that on its
   first draft.
-- The SEVEN-needle sweep's correct answer is EIGHT hits, not that one, and
-  reading it as one scores a clean tree as dirty. The two needles assembled
-  in `packages/ui/eslint.config.mjs` add seven more (measured at the q06
-  tip): both `NOTICE` files, `packages/ui/README.md` twice,
-  `packages/ui/AGENTS.md`, `packages/ui/scripts/compare-design.mjs`, and
-  the root `AGENTS.md` bullet that STATES the banned import scope. Every
-  one is `packages/ui` attribution/provenance prose or the rule's own
-  self-reference. Report the five-needle and two-needle halves separately
-  with the eight-hit total named, or every close-out re-opens the same
-  closed question — and note neither ui needle fires in the config that
-  DECLARES it, since those literals are assembled at run time, so "the
-  config contains its own needle" is a dead control. Extract them by
-  parsing the `const <ID> = [...].join('<sep>');` declarations out of the
-  config's source text; the same parser covers all seven and builds the
-  masking table for showing context around a legitimate hit.
+- That ONE-hit figure is a claim about the FIVE needles
+  `findForbiddenMatches` holds and NOT about the seven-needle sweep it sits
+  inside, and the two populations obey DIFFERENT laws — so a run
+  reporting the union against it reads as six regressions. Measured over
+  780 tracked files: the matcher's five return exactly
+  `origin-project : NOTICE : 10`, and the two needles assembled in
+  `packages/ui/eslint.config.mjs` return SEVEN more, of which four are
+  legitimate origin prose under the README/NOTICE clause and two are LAW
+  STATEMENTS naming their own subject (root `AGENTS.md`'s import ban spells
+  the scope it bans; `packages/ui/AGENTS.md`'s reference-free rule spells
+  the repo whose prose it restricts). Report the result bucketed by needle
+  SOURCE with the law each bucket answers to, never as one number against
+  the five-needle figure.
 - Separate a pre-existing hit from one the branch introduced with a
   merge-base hit-set DIFF, the only leg that can: `git archive <merge-base>
   | tar -x -C /tmp/<fresh-dir>` — never `rm -rf` the directory first, which
@@ -258,6 +301,43 @@ behind an ASCII placeholder token, never as a literal in the tool call.
   false-positive fixtures. A control returning those 2 files alone is a DEAD
   control reporting only the scanner — only the third-party members say the
   guard discriminates against what is actually in the tree.
+- One of those four controls IS dead here, and the tell is the file SET
+  rather than the count: dropping the guard from the origin HOST needle
+  returns 2 hits across exactly the invariant's own two files and ZERO
+  third-party ones, because that label has no legitimate near neighbour in
+  this tree at all. The other three do discriminate (prefix-without-
+  lookbehind: 15 hits, 1 third-party; note-app-without-scheme: 33 across 16;
+  path-segment-without-slashes: 27 across 3). So say which zeros are backed
+  by a live control and which rest on the planted sample ALONE — a blanket
+  "the controls proved the guards discriminate" is false of the host needle
+  every time.
+- The `packages/ui` bucket is a SEPARATE probe from `findForbiddenMatches`
+  and needs its OWN fragment-built planted control, taken from
+  `packages/ui/eslint.config.mjs`'s `BANNED_SOURCE_SCOPE` and
+  `BANNED_SOURCE_REPO` the way the five come from `naming-patterns.test.ts`.
+  A bucket run without one carries the same dead-needle risk the five
+  already guard against, and nothing else in the repo reports it. A branch
+  touching ZERO files under `packages/ui` still owes that bucket, which is
+  the counter-intuitive half: both needles scan the WHOLE tree, so the
+  branch's new files elsewhere sit inside their surface even though the
+  ESLint rule declaring them reaches only `packages/ui` imports.
+- On a tree that already carries legitimate hits there is no zero to lean
+  on, and the only reading separating yours from carried-in is a
+  before/after hit SET diff taken with the SAME matcher:
+  `git ls-tree -r --name-only -z <merge-base>` plus `git show <base>:<f>`
+  gives the base side in the same probe `git ls-files` gives HEAD's, and
+  `ADDED: <none> / REMOVED: <none>` is the whole verdict. Print the two file
+  COUNTS beside it (752 vs 780 here) — a base-side walk that resolved
+  nothing produces an empty base set and reports every real hit as ADDED,
+  which reads exactly like the branch having introduced all of them.
+- A THIRD leak shape survives both automated halves: a docblock in a script
+  naming the design source's HTML file (`packages/ui/scripts/
+  compare-design.mjs:11`, pre-existing, matched case-insensitively on a
+  Capitalised spelling). `no-restricted-imports` reaches only `packages/ui`
+  IMPORTS and `naming-patterns.ts` scans only `packages/service`, while
+  `packages/ui/AGENTS.md` states the very clause it violates. Expect the
+  manual half's real findings in comments under `packages/ui/scripts/` and
+  `packages/ui/**/*.stories.*`, which no gate in either fan-out opens.
 - The whole sweep runs from ONE /tmp `.mjs` under bun rather than from
   inside `packages/service`: `naming-patterns.ts` imports only node
   builtins, so a probe importing it by ABSOLUTE path reaches
@@ -387,12 +467,58 @@ red package never masks another and a single run gives the whole picture.
   pretest`, so it can only move from that package, and `@ar/service
   pretest` emits two lines whatever the package holds — which is why
   landing modules under `src/lib/` or `src/sources/` cannot move any line
-  bucket at all. The six `Exited with code 0` SCRIPTS are worth NAMING
-  rather than counting — `@ar/service pretest`, `@ar/ui pretest`,
-  `@ar/web pretest`, `@ar/ui test`, `@ar/web test`, `@ar/service test` —
-  but a `grep -c 'Exited with code'` over the capture returns EIGHT, not
-  six, because `@ar/web`'s pretest also emits doubled-prefix
-  `@ar/web pretest: @ar/ui build`/`postbuild` lines that match the needle.
+  bucket at all. The `Exited with code 0` set is exactly
+  SIX and worth NAMING rather than counting — `@ar/service pretest`,
+  `@ar/ui pretest`, `@ar/web pretest`, `@ar/ui test`, `@ar/web test`,
+  `@ar/service test`.
+- Confirming that SET needs an ANCHORED matcher, because a substring count
+  answers EIGHT and reads as the tree having grown two scripts: `@ar/web`'s
+  pretest nests a filtered `@ar/ui` build, so
+  `@ar/web pretest: @ar/ui build: Exited with code 0` and its `postbuild:`
+  sibling carry the same string under a DOUBLED prefix.
+  `^@ar/\S+ \S+: Exited with code (\d+)$` splits the two populations
+  exactly (measured 6 top-level, 2 nested), and that anchor is what
+  reconciles the two sentences above — "@ar/web gives FOUR" counts the
+  nested pair and "the set is exactly SIX" does not, so a reader taking
+  either literally against a raw count concludes the other is stale. Assert
+  the six by NAME against `packages/*` with a fabricated member asserted
+  absent, and capture the CODE as a group rather than matching `code 0`, or
+  a red package silently drops out of the set instead of showing a 2.
+- The do-not-grep-for-`failed` rule has a second population the pino example
+  does not cover, and it is shaped like a COMPILE ERROR rather than a log
+  line: `@ar/web`'s Playwright half prints its own dev server's stdout under
+  a `[WebServer]` prefix, so a vite/postcss `@import statements must precede
+  all other statements` warning arrives as a five-line block with source
+  line numbers and a caret underline, in a run whose every summary is green
+  and whose Playwright line reads `27 passed`. Classify the OTHER bucket by
+  PREFIX before reading any line in it as a finding, and attribute an
+  alarming line with `git diff --name-only $(git merge-base main HEAD)..HEAD`
+  rather than by re-running: a branch that touched nothing under
+  `packages/web` or `packages/ui` cannot have authored it.
+- That pass-glyph in-band control is a property of `test:all`'s NON-vitest
+  members (Playwright's per-test lines plus the vite builds) and does NOT
+  exist at PACKAGE scope: a fully green 65-file `bun run test` measured 0
+  pass glyphs AND 0 failure glyphs, so the glyph matcher there has no
+  positive control and its zero is uninformative in both directions. The
+  general rule is that vitest's DEFAULT reporter emits no per-case glyph at
+  any scope on a green run, so the cross-check only proves itself where
+  another runner shares the capture. At package scope the readings with
+  evidence in them are the summary line parsed into SEGMENTS (a red run
+  gains a `failed` segment rather than changing a number) and a line
+  classification whose `other` bucket is enumerable — measured 121 lines
+  as 108 deliberate pino JSON, 4 summary, 2 `$` echoes, 1 banner, 4 blank
+  and exactly the 2 pretest build lines.
+- A package-scope `bun run test` capture also carries TWO file-level
+  readings free in the run you already did. The summary's PARENTHESISED
+  total is a third member of the `vitest list --filesOnly` set equality
+  above (measured 65 == 65 == 65 for `@ar/service`), so a test file on disk
+  that was never collected shows up as the total disagreeing, with no
+  second command. And the SKIPPED-FILE count is a membership question
+  rather than the drifting one: `Test Files 59 passed | 6 skipped (65)`
+  against `git ls-files — 'tests/live/*.test.ts'` (6) says the skips are
+  exactly the env-gated roster, and any file skipped that is NOT in it is a
+  non-live suite that has quietly gone `.skip`. Prefer that over the
+  skipped CASE count, which is comparable only against HEAD's own run.
 - Of those buckets exactly one is assertable by MEMBERSHIP instead of by a
   drifting count: the OTHER (unprefixed) bucket enumerates completely as the
   two `$` echoes, the root vitest run's own nine-line block (banner, FOUR
@@ -537,6 +663,26 @@ matching anything prints exactly the same five lines.
   controls: a definitely-absent but scannable path (in NEITHER set, so
   membership is discriminating) and a binary-allowlist path (`a/b.png`,
   false, so the predicate is not simply answering true for everything).
+- `--staged` is VACUOUS in two shapes, and both print the same
+  `nothing staged to scan` the pre-commit hook does, so the
+  scanned-count-equals-staged-count rule has nothing to read there. A pure
+  DELETION commit is the first; a plan's FINAL staging task is the second,
+  since every earlier task committed its own work and `git add -A` exits 0
+  having staged nothing. The reading with coverage in it is the FULL run
+  derived through `isScannable` (measured 780 == 780 over `git ls-files`,
+  and 775 to 774 naming exactly the removed path on a deletion).
+- The clause beside it — "confirm the ignored trio is absent from
+  `git status --short --untracked-files=all`" — is evaluated against an
+  EMPTY capture on a clean tree, where a grep returns 0 for every needle
+  INCLUDING a misspelt one, so the absence is proven by nothing at all.
+  Three controls close it in one command: the three paths must EXIST on
+  disk (`ls -ld`), `git check-ignore -v` must name the governing rule AND
+  LINE for each with one TRACKED path asserted exit-1 so the exit-0s are
+  shown discriminating, and the same grep shape must return a hit for all
+  three over a PLANTED capture. Filtering `git ls-files` through
+  `isScannable` then closes the loop for free: the trio is in NEITHER the
+  tracked nor the scanned set, which is a stronger statement than the
+  ignores alone.
 - `.github/**` joins package-root `AGENTS.md` in the read-by-no-fan-out-gate
   set, for a different reason: ESLint here has no YAML plugin at all, so
   `lint:all` never opens a `.yml` whatever the ignore patterns say, and

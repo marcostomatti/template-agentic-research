@@ -9,7 +9,7 @@ in `.claude/skills/` and are pointed to below.
 | Path | What it is |
 | --- | --- |
 | `lib/` | The framework: `express` (createService: DI, middleware, health, `/_control`, auth middleware, shutdown), `service-core` (dependencies, typed clients, circuit breaker, retry, http client), `mcp` (createMCP: stdio/HTTP transports + health), `logger` (pino), `errors` (AppError family + the error handler createService registers). Treat as library code — stable, well-tested, changed deliberately. |
-| `src/` | The service: `config.ts` (zod env, fail-fast), `routes/`, `db/` (Drizzle+Postgres, default on), `redis/` (opt-in via `REDIS_URL`), `cron/` (interval jobs as a managed dependency), `notifications/` (preference-aware dispatch + channel stubs), `auth/` (dev introspection stub), `mcp/` (MCP entry + tools). |
+| `src/` | The service: `config.ts` (zod env, fail-fast), `routes/`, `db/` (Drizzle+Postgres, default on), `redis/` (opt-in via `REDIS_URL`), `cron/` (interval jobs as a managed dependency), `notifications/` (preference-aware dispatch + channel stubs), `auth/` (the basic credential strategy: argon2id bootstrap, the `/auth` routes, the local session verifier — see "Authentication" below), `mcp/` (MCP entry + tools). |
 | `src/lib/` | Pipeline libs, written dual-context so `scripts/build-workflows.ts` can splice one into an n8n Code node body — a node then runs the same function the suite imports rather than a second copy written for the canvas. Three rules are what that costs: no value imports, declaration-form exports only, and no reliance on module scope; the build refuses the first two by name. `schedule.ts` (the interval clamp and batch cap `ar-dispatch` applies) is the first and landed in phase 3; the ported wave landed in phase 4 — structured-text, delimited-record and message parsing, untrusted-text neutralization, entity-name validation, near-duplicate hashing, audit lines, chunk preparation, and the gating, scoring and feature mechanisms. Distinct from the framework `lib/`. |
 | `src/sources/` | Source adapters: the `SourceAdapter` contract (`fetch` → `parse` → `toCanonical`, with I/O confined to the first step), the static registry that selects one of them by id — written out rather than read off the directory, so nothing runs unless it was named — and the adapters that satisfy that contract from phase 5 onward, push capture included. Also the modules those adapters share, which declare no member of that contract and appear in no registry: `html-text.ts`, a pure markup-to-text reduction, and `paged-list.ts`, the cursor-paged loop an adapter runs inside its own `fetch` when one `sources` row names several listing endpoints. That one is the exception to the purity of the rest here — it makes the requests, through an injected transport it refuses to run without, which is how the isolated-suite law stays readable in a signature. |
 | `src/exports/` | Export renderers, one per format a subscription can be rendered into (phase 6). A renderer returns artifacts and never dispatches them — the email format renders a draft and stops there. |
@@ -77,6 +77,18 @@ Two rules bind every phase of that port:
   table, so siblings import it directly and it stays out of the barrel.
   Three consumers pin the barrel's path (`drizzle.config.ts`,
   `src/db/index.ts`, `tests/live/live-postgres.ts`) — never move it.
+  Past the barrel line, a new `pgTable` is still half-added until it
+  reaches TWO more places, each owned by a different gate and neither the
+  schema file's own: the alphabetical `TABLES` list in
+  `tests/live/live-postgres.ts` (the live TRUNCATE roster) and the
+  table/column/constraint counts in `docs/architecture/02-schema.md`. The
+  `TABLES` omission is the quiet one — a missing name silently NARROWS
+  what a live run resets between cases (green, with leaked rows), while an
+  extra name makes every live file throw. Derive the roster instead of
+  eyeballing it: `grep -rhoE "pgTable\('[a-z_]+'" src/db/schema/ | sort`
+  held set-equal against the literals parsed out of the `TABLES` block,
+  plus a sortedness check and one in-neither control name. A count agrees
+  at the wrong membership; only the set diff names WHICH entry is missing.
 - **Errors**: throw `AppError` subclasses (`lib/errors`) or let Zod errors
   bubble — the registered handler maps them to typed JSON responses.
   Express 5 awaits an async handler's returned promise, so a rejection
@@ -88,6 +100,38 @@ Two rules bind every phase of that port:
   still in `src/index.ts` `/users` is a pre-Express-5 leftover,
   equivalent to letting the rejection through.
 - **Routes**: validate input at the boundary with zod (see the `api` skill).
+- **Logger**: `import type { Logger } from '../../lib/logger/node.js'`.
+  `ServiceLogger` from `lib/service-core` is `@deprecated` (a bare alias for
+  the same type) and NOTHING in the verification order reports it — `lint`,
+  `check-types` and the suite are all green, and the only signal is the
+  editor's TS6385. `lib/express/*` still uses the deprecated spelling, so
+  copying an import line out of the framework half is how the alias spreads;
+  `src/cron/index.ts` and `src/notifications/dispatch.ts` are the precedents
+  to copy instead. Grep a symbol for `@deprecated` at its DECLARATION before
+  copying any import from `lib/`.
+- **Claims-shaped values are a `type` alias, never an `interface`.** A TS
+  `interface` has NO implicit index signature and a `type` alias does, which
+  makes the two NON-interchangeable at any boundary onto a type that
+  declares one — `lib/express/auth.ts`'s `SessionClaims`
+  (`{ sub: string; [key: string]: unknown }`) being the one here. Measured,
+  both spellings in one probe: `interface X { readonly sub: string }` is
+  TS2322 *not assignable to type 'SessionClaims'* and the identical
+  `type X = { readonly sub: string }` assigns clean (`readonly` is not what
+  breaks it). Say why in the docblock: the next reader's instinct is to tidy
+  it into an interface, `lint` stays green through that, and `check-types`
+  reports it at the CONSUMER, a file the edit never touched.
+- **Rate limits**: spell the count `limit`, not `max` — `max` has been the
+  deprecated alias since express-rate-limit v7 and
+  `lib/express/middleware.ts`'s literal predates the rename, so copying its
+  wording spreads it. Two limiters on ONE route BOTH run, and each
+  `RateLimit-*` header goes to whichever middleware set it LAST, so a
+  route-level limiter that omits `standardHeaders`/`legacyHeaders` takes the
+  library defaults and the response ships draft-6 headers naming the
+  APP-WIDE limit beside legacy ones naming the route's — two contradictory
+  answers to one question, green everywhere. Restate `applyMiddleware`'s two
+  header settings on every route-level limiter. To key by address at all,
+  `app.set('trust proxy', <number>)` plus `X-Forwarded-For`: v8 throws
+  `ERR_ERL_PERMISSIVE_TRUST_PROXY` on the `true` form.
 - **Docs**: TSDoc on exported surfaces; see the `documentation` skill.
 - **Tracked markdown**: no author/date header — files open straight with
   `# Title`. Under `docs/architecture/`, `##` headings are noun labels
@@ -167,6 +211,86 @@ and a 404 from `/_control` is ambiguous by construction: disabled plane,
 unmatched path and refused stop all answer the same, so a test asserting
 one of them needs a sibling assertion to say which it got.
 
+## Authentication
+
+`src/auth/` is this service's own credential strategy; `lib/express/auth.ts`
+is the framework seam it plugs into. That seam declares `SessionVerifier`
+around "verify a bearer token" and ships one implementation of it —
+`createIntrospectVerifier`, which asks another deployment over RFC 7662
+HTTP. `src/auth/verifier.ts` is the other one, answering from this
+service's own `auth_sessions` table. `createService` builds
+`requireAuth`/`optionalAuth` from whichever form it is handed, and from
+neither when the `auth` block is absent, in which case both stay
+passthroughs.
+
+**The strategy is presence-toggled on `AUTH_BASIC_USER` plus
+`AUTH_BASIC_PASSWORD`.** Both set: the bootstrap dependency, the `/auth`
+routes and the local DB-backed verifier are all registered. Neither set: a
+boot is exactly what it was before the strategy existed. `src/index.ts`
+derives ONE value from the pair and gates all three halves on it, which is
+what stops them disagreeing about whether auth is configured — a half that
+consulted the env a second time could answer differently. It is a presence
+check rather than a truthiness one because `src/config.ts` gives both
+entries a length floor (1 and 12), so a blank value is already a boot
+failure and the two spellings cannot differ. The introspection pair is the
+one where they can, and `resolveAuthConfig` keeps truthiness there
+deliberately: a present-but-blank `AUTH_INTROSPECT_URL` has to go on
+meaning nothing configured, rather than an adapter pointed at the empty
+string that refuses every request forever.
+
+**The bootstrap runs as a managed dependency ordered behind Postgres.**
+`createAuthBootstrapDependency` registers `auth-bootstrap`, which upserts
+the operator credential on every boot — argon2id, rewriting
+`password_hash` and `updated_at` and leaving `sub` and `created_at` as
+first written — and it sits AFTER the database dependency in the
+`dependencies` array, because dependencies start in array order and the
+upsert needs a live pool. So a boot against an unmigrated database aborts
+THERE, on the pino line naming `auth-bootstrap`, rather than limping on to
+fail at the first login. `bun run db:migrate` stays the operator step it
+always was: nothing in this package migrates at boot, and drizzle's
+migrator does an unlocked check-then-write that concurrent callers race
+into catalog errors (`tests/live/live-postgres.ts` records the incident),
+so adding one is a behaviour change with its own failure modes rather than
+a convenience.
+
+**Two introspection paths exist and they never meet.** This service
+verifies its own tokens in-process through the `SessionVerifier` seam: the
+sessions a request presents were minted here and are one row away, so a
+loopback HTTP hop would be this process asking itself a question it has
+already answered. It serves `POST /auth/introspect` anyway, and that
+endpoint is for a SIBLING deployment pointing its own
+`AUTH_INTROSPECT_URL` here — which is why the response shape is
+`createIntrospectVerifier`'s input rather than anything this package
+invented. `AUTH_INTROSPECT_SECRET` keeps its old meaning on that route:
+the credential authorizing a caller to ASK, compared timing-safe by
+`src/auth/introspect-secret.ts` on the same digest-then-compare precedent
+as `controlAuth` above, and refused before any store read. Unset leaves
+the route mounted and CLOSED rather than absent — the compare is against
+`''`, which no well-formed Bearer credential can equal. Precedence in
+`src/index.ts` runs basic, then the introspection pair, then no `auth`
+block at all; a precedence and not a merge, because `lib/express/schema.ts`
+refines that block to exactly one of the two forms and refuses one
+carrying both at parse time.
+
+**A password hash and a token hash are named in two files and no third.**
+Across `src/` and `lib/`, `passwordHash`/`password_hash` and
+`tokenHash`/`token_hash` appear only under `src/auth/` and in
+`src/db/schema/auth.ts`, where the columns are declared. The `AuthStore`
+port is what holds that: `findUserCredential` answers with the four
+columns the login path needs rather than a whole `auth_users` row, so no
+caller outside the module acquires a hash it has no use for, and a
+repository handing rows around would have spread the column past every
+rule about where it may travel. `src/auth/index.ts` exports no constructor
+returning a record that declares one — `bootstrapAuthUser` answers with
+the credential it just wrote and is deliberately off that surface, while
+`createAuthBootstrapDependency`, whose `Dependency` discards it, is on it.
+The rule is about call sites and not about the type graph: `AuthStore`'s
+methods name those records in their own signatures and reach them through
+the exported type as readily as anything else would. A later stage adds
+`tests/invariants/auth-containment.ts` to walk both trees with exactly
+those two exclusions; until it lands, the rule is carried by this
+paragraph and by `src/auth/store.ts`.
+
 ## Verification order
 
 ```bash
@@ -235,6 +359,38 @@ is read by NO gate at all, so a green `test:all` says nothing about it.
 Verify those by deriving each claim from the artifact it describes (parse
 the roster out of the prose, compare it against the barrel or the
 directory) rather than by reading the doc and agreeing with it.
+
+`.env.example` is the exception to that map and is NOT gateless: it is
+listed in `SCAN_FILES` in `tests/invariants/naming-patterns.ts` (beside
+`docker-compose.yml`) precisely because it is copied verbatim by whoever
+stands the stack up, so the de-origination invariant opens it on every
+`bun run test`. Prove that coverage rather than assuming it --
+`collectScannedFiles` takes a `packageRoot` ARGUMENT, and calling it with
+none dies `ERR_INVALID_ARG_TYPE` on `paths[0]` from inside `join`, which
+reads like a broken module instead of a wrong call. Pair the membership
+assertion with an absent-path control in the same run. An example VALUE in
+that file can also be falsified while every sentence around it stays true,
+so a prose sweep keyed on words never reaches it: check each commented-out
+value against the WIRING's own conditions, since a presence toggle
+routinely makes two of them exact complements.
+
+`Dockerfile`'s build stage runs `bun run check-types` over a PARTIAL tree
+(`tsconfig` + `lib` + `src`) while the package tsconfig's `include` also
+names `tests`, so any colocated `src/**/*.test.ts` importing a shared
+fixture out of `tests/helpers/` type-checks locally and breaks the IMAGE --
+and no gate in either fan-out reports it, since nothing but a docker build
+ever type-checks that subset (measured: 10 TS2307 across four
+`src/auth/*.test.ts` files, plus 2 TS7006 cascades, tsc exiting 2). The
+Dockerfile has to COPY whatever `tests/` subtree `src/` reaches, and the
+helper's own imports have to stay inside the copied set. Two readings such
+a build owes. A `docker build` whose every layer prints CACHED is a REPLAY,
+not a measurement — it exits 0 without running a single RUN step, and the
+`check-types` layer is exactly the one a stale cache hides; take it with
+`--no-cache` and read the RUN steps' OWN output (a genuine run prints both
+`bun install` summaries and `$ tsc --noEmit`). And a build with no
+`--platform` targets the HOST arch, so on Apple Silicon every claim about a
+`linux-x64` artifact is unproven — `--platform linux/amd64` builds the
+actual deploy target and costs nothing measurable here.
 
 Neither `max-len` nor `max-lines` exists in any config, so the ~800-line
 file cap and the hand-maintained comment wrapping are review-quality
@@ -355,6 +511,42 @@ hour. The rules:
    counterpart from the name.
 6. `fileParallelism: false` lives in `vitest.config.ts`, not on a script
    flag, so exported env vars can't re-parallelize the live files.
+
+`src/index.ts` cannot be imported by the isolated suite AT ALL: it resolves
+`src/config.ts` at import time and ends in a top-level `createService` call,
+so an import boots a service against a real database. Two complements cover
+it and neither is optional. The isolated one RE-ASSEMBLES the wiring shape
+over the in-memory store — same presence toggle, same 0-or-1 dependency
+array, same form precedence, same conditional mount — and its cost belongs
+in the file header: a divergence introduced in `src/index.ts` ITSELF stays
+invisible to a green run. Such a file must hand the SAME store to the
+bootstrap dependency, the router and the verifier, then assert the SUBJECT
+the guarded route saw rather than only its status (a service wired over two
+different stores answers the same 200); and a refusal case for an ABSENT
+credential exercises less of the path than one for a BAD credential, since
+`buildRequireAuthFrom` short-circuits on `extractBearer` returning null.
+
+The other complement is booting it by hand, which is the only evidence a
+WIRING change has:
+`( cd packages/service && env PORT=... DATABASE_URL=<live 5433> ... bun run
+src/index.ts )` in the background, curl the surfaces, kill it. Dependency
+ORDER is NOT readable from the running service (`/_control/*` is not mounted
+in this service's config and answers 404) — take it from boot-FAILURE
+attribution instead, which is three legs: an unreachable database must name
+the FIRST dependency, a reachable-but-UNMIGRATED one must name the later
+dependency that needed the schema, and the same unmigrated database with
+the feature toggled OFF must BOOT, which is the control saying leg 2 was
+that dependency rather than something else about an empty database. Each
+leg reads as one pino line (`dep=<name>` with `dependency failed to start`)
+plus the exit code, since `createService` calls `process.exit(1)` outside
+`NODE_ENV=test`. Make a SCRATCH database rather than using `ar_live`, and
+preflight-refuse a name that already exists so the trap's drop cannot reach
+somebody else's. Trap while doing it: `( ... ) & PID=$!` captures the
+SUBSHELL, not the server, so `kill "$PID"` leaves the child holding the port
+and the NEXT run's readiness poll is answered INSTANTLY by that orphan
+— every reading then lands on the stale service and looks like a
+real regression. Use `exec` inside the subshell, preflight-refuse a port
+already answering, and re-check `ps` for orphans AFTER the run.
 
 `describeLivePg` is one of two gates in that directory. `describeLiveN8n`,
 in `tests/live/live-n8n.ts`, keys the n8n cases to `AR_N8N_URL` the same
