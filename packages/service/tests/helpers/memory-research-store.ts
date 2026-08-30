@@ -1163,7 +1163,8 @@ export function createMemoryResearchStore(
      *
      * A CATEGORY IN ANOTHER DOMAIN IS NOT REFUSED HERE, measured:
      * nothing in the schema relates a term to a domain, so the move
-     * is accepted and that rule belongs to `./terms-service.ts`. A
+     * is accepted and that rule belongs to
+     * `src/taxonomy/terms-service.ts`. A
      * category that does not exist IS refused, by the foreign key.
      */
     async updateTerm(

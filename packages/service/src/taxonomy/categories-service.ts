@@ -102,12 +102,12 @@ import { parseBody } from '../http/validation.js';
  * A `Pick` OF TWO PORTS RATHER THAN EITHER ONE WHOLE, for two
  * reasons that happen to point the same way. Resolving a slug is one
  * method of `DomainStore`, and asking for the whole port would have
- * this module claim to need writes it never issues. And the category
- * half of `TaxonomyStore` is the half that exists so far — the term
- * methods land in their own stage, and the in-memory store
- * implements a `Pick` of the same five until they do — so a service
- * typed on the port entire could not be handed the one store that
- * needs no database.
+ * this module claim to need writes it never issues. And
+ * `TaxonomyStore` describes both halves of one resource, so a
+ * service typed on it entire would claim the eight methods
+ * `./terms-service.ts` reaches and this one never does. The two
+ * picks are disjoint and together they are the port, which is what
+ * says the split is a real one rather than a line drawn twice.
  *
  * Built with `Pick` rather than by listing signatures, so a method
  * here cannot drift from the thing it is naming: a hand-copied
