@@ -11,8 +11,8 @@
  * a row is selected by its `kind`, and one adapter serves every row of
  * its kind with nothing differing but the row it was constructed from.
  *
- * Nothing fetches these rows yet. The adapters arrive in phase 4 and
- * the parse engine they run under in phase 5. What the table fixes now
+ * Nothing fetches these rows yet. The adapters and the parse engine
+ * they run under both arrive in phase 5. What the table fixes now
  * is that everything varying per feed is stored, which is what keeps a
  * per-source branch out of the adapter that would otherwise carry it.
  *

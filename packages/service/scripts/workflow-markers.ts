@@ -980,8 +980,8 @@ export function stripDeclarationExports(transpiled: string): string {
  *
  * The forward slash in that class is deliberate and is not used
  * yet. Every library sits directly under the lib directory today,
- * but phase 4 lands a wave of them under `src/lib/sources/`, and a
- * class without the separator would simply not match that marker.
+ * phase 4's wave included, and a class without the separator would
+ * simply not match a marker naming one in a subdirectory.
  * Nothing would replace it, and it would fail the build as a marker
  * that survived the pass — naming neither the file it wanted nor
  * the directory it was looked for in. The dot is in the class for a

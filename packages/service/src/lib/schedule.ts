@@ -89,8 +89,8 @@
  * half of it that bites a reader of this file is the import specifier: a
  * `../../lib/…` written here reaches the framework, exactly as it does
  * from `src/redis/`, while the same text written one directory deeper —
- * where phase 4 puts the ported parsing libs — names a sibling pipeline
- * lib instead.
+ * from a library in a subdirectory of `src/lib/`, which nothing here is
+ * yet — names a sibling pipeline lib instead.
  */
 
 /**

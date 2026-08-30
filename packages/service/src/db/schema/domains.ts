@@ -192,11 +192,12 @@ export const domains = pgTable('domains', {
    * zero: 0 is a version like any other, and writing it here would
    * claim a vector computed under a scheme that never existed.
    *
-   * Nothing writes or reads the column yet. Version pinning against
+   * Nothing writes or reads the column yet. Phase 4 landed the
+   * feature port that computes a vector; version pinning against
    * it — reading a stored vector's version against the domain's,
    * recomputing what differs, bumping when a taxonomy edit moves the
-   * numbers under a vector already stored — arrives with the feature
-   * port in phase 4.
+   * numbers under a vector already stored — arrives with the writer
+   * that stores one.
    */
   featureVersion: integer('feature_version'),
 
@@ -217,8 +218,8 @@ export const domains = pgTable('domains', {
    * NULL means this domain has never been embedded — the same
    * absence `feature_version` encodes, for the other half of the
    * pin. Version pinning against it, re-embedding what a model
-   * change left behind, arrives with the feature port in phase 4
-   * alongside it.
+   * change left behind, arrives with the writer that stores an
+   * embedding, alongside it.
    */
   embeddingModel: text('embedding_model'),
 

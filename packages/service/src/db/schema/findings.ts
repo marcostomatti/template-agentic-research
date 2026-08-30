@@ -273,8 +273,8 @@ export const findings = pgTable('findings', {
  * moment the second source arrived.
  *
  * Nothing writes these rows yet. The adapters that meet a source's
- * items arrive in phase 4, under the engine in phase 5 that decides
- * two captures are the same thing.
+ * items arrive in phase 5, under the engine that decides two
+ * captures are the same thing.
  */
 export const findingSightings = pgTable('finding_sightings', {
   /** Surrogate key; see `domains.id` for why `number` mode. */

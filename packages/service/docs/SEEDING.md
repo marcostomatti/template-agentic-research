@@ -115,6 +115,41 @@ self-contained. A persona whose domain was seeded by an earlier pass
 and has since been dropped from `domains.json` is refused, though the
 row it names is sitting in the database.
 
+## Starting a bundle from the scaffold
+
+`bun run scaffold seed-bundle <slug> <target-dir>` stamps all five
+files for one domain into a directory of its choosing, each already
+carrying a header and rows that validate. It is the one shape that
+command emits which has to work on arrival: every other generator it
+has writes a placeholder that throws, while a seed refusing to
+validate would say nothing about whether the bundle somebody edits it
+into would apply.
+
+So its placeholders are in the values instead — an empty `settings`,
+one persona per role with an empty `systemText`, a root category and a
+child named for the scaffold, one term per polarity, and a topic that
+is enabled and never due because no seed names `nextRunAt`. Each is a
+value the generator could not decide, written in the form that says so
+rather than in an invented one, and each file's own header states
+which of them is which.
+
+The personas are where that differs visibly from the seed shipped
+here. These files mark their worked-example instructions with the word
+`Placeholder`, under the rule below; a scaffold has no instructions to
+mark, and an empty `systemText` records that the role exists and has
+none yet — which is a state the column is entitled to hold, and the
+one placeholder a model could not go on and follow.
+
+The target directory is an argument and the command overwrites
+nothing, so it cannot be pointed at `data/` while these five files
+exist: it checks every path before writing any, refuses, and leaves
+the directory as it found it. Stamp a bundle elsewhere and move across
+what is wanted. `tests/scripts/scaffold.test.ts` holds every emitted
+file to the schema `scripts/seed-schemas.ts` exports for its concern
+and then loads the whole directory through `loadSeedBundle`, which is
+what says a stamped bundle would survive `bun run db:seed` before
+anybody has edited it.
+
 ## Every file opens with a `"_readme"`
 
 The header is required. The reason is in `data/README.md`, under
