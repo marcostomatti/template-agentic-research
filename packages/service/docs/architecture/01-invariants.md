@@ -27,7 +27,7 @@ seam that row polices.
 | Invariant | Enforced by | Owning phase | Status |
 | --- | --- | --- | --- |
 | No workflow holds a send-capable node | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
-| A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/` | 6 | Pending |
+| A model node is fed a prepared chunk and nothing else | `tests/invariants/`, over workflows built from `workflows/src/`, for what a model node may be fed — the half this row's phase and status are about; `tests/lib/chunk.test.ts`, landing in phase 4, for what a prepared chunk is before any workflow reaches for one | 6 | Pending |
 | A prepared chunk is capped at 6000 characters, and there is no raw-body fallback | `tests/lib/chunk.test.ts`, driving `buildChunk` over assemblies each of which would overrun the cap, and holding what it refuses to a closed roster of reasons in both directions | 4 | Implemented |
 | Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 6 | Unexercised |
 | Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
@@ -51,6 +51,13 @@ artifact is already written, the one that lands what it judges.
 ordinary `bun run test` today, and reads something the rule applies to;
 `Unexercised` when it exists and runs over nothing the rule applies to;
 and `Pending` when the row is still a reservation.
+
+An **Enforced by** cell can name an artifact from a phase other than
+the owning one. That happens where a property splits into halves and
+one half is already covered: the cell names both, so the row can be
+read without holding the rest of the register in mind, while **Owning
+phase** and **Status** stay with the half nothing enforces yet — the
+half the row is accountable for.
 
 ### A row is written before the artifact that enforces it
 
@@ -192,11 +199,14 @@ every pass and no built workflow has offered them a model node yet.
 
 The first property is two rows rather than one, because it is two
 claims about different things. What a model node may be fed is a
-property of a workflow, has nothing behind it yet, and reads
-`Pending`; the bound on the chunk itself is a property of the library
-that assembles one, and reads `Implemented` from phase 4. Where a row
-names phase 6, its reading is what says which kind of phase-6 work it
-is waiting on.
+property of a workflow, has nothing holding a workflow to it yet, and
+reads `Pending`; the bound on the chunk itself is a property of the
+library that assembles one, and reads `Implemented` from phase 4. The
+pending row names both artifacts anyway, because a reader who found
+only `tests/invariants/` there would take the whole property to be
+unenforced where half of it is already held; its phase and status stay
+with the half that is not. Where a row names phase 6, its reading is
+what says which kind of phase-6 work it is waiting on.
 
 ### The chunk ceiling is a bill somebody already paid
 
