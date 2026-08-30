@@ -318,11 +318,14 @@ export const sources = pgTable('sources', {
  * refused too. Which of several is the one to rule on is the review
  * queue's question, and `proposed_at` below is what it reads.
  *
- * Nothing writes these rows yet. The propose step that raises them
+ * Nothing INSERTS these rows yet. The propose step that raises them
  * and the apply step that copies an approved one onto its source are
- * both phase 5's, landing beside this table rather than with it, and
- * the operator surface between them is `scripts/approve.ts` — the
- * interim CLI that already rules on `research_pool` rows.
+ * both phase 5's, landing beside this table rather than with it. The
+ * operator surface between them has landed: `scripts/approve.ts`
+ * lists the pending proposals beside the pending `research_pool`
+ * rows and writes `status` and `approved_at` on one of them at a
+ * time, the interim CLI standing in until the API and the UI take
+ * approvals over.
  */
 export const sourceConfigProposals = pgTable('source_config_proposals', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
@@ -509,12 +512,13 @@ export const sourceConfigProposals = pgTable('source_config_proposals', {
    * because the proposing IS the insert: there is no window in which
    * one of these rows exists and nothing has been proposed.
    *
-   * It is also what a review queue is ordered by, oldest first, the
-   * way `scripts/approve.ts` already reads the pending
-   * `research_pool` rows — which is what makes several proposals for
-   * one source workable without a key refusing the later ones.
-   * `now()` is the TRANSACTION's start time, so two rows written in
-   * one transaction tie to the microsecond and the tiebreak is `id`.
+   * It is also what a review queue is ordered by, oldest first:
+   * `listPendingProposals` in `scripts/approve.ts` reads on it, the
+   * way that file's older half reads `research_pool.created_at` —
+   * which is what makes several proposals for one source workable
+   * without a key refusing the later ones. `now()` is the
+   * TRANSACTION's start time, so two rows written in one transaction
+   * tie to the microsecond and the tiebreak is `id`.
    */
   proposedAt: timestamp('proposed_at', { withTimezone: true }).defaultNow()
     .notNull(),
