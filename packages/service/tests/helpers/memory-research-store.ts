@@ -1,10 +1,10 @@
 /**
  * @packageDocumentation
  * The in-memory dataset every wave-1 store port is driven through in
- * the isolated suite. The domains half and the taxonomy half are
- * both here, categories and terms together; the personas and
- * settings halves land in this same file, over this same dataset, as
- * their stages arrive.
+ * the isolated suite. The domains half, the taxonomy half and the
+ * personas half are all here — categories and terms together, and
+ * the personas beside them; the settings half lands in this same
+ * file, over this same dataset, when its stage arrives.
  *
  * ONE DATASET RATHER THAN FOUR FAKES, which is why this file is not
  * named for the one port it currently satisfies. `src/domains/store.ts`
@@ -111,6 +111,35 @@
  * named a missing category answered 21000 and not 23503, so the
  * repeat is what fires first.
  *
+ * THE PERSONA HALF HAS ONE KEY AND ONE FOREIGN KEY, AND NO SINGLE
+ * CALL CAN REACH BOTH EITHER. `personas_domain_id_role_unique` is
+ * `(domain_id, role)` and `personas_domain_id_domains_id_fk` is that
+ * same `domain_id`, so the term half's sentence carries here word
+ * for word: a write naming a domain that does not exist can
+ * duplicate nothing, because nothing is stored under a domain that
+ * is not there. `personas` carries no CHECK and no trigger at all,
+ * so this half imitates two mechanisms and no order — measured
+ * against the live Postgres, where a duplicate answered 23505 on
+ * INSERT and on UPDATE alike and a missing domain answered 23503,
+ * each beside a positive control: a second role under the same
+ * domain accepted where the duplicate was refused, and the SAME
+ * role under another domain accepted, which is what says the key is
+ * per-domain rather than global.
+ *
+ * A PERSONA DELETE CANNOT BE REFUSED, which is the one thing this
+ * half has that neither of the others does. Nothing in schema v2
+ * points at `personas`, so there is no guard below it and no
+ * cascade: `deletePersona` is `deleteTerm`'s shape rather than
+ * `deleteCategory`'s, and a persona removed is a whole operation
+ * rather than half of one with a reference left behind.
+ *
+ * AND A DOMAIN TAKES ITS PERSONAS WITH IT. `personas.domain_id` is
+ * `ON DELETE CASCADE`, as every foreign key onto `domains.id` is, so
+ * the domain delete below drops them where it drops the domain's
+ * categories and their terms. None of that is refusable either: the
+ * `NO ACTION` a cascade has to be careful of is on
+ * `categories.parent_id` and reaches no other table.
+ *
  * EVERY `Date` CROSSING THE BOUNDARY IS COPIED, in both directions.
  * `Date` is mutable, so a store holding the caller's instance, or
  * handing its own back, lets a caller write into stored state
@@ -145,7 +174,11 @@
  * third sequence and burns it the same way — measured there too, a
  * duplicate pattern between two accepted inserts left a gap of one
  * — with the `ON CONFLICT` rewrite above as the case a reader would
- * not predict.
+ * not predict. `personas` carries a fourth, and the measurement
+ * there is the widest of them: two refused inserts between two
+ * accepted ones left a gap of two with the FOREIGN KEY refusal
+ * included, so its counter advances ahead of every check rather
+ * than ahead of the key check alone.
  */
 import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type {
@@ -156,6 +189,12 @@ import type {
   InsertDomainInput,
 } from '../../src/domains/store.js';
 import type { StoreWindow } from '../../src/http/schemas.js';
+import type {
+  InsertPersonaInput,
+  PersonaPatch,
+  PersonaRecord,
+  PersonaStore,
+} from '../../src/personas/store.js';
 import type {
   CategoryPatch,
   CategoryRecord,
@@ -171,22 +210,24 @@ import type {
 import { StoreRefusal } from '../../src/db/store-errors.js';
 
 /**
- * Both implemented ports over one dataset, plus the one seam a case
- * needs that no port declares.
+ * The three implemented ports over one dataset, plus the one seam a
+ * case needs that no port declares.
  *
- * `TaxonomyStore` WHOLE rather than a `Pick` of it. The category
+ * EVERY ONE OF THEM WHOLE rather than a `Pick` of it. The category
  * half stood behind a narrowed alias while the term methods were
  * unwritten, which was the honest statement of what existed rather
- * than a gap papered over with stubs; all twelve are here now, so
- * the alias is gone and a caller wanting the port entire can be
- * handed this store.
+ * than a gap papered over with stubs; all twelve taxonomy methods
+ * and all six persona ones are here now, so a caller wanting any of
+ * the three ports entire can be handed this store. `SettingsStore`
+ * joins them when its stage arrives, and until then this interface
+ * is the statement that it has not.
  *
  * Nothing in `src/` is handed a {@link MemoryResearchStore} — a
  * service takes the port — so the seam below cannot become a way for
  * the code under test to route around it.
  */
 export interface MemoryResearchStore
-  extends DomainStore, TaxonomyStore {
+  extends DomainStore, TaxonomyStore, PersonaStore {
   /**
    * Plants what a domain has ACCUMULATED, for the delete guard to
    * read back through {@link DomainStore.countDomainDependents}.
@@ -259,6 +300,22 @@ const TERM_KEY_UNIQUE = 'terms_category_id_pattern_unique';
  * children-hold-the-delete refusal to share the name with.
  */
 const TERM_CATEGORY_FK = 'terms_category_id_categories_id_fk';
+
+/**
+ * The natural key on `personas`, spelled as
+ * `src/db/schema/domains.ts` spells it. The one key both persona
+ * writes name, and the only mechanism an update here can reach.
+ */
+const PERSONA_KEY_UNIQUE = 'personas_domain_id_role_unique';
+
+/**
+ * The foreign key from `personas.domain_id`.
+ *
+ * Like {@link TERM_CATEGORY_FK} and unlike {@link CATEGORY_PARENT_FK}
+ * this name stands for ONE rule: the column cascades on delete, so
+ * there is no rows-hold-the-delete refusal to share the name with.
+ */
+const PERSONA_DOMAIN_FK = 'personas_domain_id_domains_id_fk';
 
 /** Three zeros: what a domain nothing points at has accumulated. */
 const NO_DEPENDENTS: DomainDependentCounts = {
@@ -344,6 +401,23 @@ function copyTerm(row: TermRecord): TermRecord {
 }
 
 /**
+ * A persona record whose members belong to nobody else.
+ *
+ * A shallow copy is the whole of it, for the reason
+ * {@link copyCategory} gives: every member of `PersonaRecord` is a
+ * number or a string, so there is nothing one level down to reach.
+ * The copy still has to happen, or a caller handed the stored object
+ * could rewrite `systemText` straight through the `readonly` the port
+ * declares.
+ *
+ * @param row - The stored row.
+ * @returns A copy safe to hand across the port.
+ */
+function copyPersona(row: PersonaRecord): PersonaRecord {
+  return { ...row };
+}
+
+/**
  * A domain record whose mutable members belong to nobody else.
  *
  * @param row - The stored row.
@@ -375,9 +449,11 @@ export function createMemoryResearchStore(
   const dependents = new Map<number, DomainDependentCounts>();
   const categories = new Map<number, CategoryRecord>();
   const terms = new Map<number, TermRecord>();
+  const personas = new Map<number, PersonaRecord>();
   let nextDomainId = 1;
   let nextCategoryId = 1;
   let nextTermId = 1;
+  let nextPersonaId = 1;
 
   /**
    * Reads the clock and copies what it answered.
@@ -674,6 +750,107 @@ export function createMemoryResearchStore(
     }
   }
 
+  /**
+   * One domain's personas, unordered.
+   *
+   * A fresh array every call, which is what lets
+   * {@link orderedPersonas} sort it in place without reaching into
+   * stored state.
+   *
+   * @param domainId - The domain to read.
+   * @returns Its personas. Empty for a domain holding none AND for
+   *   an id no domain carries — nothing points at a row that is not
+   *   there, which is the answer `countPersonas` is read for.
+   */
+  function personasOf(domainId: number): PersonaRecord[] {
+    return [...personas.values()].filter((row) => row.domainId === domainId);
+  }
+
+  /**
+   * One domain's personas, ordered as
+   * `PersonaStore.listPersonas` promises.
+   *
+   * By `role` ascending, compared by code unit, and the caveat
+   * {@link orderedTerms} carries applies here word for word: a role
+   * is free text holding case, spaces and punctuation, and a
+   * database orders it under its own collation, so the agreement
+   * measured for slugs does not carry here on its own reasoning. It
+   * was measured anyway — this container's `en_US.utf8` ordered a
+   * mixed-case, punctuation-bearing set of roles exactly as `<` did,
+   * both sides — and that is a fact about a deployment's locale
+   * rather than about this port. Nothing on the personas surface
+   * serialises rows byte-for-byte, so there is nothing here that has
+   * to notice if a deployment's collation differs.
+   *
+   * @param domainId - The domain to read.
+   * @returns Its personas, role ascending. The order is total
+   *   because the role is unique within the domain, so there is no
+   *   tie-break to forget.
+   */
+  function orderedPersonas(domainId: number): PersonaRecord[] {
+    return personasOf(domainId).sort((left, right) => {
+      if (left.role === right.role) {
+        return 0;
+      }
+
+      return left.role < right.role
+        ? -1
+        : 1;
+    });
+  }
+
+  /**
+   * @param domainId - The domain to look within.
+   * @param role - The role to look for.
+   * @returns The row carrying that pair, or undefined. At most one
+   *   can, which is what `personas_domain_id_role_unique` guarantees
+   *   and what the two writes below enforce.
+   */
+  function personaByRole(
+    domainId: number,
+    role: string,
+  ): PersonaRecord | undefined {
+    return personasOf(domainId).find((row) => row.role === role);
+  }
+
+  /**
+   * Refuses a `domainId` that names no stored domain.
+   *
+   * @param domainId - The domain a persona insert is asking for.
+   * @throws A `foreign-key-violation` {@link StoreRefusal} naming
+   *   `personas_domain_id_domains_id_fk`. Reached from the insert
+   *   alone: `domainId` is not on `PersonaPatch`, so no update
+   *   touches this key at all.
+   */
+  function guardPersonaDomain(domainId: number): void {
+    if (!domains.has(domainId)) {
+      throw new StoreRefusal({
+        reason: 'foreign-key-violation',
+        constraint: PERSONA_DOMAIN_FK,
+      });
+    }
+  }
+
+  /**
+   * Removes every persona of one domain, as `ON DELETE CASCADE`
+   * does.
+   *
+   * Reached from the domain delete alone, and unable to refuse
+   * anything — which is what makes sharing it safe in the way
+   * reusing a guarded delete would not be. There is no guarded
+   * persona delete to reuse in any case: nothing points at
+   * `personas`.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropPersonasOf(domainId: number): void {
+    for (const [personaId, row] of personas) {
+      if (row.domainId === domainId) {
+        personas.delete(personaId);
+      }
+    }
+  }
+
   return {
     /** One window of the list, slug ascending. */
     async listDomains(window: StoreWindow): Promise<readonly DomainRecord[]> {
@@ -812,9 +989,15 @@ export function createMemoryResearchStore(
      * IS shared with `deleteCategory` below — {@link dropTermsOf} —
      * which is safe precisely where reusing the guarded category
      * delete is not, since removing terms refuses nothing.
+     *
+     * IT TAKES THE DOMAIN'S PERSONAS IN THE SAME PLACE, for the same
+     * reason and with nothing to be careful of: `personas.domain_id`
+     * is `ON DELETE CASCADE` and nothing points at `personas`, so
+     * there is no guard anywhere below this one to run into.
      */
     async deleteDomain(id: number): Promise<boolean> {
       dependents.delete(id);
+      dropPersonasOf(id);
 
       for (const [categoryId, row] of categories) {
         if (row.domainId === id) {
@@ -1227,6 +1410,160 @@ export function createMemoryResearchStore(
      */
     async deleteTerm(id: number): Promise<boolean> {
       return terms.delete(id);
+    },
+
+    /**
+     * One window of a domain's personas, role ascending.
+     *
+     * A domain holding none and an id no domain carries are one
+     * answer here — the empty list — because whether the domain
+     * exists was settled by `DomainStore.findDomainBySlug` before
+     * this was called.
+     */
+    async listPersonas(
+      domainId: number,
+      window: StoreWindow,
+    ): Promise<readonly PersonaRecord[]> {
+      return orderedPersonas(domainId)
+        .slice(window.offset, window.offset + window.limit)
+        .map(copyPersona);
+    },
+
+    /**
+     * How many personas one domain holds, ignoring any window.
+     *
+     * An id no domain carries answers zero rather than failing,
+     * which is correct rather than a special case: nothing points at
+     * a row that is not there.
+     */
+    async countPersonas(domainId: number): Promise<number> {
+      return personasOf(domainId).length;
+    },
+
+    /** One persona by its id, or null. */
+    async findPersonaById(id: number): Promise<PersonaRecord | null> {
+      const row = personas.get(id);
+
+      return row === undefined
+        ? null
+        : copyPersona(row);
+    },
+
+    /**
+     * Inserts one persona, asserting a new row rather than
+     * upserting — unlike `scripts/seed.ts`, which writes this same
+     * table through an `ON CONFLICT` on this same natural key.
+     *
+     * The id comes off the counter first, so every refusal below
+     * burns one exactly as the sequence does. Measured on `personas`
+     * against the live Postgres, and the widest of the three
+     * measurements this file rests on: two refused inserts between
+     * two accepted ones left a gap of two with the FOREIGN KEY
+     * refusal included, so the counter advances ahead of every check
+     * rather than ahead of the key check alone.
+     *
+     * The key is checked ahead of the foreign key, matching
+     * `insertCategory` and `insertTerm` above. NOTHING CAN OBSERVE
+     * THAT ORDER HERE, and saying so is the honest half: the unique
+     * key opens on the very column the foreign key constrains, so a
+     * write naming a domain that does not exist can duplicate
+     * nothing. The order is copied from the half where it WAS
+     * measured rather than measured here.
+     */
+    async insertPersona(input: InsertPersonaInput): Promise<PersonaRecord> {
+      const id = nextPersonaId;
+
+      nextPersonaId += 1;
+
+      if (personaByRole(input.domainId, input.role) !== undefined) {
+        throw new StoreRefusal({
+          reason: 'unique-violation',
+          constraint: PERSONA_KEY_UNIQUE,
+        });
+      }
+
+      guardPersonaDomain(input.domainId);
+
+      const row: PersonaRecord = {
+        id,
+        domainId: input.domainId,
+        role: input.role,
+        systemText: input.systemText,
+      };
+
+      personas.set(row.id, row);
+
+      return copyPersona(row);
+    },
+
+    /**
+     * Rewrites the supplied members of one persona.
+     *
+     * A PATCH NAMING NO MEMBER WRITES NOTHING and answers the stored
+     * row, for the reason `updateCategory` and `updateTerm` above
+     * give: `personas` carries no `updated_at` either, so an empty
+     * patch has nothing to set and drizzle throws on an empty update
+     * list.
+     *
+     * `role` IS PATCHABLE AND `domainId` IS NOT, so what is checked
+     * is the resulting role within the STORED domain — measured
+     * against the live Postgres, where a duplicate answers 23505 on
+     * an UPDATE exactly as it does on an INSERT — and no update
+     * reaches the foreign key at all. A row is not in conflict with
+     * itself, so the row found under the resulting pair is a refusal
+     * only when it is a different row.
+     *
+     * AN EMPTY `systemText` IS A VALUE BEING WRITTEN rather than a
+     * member being left alone, which is why the tests below are
+     * against `undefined`: `PersonaRecord.systemText` states that a
+     * role with nothing to say says so, and a store defaulting the
+     * empty string to the stored text could not express it.
+     */
+    async updatePersona(
+      id: number,
+      patch: PersonaPatch,
+    ): Promise<PersonaRecord | null> {
+      const existing = personas.get(id);
+
+      if (existing === undefined) {
+        return null;
+      }
+
+      if (patch.role === undefined && patch.systemText === undefined) {
+        return copyPersona(existing);
+      }
+
+      const role = patch.role ?? existing.role;
+      const holder = personaByRole(existing.domainId, role);
+
+      if (holder !== undefined && holder.id !== id) {
+        throw new StoreRefusal({
+          reason: 'unique-violation',
+          constraint: PERSONA_KEY_UNIQUE,
+        });
+      }
+
+      const updated: PersonaRecord = {
+        ...existing,
+        role,
+        systemText: patch.systemText ?? existing.systemText,
+      };
+
+      personas.set(id, updated);
+
+      return copyPersona(updated);
+    },
+
+    /**
+     * Deletes one persona.
+     *
+     * Nothing hangs off a persona — no foreign key in schema v2
+     * points at this table — so this is `deleteTerm`'s shape rather
+     * than `deleteCategory`'s: neither a guard nor a cascade, and a
+     * delete that cannot be refused.
+     */
+    async deletePersona(id: number): Promise<boolean> {
+      return personas.delete(id);
     },
 
     setDomainDependents(

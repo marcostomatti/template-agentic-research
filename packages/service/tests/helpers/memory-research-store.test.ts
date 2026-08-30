@@ -1,8 +1,9 @@
 /**
- * `tests/helpers/memory-research-store.ts` in both the ports it
+ * `tests/helpers/memory-research-store.ts` in all three ports it
  * implements — the claims that make it a second implementation of
- * `DomainStore` and of `TaxonomyStore` WHOLE, categories and terms
- * together, rather than a bag that stores what it is handed.
+ * `DomainStore`, of `TaxonomyStore` WHOLE with categories and terms
+ * together, and of `PersonaStore`, rather than a bag that stores
+ * what it is handed.
  *
  * THAT IT REFUSES WHAT POSTGRES REFUSES. Every refusal case names
  * the `reason` a SQLSTATE classifies to and the constraint the
@@ -17,6 +18,10 @@
  * `categories_parent_id_categories_id_fk` under both of the
  * refusals that share its name, and
  * `terms_category_id_categories_id_fk` under the one that does not.
+ * The personas half adds two more and reaches them from two writes:
+ * `personas_domain_id_role_unique`, which refuses on an INSERT and
+ * on an UPDATE alike, and `personas_domain_id_domains_id_fk`, which
+ * the insert alone can reach because `domainId` is not patchable.
  *
  * THAT IT REFUSES THEM IN THE MEASURED ORDER. Four cases exist only
  * for that, because a request carrying two faults at once is the
@@ -32,12 +37,15 @@
  * the live Postgres. It is the half a fake gets wrong by writing
  * its checks in the order they read well.
  *
- * THE TERM HALF ADDS NO ORDER OF ITS OWN, and saying so is part of
- * the claim rather than a gap in it. Its key and its foreign key
- * are both about `category_id`, so a write naming a category that
- * does not exist cannot also duplicate a pattern inside it — there
- * is nothing stored there to duplicate — and no case can tell which
- * is asked first.
+ * THE TERM AND PERSONA HALVES ADD NO ORDER OF THEIR OWN, and saying
+ * so is part of the claim rather than a gap in it. The term key and
+ * the term foreign key are both about `category_id`, so a write
+ * naming a category that does not exist cannot also duplicate a
+ * pattern inside it — there is nothing stored there to duplicate —
+ * and no case can tell which is asked first. The persona key and
+ * the persona foreign key stand in that same relation over
+ * `domain_id`, and `personas` carries no CHECK and no trigger at
+ * all, so this half has two mechanisms and nothing between them.
  *
  * THAT ITS IDS COME FROM 1 AND ARE NOT GAPLESS. A refused insert
  * burns an id here because it burns one in Postgres, measured on a
@@ -48,8 +56,12 @@
  * there too. The case a reader would not predict is the UPSERT: a
  * two-row batch moved the sequence by two while inserting one row
  * and rewriting one, so a conflicting row takes an id and leaves it
- * unused. The cases pin all of it, so a later case cannot come to
- * depend on a gaplessness only the fake has.
+ * unused. On `personas` the measurement is the widest of them: two
+ * refused inserts between two accepted ones left a gap of two with
+ * the FOREIGN KEY refusal included, which is why that half pins the
+ * burn twice — once on the key and once on the foreign key. The
+ * cases pin all of it, so a later case cannot come to depend on a
+ * gaplessness only the fake has.
  *
  * THAT AN UPSERT REWRITES THREE COLUMNS AND KEEPS THE STORED ROW'S
  * ID. Measured: the statement answered the STORED id with `weight`,
@@ -72,16 +84,16 @@
  * never gave is the failure being ruled out.
  *
  * THAT NOTHING MUTABLE IS SHARED ACROSS THE BOUNDARY. Every `Date`,
- * every `settings` payload and every category and term row is
+ * every `settings` payload and every category, term and persona row is
  * copied in both directions, so a caller cannot write into stored
  * state through a field the port declares `readonly`. Each of those
  * cases MUTATES what it was handed and reads the row back, and each
  * compares against a CONSTANT or a primitive captured beforehand
  * rather than against the record an earlier write answered: a store
- * handing out its own objects has aliased the two, and the
- * comparison then holds one lie against itself and passes. Measured
- * — two of the four term copy cases were green under the leg until
- * their expectations stopped naming the seeded record.
+ * handing out its own objects has aliased the two, and the comparison
+ * then holds one lie against itself and passes. Measured — two of the
+ * four term copy cases were green under the leg until their
+ * expectations stopped naming the seeded record.
  *
  * THAT A DOMAIN DELETE IS NOT REFUSED BY THE GUARD THAT REFUSES A
  * CATEGORY DELETE. `categories.parent_id` is `NO ACTION`, so
@@ -99,6 +111,16 @@
  * of its own: only CHILDREN refuse it, and a store reusing that
  * guard over its terms refuses a delete Postgres takes.
  *
+ * THAT A DOMAIN TAKES ITS PERSONAS AND NOTHING ELSE DOES.
+ * `personas.domain_id` cascades like every other foreign key onto
+ * `domains.id`, so one delete reaches the personas and both levels
+ * of taxonomy together; and because nothing in schema v2 points at
+ * `personas`, a persona delete has neither a guard nor a cascade
+ * and cannot be refused at all. The two claims are adjacent cases
+ * because they are the same fact read from either end, and the
+ * second carries the category delete beside it as its control —
+ * refused for holding children under the very same domain.
+ *
  * Several cases carry a positive control in the same body rather
  * than in a sibling case, because each is asking a question a broken
  * store answers the same way by accident: a store refusing every
@@ -113,59 +135,74 @@
  * taken over a planted message: a search that would find nothing
  * anywhere reports a clean refusal and a leaking one alike.
  *
- * MUTATION GRID, RE-DERIVED over the 125 cases here across 52 legs
+ * MUTATION GRID, RE-DERIVED over the 162 cases here across 67 legs
  * with `--reporter=json`, and read as the SET each leg reddened
- * rather than as a count. Every figure moves when the personas or
- * settings half adds its cases to this file, exactly as the term
- * half moved three of the figures the category half had written
- * here.
+ * rather than as a count. Every figure moves when the settings half
+ * adds its cases to this file, exactly as the personas half moved
+ * four of the fifty-two legs that stood before it and the term half
+ * moved three before that.
  *
- * The nine domains legs are unchanged by the term half as they were
- * by the category half — 4, 6 and seven ones, over the same sets —
- * which is itself the reading: the halves' red sets are disjoint.
- * Answering the stored domain object reddens 4 (three date cases
- * and the settings case that writes through what it was answered,
- * because one helper copies both). Accepting the duplicate slug
- * reddens 6, five of them `refusalFrom` throwing because the call
+ * THE PERSONAS HALF MOVED EXACTLY FOUR OF THOSE FIFTY-TWO, and every
+ * case each of the four gained sits in a personas describe: accepting
+ * the delete of a category holding children went 5 to 6, refusing a
+ * null parent as though it named a missing row 86 to 89 (three cases,
+ * the only one of the four to gain more than one), the domain cascade
+ * leaving a category's terms behind 2 to 3, and refusing every term
+ * insert as a duplicate 55 to 56. Bucketing every red set by half is
+ * what makes that readable: the category and term legs' own red sets
+ * are unchanged member for member, so the four moves are personas
+ * cases reaching those rules through the shared dataset rather than
+ * anything having shifted under them.
+ *
+ * The nine domains legs are unchanged by the personas half as they
+ * were by the term and category halves — 4, 6 and seven ones, over the
+ * same sets — which is itself the reading: the halves' red sets are
+ * disjoint. Answering the stored domain object reddens 4 (three date
+ * cases and the settings case that writes through what it was
+ * answered, because one helper copies both). Accepting the duplicate
+ * slug reddens 6, five of them `refusalFrom` throwing because the call
  * ANSWERED rather than an assertion failing. The other seven redden
  * one case apiece: stamping the clock's own object, storing the
  * payload it was handed, taking the id after the key check, merging
- * `settings` on a patch, listing in insertion order, leaving a
- * deleted domain's counts standing, and answering those counts by
- * reference.
+ * `settings` on a patch, listing in insertion order, leaving a deleted
+ * domain's counts standing, and answering those counts by reference.
  *
- * Eighteen category legs redden between 0 and 86, and THREE moved
- * when the term half landed — each because a term case reaches a
- * category rule, which is what one dataset behind two ports means.
- * Accepting the delete of a category holding children went 4 to 5,
- * running the children guard inside the domain cascade 3 to 4, and
- * making the category key unique across domains 2 to 5. The rest
- * stand: the duplicate `(domain_id, key)` reddens 6, one of them in
- * another describe; the three depth branches 4, 2 and 2, which is
- * the shape to expect since only one is reachable from a patch;
- * refusing nothing for a parent that names no row 2; conflating an
- * absent and a null `parentId` 2; and the two ordering legs one
- * case EACH and different cases, a pair pinning a three-step order
- * no single case can. Taking the category id after the checks,
- * ordering by insertion, answering the stored category by reference
- * and handing the stored object out of the list redden one apiece —
- * the last two DISJOINT, because the list builds a fresh object
- * with its own spread whatever the copy helper does. Dropping the
- * depth guard's early return on a null parent reddens 1, and
- * refusing a null parent as though it named a missing row reddens
- * 86 of the 125: the category half's whole-half control.
+ * Eighteen category legs redden between 0 and 89, and TWO moved when
+ * the personas half landed — each because a persona case reaches a
+ * category rule, which is what one dataset behind three ports means.
+ * Accepting the delete of a category holding children went 5 to 6,
+ * through the persona-delete case that carries the category delete as
+ * its control; and refusing a null parent as a missing one went 86 to
+ * 89, through the three persona cases that plant a category. The three
+ * the term half moved stand where it left them, and so does the rest:
+ * the duplicate `(domain_id, key)` reddens 6, one of them in another
+ * describe; the three depth branches 4, 2 and 2, which is the shape to
+ * expect since only one is reachable from a patch; refusing nothing
+ * for a parent that names no row 2; conflating an absent and a null
+ * `parentId` 2; and the two ordering legs one case EACH and different
+ * cases, a pair pinning a three-step order no single case can. Taking
+ * the category id after the checks, ordering by insertion, answering
+ * the stored category by reference and handing the stored object out
+ * of the list redden one apiece — the last two DISJOINT, because the
+ * list builds a fresh object with its own spread whatever the copy
+ * helper does. Dropping the depth guard's early return on a null
+ * parent reddens 1, and refusing a null parent as though it named a
+ * missing row reddens 89 of the 162: the category half's whole-half
+ * control, whose five survivors WITHIN that half are unchanged — the
+ * reads and the refusal that plant no category at all.
  *
- * Twenty-five term legs redden between 0 and 55. Refusing every
- * term insert as a duplicate is this half's whole-half control and
- * reddens 55 of the 59 term cases, the four survivors being exactly
- * the reads that write no term at all (an unknown category, an
- * unknown term, a patch and a delete naming neither). Making the
- * key global rather than per category reddens 9 across five
- * describes, which is the widening leg the sibling-category
- * acceptance case exists for. Accepting the duplicate pattern
- * reddens 5, and ALL FIVE are `refusalFrom` throwing rather than an
- * assertion failing — including the id-burn case, which would have
- * read the wrong id and passed for nobody's reason.
+ * Twenty-five term legs redden between 0 and 56. Refusing every term
+ * insert as a duplicate is this half's whole-half control and reddens
+ * 56, of which 55 are term cases — the four survivors unchanged, and
+ * exactly the reads that write no term at all (an unknown category, an
+ * unknown term, a patch and a delete naming neither) — while the
+ * fifty-sixth is the persona case that seeds a lexicon to delete a
+ * domain over. Making the key global rather than per category reddens
+ * 9 across five describes, which is the widening leg the
+ * sibling-category acceptance case exists for. Accepting the duplicate
+ * pattern reddens 5, and ALL FIVE are `refusalFrom` throwing rather
+ * than an assertion failing — including the id-burn case, which would
+ * have read the wrong id and passed for nobody's reason.
  *
  * The upsert carries six legs and they are not independent.
  * Leaving a conflicting row as it stands reddens 3 and writing a
@@ -179,12 +216,13 @@
  * are what the port's precondition rests on.
  *
  * The cascade legs are DISJOINT rather than nested: leaving a
- * category's terms behind reddens 1 and leaving the domain
- * cascade's behind reddens 2, because reaching two levels down is a
- * separate claim from reaching one. Refusing a category delete over
- * its terms — a widening leg — reddens 5, four in the cascade
- * describe and the fifth the term-delete control, which is that
- * control earning its place.
+ * category's terms behind reddens 1 and leaving the domain cascade's
+ * behind reddens 3 (2 term cases and the persona case that asserts one
+ * delete reaches both), because reaching two levels down is a separate
+ * claim from reaching one. Refusing a category delete over its terms —
+ * a widening leg — reddens 5, four in the cascade describe and the
+ * fifth the term-delete control, which is that control earning its
+ * place.
  *
  * The three list legs nest differently in each direction. Ignoring
  * the window reddens 2 and reading one row where no window was
@@ -215,6 +253,60 @@
  * empty update list, and this store has no such throw to observe.
  * Both zeros are honest rather than holes, and both are pinned by
  * the port's TSDoc and by the drizzle half's own cases instead.
+ *
+ * Fifteen persona legs redden between 0 and 31, and every one of them
+ * stays inside the personas describes — the mirror of the paragraph
+ * above, and what says the two directions of the shared dataset are
+ * not the same claim. Refusing every persona insert as a duplicate is
+ * this half's whole-half control and reddens 31 of the 37, the six
+ * survivors being exactly the cases that write no persona at all: an
+ * unknown id on the read, the patch and the delete, the two list reads
+ * that plant none (a domain holding nothing and an id no domain
+ * carries), and the foreign-key containment case, which needs no
+ * stored row to be refused. Accepting the duplicate role reddens 5,
+ * and ALL FIVE are `refusalFrom` throwing rather than an assertion
+ * failing — including the id-burn case, which would otherwise have
+ * read the wrong id and passed for nobody's reason.
+ *
+ * Skipping the foreign key reddens 4 the same way, all four through
+ * `refusalFrom`, and one of them sits in the id describe rather
+ * than in its own: the burn is measured twice here, once per
+ * mechanism, because the gap of two measured on the live server
+ * covered a key refusal AND a foreign-key one. Taking the id after
+ * the key check reddens exactly those two id cases.
+ *
+ * The patch's two legs are one narrowing and one widening and they are
+ * DISJOINT. Skipping the resulting-role check reddens 1, the rename
+ * the domain already carries; refusing a persona in conflict with
+ * ITSELF reddens 3 — the case named for it plus two ordinary patch
+ * cases, which is what says those cases exercise the rule rather than
+ * passing over it, since a patch naming no role still resolves to the
+ * stored one. Making the role key global rather than per domain
+ * reddens 3 across two describes — both sibling-domain acceptance
+ * cases and the cascade case that seeds a second domain — which is the
+ * widening leg those acceptance cases exist for; and counting the
+ * personas of every domain at once reddens 1, only the case whose
+ * fixture has a second domain to be wrong about.
+ *
+ * The two read legs are DISJOINT and the two copy legs are NESTED,
+ * which is the term half's shape rather than the category half's
+ * and for the term half's reason: `listPersonas` maps through the
+ * copy helper instead of building an object of its own. Ordering by
+ * insertion reddens 3 and ignoring the window reddens 2, sharing no
+ * case; answering the stored persona by reference reddens 3 — every
+ * read path — and handing the stored object out of the list reddens
+ * 1, inside it.
+ *
+ * The remaining three: leaving the domain cascade's personas
+ * standing reddens 2, defaulting an empty system text to the stored
+ * one reddens 1 — the leg that says an empty string is a value
+ * being written — and writing on a patch that names no member
+ * reddens NOTHING, the same honest zero the category and term legs
+ * measure, for the same reason: the early return exists because
+ * drizzle throws on an empty update list, and this store has no
+ * such throw to observe. Three measured zeros now, all three
+ * pinned by the ports' TSDoc and by the drizzle halves' own cases
+ * instead.
  */
 import type { MemoryResearchStore } from './memory-research-store.js';
 import type { DomainSettings } from '../../src/db/schema/domains.js';
@@ -222,6 +314,7 @@ import type {
   DomainRecord,
   InsertDomainInput,
 } from '../../src/domains/store.js';
+import type { PersonaRecord } from '../../src/personas/store.js';
 import type {
   CategoryRecord,
   TermRecord,
@@ -529,6 +622,90 @@ async function plainErrorFrom(run: () => Promise<unknown>): Promise<Error> {
   }
 
   throw new Error('expected an Error, and the call answered');
+}
+
+/**
+ * The three roles `src/db/schema/domains.ts` names, and the only
+ * ones any case here writes.
+ *
+ * Ordered `drafter`, `researcher`, `scorer` by code unit, which is
+ * NOT the order they are seeded in: every read-order claim below is
+ * therefore about the sort rather than about insertion.
+ */
+const RESEARCHER = 'researcher';
+const SCORER = 'scorer';
+const DRAFTER = 'drafter';
+
+/**
+ * Inserts a persona, defaulting the member a case is not about.
+ *
+ * @param store - The store to write to.
+ * @param domainId - The domain it speaks for.
+ * @param role - Its role, within that domain.
+ * @param systemText - The text, derived from the role by default so
+ *   two personas never share one string. Required on the port and
+ *   defaulted here, since most cases are about the key rather than
+ *   about the prose.
+ * @returns The stored row.
+ */
+async function addPersona(
+  store: MemoryResearchStore,
+  domainId: number,
+  role: string,
+  systemText = `System text for ${role}`,
+): Promise<PersonaRecord> {
+  return store.insertPersona({ domainId, role, systemText });
+}
+
+/**
+ * A domain carrying two personas.
+ *
+ * Two rather than one because every claim about the key needs a
+ * second row to collide with, and every claim about the collection
+ * needs an order to read.
+ *
+ * @param store - The store to write to.
+ * @param slug - The domain to build them under.
+ * @returns The domain and its two personas.
+ */
+async function seedPersonas(
+  store: MemoryResearchStore,
+  slug: string,
+): Promise<{
+  domain: DomainRecord;
+  scorer: PersonaRecord;
+  researcher: PersonaRecord;
+}> {
+  const domain = await store.insertDomain(domainInput(slug));
+
+  // Inserted out of role order, so a read answering them sorted is
+  // answering a sort rather than an insertion order.
+  const scorer = await addPersona(store, domain.id, SCORER);
+  const researcher = await addPersona(store, domain.id, RESEARCHER);
+
+  return { domain, scorer, researcher };
+}
+
+/**
+ * Reads a persona that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no row carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readPersona(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<PersonaRecord> {
+  const row = await store.findPersonaById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored persona under ${id}`);
+  }
+
+  return row;
 }
 
 // ---------------------------------------------------------------------------
@@ -2448,5 +2625,559 @@ describe('the term delete', () => {
     // nothing either.
     expect(await store.deleteTerm(kube.id)).toBe(true);
     expect(await store.deleteCategory(platforms.id)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The one key the personas half can refuse on
+// ---------------------------------------------------------------------------
+
+describe('the personas_domain_id_role_unique key', () => {
+  it('refuses a second persona on a role the domain holds', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedPersonas(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addPersona(store, domain.id, RESEARCHER),
+    );
+
+    expect(refusal).toBeInstanceOf(StoreRefusal);
+
+    // The positive control, in this body rather than in a sibling
+    // case: a store refusing every write passes the assertion above.
+    const accepted = await addPersona(store, domain.id, DRAFTER);
+
+    expect(accepted.role).toBe(DRAFTER);
+    expect(await store.countPersonas(domain.id)).toBe(3);
+  });
+
+  it('names the mechanism and the constraint that refused', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedPersonas(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addPersona(store, domain.id, RESEARCHER),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe('personas_domain_id_role_unique');
+  });
+
+  it('takes the same role in a second domain', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedPersonas(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+
+    // The key is `(domain_id, role)` and not `role`, so this is the
+    // widening control: a store holding roles globally unique
+    // refuses a write the database takes. Measured against the live
+    // Postgres, where the same role under another domain was
+    // accepted beside the duplicate that was refused.
+    const accepted = await addPersona(store, transit.id, RESEARCHER);
+
+    expect(accepted.domainId).toBe(transit.id);
+    expect(await store.countPersonas(radar.domain.id)).toBe(2);
+    expect(await store.countPersonas(transit.id)).toBe(1);
+  });
+
+  it('leaves the standing persona exactly as it was', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, researcher } = await seedPersonas(store, RADAR);
+
+    await refusalFrom(() => store.insertPersona({
+      domainId: domain.id,
+      role: RESEARCHER,
+      systemText: 'Rewritten by a refused insert',
+    }));
+
+    expect(await readPersona(store, researcher.id))
+      .toStrictEqual(researcher);
+    expect(await store.countPersonas(domain.id)).toBe(2);
+  });
+
+  it('puts the refused role in nothing a logger can reach', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedPersonas(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addPersona(store, domain.id, RESEARCHER),
+    );
+    const serialised = JSON.stringify({
+      ...refusal,
+      message: refusal.message,
+      stack: refusal.stack,
+    });
+
+    expect(countOccurrences(serialised, RESEARCHER)).toBe(0);
+
+    // The same search over a message that DOES carry the role, so
+    // the zero above is a reading rather than a search finding
+    // nothing anywhere.
+    const planted = JSON.stringify({
+      ...refusal,
+      message: `duplicate key ${RESEARCHER}`,
+    });
+
+    expect(countOccurrences(planted, RESEARCHER)).toBe(1);
+  });
+
+  it('refuses a rename onto a role the domain holds', async () => {
+    const store = createMemoryResearchStore();
+    const { researcher, scorer } = await seedPersonas(store, RADAR);
+
+    // The same mechanism on an UPDATE, measured against the live
+    // Postgres as 23505 naming the same constraint an insert raises.
+    const refusal = await refusalFrom(
+      () => store.updatePersona(scorer.id, { role: RESEARCHER }),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe('personas_domain_id_role_unique');
+    expect(await readPersona(store, scorer.id)).toStrictEqual(scorer);
+    expect(await readPersona(store, researcher.id))
+      .toStrictEqual(researcher);
+  });
+
+  it('takes a rename onto a role a SECOND domain holds', async () => {
+    const store = createMemoryResearchStore();
+    const { scorer } = await seedPersonas(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+
+    await addPersona(store, transit.id, DRAFTER);
+
+    // The resulting pair is checked within the STORED domain, since
+    // `domainId` is not patchable: a role another domain carries is
+    // not a conflict, which is the same widening control the insert
+    // case makes and the patch has to make for itself.
+    const patched = await store.updatePersona(scorer.id, { role: DRAFTER });
+
+    expect(patched?.role).toBe(DRAFTER);
+  });
+
+  it('takes a patch writing a role back over itself', async () => {
+    const store = createMemoryResearchStore();
+    const { scorer } = await seedPersonas(store, RADAR);
+
+    // A row is not in conflict with itself. A store looking the pair
+    // up without excluding the row being written refuses this.
+    const patched = await store.updatePersona(scorer.id, {
+      role: SCORER,
+      systemText: 'Rewritten in place',
+    });
+
+    expect(patched?.role).toBe(SCORER);
+    expect(patched?.systemText).toBe('Rewritten in place');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sequence behind personas.id
+// ---------------------------------------------------------------------------
+
+describe('the persona id sequence', () => {
+  it('hands the first persona id 1', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const inserted = await addPersona(store, domain.id, RESEARCHER);
+
+    // Its own counter, and none of the other three: the domain above
+    // holds id 1 as well.
+    expect(inserted.id).toBe(1);
+    expect(domain.id).toBe(1);
+  });
+
+  it('burns an id on a refused insert, as the sequence does', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedPersonas(store, RADAR);
+
+    await refusalFrom(() => addPersona(store, domain.id, RESEARCHER));
+
+    const next = await addPersona(store, domain.id, DRAFTER);
+
+    // 4 rather than 3: the two seeded personas took 1 and 2, and the
+    // refusal took the third. Measured on `personas` against the
+    // live Postgres, where two refused inserts between two accepted
+    // ones left a gap of two.
+    expect(next.id).toBe(4);
+  });
+
+  it('burns one on a foreign-key refusal as well', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedPersonas(store, RADAR);
+
+    await refusalFrom(() => addPersona(store, domain.id + 400, DRAFTER));
+
+    const next = await addPersona(store, domain.id, DRAFTER);
+
+    // The widest half of that measurement: the gap of two covered a
+    // key refusal AND a foreign-key one, so the counter advances
+    // ahead of every check rather than ahead of the key check alone.
+    expect(next.id).toBe(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The foreign key onto domains.id
+// ---------------------------------------------------------------------------
+
+describe('the persona domain foreign key', () => {
+  it('refuses an insert naming no stored domain', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedPersonas(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addPersona(store, domain.id + 400, DRAFTER),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe('personas_domain_id_domains_id_fk');
+
+    // The positive control: the same write into a domain that exists
+    // is taken, so the refusal above is about the id rather than
+    // about the row.
+    const accepted = await addPersona(store, domain.id, DRAFTER);
+
+    expect(accepted.domainId).toBe(domain.id);
+  });
+
+  it('refuses an insert into a domain just deleted', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedPersonas(store, RADAR);
+
+    await store.deleteDomain(domain.id);
+
+    const refusal = await refusalFrom(
+      () => addPersona(store, domain.id, DRAFTER),
+    );
+
+    // Not a duplicate, though the domain carried that role a moment
+    // ago: the cascade took its personas, so there is nothing left
+    // to conflict with and the foreign key is what answers.
+    expect(refusal.reason).toBe('foreign-key-violation');
+  });
+
+  it('puts the refused id in nothing a logger can reach', async () => {
+    const store = createMemoryResearchStore();
+    const refusal = await refusalFrom(
+      () => addPersona(store, 4041, DRAFTER),
+    );
+    const serialised = JSON.stringify({
+      ...refusal,
+      message: refusal.message,
+      stack: refusal.stack,
+    });
+
+    expect(countOccurrences(serialised, '4041')).toBe(0);
+
+    // The same search over a message that DOES carry the id.
+    const planted = JSON.stringify({
+      ...refusal,
+      message: 'domain 4041 does not exist',
+    });
+
+    expect(countOccurrences(planted, '4041')).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The domain cascade over its personas
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its personas', () => {
+  it('takes the personas of the domain it removes', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, researcher, scorer } = await seedPersonas(store, RADAR);
+
+    // `personas.domain_id` is `ON DELETE CASCADE`, and nothing
+    // points at `personas`, so there is no guard below this one to
+    // refuse it the way `categories.parent_id` refuses a category
+    // delete.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findPersonaById(researcher.id)).toBeNull();
+    expect(await store.findPersonaById(scorer.id)).toBeNull();
+    expect(await store.countPersonas(domain.id)).toBe(0);
+    expect(await store.listPersonas(domain.id, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+  });
+
+  it('leaves a second domain personas standing', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedPersonas(store, RADAR);
+    const transit = await seedPersonas(store, TRANSIT);
+
+    await store.deleteDomain(radar.domain.id);
+
+    expect(await store.countPersonas(transit.domain.id)).toBe(2);
+    expect(await readPersona(store, transit.scorer.id))
+      .toStrictEqual(transit.scorer);
+  });
+
+  it('takes the personas and the taxonomy together', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, platforms, kube } = await seedLexicon(store, RADAR);
+    const drafter = await addPersona(store, domain.id, DRAFTER);
+
+    // Every foreign key onto `domains.id` cascades, so one delete
+    // reaches the personas and two levels of taxonomy in the same
+    // statement.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findPersonaById(drafter.id)).toBeNull();
+    expect(await store.findTermById(kube.id)).toBeNull();
+    expect(await store.findCategoryById(platforms.id)).toBeNull();
+  });
+
+  it('is the only thing that removes a persona in bulk', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, researcher } = await seedPersonas(store, RADAR);
+
+    // The other half of the cascade claim: a persona goes when its
+    // domain goes and at no other time, so deleting the taxonomy
+    // under a domain leaves every persona of it standing.
+    const category = await addCategory(store, domain.id, PLATFORMS);
+
+    expect(await store.deleteCategory(category.id)).toBe(true);
+    expect(await readPersona(store, researcher.id))
+      .toStrictEqual(researcher);
+    expect(await store.countPersonas(domain.id)).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The persona reads
+// ---------------------------------------------------------------------------
+
+describe('the persona list', () => {
+  it('orders by role ascending rather than by insertion', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedPersonas(store, RADAR);
+
+    await addPersona(store, domain.id, DRAFTER);
+
+    const listed = await store.listPersonas(domain.id, WHOLE_COLLECTION);
+
+    expect(listed.map((row) => row.role))
+      .toStrictEqual([DRAFTER, RESEARCHER, SCORER]);
+  });
+
+  it('reads only the window it was given', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedPersonas(store, RADAR);
+
+    await addPersona(store, domain.id, DRAFTER);
+
+    const page = await store.listPersonas(domain.id, { limit: 1, offset: 1 });
+
+    expect(page.map((row) => row.role)).toStrictEqual([RESEARCHER]);
+    expect(await store.countPersonas(domain.id)).toBe(3);
+  });
+
+  it('answers an empty window past the end', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedPersonas(store, RADAR);
+
+    expect(await store.listPersonas(domain.id, { limit: 50, offset: 9 }))
+      .toStrictEqual([]);
+  });
+
+  it('lists only the personas of the domain asked about', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedPersonas(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+
+    await addPersona(store, transit.id, DRAFTER);
+
+    const listed = await store.listPersonas(radar.domain.id, WHOLE_COLLECTION);
+
+    expect(listed.map((row) => row.role))
+      .toStrictEqual([RESEARCHER, SCORER]);
+  });
+
+  it('answers an empty list for a domain holding none', async () => {
+    const store = createMemoryResearchStore();
+    const empty = await store.insertDomain(domainInput(TRANSIT));
+
+    expect(await store.listPersonas(empty.id, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+    expect(await store.countPersonas(empty.id)).toBe(0);
+  });
+
+  it('answers zero for an id no domain carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.countPersonas(404)).toBe(0);
+    expect(await store.listPersonas(404, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+  });
+
+  it('answers rows a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedPersonas(store, RADAR);
+
+    const [listed] = await store.listPersonas(domain.id, WHOLE_COLLECTION);
+
+    if (listed === undefined) {
+      throw new Error('expected the list to answer a row');
+    }
+
+    (listed as { role: string }).role = 'written through the list';
+
+    // Against the constants rather than against the records the
+    // writes answered: a store handing its own objects out has
+    // ALIASED the two, and the comparison then holds one lie against
+    // itself and passes.
+    const reread = await store.listPersonas(domain.id, WHOLE_COLLECTION);
+
+    expect(reread.map((row) => row.role))
+      .toStrictEqual([RESEARCHER, SCORER]);
+  });
+});
+
+describe('the single persona read', () => {
+  it('answers null for an id no persona carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.findPersonaById(404)).toBeNull();
+  });
+
+  it('answers a row a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { scorer } = await seedPersonas(store, RADAR);
+    const systemText = scorer.systemText;
+
+    const read = await readPersona(store, scorer.id);
+
+    (read as { systemText: string }).systemText = 'written through the read';
+
+    // Against a primitive read BEFORE the mutation: comparing
+    // against `scorer.systemText` would compare one lie against
+    // itself, since a store handing its own objects out aliased the
+    // two.
+    expect((await readPersona(store, scorer.id)).systemText)
+      .toBe(systemText);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The persona patch and the persona delete
+// ---------------------------------------------------------------------------
+
+describe('the persona patch', () => {
+  it('rewrites the members it names and leaves the rest', async () => {
+    const store = createMemoryResearchStore();
+    const { scorer } = await seedPersonas(store, RADAR);
+
+    const patched = await store.updatePersona(scorer.id, {
+      systemText: 'Score against the domain weights',
+    });
+
+    expect(patched).toStrictEqual({
+      ...scorer,
+      systemText: 'Score against the domain weights',
+    });
+    expect(await readPersona(store, scorer.id)).toStrictEqual(patched);
+  });
+
+  it('renames within the domain, keeping the id', async () => {
+    const store = createMemoryResearchStore();
+    const { scorer } = await seedPersonas(store, RADAR);
+
+    const renamed = await store.updatePersona(scorer.id, { role: DRAFTER });
+
+    // An UPDATE rather than a delete and an insert, which is what
+    // keeps the id and the system text together across a rename.
+    expect(renamed?.id).toBe(scorer.id);
+    expect(renamed?.systemText).toBe(scorer.systemText);
+    expect((await readPersona(store, scorer.id)).role).toBe(DRAFTER);
+  });
+
+  it('writes an empty system text rather than ignoring it', async () => {
+    const store = createMemoryResearchStore();
+    const { scorer } = await seedPersonas(store, RADAR);
+
+    // An empty string is a value being written and not a member
+    // being left alone: the role exists and has nothing to say yet,
+    // which is a state a reader can act on. A store defaulting it to
+    // the stored text cannot express it at all.
+    const cleared = await store.updatePersona(scorer.id, { systemText: '' });
+
+    expect(cleared?.systemText).toBe('');
+    expect((await readPersona(store, scorer.id)).systemText).toBe('');
+  });
+
+  it('answers the stored row for a patch naming no member', async () => {
+    const store = createMemoryResearchStore();
+    const { scorer } = await seedPersonas(store, RADAR);
+
+    // A legal call rather than a no-op to be avoided: `personas`
+    // carries no `updated_at`, so an empty patch has nothing to set
+    // and answers the row without writing.
+    expect(await store.updatePersona(scorer.id, {})).toStrictEqual(scorer);
+  });
+
+  it('answers null from a patch naming no stored persona', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.updatePersona(404, { role: DRAFTER })).toBeNull();
+  });
+
+  it('answers a row a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { scorer } = await seedPersonas(store, RADAR);
+
+    const patched = await store.updatePersona(scorer.id, { role: DRAFTER });
+
+    if (patched === null) {
+      throw new Error('expected the patch to answer the stored row');
+    }
+
+    (patched as { role: string }).role = 'written through the patch';
+
+    expect((await readPersona(store, scorer.id)).role).toBe(DRAFTER);
+  });
+});
+
+describe('the persona delete', () => {
+  it('removes one persona and leaves its domain standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, scorer } = await seedPersonas(store, RADAR);
+
+    expect(await store.deletePersona(scorer.id)).toBe(true);
+    expect(await store.findPersonaById(scorer.id)).toBeNull();
+    expect(await store.countPersonas(domain.id)).toBe(1);
+    expect(await store.findDomainBySlug(RADAR)).not.toBeNull();
+  });
+
+  it('answers false for an id no persona carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.deletePersona(404)).toBe(false);
+  });
+
+  it('frees the role the deleted persona held', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, scorer } = await seedPersonas(store, RADAR);
+
+    await store.deletePersona(scorer.id);
+
+    const written = await addPersona(store, domain.id, SCORER);
+
+    expect(written.role).toBe(SCORER);
+    expect(await store.countPersonas(domain.id)).toBe(2);
+  });
+
+  it('cannot be refused, unlike the category delete', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, scorer } = await seedPersonas(store, RADAR);
+    const root = await addCategory(store, domain.id, PLATFORMS);
+
+    await addCategory(store, domain.id, TOOLING, root.id);
+
+    // Nothing in schema v2 points at `personas`, so there is no
+    // state a persona can be in that refuses this — and the control
+    // that says so is the category delete beside it, refused for
+    // holding children under the very same domain.
+    expect(await store.deletePersona(scorer.id)).toBe(true);
+    expect((await refusalFrom(() => store.deleteCategory(root.id))).reason)
+      .toBe('foreign-key-violation');
   });
 });
