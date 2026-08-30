@@ -486,23 +486,36 @@ The other complement is booting it by hand, which is the only evidence a
 WIRING change has:
 `( cd packages/service && env PORT=... DATABASE_URL=<live 5433> ... bun run
 src/index.ts )` in the background, curl the surfaces, kill it. Dependency
-ORDER is NOT readable from the running service (`/_control/*` is not mounted
-in this service's config and answers 404) — take it from boot-FAILURE
-attribution instead, which is three legs: an unreachable database must name
-the FIRST dependency, a reachable-but-UNMIGRATED one must name the later
-dependency that needed the schema, and the same unmigrated database with
-the feature toggled OFF must BOOT, which is the control saying leg 2 was
-that dependency rather than something else about an empty database. Each
-leg reads as one pino line (`dep=<name>` with `dependency failed to start`)
-plus the exit code, since `createService` calls `process.exit(1)` outside
-`NODE_ENV=test`. Make a SCRATCH database rather than using `ar_live`, and
-preflight-refuse a name that already exists so the trap's drop cannot reach
-somebody else's. Trap while doing it: `( ... ) & PID=$!` captures the
-SUBSHELL, not the server, so `kill "$PID"` leaves the child holding the port
-and the NEXT run's readiness poll is answered INSTANTLY by that orphan
-— every reading then lands on the stale service and looks like a
-real regression. Use `exec` inside the subshell, preflight-refuse a port
-already answering, and re-check `ps` for orphans AFTER the run.
+ORDER is NOT readable from the running service (this service configures no
+`control` block, so `/_control/*` is an unmatched path here) — take it from
+boot-FAILURE attribution instead, which is three legs: an unreachable
+database must name the FIRST dependency, a reachable-but-UNMIGRATED one must
+name the later dependency that needed the schema, and the same unmigrated
+database with the feature toggled OFF must BOOT, which is the control saying
+leg 2 was that dependency rather than something else about an empty
+database. Each leg reads as one pino line (`dep=<name>` with
+`dependency failed to start`) plus the exit code, since `createService`
+calls `process.exit(1)` outside `NODE_ENV=test`. Make a SCRATCH database
+rather than using `ar_live`, and preflight-refuse a name that already exists
+so the trap's drop cannot reach somebody else's. Trap while doing it:
+`( ... ) & PID=$!` captures the SUBSHELL, not the server, so `kill "$PID"`
+leaves the child holding the port and the NEXT run's readiness poll is
+answered INSTANTLY by that orphan — every reading then lands on the stale
+service and looks like a real regression. Use `exec` inside the subshell,
+preflight-refuse a port already answering, and re-check `ps` for orphans
+AFTER the run.
+
+What an unmatched path ANSWERS there is not a constant, and the difference
+is the wave-1 surface rather than the control plane: the five routers mount
+at `/`, so each one's `ctx.requireAuth` runs for every request that reaches
+it. Measured all four ways against a real `createService` carrying the auth
+block `AUTH_BASIC_USER`/`AUTH_BASIC_PASSWORD` produce — with the pair set,
+an uncredentialled `/_control/status` answers `401` `application/json` and a
+credentialled one the `404` `text/html`; with it unset the guard is a
+passthrough and both answer `404`. `/health` is `200` in all four. So a
+`401` while curling the surfaces says the guard is on the mounts, not that
+the plane is mounted and refusing — and `/nope` answers identically, which
+is what says the change belongs to unmatched paths generally.
 
 `describeLivePg` is one of two gates in that directory. `describeLiveN8n`,
 in `tests/live/live-n8n.ts`, keys the n8n cases to `AR_N8N_URL` the same
