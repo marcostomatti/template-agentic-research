@@ -199,7 +199,7 @@ export interface CanonicalDocumentColumnTie {
  * it. The suite beside this file holds this list to the contract's own
  * key set in one direction and to the live table in the other, so a
  * member that stops naming a real column fails there rather than in
- * the first adapter written against it.
+ * whichever adapter is next written against it.
  */
 export const CANONICAL_DOCUMENT_COLUMN_TIES: readonly CanonicalDocumentColumnTie[] = [
   { member: 'hash', column: 'hash', notNull: true },

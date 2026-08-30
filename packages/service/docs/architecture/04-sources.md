@@ -284,12 +284,26 @@ not a member here: an adapter fronting several endpoints runs the
 loop in `src/sources/paged-list.ts` inside its own `fetch`, so no
 optional member is left for a conditional rule to be about.
 
-### The registry ships empty, and that is a state rather than a stub
+### The registry holds one entry, and that entry is a declaration
 
-No module in this directory declares the five members yet. The two
-that sit beside it front no source and each says so at the top of its
-own file. The first adapter adds its own line to the literal, and the
-directory guard is what will notice if it forgets.
+`listing-api.ts` is the first module here to declare the five
+members. It added its own line to the literal in the commit that
+landed it, which is the whole of what registration costs, and the
+directory guard is what notices an adapter that forgets.
+
+What is registered is not a working adapter, and that is where the
+contract and the registry pull against each other. Configuration
+binds at construction, so an adapter is per ROW; a registry is keyed
+by id and holds one entry per KIND of source. The entry therefore
+carries the id and the kind a `sources` row is matched against, is
+bound to no row, names no endpoint and holds a transport that
+refuses — so it can reach nothing even if something called it. A run
+builds its own adapter through that module's factory with the row it
+is for.
+
+The two other modules beside the registry front no source, declare
+none of the five members and each says so at the top of its own
+file.
 
 ### The registry is Node-only, and could not be anything else
 

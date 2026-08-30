@@ -13,9 +13,11 @@
  * afterwards as the control that says the check can still answer
  * with nothing.
  *
- * Three arrangements in here exist to stop a claim going vacuous,
- * because the registry is EMPTY and an empty registry agrees with
- * anything.
+ * Three arrangements in here exist to stop a claim going vacuous.
+ * The shipped registry is small — one entry, and that entry is a
+ * declaration bound to no row — so a walk over it agrees with
+ * almost anything, and each of the three supplies the discriminating
+ * input the shipped registry cannot.
  *
  * The member roster is declared here rather than read off the
  * module, so the "every member" claim is a real set equality: a
@@ -26,7 +28,7 @@
  * both cases with the module's own opinion of itself.
  *
  * The registry walk is driven over a BUILT registry as well as over
- * the shipped one. The shipped one holds nothing, so the walk over
+ * the shipped one. The shipped one reports nothing, so the walk over
  * it cannot say whether a fault would have been reported at all;
  * the built one holds a perfectly good adapter filed under the
  * wrong key, which is the one fault expressible without reaching
@@ -201,6 +203,18 @@ const REGISTRY_MODULE = 'index.ts';
 const HELPER_MODULES: readonly string[] = ['html-text.ts', 'paged-list.ts'];
 
 /**
+ * What a scaffolded adapter's stored payload is named.
+ *
+ * `bun run scaffold source-adapter` emits a trio — the module, its
+ * colocated cases, and the payload those cases are driven over — so
+ * registering an id accounts for all three files rather than for the
+ * module alone. Without this bucket the fixture beside the first
+ * adapter falls through all four, and the guard below reports it as
+ * something nobody has decided what to call.
+ */
+const PAYLOAD_SUFFIX = '-payload.json';
+
+/**
  * Everything the directory holds, sorted.
  *
  * No filter of any kind. A file that is neither a module nor a case
@@ -218,7 +232,8 @@ function directoryEntries(): string[] {
  * Every entry the guard cannot account for.
  *
  * The four buckets are the registry module itself, the colocated
- * case files, the declared helpers, and one file per registered id.
+ * case files, the declared helpers, and the module and stored
+ * payload of each registered id.
  * What falls out of all four is an adapter nobody registered, a
  * helper nobody declared, or something else entirely — and each of
  * those wants a person, which is why the answer is the names rather
@@ -227,7 +242,10 @@ function directoryEntries(): string[] {
  * @returns The unaccounted-for names, sorted.
  */
 function unclassifiedEntries(): string[] {
-  const registered = new Set(listSourceIds().map((id) => `${id}.ts`));
+  const registered = new Set(listSourceIds().flatMap((id) => [
+    `${id}.ts`,
+    `${id}${PAYLOAD_SUFFIX}`,
+  ]));
 
   return directoryEntries()
     .filter((entry) => entry !== REGISTRY_MODULE)
@@ -396,12 +414,14 @@ describe('sourceAdapterContractErrors — what a module fails', () => {
 });
 
 describe('the registry, and how one adapter is reached', () => {
-  // The current state, asserted rather than assumed. Nothing in this
-  // directory declares the five members yet, so the shipped registry
-  // is empty — and the day that changes, this case is the one that
-  // says so, beside the guard that says the new module was named.
-  it('ships empty, and lists nothing', () => {
-    expect(listSourceIds()).toEqual([]);
+  // What the registry ships, written out rather than derived. A case
+  // that computed the answer from the same literal it is checking
+  // would agree with any edit to that literal, and this is the one
+  // case that notices an adapter being registered or unregistered at
+  // all — beside the guard below, which notices a module that was
+  // written and never named.
+  it('lists the adapters this service ships', () => {
+    expect(listSourceIds()).toEqual(['listing-api']);
   });
 
   // Sorted, over keys written out of order. The shipped registry
@@ -429,11 +449,11 @@ describe('the registry, and how one adapter is reached', () => {
     expect(getSourceAdapter('beta', registry)).toBeNull();
   });
 
-  // The prototype keys, which is the case the empty registry makes
-  // LIVE rather than hypothetical: `in` answers true for every one
-  // of these names over the very object the lookup reads, so a
-  // lookup that read the key instead of asking whether it was an own
-  // key would hand back a function off `Object.prototype`.
+  // The prototype keys, and the case is live rather than
+  // hypothetical whatever the registry holds: `in` answers true for
+  // every one of these names over the very object the lookup reads,
+  // so a lookup that read the key instead of asking whether it was
+  // an own key would hand back a function off `Object.prototype`.
   //
   // The `in` assertions are the control. Without them a green run is
   // equally satisfied by a registry that had stopped being a plain
@@ -451,10 +471,8 @@ describe('the registry, and how one adapter is reached', () => {
   });
 
   // Every registered adapter satisfies the contract under its own
-  // key. Vacuous over the shipped registry today and asserted
-  // anyway, because the day it stops being vacuous is the day
-  // somebody is thinking about an adapter rather than about this
-  // file.
+  // key, over the registry as shipped rather than over one written
+  // here.
   //
   // The second half is what makes the first half a reading. A
   // perfectly good adapter filed under the wrong key is the one

@@ -1,0 +1,77 @@
+{
+  "_readme": [
+    "PAYLOAD FIXTURE for `src/sources/listing-api.ts`.",
+    "",
+    "One listing run, stored as that adapter's `fetch` returned it, so",
+    "`parse` and `toCanonical` can be driven over it with no network —",
+    "which is what keeps the cases beside that module in the fully",
+    "isolated default suite.",
+    "",
+    "An envelope, not the payload itself: everything the adapter is",
+    "handed sits under `payload`, and this key does not. A header",
+    "written into the payload would reach `parse` as though the source",
+    "had answered with it.",
+    "",
+    "AUTHORED HERE rather than recorded from a source, which is the",
+    "law for every fixture in this repository: a payload pasted in",
+    "whole is the easiest way to commit somebody else's data by",
+    "accident. The catalogue below is invented, its host is under",
+    "`.invalid` — a name reserved so it can never resolve — and the",
+    "subject matter is deliberately nobody's.",
+    "",
+    "Three records under two endpoints, and each one is a case:",
+    "`atlas-0007` is the ordinary reading, with markup a selector",
+    "reaches into; `atlas-0008` states an empty `permalink`, which is",
+    "the URL a `documents` row stores as NULL rather than as `''`; and",
+    "`beacon-0142` carries no `content` member at all, which is the",
+    "capture that yields an empty body and is kept anyway."
+  ],
+  "payload": {
+    "records": [
+      {
+        "endpoint": {
+          "slug": "atlas",
+          "name": "Atlas Catalogue"
+        },
+        "record": {
+          "id": "atlas-0007",
+          "permalink": "https://catalogue.example.invalid/atlas/0007",
+          "headline": "Tidal gauge calibration, third revision",
+          "content": "<article class=\"summary\"><p>The revision restates the drift correction and adds a worked example.</p><p>Both annexes are unchanged.</p></article>",
+          "updated": "2026-07-14T09:12:00Z"
+        }
+      },
+      {
+        "endpoint": {
+          "slug": "atlas",
+          "name": "Atlas Catalogue"
+        },
+        "record": {
+          "id": "atlas-0008",
+          "permalink": "",
+          "headline": "Sediment transport notes",
+          "content": "<article class=\"summary\">One paragraph, with <em>emphasis</em> in it.</article>",
+          "updated": "2026-07-15T06:00:00Z"
+        }
+      },
+      {
+        "endpoint": {
+          "slug": "beacon",
+          "name": "Beacon Index"
+        },
+        "record": {
+          "id": "beacon-0142",
+          "permalink": "https://catalogue.example.invalid/beacon/0142",
+          "headline": "Buoy telemetry retention policy",
+          "updated": "2026-07-15T11:30:00Z"
+        }
+      }
+    ],
+    "cursor": "{\"atlas\":{\"seen\":\"2026-07-15T06:00:00.000Z\"},\"beacon\":{\"seen\":\"2026-07-15T11:30:00.000Z\"}}",
+    "notes": [
+      "\"beacon\": 1 of 3 new records taken (row cap)"
+    ],
+    "pages": 2,
+    "requests": 2
+  }
+}

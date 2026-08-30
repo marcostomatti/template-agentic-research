@@ -13,14 +13,13 @@
  * that fetches inside `parse` passes its tests the day it is
  * written and fails them the first time it runs offline.
  *
- * {@link SOURCE_ADAPTERS} is EMPTY, and that is the current state
- * rather than a placeholder waiting to be filled in. No module in
- * this directory declares the five members yet: `html-text.ts` and
- * `paged-list.ts` sit beside this file as the modules adapters
- * reach for, and each says at the top of its own source that it
- * fronts no source and appears in no registry. The first adapter
- * adds its own line to that literal in the commit that lands it,
- * which is the whole of what registration costs.
+ * {@link SOURCE_ADAPTERS} holds one adapter. `listing-api.ts` added
+ * its own line to that literal in the commit that landed it, which
+ * is the whole of what registration costs. The other two modules
+ * beside this file are not adapters and are not in it:
+ * `html-text.ts` and `paged-list.ts` are what an adapter reaches
+ * for, and each says at the top of its own source that it fronts no
+ * source and appears in no registry.
  *
  * Node-only, deliberately, and this is the file that could not be
  * anything else: a registry names its adapters with value imports,
@@ -30,6 +29,8 @@
  * rather than this directory for that reason.
  */
 import { SOURCE_KINDS } from '../db/schema/values.js';
+
+import { LISTING_API_DECLARATION } from './listing-api.js';
 
 /**
  * The kinds of source an adapter can front.
@@ -217,11 +218,19 @@ export type SourceAdapterRegistry = Readonly<Record<string, SourceAdapter>>;
  * because the alternative — this module reading the directory to
  * check — is the thing being refused.
  *
- * Empty today, and {@link listSourceIds} answering with nothing is
- * the current state rather than a stub: no module in this directory
- * declares the five members yet.
+ * One entry today, and what it holds is a DECLARATION rather than a
+ * working adapter. That is the one place this contract and this
+ * registry pull against each other, and it is worth naming here:
+ * configuration binds at construction, so an adapter is per ROW,
+ * while a registry is keyed by id and holds one entry per KIND of
+ * source. A registered entry therefore carries the id and the kind
+ * a `sources` row is matched against and can reach nothing, and a
+ * run builds its own through that module's factory. The value below
+ * argues it at length in the module it comes from.
  */
-export const SOURCE_ADAPTERS: SourceAdapterRegistry = {};
+export const SOURCE_ADAPTERS: SourceAdapterRegistry = {
+  'listing-api': LISTING_API_DECLARATION,
+};
 
 /**
  * The registered ids, sorted.
@@ -233,9 +242,9 @@ export const SOURCE_ADAPTERS: SourceAdapterRegistry = {};
  *
  * @param registry - Which registry to read. Production passes
  *   nothing and gets {@link SOURCE_ADAPTERS}; the parameter is a
- *   test seam, because an empty registry cannot demonstrate that
- *   anything was sorted and a sort nothing exercises is a sort
- *   nobody checked.
+ *   test seam, because a registry holding fewer than two ids cannot
+ *   demonstrate that anything was sorted, and a sort nothing
+ *   exercises is a sort nobody checked.
  * @returns The ids in sorted order, as a new array.
  */
 export function listSourceIds(
@@ -257,9 +266,9 @@ export function listSourceIds(
  * defensive: `toString`, `valueOf` and `constructor` all answer
  * something off the prototype chain, so a stored id spelling one of
  * them would hand a function from `Object.prototype` back as though
- * it were an adapter. The case is live today rather than
- * hypothetical — the registry is empty, and the `in` operator still
- * answers true for every one of those names.
+ * it were an adapter. The case is live rather than hypothetical:
+ * the `in` operator answers true for every one of those names over
+ * the registry as it stands, whatever ids it happens to hold.
  *
  * @param id - The id to look up, as a `sources` row spells it.
  * @param registry - Which registry to read; {@link SOURCE_ADAPTERS}
