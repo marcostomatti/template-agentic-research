@@ -250,6 +250,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'records.push(built.record)',
     ],
   },
+  {
+    file: 'markup-select.ts',
+    ownText: [
+      'fragments.length >= MAX_FRAGMENTS',
+      'RAW_TEXT_ELEMENTS.includes(tag.name)',
+      'stepMatches(step, ancestor)',
+    ],
+  },
 ];
 
 /**

@@ -342,6 +342,7 @@ side of that string records what the library is for.
 | `sanitize-md.ts` | Untrusted text on its way into anything that renders it — a digest, a note, a research brief. |
 | `audit-log.ts` | The on-disk half of a run's ledger, for whatever workflow writes one. |
 | `parser-config.ts` | The extraction a `sources.parser_config` row directs and the `contract` check that judges the reading: `ar-ingest` on the pull path, `ar-capture` on the push one. Its markup step is an injected parameter, because a library cannot import a sibling. |
+| `markup-select.ts` | The markup step that engine takes, wherever a source answers with markup: the fragments a `selector` field names, for `ar-ingest` and `ar-capture` alike. A Code node carries both markers and wires the two together in its own body, which is the only place they can meet. |
 
 One row of that table is a workflow's today: `ar-dispatch` writes the
 only library marker there is. Every other library is written down
