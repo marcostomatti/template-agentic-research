@@ -282,6 +282,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'spellsFenceStem(trusted)',
     ],
   },
+  {
+    file: 'feature-version.ts',
+    ownText: [
+      'value.replace(FIELD_ESCAPES, escapeSeparator)',
+      'Number(hash % TERM_DIGEST_MODULUS)',
+      'mechanismVersion * TERM_DIGEST_SPAN + termSetDigest(terms)',
+    ],
+  },
 ];
 
 /**
