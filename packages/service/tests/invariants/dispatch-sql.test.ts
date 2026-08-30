@@ -139,7 +139,7 @@ const DISPATCH_WORKFLOW_ID = 'ar-dispatch';
  * cause, and no case in this file drives the read into that state.
  * What the message owes instead is which of two edits fixes it, the
  * artifact being generated — a stale tree wants a rebuild, and a
- * source that is gone is reported by the phase-3 roster case in
+ * source that is gone is reported by the roster case in
  * `workflows.test.ts` rather than here.
  *
  * @returns The built workflow {@link DISPATCH_WORKFLOW_ID} names.
@@ -156,7 +156,7 @@ function dispatchWorkflow(): BuiltWorkflow {
       'without it leaves nothing here to hold: run ' +
       '`bun run build:workflows` if the tree is stale, and if the ' +
       'source of that name is gone from `workflows/src/`, the ' +
-      'phase-3 roster case in `workflows.test.ts` is what says so.',
+      'roster case in `workflows.test.ts` is what says so.',
     );
   }
 

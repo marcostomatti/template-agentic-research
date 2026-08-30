@@ -86,21 +86,30 @@ import {
 const BUILT_WORKFLOWS = loadBuiltWorkflows();
 
 // ---------------------------------------------------------------------------
-// What this phase expects that tree to hold
+// What the phases that have landed expect that tree to hold
 // ---------------------------------------------------------------------------
 
 /**
- * The workflows phase 3 expects the built tree to hold, by id and in
- * the order the read hands them back.
+ * The workflows phases 3 and 5 have landed, by id and in the order
+ * the read hands them back.
  *
  * Declared rather than derived, which is what leaves a case standing
  * on it with anything to say. `buildAll` writes one artifact per
  * source under the source's own name, so a roster read out of
  * `workflows/src/` would agree with the built tree by construction,
  * holding whatever the build wrote against whatever the build wrote.
- * What is written down here is what this phase says the tree is for,
- * taken off the roster table in `workflows/src/README.md`, where the
- * entries the later phases deliver are named too.
+ * What is written down here is what those phases say the tree is
+ * for, taken off the roster table in `workflows/src/README.md`,
+ * where the entries the later phases deliver are named too.
+ *
+ * A closed set that grows inside a phase rather than at the end of
+ * one. That table's delivered-in column marks an entry landed as its
+ * source arrives, and an id joins this list in the same commit as
+ * the source it names, so an entry phase 5 has still to deliver is
+ * missing here for exactly as long as its source is. What that buys
+ * is the equality below staying a claim about the tree: a roster
+ * written ahead of the sources would report the phase's own
+ * unfinished middle as a build that lost an artifact.
  *
  * By id and never by file name. That README's 1:1 rule is that a
  * workflow is one file called `<workflow-id>.json`, and the build
@@ -114,7 +123,7 @@ const BUILT_WORKFLOWS = loadBuiltWorkflows();
  * and the artifact an entry does name was built from a source under
  * `workflows/` — which that scan reads.
  */
-const PHASE_3_WORKFLOW_IDS = ['ar-dispatch'] as const;
+const PHASE_3_AND_5_WORKFLOW_IDS = ['ar-dispatch', 'ar-ingest'] as const;
 
 // ---------------------------------------------------------------------------
 // The send-free rule
@@ -215,20 +224,21 @@ function withSendNodePlanted(workflow: BuiltWorkflow): BuiltWorkflow {
 /**
  * The workflow the one schedule trigger belongs to, by id.
  *
- * Declared rather than read off {@link PHASE_3_WORKFLOW_IDS}, which
- * spells the same id and today holds nothing else. The two are
- * separate claims that coincide while the tree holds one workflow:
- * that roster says which artifacts the build is expected to produce,
- * this says which one of them schedules. Five more workflows arrive
- * in phases 5 and 6 and none of them is a schedule, so the roster
- * grows and this stays a set of one — which is the property itself,
- * and is what a value derived from a list that grew with it would
- * stop asserting.
+ * Declared rather than read off {@link PHASE_3_AND_5_WORKFLOW_IDS},
+ * whose first entry spells the same id. The two are separate claims
+ * that used to coincide, that roster having held one workflow: it
+ * says which artifacts the build is expected to produce, this says
+ * which one of them schedules. `ar-ingest` is what parted them, and
+ * the entries phases 5 and 6 have still to deliver part them
+ * further, none of those being a schedule — so the roster grows and
+ * this stays a set of one, which is the property itself and is what
+ * a value derived from a list that grew with it would stop
+ * asserting.
  *
  * By id and never by file name, for the reason
- * {@link PHASE_3_WORKFLOW_IDS} gives: a workflow is one file called
- * `<workflow-id>.json`, so a file name is a derivation and an id is
- * the thing to keep in step with the roster table in
+ * {@link PHASE_3_AND_5_WORKFLOW_IDS} gives: a workflow is one file
+ * called `<workflow-id>.json`, so a file name is a derivation and an
+ * id is the thing to keep in step with the roster table in
  * `workflows/src/README.md`.
  */
 const SCHEDULE_TRIGGER_WORKFLOW_ID = 'ar-dispatch';
@@ -1024,11 +1034,12 @@ describe('workflow invariants — built tree', () => {
   });
 
   // Held as an ordered list rather than as two sets, for two
-  // reasons. `loadBuiltWorkflows` sorts, and `PHASE_3_WORKFLOW_IDS`
-  // is written in that order. A comparison sorting both sides again
-  // would be answered by a read that never sorted at all, and a
-  // roster naming one id twice would come back as the same set as
-  // one naming it once. An array parts both.
+  // reasons. `loadBuiltWorkflows` sorts, and
+  // `PHASE_3_AND_5_WORKFLOW_IDS` is written in that order. A
+  // comparison sorting both sides again would be answered by a read
+  // that never sorted at all, and a roster naming one id twice would
+  // come back as the same set as one naming it once. An array parts
+  // both.
   //
   // Equality and not containment, because what this exists to catch
   // is an artifact whose source is gone. The build writes one
@@ -1054,12 +1065,12 @@ describe('workflow invariants — built tree', () => {
   // over the reader's surface reads: a walk that reached no workflow
   // fails on the record list rather than passing through an
   // expectation nothing ran.
-  it('holds every workflow the phase-3 roster expects', () => {
+  it('holds every workflow the phase-3 and phase-5 roster expects', () => {
     const built = BUILT_WORKFLOWS.map((workflow) => ({
       file: workflow.file,
       hasNodes: workflow.nodes.length > 0,
     }));
-    const expected = PHASE_3_WORKFLOW_IDS.map((id) => ({
+    const expected = PHASE_3_AND_5_WORKFLOW_IDS.map((id) => ({
       file: `${id}.json`,
       hasNodes: true,
     }));
