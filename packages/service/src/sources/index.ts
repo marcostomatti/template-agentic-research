@@ -13,13 +13,13 @@
  * that fetches inside `parse` passes its tests the day it is
  * written and fails them the first time it runs offline.
  *
- * {@link SOURCE_ADAPTERS} holds one adapter. `listing-api.ts` added
- * its own line to that literal in the commit that landed it, which
- * is the whole of what registration costs. The other two modules
- * beside this file are not adapters and are not in it:
- * `html-text.ts` and `paged-list.ts` are what an adapter reaches
- * for, and each says at the top of its own source that it fronts no
- * source and appears in no registry.
+ * {@link SOURCE_ADAPTERS} holds the adapters this service ships. Each
+ * of them added its own line to that literal in the commit that
+ * landed it, which is the whole of what registration costs. The other
+ * two modules beside this file are not adapters and are not in it:
+ * `html-text.ts` and `paged-list.ts` are what an adapter reaches for,
+ * and each says at the top of its own source that it fronts no source
+ * and appears in no registry.
  *
  * Node-only, deliberately, and this is the file that could not be
  * anything else: a registry names its adapters with value imports,
@@ -31,6 +31,7 @@
 import { SOURCE_KINDS } from '../db/schema/values.js';
 
 import { LISTING_API_DECLARATION } from './listing-api.js';
+import { PUSH_CAPTURE_DECLARATION } from './push-capture.js';
 
 /**
  * The kinds of source an adapter can front.
@@ -218,18 +219,19 @@ export type SourceAdapterRegistry = Readonly<Record<string, SourceAdapter>>;
  * because the alternative — this module reading the directory to
  * check — is the thing being refused.
  *
- * One entry today, and what it holds is a DECLARATION rather than a
- * working adapter. That is the one place this contract and this
- * registry pull against each other, and it is worth naming here:
+ * What every entry holds is a DECLARATION rather than a working
+ * adapter. That is the one place this contract and this registry
+ * pull against each other, and it is worth naming here:
  * configuration binds at construction, so an adapter is per ROW,
  * while a registry is keyed by id and holds one entry per KIND of
  * source. A registered entry therefore carries the id and the kind
  * a `sources` row is matched against and can reach nothing, and a
- * run builds its own through that module's factory. The value below
+ * run builds its own through that module's factory. Each value
  * argues it at length in the module it comes from.
  */
 export const SOURCE_ADAPTERS: SourceAdapterRegistry = {
   'listing-api': LISTING_API_DECLARATION,
+  'push-capture': PUSH_CAPTURE_DECLARATION,
 };
 
 /**

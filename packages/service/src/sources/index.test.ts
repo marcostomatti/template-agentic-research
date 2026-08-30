@@ -421,7 +421,7 @@ describe('the registry, and how one adapter is reached', () => {
   // all — beside the guard below, which notices a module that was
   // written and never named.
   it('lists the adapters this service ships', () => {
-    expect(listSourceIds()).toEqual(['listing-api']);
+    expect(listSourceIds()).toEqual(['listing-api', 'push-capture']);
   });
 
   // Sorted, over keys written out of order. The shipped registry
