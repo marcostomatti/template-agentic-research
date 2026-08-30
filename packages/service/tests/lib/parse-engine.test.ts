@@ -448,9 +448,12 @@ function textPayload(text: string): unknown {
 /**
  * One rule, as the field that reads the member it checks.
  *
- * Named rather than written inline so the tuple keeps its type: an
- * arrow answering an array literal infers a union member list, which
- * `Object.fromEntries` then cannot read as entries.
+ * Named rather than written inline for width and for symmetry with
+ * its sibling below: one rule becomes two entries under the same key
+ * and naming both is what makes that pair visible. Nothing about the
+ * types wants it — an inline arrow answering the array literal
+ * infers the tuple from the call site and `Object.fromEntries` reads
+ * it, measured by swapping this helper back out.
  *
  * @param rule - The rule.
  * @returns The field-map entry.
