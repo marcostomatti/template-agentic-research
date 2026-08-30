@@ -375,9 +375,14 @@ function parseOrThrow<S extends ZodType>(
  *
  * @example
  * ```ts
- * router.post('/domains', async (req, res) => {
- *   const body = parseBody(createDomainSchema, req.body);
- *   res.status(201).json(ok(await createDomain(store, body)));
+ * // Inside a service function rather than inside the router: the
+ * // operation owns its own input contract, so one parse serves the
+ * // HTTP route and the MCP tool wave 3 exposes it through.
+ * const input = parseBody(createDomainSchema, body);
+ *
+ * return store.insertDomain({
+ *   ...input,
+ *   settings: input.settings ?? {},
  * });
  * ```
  *
