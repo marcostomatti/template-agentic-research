@@ -848,3 +848,144 @@ was deleted in between. The fact to report is the one the lookup
 itself reports — no domain carries that slug — so it is the same `404`
 rather than a `500`, and a caller re-issuing the request gets one
 answer for one state however the timing fell.
+
+## Settings
+
+### One row, two routes, and no address at all
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /settings` | `200` with the stored payload, or `{}` when no row has been written yet. No other status: there is no address to get wrong, no body to check and no query it reads. |
+| `PUT /settings` | `200` with the stored payload afterwards. `422` for a body the schema refuses, one detail per fault, and `422` again when a well-formed `defaultDomainSlug` names no domain. |
+
+`src/settings/routes.ts` declares both and decides neither: each
+handler calls the matching function in `src/settings/service.ts` and
+chooses a status.
+
+Every sibling group declares two path shapes, because a resource is
+met in its parent and written by its id. `operator_settings` holds one
+row whose id the database pins, so there is no collection to page, no
+parent to hang off and no segment for a request to get wrong. Neither
+handler reads `req.params`, and this group answers no `404` and no
+`409` — there is no address to name a row that is not there, and
+no natural key a request could propose twice.
+
+### Per-domain settings live on the domain row and are unreachable here
+
+`domains.settings` is a different column on a different table holding
+a different shape: scoring weights, a verdict vocabulary, a field
+contract and a display name, all of them things ONE domain scores and
+reports with. It is written through `PATCH /domains/:slug`, where it
+is one member of a larger body, and it is documented under Domains
+above.
+
+What `operator_settings` holds is the deployment's own preferences
+— which domain a caller that named none meant, which format a
+digest takes, which channels a notification reaches. None of it
+belongs to a domain, and none of it is reachable from a `/domains`
+path.
+
+The two are near enough in name that a reader may expect one route to
+reach the other. Nothing here does. No path on this group takes a
+slug, and `defaultDomainSlug` is the only member of either payload
+that names the other side at all — as a value inside JSON, and
+never as an address.
+
+### A `PUT` rather than a `PATCH`, because the payload is the request
+
+Omitting a member is how it is cleared. `SettingsStore.writeSettings`
+replaces the stored payload rather than merging into it, so under a
+merge the request that omits a preference and the request that removes
+it would be the same bytes and removal would be unexpressible.
+
+`PATCH /domains/:slug` is the shape that needs the other verb. There
+`settings` is one member of a larger body, so omitting the member and
+emptying it are two different requests and the surface has to tell
+them apart. Here the payload IS the request and there is no third
+state to express.
+
+Strictness is what makes the replacement trustworthy, per the
+validation rules above: a payload whose typo was silently stripped
+would be a whole-unit write that quietly dropped what its author
+wrote.
+
+### A read before any write is `{}` and never a `404`
+
+Absent settings mean the defaults apply, which is exactly what an
+empty payload means once one has been written. There is nothing an
+operator must create before they can configure something, so a missing
+row is not a missing resource — the same argument
+`domains.settings` already makes for its own `{}` default.
+
+The port still reports which of the two the database is in, and that
+is not a contradiction: `SettingsStore.readSettings` answers null for
+a table with no row, because whether a row exists is a fact, while
+treating the two as one state is a decision. `src/settings/service.ts`
+is the single line that takes it.
+
+### A write answers `200` and carries what is held
+
+Not `201`, although the first write may create the row. The resource a
+caller addressed exists before any row does — `GET /settings`
+answers `{}` rather than `404` — so a `201` would announce a
+creation no caller can observe, and would make the first write answer
+differently from every later one for a reason about storage rather
+than about the request. No `Location` header either: the address is
+fixed, and the caller already has it.
+
+Not `204`, because the answer is worth reading. A write is a
+replacement, so what is held afterwards is what a caller checks
+against what it meant, and the payload is read back rather than echoed
+from the argument — `jsonb` may normalise the key order it stored.
+
+### The default domain is checked on the way in, and it is a `422`
+
+`defaultDomainSlug` names a `domains.slug` from inside a JSONB
+payload, where no foreign key reaches, so the app layer is the whole
+of the enforcement. A slug that is well formed and names no domain is
+refused with one detail against that member carrying
+`code: 'unknown_domain'` — this service's own code, since no
+schema can raise a rule that is about rows.
+
+A `422` and not a `404`, because the slug is a member of the BODY and
+never the address. `PUT /settings` addresses the settings row, which
+exists, and a body naming a domain that is not there is a body this
+endpoint cannot accept rather than a resource that is missing. The
+three sibling groups answering `404` for a slug are not being
+contradicted: theirs arrives in the path.
+
+The same member has a second refusal, from `slugParamSchema` refusing
+its SHAPE, and the two answer the same status at the same field. The
+`code` beside it is what separates them, which is the difference
+between a spelling to fix and a domain to create.
+
+The check is not maintained afterwards. A domain deleted later leaves
+the slug naming nothing and nothing repairs it: it reads as no default
+being set, which is the state the operator is one write away from
+either way. So this is a guard against a typo rather than a
+referential guarantee, and calling it the second would promise
+something no column enforces.
+
+### Neither route parses a query, and that is a departure
+
+`GET /domains/:slug/categories` answers its collection whole and still
+refuses `?page`, because a window silently ignored would let a caller
+read every row believing it had read the first page. A singleton has
+no page for a caller to believe in: `?page=2` on a route answering one
+payload is as meaningless as it is on `GET /domains/:slug`, which is
+the read this pair follows rather than the list routes.
+
+### No refusal crosses this group's store port, and that is measured
+
+`operator_settings` carries two mechanisms and both were seen firing
+against the live server: a second insert at the singleton id is 23505,
+and any id but 1 is 23514 — on a plain INSERT and through an `ON
+CONFLICT` alike, because the row is formed before the conflict arbiter
+is consulted. Neither is reachable from a request. `writeSettings`
+spells the id from a constant of its own and absorbs the conflict by
+upserting on it, which is why this is the one wave-1 group whose store
+call cannot be refused.
+
+So a `StoreRefusal` arriving out of this group would be a store doing
+something its port does not describe. It is left to answer `500`
+rather than given a plausible status no rule authorised.
