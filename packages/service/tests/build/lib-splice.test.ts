@@ -266,6 +266,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'outcome.succeeded === true',
     ],
   },
+  {
+    file: 'capture-contract.ts',
+    ownText: [
+      'version !== CAPTURE_CONTRACT_VERSION',
+      'canonicalStamp(at, value.length) === value',
+      'names.length > MAX_PROVENANCE_MEMBERS',
+    ],
+  },
 ];
 
 /**
