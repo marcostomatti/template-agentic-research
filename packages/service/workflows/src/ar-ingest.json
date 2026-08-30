@@ -56,6 +56,39 @@
       }
     },
     {
+      "id": "fetch-source-payload",
+      "name": "Fetch Source Payload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 0],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "url": "={{ $json.endpoint }}",
+        "sendQuery": true,
+        "specifyQuery": "json",
+        "jsonQuery": "={{ JSON.stringify($json.cursor && $json.parser_config && $json.parser_config.cursor_param ? { [$json.parser_config.cursor_param]: $json.cursor } : {}) }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "extract-source-records",
+      "name": "Extract Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0],
+      "parameters": {
+        "jsCode": "__INLINE:parser-config.ts__\n__INLINE:markup-select.ts__\n// Where a payload becomes readings. Both libraries above are spliced in\n// whole and are wired together here, which is the only place they can\n// meet: parser-config.ts takes its markup step as an injected parameter\n// because a spliced library imports nothing, and markup-select.ts is\n// what that parameter is filled with. Nothing below is an extraction\n// rule of its own. What a parser_config directs and what a contract\n// judges are settled in those two files and under test beside them, and\n// a rule restated here would be a second copy with nothing comparing it\n// against the first.\n//\n// What IS written here is the composition, because no module holds it.\n// Four exported functions, in this order: parserConfigErrors says\n// whether the row can be read at all, valueAtPath takes the records out\n// of the payload, applyFieldMap turns one entry into one reading, and\n// contractErrors says whether that reading is what the source promised.\n//\n// extractRecords bundles the first three into one call, and not using\n// it is a decision rather than an oversight. It hands back records\n// without the entries they were built from, and documents.raw wants the\n// entry beside its reading rather than the whole response stored again\n// for every record it yielded. And it walks a record or a list of\n// records only, where two of the four source kinds answer one whole\n// document: a url source answers a page and an rss source answers a\n// feed, and each arrives here as a string. Splitting the payload here\n// is what lets a string be one entry, which a field rule stating a\n// selector and no path reads directly, that pair being the one shape\n// the engine accepts with no path to walk. Both adapters under\n// src/sources/ write the same split for the same reason.\n//\n// One item per reading, plus one item for a source that produced none,\n// so every source this pass reached leaves something behind. A source\n// that drops out of the stream is a source the health group below\n// cannot count, and a fetch nobody recorded reads exactly like a fetch\n// that never came due.\n//\n// WHAT THIS NODE DECIDES. Whether one reading is what its source\n// promised, one reading at a time. contractErrors answers sentences\n// instead of raising, which is what makes a divergence a report rather\n// than the end of the batch: a shape change is discovered by keeping\n// the reading that diverged, and a throw here would discard every other\n// record in the same payload to report the first one. parse_status and\n// parse_error are that answer written the way the two documents columns\n// take it, done here because this is where the contract was read. The\n// sentences are joined with a semicolon and a space rather than with a\n// newline, because the column is rendered inline and a newline in it is\n// one row that reads as several.\n//\n// WHAT IT DOES NOT. It does not decide that a source is failing.\n// Nothing here reads consecutive_failures, nothing sets flagged, and no\n// item this node emits carries a success member for something else to\n// read a decision off. What counts as a bad pass is stated by the\n// health group below rather than inherited from a member handed to it:\n// a missing status, a config fault and an empty reading are three\n// different outcomes, and they sit on the item separately for that\n// reason.\n//\n// It does not write a row either. No document exists until the write\n// group inserts one, so parse_status and parse_error travel as members\n// of an item and are columns only down there. Nothing here deduplicates\n// a document, gates one, or scores one.\n//\n// And it does not judge the row. A config carrying any fault reads\n// nothing at all rather than reading part of a payload, but the faults\n// come out on the item instead of raising: a parser_config nobody can\n// read is a row for an operator to fix and not a reason to end the pass\n// over the sources whose rows are fine.\n//\n// PAIRING. The fetch node replaces the item it was handed, so a source\n// row is gone from $json past it and is read back off Select Active\n// Sources by index. Two settings on that node are what make the index a\n// pairing rather than an assumption: fullResponse answers exactly one\n// item per request whatever shape the body turned out to be, and the\n// continue-on-error output answers one for a request that never\n// completed. So the two lists are the same length, and this refuses\n// before reading anything when they are not. Getting it wrong would\n// read one source's payload under another source's config and file the\n// result under the wrong source id, which nothing downstream undoes and\n// nothing reports.\n//\n// The markup step answers fragments AS MARKUP, and nothing reduces them\n// to text on this path. src/sources/html-text.ts is what both adapters\n// pair with this same matcher, and it sits outside src/lib/, so no\n// marker can name it: a path holding a parent segment is refused before\n// a loader is reached. A selector field extracted here therefore stores\n// the fragment as it was matched, and giving a Code node the reduction\n// is a move into the library directory rather than an edit to this\n// node.\nfunction bodyEntries(payload, recordsPath) {\n  const found = recordsPath === undefined\n    ? payload\n    : valueAtPath(payload, recordsPath);\n\n  // Null as well as undefined, which is where this differs from the\n  // same split in src/sources/push-capture.ts: a body there has been\n  // through an envelope, and a payload here is null whenever the\n  // request never completed. One entry built from nothing would be a\n  // reading of a fetch that did not happen.\n  if (found === undefined || found === null) {\n    return [];\n  }\n\n  return Array.isArray(found)\n    ? found\n    : [found];\n}\n\nconst PARSE_ERROR_JOIN = '; ';\nconst PARSE_DEPS = { selectMarkup: markupSelect };\nconst sources = $('Select Active Sources').all();\nconst answers = $input.all();\n\nif (sources.length !== answers.length) {\n  throw new Error(\n    '[ar-ingest] Extract Records pairs one answer to one source by index: '\n    + String(answers.length) + ' answers against ' + String(sources.length)\n    + ' sources',\n  );\n}\n\nconst items = [];\n\nfor (const [index, answer] of answers.entries()) {\n  const source = sources[index].json;\n  const answered = answer.json ?? {};\n  const reached = Object.hasOwn(answered, 'statusCode');\n  const payload = reached ? answered.body : null;\n  const configErrors = parserConfigErrors(source.parser_config);\n  const usable = configErrors.length === 0;\n  const entries = usable\n    ? bodyEntries(payload, valueAtPath(source.parser_config, 'recordsPath'))\n    : [];\n  const fields = usable\n    ? valueAtPath(source.parser_config, 'fields')\n    : undefined;\n  const base = {\n    run_id: source.run_id,\n    source_id: source.source_id,\n    domain_id: source.domain_id,\n    http_status: reached ? answered.statusCode : null,\n    config_errors: configErrors,\n  };\n\n  for (const entry of entries) {\n    const built = applyFieldMap(entry, fields, PARSE_DEPS);\n    const divergences = contractErrors(built.record, source.contract);\n\n    items.push({\n      json: {\n        ...base,\n        record: built.record,\n        raw: entry,\n        warnings: built.warnings,\n        parse_status: divergences.length === 0 ? 'ok' : 'failed',\n        parse_error: divergences.length === 0\n          ? null\n          : divergences.join(PARSE_ERROR_JOIN),\n      },\n    });\n  }\n\n  // The keep half, for a source that yielded no entry at all. There is\n  // no reading to judge and so no parse_status to write, and raw is the\n  // whole payload because that is what there is to keep: a page whose\n  // shape moved is the evidence the move happened.\n  if (entries.length === 0) {\n    items.push({\n      json: {\n        ...base,\n        record: null,\n        raw: payload,\n        warnings: [],\n        parse_status: null,\n        parse_error: null,\n      },\n    });\n  }\n}\n\nreturn items;"
+      }
+    },
+    {
       "id": "invoked-never-scheduled",
       "name": "Invoked Never Scheduled",
       "type": "n8n-nodes-base.stickyNote",
@@ -78,6 +111,18 @@
         "height": 880,
         "content": "## Flagged Is Not Disabled\n\nTwo columns keep a source out of this pass, and they are not one column written twice. `Select Active Sources` reads both: `enabled AND NOT flagged`.\n\n`flagged` is the pipeline's own reading, and the flag half of fail-flag-keep. `src/lib/source-health.ts` decides it: handed a source's counters and one fetch outcome, it answers a `flagged` of true once `consecutive_failures` has reached the threshold. Skipping the row is what makes setting the flag worth anything. A rotted feed that goes on being fetched spends a request every pass, stores payloads nothing can read, and buries the sources still worth reading underneath them.\n\nNothing on this canvas clears it. `source-health.ts` sets the flag and has no member that unsets it, and no node here writes `flagged = false`. A flag the same automation could clear is a source that alternates quietly between working and not with nobody told, and the repair is usually a new `parser_config`, which is a pending row and an approval of its own. Clearing it is an operator's act, taken once what broke has been fixed.\n\n### Switching a source off is a column of its own\n\n`enabled` is the operator's outright, and the two are separate because they answer different questions. `flagged` says the pipeline believes this feed has stopped working; `enabled` says whether it may be read at all. Collapsing them would let the detector switch off a feed an operator deliberately turned on, and leave nowhere to record a suspect source still worth reading.\n\n### What a skipped source costs\n\nNothing on this pass and nothing after it. A source this node does not select produces no item, so nothing is requested for it, no document is written under it, and its counter and its two stamps stay where the last pass left them. Which sources a domain is skipping is a question for the table, and the rows are the answer.\n\nA domain whose sources are all switched off or flagged selects nothing at all, and the chain below is skipped whole. The `runs` row still closes: `ar-dispatch` opened it and waits for this workflow to return, so a pass with nothing to fetch ends looking like the pass it was."
       }
+    },
+    {
+      "id": "one-request-per-source",
+      "name": "One Request Per Source",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [860, -760],
+      "parameters": {
+        "width": 400,
+        "height": 780,
+        "content": "## One Request Per Source\n\n`Fetch Source Payload` runs once for every item `Select Active Sources` answered, so that statement's row count is this pass's request count and nothing here loops. A source is reached once per pass, and paging across passes is what the cursor is for.\n\n### The cursor travels as a query parameter\n\n`sources.cursor` is opaque text: only the adapter that wrote it has to understand it, and this node does not read it at all. It is sent under whatever name `parser_config.cursor_param` gives, and a source naming none sends no cursor. There is no default name, because guessing one puts a parameter nobody asked for on every request, where a source ignoring it looks exactly like a source honouring it.\n\nA NULL cursor sends nothing either. The column stores an absence rather than an empty string, and an empty string handed back to a source is a real position.\n\nWhat that does not serve is a cursor an API takes as a header, an entity tag being the usual one. `src/sources/paged-list.ts` sends those Node side, over an endpoint list one row cannot hold. Serving one here would be another `parser_config` key and another expression, never a branch on what a cursor happens to look like.\n\n### Nothing here ends the pass\n\n`fullResponse` is on, so this node answers exactly one item per request whatever the body turned out to be. Without it a JSON array comes back as one item per element, and the node below could no longer say which source a payload came from.\n\n`neverError` is on, so a 404 or a 500 arrives as data carrying its status, and the error output continues on the regular branch, so a refused connection, a timeout or an endpoint somebody never finished configuring arrives as an item carrying no status at all. Each of those is an outcome a source can have and each is the health group's to read. A dead source is a row to flag, not a pass to abort."
+      }
     }
   ],
   "connections": {
@@ -92,6 +137,20 @@
       "main": [
         [
           { "node": "Select Active Sources", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Select Active Sources": {
+      "main": [
+        [
+          { "node": "Fetch Source Payload", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Source Payload": {
+      "main": [
+        [
+          { "node": "Extract Records", "type": "main", "index": 0 }
         ]
       ]
     }
