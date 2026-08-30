@@ -258,6 +258,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'stepMatches(step, ancestor)',
     ],
   },
+  {
+    file: 'source-health.ts',
+    ownText: [
+      'priorFailures(prior.consecutiveFailures) + 1',
+      'prior.flagged === true || failures >= threshold',
+      'outcome.succeeded === true',
+    ],
+  },
 ];
 
 /**
