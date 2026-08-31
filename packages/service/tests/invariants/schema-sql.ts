@@ -256,15 +256,15 @@ export interface SchemaSqlAssertion {
 /**
  * The statements the generated migration must carry.
  *
- * One entry per constraint the parent design calls database-level:
- * the approval gate on `research_pool` and the one on
- * `source_config_proposals` beside it, the category depth guard in
- * both of its halves, the pair of constraints that makes
- * `documents.hash` dedupe, both partial scheduling indexes, the
- * CHECKs behind `sources.kind` and `source_config_proposals.status`,
- * the five holding the two auth tables together — three unique
- * keys, the session-to-user foreign key, and the NOT NULL that
- * bounds a session — and the CHECK that makes
+ * One entry per constraint the parent design calls database-level: the
+ * approval gate on `research_pool` and the one on
+ * `source_config_proposals` beside it, the category depth guard in both
+ * of its halves, the pair of constraints that makes `documents.hash`
+ * dedupe, the read index behind the two per-source `documents` readers,
+ * both partial scheduling indexes, the CHECKs behind `sources.kind` and
+ * `source_config_proposals.status`, the five holding the two auth
+ * tables together — three unique keys, the session-to-user foreign key,
+ * and the NOT NULL that bounds a session — and the CHECK that makes
  * `operator_settings` a singleton.
  *
  * A chosen sample and not the whole schema, which is the whole reason
@@ -353,6 +353,26 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
       'ones with none — which is what the NOT NULL above it closes, ' +
       'and why the two are asserted apart.',
     pattern: /^[ \t]*CONSTRAINT "documents_hash_unique" UNIQUE\("hash"\)/m,
+  },
+  // The one index in this roster that must NOT be qualified, and the
+  // pattern says so by ending at the terminator. The two scheduling
+  // indexes below pin their predicate because a partial index that
+  // lost it is still an index; this one is the inverse. A predicate
+  // added here would serve whichever reader it was written for and
+  // leave the other on a sequential scan of the corpus table, which
+  // Postgres reports by planning around the index rather than by
+  // refusing it.
+  {
+    id: 'documents-source-parse-status-index',
+    description:
+      'Index over documents by source_id and parse_status, which is ' +
+      'what the per-source parse-status aggregate behind the sources ' +
+      'list and the failed-parse filter behind the failures queue ' +
+      'both read through. Pins the column order, source_id leading ' +
+      'because both readers narrow on it first, and pins the ' +
+      'terminator behind the column list, so a WHERE qualifying this ' +
+      'index is a miss rather than a match.',
+    pattern: /^[ \t]*CREATE INDEX "documents_source_parse_status_idx" ON "documents" USING btree \("source_id","parse_status"\);/m,
   },
   // Both scheduling indexes carry the WHERE clause in the pattern,
   // because a partial index that lost it is still an index: it is

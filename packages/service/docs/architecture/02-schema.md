@@ -387,7 +387,7 @@ children of the row being written, which no table definition states.
 
 Ownership says nothing about the reading. `readMigrationSql()` in
 `tests/invariants/schema-sql.ts` concatenates every `.sql` under
-`drizzle/` and its assertions run over the whole text, so fourteen of
+`drizzle/` and its assertions run over the whole text, so fifteen of
 them land in the generated migrations and two in the hand-written one
 with nothing in the roster recording which. What does follow from the
 split is what a match there is worth. A generated statement is one of
