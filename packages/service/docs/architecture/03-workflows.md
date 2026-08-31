@@ -38,11 +38,11 @@ landed already.
 ### A workflow is a row here before it is a file
 
 A row carrying no `landed` beside its phase is listed here before it
-exists, for the reason the pending rows of
-`docs/architecture/01-invariants.md` are rows: the set is decided
-once, and the phase that lands a workflow lands it against a role
-already written down. So the roster answers what the set IS, and the
-column answers how much of it `workflows/src/` holds today.
+exists, for the reason `docs/architecture/01-invariants.md` defines a
+`Pending` reading at all: the set is decided once, and the phase that
+lands a workflow lands it against a role already written down. So the
+roster answers what the set IS, and the column answers how much of it
+`workflows/src/` holds today.
 
 Two of the delivered-in phases are the dispatcher's problem, which is
 why the column is worth reading rather than skipping. `ar-dispatch`
@@ -50,7 +50,8 @@ invokes `ar-ingest` for a claimed topic and `ar-digest` for a claimed
 export subscription, and the two land a phase apart, so there is a
 stretch in which one of its targets exists and the other does not and
 a tick records successes and failures side by side for nobody's
-mistake.
+mistake. Whether the set is standing in that stretch is the column's
+to answer rather than this paragraph's.
 
 ### `ar-dispatch` is the only workflow with a clock
 
@@ -305,15 +306,15 @@ a library that obeys the rule. It is satisfied by hand rather than
 checked.
 
 What breaking it costs splits in two, and only the louder half is
-reachable offline. `tests/build/schedule-splice.test.ts` puts the one
-library a workflow source here names through the shipped build and
-then through `new Function`, which supplies no `require` and no
-`module` exactly as a Code node does not: an `import.meta` is refused
-when that function is constructed, and a `require` raises when its
-line runs. Module-level state is invisible in both contexts — it
-lives as long as the process that imported the file, and as long as
-the one execution that ran the spliced copy, and neither reports the
-difference.
+reachable offline. `tests/build/schedule-splice.test.ts` puts
+`schedule.ts`, one of the libraries a source here names, through the
+shipped build and then through `new Function`, which supplies no
+`require` and no `module` exactly as a Code node does not: an
+`import.meta` is refused when that function is constructed, and a
+`require` raises when its line runs. Module-level state is invisible
+in both contexts — it lives as long as the process that imported the
+file, and as long as the one execution that ran the spliced copy, and
+neither reports the difference.
 
 The five declaration forms are the whole of what is spliceable, and a
 sixth is the standing gap. `export async function` declares a name the
@@ -337,9 +338,9 @@ side of that string records what the library is for.
 | `parse-eml.ts` | Message-format bodies — a file handed to `ar-capture`, and any `multipart/` an ingest source answers with. |
 | `yaml-lite.ts` | Configuration somebody edits by hand, wherever a later phase reads one. |
 | `shingle.ts` | `ar-ingest`'s dedupe: the sketch two bodies are held against each other by. |
-| `static-gate.ts` | `ar-ingest`'s gate — the free decision that runs before anything is spent on a document. |
+| `static-gate.ts` | The free decision that runs before anything is spent on a document: `ar-ingest`'s gate. Its `scoreText` is also what a feature node reads a document with, in `ar-ingest` and `ar-score` alike, so a vector's category counts are hits taken off the body rather than a block of zeros. |
 | `chunk.ts` | The prepared chunk a model node is fed, in `ar-ingest` and in `ar-research`. |
-| `features.ts` | The deterministic vector `documents.features` stores, computed as a document is ingested. |
+| `features.ts` | The deterministic vector `documents.features` stores: written in `ar-ingest` as a document is ingested, and recomputed in `ar-score` for a document whose stored version is not the one that pass composes. Its `asKey` is also what `ar-score`'s scoring node names a category's column with, `categories.key` being free text a second spelling would get wrong silently. |
 | `aggregate-score.ts` | `ar-score`: the one total a digest orders findings by. |
 | `validate-entity-name.ts` | `ar-research`: the capability gate in front of the one step that gets tools bound. |
 | `sanitize-md.ts` | Untrusted text on its way into anything that renders it — a digest, a note, a research brief. |
@@ -351,11 +352,13 @@ side of that string records what the library is for.
 | `prompt-frame.ts` | The framing around the prepared chunk a model node is fed, for `ar-ingest` now and `ar-research` later: the persona and the data-never-instruction notice as the trusted half, the neutralized chunk between two fence lines as the untrusted one. A Code node carries this marker beside `chunk.ts`'s and wires the two together, which is the only place they meet. The persona is a `personas` row and is never written here, and nothing in the module decides what a model is asked. |
 | `feature-version.ts` | The version a stored vector is read against, for `ar-ingest` where a vector is first written and `ar-score` where one is recomputed: `FEATURE_MECHANISM_VERSION` and a digest over the domain's term set, composed into the one integer `documents.feature_version` holds. A Code node carries this marker beside `features.ts`'s, which is where the mechanism version comes from — it is passed in rather than imported, because a spliced library imports nothing. |
 
-One row of that table is a workflow's today: `ar-dispatch` writes the
-only library marker there is. Every other library is written down
-here ahead of the workflow that will name it, the way the rows of
-the set at the top of this document are, and the phase that lands
-each of those workflows is the phase that writes its markers. A
+Rows of that table divide by whether a source already names the
+library. Some are named by a marker in `workflows/src/` today; the
+rest are written down here ahead of the workflow that will name one,
+the way the rows of the set at the top of this document are. The phase
+that lands a workflow is the phase that writes its markers, so which
+side of that line a row sits on moves with the set rather than with
+the library, and the markers are where it is read rather than here. A
 library waiting for one is not waiting to be exercised — the default
 suite imports it, and a build reads it.
 
@@ -383,8 +386,7 @@ node body the build wrote for three things: the library's own text
 arrived, the module boundary it was declared behind did not, and
 what arrived is something a Code node could construct. Driving a
 spliced copy is depth rather than breadth and stays with
-`tests/build/schedule-splice.test.ts`, over the one library a
-workflow source names.
+`tests/build/schedule-splice.test.ts`, over `schedule.ts` alone.
 
 ### A retired form is refused rather than left to pass through
 
@@ -472,9 +474,9 @@ this package holds moves with the plan, so a case driving it would
 assert how far the work had got rather than what a build does. What
 that leaves out is the sources this repository ships: a second
 `bun run build:workflows` over this package's own tree, compared
-against the first, is the only comparison that reaches `ar-dispatch`
-and the library its `__INLINE:` marker splices — and nothing automates
-it.
+against the first, is the only comparison that reaches the sources
+under `workflows/src/` and the libraries their `__INLINE:` markers
+splice — and nothing automates it.
 
 ### The stamp is the one value permitted to move with the checkout
 
