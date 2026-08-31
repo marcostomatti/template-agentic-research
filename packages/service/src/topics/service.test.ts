@@ -1,14 +1,19 @@
 /**
- * `src/topics/service.ts` — what the four topic operations refuse.
- * Driven over `tests/helpers/memory-research-store.ts`, so every
- * claim here is answered with no database anywhere.
+ * `src/topics/service.ts` — what the four topic operations refuse,
+ * and what they let through. Driven over
+ * `tests/helpers/memory-research-store.ts`, so every claim here is
+ * answered with no database anywhere.
  *
- * Five claims, all of them about the ways this module says no. The
- * reads and writes it lets through are asserted in cases of their
- * own beside these; what appears here is the narrow CONTROL each
- * refusal needs, varied along the one axis the refusal turns on,
- * because a module refusing everything passes every assertion a
- * refusal case makes on its own.
+ * NINE CLAIMS IN TWO HALVES. The first five are the ways this
+ * module says no, and each carries the narrow CONTROL its refusal
+ * needs, varied along the one axis the refusal turns on, because a
+ * module refusing everything passes every assertion a refusal case
+ * makes on its own. The last four are the reads and writes that go
+ * through, and they carry the same discipline the other way round:
+ * each write is compared as a WHOLE record against the row as it
+ * was, because an operation reaching a member nobody submitted
+ * answers a perfectly plausible topic that no field-by-field read
+ * would report.
  *
  * THAT AN ADDRESS NAMING NOTHING IS A 404 ON ALL FOUR OPERATIONS,
  * and that the two addresses are told apart. A `:slug` naming no
@@ -78,12 +83,61 @@
  * fixture name would leave exactly that channel unmeasured while
  * looking identical in the output.
  *
+ * THAT A LIST IS SCOPED TO ITS DOMAIN AND ORDERED BY NAME. The
+ * fixture is what makes the first sharp: two domains research a
+ * topic of the same name, so a read that reached past the domain
+ * answers three rows here and the wrong one under the other slug.
+ * The ordering claim is separate and needs the fixture too — the
+ * rows are planted in the reverse of the order they come back in,
+ * so a store handing them over as they went in is green against
+ * every count. Beside them sit the two states a 404 could be
+ * confused with: a domain researching nothing is an empty PAGE,
+ * and a window narrower than the collection reports a `total` the
+ * page in hand does not equal.
+ *
+ * THAT A CREATE LANDS ENABLED AND UNSCHEDULED. `nextRunAt` null
+ * and `enabled` true are what the rest of this surface is built
+ * on — a null due time is never claimed, and only an enabled row
+ * can be run now — and each has the control that says it is a
+ * DEFAULT rather than a constant: a body submitting `enabled`
+ * false lands false, and one supplying bounds lands them. The
+ * whole row is compared rather than those members, with the sorted
+ * key set beside it, since `topics` spreads `schedulableColumns()`
+ * and a column added to that one helper reaches this projection
+ * with no topic module edited at all.
+ *
+ * THAT A PATCH REPLACES RATHER THAN MERGES, AND WRITES ONE MEMBER
+ * AT A TIME. `searchTerms` is the member that rule exists for and
+ * it gets three readings, because a merge and a replace agree on
+ * everything but the third: a disjoint list, a SUBSET of the
+ * stored one — the shape a caller who edited a list actually
+ * sends, and the one where a merge is invisible — and the empty
+ * list read back through the collection. The two bounds are read
+ * as separate members rather than as a pair, set on a topic
+ * carrying none, moved on one carrying both, and one moved with
+ * the other left alone. `enabled` is read in both directions,
+ * since a service folding it through `||` writes true for a
+ * submitted false and is green on the way back.
+ *
+ * THAT A DELETE ANSWERS NOTHING AND TAKES ONE ROW. Nothing in
+ * schema v2 points at `topics`, so the whole of what this
+ * operation answers is `undefined` and the whole of what it did is
+ * read back off the page: the sibling compared as a whole record,
+ * the second domain's topic of that same name still standing, a
+ * second delete of the same id refused, and the name free for the
+ * next create — the one reading that says the key went with the
+ * row rather than outliving it.
+ *
  * Mutation legs, run over this file with `--reporter=json` and read
- * as the failed case SET rather than as a count, against 71 cases.
- * Ten legs, each aimed at one rule, because a grid made of one
- * class leaves the other half green while looking thorough. Every
- * figure is a measurement over this case count and moves again if a
- * later task adds to this file.
+ * as the failed case SET rather than as a count, against 102 cases.
+ * Seventeen legs, ten aimed at the refusals and seven at the half
+ * below them, because a grid made of one class leaves the other
+ * green while looking thorough. Two of the seventeen mutate
+ * `tests/helpers/memory-research-store.ts` rather than the service:
+ * the replace-whole rule and the page's order are the STORE's, and
+ * no leg over this module could reach either. Every figure is a
+ * measurement over this case count and moves again if a later task
+ * adds to this file.
  *
  * The two `.strict()` legs redden 5 and 4 and their sets are
  * DISJOINT, which is what says the two schemas are separately
@@ -101,8 +155,9 @@
  * entries. Widening `searchTerms` to `z.array(z.unknown())` reddens
  * exactly 2 — the non-string entry row on each operation — and
  * leaves the whole-list row green. Narrowing it to `.min(1)`
- * reddens exactly 1, the empty-list control, which is what says
- * that control is not vacuous.
+ * reddens 2 of a different shape, the empty-list control here and
+ * the patch that clears every term below, which is what says
+ * neither is vacuous.
  *
  * The name legs nest. Rethrowing the unique refusal reddens 7 —
  * both 409 cases, both of their read-back controls, both
@@ -119,6 +174,37 @@
  * and collapsing the patch's nullable bounds with `??` reddens only
  * the cleared-bound control.
  *
+ * The three create-default legs are what say the two omissions
+ * become values HERE rather than at a column. Defaulting `enabled`
+ * to false reddens 4 — the two create cases that read it, and both
+ * retirement cases below, since the fixture's own topics would then
+ * land disabled. Defaulting `searchTerms` to a non-empty list
+ * reddens 2, one of them the delete case reading the terms of a
+ * topic created under a freed name. Defaulting a bound to zero
+ * rather than null reddens 3, one of which is the whole-row compare
+ * on a case named for neither bound — that compare paying for
+ * itself.
+ *
+ * Folding the patch's `enabled` through `||` reddens exactly 2, and
+ * the case it leaves GREEN is the reading: bringing a retired topic
+ * back submits true, so a fold writing true whatever arrived passes
+ * it. The pair is what makes the member two-directional rather than
+ * one-way.
+ *
+ * The two store legs reach what no service mutation can. Merging
+ * the submitted term list into the stored one rather than replacing
+ * it reddens 5, across all three replace readings, the read-back
+ * beside them and the refusal half's empty-list control. Ordering
+ * the page by id rather than by name reddens 7, three of them
+ * read-back cases in the refusal half that had been reading a page
+ * whose order they never asserted.
+ *
+ * The blunt leg is recorded rather than read: a store ignoring the
+ * domain scope entirely reddens 90 of 102, because `plantTopics`
+ * cannot build a fixture whose two domains research one name at
+ * all. That is the fixture's design reporting rather than any case,
+ * and it is why the explicit widening control sits beside it.
+ *
  * What no module mutation reaches, by construction: the table
  * guards read only the tables beside them and are aimed at a later
  * edit, such as an operation added with no row or a body half
@@ -127,7 +213,7 @@
  * SEARCH, where the rethrow legs prove the SUBJECT.
  */
 
-import type { TopicServiceStore } from './service.js';
+import type { TopicPage, TopicServiceStore } from './service.js';
 import type { TopicRecord } from './store.js';
 import type { FieldError } from '../../lib/errors/index.js';
 import type {
@@ -1462,5 +1548,740 @@ describe('what a refusal is allowed to say', () => {
     expect(refusal.cause).toBeInstanceOf(StoreRefusal);
     expect(Object.keys(refusal.toJSON()).sort())
       .toEqual(['code', 'message']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a list scopes to
+// ---------------------------------------------------------------------------
+
+/**
+ * The members `TopicRecord` declares.
+ *
+ * Written out rather than derived, because an interface has no
+ * runtime form to read keys off — and pinned in BOTH directions,
+ * since a one-directional list is exactly as green as no list at
+ * all against the drift that matters. `satisfies` closes the
+ * direction where this names a member the record lacks;
+ * {@link EVERY_KEY_LISTED} closes the one where the record grows a
+ * member nothing here learned about.
+ *
+ * The second direction is the one THIS table needs. `topics`
+ * spreads `schedulableColumns()` from
+ * `src/db/schema/scheduling.ts`, which `export_subscriptions`
+ * spreads too, so a column added to that one helper reaches
+ * `TopicRecord` and every projection under it without a single
+ * topic module being edited — and every field-by-field assertion
+ * in this file stays green while the surface answers a member
+ * nobody argued onto it.
+ */
+const TOPIC_KEYS = [
+  'domainId',
+  'enabled',
+  'id',
+  'intervalSeconds',
+  'maxIntervalSeconds',
+  'minIntervalSeconds',
+  'name',
+  'nextRunAt',
+  'searchTerms',
+] as const satisfies readonly (keyof TopicRecord)[];
+
+/** The two members a page carries around its rows. */
+const PAGE_KEYS = [
+  'rows',
+  'total',
+] as const satisfies readonly (keyof TopicPage)[];
+
+/**
+ * `true` only while `L` names every key of `T`.
+ *
+ * The tuple wrapper is load-bearing rather than decoration:
+ * without it the union distributes over the conditional and the
+ * answer is `boolean`, which accepts `true` as an initializer and
+ * pins nothing at all.
+ *
+ * @typeParam T - The type whose keys must all be named.
+ * @typeParam L - The list naming them, as `typeof <the const>`.
+ */
+type CoversEveryKey<T, L extends readonly PropertyKey[]> =
+  [Exclude<keyof T, L[number]>] extends [never] ? true : false;
+
+/** Both lists above, held against the types they describe. */
+type EveryKeyListed =
+  CoversEveryKey<TopicRecord, typeof TOPIC_KEYS>
+  & CoversEveryKey<TopicPage, typeof PAGE_KEYS>;
+
+/**
+ * The half of the drift guard `check-types` owns.
+ *
+ * A member added to `TopicRecord` or to `TopicPage` and to neither
+ * list above turns {@link EveryKeyListed} into `never`, and this
+ * initializer is then a TS2322 at this line — before any case can
+ * compare a record against a set that has quietly stopped
+ * describing it. Read in a case below, so it is a symbol this file
+ * uses rather than one lint reports.
+ */
+const EVERY_KEY_LISTED: EveryKeyListed = true;
+
+/** {@link TOPIC_KEYS}, sorted at use rather than by hand. */
+const TOPIC_KEY_SET: readonly string[] = [...TOPIC_KEYS].sort();
+
+/** {@link PAGE_KEYS}, sorted. */
+const PAGE_KEY_SET: readonly string[] = [...PAGE_KEYS].sort();
+
+/** A third domain, invented in the same neutral register. */
+const SEABED = 'example-seabed-mapping';
+
+/**
+ * Finds one answered topic by the name it carries.
+ *
+ * @param rows - What a read answered.
+ * @param name - The name to look for.
+ * @returns The row carrying it.
+ * @throws When no row does. A `find` answering `undefined`
+ *   compares equal to another `undefined`, so a case reading a
+ *   stored row back against a write that never landed would
+ *   otherwise pass for nobody's reason.
+ */
+function topicNamed(
+  rows: readonly TopicRecord[],
+  name: string,
+): TopicRecord {
+  const found = rows.find((row) => row.name === name);
+
+  if (found === undefined) {
+    throw new Error('no answered row carries that name');
+  }
+
+  return found;
+}
+
+describe('what a list scopes to', () => {
+  it('holds both key sets against the types they describe', () => {
+    // The runtime half of the pin above. What it asserts is not
+    // the `true` — that is a constant — but that the symbol exists
+    // to be read: its VALUE is the statement `check-types` makes
+    // at the declaration, which is a TS2322 the moment either type
+    // grows a member neither list names.
+    expect(EVERY_KEY_LISTED).toBe(true);
+  });
+
+  it('answers the topics of the domain it was given', async () => {
+    // The scoping claim, and the fixture is what makes it sharp:
+    // both domains research a topic named `transformers`, so a
+    // read that reached past the domain answers three rows here
+    // and the wrong one under TRANSIT. Whole records rather than
+    // names, so a page assembled out of the right names and the
+    // wrong rows is this case failing.
+    const planted = await plantTopics();
+    const here = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+    const there = await listTopics(planted.store, TRANSIT, WIDE_WINDOW);
+
+    expect(here.rows).toStrictEqual([planted.inference, planted.transformers]);
+    expect(here.total).toBe(2);
+    expect(there.rows).toStrictEqual([planted.foreign]);
+    expect(there.total).toBe(1);
+
+    // The sorted key SET beside the records the case compares. A
+    // member arriving on the row by spread — a column nobody
+    // projected — is invisible to a compare against a record this
+    // same module answered, and is exactly what this line catches.
+    expect(Object.keys(topicNamed(here.rows, 'transformers')).sort())
+      .toEqual([...TOPIC_KEY_SET]);
+    expect(Object.keys(here).sort()).toEqual([...PAGE_KEY_SET]);
+  });
+
+  it('tells the two rows of one name apart by their domain', async () => {
+    // The scoping claim read from the other end: the two records
+    // sharing a name differ in every other member, so a read
+    // answering EITHER of them under both slugs would pass a
+    // name-only comparison and fail this.
+    const planted = await plantTopics();
+    const here = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+    const there = await listTopics(planted.store, TRANSIT, WIDE_WINDOW);
+    const mine = topicNamed(here.rows, 'transformers');
+    const theirs = topicNamed(there.rows, 'transformers');
+
+    expect(mine.domainId).not.toBe(theirs.domainId);
+    expect(mine.id).not.toBe(theirs.id);
+    expect(mine.searchTerms).not.toEqual(theirs.searchTerms);
+  });
+
+  it('orders the page by name rather than by insertion', async () => {
+    // The fixture plants `transformers` first and `edge inference`
+    // second, so a read handing rows back in the order they went
+    // in answers the reverse of this and is green against every
+    // count above. Ordering on the name is what makes a paginated
+    // read total: `nextRunAt` is nullable, non-unique and MOVES
+    // under the dispatcher, so a page over it would reorder itself
+    // between two requests.
+    const planted = await plantTopics();
+    const page = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(page.rows.map((row) => row.name))
+      .toEqual(['edge inference', 'transformers']);
+    expect(planted.transformers.id).toBeLessThan(planted.inference.id);
+  });
+
+  it('reports the collection rather than the page in hand', async () => {
+    // `total` is a second question rather than the length of the
+    // rows in hand, and the refusal half of this file could not
+    // say so: its one window was wider than every collection, so a
+    // total taken off the rows would have been right there. This
+    // window holds one row of two.
+    const planted = await plantTopics();
+    const page = await listTopics(planted.store, RADAR, {
+      limit: 1,
+      offset: 0,
+    });
+
+    expect(page.rows.map((row) => row.name)).toEqual(['edge inference']);
+    expect(page.total).toBe(2);
+  });
+
+  it('answers an empty page for a domain holding none', async () => {
+    // A domain with no topics and a slug naming no domain are two
+    // states, and this is the one that is not a 404: the
+    // collection is there and empty. The RADAR read beside it is
+    // the control — a module answering an empty page to everything
+    // passes the first half of this and fails the second.
+    const planted = await plantTopics();
+
+    await planted.store.insertDomain({
+      slug: SEABED,
+      name: 'Seabed',
+      settings: {},
+    });
+
+    const empty = await listTopics(planted.store, SEABED, WIDE_WINDOW);
+    const held = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(empty).toStrictEqual({ rows: [], total: 0 });
+    expect(held.total).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a create lands
+// ---------------------------------------------------------------------------
+
+/** The subject every create below adds to a domain. */
+const FRESH_NAME = 'retrieval augmentation';
+
+/** The terms it issues. */
+const FRESH_TERMS = ['retrieval augmentation', 'vector recall'];
+
+describe('what a create lands', () => {
+  it('answers a row that is enabled and unscheduled', async () => {
+    // The whole row rather than the members the case is named
+    // for. `nextRunAt` null and `enabled` true are the two the
+    // rest of this surface is built on — a null due time is never
+    // claimed by `ar-dispatch`, and an enabled row is the only
+    // kind `POST /topics/:id/run-now` will schedule — but a create
+    // reaching a member nobody submitted is exactly as wrong and
+    // is invisible to a pair of field reads.
+    const planted = await plantTopics();
+    const created = await createTopic(planted.store, RADAR, {
+      name: FRESH_NAME,
+      searchTerms: FRESH_TERMS,
+      intervalSeconds: HOURLY,
+    });
+
+    expect(created).toStrictEqual({
+      id: created.id,
+      domainId: planted.transformers.domainId,
+      name: FRESH_NAME,
+      searchTerms: FRESH_TERMS,
+      intervalSeconds: HOURLY,
+      nextRunAt: null,
+      enabled: true,
+      minIntervalSeconds: null,
+      maxIntervalSeconds: null,
+    });
+
+    // The id is the store's own — no body here carries one — and
+    // the sorted key set beside it, since the id is the one member
+    // a whole-row compare cannot pin against anything but itself.
+    expect(created.id).toBeGreaterThan(planted.foreign.id);
+    expect(Object.keys(created).sort()).toEqual([...TOPIC_KEY_SET]);
+  });
+
+  it('turns the two omissions into values rather than absences', async () => {
+    // `searchTerms` and `enabled` are optional in the schema and
+    // REQUIRED by `InsertTopicInput`, so what an absence means is
+    // decided in the service and is readable here rather than
+    // left to a column only one of the two implementations has.
+    // The empty list is a complete value: the topic comes due on
+    // time and gives its run nothing to issue.
+    const { store } = await plantTopics();
+    const created = await createTopic(store, RADAR, {
+      name: FRESH_NAME,
+      intervalSeconds: HOURLY,
+    });
+
+    expect(created.searchTerms).toEqual([]);
+    expect(created.enabled).toBe(true);
+    expect(created.nextRunAt).toBeNull();
+  });
+
+  it('stages a topic switched off when the body says so', async () => {
+    // The control that makes the `enabled: true` above a DEFAULT
+    // rather than a constant: a service writing true whatever was
+    // submitted passes both cases above and fails this. It is also
+    // the state the run-now verb refuses, so a topic staged off is
+    // one an operator has to enable deliberately rather than one
+    // that quietly answers a run-now with a due time nothing ever
+    // reads.
+    const { store } = await plantTopics();
+    const created = await createTopic(store, RADAR, {
+      name: FRESH_NAME,
+      intervalSeconds: HOURLY,
+      enabled: false,
+    });
+
+    expect(created.enabled).toBe(false);
+    expect(created.nextRunAt).toBeNull();
+  });
+
+  it('folds an absent bound and an explicit null together', async () => {
+    // On a create there is nothing stored for an absent bound to
+    // leave alone, so the two spellings mean one thing and the
+    // service folds them. One bound is submitted null and the
+    // other omitted in the same call, so the two paths are read
+    // against each other rather than one at a time.
+    const { store } = await plantTopics();
+    const created = await createTopic(store, RADAR, {
+      name: FRESH_NAME,
+      intervalSeconds: HOURLY,
+      minIntervalSeconds: null,
+    });
+
+    expect(created.minIntervalSeconds).toBeNull();
+    expect(created.maxIntervalSeconds).toBeNull();
+  });
+
+  it('lands the bounds a body did supply', async () => {
+    // The control for the case above: a service folding every
+    // bound to null passes it and fails this. Both members, since
+    // a floor written from the ceiling's value is a plausible row
+    // no single-bound read would report.
+    const { store } = await plantTopics();
+    const created = await createTopic(store, RADAR, {
+      name: FRESH_NAME,
+      intervalSeconds: HOURLY,
+      minIntervalSeconds: 600,
+      maxIntervalSeconds: 86400,
+    });
+
+    expect(created.minIntervalSeconds).toBe(600);
+    expect(created.maxIntervalSeconds).toBe(86400);
+  });
+
+  it('stores the row it answered', async () => {
+    // Read back through the OTHER operation, so the claim is about
+    // what is stored rather than about what one call happened to
+    // answer: a create returning a row it never wrote passes every
+    // case above and fails this.
+    const planted = await plantTopics();
+    const created = await createTopic(planted.store, RADAR, {
+      name: FRESH_NAME,
+      searchTerms: FRESH_TERMS,
+      intervalSeconds: HOURLY,
+    });
+    const page = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(topicNamed(page.rows, FRESH_NAME)).toStrictEqual(created);
+  });
+
+  it('writes into the domain the path addressed', async () => {
+    // The `:slug` reached the WRITE rather than only a lookup: a
+    // create stamping another domain answers a perfectly plausible
+    // row and files it under configuration nobody asked about. The
+    // name is one RADAR already researches, so a write landing
+    // there would be REFUSED rather than merely misfiled — the
+    // sharper failure, and the reason this name was chosen over a
+    // free one.
+    const planted = await plantTopics();
+
+    await createTopic(planted.store, TRANSIT, {
+      name: planted.inference.name,
+      intervalSeconds: HOURLY,
+    });
+
+    const here = await listTopics(planted.store, TRANSIT, WIDE_WINDOW);
+    const there = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(here.rows.map((row) => row.name))
+      .toEqual(['edge inference', 'transformers']);
+    expect(here.total).toBe(2);
+    expect(there.rows)
+      .toStrictEqual([planted.inference, planted.transformers]);
+  });
+
+  it('counts the new row in the total a page reports', async () => {
+    // `total` is a second question rather than the length of the
+    // rows in hand, so a create the count never saw would leave a
+    // page claiming to be the whole of a domain it is not. Read
+    // through a window of one, so the two numbers cannot agree by
+    // accident.
+    const planted = await plantTopics();
+
+    await createTopic(planted.store, RADAR, {
+      name: FRESH_NAME,
+      intervalSeconds: HOURLY,
+    });
+
+    const page = await listTopics(planted.store, RADAR, {
+      limit: 1,
+      offset: 0,
+    });
+
+    expect(page.rows).toHaveLength(1);
+    expect(page.total).toBe(3);
+  });
+
+  it('leaves the topics the domain already researched', async () => {
+    // A write lands one row. The two the fixture planted are still
+    // there and still say what they said, which no assertion over
+    // the created row could report.
+    const planted = await plantTopics();
+
+    await createTopic(planted.store, RADAR, {
+      name: FRESH_NAME,
+      intervalSeconds: HOURLY,
+    });
+
+    const page = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(topicNamed(page.rows, 'transformers'))
+      .toStrictEqual(planted.transformers);
+    expect(topicNamed(page.rows, 'edge inference'))
+      .toStrictEqual(planted.inference);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a patch retunes
+// ---------------------------------------------------------------------------
+
+/**
+ * The list a term patch writes in place of the stored one.
+ *
+ * Shares NO member with the two terms `transformers` was planted
+ * with, and is SHORTER than them, so the three readings a merge
+ * could be come apart: a union answers three terms, an append
+ * answers three in the other order, and a replace answers this
+ * one. A replacement sharing a member would leave the first two
+ * satisfiable together.
+ */
+const REPLACED_TERMS = ['sparse attention'];
+
+/** A floor above the one `edge inference` was planted with. */
+const RAISED_FLOOR = 900;
+
+/** A ceiling below the one it was planted with. */
+const LOWERED_CEILING = 43200;
+
+describe('what a patch retunes', () => {
+  it('replaces the term list whole rather than merging into it', async () => {
+    // Compared against the row as it was rather than field by
+    // field: a patch reaching a second member answers a plausible
+    // topic and quietly changes what a run issues.
+    const planted = await plantTopics();
+    const patched = await patchTopic(planted.store, planted.transformers.id, {
+      searchTerms: REPLACED_TERMS,
+    });
+
+    expect(patched).toStrictEqual({
+      ...planted.transformers,
+      searchTerms: REPLACED_TERMS,
+    });
+
+    // The stored list was longer than the one that replaced it and
+    // shared nothing with it, so a merge answers three here and an
+    // append answers three the other way round.
+    expect(planted.transformers.searchTerms).toHaveLength(2);
+    expect(patched.searchTerms).toHaveLength(1);
+  });
+
+  it('stores the term list it replaced', async () => {
+    // Read back through the list, so the claim is about the stored
+    // row rather than about what the patch answered. A module
+    // answering a row it never wrote passes the case above.
+    const planted = await plantTopics();
+
+    await patchTopic(planted.store, planted.transformers.id, {
+      searchTerms: REPLACED_TERMS,
+    });
+
+    const page = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(topicNamed(page.rows, 'transformers')).toStrictEqual({
+      ...planted.transformers,
+      searchTerms: REPLACED_TERMS,
+    });
+  });
+
+  it('drops a term by being sent the list without it', async () => {
+    // The SUBSET reading, which the disjoint replacement above
+    // cannot make: a caller sends the list it wants to exist, so
+    // removing one term is sending the other. A store merging the
+    // two answers both terms here and is indistinguishable from a
+    // correct replace whenever the submitted list is a subset of
+    // the stored one — which is the shape a caller who edited a
+    // list actually sends.
+    const planted = await plantTopics();
+    const kept = planted.transformers.searchTerms.slice(0, 1);
+    const patched = await patchTopic(planted.store, planted.transformers.id, {
+      searchTerms: kept,
+    });
+
+    expect(patched.searchTerms).toEqual(kept);
+    expect(patched.searchTerms).toHaveLength(1);
+  });
+
+  it('clears every term when the list it is sent is empty', async () => {
+    // Read back through the LIST, which the empty-list control in
+    // the body table above cannot: that one reads the row the
+    // patch answered. An empty list is a complete value and the
+    // only way to express having no terms at all, so a store
+    // treating it as an absence leaves the stored terms standing
+    // and answers a row that looks right.
+    const planted = await plantTopics();
+
+    await patchTopic(planted.store, planted.transformers.id, {
+      searchTerms: [],
+    });
+
+    const page = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(topicNamed(page.rows, 'transformers').searchTerms).toEqual([]);
+  });
+
+  it('moves both interval bounds and leaves the cadence', async () => {
+    // `edge inference` was planted with both bounds set, so this
+    // is the write that moves them rather than the one that adds
+    // them. `intervalSeconds` is in the compare by being absent
+    // from the override: a patch writing the cadence from a bound
+    // is a plausible row every bound-only read would pass.
+    const planted = await plantTopics();
+    const patched = await patchTopic(planted.store, planted.inference.id, {
+      minIntervalSeconds: RAISED_FLOOR,
+      maxIntervalSeconds: LOWERED_CEILING,
+    });
+
+    expect(patched).toStrictEqual({
+      ...planted.inference,
+      minIntervalSeconds: RAISED_FLOOR,
+      maxIntervalSeconds: LOWERED_CEILING,
+    });
+    expect(planted.inference.minIntervalSeconds).not.toBe(RAISED_FLOOR);
+    expect(planted.inference.maxIntervalSeconds).not.toBe(LOWERED_CEILING);
+  });
+
+  it('sets a bound on a topic that carried none', async () => {
+    // The other transition, and the one the case above cannot
+    // make: `transformers` was created with neither bound, so a
+    // store treating a stored null as nothing to write passes the
+    // move and fails this.
+    const planted = await plantTopics();
+    const patched = await patchTopic(planted.store, planted.transformers.id, {
+      minIntervalSeconds: RAISED_FLOOR,
+      maxIntervalSeconds: LOWERED_CEILING,
+    });
+
+    expect(planted.transformers.minIntervalSeconds).toBeNull();
+    expect(planted.transformers.maxIntervalSeconds).toBeNull();
+    expect(patched).toStrictEqual({
+      ...planted.transformers,
+      minIntervalSeconds: RAISED_FLOOR,
+      maxIntervalSeconds: LOWERED_CEILING,
+    });
+  });
+
+  it('moves one bound and leaves the other alone', async () => {
+    // The two are separate members rather than a pair. A patch
+    // writing both from whichever one was submitted answers a
+    // plausible row, passes both cases above — they submit both —
+    // and is reported by nothing else in this file.
+    const planted = await plantTopics();
+    const patched = await patchTopic(planted.store, planted.inference.id, {
+      minIntervalSeconds: RAISED_FLOOR,
+    });
+
+    expect(patched).toStrictEqual({
+      ...planted.inference,
+      minIntervalSeconds: RAISED_FLOOR,
+    });
+    expect(patched.maxIntervalSeconds)
+      .toBe(planted.inference.maxIntervalSeconds);
+  });
+
+  it('stores the bounds it moved', async () => {
+    // Read back through the list. A patch answering bounds it
+    // never wrote passes every case above.
+    const planted = await plantTopics();
+
+    await patchTopic(planted.store, planted.inference.id, {
+      minIntervalSeconds: RAISED_FLOOR,
+      maxIntervalSeconds: LOWERED_CEILING,
+    });
+
+    const page = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(topicNamed(page.rows, 'edge inference')).toStrictEqual({
+      ...planted.inference,
+      minIntervalSeconds: RAISED_FLOOR,
+      maxIntervalSeconds: LOWERED_CEILING,
+    });
+  });
+
+  it('retires a topic without deleting it', async () => {
+    // `enabled` is the column the schema provides for taking a
+    // topic out of scheduling, and this is the whole of what a
+    // retirement writes: the subject, the terms and the cadence
+    // stay, which is what makes it recoverable and what makes it
+    // different from the delete below.
+    const planted = await plantTopics();
+    const patched = await patchTopic(planted.store, planted.inference.id, {
+      enabled: false,
+    });
+
+    expect(planted.inference.enabled).toBe(true);
+    expect(patched).toStrictEqual({ ...planted.inference, enabled: false });
+  });
+
+  it('keeps a retired topic on the page it was listed on', async () => {
+    // `enabled` is not a filter on this read. A list quietly
+    // hiding disabled rows would leave an operator with no way to
+    // find the topic they had just switched off, and every count
+    // in the refusal half of this file would still add up.
+    const planted = await plantTopics();
+
+    await patchTopic(planted.store, planted.inference.id, { enabled: false });
+
+    const page = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(page.rows.map((row) => row.name))
+      .toEqual(['edge inference', 'transformers']);
+    expect(page.total).toBe(2);
+    expect(topicNamed(page.rows, 'edge inference').enabled).toBe(false);
+  });
+
+  it('brings a retired topic back', async () => {
+    // The member is not one-way, and this is what says so. A
+    // service folding `enabled` through `||` rather than `??`
+    // writes true for a submitted false and fails the retirement
+    // above; one that had stopped writing the column at all passes
+    // that case only while the stored value already differed, and
+    // fails here.
+    const planted = await plantTopics();
+
+    await patchTopic(planted.store, planted.inference.id, { enabled: false });
+
+    const revived = await patchTopic(planted.store, planted.inference.id, {
+      enabled: true,
+    });
+
+    expect(revived).toStrictEqual(planted.inference);
+  });
+
+  it('retunes the topic it named and no other', async () => {
+    // The whole of both domains read back: three topics, one term
+    // list moved. A patch reaching more rows than the id it was
+    // given answers the same row and is invisible to every case
+    // above. The second domain is in the sweep because its topic
+    // carries a name RADAR carries too, so a patch keyed on the
+    // name rather than on the id would reach across the two.
+    const planted = await plantTopics();
+
+    await patchTopic(planted.store, planted.transformers.id, {
+      searchTerms: REPLACED_TERMS,
+    });
+
+    const here = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+    const there = await listTopics(planted.store, TRANSIT, WIDE_WINDOW);
+
+    expect(topicNamed(here.rows, 'edge inference'))
+      .toStrictEqual(planted.inference);
+    expect(there.rows).toStrictEqual([planted.foreign]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a delete takes
+// ---------------------------------------------------------------------------
+
+describe('what a delete takes', () => {
+  it('answers nothing and leaves the sibling standing', async () => {
+    // Nothing in schema v2 points at `topics`, so this delete has
+    // neither a guard nor a confirmation to give it: the whole of
+    // what it answers is nothing, and the whole of what it did is
+    // read back off the page. The sibling is compared as a WHOLE
+    // record — a delete that took the right row and edited the one
+    // beside it answers the same page of names.
+    const planted = await plantTopics();
+
+    await expect(deleteTopic(planted.store, planted.transformers.id))
+      .resolves.toBeUndefined();
+
+    const page = await listTopics(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(page.rows).toStrictEqual([planted.inference]);
+    expect(page.total).toBe(1);
+  });
+
+  it('leaves the second domain researching that name', async () => {
+    // A topic in each domain is named `transformers`, so a delete
+    // keyed on the name rather than on the id takes both and
+    // passes any count that only looked at one of them.
+    const planted = await plantTopics();
+
+    await deleteTopic(planted.store, planted.transformers.id);
+
+    const there = await listTopics(planted.store, TRANSIT, WIDE_WINDOW);
+
+    expect(there.rows).toStrictEqual([planted.foreign]);
+    expect(there.total).toBe(1);
+  });
+
+  it('answers 404 to a second delete of the same id', async () => {
+    // The row is gone rather than merely unlisted, which no read
+    // above can say: a delete that unlinked the row without
+    // removing it answers this second call as a success.
+    const planted = await plantTopics();
+
+    await deleteTopic(planted.store, planted.transformers.id);
+
+    const refusal = await refusalFrom(
+      () => deleteTopic(planted.store, planted.transformers.id),
+    );
+
+    expect(refusal).toBeInstanceOf(NotFoundError);
+    expect(refusal.statusCode).toBe(404);
+  });
+
+  it('frees the name the delete took out of the domain', async () => {
+    // The natural key went with the row rather than outliving it,
+    // which neither read above can say: an index keeping the entry
+    // answers the same page and refuses this create as a
+    // duplicate.
+    const planted = await plantTopics();
+
+    await deleteTopic(planted.store, planted.transformers.id);
+
+    const created = await createTopic(planted.store, RADAR, {
+      name: planted.transformers.name,
+      intervalSeconds: HOURLY,
+    });
+
+    expect(created.name).toBe(planted.transformers.name);
+
+    // A new row rather than the old one back: a sequence does not
+    // roll back over a row that went, and the terms the deleted
+    // topic issued did not come with the name.
+    expect(created.id).not.toBe(planted.transformers.id);
+    expect(created.searchTerms).toEqual([]);
   });
 });
