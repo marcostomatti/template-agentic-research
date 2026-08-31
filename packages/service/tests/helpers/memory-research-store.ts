@@ -1,20 +1,22 @@
 /**
  * @packageDocumentation
- * The in-memory dataset every wave-1 store port is driven through in
- * the isolated suite. All four halves are here — the domains half,
- * the taxonomy half with categories and terms together, the personas
- * beside them, and the operator settings the deployment as a whole is
- * configured by.
+ * The in-memory dataset every research store port is driven through
+ * in the isolated suite. All five halves are here — the domains
+ * half, the taxonomy half with categories and terms together, the
+ * personas beside them, the topics the dispatcher comes for, and the
+ * operator settings the deployment as a whole is configured by.
  *
- * ONE DATASET RATHER THAN FOUR FAKES, which is why this file is not
+ * ONE DATASET RATHER THAN FIVE FAKES, which is why this file is not
  * named for any one of the ports it satisfies. `src/domains/store.ts`
  * records that the taxonomy, personas and settings services all
  * resolve a `:slug` through {@link DomainStore.findDomainBySlug}
- * before doing anything of their own, and the taxonomy and persona
- * tables hang off `domains.id` with `ON DELETE CASCADE`. A domain
- * deleted through one port has to be gone from the others, and only
- * shared state makes that true: four independent fakes would agree
- * with each other right up until a case deleted something.
+ * before doing anything of their own, and `src/topics/store.ts`
+ * records the same of the topics service. The taxonomy, persona and
+ * topic tables all hang off `domains.id` with `ON DELETE CASCADE`,
+ * so a domain deleted through one port has to be gone from the
+ * others, and only shared state makes that true: five independent
+ * fakes would agree with each other right up until a case deleted
+ * something.
  *
  * `operator_settings` IS THE ONE TABLE THAT HANGS OFF NOTHING, and
  * it belongs in the shared dataset for the other direction of that
@@ -150,6 +152,44 @@
  * `NO ACTION` a cascade has to be careful of is on
  * `categories.parent_id` and reaches no other table.
  *
+ * THE TOPICS HALF HAS ONE KEY AND ONE FOREIGN KEY, AND NO SINGLE
+ * CALL CAN REACH BOTH EITHER. `topics_domain_id_name_unique` is
+ * `(domain_id, name)` and `topics_domain_id_domains_id_fk` is that
+ * same `domain_id`, so the persona half's sentence above carries
+ * here word for word: a write naming a domain that does not exist
+ * can duplicate nothing, because nothing is stored under a domain
+ * that is not there. `topics` carries no CHECK and no trigger — the
+ * interval bounds are clamped by a writer and constrain nothing at
+ * the database, which `schedulableColumns()` says in as many words
+ * — so this half imitates two mechanisms and no order of its own,
+ * and the order they are written in below is copied from the half
+ * where it WAS measured rather than measured here.
+ *
+ * THE KEY REFUSES AN UPDATE AS READILY AS AN INSERT, which is the
+ * personas half's shape rather than the terms half's. `name` is
+ * patchable per `TopicPatch`, so both writes reach it, and what an
+ * update checks is the RESULTING name within the STORED domain:
+ * `domainId` is not patchable, so no update here reaches the
+ * foreign key at all, and a row is not in conflict with itself.
+ *
+ * A TOPIC IS INSERTED UNSCHEDULED, AND ONE METHOD MOVES IT.
+ * `InsertTopicInput` carries no `nextRunAt`, so every insert below
+ * lands a null due time whatever it is handed, and
+ * `updateTopicSchedule` is the only method here that writes the
+ * column — the containment `src/topics/store.ts` states, held by
+ * the shape of the types rather than by a check this file could
+ * forget. `updateTopic` cannot reach the column either, for the
+ * same reason: `TopicPatch` declares no member that could carry a
+ * due time.
+ *
+ * AND A DOMAIN TAKES ITS TOPICS WITH IT. `topics.domain_id` is
+ * `ON DELETE CASCADE`, as every foreign key onto `domains.id` is,
+ * so the domain delete below drops them where it drops the domain's
+ * personas and both levels of its taxonomy. Nothing in schema v2
+ * points at `topics`, so — like a persona and unlike a category — a
+ * topic delete has neither a guard nor a cascade and cannot be
+ * refused at all.
+ *
  * THE SETTINGS HALF REFUSES NOTHING, AND THAT IS A MEASUREMENT
  * RATHER THAN A SIMPLIFICATION. `operator_settings` carries two
  * mechanisms and neither is reachable through the port: a second
@@ -183,7 +223,7 @@
  * `operator_settings.id` is `integer` with no default — measured
  * off `information_schema.columns` — so nothing hands out a value
  * and a refused write could not leave a gap even if one were
- * reachable. The id-burn fidelity the other three halves owe has no
+ * reachable. The id-burn fidelity the other four halves owe has no
  * subject here.
  *
  * EVERY `Date` CROSSING THE BOUNDARY IS COPIED, in both directions.
@@ -194,6 +234,12 @@
  * built fresh out of the driver. The clock reading is copied too:
  * `() => FIXED` is the obvious way to write a fixed clock, and
  * without the copy every row it stamped would share that one `Date`.
+ * `topics.next_run_at` is the first date here that is NOT a stamp:
+ * it arrives as an ARGUMENT to `updateTopicSchedule` rather than off
+ * the clock, and is null on a topic nobody has scheduled, so it is
+ * copied in both directions and a null stays a null. A store holding
+ * the caller's instance would let the call that scheduled a topic go
+ * on moving the due time afterwards.
  *
  * SO IS EVERY `settings` PAYLOAD, for the same reason and by the
  * route a `jsonb` column takes. Drizzle serialises the payload on
@@ -206,7 +252,10 @@
  * the same kind of column and is copied by a helper of its own, for
  * the reason `copyCategory`, `copyTerm` and `copyPersona` are three
  * functions rather than one: what a copy promises is a fact about
- * the shape it copies.
+ * the shape it copies. `topics.search_terms` is a `jsonb` column
+ * too and is copied one level shallower: a list of strings has
+ * nothing below it, so a fresh array is the whole of it where a
+ * `DomainSettings` payload needs a round trip.
  *
  * IDS COME FROM 1 AND ARE NOT GAPLESS, which is the half a reader
  * would not predict. Measured against the live Postgres on a
@@ -228,7 +277,11 @@
  * there is the widest of them: two refused inserts between two
  * accepted ones left a gap of two with the FOREIGN KEY refusal
  * included, so its counter advances ahead of every check rather
- * than ahead of the key check alone.
+ * than ahead of the key check alone. `topics` carries a fifth
+ * counter and burns it the same way, on that reasoning and on no
+ * measurement of its own: the two tables carry the same pair of
+ * mechanisms over the same column, so the gap of two measured on
+ * `personas` is what this one is expected to reproduce.
  */
 import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type { OperatorSettings } from '../../src/db/schema/settings.js';
@@ -258,39 +311,65 @@ import type {
   TermRecord,
   TermValues,
 } from '../../src/taxonomy/store.js';
+import type {
+  InsertTopicInput,
+  TopicPatch,
+  TopicRecord,
+  TopicStore,
+} from '../../src/topics/store.js';
 
 import { StoreRefusal } from '../../src/db/store-errors.js';
 
 /**
- * All four wave-1 ports over one dataset, plus the one seam a case
- * needs that no port declares.
+ * All five research ports over one dataset, plus the one seam a
+ * case needs that no port declares.
  *
  * EVERY ONE OF THEM WHOLE rather than a `Pick` of it. The category
  * half stood behind a narrowed alias while the term methods were
  * unwritten, which was the honest statement of what existed rather
  * than a gap papered over with stubs; all twelve taxonomy methods,
- * all six persona ones and both settings ones are here now, so a
- * caller wanting any of the four ports entire can be handed this
- * store.
+ * all six persona ones, all seven topic ones and both settings ones
+ * are here now, so a caller wanting any of the five ports entire
+ * can be handed this store.
+ *
+ * `TopicStore` is the first member from outside wave 1, and it joins
+ * this file rather than standing on its own for the reason the
+ * paragraph above gives: `topics.domain_id` cascades, so a domain
+ * deleted through `DomainStore` has to take its topics with it, and
+ * only shared state makes that true.
  *
  * Nothing in `src/` is handed a {@link MemoryResearchStore} — a
  * service takes the port — so the seam below cannot become a way for
  * the code under test to route around it.
  */
-export interface MemoryResearchStore
-  extends DomainStore, TaxonomyStore, PersonaStore, SettingsStore {
+export interface MemoryResearchStore extends
+  DomainStore, TaxonomyStore, PersonaStore, SettingsStore, TopicStore {
   /**
    * Plants what a domain has ACCUMULATED, for the delete guard to
    * read back through {@link DomainStore.countDomainDependents}.
    *
-   * NOTHING IN WAVE 1 WRITES `topics`, `sources` OR `findings`. No
-   * port declares an insert for any of the three, and the pipeline
-   * that fills them arrives in a later phase — so the state the
-   * delete guard exists for is unreachable through the port itself,
-   * and without this seam every count answers zero and the guard is
-   * exercisable only against a real database. That would put the
-   * one rule the spec argues hardest for in the half of the suite
-   * that needs a container up.
+   * NOTHING HERE WRITES `sources` OR `findings`. No port declares an
+   * insert for either, and the pipeline that fills them arrives in a
+   * later phase — so the state the delete guard exists for is
+   * unreachable through the ports themselves, and without this seam
+   * every count answers zero and the guard is exercisable only
+   * against a real database. That would put the one rule the spec
+   * argues hardest for in the half of the suite that needs a
+   * container up.
+   *
+   * `topics` IS NOW WRITABLE AND THE COUNT IS STILL PLANTED, which
+   * is the one place this file knowingly answers something a
+   * deployment would not. `TopicStore.insertTopic` below stores real
+   * rows, and `src/domains/db-store.ts` counts them, so a live
+   * domain holding a topic is refused a delete it is offered here.
+   * Reconciling the two is not a matter of counting instead:
+   * `src/domains/service.test.ts` and `src/domains/routes.test.ts`
+   * plant counts for tables no port can write, and a rule mixing a
+   * planted number with a counted one would answer neither. So the
+   * plant stays authoritative for all three members, a case wanting
+   * the guard to see a topic plants it whether or not it also
+   * inserted one, and `tests/live/api-wave2.live.test.ts` is where
+   * the counted answer is discharged.
    *
    * @param domainId - The domain the rows hang off. Need not name a
    *   stored domain: the counts are plantable ahead of the row, and
@@ -367,6 +446,23 @@ const PERSONA_KEY_UNIQUE = 'personas_domain_id_role_unique';
  * there is no rows-hold-the-delete refusal to share the name with.
  */
 const PERSONA_DOMAIN_FK = 'personas_domain_id_domains_id_fk';
+
+/**
+ * The natural key on `topics`, spelled as
+ * `src/db/schema/scheduling.ts` spells it. The one key both topic
+ * writes name: `name` is patchable, so an UPDATE reaches it as
+ * readily as an INSERT.
+ */
+const TOPIC_KEY_UNIQUE = 'topics_domain_id_name_unique';
+
+/**
+ * The foreign key from `topics.domain_id`.
+ *
+ * Like {@link PERSONA_DOMAIN_FK} and unlike {@link CATEGORY_PARENT_FK}
+ * this name stands for ONE rule: the column cascades on delete, so
+ * there is no rows-hold-the-delete refusal to share the name with.
+ */
+const TOPIC_DOMAIN_FK = 'topics_domain_id_domains_id_fk';
 
 /** Three zeros: what a domain nothing points at has accumulated. */
 const NO_DEPENDENTS: DomainDependentCounts = {
@@ -490,6 +586,30 @@ function copyPersona(row: PersonaRecord): PersonaRecord {
 }
 
 /**
+ * A topic record whose mutable members belong to nobody else.
+ *
+ * Neither {@link copyPersona}'s shallow copy nor {@link copyDomain}'s
+ * pair of stamps: `TopicRecord` carries a list one level down and a
+ * `Date` that is null on a topic nobody has scheduled, so both are
+ * rebuilt here. `searchTerms` is `readonly` on the array as well as
+ * on the member, and a caller handed the stored one could push a
+ * term straight through that promise; `nextRunAt` is the mutable
+ * instant every other date in this file is copied for.
+ *
+ * @param row - The stored row.
+ * @returns A copy safe to hand across the port.
+ */
+function copyTopic(row: TopicRecord): TopicRecord {
+  return {
+    ...row,
+    searchTerms: [...row.searchTerms],
+    nextRunAt: row.nextRunAt === null
+      ? null
+      : copyInstant(row.nextRunAt),
+  };
+}
+
+/**
  * A domain record whose mutable members belong to nobody else.
  *
  * @param row - The stored row.
@@ -522,10 +642,12 @@ export function createMemoryResearchStore(
   const categories = new Map<number, CategoryRecord>();
   const terms = new Map<number, TermRecord>();
   const personas = new Map<number, PersonaRecord>();
+  const topics = new Map<number, TopicRecord>();
   let nextDomainId = 1;
   let nextCategoryId = 1;
   let nextTermId = 1;
   let nextPersonaId = 1;
+  let nextTopicId = 1;
 
   // The whole of the settings half's state. Not a Map, because
   // there is no key: `src/settings/store.ts` states a second
@@ -929,6 +1051,103 @@ export function createMemoryResearchStore(
     }
   }
 
+  /**
+   * One domain's topics, unordered.
+   *
+   * A fresh array every call, which is what lets
+   * {@link orderedTopics} sort it in place without reaching into
+   * stored state.
+   *
+   * @param domainId - The domain to read.
+   * @returns Its topics. Empty for a domain holding none AND for an
+   *   id no domain carries — nothing points at a row that is not
+   *   there, which is the answer `countTopics` is read for.
+   */
+  function topicsOf(domainId: number): TopicRecord[] {
+    return [...topics.values()].filter((row) => row.domainId === domainId);
+  }
+
+  /**
+   * One domain's topics, ordered as `TopicStore.listTopics`
+   * promises.
+   *
+   * By `name` ascending, compared by code unit, and the caveat
+   * {@link orderedTerms} carries applies here word for word: a topic
+   * name is free text holding case, spaces, digits and punctuation,
+   * and a database orders it under its own collation, so the
+   * agreement measured for slugs does not carry here on its own
+   * reasoning. It was measured anyway — this container's
+   * `en_US.utf8` ordered a mixed-case set of names carrying spaces,
+   * hyphens and digits exactly as `<` did, both sides — and that is
+   * a fact about a deployment's locale rather than about this port.
+   *
+   * @param domainId - The domain to read.
+   * @returns Its topics, name ascending. The order is total because
+   *   the name is unique within the domain, so there is no tie-break
+   *   to forget.
+   */
+  function orderedTopics(domainId: number): TopicRecord[] {
+    return topicsOf(domainId).sort((left, right) => {
+      if (left.name === right.name) {
+        return 0;
+      }
+
+      return left.name < right.name
+        ? -1
+        : 1;
+    });
+  }
+
+  /**
+   * @param domainId - The domain to look within.
+   * @param name - The name to look for.
+   * @returns The row carrying that pair, or undefined. At most one
+   *   can, which is what `topics_domain_id_name_unique` guarantees
+   *   and what the two writes below enforce.
+   */
+  function topicByName(
+    domainId: number,
+    name: string,
+  ): TopicRecord | undefined {
+    return topicsOf(domainId).find((row) => row.name === name);
+  }
+
+  /**
+   * Refuses a `domainId` that names no stored domain.
+   *
+   * @param domainId - The domain a topic insert is asking for.
+   * @throws A `foreign-key-violation` {@link StoreRefusal} naming
+   *   `topics_domain_id_domains_id_fk`. Reached from the insert
+   *   alone: `domainId` is not on `TopicPatch`, so no update touches
+   *   this key at all.
+   */
+  function guardTopicDomain(domainId: number): void {
+    if (!domains.has(domainId)) {
+      throw new StoreRefusal({
+        reason: 'foreign-key-violation',
+        constraint: TOPIC_DOMAIN_FK,
+      });
+    }
+  }
+
+  /**
+   * Removes every topic of one domain, as `ON DELETE CASCADE` does.
+   *
+   * Reached from the domain delete alone, and unable to refuse
+   * anything — which is what makes sharing it safe in the way
+   * reusing a guarded delete would not be. There is no guarded topic
+   * delete to reuse in any case: nothing points at `topics`.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropTopicsOf(domainId: number): void {
+    for (const [topicId, row] of topics) {
+      if (row.domainId === domainId) {
+        topics.delete(topicId);
+      }
+    }
+  }
+
   return {
     /** One window of the list, slug ascending. */
     async listDomains(window: StoreWindow): Promise<readonly DomainRecord[]> {
@@ -1068,14 +1287,23 @@ export function createMemoryResearchStore(
      * which is safe precisely where reusing the guarded category
      * delete is not, since removing terms refuses nothing.
      *
-     * IT TAKES THE DOMAIN'S PERSONAS IN THE SAME PLACE, for the same
-     * reason and with nothing to be careful of: `personas.domain_id`
-     * is `ON DELETE CASCADE` and nothing points at `personas`, so
-     * there is no guard anywhere below this one to run into.
+     * IT TAKES THE DOMAIN'S PERSONAS AND ITS TOPICS IN THE SAME
+     * PLACE, for the same reason and with nothing to be careful of:
+     * `personas.domain_id` and `topics.domain_id` are both `ON
+     * DELETE CASCADE` and nothing in schema v2 points at either
+     * table, so there is no guard anywhere below this one to run
+     * into.
+     *
+     * IT DOES NOT MOVE THE PLANTED DEPENDENT COUNTS OF ANY OTHER
+     * DOMAIN, and dropping the topics does not move them at all:
+     * {@link MemoryResearchStore.setDomainDependents} records what
+     * the guard reads and this half of the file writes real rows,
+     * which is the divergence that seam's own TSDoc states.
      */
     async deleteDomain(id: number): Promise<boolean> {
       dependents.delete(id);
       dropPersonasOf(id);
+      dropTopicsOf(id);
 
       for (const [categoryId, row] of categories) {
         if (row.domainId === id) {
@@ -1642,6 +1870,225 @@ export function createMemoryResearchStore(
      */
     async deletePersona(id: number): Promise<boolean> {
       return personas.delete(id);
+    },
+
+    /**
+     * One window of a domain's topics, name ascending.
+     *
+     * A domain holding none and an id no domain carries are one
+     * answer here — the empty list — because whether the domain
+     * exists was settled by `DomainStore.findDomainBySlug` before
+     * this was called.
+     */
+    async listTopics(
+      domainId: number,
+      window: StoreWindow,
+    ): Promise<readonly TopicRecord[]> {
+      return orderedTopics(domainId)
+        .slice(window.offset, window.offset + window.limit)
+        .map(copyTopic);
+    },
+
+    /**
+     * How many topics one domain holds, ignoring any window.
+     *
+     * An id no domain carries answers zero rather than failing,
+     * which is correct rather than a special case: nothing points at
+     * a row that is not there.
+     */
+    async countTopics(domainId: number): Promise<number> {
+      return topicsOf(domainId).length;
+    },
+
+    /** One topic by its id, or null. */
+    async findTopicById(id: number): Promise<TopicRecord | null> {
+      const row = topics.get(id);
+
+      return row === undefined
+        ? null
+        : copyTopic(row);
+    },
+
+    /**
+     * Inserts one topic, UNSCHEDULED.
+     *
+     * `nextRunAt` is null on the row this answers whatever the
+     * caller wanted, because `InsertTopicInput` declares no member
+     * that could set it: the containment is the type's rather than a
+     * check here. `searchTerms` is copied on the way in, so a caller
+     * that goes on editing the list it submitted does not edit the
+     * stored row.
+     *
+     * The id comes off the counter first, so every refusal below
+     * burns one exactly as the sequence does. No measurement of this
+     * table's own: `topics` carries the same pair of mechanisms over
+     * the same column `personas` does, where two refused inserts
+     * between two accepted ones left a gap of two against the live
+     * server.
+     *
+     * The key is checked ahead of the foreign key, matching every
+     * insert above. NOTHING CAN OBSERVE THAT ORDER HERE, and saying
+     * so is the honest half: the unique key opens on the very column
+     * the foreign key constrains, so a write naming a domain that
+     * does not exist can duplicate nothing.
+     */
+    async insertTopic(input: InsertTopicInput): Promise<TopicRecord> {
+      const id = nextTopicId;
+
+      nextTopicId += 1;
+
+      if (topicByName(input.domainId, input.name) !== undefined) {
+        throw new StoreRefusal({
+          reason: 'unique-violation',
+          constraint: TOPIC_KEY_UNIQUE,
+        });
+      }
+
+      guardTopicDomain(input.domainId);
+
+      const row: TopicRecord = {
+        id,
+        domainId: input.domainId,
+        name: input.name,
+        searchTerms: [...input.searchTerms],
+        intervalSeconds: input.intervalSeconds,
+        nextRunAt: null,
+        enabled: input.enabled,
+        minIntervalSeconds: input.minIntervalSeconds,
+        maxIntervalSeconds: input.maxIntervalSeconds,
+      };
+
+      topics.set(row.id, row);
+
+      return copyTopic(row);
+    },
+
+    /**
+     * Rewrites the supplied members of one topic.
+     *
+     * A PATCH NAMING NO MEMBER WRITES NOTHING and answers the stored
+     * row, for the reason `updatePersona` above gives: `topics`
+     * carries no `updated_at` either, so an empty patch has nothing
+     * to set and drizzle throws on an empty update list.
+     *
+     * `name` IS PATCHABLE AND `domainId` IS NOT, so what is checked
+     * is the resulting name within the STORED domain, and no update
+     * reaches the foreign key at all. A row is not in conflict with
+     * itself, so the row found under the resulting pair is a refusal
+     * only when it is a different row.
+     *
+     * THE TWO BOUNDS DISTINGUISH THREE REQUESTS and the two NOT NULL
+     * members distinguish two, which is why they are written
+     * differently below. Absent leaves a bound alone and an explicit
+     * `null` clears it, so `??` would collapse the two and make
+     * removing a floor unexpressible — the rule
+     * `CategoryPatch.parentId` carries in `src/taxonomy/store.ts`.
+     * `intervalSeconds` and `enabled` are not nullable, so `??` says
+     * exactly the right thing for them, `false` included.
+     *
+     * `searchTerms` REPLACES THE STORED LIST WHOLE and is copied on
+     * the way in, never merged into what is there and never appended
+     * to: a caller sends the list it wants to exist, which is the
+     * only shape under which removing a term is expressible at all.
+     */
+    async updateTopic(
+      id: number,
+      patch: TopicPatch,
+    ): Promise<TopicRecord | null> {
+      const existing = topics.get(id);
+
+      if (existing === undefined) {
+        return null;
+      }
+
+      if (
+        patch.name === undefined
+        && patch.searchTerms === undefined
+        && patch.intervalSeconds === undefined
+        && patch.enabled === undefined
+        && patch.minIntervalSeconds === undefined
+        && patch.maxIntervalSeconds === undefined
+      ) {
+        return copyTopic(existing);
+      }
+
+      const name = patch.name ?? existing.name;
+      const holder = topicByName(existing.domainId, name);
+
+      if (holder !== undefined && holder.id !== id) {
+        throw new StoreRefusal({
+          reason: 'unique-violation',
+          constraint: TOPIC_KEY_UNIQUE,
+        });
+      }
+
+      const updated: TopicRecord = {
+        ...existing,
+        name,
+        searchTerms: patch.searchTerms === undefined
+          ? existing.searchTerms
+          : [...patch.searchTerms],
+        intervalSeconds: patch.intervalSeconds ?? existing.intervalSeconds,
+        enabled: patch.enabled ?? existing.enabled,
+        minIntervalSeconds: patch.minIntervalSeconds === undefined
+          ? existing.minIntervalSeconds
+          : patch.minIntervalSeconds,
+        maxIntervalSeconds: patch.maxIntervalSeconds === undefined
+          ? existing.maxIntervalSeconds
+          : patch.maxIntervalSeconds,
+      };
+
+      topics.set(id, updated);
+
+      return copyTopic(updated);
+    },
+
+    /**
+     * Writes one topic's due time, AND NOTHING ELSE.
+     *
+     * The instant is COPIED on the way in, which is what the two
+     * schedule verbs need from this method rather than a nicety: a
+     * service holding the `Date` it passed could otherwise go on
+     * moving the stored due time after the write, through a member
+     * the port declares `readonly`. The drizzle implementation
+     * cannot have that fault, since a timestamp crossing the driver
+     * is serialised on the way in and parsed fresh on the way out.
+     *
+     * It takes no view of the instant: no clamp, no clock, no
+     * reading of `enabled` and no comparison against the stored due
+     * time. All four are `src/topics/service.ts`'s, because all four
+     * are decisions rather than facts a database reports.
+     */
+    async updateTopicSchedule(
+      id: number,
+      nextRunAt: Date,
+    ): Promise<TopicRecord | null> {
+      const existing = topics.get(id);
+
+      if (existing === undefined) {
+        return null;
+      }
+
+      const updated: TopicRecord = {
+        ...existing,
+        nextRunAt: copyInstant(nextRunAt),
+      };
+
+      topics.set(id, updated);
+
+      return copyTopic(updated);
+    },
+
+    /**
+     * Deletes one topic.
+     *
+     * Nothing in schema v2 points at `topics`, so this is
+     * `deletePersona`'s shape rather than `deleteCategory`'s:
+     * neither a guard nor a cascade, and a delete that cannot be
+     * refused.
+     */
+    async deleteTopic(id: number): Promise<boolean> {
+      return topics.delete(id);
     },
 
     /**

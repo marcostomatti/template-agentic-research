@@ -1,9 +1,9 @@
 /**
- * `tests/helpers/memory-research-store.ts` in all four ports it
+ * `tests/helpers/memory-research-store.ts` in all five ports it
  * implements — the claims that make it a second implementation of
  * `DomainStore`, of `TaxonomyStore` WHOLE with categories and terms
- * together, of `PersonaStore` and of `SettingsStore`, rather than a
- * bag that stores what it is handed.
+ * together, of `PersonaStore`, of `TopicStore` and of
+ * `SettingsStore`, rather than a bag that stores what it is handed.
  *
  * THAT IT REFUSES WHAT POSTGRES REFUSES. Every refusal case names
  * the `reason` a SQLSTATE classifies to and the constraint the
@@ -22,8 +22,12 @@
  * `personas_domain_id_role_unique`, which refuses on an INSERT and
  * on an UPDATE alike, and `personas_domain_id_domains_id_fk`, which
  * the insert alone can reach because `domainId` is not patchable.
- * The settings half adds NONE, and that is a measurement rather than
- * a gap — see below.
+ * The topics half adds two more in that same shape and reaches them
+ * from two writes as well: `topics_domain_id_name_unique`, which
+ * refuses on an INSERT and on an UPDATE because `name` is
+ * patchable, and `topics_domain_id_domains_id_fk`, which the insert
+ * alone can reach because `domainId` is not. The settings half adds
+ * NONE, and that is a measurement rather than a gap — see below.
  *
  * THAT IT REFUSES THEM IN THE MEASURED ORDER. Four cases exist only
  * for that, because a request carrying two faults at once is the
@@ -39,15 +43,16 @@
  * the live Postgres. It is the half a fake gets wrong by writing
  * its checks in the order they read well.
  *
- * THE TERM AND PERSONA HALVES ADD NO ORDER OF THEIR OWN, and saying
- * so is part of the claim rather than a gap in it. The term key and
- * the term foreign key are both about `category_id`, so a write
- * naming a category that does not exist cannot also duplicate a
- * pattern inside it — there is nothing stored there to duplicate —
- * and no case can tell which is asked first. The persona key and
- * the persona foreign key stand in that same relation over
- * `domain_id`, and `personas` carries no CHECK and no trigger at
- * all, so this half has two mechanisms and nothing between them.
+ * THE TERM, PERSONA AND TOPIC HALVES ADD NO ORDER OF THEIR OWN, and
+ * saying so is part of the claim rather than a gap in it. The term
+ * key and the term foreign key are both about `category_id`, so a
+ * write naming a category that does not exist cannot also duplicate
+ * a pattern inside it — there is nothing stored there to duplicate
+ * — and no case can tell which is asked first. The persona pair and
+ * the topic pair stand in that same relation over `domain_id`, and
+ * neither `personas` nor `topics` carries a CHECK or a trigger at
+ * all, so each of those halves has two mechanisms and nothing
+ * between them.
  *
  * THAT ITS IDS COME FROM 1 AND ARE NOT GAPLESS. A refused insert
  * burns an id here because it burns one in Postgres, measured on a
@@ -62,8 +67,13 @@
  * refused inserts between two accepted ones left a gap of two with
  * the FOREIGN KEY refusal included, which is why that half pins the
  * burn twice — once on the key and once on the foreign key. The
- * cases pin all of it, so a later case cannot come to depend on a
- * gaplessness only the fake has.
+ * topics half pins the burn twice as well and on NO measurement of
+ * its own: `topics` carries the same pair of mechanisms over the
+ * same column `personas` does, so the gap of two measured there is
+ * what its counter is expected to reproduce, and saying which
+ * figure rests on a measurement is half the claim. The cases pin
+ * all of it, so a later case cannot come to depend on a gaplessness
+ * only the fake has.
  *
  * THAT AN UPSERT REWRITES THREE COLUMNS AND KEEPS THE STORED ROW'S
  * ID. Measured: the statement answered the STORED id with `weight`,
@@ -124,9 +134,16 @@
  *
  * THAT NOTHING MUTABLE IS SHARED ACROSS THE BOUNDARY. Every `Date`,
  * every `settings` payload — a domain's and the operator's alike
- * — and every category, term and persona row is copied in both
- * directions, so a caller cannot write into stored state through a
- * field the port declares `readonly`. The operator's payload has
+ * — and every category, term, persona and topic row is copied in
+ * both directions, so a caller cannot write into stored state
+ * through a field the port declares `readonly`. A topic carries two
+ * mutable members rather than one and they are separate claims: its
+ * `searchTerms` list, which a caller could otherwise push a term
+ * onto through a `readonly` array, and its `nextRunAt`, which is
+ * the first date here that arrives as an ARGUMENT rather than off
+ * the clock — so the schedule write is copied on the way IN as well
+ * as out, and a caller that kept the `Date` it passed cannot go on
+ * moving the stored due time. The operator's payload has
  * THREE answer sites rather than two, and one case each: the
  * argument a write was handed, the payload that write answered, and
  * the payload a read handed out. The three legs are DISJOINT,
@@ -156,15 +173,17 @@
  * of its own: only CHILDREN refuse it, and a store reusing that
  * guard over its terms refuses a delete Postgres takes.
  *
- * THAT A DOMAIN TAKES ITS PERSONAS AND NOTHING ELSE DOES.
- * `personas.domain_id` cascades like every other foreign key onto
- * `domains.id`, so one delete reaches the personas and both levels
- * of taxonomy together; and because nothing in schema v2 points at
- * `personas`, a persona delete has neither a guard nor a cascade
- * and cannot be refused at all. The two claims are adjacent cases
- * because they are the same fact read from either end, and the
- * second carries the category delete beside it as its control —
- * refused for holding children under the very same domain.
+ * THAT A DOMAIN TAKES ITS PERSONAS AND ITS TOPICS, AND NOTHING ELSE
+ * DOES. `personas.domain_id` and `topics.domain_id` cascade like
+ * every other foreign key onto `domains.id`, so one delete reaches
+ * both of them and both levels of taxonomy together; and because
+ * nothing in schema v2 points at either table, a persona delete and
+ * a topic delete each have neither a guard nor a cascade and cannot
+ * be refused at all. Each half states those two claims as adjacent
+ * cases because they are the same fact read from either end, and
+ * each second case carries the category delete beside it as its
+ * control — refused for holding children under the very same
+ * domain.
  *
  * Several cases carry a positive control in the same body rather
  * than in a sibling case, because each is asking a question a broken
@@ -185,6 +204,102 @@
  * rather than as a count. Every figure below moves again when a
  * later task adds a case to this file, so re-derive the whole grid
  * rather than appending legs for the new rows.
+ *
+ * THE TOPICS HALF IS THE ONE PLACE THAT RULE WAS NOT FOLLOWED
+ * WHOLE, and what stands in for it is stated rather than left to be
+ * inferred. The file holds 228 cases now, of which 54 are the
+ * topics half's, and re-deriving all 76 recorded legs would mean
+ * reconstructing each from the prose that describes it. What was
+ * run instead is the topics half's OWN seventeen legs plus SEVEN of
+ * the recorded ones — the four whole-half controls and the three
+ * other legs a topics case could reach, chosen by reading what the
+ * new cases call rather than guessed. The argument that closes the
+ * rest is that the old cases are unchanged and the store's
+ * behaviour on every non-topic path is byte-identical except for
+ * one added line in `deleteDomain`, which no old case can see: so
+ * every recorded red set still holds over the old 174, and only a
+ * DELTA over the 54 new cases was ever in question. Those seven
+ * runs carry their own liveness control, and it is the reading that
+ * makes the argument checkable rather than merely plausible: each
+ * one's red set OUTSIDE the topics describes came back at exactly
+ * the recorded figure (6, 4, 90, 6, 57, 32 and 8), which is what
+ * says these are the same legs the prose names and not seven new
+ * ones that happen to redden something.
+ *
+ * THE TOPICS HALF MOVED EXACTLY FOUR OF THOSE SEVEN, by six cases
+ * in total, and every one of the six is a topics case that plants
+ * in another half on purpose. Refusing a null parent as a missing
+ * one went 90 to 93 — the three topics cases that plant a category,
+ * matching the three the personas half moved that same leg by, and
+ * for the same structural reason. Accepting
+ * the delete of a category holding children went 6 to 7, through
+ * the topic-delete case that carries the category delete as its
+ * control. Refusing every term insert as a duplicate went 57 to 58
+ * and refusing every persona insert as a duplicate 32 to 33,
+ * through the ONE case that deletes a domain carrying a lexicon, a
+ * persona and a topic at once. The three that did NOT move are the
+ * two domains legs and the settings whole-half control, all three
+ * unchanged member for member: no topics case reads a domain's
+ * dates or its settings payload, and nothing here writes the
+ * operator's row.
+ *
+ * Eighteen topic legs redden between 0 and 47, and EVERY red one of
+ * them lands wholly inside the topics describes — the mirror of the
+ * paragraph above, and what says the two directions are not the
+ * same claim. Refusing every topic insert as a duplicate is this
+ * half's whole-half control and reddens 47 of the 54; the seven
+ * survivors are exactly the cases that write no topic at all (the
+ * foreign-key containment case, which needs no stored row to be
+ * refused, the two list reads that plant none, and the four
+ * unknown-id answers off the read, the patch, the schedule write
+ * and the delete). Accepting the duplicate name reddens 5 on the
+ * insert and 1 on the update, the split `personas` cannot make
+ * because its own key case set is differently shaped; skipping the
+ * foreign key reddens 4, one of them in the id describe, because
+ * the burn is measured once per mechanism.
+ *
+ * The patch's two legs are one narrowing and one widening and they
+ * are DISJOINT, which is the personas half's shape. Skipping the
+ * resulting-name check reddens 1, the rename the domain already
+ * carries; refusing a topic in conflict with ITSELF reddens 7 — the
+ * case named for it plus six ordinary patch and search-term cases,
+ * which is what says those cases exercise the rule rather than
+ * passing over it, since a patch naming no name still resolves to
+ * the stored one. Making the name key global rather than per domain
+ * reddens 4 across three describes, which is the widening leg the
+ * two sibling-domain acceptance cases exist for.
+ *
+ * Both pairs of read legs OVERLAP rather than nesting or standing
+ * apart, which is a shape neither of the other halves has: theirs
+ * are disjoint on one side and nested on the other. Ordering by
+ * insertion reddens 5 and ignoring the window reddens 2, sharing
+ * the one case that asks for a page of three. Answering the stored
+ * topic by reference reddens 4 — the three read paths and the
+ * fresh-Date case — and handing the stored due time out of every
+ * copy reddens 4 as well, overlapping in 2: one helper stands
+ * behind both faults, and only the assertion that fails inside each
+ * case tells them apart. Taking the id after the checks reddens
+ * exactly the 2 id cases.
+ *
+ * The four remaining copy legs redden ONE CASE EACH and are
+ * disjoint, which is one leg per ANSWER SITE exactly as the
+ * settings half measures: storing the array an insert was handed,
+ * storing the array a patch was handed, storing the `Date` a
+ * schedule write was handed, and handing the stored array out.
+ * Conflating an absent bound with a null one reddens 1, the leg
+ * that says a nullable member distinguishes three requests and not
+ * two.
+ *
+ * And writing on a topic patch that names no member reddens
+ * NOTHING, the fourth honest zero in this file and the same one the
+ * category, term and persona legs measure, for the same reason: the
+ * early return exists because drizzle throws on an empty update
+ * list, and this store has no such throw to observe. It keeps the
+ * WEAKER pinning of the category and term zeros rather than the
+ * persona one — `src/topics/db-store.ts` and a live case that
+ * patches a topic with an empty patch are both later tasks, so
+ * today the branch is pinned by `src/topics/store.ts`'s TSDoc and
+ * by nothing else.
  *
  * THE SETTINGS HALF MOVED EXACTLY THREE OF THE SIXTY-SEVEN LEGS
  * THAT STOOD BEFORE IT, and all three gained the SAME single case:
@@ -444,6 +559,11 @@ import type {
   TermRecord,
   TermValues,
 } from '../../src/taxonomy/store.js';
+import type {
+  InsertTopicInput,
+  TopicPatch,
+  TopicRecord,
+} from '../../src/topics/store.js';
 
 import { describe, expect, it } from 'vitest';
 
@@ -830,6 +950,137 @@ async function readPersona(
   }
 
   return row;
+}
+
+/** Three topic subjects, in the same register as the taxonomy keys. */
+const EDGE_INFERENCE = 'edge inference';
+const RUNTIME_SECURITY = 'runtime security';
+const WASM_TOOLCHAINS = 'wasm toolchains';
+
+/**
+ * An hour in seconds: the cadence every topic here runs at unless a
+ * case is about the cadence.
+ */
+const HOURLY = 3600;
+
+/** What {@link addTopic} defaults when a case is not about it. */
+type TopicDefaults = Partial<Omit<InsertTopicInput, 'domainId' | 'name'>>;
+
+/**
+ * Inserts a topic, defaulting the members a case is not about.
+ *
+ * Every member of `InsertTopicInput` is required on the port — a
+ * default is a decision, and the port takes none — so the defaults
+ * live here, where a case that cares about one can see itself
+ * overriding it.
+ *
+ * @param store - The store to write to.
+ * @param domainId - The domain whose research it is part of.
+ * @param name - Its subject, within that domain.
+ * @param values - The five members a case may care about. The bounds
+ *   default to null rather than to a number, because null is what a
+ *   topic with no floor and no ceiling carries and a default bound
+ *   would make every case that clears one start from the wrong
+ *   state.
+ * @returns The stored row.
+ */
+async function addTopic(
+  store: MemoryResearchStore,
+  domainId: number,
+  name: string,
+  values: TopicDefaults = {},
+): Promise<TopicRecord> {
+  return store.insertTopic({
+    domainId,
+    name,
+    searchTerms: values.searchTerms ?? [],
+    intervalSeconds: values.intervalSeconds ?? HOURLY,
+    enabled: values.enabled ?? true,
+    minIntervalSeconds: values.minIntervalSeconds ?? null,
+    maxIntervalSeconds: values.maxIntervalSeconds ?? null,
+  });
+}
+
+/**
+ * A domain carrying two topics.
+ *
+ * Two rather than one because every claim about the key needs a
+ * second row to collide with, and every claim about the collection
+ * needs an order to read.
+ *
+ * @param store - The store to write to.
+ * @param slug - The domain to build them under.
+ * @returns The domain and its two topics.
+ */
+async function seedTopics(
+  store: MemoryResearchStore,
+  slug: string,
+): Promise<{
+  domain: DomainRecord;
+  security: TopicRecord;
+  edge: TopicRecord;
+}> {
+  const domain = await store.insertDomain(domainInput(slug));
+
+  // Inserted out of name order, so a read answering them sorted is
+  // answering a sort rather than an insertion order.
+  const security = await addTopic(store, domain.id, RUNTIME_SECURITY);
+  const edge = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+  return { domain, security, edge };
+}
+
+/**
+ * Reads a topic that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no row carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readTopic(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<TopicRecord> {
+  const row = await store.findTopicById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored topic under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * The due time a topic must carry, ready to be read as a number.
+ *
+ * @param row - The row to reach into.
+ * @returns Its `nextRunAt` in milliseconds — a primitive, which is
+ *   what the copy cases compare against so that a store handing its
+ *   own `Date` out cannot hold one lie against itself and pass.
+ * @throws When the topic is unscheduled, so a case about a due time
+ *   cannot quietly assert over a null.
+ */
+function dueAt(row: TopicRecord): number {
+  if (row.nextRunAt === null) {
+    throw new Error('expected the topic to carry a due time');
+  }
+
+  return row.nextRunAt.getTime();
+}
+
+/**
+ * The search terms of a topic, ready to be written into.
+ *
+ * @param row - The row to reach into.
+ * @returns Its `searchTerms`, cast writable — which is exactly the
+ *   promise a shared reference would break behind the type system's
+ *   back, since the port declares the array `readonly` as well as
+ *   the member.
+ */
+function termsIn(row: TopicRecord): string[] {
+  return row.searchTerms as string[];
 }
 
 /**
@@ -3381,6 +3632,864 @@ describe('the persona delete', () => {
       .toBe('foreign-key-violation');
   });
 });
+
+// ---------------------------------------------------------------------------
+// The one key the topics half can refuse on
+// ---------------------------------------------------------------------------
+
+describe('the topics_domain_id_name_unique key', () => {
+  it('refuses a second topic on a name the domain holds', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addTopic(store, domain.id, EDGE_INFERENCE),
+    );
+
+    expect(refusal).toBeInstanceOf(StoreRefusal);
+
+    // The positive control, in this body rather than in a sibling
+    // case: a store refusing every write passes the assertion above.
+    const accepted = await addTopic(store, domain.id, WASM_TOOLCHAINS);
+
+    expect(accepted.name).toBe(WASM_TOOLCHAINS);
+    expect(await store.countTopics(domain.id)).toBe(3);
+  });
+
+  it('names the mechanism and the constraint that refused', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addTopic(store, domain.id, EDGE_INFERENCE),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe('topics_domain_id_name_unique');
+  });
+
+  it('takes the same name in a second domain', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedTopics(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+
+    // The key is `(domain_id, name)` and not `name`, so this is the
+    // widening control: a store holding names globally unique
+    // refuses a write the database takes. Two domains are free to
+    // research subjects of the same name, which is what
+    // `src/db/schema/scheduling.ts` says the pair is for.
+    const accepted = await addTopic(store, transit.id, EDGE_INFERENCE);
+
+    expect(accepted.domainId).toBe(transit.id);
+    expect(await store.countTopics(radar.domain.id)).toBe(2);
+    expect(await store.countTopics(transit.id)).toBe(1);
+  });
+
+  it('leaves the standing topic exactly as it was', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge } = await seedTopics(store, RADAR);
+
+    await refusalFrom(() => addTopic(store, domain.id, EDGE_INFERENCE, {
+      searchTerms: ['rewritten by a refused insert'],
+      intervalSeconds: 60,
+      enabled: false,
+    }));
+
+    expect(await readTopic(store, edge.id)).toStrictEqual(edge);
+    expect(await store.countTopics(domain.id)).toBe(2);
+  });
+
+  it('puts the refused name in nothing a logger can reach', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addTopic(store, domain.id, EDGE_INFERENCE),
+    );
+    const serialised = JSON.stringify({
+      ...refusal,
+      message: refusal.message,
+      stack: refusal.stack,
+    });
+
+    expect(countOccurrences(serialised, EDGE_INFERENCE)).toBe(0);
+
+    // The same search over a message that DOES carry the name, so
+    // the zero above is a reading rather than a search finding
+    // nothing anywhere.
+    const planted = JSON.stringify({
+      ...refusal,
+      message: `duplicate key ${EDGE_INFERENCE}`,
+    });
+
+    expect(countOccurrences(planted, EDGE_INFERENCE)).toBe(1);
+  });
+
+  it('refuses a rename onto a name the domain holds', async () => {
+    const store = createMemoryResearchStore();
+    const { edge, security } = await seedTopics(store, RADAR);
+
+    // The same mechanism on an UPDATE, which `topics` reaches and
+    // `terms` does not: `name` is patchable, so both writes open on
+    // the key.
+    const refusal = await refusalFrom(
+      () => store.updateTopic(security.id, { name: EDGE_INFERENCE }),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe('topics_domain_id_name_unique');
+    expect(await readTopic(store, security.id)).toStrictEqual(security);
+    expect(await readTopic(store, edge.id)).toStrictEqual(edge);
+  });
+
+  it('takes a rename onto a name a SECOND domain holds', async () => {
+    const store = createMemoryResearchStore();
+    const { security } = await seedTopics(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+
+    await addTopic(store, transit.id, WASM_TOOLCHAINS);
+
+    // The resulting pair is checked within the STORED domain, since
+    // `domainId` is not patchable: a name another domain carries is
+    // not a conflict, which is the same widening control the insert
+    // case makes and the patch has to make for itself.
+    const patched = await store.updateTopic(security.id, {
+      name: WASM_TOOLCHAINS,
+    });
+
+    expect(patched?.name).toBe(WASM_TOOLCHAINS);
+  });
+
+  it('takes a patch writing a name back over itself', async () => {
+    const store = createMemoryResearchStore();
+    const { security } = await seedTopics(store, RADAR);
+
+    // A row is not in conflict with itself. A store looking the pair
+    // up without excluding the row being written refuses this.
+    const patched = await store.updateTopic(security.id, {
+      name: RUNTIME_SECURITY,
+      intervalSeconds: 900,
+    });
+
+    expect(patched?.name).toBe(RUNTIME_SECURITY);
+    expect(patched?.intervalSeconds).toBe(900);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sequence behind topics.id, and the key it burns
+// ---------------------------------------------------------------------------
+
+describe('the topic id sequence', () => {
+  it('hands the first topic id 1', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const inserted = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    // Its own counter, and none of the other four: the domain above
+    // holds id 1 as well.
+    expect(inserted.id).toBe(1);
+    expect(domain.id).toBe(1);
+  });
+
+  it('burns an id on a refused insert, as the sequence does', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    await refusalFrom(() => addTopic(store, domain.id, EDGE_INFERENCE));
+
+    const next = await addTopic(store, domain.id, WASM_TOOLCHAINS);
+
+    // 4 rather than 3: the two seeded topics took 1 and 2, and the
+    // refusal took the third. No measurement on `topics` of its own
+    // — the reasoning is `personas`', where two refused inserts
+    // between two accepted ones left a gap of two against the live
+    // server, over the same pair of mechanisms on the same column.
+    expect(next.id).toBe(4);
+  });
+
+  it('burns one on a foreign-key refusal as well', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    await refusalFrom(() => addTopic(store, 404, EDGE_INFERENCE));
+
+    const next = await addTopic(store, domain.id, WASM_TOOLCHAINS);
+
+    // The counter advances ahead of EVERY check rather than ahead of
+    // the key check alone, which is the half of the personas
+    // measurement a key-only burn would satisfy anyway.
+    expect(next.id).toBe(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The other mechanism, and the cascade that is not one
+// ---------------------------------------------------------------------------
+
+describe('the topic domain foreign key', () => {
+  it('refuses an insert naming no stored domain', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    const refusal = await refusalFrom(
+      () => addTopic(store, domain.id + 1, EDGE_INFERENCE),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe('topics_domain_id_domains_id_fk');
+
+    // The positive control: the same row into the domain that IS
+    // there, so the refusal above is about the id rather than about
+    // the write.
+    const accepted = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    expect(accepted.domainId).toBe(domain.id);
+  });
+
+  it('refuses an insert into a domain just deleted', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    await store.deleteDomain(domain.id);
+
+    // The id was good a moment ago, which is the shape a service
+    // meets: `findDomainBySlug` resolved the domain and the row went
+    // in between. `src/topics/store.ts` names that as the one way
+    // this refusal is reachable at all.
+    const refusal = await refusalFrom(
+      () => addTopic(store, domain.id, WASM_TOOLCHAINS),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe('topics_domain_id_domains_id_fk');
+  });
+
+  it('puts the refused id in nothing a logger can reach', async () => {
+    const store = createMemoryResearchStore();
+
+    const refusal = await refusalFrom(
+      () => addTopic(store, 4004, EDGE_INFERENCE),
+    );
+    const serialised = JSON.stringify({
+      ...refusal,
+      message: refusal.message,
+      stack: refusal.stack,
+    });
+
+    expect(countOccurrences(serialised, '4004')).toBe(0);
+
+    // The same search over a message that DOES carry the id.
+    const planted = JSON.stringify({
+      ...refusal,
+      message: 'domain 4004 is not there',
+    });
+
+    expect(countOccurrences(planted, '4004')).toBe(1);
+  });
+});
+
+describe('the domain cascade over its topics', () => {
+  it('takes the topics of the domain it removes', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge, security } = await seedTopics(store, RADAR);
+
+    // `topics.domain_id` is `ON DELETE CASCADE`, and nothing in
+    // schema v2 points at `topics`, so there is no guard below this
+    // one to refuse it the way `categories.parent_id` refuses a
+    // category delete.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findTopicById(edge.id)).toBeNull();
+    expect(await store.findTopicById(security.id)).toBeNull();
+    expect(await store.countTopics(domain.id)).toBe(0);
+    expect(await store.listTopics(domain.id, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+  });
+
+  it('leaves a second domain topics standing', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedTopics(store, RADAR);
+    const transit = await seedTopics(store, TRANSIT);
+
+    await store.deleteDomain(radar.domain.id);
+
+    expect(await store.countTopics(transit.domain.id)).toBe(2);
+    expect(await readTopic(store, transit.edge.id))
+      .toStrictEqual(transit.edge);
+  });
+
+  it('takes the topics, the personas and the taxonomy together', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, platforms, kube } = await seedLexicon(store, RADAR);
+    const drafter = await addPersona(store, domain.id, DRAFTER);
+    const topic = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    // Every foreign key onto `domains.id` cascades, so one delete
+    // reaches the topics, the personas and two levels of taxonomy in
+    // the same statement.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findTopicById(topic.id)).toBeNull();
+    expect(await store.findPersonaById(drafter.id)).toBeNull();
+    expect(await store.findTermById(kube.id)).toBeNull();
+    expect(await store.findCategoryById(platforms.id)).toBeNull();
+  });
+
+  it('is the only thing that removes a topic in bulk', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge } = await seedTopics(store, RADAR);
+
+    // The other half of the cascade claim: a topic goes when its
+    // domain goes and at no other time, so deleting the taxonomy
+    // under a domain leaves every topic of it standing.
+    const category = await addCategory(store, domain.id, PLATFORMS);
+
+    expect(await store.deleteCategory(category.id)).toBe(true);
+    expect(await readTopic(store, edge.id)).toStrictEqual(edge);
+    expect(await store.countTopics(domain.id)).toBe(2);
+  });
+
+  it('frees the names the deleted domain held', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    await store.deleteDomain(domain.id);
+
+    const rebuilt = await store.insertDomain(domainInput(RADAR));
+    const accepted = await addTopic(store, rebuilt.id, EDGE_INFERENCE);
+
+    expect(accepted.name).toBe(EDGE_INFERENCE);
+    expect(await store.countTopics(rebuilt.id)).toBe(1);
+  });
+
+  it('leaves the planted dependent counts to the seam', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    // The one place this file knowingly answers something a
+    // deployment would not, pinned rather than left to be
+    // discovered: `countDomainDependents` reads what
+    // `setDomainDependents` planted and never the rows this half
+    // writes, so two stored topics answer a counted zero.
+    // `src/domains/db-store.ts` counts the rows instead, and
+    // `MemoryResearchStore.setDomainDependents` carries why the two
+    // are not reconciled here.
+    expect(await store.countTopics(domain.id)).toBe(2);
+    expect((await store.countDomainDependents(domain.id)).topics).toBe(0);
+
+    store.setDomainDependents(domain.id, { topics: 2 });
+
+    expect((await store.countDomainDependents(domain.id)).topics).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The two mutable members crossing the boundary
+// ---------------------------------------------------------------------------
+
+describe('the topic due time crossing the boundary', () => {
+  it('lands an unscheduled topic, which is not an absent one', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    const inserted = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    // `InsertTopicInput` declares no member that could set it, so
+    // the null is the type's doing rather than a default. Read back
+    // as well as answered, since a store echoing its argument would
+    // answer null having stored anything at all.
+    expect(inserted.nextRunAt).toBeNull();
+    expect((await readTopic(store, inserted.id)).nextRunAt).toBeNull();
+  });
+
+  it('does not store the Date object it was handed', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+    const due = new Date('2026-03-01T00:00:00.000Z');
+
+    await store.updateTopicSchedule(edge.id, due);
+
+    // The copy on the way IN. A store holding this instance lets the
+    // caller that scheduled the topic go on moving its due time
+    // afterwards, through a member the port declares `readonly`.
+    due.setTime(Date.parse('2030-06-01T00:00:00.000Z'));
+
+    expect(dueAt(await readTopic(store, edge.id)))
+      .toBe(Date.parse('2026-03-01T00:00:00.000Z'));
+  });
+
+  it('answers a due time the write cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    const written = await store.updateTopicSchedule(
+      edge.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    if (written === null) {
+      throw new Error('expected the schedule write to answer a row');
+    }
+
+    const scheduledAt = dueAt(written);
+
+    written.nextRunAt?.setTime(0);
+
+    // Against the primitive captured BEFORE the mutation: a store
+    // handing its own `Date` out has aliased the two, and comparing
+    // against `written.nextRunAt` would hold one lie against itself.
+    expect(dueAt(await readTopic(store, edge.id))).toBe(scheduledAt);
+  });
+
+  it('answers a due time the read cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    await store.updateTopicSchedule(
+      edge.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    const read = await readTopic(store, edge.id);
+    const scheduledAt = dueAt(read);
+
+    read.nextRunAt?.setTime(0);
+
+    expect(dueAt(await readTopic(store, edge.id))).toBe(scheduledAt);
+  });
+
+  it('answers a due time the list cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge } = await seedTopics(store, RADAR);
+
+    await store.updateTopicSchedule(
+      edge.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    const [listed] = await store.listTopics(domain.id, WHOLE_COLLECTION);
+
+    if (listed === undefined) {
+      throw new Error('expected the list to answer a row');
+    }
+
+    const scheduledAt = dueAt(listed);
+
+    listed.nextRunAt?.setTime(0);
+
+    expect(dueAt(await readTopic(store, edge.id))).toBe(scheduledAt);
+  });
+
+  it('answers a fresh Date on every read', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    await store.updateTopicSchedule(
+      edge.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    const first = await readTopic(store, edge.id);
+    const second = await readTopic(store, edge.id);
+
+    expect(first.nextRunAt).not.toBe(second.nextRunAt);
+    expect(dueAt(first)).toBe(dueAt(second));
+  });
+});
+
+describe('the topic search terms crossing the boundary', () => {
+  it('does not store the array an insert was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const submitted = ['npu', 'accelerator'];
+
+    const inserted = await addTopic(store, domain.id, EDGE_INFERENCE, {
+      searchTerms: submitted,
+    });
+
+    submitted.push('written through the insert');
+
+    expect((await readTopic(store, inserted.id)).searchTerms)
+      .toStrictEqual(['npu', 'accelerator']);
+  });
+
+  it('does not store the array a patch was handed', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+    const submitted = ['npu'];
+
+    await store.updateTopic(edge.id, { searchTerms: submitted });
+
+    submitted.push('written through the patch');
+
+    expect((await readTopic(store, edge.id)).searchTerms)
+      .toStrictEqual(['npu']);
+  });
+
+  it('answers a list a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const inserted = await addTopic(store, domain.id, EDGE_INFERENCE, {
+      searchTerms: ['npu'],
+    });
+
+    termsIn(inserted).push('written through the answer');
+    termsIn(await readTopic(store, inserted.id)).push('and through a read');
+
+    // Against a constant rather than against the record the insert
+    // answered, for the reason the due-time cases give.
+    expect((await readTopic(store, inserted.id)).searchTerms)
+      .toStrictEqual(['npu']);
+  });
+
+  it('replaces the list whole rather than merging into it', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    await store.updateTopic(edge.id, { searchTerms: ['npu', 'accelerator'] });
+
+    // A caller sends the list it wants to exist, which is the only
+    // shape under which removing a term is expressible at all. Under
+    // a merge the read answers two members here and three below.
+    const patched = await store.updateTopic(edge.id, { searchTerms: ['npu'] });
+
+    expect(patched?.searchTerms).toStrictEqual(['npu']);
+    expect((await readTopic(store, edge.id)).searchTerms)
+      .toStrictEqual(['npu']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The topic reads
+// ---------------------------------------------------------------------------
+
+describe('the topic list', () => {
+  it('orders by name ascending rather than by insertion', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    await addTopic(store, domain.id, WASM_TOOLCHAINS);
+
+    const listed = await store.listTopics(domain.id, WHOLE_COLLECTION);
+
+    expect(listed.map((row) => row.name))
+      .toStrictEqual([EDGE_INFERENCE, RUNTIME_SECURITY, WASM_TOOLCHAINS]);
+  });
+
+  it('reads only the window it was given', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    await addTopic(store, domain.id, WASM_TOOLCHAINS);
+
+    const page = await store.listTopics(domain.id, { limit: 1, offset: 1 });
+
+    expect(page.map((row) => row.name)).toStrictEqual([RUNTIME_SECURITY]);
+    expect(await store.countTopics(domain.id)).toBe(3);
+  });
+
+  it('answers an empty window past the end', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    expect(await store.listTopics(domain.id, { limit: 50, offset: 50 }))
+      .toStrictEqual([]);
+  });
+
+  it('lists only the topics of the domain asked about', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedTopics(store, RADAR);
+    const transit = await seedTopics(store, TRANSIT);
+
+    const listed = await store.listTopics(radar.domain.id, WHOLE_COLLECTION);
+
+    expect(listed.map((row) => row.id))
+      .toStrictEqual([radar.edge.id, radar.security.id]);
+    expect(await store.countTopics(transit.domain.id)).toBe(2);
+  });
+
+  it('answers an empty list for a domain holding none', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    expect(await store.listTopics(domain.id, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+    expect(await store.countTopics(domain.id)).toBe(0);
+  });
+
+  it('answers zero for an id no domain carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.countTopics(404)).toBe(0);
+    expect(await store.listTopics(404, WHOLE_COLLECTION)).toStrictEqual([]);
+  });
+
+  it('answers rows a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    const [listed] = await store.listTopics(domain.id, WHOLE_COLLECTION);
+
+    if (listed === undefined) {
+      throw new Error('expected the list to answer a row');
+    }
+
+    (listed as { name: string }).name = 'written through the list';
+
+    // Against the constants rather than against the records the
+    // writes answered: a store handing its own objects out has
+    // ALIASED the two, and the comparison then holds one lie against
+    // itself and passes.
+    const reread = await store.listTopics(domain.id, WHOLE_COLLECTION);
+
+    expect(reread.map((row) => row.name))
+      .toStrictEqual([EDGE_INFERENCE, RUNTIME_SECURITY]);
+  });
+});
+
+describe('the single topic read', () => {
+  it('answers null for an id no topic carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.findTopicById(404)).toBeNull();
+  });
+
+  it('answers a row a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+    const interval = edge.intervalSeconds;
+
+    const read = await readTopic(store, edge.id);
+
+    (read as { intervalSeconds: number }).intervalSeconds = 1;
+
+    // Against a primitive read BEFORE the mutation: comparing
+    // against `edge.intervalSeconds` would compare one lie against
+    // itself, since a store handing its own objects out aliased the
+    // two.
+    expect((await readTopic(store, edge.id)).intervalSeconds)
+      .toBe(interval);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The three topic writes that are not the insert
+// ---------------------------------------------------------------------------
+
+describe('the topic patch', () => {
+  it('rewrites the members it names and leaves the rest', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    const patched = await store.updateTopic(edge.id, {
+      intervalSeconds: 900,
+      enabled: false,
+    });
+
+    expect(patched?.intervalSeconds).toBe(900);
+    expect(patched?.enabled).toBe(false);
+    expect(patched?.name).toBe(EDGE_INFERENCE);
+    expect(patched?.searchTerms).toStrictEqual([]);
+  });
+
+  it('clears a bound with a null and leaves it alone when absent', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const topic = await addTopic(store, domain.id, EDGE_INFERENCE, {
+      minIntervalSeconds: 300,
+      maxIntervalSeconds: 86400,
+    });
+
+    // The three requests a nullable member distinguishes: absent
+    // leaves the ceiling alone, an explicit null clears the floor. A
+    // store reaching for `??` collapses the two and makes removing a
+    // floor unexpressible.
+    const patched = await store.updateTopic(topic.id, {
+      minIntervalSeconds: null,
+    });
+
+    expect(patched?.minIntervalSeconds).toBeNull();
+    expect(patched?.maxIntervalSeconds).toBe(86400);
+
+    const raised = await store.updateTopic(topic.id, {
+      maxIntervalSeconds: 43200,
+    });
+
+    expect(raised?.maxIntervalSeconds).toBe(43200);
+    expect(raised?.minIntervalSeconds).toBeNull();
+  });
+
+  it('writes a false enabled rather than ignoring it', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    // `enabled` is NOT NULL and defaults true, so `false` is a value
+    // being written rather than a member being left alone. This is
+    // the column for retiring a topic; deleting it is a different
+    // operation and pausing it is neither.
+    await store.updateTopic(edge.id, { enabled: false });
+
+    expect((await readTopic(store, edge.id)).enabled).toBe(false);
+  });
+
+  it('answers the stored row for a patch naming no member', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    // `topics` carries no `updated_at`, so an empty patch has
+    // literally nothing to set and drizzle throws `No values to set`
+    // on an empty update list. The port decides the answer rather
+    // than leaving its two implementations to disagree.
+    expect(await store.updateTopic(edge.id, {})).toStrictEqual(edge);
+  });
+
+  it('cannot reach the due time whatever it is handed', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    // `TopicPatch` declares no `nextRunAt`, so the containment is
+    // the type's; the cast is what lets a case ask what happens when
+    // one arrives anyway, which is the reading a route's `.strict()`
+    // schema cannot give from inside `src/`.
+    const patched = await store.updateTopic(
+      edge.id,
+      { nextRunAt: new Date('2026-03-01T00:00:00.000Z') } as TopicPatch,
+    );
+
+    expect(patched?.nextRunAt).toBeNull();
+    expect((await readTopic(store, edge.id)).nextRunAt).toBeNull();
+  });
+
+  it('answers null from a patch naming no stored topic', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.updateTopic(404, { enabled: false })).toBeNull();
+  });
+
+  it('answers a row a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    const patched = await store.updateTopic(edge.id, { intervalSeconds: 900 });
+
+    if (patched === null) {
+      throw new Error('expected the patch to answer a row');
+    }
+
+    (patched as { intervalSeconds: number }).intervalSeconds = 1;
+
+    expect((await readTopic(store, edge.id)).intervalSeconds).toBe(900);
+  });
+});
+
+describe('the topic schedule write', () => {
+  it('writes the instant it is handed and nothing else', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+    const due = new Date('2026-03-01T00:00:00.000Z');
+
+    const written = await store.updateTopicSchedule(edge.id, due);
+
+    // The whole record against the row before the call, with only
+    // the due time permitted to differ: the port says this method
+    // writes one column, and asserting the column alone would pass
+    // against a store that also cleared the search terms.
+    expect(written).toStrictEqual({ ...edge, nextRunAt: due });
+  });
+
+  it('takes no view of the instant it is handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const topic = await addTopic(store, domain.id, EDGE_INFERENCE, {
+      enabled: false,
+      minIntervalSeconds: 300,
+      maxIntervalSeconds: 900,
+    });
+    const past = new Date('2020-01-01T00:00:00.000Z');
+
+    // A time in the past on a DISABLED row: no clamp, no clock and
+    // no reading of `enabled`. All three are decisions
+    // `src/topics/service.ts` takes, and a store taking them would
+    // move a rule into the half that needs a database.
+    const written = await store.updateTopicSchedule(topic.id, past);
+
+    expect(written?.nextRunAt?.toISOString())
+      .toBe('2020-01-01T00:00:00.000Z');
+    expect(written?.enabled).toBe(false);
+  });
+
+  it('moves a due time that is already set', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    await store.updateTopicSchedule(
+      edge.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+    await store.updateTopicSchedule(
+      edge.id,
+      new Date('2026-03-08T00:00:00.000Z'),
+    );
+
+    expect((await readTopic(store, edge.id)).nextRunAt?.toISOString())
+      .toBe('2026-03-08T00:00:00.000Z');
+  });
+
+  it('answers null for an id no topic carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.updateTopicSchedule(404, new Date())).toBeNull();
+  });
+});
+
+describe('the topic delete', () => {
+  it('removes one topic and leaves its domain standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge, security } = await seedTopics(store, RADAR);
+
+    expect(await store.deleteTopic(edge.id)).toBe(true);
+    expect(await store.findTopicById(edge.id)).toBeNull();
+    expect(await readTopic(store, security.id)).toStrictEqual(security);
+    expect(await readDomain(store, RADAR)).toStrictEqual(domain);
+  });
+
+  it('answers false for an id no topic carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.deleteTopic(404)).toBe(false);
+  });
+
+  it('frees the name the deleted topic held', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge } = await seedTopics(store, RADAR);
+
+    await store.deleteTopic(edge.id);
+
+    const accepted = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    expect(accepted.id).not.toBe(edge.id);
+    expect(await store.countTopics(domain.id)).toBe(2);
+  });
+
+  it('cannot be refused, unlike the category delete', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge } = await seedTopics(store, RADAR);
+    const { root } = await seedOneLevel(store, TRANSIT);
+
+    // Nothing in schema v2 points at `topics`, so there is no guard
+    // to run into and no state a topic can be in that holds its
+    // delete. The category beside it IS refused, under the very
+    // rule this one has no counterpart of — which is what says the
+    // acceptance above is a fact about the table rather than a store
+    // that refuses nothing.
+    expect(await store.deleteTopic(edge.id)).toBe(true);
+    expect(await store.countTopics(domain.id)).toBe(1);
+
+    const refusal = await refusalFrom(() => store.deleteCategory(root.id));
+
+    expect(refusal.constraint).toBe('categories_parent_id_categories_id_fk');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // The one row the database pins, before it exists and after
 // ---------------------------------------------------------------------------
