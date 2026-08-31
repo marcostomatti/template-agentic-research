@@ -155,13 +155,13 @@ export function schedulableColumns() {
  * `next_run_at` is set — no workflow gains a branch and no schedule is
  * configured anywhere else.
  *
- * `ar-dispatch` claims these rows, and this phase is where it landed:
- * a topic that is enabled and whose `next_run_at` has passed is taken
- * by its tick and dispatched to `ar-ingest`, which the roster in
- * `workflows/src/README.md` delivers in phase 5. So the claim is real
- * and what it reaches is not — and nothing has run the dispatcher
- * either, this phase shipping the workflow source and the stack that
- * would import it arriving in phase 7.
+ * `ar-dispatch` claims these rows, from phase 3: a topic that is
+ * enabled and whose `next_run_at` has passed is taken by its tick and
+ * dispatched to `ar-ingest`, which phase 5 delivered — so the claim
+ * and what it reaches are both real now, where for two phases only the
+ * claim was. What has still not happened is a tick: those phases ship
+ * workflow sources, and the stack that would import them arrives in
+ * phase 7.
  *
  * What the table fixes now is that the subject, its terms and its
  * cadence are one row, so what the pipeline is currently looking into

@@ -91,17 +91,19 @@ export type SourceKind = (typeof SOURCE_KINDS)[number];
  *
  * The five members are the columns a CAPTURE supplies, and the nine they
  * leave out are each somebody else's. `id` is the database's and
- * `captured_at` the insert's — capture IS the insert, so no window exists
- * in which the two disagree. `domain_id` is the writer's, taken from the
+ * `captured_at` the insert's — capture IS the insert, so no window exists in
+ * which the two disagree. `domain_id` is the writer's, taken from the
  * `sources` row the adapter was constructed for, which records how the
  * adapter was reached rather than anything it read. `parse_status` and
- * `parse_error` belong to the contract check rather than to the capture:
- * the row that most needs them is one whose payload yielded no record at
- * all, so {@link SourceAdapter.toCanonical} never ran to return a shape
- * they could have sat in. And `features`, `feature_version`, `embedding`
- * and `embedding_model` are computed from the stored row long after
- * the capture that wrote it, and nothing writes any of them yet:
- * phase 4 landed the feature port but no writer.
+ * `parse_error` belong to the contract check rather than to the capture: the
+ * row that most needs them is one whose payload yielded no record at all, so
+ * {@link SourceAdapter.toCanonical} never ran to return a shape they could
+ * have sat in. And `features`, `feature_version`, `embedding` and
+ * `embedding_model` are computed from the stored row long after the capture
+ * that wrote it. Two of the four now have a writer: phase 4 landed the
+ * feature port and phase 5 wired it into `ar-ingest`, which fills `features`
+ * and `feature_version` in a pass of its own after the document is stored.
+ * Nothing writes either embedding column.
  *
  * Each member below names its column and states only what the CONTRACT
  * adds. Why the database holds a column the way it does is argued once,

@@ -215,13 +215,13 @@ const CHECKOUT_STEPS: readonly (readonly string[])[] = [
  * The workflow source the third case holds an instance against.
  *
  * One source and not the whole directory, because what an activation
- * would arm is a different answer per workflow, and the roster in
- * `workflows/src/README.md` already says the set will not agree:
+ * would arm is a different answer per workflow, and since phase 5 the
+ * built tree shows it rather than the roster predicting it:
  * `ar-dispatch` holds the only schedule in the system, `ar-capture` is
- * a push webhook and would arm on a URL, and the rest are reached
- * through Execute Workflow and would arm nothing. A claim written over
- * the directory as a whole would be false for part of it the moment
- * phase 5 lands.
+ * a push webhook and would arm on a URL, and `ar-ingest` and
+ * `ar-score` are reached through Execute Workflow and would arm
+ * nothing. A claim written over the directory as a whole is false for
+ * part of it.
  */
 const DISPATCH_SOURCE = 'ar-dispatch.json';
 

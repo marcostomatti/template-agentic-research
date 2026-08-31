@@ -24,8 +24,11 @@
  * that split is what lets one subject arrive spelled three ways and
  * land on one row.
  *
- * Nothing writes these rows yet. Attribution is `ar-ingest`'s (phase
- * 5) and what accumulates against a subject is `ar-research`'s (phase
+ * Nothing writes these rows yet, and phase 5 is where that stopped
+ * being a matter of the writer not having landed. `ar-ingest` writes
+ * a finding with no `entity_id` at all, so attribution is work its
+ * model node was not asked to do rather than work still to arrive,
+ * and what accumulates against a subject is `ar-research`'s (phase
  * 6). `entity_research` below is what one run found out about a
  * subject, and `research_pool` after it is the gate deciding which
  * subjects are researched at all — the queue that run drains rather
@@ -378,11 +381,11 @@ export const entityResearch = pgTable('entity_research', {
  * queue again, and how recently counts as recent is that reader's
  * question rather than this table's.
  *
- * Nothing writes these rows yet. `ar-ingest` and `ar-score` raise
- * them (phase 5) and `ar-research` drains them (phase 6). The
- * operator surface between the two is `scripts/approve.ts`, the
- * interim CLI that stands in until the API and the UI take approvals
- * over — a client of the gate rather than the gate itself.
+ * `ar-ingest` and `ar-score` raise these rows, both landed in phase
+ * 5, and `ar-research` drains them in phase 6. The operator surface
+ * between the two is `scripts/approve.ts`, the interim CLI that
+ * stands in until the API and the UI take approvals over — a client
+ * of the gate rather than the gate itself.
  */
 export const researchPool = pgTable('research_pool', {
   /** Surrogate key; see `domains.id` for why `number` mode. */

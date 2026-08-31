@@ -37,10 +37,10 @@
  * that would never have caught it. So the sweep over the real
  * tree cannot tell a live matcher from a dead one, and a sample
  * planted against a matcher directly is the only thing that can.
- * It bites hardest where the subject is not in the tree at all —
- * {@link MODEL_NODE_TYPE_PREFIX}, which no built workflow carries
- * a node under until phase 6 — where the sweep runs across zero
- * nodes and every claim about it holds by having found nothing.
+ * It bit hardest where the subject was not in the tree at all —
+ * {@link MODEL_NODE_TYPE_PREFIX}, which no built workflow carried
+ * a node under until phase 5 — where the sweep ran across zero
+ * nodes and every claim about it held by having found nothing.
  *
  * Split from the assertions for the reason `naming-patterns.ts`
  * keeps its scan surface and its needle set apart from the
@@ -549,18 +549,18 @@ export function isScheduleTrigger(type: string): boolean {
  * the evidence rather than a note about a check something else
  * repeats.
  *
- * No built workflow holds a node under it. The workflows that
- * make model calls are `ar-research` and `ar-digest`, both phase
- * 6, and the roster in `workflows/src/README.md` is what says so;
- * phase 3 delivers `ar-dispatch` alone. Every assertion standing
- * on this constant therefore runs across zero nodes today, and
- * there are three of them failing empty in two different ways:
- * the retry guard is a claim about every model node, so it holds
- * over none of them, while the ledger-row and per-run-ceiling
- * guards are claims about every workflow HOLDING one, so their
- * antecedent is false and the implication holds. Three green
- * cases and no evidence, until phase 6 puts a node in front of
- * them.
+ * One built workflow holds a node under it. Phase 5 landed
+ * `ar-ingest`, whose Model Endpoint is an `lmChatOpenAi` sub-node
+ * the chain node above it calls through; `ar-research` and
+ * `ar-digest` make model calls of their own in phase 6, and the
+ * roster in `workflows/src/README.md` is what says so. Every
+ * assertion standing on this constant ran across zero nodes for
+ * two phases, failing empty in two different ways: the retry
+ * guard is a claim about every model node, so it held over none
+ * of them, while the ledger-row and per-run-ceiling guards are
+ * claims about every workflow HOLDING one, so their antecedent
+ * was false and the implication held. Three green cases and no
+ * evidence, until that node arrived.
  *
  * Which is the header's argument about paired samples aimed at
  * the one subject where it is not a precaution. Planting a type
@@ -636,13 +636,13 @@ export const MODEL_NODE_TYPE_PREFIX = '@n8n/n8n-nodes-langchain.lm';
  * disabled model node still owes a ceiling and a ledger row,
  * which is what a workflow one edit from spending should owe.
  *
- * What an answer means today is bounded by what the constant
- * records. With no model node in any built workflow, a sweep
- * composing this at the call site hands back an empty list
- * whatever this function does, so a green run over the real tree
- * is evidence about the tree and not about the matcher. Asking it
- * directly is what leaves evidence — a planted type under the
- * prefix, and a near miss beside it.
+ * What an answer means is bounded by what the constant records.
+ * Phase 5 put one node under the prefix in the built tree,
+ * `ar-ingest`'s Model Endpoint, so a sweep composing this at the
+ * call site now has a subject — but one node is a thin sample and
+ * a green run over the real tree is still mostly evidence about
+ * the tree. Asking it directly is what leaves evidence — a
+ * planted type under the prefix, and a near miss beside it.
  */
 export function isModelNode(type: string): boolean {
   return type.toLowerCase().startsWith(MODEL_NODE_TYPE_PREFIX.toLowerCase());

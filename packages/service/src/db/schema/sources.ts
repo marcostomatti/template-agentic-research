@@ -11,10 +11,13 @@
  * a row is selected by its `kind`, and one adapter serves every row of
  * its kind with nothing differing but the row it was constructed from.
  *
- * Nothing fetches these rows yet. The adapters and the parse engine
- * they run under both arrive in phase 5. What the table fixes now
- * is that everything varying per feed is stored, which is what keeps a
- * per-source branch out of the adapter that would otherwise carry it.
+ * `ar-ingest` fetches these rows, from phase 5, selecting the enabled
+ * and unflagged ones for the domain its pass ran for, and `ar-capture`
+ * resolves one out of the envelope a client posted; the adapters and
+ * the parse engine they run under landed with them. What the table
+ * fixed ahead of all of it is that everything varying per feed is
+ * stored, which is what keeps a per-source branch out of the adapter
+ * that would otherwise carry it.
  *
  * `source_config_proposals` is the pending half of two of those
  * columns. A source with no `parser_config`, or one whose contract has
@@ -86,13 +89,14 @@ export const sources = pgTable('sources', {
    * regex, a field map — bound to the adapter when it is constructed
    * rather than handed to it per call.
    *
-   * Data the engine executes, never code. The parse engine arriving in
-   * phase 5 performs the operations it implements against the payload,
-   * directed by this column; it evaluates nothing it finds here. That
-   * is what keeps an INSERT into this table an INSERT — a column whose
-   * contents could execute would turn every writer that reaches it,
-   * the seed script and a workflow node and an operator at a psql
-   * prompt alike, into a way to run arbitrary code in the pipeline.
+   * Data the engine executes, never code. The parse engine phase 5
+   * landed, `src/lib/parser-config.ts`, performs the operations it
+   * implements against the payload, directed by this column; it
+   * evaluates nothing it finds here. That is what keeps an INSERT into
+   * this table an INSERT — a column whose contents could execute would
+   * turn every writer that reaches it, the seed script and a workflow
+   * node and an operator at a psql prompt alike, into a way to run
+   * arbitrary code in the pipeline.
    *
    * It is also what makes an extraction replayable: the same payload
    * under the same config yields the same records every time, so an
@@ -318,14 +322,16 @@ export const sources = pgTable('sources', {
  * refused too. Which of several is the one to rule on is the review
  * queue's question, and `proposed_at` below is what it reads.
  *
- * Nothing INSERTS these rows yet. The propose step that raises them
- * and the apply step that copies an approved one onto its source are
- * both phase 5's, landing beside this table rather than with it. The
- * operator surface between them has landed: `scripts/approve.ts`
- * lists the pending proposals beside the pending `research_pool`
- * rows and writes `status` and `approved_at` on one of them at a
- * time, the interim CLI standing in until the API and the UI take
- * approvals over.
+ * Nothing INSERTS these rows yet, and phase 5 landed both halves that
+ * would. `src/sources/config-proposer.ts` declares the propose seam
+ * and builds the pending row from an answer, and the apply step beside
+ * it refuses a proposal carrying no `approved_at` — what is missing is
+ * a proposer to construct, no module in this package implementing the
+ * interface. The operator surface between them landed too:
+ * `scripts/approve.ts` lists the pending proposals beside the pending
+ * `research_pool` rows and writes `status` and `approved_at` on one of
+ * them at a time, the interim CLI standing in until the API and the UI
+ * take approvals over.
  */
 export const sourceConfigProposals = pgTable('source_config_proposals', {
   /** Surrogate key; see `domains.id` for why `number` mode. */

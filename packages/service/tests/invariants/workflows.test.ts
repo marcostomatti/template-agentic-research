@@ -459,8 +459,8 @@ function writesLedgerRow(node: BuiltWorkflowNode): boolean {
  * A statement that keeps a ledger row, as the node making the call
  * would run it.
  *
- * Fixture SQL and not a statement any workflow carries — none
- * does, the workflows that call a model being phase 6. What is
+ * Fixture SQL and not the statement `ar-ingest`'s Ledger Model Call
+ * carries, which writes five columns where this writes two. What is
  * asserted over it is the reading. What a real ledger write owes
  * beyond an insert is the run it charges the call to, which
  * `src/db/schema/runs.ts` argues at length and which nothing here
@@ -596,20 +596,23 @@ const LEDGER_SAMPLES: readonly LedgerSample[] = [
  * A JavaScript line comment, from its slashes to the end of its
  * line.
  *
- * Stripped out of a body before anything is matched in it, for
- * the reason {@link SQL_LINE_COMMENT} is stripped out of a
- * statement: a workflow source has no comment syntax of its own,
- * so a Code node's body is one of the few tracked homes a
- * decision made at a node has. The one body the built tree
- * carries is prose for ninety-nine of its hundred and nineteen
- * lines, and most of that prose argues about the cap the node
- * applies. Read whole, a body could satisfy this rule by making
- * the case for a ceiling rather than by carrying one.
+ * Stripped out of a body before anything is matched in it, for the
+ * reason {@link SQL_LINE_COMMENT} is stripped out of a statement: a
+ * workflow source has no comment syntax of its own, so a Code node's
+ * body is one of the few tracked homes a decision made at a node
+ * has. Every body the built tree carries is mostly prose —
+ * `ar-dispatch`'s Plan Dispatch runs ninety-nine comment lines of a
+ * hundred and nineteen, and `ar-ingest`'s Apply Call Ceiling, the
+ * one body declaring a ceiling at all, ninety-two of a hundred and
+ * forty-five — and most of that prose argues about the cap the node
+ * applies. Read whole, a body could satisfy this rule by making the
+ * case for a ceiling rather than by carrying one.
  *
- * Over this tree the strip changes no answer — measured, that
- * body declares the same ceiling with its prose in or out — so
- * what it is for is the bodies phase 6 writes, and the sample
- * planted for it is what says it runs at all.
+ * Over this tree the strip still changes no answer — measured, both
+ * of those bodies name the same ceiling set with their prose in or
+ * out — so what it is for is a body whose prose spells a declaration
+ * the code does not carry, and the sample planted for it is what
+ * says it runs at all.
  *
  * Line comments and nothing else. Every comment this port writes
  * in a body is one. The two forms left unread, a block comment
@@ -660,15 +663,15 @@ const JS_LINE_COMMENT = /\/\/[^\n]*/gu;
  * is named, is read where the work is done, and is no ceiling at
  * all.
  *
- * Which is also why the value half needs the second form, and
- * why this reads the artifact and never the source. `Plan
- * Dispatch` is where `Number('25')` was measured: its cap is a
- * settings marker, so the built body carries a quoted number
- * where the source carries `Number` over marker text, which is
- * no number at all. That node's own bound is named `CAP` and is
- * not one this rule looks for — the workflow holds no model node
- * and owes no ceiling — but the FORM a resolved setting leaves
- * behind is the form a phase-6 ceiling will arrive in.
+ * Which is also why the value half needs the second form, and why
+ * this reads the artifact and never the source. `Plan Dispatch` is
+ * where `Number('25')` was measured: its cap is a settings marker,
+ * so the built body carries a quoted number where the source carries
+ * `Number` over marker text, which is no number at all. That node's
+ * own bound is named `CAP` and is not one this rule looks for —
+ * `ar-dispatch` holds no model node and owes no ceiling — but the
+ * FORM a resolved setting leaves behind is the form `ar-ingest`'s
+ * ceiling arrived in a phase later.
  *
  * A fragment is still a fragment, and that is the limit. The
  * rule reads a name and a shape and never an intent, so a
@@ -763,13 +766,12 @@ function declaredCeilings(code: string): readonly string[] {
  *
  * More than one occurrence, the declaration being the first: a
  * second is the ceiling read where the work is done. What this
- * deliberately does not read is WHERE. The origin asserted the
- * site as well as the name, matching a slice against its one
- * drafting node, which it could do because it knew what that
- * node bounded. Here the workflows that will carry a ceiling are
- * phase 6 and what they bound is theirs to choose — a slice, a
- * call like `capBatch`, a loop bound, a comparison ahead of an
- * early return — so the property this can hold is that the name
+ * deliberately does not read is WHERE. The origin asserted the site
+ * as well as the name, matching a slice against its one drafting
+ * node, which it could do because it knew what that node bounded.
+ * Here what a workflow's ceiling bounds is its own to choose — a
+ * slice, a call like `capBatch`, a loop bound, a comparison ahead of
+ * an early return — so the property this can hold is that the name
  * is read at all, which is already what parts a ceiling from a
  * constant somebody left behind.
  *
@@ -837,12 +839,12 @@ const CEILING_LINES =
 /**
  * A body that declares a ceiling and applies it.
  *
- * The origin's own shape with its name generalized: six of its
- * built bodies declare a `_PER_RUN` ceiling and take the front
- * of the batch with it, and one of the six is the drafting node
- * whose check this rule generalizes. Written about model calls
- * because that is the work the rule is about, and phase 6 is
- * where such a body lands.
+ * The origin's own shape with its name generalized: six of its built
+ * bodies declare a `_PER_RUN` ceiling and take the front of the
+ * batch with it, and one of the six is the drafting node whose check
+ * this rule generalizes. Written about model calls because that is
+ * the work the rule is about, and `ar-ingest`'s Apply Call Ceiling
+ * is where such a body first landed here.
  */
 const CEILING_BODY = `${CEILING_LINES}\nreturn calls;`;
 
@@ -1434,32 +1436,34 @@ describe('workflow invariants — built tree', () => {
   // the send-free case gives: `nodesMatching` labels every offender
   // `<file>:<node name>`, so the answer is the report.
   //
-  // It runs across zero nodes, and will until phase 6.
-  // `MODEL_NODE_TYPE_PREFIX` records why: the workflows that make
-  // model calls are `ar-research` and `ar-digest`, both phase 6, and
-  // phase 3 delivers `ar-dispatch` alone. The half of the predicate
-  // reading the retry setting is not merely unsatisfied over this
-  // tree, it never runs at all — the matcher answers no for every
-  // node the tree carries and the conjunction stops there. Measured:
-  // gutting that read reddens nothing here, and a matcher
-  // recognising nothing reddens nothing either, while one
-  // recognising everything reddens this case and the two cost-guard
+  // It ran across zero nodes for two phases.
+  // `MODEL_NODE_TYPE_PREFIX` records why: phase 3 delivered
+  // `ar-dispatch` alone, and the workflows that make model calls are
+  // `ar-ingest`, from phase 5, with `ar-research` and `ar-digest` to
+  // come in phase 6. Over that empty tree the half of the predicate
+  // reading the retry setting was not merely unsatisfied, it never
+  // ran at all — the matcher answered no for every node the tree
+  // carried and the conjunction stopped there. Measured then:
+  // gutting that read reddened nothing here, and a matcher
+  // recognising nothing reddened nothing either, while one
+  // recognising everything reddened this case and the two cost-guard
   // cases that follow it, each reading the same matcher for an
-  // antecedent of its own. So the only mistake in the predicate this
-  // tree can report reaches it through the matcher half, and says
-  // nothing about the read sitting behind it.
+  // antecedent of its own. So the only mistake in the predicate that
+  // tree could report reached it through the matcher half, and said
+  // nothing about the read sitting behind it. `ar-ingest`'s model
+  // node is what put that read on a real subject.
   //
-  // What stands behind it meanwhile is the roster's own controls, in
+  // What stood behind it meanwhile is the roster's own controls, in
   // `workflow-rosters.test.ts`. A type planted under the namespace
   // and a Code node whose body names a model are each other's
   // control: a matcher recognising nothing reddens the plant, one
   // recognising everything reddens the refusal, and a third case
   // holds the two fixtures against each other so neither drifts off
-  // the vendor name they share. Those three are the whole of what
-  // says the matcher is live while there is no model node to ask it
-  // about, and this case adds none of it. What it adds is that the
-  // rule is in place before the nodes are, so phase 6 lands a node
-  // rather than a node and a check.
+  // the vendor name they share. Those three were the whole of what
+  // said the matcher is live while there was no model node to ask it
+  // about, and this case added none of it. What it added is that the
+  // rule was in place before the nodes were, so phase 5 landed a
+  // node rather than a node and a check.
   //
   // The rest of what it is worth, part by part. The input is covered
   // a module away, `loadBuiltWorkflows` refusing an empty tree and
@@ -1488,35 +1492,39 @@ describe('workflow invariants — built tree', () => {
   // gives: the node that calls and the node that keeps the row are
   // two nodes, and the rule is that one workflow carries both.
   //
-  // It runs across zero workflows and will until phase 6, which is
-  // a different empty from the retry guard.
-  // `MODEL_NODE_TYPE_PREFIX` names both: that one is a claim about
-  // every model node, so it holds over none of them; this is a
-  // claim about every workflow HOLDING one, so its antecedent is
-  // false and the implication holds. This is the emptier of the
-  // two — with no workflow owing a row, the ledger read is never
-  // reached at all.
+  // It ran across zero workflows for two phases, which was a
+  // different empty from the retry guard. `MODEL_NODE_TYPE_PREFIX`
+  // names both: that one is a claim about every model node, so it
+  // held over none of them; this is a claim about every workflow
+  // HOLDING one, so its antecedent was false and the implication
+  // held. It was the emptier of the two — with no workflow owing a
+  // row, the ledger read was never reached at all. Phase 5 ended
+  // both empties at once, `ar-ingest` holding a model node and the
+  // `llm_calls` write that goes with it.
   //
-  // So what stands behind it is elsewhere, in two halves. The
+  // So what stood behind it while it was empty is elsewhere, in two
+  // halves, and that is still where the coverage argument lives. The
   // matcher is covered over planted nodes in
   // `workflow-rosters.test.ts`, by the mutual-control pair
   // `isModelNode` has there. The ledger read is covered by the case
-  // that drives it over planted statements, and by nothing else: no
-  // node in the built tree writes a ledger row, so this case cannot
-  // exercise that rule and does not. The input is covered a module
-  // away, by the two refusals the sweeps in this file rest on. There
-  // is no walk to cover, this case reading each workflow's own nodes
-  // rather than the sweep those use.
+  // that drives it over planted statements, which is what carried
+  // the rule while no node in the built tree wrote a ledger row. The
+  // input is covered a module away, by the two refusals the sweeps
+  // in this file rest on. There is no walk to cover, this case
+  // reading each workflow's own nodes rather than the sweep those
+  // use.
   //
-  // Measured, six legs. A matcher recognising every type reddens
-  // this case, the retry case and the per-run-ceiling case, all
-  // three reading the same matcher; one recognising nothing reddens
-  // none of them. The ledger read forced true and forced false each
-  // leave this case green and redden the sample-driven case instead,
-  // which is what running across zero workflows means. A model node
-  // planted into the built artifact reddens this case and the
-  // ceiling case, one node satisfying both antecedents, and stops
-  // reddening this one once a ledger write is planted beside it.
+  // Measured, six legs, over the tree as it stood before `ar-ingest`
+  // landed. A matcher recognising every type reddens this case, the
+  // retry case and the per-run-ceiling case, all three reading the
+  // same matcher; one recognising nothing reddens none of them. The
+  // ledger read forced true and forced false each left this case
+  // green and reddened the sample-driven case instead, which is what
+  // running across zero workflows meant. A model node planted into
+  // the built artifact reddened this case and the ceiling case, one
+  // node satisfying both antecedents, and stopped reddening this one
+  // once a ledger write was planted beside it — which is the shape
+  // `ar-ingest` then landed for real.
   it('holds a ledger write in every workflow that holds a model node', () => {
     const owing = BUILT_WORKFLOWS
       .filter((workflow) => holdsModelNode(workflow))
@@ -1595,28 +1603,31 @@ describe('workflow invariants — built tree', () => {
   // ONE body, nothing carrying a `const` from one Code node into
   // the next.
   //
-  // It runs across zero workflows and will until phase 6, the same
-  // empty as the ledger-row case and not the retry case's — the
-  // shape `MODEL_NODE_TYPE_PREFIX` names for both: the antecedent
-  // is false, so the implication holds and the ceiling read is
-  // never reached at all. What stands behind it meanwhile is
-  // elsewhere, in two halves. The matcher is covered over planted
-  // nodes in `workflow-rosters.test.ts`, by the mutual-control pair
-  // `isModelNode` has there. The ceiling read is covered by the
-  // case that drives it over planted bodies, and by nothing else —
-  // no workflow in the built tree holds a model node, so this case
-  // cannot exercise that rule and does not. The input is covered a
-  // module away, by the two refusals the sweeps in this file rest
-  // on. There is no walk to cover, this case reading each
-  // workflow's own nodes rather than the sweep those use.
+  // It ran across zero workflows for two phases, the same empty as
+  // the ledger-row case and not the retry case's — the shape
+  // `MODEL_NODE_TYPE_PREFIX` names for both: the antecedent was
+  // false, so the implication held and the ceiling read was never
+  // reached at all. Phase 5 ended that. `ar-ingest` holds a model
+  // node, so this case now reads a real ceiling and its answer is
+  // about the built tree rather than about an empty walk. What stood
+  // behind it meanwhile is still where the coverage argument lives,
+  // in two halves. The matcher is covered over planted nodes in
+  // `workflow-rosters.test.ts`, by the mutual-control pair
+  // `isModelNode` has there. The ceiling read is covered by the case
+  // that drives it over planted bodies, which is what carried the
+  // rule while no workflow in the built tree held a model node. The
+  // input is covered a module away, by the two refusals the sweeps
+  // in this file rest on. There is no walk to cover, this case
+  // reading each workflow's own nodes rather than the sweep those
+  // use.
   //
-  // Measured, six legs. A matcher recognising every type reddens
-  // this case, the retry case and the ledger-row case, all three
-  // reading it for an antecedent of their own; one recognising
-  // nothing reddens none of them. The ceiling read forced true and
-  // forced false each leave this case green and redden the
-  // sample-driven case instead, which is what running across zero
-  // workflows means.
+  // Measured, six legs, over the tree as it stood before `ar-ingest`
+  // landed. A matcher recognising every type reddens this case, the
+  // retry case and the ledger-row case, all three reading it for an
+  // antecedent of their own; one recognising nothing reddens none of
+  // them. The ceiling read forced true and forced false each left
+  // this case green and reddened the sample-driven case instead,
+  // which is what running across zero workflows meant.
   //
   // The fixture leg that reads this case is two coordinated edits
   // to the built artifact rather than one: a model node, to fire

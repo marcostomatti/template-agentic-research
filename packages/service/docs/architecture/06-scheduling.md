@@ -447,7 +447,10 @@ it ran, and the two are the same absence: a dispatcher whose cron has
 stopped firing and one firing on time into an empty backlog leave an
 identical gap in this table. The one workflow holding the only clock
 is what that gap is least able to report on. Counting rows says
-nothing about a cadence either, the row rate being the dispatch rate.
+nothing about a cadence either: the dispatcher's rows are its
+dispatches rather than its ticks, and since phase 5 they are not the
+only rows in the table — the section below on which workflow opened a
+row carries that half.
 
 What answers it is the executor's own execution list, which records a
 run of the workflow whether or not the workflow wrote anything down.
@@ -464,59 +467,65 @@ to those two — a surrogate key, a start, a finish, a status, a tally
 and a list of failures — say what a pass did and never who ran it. A
 row read on its own cannot answer which workflow opened it.
 
-The question is answerable today all the same, by convention rather
-than by reading. `ar-dispatch` is the only workflow that opens one, so
+The question was answerable by convention rather than by reading for
+two phases. `ar-dispatch` was the only workflow that opened one, so
 every row a workflow opened came out of the dispatcher's own insert,
-and the answer belongs to the table instead of to the row. The scope
-is workflows rather than the table: `src/db/schema/taxonomy.ts`
+and the answer belonged to the table instead of to the row. The scope
+was workflows rather than the table: `src/db/schema/taxonomy.ts`
 records that rows in this schema arrive from the seed script, from
 hand-written SQL inside workflow nodes and from an operator at a psql
-prompt, and it is the middle of those three the convention covers.
+prompt, and it was the middle of those three the convention covered.
 
-A reading this document has already made rests on it. Counting `runs`
+A reading this document made earlier rested on it. Counting `runs`
 rows says nothing about a cadence because the row rate is the dispatch
 rate — true of a table one workflow writes, and not of a shared one,
 where the rate is the sum of every writer's and there is no column to
 filter one writer out by. What the dispatcher can claim on its own is
 narrower, and is about its own statement: the rows that statement
-opens are the units its cap kept. Reading a dispatch rate off the
-table rather than off the node is what the convention buys.
+opens are the units its cap kept. That narrower reading is the one
+that survives, and it is read off the node rather than off the table.
 
-Nothing would report the change. The entries in
+Nothing reported the change. The entries in
 `tests/invariants/dispatch-sql.ts` each name a node of `ar-dispatch`,
 so a second workflow's insert is outside what any of them reads, and
 the sweeps in `tests/invariants/workflows.test.ts` key on node types
 and on what a workflow holding a model node owes. The one place `runs`
 appears in that suite is as the near-miss control that proves the
 ledger rule does not fire on an insert against another table. So the
-premise is a fact about the workflow set rather than a checked
-property, and it stops holding without a case failing.
+premise was a fact about the workflow set rather than a checked
+property, and it stopped holding with no case failing.
 
-Phase 5 is where it stops. The roster in `workflows/src/README.md`
-delivers `ar-ingest`, `ar-capture` and `ar-score` there, and the first
-of the three to open a run of its own leaves two workflows sharing one
-table with nothing in a row to tell their passes apart. What is stored
-narrows without naming: `domain_id` says which domain a pass ran for
-and several workflows will run for the same one, while `scheduled_by`
-carries the same literal on every row this workflow opens. `counts`
-and `errors` refuse nothing, so a producer's name dropped into either
-is one writer's habit rather than a column a reader can query. Closing
-the gap is a column and a column is a migration this phase does not
-carry, which is why it is left open rather than closed: the choice
-between the column and a second convention is phase 5's to take.
+Phase 5 is where it stopped, and it took the second convention rather
+than the column. `ar-capture` and `ar-score` each insert a `runs` row
+of their own, so the table has three writers where it had one, and no
+migration in that phase added a column naming any of them. What tells
+them apart is partial and worth stating as such. `scheduled_by` parts
+the dispatcher from the other two and not those two from each other:
+it reads `interval` on every row the dispatcher opens and `operator`
+on every row the pipeline pair writes, which is `RUN_SCHEDULERS`
+having no member that is true of a pass no schedule fired. The shape
+of the write parts them again the same way — the dispatcher opens a
+row `running` and closes it from a second node, while the pair insert
+one already closed, so their rows carry a start and a finish from one
+transaction and read as instantaneous. Below that the naming stops:
+`domain_id` says which domain a pass ran for and all three run for the
+same ones, and `counts` and `errors` refuse nothing, so the keys a
+writer puts in `counts` are one writer's habit rather than a column a
+reader can query.
 
-### Every run opened before the targets exist closes as failed
+### A run opened against a target that is not there closes as failed
 
 `Invoke Target Workflow` addresses `ar-ingest` for a claimed topic and
-`ar-digest` for a claimed export subscription, and the roster in
-`workflows/src/README.md` delivers the first of those in phase 5 and
-the second in phase 6. Until each arrives the id resolves, nothing on
+`ar-digest` for a claimed export subscription. Phase 5 delivered the
+first, so a claimed topic now reaches a workflow that exists; the
+second is phase 6's, and until it arrives the id resolves, nothing on
 the instance answers to it, the claimed unit takes the node's error
-output, and `Close Run Failed` writes its row as failed. Why a routed
-failure is the right shape for that is argued on
-`AR_TOPIC_WORKFLOW_ID` in `scripts/workflow-markers.ts`, and on the
-workflow's own canvas for an operator standing in front of it. What
-follows from a whole phase of it is this document's.
+output, and `Close Run Failed` writes its row as failed. One tick can
+now record both outcomes side by side. Why a routed failure is the
+right shape for the second is argued on `AR_TOPIC_WORKFLOW_ID` in
+`scripts/workflow-markers.ts`, and on the workflow's own canvas for an
+operator standing in front of it. What follows from two phases of it
+is this document's.
 
 The window does not compound, and what keeps it from compounding is
 the fold. A claim writes the row's next due time before anything looks

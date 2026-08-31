@@ -178,12 +178,14 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * is the work a topic coming due asks for, which is why the id is
    * the default here rather than something an operator supplies.
    *
-   * Neither id names a workflow that exists. The roster delivers
-   * `ar-ingest` in phase 5 and `ar-digest` in phase 6, so the
-   * dispatcher landing in this phase resolves a correct id, addresses
-   * it, and finds nothing behind it on the instance. That is the
-   * expected state for both settings rather than a misconfiguration:
-   * the value is right and the target has not been built.
+   * This id names a workflow that exists and the other does not. The
+   * roster delivered `ar-ingest` in phase 5 and reserves `ar-digest`
+   * for phase 6, so a claimed topic now resolves an id AND finds
+   * something behind it, where for two phases the dispatcher resolved
+   * a correct id and reached nothing. An absent target is still the
+   * expected state for `AR_EXPORT_WORKFLOW_ID` rather than a
+   * misconfiguration: the value is right and the target has not been
+   * built.
    *
    * A target that is not there is routed, not raised. The dispatcher
    * invokes through an Execute Workflow node, and that node carries a
@@ -197,8 +199,8 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * happened comes to read like one that did.
    *
    * So a run reading failed against an absent target is the accurate
-   * record until those phases land, not noise to be suppressed. What
-   * the error branch does not buy is a retry: claiming and
+   * record while the target is absent, not noise to be suppressed.
+   * What the error branch does not buy is a retry: claiming and
    * rescheduling are one statement, so the row's `next_run_at` moved
    * before the dispatch was attempted, and a row whose target is
    * missing waits its whole interval before anything tries it again.
@@ -222,20 +224,21 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    *
    * Its target arrives a phase later than the other half's —
    * `ar-ingest` in phase 5, `ar-digest` in phase 6 — so the two ids
-   * stop naming absent workflows at different times. Phase 5 is the
-   * window where that shows: a claimed topic reaches a workflow that
-   * exists while a claimed subscription still reaches nothing, and
-   * one tick records successes and failures side by side for a reason
-   * that is nobody's mistake. The error branch described under
-   * `AR_TOPIC_WORKFLOW_ID` is what keeps those two outcomes readable
-   * apart on the `runs` rows rather than letting the second read as a
-   * fault in the first.
+   * stopped naming absent workflows at different times, and phase 5
+   * opened the window where that shows: a claimed topic reaches a
+   * workflow that exists while a claimed subscription still reaches
+   * nothing, and one tick records successes and failures side by side
+   * for a reason that is nobody's mistake. The error branch described
+   * under `AR_TOPIC_WORKFLOW_ID` is what keeps those two outcomes
+   * readable apart on the `runs` rows rather than letting the second
+   * read as a fault in the first.
    */
   AR_EXPORT_WORKFLOW_ID: 'ar-digest',
 
   /**
-   * The workflow `ar-ingest` invokes to score the findings one of its
-   * passes produced.
+   * The workflow both of the pipeline's capture paths invoke to score
+   * the findings a pass produced: `ar-ingest` for what its adapters
+   * pulled, and `ar-capture` for what a client posted.
    *
    * Not one of the dispatcher's pair. `AR_TOPIC_WORKFLOW_ID` and
    * `AR_EXPORT_WORKFLOW_ID` above are a ROUTING choice made on the
@@ -257,12 +260,12 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * operator supplies.
    *
    * A name nothing answers for is a BUILD failure and not a run-time
-   * one. The marker in `ar-ingest.json` is resolved against the chain
-   * {@link envSources} builds, this table stands behind it, and a
-   * setting with no entry is {@link UnresolvedSettingError} before an
-   * artifact exists. A workflow id written into a source as a literal
-   * fails later and further away, on an instance, in a workflow
-   * nobody is watching.
+   * one. The marker each of `ar-ingest.json` and `ar-capture.json`
+   * carries is resolved against the chain {@link envSources} builds,
+   * this table stands behind it, and a setting with no entry is
+   * {@link UnresolvedSettingError} before an artifact exists. A
+   * workflow id written into a source as a literal fails later and
+   * further away, on an instance, in a workflow nobody is watching.
    */
   AR_SCORE_WORKFLOW_ID: 'ar-score',
 };

@@ -126,12 +126,13 @@ export const categories = pgTable('categories', {
  * row rather than a cut and a paste between two files that can both
  * end up holding it.
  *
- * Nothing matches on these rows yet. The matcher — how a pattern is
- * applied to a document, and how the hits are combined into a score —
- * arrives with the scoring port in phase 5. What the table fixes now
- * is the shape the matcher will read: pattern, magnitude and
- * direction as three separate columns, none of them inferable from
- * where the row is stored.
+ * Phase 5 is where a matcher started reading them. How a pattern is
+ * applied to a document and how the hits are combined into a score are
+ * `src/lib/features.ts` and `src/lib/aggregate-score.ts`, spliced into
+ * `ar-ingest` and `ar-score`. What the table fixed ahead of them is the
+ * shape a matcher reads: pattern, magnitude and direction as three
+ * separate columns, none of them inferable from where the row is
+ * stored.
  */
 export const terms = pgTable('terms', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
@@ -238,7 +239,8 @@ export const terms = pgTable('terms', {
  * matched as if it were a pattern — or rendered as if it were a
  * measurement — is wrong in both directions.
  *
- * Nothing reads these rows yet; the scoring port that does is phase 5.
+ * `ar-score` reads these rows, from phase 5, joined to the category
+ * each one hangs off; it is the scoring port that does.
  */
 export const criteria = pgTable('criteria', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
