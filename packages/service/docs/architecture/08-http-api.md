@@ -1428,3 +1428,129 @@ fetch whole.
 and it is the STORED length rather than the answered one — the two
 differ by exactly what was withheld, which is the number worth having
 when deciding whether to go to the database for the rest.
+
+## Topics
+
+### A topic is met in its domain and written by its id
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /domains/:slug/topics` | `200` with one page of the domain's topics, name ascending, plus `meta`. `404` for an unknown slug, `422` for a segment that is not a slug and for the pagination faults every list route answers. |
+| `POST /domains/:slug/topics` | `201` with the stored row, unscheduled. `422` for a body the schema refuses, `404` for an unknown slug, `409` when the domain already researches that name. |
+| `PATCH /topics/:id` | `200` with the row afterwards. `422` for a body the schema refuses and for a segment that is not an id, `404` for an unknown id, `409` when the resulting name is taken. |
+| `DELETE /topics/:id` | `204` with no body. `404` for an unknown id, `422` for a segment that is not one. Never `409`: nothing hangs off a topic. |
+
+`src/topics/routes.ts` declares all four and decides none of them:
+each handler reads the address, derives the window, calls the matching
+function in `src/topics/service.ts` and chooses a status.
+
+The collection hangs off `/domains/:slug` because a topic is a
+question asked ABOUT the subject a domain names, and a caller holding
+a slug should not have to look an id up to read it. The two writes
+address `/topics/:id` instead, for the reason a persona is written by
+id: the row carries its own `domain_id`, the one rule that spans a
+domain — a name unique within it — is the database's, and repeating
+the slug would let a request name a domain the row does not belong to.
+
+### Two more routes are this group's, and they are documented above
+
+`POST /topics/:id/run-now` and `POST /topics/:id/pause` belong to the
+same router and are not in the table above, because what they do is
+not what the four operations do: they write one column, they write no
+other, and the rules they answer to are stated once for both
+schedulable groups under `Schedule verbs`. Their rows join this table
+in the commit that lands them.
+
+The containment is structural rather than a convention the router
+keeps. `TopicServiceStore` is a `Pick` over two ports and does not
+name `updateTopicSchedule`, which is the only port method that writes
+`next_run_at`, so none of the four handlers above could reach the
+column even by mistake. The verbs widening that type is a change
+visible in one declaration.
+
+### A topic is created unscheduled, and a verb is what schedules it
+
+`POST /domains/:slug/topics` lands a row whose `nextRunAt` is null
+whatever the request said, because `InsertTopicInput` carries no such
+member. A null due time is never claimed — the dispatch claim reads
+`WHERE enabled AND next_run_at <= now()` — so a topic created here and
+never run-now'd sits at null until something writes an instant.
+
+That is stated rather than hidden, and it is the same state a seeded
+topic is in: `data/topics.json` leaves the column out on purpose. The
+alternative, defaulting a create to due-now, would make every import
+of a domain's topics a burst of runs nobody asked for.
+
+`enabled` defaults to true, so a topic staged switched off is one the
+body said so about. The two interact: `run-now` refuses a disabled
+row, so a topic created disabled has to be enabled by a `PATCH` before
+it can be run, which is the caller's own decision to take first.
+
+### A name is unique within its domain, and both writes can propose one
+
+`topics_domain_id_name_unique` refuses a name the domain already
+researches, on an INSERT and on an UPDATE alike. So a `409` carrying
+`code: 'CONFLICT'` is the answer from `POST /domains/:slug/topics` and
+from `PATCH /topics/:id` both, and the two are separate call sites
+rather than one rule stated twice.
+
+The key is per-domain and not global. The same name under a second
+domain is accepted, which is what makes two domains free to research
+the same subject through their own terms and their own cadence.
+
+`name` is patchable, as a persona's role is and as a domain's slug and
+a category's key are not. Nothing in schema v2 points at `topics`, and
+the seed upserts on `(domain, name)`, so a rename changes which row a
+seed pass adjusts rather than leaving a dangling pointer behind. That
+is why a rename can collide at all.
+
+The refusal names the rule and never the name, which is the validation
+rule above applied to the one refusal on this group whose cause is a
+value the caller sent.
+
+### `searchTerms` is replaced whole, and the bounds distinguish three
+
+A patch carrying `searchTerms` writes the list it was given. Nothing
+is merged into the stored list and nothing is appended to it, so
+removing a term is expressible and an empty array is a legal request
+meaning the topic issues nothing. That is the same rule a domain's
+`settings` is replaced under.
+
+`minIntervalSeconds` and `maxIntervalSeconds` distinguish three
+requests on a patch where they distinguish two on a create. Absent
+leaves the stored bound alone, a number sets it, and an explicit
+`null` clears it — the only way to remove a floor or a ceiling, and
+unexpressible if absent and null meant one thing. On a create there is
+nothing stored for an absence to leave alone, so the two fold
+together there.
+
+Each of the three interval members has to be a positive integer and
+none is checked against the others. A floor above its ceiling is not
+refused here: no CHECK relates the three, `clampIntervalSeconds`
+already resolves crossed bounds to the ceiling, and a refinement on
+this one path would enforce a rule the seed and every other writer
+would pass by.
+
+### A delete cannot be refused, and a create's `404` may be a lost race
+
+No foreign key in schema v2 points at `topics`, so removing one has
+neither a guard nor a cascade. There is no `?cascade=confirm` here and
+nothing for one to authorise, which is the difference from
+`DELETE /sources/:id`: a source accumulated a corpus that its
+documents and sightings still reference, and a topic accumulated
+nothing that names it. A run is not a counter-example — `runs` carries
+no `topic_id`, so what a run was about survives its topic as recorded
+text rather than as a reference.
+
+A delete and a disable are different operations and this surface means
+both. `enabled: false` through the patch keeps the subject, its terms
+and its cadence and stops the topic coming due; the delete takes them.
+Neither reaches work already dispatched, because the dispatcher claims
+a row and commits its reschedule in one transaction.
+
+`POST /domains/:slug/topics` resolves the domain and only then writes,
+so a foreign-key refusal out of that write means the domain was
+deleted in between. The fact to report is the one the lookup itself
+reports — no domain carries that slug — so it is the same `404` rather
+than a `500`, and a caller re-issuing the request gets one answer for
+one state however the timing fell.
