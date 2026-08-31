@@ -10,9 +10,9 @@ whether it is enforced today.
 The design the register comes from is
 `.specs/2026-08-19-research-pipeline-port.md`. Its §5 fixes the set
 below, with the hostname row carried from the migration-hygiene rules in
-§6, the bounded-chunk row from the risk register in that same §6, the
-category-depth row from the schema-v2 table roster in §2, the
-hash-dedupe row from the locked core vocabulary in §1, and the
+§6, the bounded-chunk and feature-version rows from the risk register in
+that same §6, the category-depth row from the schema-v2 table roster in
+§2, the hash-dedupe row from the locked core vocabulary in §1, and the
 proposed-configuration row from the parsing and validation rules in §4,
 all registered here alongside the rest; phase numbers throughout refer
 to the 7-phase sequencing in that design, §7. The deterministic-build
@@ -41,6 +41,7 @@ in the phase column names the item rather than a number.
 | No proposed configuration reaches a source row without a recorded approval | `source_config_proposals_approval_check`, the CHECK in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 5 | Implemented |
 | A category is a root or the child of a root, and nothing deeper | A trigger in the hand-written migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts`, with the opt-in `tests/live/schema.live.test.ts` watching a database refuse the write | 2 | Implemented |
 | Every document carries a hash, and no two carry the same one | The NOT NULL and UNIQUE pair on `documents.hash` in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
+| A stored feature vector names both the mechanism that produced it and the term set it was read against | `tests/lib/feature-version.test.ts`, holding the composed integer to both inputs at once — a term set reordered composes the same version, one member edited composes a different one, and the term digest survives every mechanism version; `tests/workflows/ar-ingest.test.ts` and `tests/workflows/ar-score.test.ts`, driving the built feature nodes and holding each version written beside a vector against what the domain's own mechanism and terms compose to | 5 | Implemented |
 | No naming from the project this pipeline was ported from survives in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No vault path appears in tracked source | `tests/invariants/naming.test.ts` | 1 | Implemented |
 | No real hostname appears in a tracked file | `tests/invariants/naming.test.ts` | 1 | Implemented |
