@@ -1,5 +1,5 @@
 /**
- * `src/topics/routes.ts` — what each of the four routes answers,
+ * `src/topics/routes.ts` — what each of the six routes answers,
  * refusing and landing: the status, the envelope and the members
  * each reaches the wire with. Driven over supertest against a
  * router built by the real factory, standing on
@@ -18,28 +18,36 @@
  * swallowed a throw on the way. So every case below reads a
  * response and none of them reads a return value.
  *
- * NINETEEN CASES IN THREE GROUPS. Ten cover seven ways a request to
- * this router can be wrong; six cover what the four routes answer
- * when they LAND; three are guards over the fixture and over the
- * key lists both halves are read through.
+ * TWENTY-FIVE CASES IN THREE GROUPS. Fifteen cover the ways a
+ * request to this router can be wrong; six cover what the four
+ * resource routes answer when they LAND; four are guards over the
+ * two fixtures and over the key lists every half is read through.
+ *
+ * TWO FIXTURES, BECAUSE THE VERBS NEED A STATE THE LIST CASES
+ * COUNT. {@link withTopics} is the collection every case above the
+ * verbs reads whole — its length, its order and the neighbour a
+ * write left alone — so a fourth row planted there for a verb
+ * would be a row every one of those assertions had to be taught
+ * about. {@link withSchedulable} plants its own three instead, one
+ * per state a verb decides on, and no case reads both.
  *
  * THE ADDRESS. A slug naming no domain is `404` on both operations
- * that take one, and an id naming no topic is `404` on both that
- * take one, each asserted against ONE shared body constant per
- * ADDRESS rather than four literals that agree today. The constants
- * are per address and not per status: a `404` about a domain and a
- * `404` about a topic are two envelopes on one router, and four
- * handlers are four chances to answer a missing row four different
- * ways. A segment that is not an ADDRESS at all is `422` naming
- * `id` or `slug` and never `404` — a `404` says the row is not
- * there, and a request that never named a row has not established
- * that. Both of those are asserted across the TWO routes that share
- * each segment inside one case, because two handlers are two
- * chances to narrow only one of them. The slug half is the only
- * reading in this file that `readSlug` narrows at all: every other
- * slug sent anywhere here is well-formed, so an unnarrowed segment
- * answers exactly what those cases already assert — measured, as
- * the grid below records.
+ * that take one, and an id naming no topic is `404` on all FOUR
+ * that take one, each asserted against ONE shared body constant
+ * per ADDRESS rather than six literals that agree today. The
+ * constants are per address and not per status: a `404` about a
+ * domain and a `404` about a topic are two envelopes on one
+ * router, and six handlers are six chances to answer a missing row
+ * six different ways. A segment that is not an ADDRESS at all is
+ * `422` naming `id` or `slug` and never `404` — a `404` says the
+ * row is not there, and a request that never named a row has not
+ * established that. Each is asserted across EVERY route sharing
+ * its segment inside one case, the id half over all four, because
+ * a handler is a chance to narrow only its own. The slug half is
+ * the only reading in this file that `readSlug` narrows at all:
+ * every other slug sent anywhere here is well-formed, so an
+ * unnarrowed segment answers exactly what those cases already
+ * assert — measured, as the grid below records.
  *
  * THE WINDOW. This list route IS paginated, unlike the taxonomy's,
  * so a `?perPage` above the cap is `422` naming `perPage` rather
@@ -65,8 +73,8 @@
  * asserted as the WHOLE envelope and from both writes. That is the
  * pipeline-owned-column rule reaching a caller: the column is
  * answered on every read and accepted by nothing, and the two
- * routes that may write it are the schedule verbs, which are not on
- * this router yet. Its control is the same body with the member
+ * routes that may write it are the verbs below, which name it in
+ * neither body. Its control is the same body with the member
  * removed, which is accepted and lands a `nextRunAt` of null — so
  * the pair says the refusal is about that MEMBER rather than about
  * a router refusing every create it is handed. Every positive case
@@ -81,6 +89,40 @@
  * — and takes the same count over a PLANTED envelope carrying it,
  * because a search that would find nothing anywhere reports a clean
  * refusal and a leaking one alike.
+ *
+ * THE VERBS REFUSE TWO STATES, AND THE PAIR IS WHAT SEPARATES
+ * THEM. `POST /topics/:id/run-now` is `409` for a row whose
+ * `enabled` is false; `POST /topics/:id/pause` is `409` for one
+ * whose `nextRunAt` is null. Each case drives the OTHER verb
+ * against its OWN subject and reads a `200`, which is available
+ * only because the fixture made the disabled row scheduled and the
+ * unscheduled row enabled: so the run-now's refusal can only be
+ * about `enabled` and the pause's can only be about the NULL. A
+ * verb that had copied its neighbour's guard passes one of the two
+ * cases and fails the other. The pause of the disabled row also
+ * reads `enabled` back false, which is the schema's rule that a
+ * pause is not a disable reaching a caller.
+ *
+ * `cycles` IS REFUSED AT TWO DIFFERENT FIELDS, and that pair is
+ * the reading rather than either half. A pause that sent NO body
+ * is `422` naming `body`, because there is nothing for the member
+ * to be missing from; a pause sending `{}` is `422` naming
+ * `cycles`. A handler defaulting the body with `?? {}` answers
+ * both the second way and passes every other case in this file. A
+ * `cycles` of zero is `too_small` at `cycles` and a `cycles` of
+ * one is accepted, which is the same one-past-the-refusal control
+ * the over-cap `perPage` case uses. What the schema refuses beyond
+ * those — a negative, a fraction, a count above the ceiling —
+ * is `src/topics/service.test.ts`'s claim over direct calls: those
+ * are RULES, and what this file adds is that one of them reached a
+ * caller in this envelope.
+ *
+ * WHAT THE VERBS ANSWER WHEN THEY LAND IS NOT THIS FILE'S CLAIM
+ * YET. Every `200` above is a control read for its status alone,
+ * so no case here compares a written instant against
+ * {@link CLOCK_INSTANT} except the one that needed a scheduled row
+ * to exist at all. The instant, the clamped cycle length and the
+ * idempotence of a second run-now land with the positive half.
  *
  * WHAT THE POSITIVE HALF READS IS A KEY SET AND NOT A FIELD. Every
  * answer below is held against a sorted list of the members it may
@@ -114,8 +156,12 @@
  * refused member is removed and resent, the wide list read is
  * paired with two windows of one, the full create body is paired
  * with the two members the schema requires and nothing else, the
- * patch is followed by two more that name other members, and the
- * `204` is followed by the same request answering `404`.
+ * patch is followed by two more that name other members, the
+ * `204` is followed by the same request answering `404`, each verb
+ * refusal is paired with the same verb against a row it takes AND
+ * with the other verb against its own subject, the absent body is
+ * paired with an empty one refused at a different field, and the
+ * zero count is paired with a count of one.
  *
  * WHAT THIS FILE DOES NOT CLAIM. That the router sits behind
  * `ctx.requireAuth` is `tests/api/wiring.test.ts`'s claim, and what
@@ -124,48 +170,71 @@
  * below is scoped to the one channel these routes open, which is
  * the value a refused pipeline-owned member carries.
  *
- * MUTATION GRID, re-derived over all nineteen cases by mutating
+ * MUTATION GRID, re-derived over all twenty-five cases by mutating
  * `routes.ts` one edit at a time and reading the failed `fullName`
- * SET from a `--reporter=json` run rather than a count. Eight legs,
- * each named by the EDIT it makes rather than by its effect, since
- * a leg described only by its effect is one nobody can run again.
- * Every figure belongs to this case list: the positive half moved
- * seven of the eight, and the figures recorded here before it
- * landed are the ones in parentheses.
+ * SET from a `--reporter=json` run rather than a count. THIRTEEN
+ * legs now, each named by the EDIT it makes rather than by its
+ * effect, since a leg described only by its effect is one nobody
+ * can run again. The eight the file already carried were all
+ * re-run rather than carried forward, and only the `:id` one moved.
  *
- * THE STATUS LEGS NOW LAND ON SUBJECTS AS WELL AS ON CONTROLS,
- * which is the difference the positive half makes to this file.
- * `res.status(201)` written as `200` on the create reddens FOUR
- * (three), the added one being the case named for a create;
- * `res.status(204)` written as `200` on the delete reddens THREE
- * (two); `res.status(200)` written as `204` on the patch reddens
- * THREE (two). The refusal half does pin every status this router
- * chooses, but by the half of each case that reads what IS there;
- * the positive half pins them by cases that are about them.
+ * THE FOUR RESOURCE-ROUTE STATUS LEGS ARE UNMOVED BY THE VERBS.
+ * `res.status(201)` written as `200` on the create reddens FOUR;
+ * `res.status(204)` written as `200` on the delete reddens THREE;
+ * `res.status(200)` written as `204` on the patch reddens THREE.
+ * Every figure is the one the positive half left, which is what
+ * says the verb cases reach none of those four handlers.
  *
- * THE ADDRESS LEGS ARE STILL THE MOST UNEVEN PAIR. Returning the
- * `:id` segment raw from {@link readId} reddens SIX (one), because
- * every positive case addresses a row by its id. Returning the
- * `:slug` raw from {@link readSlug} still reddens exactly ONE, the
- * not-a-slug case, and that is this file's shape rather than an
- * omission: every other slug it sends is well-formed.
+ * THE `:id` LEG IS THE ONE THE VERBS MOVED, from SIX to ELEVEN:
+ * returning the segment raw from {@link readId} reddens every case
+ * that addresses a row, and each of the five verb cases does.
+ * Returning the `:slug` raw from {@link readSlug} still reddens
+ * exactly ONE, the not-a-slug case, and that is this file's shape
+ * rather than an omission: every other slug it sends is
+ * well-formed, and no verb takes a `:slug` at all.
  *
- * THE THREE WINDOW LEGS SEPARATE, where two of them used to give an
- * identical set of one. A fixed `{ limit: 50, offset: 0 }` in place
- * of `toStoreWindow(query)` reddens the TWO list cases and NOT the
- * over-cap refusal, whose at-cap control asks for 200 and is
- * answered the whole two-row collection either way. `ok(page.rows)`
- * in place of `okPage(page.rows, meta)` reddens FIVE, which is
- * every case here that reads a `meta` at all — the two list
- * cases, the over-cap control, and the create and delete cases that
- * count a collection through `meta.total`.
+ * THE THREE WINDOW LEGS ARE UNMOVED AND STILL SEPARATE. A fixed
+ * `{ limit: 50, offset: 0 }` in place of `toStoreWindow(query)`
+ * reddens the TWO list cases and NOT the over-cap refusal, whose
+ * at-cap control asks for 200 and is answered the whole two-row
+ * collection either way. `ok(page.rows)` in place of
+ * `okPage(page.rows, meta)` reddens FIVE, every case that reads a
+ * `meta` at all. `total: page.rows.length` in place of
+ * `total: page.total` reddens the TWO list cases.
  *
- * AND THE ONE MEASURED ZERO IS CLOSED. `total: page.rows.length` in
- * place of `total: page.total` reddened NOTHING while this file was
- * refusals only, since no refusal case can afford a window narrower
- * than its collection. It now reddens the TWO list cases, which
- * read two windows of one over a roster of two and assert the total
- * of the COLLECTION on each.
+ * THE TWO VERB STATUS LEGS SEPARATE, and neither is redundant with
+ * the other. `res.status(200)` written as `201` on the run-now
+ * reddens THREE — the two cases whose control is a run-now, and
+ * the 404 case that drives both verbs. On the pause it reddens
+ * FIVE, which is every verb case: four drive a pause as their
+ * control and the fifth is about one. A router registering one
+ * handler's status on the other's route is a red set of eight.
+ *
+ * THE BODY LEG IS EXACTLY THE PAIR IT WAS WRITTEN FOR. `req.body`
+ * written as `req.body ?? {}` in the pause call reddens ONE, the
+ * absent-body case, and nothing else: every other pause in this
+ * file sends a body. That single red is the whole argument for the
+ * `{}` reading sitting inside that case rather than in one of its
+ * own.
+ *
+ * AND TWO CLOCK LEGS, OF WHICH ONE IS A MEASURED ZERO. Having the
+ * run-now read `new Date()` rather than `options.clock` reddens
+ * ONE — the pause case, whose run-now control reads the answered
+ * instant back. Having the PAUSE read the real present reddens
+ * NOTHING, and that zero is the scope boundary showing up as a
+ * measurement rather than thin coverage: no case here compares a
+ * paused instant against anything, because the arithmetic is the
+ * positive half's subject. Recorded so the leg is re-run there
+ * rather than re-derived.
+ *
+ * ONE FALSE RED WAS MEASURED AND DISCARDED. The run-now status leg
+ * first answered FOUR, the extra being a delete case that drives no
+ * verb; three re-runs of that leg answered THREE with an identical
+ * set. That is the macOS supertest port-steal flake, which
+ * `packages/service/AGENTS.md` describes and which no helper in
+ * `tests/helpers/` closes on this HEAD. A leg answering one case
+ * more than its edit can reach is worth re-running before it is
+ * written down.
  */
 import type { TopicRecord } from './store.js';
 import type {
@@ -326,6 +395,37 @@ const DEFAULT_PER_PAGE = 50;
 const SENTINEL_INSTANT = '2031-02-03T04:05:06.000Z';
 
 /**
+ * The present every case here is answered against.
+ *
+ * FIXED rather than real, which is what lets a verb's answer be
+ * compared exactly instead of against a window around the actual
+ * present — and what makes {@link DUE_LATER} reliably later than
+ * it. Far enough into the future that no planted row's due time
+ * can be confused with the moment the suite ran.
+ */
+const CLOCK_INSTANT = '2031-06-07T08:09:10.000Z';
+
+/**
+ * The due time {@link withSchedulable} plants on the two rows that
+ * are scheduled at all.
+ *
+ * LATER than {@link CLOCK_INSTANT}, and a whole day later so the
+ * gap is unmistakable in a failure message. Which of the two a
+ * pause bases on is `src/topics/service.test.ts`'s claim; what it
+ * has to be here is a value neither verb could answer by accident.
+ */
+const DUE_LATER = '2031-06-08T00:00:00.000Z';
+
+/** The name of the row both verbs take, scheduled and enabled. */
+const SCHEDULED_NAME = 'model routing';
+
+/** The name of the row the pause refuses: enabled, never scheduled. */
+const UNSCHEDULED_NAME = 'silicon supply';
+
+/** The name of the row the run-now refuses: scheduled, disabled. */
+const DISABLED_NAME = 'error correction';
+
+/**
  * The whole body a `404` about a domain answers with.
  *
  * One constant asserted by two cases rather than two literals,
@@ -429,6 +529,79 @@ const NEXT_RUN_AT_BODY = {
     field: 'body',
     message: 'Carries a key this endpoint does not declare.',
     code: 'unrecognized_keys',
+  }],
+};
+
+/**
+ * The whole body a run-now against a disabled topic answers with.
+ *
+ * `CONFLICT` and not `422`: the request is well formed and names a
+ * row that is there, and what refuses it is a STATE.
+ * {@link TOPIC_NOT_SCHEDULED_BODY} is its opposite number, and the
+ * two are asserted as WHOLES so a router answering one where the
+ * other was due is a red case rather than a matching status
+ * nobody looked past.
+ */
+const TOPIC_DISABLED_BODY = {
+  code: 'CONFLICT',
+  message: 'This topic is disabled, so a run now would never be claimed',
+};
+
+/** The whole body a pause against an unscheduled topic answers with. */
+const TOPIC_NOT_SCHEDULED_BODY = {
+  code: 'CONFLICT',
+  message: 'This topic is not scheduled, so there is no run to defer',
+};
+
+/**
+ * The whole body a pause that sent NO body at all answers with.
+ *
+ * The detail names `body` and not `cycles`, because there is
+ * nothing for the member to be missing FROM: `express.json()`
+ * leaves `req.body` undefined for a request that carried none, and
+ * an object schema handed one raises at its own root.
+ * {@link NO_CYCLES_BODY} is what the same route answers to `{}`,
+ * and the two together are what say this envelope is about the
+ * absent BODY rather than about any refused pause.
+ */
+const NO_BODY_SENT_BODY = {
+  code: 'VALIDATION_ERROR',
+  message: 'Validation failed',
+  details: [{
+    field: 'body',
+    message: 'Missing, or not of the expected type.',
+    code: 'invalid_type',
+  }],
+};
+
+/** The whole body a pause sending `{}` answers with. */
+const NO_CYCLES_BODY = {
+  code: 'VALIDATION_ERROR',
+  message: 'Validation failed',
+  details: [{
+    field: 'cycles',
+    message: 'Missing, or not of the expected type.',
+    code: 'invalid_type',
+  }],
+};
+
+/**
+ * The whole body a `cycles` of zero answers with.
+ *
+ * `too_small` rather than `invalid_type`, which is
+ * `.positive()` firing after `.int()` has passed. A fraction, a
+ * negative and a count above the ceiling are refusals of
+ * `pauseTopicSchema` and are pinned over direct calls in
+ * `src/topics/service.test.ts`; what this constant is here for is
+ * that ONE of them reaches a caller in this shape.
+ */
+const ZERO_CYCLES_BODY = {
+  code: 'VALIDATION_ERROR',
+  message: 'Validation failed',
+  details: [{
+    field: 'cycles',
+    message: 'Below the allowed minimum.',
+    code: 'too_small',
   }],
 };
 
@@ -546,6 +719,20 @@ interface NamedRow {
 }
 
 /**
+ * Reads the present, as every router built here is given it.
+ *
+ * A FRESH `Date` per call rather than one captured instant, so no
+ * handler can hand a case back the very object it would compare
+ * against — an equality that held because both sides were one
+ * reference would say nothing about what was stored.
+ *
+ * @returns {@link CLOCK_INSTANT}, always.
+ */
+function fixedClock(): Date {
+  return new Date(CLOCK_INSTANT);
+}
+
+/**
  * Builds an app carrying one freshly built topics router.
  *
  * `errorHandler` is registered LAST, exactly as `createService`
@@ -560,6 +747,11 @@ interface NamedRow {
  * A FRESH router and a fresh app per call, so no case can be
  * reached by state another one left.
  *
+ * The clock is {@link fixedClock} and is REQUIRED by the router, so
+ * every app here answers the two verbs against one instant this
+ * file chose. A real clock would leave a written `nextRunAt`
+ * comparable only against a window.
+ *
  * @param store - What the router acts against.
  * @returns The Express app, with the router mounted at `/`.
  */
@@ -567,7 +759,7 @@ function buildTopicsApp(store: MemoryResearchStore): Application {
   const app = express();
 
   app.use(express.json());
-  app.use(buildTopicsRouter({ store }));
+  app.use(buildTopicsRouter({ store, clock: fixedClock }));
   app.use(errorHandler(silentLogger));
 
   return app;
@@ -654,9 +846,94 @@ async function withTopics(): Promise<{
   };
 }
 
+/**
+ * One topic per state the two verbs decide on, and the app in front
+ * of them.
+ *
+ * A fixture of its own rather than three more rows in
+ * {@link withTopics}, because every case above reads that
+ * collection WHOLE — its length, its order, and the neighbour a
+ * write left alone — so a row added there for the verbs would be
+ * a row every list assertion had to be taught about.
+ *
+ * The three rows are the two-by-two the verbs read differently,
+ * minus the corner neither of them needs. {@link SCHEDULED_NAME} is
+ * enabled AND scheduled, so both verbs take it and it is the
+ * control in every case here. {@link UNSCHEDULED_NAME} is ENABLED
+ * and carries no due time, so the pause's `409` can only be about
+ * the NULL. {@link DISABLED_NAME} IS scheduled and disabled, so the
+ * run-now's `409` can only be about `enabled`. Each refusal case
+ * then drives the OTHER verb against its own subject and reads a
+ * `200`, which is what says the two guards are two rather than one
+ * guard reached twice.
+ *
+ * The two due times are planted through the PORT, which is the one
+ * method that writes the column at all. So a case about a verb is
+ * never also a case about the verb that would otherwise have had to
+ * set its fixture up.
+ *
+ * @returns The app and the three ids a request addresses the rows
+ *   by. Ids are addresses rather than readings, per
+ *   {@link withTopics}; the clock is not handed back either, since
+ *   {@link CLOCK_INSTANT} is the constant every case compares
+ *   against and reading it off the fixture would compare the
+ *   fixture with itself.
+ */
+async function withSchedulable(): Promise<{
+  app: Application;
+  scheduledId: number;
+  unscheduledId: number;
+  disabledId: number;
+}> {
+  const store = createMemoryResearchStore();
+  const domain = await store.insertDomain({
+    slug: STORED_SLUG,
+    name: 'Example Tech Radar',
+    settings: {},
+  });
+
+  async function plant(name: string, enabled: boolean): Promise<number> {
+    const topic = await store.insertTopic({
+      domainId: domain.id,
+      name,
+      searchTerms: [],
+      intervalSeconds: HOURLY,
+      enabled,
+      minIntervalSeconds: null,
+      maxIntervalSeconds: null,
+    });
+
+    return topic.id;
+  }
+
+  const scheduledId = await plant(SCHEDULED_NAME, true);
+  const unscheduledId = await plant(UNSCHEDULED_NAME, true);
+  const disabledId = await plant(DISABLED_NAME, false);
+
+  await store.updateTopicSchedule(scheduledId, new Date(DUE_LATER));
+  await store.updateTopicSchedule(disabledId, new Date(DUE_LATER));
+
+  return {
+    app: buildTopicsApp(store),
+    scheduledId,
+    unscheduledId,
+    disabledId,
+  };
+}
+
 /** The path a domain's topics are read and written at. */
 function topicsPath(slug: string): string {
   return `/domains/${slug}/topics`;
+}
+
+/** The path `POST /topics/:id/run-now` is sent to. */
+function runNowPath(id: number | string): string {
+  return `/topics/${id}/run-now`;
+}
+
+/** The path `POST /topics/:id/pause` is sent to. */
+function pausePath(id: number | string): string {
+  return `/topics/${id}/pause`;
 }
 
 /**
@@ -749,6 +1026,29 @@ describe('the fixture every case below is read through', () => {
       JSON.stringify(NEXT_RUN_AT_BODY),
       SENTINEL_INSTANT,
     )).toBe(0);
+  });
+
+  it('plants one row per state the two verbs decide on', () => {
+    // The three names are distinct, so the fixture cannot refuse
+    // its own second write on `topics_domain_id_name_unique` and
+    // leave a case addressing an id that was never planted.
+    const names = [SCHEDULED_NAME, UNSCHEDULED_NAME, DISABLED_NAME];
+
+    expect(new Set(names).size).toBe(names.length);
+    // And the fixture's present is EARLIER than the due time it
+    // plants. Both verb refusals below drive their control against
+    // a scheduled row, and a due time already in the past would
+    // make the pause's base the clock rather than the stored value
+    // — a difference the positive half reads and this half must
+    // not depend on either way.
+    expect(new Date(CLOCK_INSTANT).getTime())
+      .toBeLessThan(new Date(DUE_LATER).getTime());
+    // The two `409` sentences differ, which is what lets the two
+    // state guards be told apart at all: one constant answering
+    // both would make either case green against the other's
+    // refusal.
+    expect(TOPIC_DISABLED_BODY.message)
+      .not.toBe(TOPIC_NOT_SCHEDULED_BODY.message);
   });
 
   it('plants four term lists that differ from each other', () => {
@@ -887,19 +1187,33 @@ describe('a path segment that is not an address', () => {
       .patch('/topics/abc')
       .send({});
     const onDelete = await request(app).delete('/topics/abc');
+    const onRunNow = await request(app).post(runNowPath('abc'));
+    // A body the schema WOULD refuse, sent under a segment that is
+    // not an id. The answer names the SEGMENT, which is the one
+    // reading in this file that the pause narrows its address
+    // before `pauseTopic` ever sees a body: a handler in the other
+    // order answers about `cycles` and passes every other case
+    // here.
+    const onPause = await request(app)
+      .post(pausePath('abc'))
+      .send({ cycles: 0 });
     // The control, ending on an id that IS one: without it the
     // assertions above are equally green against a router refusing
     // every `:id` it is handed.
     const anId = await request(app).delete(`/topics/${inferenceId}`);
 
-    // Both writes that take an `:id`, against ONE body constant:
-    // two handlers are two chances to narrow the segment in only
-    // one of them, and nothing else in this package would report
-    // the half that was left raw.
+    // All FOUR routes that take an `:id`, against ONE body
+    // constant: four handlers are four chances to narrow the
+    // segment in only some of them, and nothing else in this
+    // package would report the half that was left raw.
     expect(onPatch.status).toBe(422);
     expect(onPatch.body).toStrictEqual(NOT_AN_ID_BODY);
     expect(onDelete.status).toBe(422);
     expect(onDelete.body).toStrictEqual(NOT_AN_ID_BODY);
+    expect(onRunNow.status).toBe(422);
+    expect(onRunNow.body).toStrictEqual(NOT_AN_ID_BODY);
+    expect(onPause.status).toBe(422);
+    expect(onPause.body).toStrictEqual(NOT_AN_ID_BODY);
     expect(anId.status).toBe(204);
   });
 
@@ -1067,6 +1381,159 @@ describe('a body naming the column the dispatcher owns', () => {
     // The planted control: without it both zeros above are equally
     // green against a search that would find nothing anywhere.
     expect(countOccurrences(leaked, SENTINEL_INSTANT)).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The verbs: two states each refuses, and the count one needs
+// ---------------------------------------------------------------------------
+
+describe('a verb naming no topic', () => {
+  it('answers 404 from both, and 200 for the stored id', async () => {
+    const { app, scheduledId } = await withSchedulable();
+
+    const ranMissing = await request(app).post(runNowPath(ABSENT_ID));
+    const pausedMissing = await request(app)
+      .post(pausePath(ABSENT_ID))
+      .send({ cycles: 1 });
+    // The controls, along the axis under test and through the SAME
+    // two operations. Both are needed rather than one: a verb that
+    // refused every id it was handed satisfies its own assertion
+    // above on its own, and the two verbs are two handlers.
+    const ran = await request(app).post(runNowPath(scheduledId));
+    const paused = await request(app)
+      .post(pausePath(scheduledId))
+      .send({ cycles: 1 });
+
+    // The SAME constant the patch and the delete answer with, which
+    // is the claim: the two verbs are a third and fourth chance to
+    // answer a missing row a new way, and they read the row before
+    // they write it rather than letting the write report it.
+    expect(ranMissing.status).toBe(404);
+    expect(ranMissing.body).toStrictEqual(NO_SUCH_TOPIC_BODY);
+    expect(pausedMissing.status).toBe(404);
+    expect(pausedMissing.body).toStrictEqual(NO_SUCH_TOPIC_BODY);
+    expect(ran.status).toBe(200);
+    expect(paused.status).toBe(200);
+  });
+});
+
+describe('a run-now against a topic that is disabled', () => {
+  it('answers 409 for a disabled row, which a pause takes', async () => {
+    const { app, disabledId, scheduledId } = await withSchedulable();
+
+    const refused = await request(app).post(runNowPath(disabledId));
+    // The first control, through the SAME operation against an
+    // enabled row: without it the assertion above is equally green
+    // against a run-now that refuses every topic it is given.
+    const ran = await request(app).post(runNowPath(scheduledId));
+    // The second, and the one no other case can stand in for: the
+    // SAME disabled row, PAUSED. That row is scheduled, so a pause
+    // takes it — which is what says this `409` is the run-now's own
+    // guard on `enabled` rather than something about the row, and
+    // that a pause is not a disable. A verb that had copied its
+    // neighbour's guard fails exactly here.
+    const paused = await request(app)
+      .post(pausePath(disabledId))
+      .send({ cycles: 1 });
+
+    // The WHOLE envelope, because the message is the answer: it
+    // names the reason a write would have been a silent no-op, and
+    // `409` rather than `422` says the request was well formed and
+    // the row was there.
+    expect(refused.status).toBe(409);
+    expect(refused.body).toStrictEqual(TOPIC_DISABLED_BODY);
+    expect(ran.status).toBe(200);
+    expect(paused.status).toBe(200);
+    // And the pause did not enable it on the way past, which is the
+    // column this pair is about.
+    expect(paused.body.data.enabled).toBe(false);
+  });
+});
+
+describe('a pause against a topic that is not scheduled', () => {
+  it('answers 409 for an unscheduled row a run-now takes', async () => {
+    const { app, unscheduledId, scheduledId } = await withSchedulable();
+
+    const refused = await request(app)
+      .post(pausePath(unscheduledId))
+      .send({ cycles: 1 });
+    // The first control, through the SAME operation against a
+    // scheduled row.
+    const paused = await request(app)
+      .post(pausePath(scheduledId))
+      .send({ cycles: 1 });
+    // The second: the SAME unscheduled row, RUN NOW. That row is
+    // enabled, so the run-now takes it and schedules it — which
+    // is what says this `409` is the pause's own guard on a NULL
+    // due time rather than a state both verbs refuse. It is also
+    // the repair the refusal implies: there is no run to defer
+    // until something has scheduled one.
+    const ran = await request(app).post(runNowPath(unscheduledId));
+
+    expect(refused.status).toBe(409);
+    expect(refused.body).toStrictEqual(TOPIC_NOT_SCHEDULED_BODY);
+    expect(paused.status).toBe(200);
+    expect(ran.status).toBe(200);
+    // The row the pause refused was answered a due time by the
+    // OTHER verb in the same case, so the NULL it refused was a
+    // state and not a row nothing could schedule.
+    expect(ran.body.data.nextRunAt).toBe(CLOCK_INSTANT);
+  });
+});
+
+describe('a pause body the schema refuses', () => {
+  it('answers 422 naming the body when none was sent', async () => {
+    const { app, scheduledId } = await withSchedulable();
+
+    const nothing = await request(app).post(pausePath(scheduledId));
+    // The discriminating pair rather than a control: `{}` IS a body
+    // and is refused at `cycles`, so the envelope above is about
+    // the body being ABSENT rather than about any refused pause. A
+    // handler passing `req.body ?? {}` answers both requests the
+    // second way and passes every other case in this file.
+    const empty = await request(app)
+      .post(pausePath(scheduledId))
+      .send({});
+    // The control, along the axis under test and through the SAME
+    // operation.
+    const counted = await request(app)
+      .post(pausePath(scheduledId))
+      .send({ cycles: 1 });
+
+    expect(nothing.status).toBe(422);
+    expect(nothing.body).toStrictEqual(NO_BODY_SENT_BODY);
+    expect(empty.status).toBe(422);
+    expect(empty.body).toStrictEqual(NO_CYCLES_BODY);
+    expect(counted.status).toBe(200);
+  });
+
+  it('answers 422 for a cycles of zero, and 200 for one', async () => {
+    const { app, scheduledId } = await withSchedulable();
+
+    const zero = await request(app)
+      .post(pausePath(scheduledId))
+      .send({ cycles: 0 });
+    // The control is ONE past the refusal rather than an arbitrary
+    // count, exactly as the over-cap `perPage` case is paired with
+    // a request at the cap: it says the refusal is a FLOOR and not
+    // a route that refuses every count it is handed.
+    const one = await request(app)
+      .post(pausePath(scheduledId))
+      .send({ cycles: 1 });
+
+    // `too_small` at `cycles`, asserted WHOLE: a zero writes the
+    // base back unchanged, which on an overdue row IS the
+    // extraordinary run a pause was asked to defer, so the refusal
+    // is the difference between the two verbs surviving.
+    expect(zero.status).toBe(422);
+    expect(zero.body).toStrictEqual(ZERO_CYCLES_BODY);
+    expect(one.status).toBe(200);
+    // Nothing the request submitted is in the refusal, which the
+    // whole-envelope assertion above already says and this states
+    // as the rule it is an instance of.
+    expect(countOccurrences(JSON.stringify(zero.body), 'cycles'))
+      .toBe(1);
   });
 });
 

@@ -98,23 +98,30 @@ writes the time and how it was worked out, never in what is stored.
 | --- | --- | --- |
 | Strict periodic | The row's `interval_seconds` added to now, clamped by its bounds. | `ar-dispatch`, inside the claim. |
 | Agent-driven | A gap the research agent proposes, clamped by the same bounds. | `ar-research`, phase 6. |
-| Extraordinary run | `next_run_at = now()`, so the next tick claims the row whatever its interval says. | An operator, by UPDATE. |
-| Pause for N cycles | `next_run_at` pushed out by N intervals. | An operator, by UPDATE. |
+| Extraordinary run | `next_run_at = now()`, so the next tick claims the row whatever its interval says. | An operator, through `POST /topics/:id/run-now` or `POST /exports/:id/run-now`, or by UPDATE. |
+| Pause for N cycles | `next_run_at` pushed out by N intervals. | An operator, through `POST /topics/:id/pause`, or by UPDATE. |
 
-### Two of the four are performed by something here today
+### Three of the four are performed by something here today
 
 `workflows/src/ar-dispatch.json` writes the periodic increment, inside
-the claim it takes. The agent path arrives with `ar-research` in phase
-6.
+the claim it takes. The agent path is the one still to arrive, with
+`ar-research` in phase 6.
 
-Both operator modes are now written in TypeScript as well.
-`runTopicNow` and `pauseTopic` in `src/topics/service.ts` are the
-extraordinary run and the pause for N cycles, each writing
-`next_run_at` through `TopicStore.updateTopicSchedule` and writing
-nothing else. Neither is reachable over HTTP yet — the two routes
-under `POST /topics/:id` land in their own commit, and
-`docs/architecture/08-http-api.md` carries the rules they answer to —
-so a hand-written UPDATE is still what an operator has.
+Both operator modes are now reachable over HTTP. `runTopicNow` and
+`pauseTopic` in `src/topics/service.ts` are the extraordinary run
+and the pause for N cycles, each writing `next_run_at` through
+`TopicStore.updateTopicSchedule` and writing nothing else, and
+`src/topics/routes.ts` answers them at the two paths the table
+names. `docs/architecture/08-http-api.md` carries the rules both
+obey, stated once for the two schedulable groups.
+
+A hand-written UPDATE remains a fourth writer rather than a
+fallback, and the table keeps naming it for that reason: nothing in
+the database refuses one, so a row whose due time nobody can account
+for was set by something, and the modes above are the vocabulary for
+saying which. The export subscriptions half of the run-now row is
+the route `src/subscriptions/routes.ts` will answer; the topics half
+answers today.
 
 That the modes worked before anything implemented them is the
 mechanism reporting rather than an accident: it reads one column, and

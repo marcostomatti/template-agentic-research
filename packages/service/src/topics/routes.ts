@@ -1,39 +1,58 @@
 /**
  * @packageDocumentation
- * The HTTP surface over `src/topics/service.ts`: four routes, and
+ * The HTTP surface over `src/topics/service.ts`: six routes, and
  * nothing in them that decides anything.
  *
  * `GET /domains/:slug/topics` is {@link listTopics},
  * `POST /domains/:slug/topics` is {@link createTopic},
- * `PATCH /topics/:id` is {@link patchTopic} and
- * `DELETE /topics/:id` is {@link deleteTopic}. What a handler adds
- * over the call it wraps is an address to read, a window to derive,
- * a status to choose and an envelope to write — so a change to a
- * topic RULE belongs one file over, and the cases that pin those
- * rules still need no server.
+ * `PATCH /topics/:id` is {@link patchTopic},
+ * `DELETE /topics/:id` is {@link deleteTopic},
+ * `POST /topics/:id/run-now` is {@link runTopicNow} and
+ * `POST /topics/:id/pause` is {@link pauseTopic}. What a handler
+ * adds over the call it wraps is an address to read, a window to
+ * derive, a status to choose and an envelope to write — so a
+ * change to a topic RULE belongs one file over, and the cases that
+ * pin those rules still need no server.
  *
- * FOUR ROUTES HERE AND TWO MORE TO COME, which is where this file
- * differs in SHAPE from its four wave-1 siblings rather than in
- * subject. `POST /topics/:id/run-now` and `POST /topics/:id/pause`
- * are the two schedule verbs, they act on a column no route below
- * writes, and they land beside these in their own commit.
+ * SIX ROUTES RATHER THAN FOUR, which is where this file differs
+ * in SHAPE from its four wave-1 siblings rather than in subject.
+ * The last two are the schedule verbs. They take no window, they
+ * answer no collection, and each writes one column the other four
+ * cannot name at all: `POST /topics/:id/run-now` moves
+ * `next_run_at` to the clock's instant and `POST /topics/:id/pause`
+ * moves it out by a count of cycles.
+ * `docs/architecture/08-http-api.md` states the rules both answer
+ * to once, under `Schedule verbs`, because the exports group has a
+ * run-now of its own answering to the same ones.
  *
- * THE CONTAINMENT NO LONGER SITS IN THE TYPE, and saying so is the
- * point. `TopicServiceStore` names `updateTopicSchedule` now that
- * `./service.ts` holds the two verbs, so the store this router is
- * handed CAN write `next_run_at` and the four handlers below are
- * kept off it by what they do rather than by what they hold: none
- * of them derives an instant, `TopicPatch` carries no such member,
- * and both request schemas refuse the key.
- * `tests/invariants/api-schedule-containment.test.ts` is what makes
- * that a property of the tree, since it reads the modules rather
- * than the types.
+ * THE CONTAINMENT IS WHAT A HANDLER DOES AND NOT WHAT IT HOLDS.
+ * `TopicServiceStore` names `updateTopicSchedule`, so the store
+ * every handler here is given CAN write `next_run_at`. What keeps
+ * the four resource routes off the column is that none of them
+ * derives an instant to write, `TopicPatch` carries no such
+ * member, and all three request schemas refuse the key. The two
+ * verbs derive one each and write it through the single service
+ * function that owns the column, which is the same containment
+ * read from the other side.
+ * `tests/invariants/api-schedule-containment.test.ts` makes it a
+ * property of the tree, since it reads the modules rather than the
+ * types.
+ *
+ * THE CLOCK IS SUPPLIED RATHER THAN READ, and it is a thunk for
+ * the reason `AuthRouterOptions.clock` gives: a router is built
+ * once at boot and answers for the life of the process, so a
+ * captured `Date` would freeze every instant a verb writes at the
+ * moment the wiring ran. It is REQUIRED rather than defaulted, so
+ * no caller can mount the verbs without having said which present
+ * they answer against — which is also what lets a case compare a
+ * written instant exactly rather than against a window around the
+ * real one.
  *
  * TWO PATH SHAPES, BECAUSE A TOPIC IS MET IN ITS DOMAIN AND WRITTEN
  * BY ITS ID. The collection hangs off `/domains/:slug`, since a
  * topic is a question asked ABOUT the subject a domain names and a
  * caller holding a slug should not have to look an id up to read
- * it. The two writes address `/topics/:id` instead: the row carries
+ * it. The other four address `/topics/:id` instead: the row carries
  * its own `domainId`, the one rule that spans a domain — a name
  * unique within it — is the database's, and repeating the slug in
  * the path would let a request name a domain the row does not
@@ -42,13 +61,13 @@
  * the rest of the surface.
  *
  * THE BODY IS NOT PARSED HERE, exactly as in the wave-1 routers and
- * for the same reason. {@link createTopic} and {@link patchTopic}
- * take an `unknown` and parse it themselves, because wave 3 exposes
- * those same functions as MCP tools and a body validated by the
- * router would leave that caller validating against a second schema
- * nobody would notice drifting. What a router owns instead is what
- * only HTTP has: the `:slug` and the `:id` in the path, and the
- * `?page`/`?perPage` window.
+ * for the same reason. {@link createTopic}, {@link patchTopic} and
+ * {@link pauseTopic} take an `unknown` and parse it themselves,
+ * because wave 3 exposes those same functions as MCP tools and a
+ * body validated by the router would leave that caller validating
+ * against a second schema nobody would notice drifting. What a
+ * router owns instead is what only HTTP has: the `:slug` and the
+ * `:id` in the path, and the `?page`/`?perPage` window.
  *
  * THIS LIST ROUTE IS PAGINATED, which is where it follows
  * `GET /domains/:slug/personas` rather than
@@ -70,6 +89,12 @@
  * answering it a 422 or a 404 depending on what happens to be
  * stored would make a caller's error depend on rows it never asked
  * about.
+ *
+ * THE PAUSE FOLLOWS THE PATCH, for that same reason. Its `:id` is
+ * narrowed here before {@link pauseTopic} sees a body, so
+ * `POST /topics/abc/pause` carrying a malformed count is answered
+ * about the segment. The run-now reads no body at all, so the
+ * question does not arise for it.
  *
  * THE QUERY IS READ BEFORE THE ADDRESS ON THE LIST, as it is on
  * every paginated list route here. Both faults are facts about the
@@ -103,10 +128,11 @@
  * THE PIPELINE-OWNED COLUMN IS ANSWERED AND NEVER ACCEPTED, which
  * is the surface-wide rule applied to the one column on this table
  * the dispatcher writes. `nextRunAt` is projected on every read
- * here and refused as an unrecognized key by both request schemas
- * one file over, so a caller can see when a topic next comes due
- * and cannot move it except through the two verbs that exist for
- * exactly that.
+ * here and refused as an unrecognized key by all three request
+ * schemas one file over, so a caller can see when a topic next
+ * comes due and cannot move it except through the two verbs below
+ * — which name the column in neither body and work out what to
+ * store from the row and the clock instead.
  *
  * PATHS ARE ROOT-ABSOLUTE AND THIS ROUTER MOUNTS AT `/`, which is
  * the surface-wide rule. The string below is the string on the
@@ -142,6 +168,8 @@ import {
   deleteTopic,
   listTopics,
   patchTopic,
+  pauseTopic,
+  runTopicNow,
 } from './service.js';
 
 /**
@@ -183,19 +211,31 @@ export interface TopicsRouterOptions {
    * `tests/helpers/memory-research-store.ts` can stand behind it
    * with no database up.
    *
-   * It NAMES `updateTopicSchedule`, which the four handlers below
-   * never call: the type widened when `./service.ts` grew the two
-   * schedule verbs, and one type stands for all six functions
+   * It NAMES `updateTopicSchedule`, and exactly two of the six
+   * handlers below call it: one type stands for all six functions
    * rather than a second `Pick` being kept in step with the first.
-   * What keeps `next_run_at` out of reach from the handlers below
-   * is stated in this module's header.
-   *
-   * The only member, and an options object regardless, so this
-   * router is built the way its siblings are and a dependency added
-   * here later is not a signature change at the one call site in
-   * `src/index.ts`.
+   * What keeps the other four off `next_run_at` is stated in this
+   * module's header.
    */
   readonly store: TopicServiceStore;
+
+  /**
+   * Reads the present, for the instant each schedule verb writes.
+   *
+   * Named `clock` here and `now` one level down, exactly as
+   * `AuthRouterOptions` names the same dependency: at this level
+   * it is what is being supplied, and at that one it is the
+   * reading being taken. A thunk rather than a `Date`, because a
+   * router built once at boot answers for the life of the process
+   * and a captured instant would freeze every write.
+   *
+   * REQUIRED rather than defaulted to `() => new Date()`. A
+   * default would let a caller mount the two verbs without having
+   * said which present they answer against, and the one place that
+   * silence would show is a case comparing a written instant
+   * against one it chose.
+   */
+  readonly clock: () => Date;
 }
 
 /**
@@ -249,8 +289,8 @@ function readId(params: unknown): number {
 /**
  * Builds the topics router.
  *
- * @param options - The store to act against; see
- *   {@link TopicsRouterOptions}.
+ * @param options - The store to act against and the clock the two
+ *   verbs read; see {@link TopicsRouterOptions}.
  * @returns A configured Express `Router`, to be mounted at `/` by
  *   the host application with `app.use(ctx.requireAuth, router)`.
  *
@@ -290,6 +330,22 @@ function readId(params: unknown): number {
  *   not one. Never `409`: nothing in schema v2 points at `topics`,
  *   so there is no guard here and no `?cascade=confirm` for one to
  *   be waived by.
+ * - `POST /topics/:id/run-now` — brings the next run forward to
+ *   the clock's instant. `200` with the stored row afterwards,
+ *   whose `nextRunAt` is that instant. `404` when no topic carries
+ *   the id, `422` for a segment that is not one, `409` with
+ *   `code: 'CONFLICT'` when the topic is disabled — such a row is
+ *   outside `topics_dispatch_claim_idx` and would look due forever
+ *   without ever being claimed. Reads no body, and calling it twice
+ *   is not refused.
+ * - `POST /topics/:id/pause` — pushes the next run out by
+ *   `cycles` of the topic's own clamped interval. `200` with the
+ *   stored row afterwards. `422` for a body `pauseTopicSchema`
+ *   refuses — an absent, zero, negative, fractional or
+ *   over-ceiling `cycles`, and any other key — and for a segment
+ *   that is not an id; `404` when no topic carries the id; `409`
+ *   when its `nextRunAt` is null, since pausing a row that is not
+ *   scheduled would SCHEDULE it.
  *
  * A NAME IS A 409 FROM BOTH WRITES, which this group has in common
  * with the personas group and not with the other two wave-1 ones.
@@ -298,11 +354,12 @@ function readId(params: unknown): number {
  * rename can reach `topics_domain_id_name_unique` exactly as a
  * create can.
  *
- * `nextRunAt` IS ANSWERED BY ALL FOUR AND ACCEPTED BY NONE. It is
- * refused as an unrecognized key by both request schemas, which is
- * `.strict()` doing its ordinary work rather than a check of its
- * own. The two routes that MAY write it are the schedule verbs, and
- * they are not on this router yet.
+ * `nextRunAt` IS ANSWERED BY ALL SIX AND ACCEPTED BY NONE. It is
+ * refused as an unrecognized key by all three request schemas,
+ * which is `.strict()` doing its ordinary work rather than a check
+ * of its own. The two routes that MAY write it are the verbs, and
+ * what each writes is worked out from the stored row and the
+ * injected clock rather than read off a request.
  *
  * Every one of them can also answer `401` with
  * `{ error: 'Unauthorized' }` — the guard's own body, in neither
@@ -425,6 +482,69 @@ export function buildTopicsRouter(options: TopicsRouterOptions): RouterType {
     await deleteTopic(options.store, readId(req.params));
 
     res.status(204).end();
+  });
+
+  /**
+   * POST /topics/:id/run-now
+   *
+   * Brings one topic's next run forward to the clock's instant.
+   *
+   * **Side effects:** writes `next_run_at` on one `topics` row and
+   * no other column — `TopicStore.updateTopicSchedule` takes a
+   * bare instant, so there is no member a second one could reach.
+   *
+   * `200` rather than `202`, and the difference is worth naming
+   * because a route spelled `run-now` invites the other reading. A
+   * `202` would say the work has been accepted and is under way,
+   * which is not what happened: nothing here runs anything. What
+   * the request produced is a stored row whose due time has moved,
+   * the answer carries that row, and `ar-dispatch` picks it up on
+   * the tick that follows.
+   *
+   * No body is read. `express.json()` having parsed one changes
+   * nothing, because {@link runTopicNow} takes no such argument, so
+   * a request that sent a body is answered exactly as one that did
+   * not.
+   */
+  router.post('/topics/:id/run-now', async (req, res) => {
+    const id = readId(req.params);
+    const ran = await runTopicNow(options.store, options.clock, id);
+
+    res.status(200).json(ok(ran));
+  });
+
+  /**
+   * POST /topics/:id/pause
+   *
+   * Defers one topic's next run by a count of its own cycles.
+   *
+   * **Side effects:** writes `next_run_at` on one `topics` row and
+   * no other column, per the run-now above. It does NOT write
+   * `enabled`: a pause and a disable are different requests with
+   * different undo, which is the schema keeping the two columns
+   * apart rather than a choice made in this handler.
+   *
+   * The id is narrowed before the body is seen, which is the patch
+   * ordering rather than the create one. {@link pauseTopic} parses
+   * the body first, but it is handed an id this file has already
+   * checked, so `POST /topics/abc/pause` carrying a malformed count
+   * is answered about the segment.
+   *
+   * `200` with the stored row rather than `204`, because the due
+   * time is the answer: the request counted CYCLES and the row
+   * carries an instant, so what comes back is the arithmetic the
+   * caller asked this surface to do.
+   */
+  router.post('/topics/:id/pause', async (req, res) => {
+    const id = readId(req.params);
+    const paused = await pauseTopic(
+      options.store,
+      options.clock,
+      id,
+      req.body,
+    );
+
+    res.status(200).json(ok(paused));
   });
 
   return router;

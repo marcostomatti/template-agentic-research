@@ -1187,14 +1187,13 @@ three dual-context rules that file is held to — no value import,
 declaration-form exports, nothing relying on module scope — so the
 splice gate keeps passing over a grown module.
 
-This narrows a sentence next door.
-`docs/architecture/06-scheduling.md` counts two of the four modes
-through the bounds, on the reading that an extraordinary run and a
-pause each write a timestamp directly. The timestamp half stays right:
-what `pauseFrom` clamps is the CYCLE LENGTH it multiplies, not the
-instant it stores. But that makes three of the four modes pass through
-the bounds rather than two, and that section is corrected in the
-commit that lands the verb rather than left to disagree with this one.
+This narrowed a sentence next door, and that sentence has been
+corrected. `docs/architecture/06-scheduling.md` used to count two of
+the four modes through the bounds, on the reading that an
+extraordinary run and a pause each write a timestamp directly. The
+timestamp half was right: what `pauseFrom` clamps is the CYCLE LENGTH
+it multiplies, not the instant it stores. But that makes THREE of the
+four modes pass through the bounds, and that section now says three.
 
 ### The API never claims a row, opens a run, or invokes a workflow
 
@@ -1439,8 +1438,10 @@ when deciding whether to go to the database for the rest.
 | `POST /domains/:slug/topics` | `201` with the stored row, unscheduled. `422` for a body the schema refuses, `404` for an unknown slug, `409` when the domain already researches that name. |
 | `PATCH /topics/:id` | `200` with the row afterwards. `422` for a body the schema refuses and for a segment that is not an id, `404` for an unknown id, `409` when the resulting name is taken. |
 | `DELETE /topics/:id` | `204` with no body. `404` for an unknown id, `422` for a segment that is not one. Never `409`: nothing hangs off a topic. |
+| `POST /topics/:id/run-now` | `200` with the row afterwards, whose `nextRunAt` is the service clock's instant. `404` for an unknown id, `422` for a segment that is not one, `409` when the topic is disabled. Reads no body. |
+| `POST /topics/:id/pause` | `200` with the row afterwards. `422` for a body the schema refuses and for a segment that is not an id, `404` for an unknown id, `409` when the topic is not scheduled. |
 
-`src/topics/routes.ts` declares all four and decides none of them:
+`src/topics/routes.ts` declares all six and decides none of them:
 each handler reads the address, derives the window, calls the matching
 function in `src/topics/service.ts` and chooses a status.
 
@@ -1452,24 +1453,34 @@ id: the row carries its own `domain_id`, the one rule that spans a
 domain — a name unique within it — is the database's, and repeating
 the slug would let a request name a domain the row does not belong to.
 
-### Two more routes are this group's, and they are documented above
+### The last two rows are ruled on above, not here
 
-`POST /topics/:id/run-now` and `POST /topics/:id/pause` belong to the
-same router and are not in the table above, because what they do is
-not what the four operations do: they write one column, they write no
-other, and the rules they answer to are stated once for both
-schedulable groups under `Schedule verbs`. Their rows join this table
-in the commit that lands them.
+`POST /topics/:id/run-now` and `POST /topics/:id/pause` are in the
+table because they are this router's, and their answers are in it
+because a reader looking up a path should find one. What is NOT
+restated here is the reasoning: they write one column and no other,
+and the rules behind each status — the disabled row, the
+unscheduled row, the required `cycles`, the clamp the count
+multiplies — are stated once for both schedulable groups under
+`Schedule verbs`, because `POST /exports/:id/run-now` answers to the
+same ones. Duplicating them here would give this surface two places
+to disagree with itself about the same rule.
 
-`TopicServiceStore` now names `updateTopicSchedule`, because
+The clock is supplied to the router rather than read inside it, as
+`AuthRouterOptions` supplies one for session expiry: a router built
+once at boot and answering for the life of the process must not
+close over the instant its wiring ran at.
+
+`TopicServiceStore` names `updateTopicSchedule`, because
 `src/topics/service.ts` holds the two verbs and one type stands for
 all six functions rather than a second `Pick` being kept in step with
-the first. So the containment is not that the four handlers above
-hold a store that cannot write `next_run_at`; it is that none of them
-derives an instant to write. `TopicPatch` carries no such member,
-both request schemas refuse the key, and
-`tests/invariants/api-schedule-containment.test.ts` reads the modules
-rather than the types.
+the first. So the containment is not that the handlers hold a store
+that cannot write `next_run_at`; it is that exactly two of the six
+derive an instant to write, and both do it through the one service
+function that owns the column. The other four derive none,
+`TopicPatch` carries no such member, all three request schemas refuse
+the key, and `tests/invariants/api-schedule-containment.test.ts`
+reads the modules rather than the types.
 
 ### A topic is created unscheduled, and a verb is what schedules it
 
