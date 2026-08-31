@@ -4,11 +4,11 @@
  * `tests/helpers/memory-research-store.ts`, so every claim here is
  * answered with no database anywhere.
  *
- * ELEVEN CLAIMS IN TWO HALVES. The first seven are the ways this
+ * TWELVE CLAIMS IN TWO HALVES. The first seven are the ways this
  * module says no, and each carries the narrow CONTROL its refusal
  * needs, varied along the one axis the refusal turns on, because a
  * module refusing everything passes every assertion a refusal case
- * makes on its own. The last four are the reads and writes that go
+ * makes on its own. The last five are the reads and writes that go
  * through, and they carry the same discipline the other way round:
  * each write is compared as a WHOLE record against the row as it
  * was, because an operation reaching a member nobody submitted
@@ -157,11 +157,36 @@
  * next create — the one reading that says the key went with the
  * row rather than outliving it.
  *
+ * THAT EACH VERB WRITES THE INSTANT IT DERIVED, AND THE PAUSE
+ * DERIVES ITS OWN IN THREE STEPS. A run-now is an EQUALITY against
+ * the injected clock rather than a window, which is the whole
+ * reason the clock is injected, with a second call after the clock
+ * moves beside it: one equality against one fixed instant is also
+ * satisfied by a verb writing a constant and by one that resolved
+ * the thunk when the dependency was assembled. The pause is read
+ * as three separate claims because no single case can separate
+ * them. The COUNT, over a row whose bounds do not bite, so one
+ * cycle and three cycles differ in nothing else. The BASE, over
+ * the two rows where the two simpler rules are each wrong — an
+ * overdue row, which basing on the stored time alone leaves
+ * overdue, and a row due in a week, which basing on the clock
+ * alone pulls six days FORWARD on a request to defer it. And the
+ * CLAMP, over one row whose cadence a floor raises and one whose
+ * cadence a ceiling lowers, the second paused by TWO cycles so
+ * that clamping one cycle is told from clamping the span: a rule
+ * multiplying first would answer the ceiling itself there and is
+ * separated from the right answer by a factor of two. The
+ * fixture's own bounded topic cannot carry any of that — it runs
+ * hourly between a ten-minute floor and a daily ceiling, so its
+ * clamp is the identity and a clamp that had stopped happening
+ * would answer it correctly.
+ *
  * Mutation legs, run over this file with `--reporter=json` and read
  * as the failed case SET rather than as a count. The first
  * seventeen were measured against 102 cases and are recorded
  * below; the schedule verbs took the file to 139 and added twelve
- * of their own, measured there.
+ * of their own, measured there; the verbs' positive half took it
+ * to 145 and added five, measured there and recorded last.
  *
  * THE OLD SEVENTEEN WERE NOT ALL RE-RUN, and the argument for that
  * is what makes the bounded run honest rather than a shortcut. The
@@ -288,12 +313,47 @@
  * to the parse — so the two ordering cases are one claim each
  * rather than a pair, and only the first has a leg.
  *
- * The twelfth reddens ZERO and is recorded rather than repaired:
- * basing the pause on the clock alone instead of on the later of
- * the clock and the stored due time changes nothing here. That
- * rule is the positive half's, and this file's schedule sections
- * are refusals — the cases that would report it land with the
- * verbs' positive cases.
+ * The twelfth reddened ZERO when the refusals were the whole of
+ * the verbs' coverage, and was recorded rather than repaired
+ * against the case that would report it landing later: basing the
+ * pause on the clock alone instead of on the later of the clock
+ * and the stored due time changed nothing while this file's
+ * schedule sections were refusals. It now reddens exactly 1, the
+ * due-later case, and nothing outside the new section — which is
+ * the prediction discharged rather than a leg that moved.
+ *
+ * THE FIVE POSITIVE LEGS, measured against 145 cases, and every
+ * one of them lands ENTIRELY inside the new section. Three mutate
+ * `src/lib/schedule.ts` rather than this module, which is a third
+ * external target beside the two store legs above and is the point
+ * of them: the arithmetic is the library's, so a service leg
+ * cannot reach it and a section claiming the clamp with no such
+ * leg would be reading a rule nothing here pins. Dropping the
+ * clamp reddens 1 and clamping the SPAN rather than the cycle
+ * reddens the same 1 — the bounds case, which is what says its
+ * two-cycle row is carrying that second reading — while ignoring
+ * `cycles` altogether reddens 2, the three-cycle case and the
+ * bounds case again. Basing the pause on the stored time alone
+ * reddens exactly 1, the overdue case, so the two base legs redden
+ * DISJOINT single cases and the pair is what makes the rule
+ * two-directional rather than one-way. Having the run-now read the
+ * real present rather than the thunk reddens 1.
+ *
+ * FOUR OF THE OLD LEGS MOVED, and each was re-run rather than
+ * predicted, with the recorded figure held against its reds
+ * OUTSIDE the new section — which is what says the leg rebuilt is
+ * the leg the prose names. Defaulting `enabled` to false stays at
+ * 6 outside and gains the run-now case. Defaulting a bound to zero
+ * rather than null stays at 3 outside and gains FIVE, every case
+ * in the new section: an absent bound stored as zero is a ceiling
+ * of zero, so every pause answers its own base. Lowering the
+ * cycles ceiling to one stays at 1 outside and gains the two cases
+ * that pause by more than one cycle. Two others reachable through
+ * `createTopic` were re-run and did NOT move, which is the reading
+ * they were run for: defaulting `searchTerms` to a non-empty list
+ * stays at exactly 2 and narrowing it to `.min(1)` at exactly 2,
+ * because the new section submits no term list and supplies no
+ * name a duplicate could take.
  *
  * What no module mutation reaches, by construction: the table
  * guards read only the tables beside them and are aimed at a later
@@ -3023,5 +3083,273 @@ describe('what a delete takes', () => {
     // topic issued did not come with the name.
     expect(created.id).not.toBe(planted.transformers.id);
     expect(created.searchTerms).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the two verbs move
+// ---------------------------------------------------------------------------
+
+/**
+ * Milliseconds in a second, so an expected instant below is
+ * arithmetic a reader can check rather than a date literal.
+ *
+ * Spelled here rather than read off `src/lib/schedule.ts`, where
+ * the same constant is private, for the reason {@link MAX_CYCLES}
+ * gives: a test taking a factor out of the module it is checking
+ * agrees with that module whatever the module holds.
+ */
+const MILLISECONDS_PER_SECOND = 1000;
+
+/**
+ * How far behind the clock an overdue topic's due time is planted.
+ *
+ * Three cycles late rather than a moment late, so the two
+ * candidate bases sit further apart than the interval being added
+ * to them — which is what keeps the two expected instants below
+ * from being separable only by a rounding.
+ */
+const OVERDUE_BY = HOURLY * 3;
+
+/**
+ * How far ahead of the clock a topic due later is planted.
+ *
+ * A week, which is where the clock-alone rule is wrong most
+ * visibly: a pause of this row basing on the present would pull it
+ * six days FORWARD on a request to defer it.
+ */
+const DUE_LATER_IN = HOURLY * 24 * 7;
+
+/** A cadence below the floor the row carrying it declares. */
+const TOO_FREQUENT = 60;
+
+/** The floor that raises it, ten times that cadence. */
+const FLOOR = 600;
+
+/** A cadence above the ceiling the row carrying it declares. */
+const TOO_RARE = 86400;
+
+/** The ceiling that lowers it, a twelfth of that cadence. */
+const CEILING = 7200;
+
+/**
+ * The instant `seconds` seconds after `base`.
+ *
+ * The arithmetic written out rather than taken from `pauseFrom`,
+ * which is the rule under test two calls away: an expected value
+ * derived from the rule it is checking agrees with that rule
+ * however wrong the rule is. A negative offset reads backwards,
+ * which is how the overdue fixture below is planted.
+ *
+ * @param base - The instant to measure from.
+ * @param seconds - How far after it, or before it when negative.
+ * @returns A fresh `Date`, so nothing a caller holds moves.
+ */
+function secondsAfter(base: Date, seconds: number): Date {
+  return new Date(base.getTime() + seconds * MILLISECONDS_PER_SECOND);
+}
+
+describe('what the two verbs move', () => {
+  it('writes the instant the run-now clock read', async () => {
+    // An EQUALITY rather than a window, which is the whole reason
+    // the clock is injected: a verb reading the real present
+    // answers a plausible instant no assertion could pin. The
+    // whole record is compared against the row as it was, per this
+    // file's discipline — a run-now that moved a second column
+    // answers a perfectly ordinary topic.
+    const planted = await plantTopics();
+
+    const ran = await runTopicNow(
+      planted.store,
+      planted.clock.now,
+      planted.transformers.id,
+    );
+
+    expect(ran).toStrictEqual({
+      ...planted.transformers,
+      nextRunAt: FIXED_INSTANT,
+    });
+
+    // And again from a clock that has moved. One equality against
+    // one fixed instant is also satisfied by a verb writing a
+    // constant, and by one that resolved the thunk when the
+    // dependency was assembled rather than at the write.
+    planted.clock.advanceSeconds(HOURLY);
+
+    const moved = secondsAfter(FIXED_INSTANT, HOURLY);
+    const again = await runTopicNow(
+      planted.store,
+      planted.clock.now,
+      planted.transformers.id,
+    );
+
+    expect(again.nextRunAt).toStrictEqual(moved);
+
+    // Read off the row rather than off the answer: a verb that
+    // answered an instant it did not store satisfies every line
+    // above, and this surface has no other reader of the column to
+    // report it.
+    const stored = await planted.store.findTopicById(
+      planted.transformers.id,
+    );
+
+    expect(stored?.nextRunAt).toStrictEqual(moved);
+  });
+
+  it('moves a pause of one cycle by one interval', async () => {
+    // The unbounded topic, so the clamp is the identity here and
+    // what the case reads is the cadence itself. Scheduled AT the
+    // clock, so the two candidate bases agree and this case is
+    // about the multiplication alone — which base is taken is the
+    // pair of cases below.
+    const planted = await plantTopics();
+
+    await schedule(planted, planted.transformers);
+
+    const paused = await pauseTopic(
+      planted.store,
+      planted.clock.now,
+      planted.transformers.id,
+      { cycles: 1 },
+    );
+
+    expect(paused).toStrictEqual({
+      ...planted.transformers,
+      nextRunAt: secondsAfter(FIXED_INSTANT, HOURLY),
+    });
+  });
+
+  it('moves a pause of three cycles by three intervals', async () => {
+    // A verb deferring by one cycle whatever it was asked answers
+    // the case above and fails this one. Same row, same base, same
+    // body member: the count is the only thing that moved between
+    // the two cases.
+    const planted = await plantTopics();
+
+    await schedule(planted, planted.transformers);
+
+    const paused = await pauseTopic(
+      planted.store,
+      planted.clock.now,
+      planted.transformers.id,
+      { cycles: 3 },
+    );
+
+    expect(paused.nextRunAt)
+      .toStrictEqual(secondsAfter(FIXED_INSTANT, HOURLY * 3));
+
+    // Not the one-cycle answer, spelled rather than left implied:
+    // the equality above is a reading about the count only while
+    // the value it could otherwise have been is named.
+    expect(paused.nextRunAt)
+      .not.toStrictEqual(secondsAfter(FIXED_INSTANT, HOURLY));
+  });
+
+  it('bases an overdue pause on the clock', async () => {
+    // The stored due time is three cycles BEHIND the clock, so the
+    // two candidate bases disagree and the answer says which was
+    // taken. Basing on the stored time alone would leave the row
+    // overdue — a pause of a row three days late buys nothing at
+    // all until the dispatcher has caught up with it.
+    const planted = await plantTopics();
+    const overdue = secondsAfter(FIXED_INSTANT, -OVERDUE_BY);
+
+    await schedule(planted, planted.transformers, overdue);
+
+    const paused = await pauseTopic(
+      planted.store,
+      planted.clock.now,
+      planted.transformers.id,
+      { cycles: 1 },
+    );
+
+    expect(paused.nextRunAt)
+      .toStrictEqual(secondsAfter(FIXED_INSTANT, HOURLY));
+
+    // The control the equality cannot carry on its own: the other
+    // base is a real instant this same call could have answered,
+    // and naming it is what makes the line above a choice rather
+    // than an arithmetic coincidence.
+    expect(paused.nextRunAt)
+      .not.toStrictEqual(secondsAfter(overdue, HOURLY));
+  });
+
+  it('bases a pause due later on the stored due time', async () => {
+    // The other direction, and the one the clock-alone rule is
+    // wrong in: a topic due in a week is pulled six days FORWARD
+    // by a request to defer it. Two controls rather than one,
+    // because an equality on its own does not say the pause
+    // DEFERRED anything at all.
+    const planted = await plantTopics();
+    const later = secondsAfter(FIXED_INSTANT, DUE_LATER_IN);
+
+    await schedule(planted, planted.transformers, later);
+
+    const paused = await pauseTopic(
+      planted.store,
+      planted.clock.now,
+      planted.transformers.id,
+      { cycles: 1 },
+    );
+
+    expect(paused.nextRunAt).toStrictEqual(secondsAfter(later, HOURLY));
+    expect(paused.nextRunAt)
+      .not.toStrictEqual(secondsAfter(FIXED_INSTANT, HOURLY));
+    expect(paused.nextRunAt?.getTime()).toBeGreaterThan(later.getTime());
+  });
+
+  it('clamps each row by the bounds that row carries', async () => {
+    // Two rows the clamp actually moves, in opposite directions.
+    // The fixture's own bounded topic runs hourly between a
+    // ten-minute floor and a daily ceiling, so nothing about it
+    // would report a clamp that had stopped happening; these two
+    // are planted for that reason. A verb applying only the floor
+    // answers the first of them and fails the second.
+    const planted = await plantTopics();
+
+    const raised = await createTopic(planted.store, RADAR, {
+      name: 'sea ice extent',
+      intervalSeconds: TOO_FREQUENT,
+      minIntervalSeconds: FLOOR,
+    });
+    const lowered = await createTopic(planted.store, RADAR, {
+      name: 'grid inertia',
+      intervalSeconds: TOO_RARE,
+      maxIntervalSeconds: CEILING,
+    });
+
+    await schedule(planted, raised);
+    await schedule(planted, lowered);
+
+    const floored = await pauseTopic(
+      planted.store,
+      planted.clock.now,
+      raised.id,
+      { cycles: 1 },
+    );
+
+    expect(floored.nextRunAt)
+      .toStrictEqual(secondsAfter(FIXED_INSTANT, FLOOR));
+    expect(floored.nextRunAt)
+      .not.toStrictEqual(secondsAfter(FIXED_INSTANT, TOO_FREQUENT));
+
+    // Two cycles rather than one on this row, which buys a second
+    // reading for nothing: the clamp applies to ONE cycle and the
+    // product is taken afterwards, so a rule multiplying first and
+    // clamping the span would answer the ceiling itself here and
+    // is told from the right answer by a factor of two.
+    const capped = await pauseTopic(
+      planted.store,
+      planted.clock.now,
+      lowered.id,
+      { cycles: 2 },
+    );
+
+    expect(capped.nextRunAt)
+      .toStrictEqual(secondsAfter(FIXED_INSTANT, CEILING * 2));
+    expect(capped.nextRunAt)
+      .not.toStrictEqual(secondsAfter(FIXED_INSTANT, TOO_RARE * 2));
+    expect(capped.nextRunAt)
+      .not.toStrictEqual(secondsAfter(FIXED_INSTANT, CEILING));
   });
 });
