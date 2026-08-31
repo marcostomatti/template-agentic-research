@@ -181,12 +181,31 @@
  * clamp is the identity and a clamp that had stopped happening
  * would answer it correctly.
  *
+ * Beside those three sits the unmoved-column reading, which none
+ * of them can give: each compares a DUE TIME, so a verb that also
+ * cleared a bound, flipped `enabled` or renamed the row answers
+ * every one of them. The last case compares the stored row
+ * against a copy of itself taken before the call, member for
+ * member over every `TopicRecord` key but `nextRunAt` — the
+ * exclusion written as an `Omit` and the list held against what
+ * that leaves by `satisfies` and by a conditional pin, so a
+ * column added to `topics`, or to `schedulableColumns()`, has to
+ * be named there or `check-types` refuses the list rather than
+ * the comparison quietly narrowing. Two rows rather than one,
+ * because the nullable bounds have to be read in both states: a
+ * verb WRITING a bound moves the row carrying none and one
+ * CLEARING a bound moves the row carrying both. And the control
+ * both equalities need is that the due time DID move on each row,
+ * since a verb writing nothing at all satisfies a comparison that
+ * nothing moved.
+ *
  * Mutation legs, run over this file with `--reporter=json` and read
  * as the failed case SET rather than as a count. The first
  * seventeen were measured against 102 cases and are recorded
  * below; the schedule verbs took the file to 139 and added twelve
  * of their own, measured there; the verbs' positive half took it
- * to 145 and added five, measured there and recorded last.
+ * to 145 and added five, measured there; and the unmoved-column
+ * case took it to 146 and added five more, recorded last.
  *
  * THE OLD SEVENTEEN WERE NOT ALL RE-RUN, and the argument for that
  * is what makes the bounded run honest rather than a shortcut. The
@@ -354,6 +373,37 @@
  * stays at exactly 2 and narrowing it to `.min(1)` at exactly 2,
  * because the new section submits no term list and supplies no
  * name a duplicate could take.
+ *
+ * THE FIVE UNMOVED-COLUMN LEGS, measured against 146 cases. Three
+ * of them are the ones no earlier leg in this file could stand in
+ * for: they make a schedule verb write a SECOND column, which
+ * every other leg here leaves alone. Having the shared schedule
+ * write also disable the row reddens 3, having it also rename the
+ * row reddens 4, and having it write nothing at all reddens 7 —
+ * that last one being the control rather than a rule, since a
+ * verb that wrote nothing satisfies a comparison that nothing
+ * moved. All three redden the new case among them.
+ *
+ * The other two are `check-types` legs rather than case legs, and
+ * they close the two directions of the key list the comparison is
+ * built from. Dropping a member from the list is a TS2322 at the
+ * conditional pin, `true` not assignable to `false`. Adding one
+ * optional column to `TopicRecord` is a TS2322 at that same pin
+ * AND at the older `EVERY_KEY_LISTED` beside it — the drift the
+ * pair exists for, since a column reaching this record through
+ * `schedulableColumns()` cannot sit outside the comparison
+ * without one of them going red.
+ *
+ * TWO MORE OF THE OLD LEGS MOVED AND FIVE DID NOT, each re-run
+ * rather than predicted. Defaulting `enabled` to false stays at 6
+ * outside the new section and now reddens 2 inside it; having the
+ * run-now read the real present rather than the thunk goes from 1
+ * to 2. The five that did not move are the reading they were run
+ * for: defaulting a bound to zero stays at 8, basing the pause on
+ * the stored time alone at 1, and the three library legs at 1, 1
+ * and 2 — the new case pauses a row whose bounds do not bite, by
+ * one cycle, from a due time planted at the clock, so no clamp,
+ * no count and no base rule can reach it.
  *
  * What no module mutation reaches, by construction: the table
  * guards read only the tables beside them and are aimed at a later
@@ -3149,6 +3199,90 @@ function secondsAfter(base: Date, seconds: number): Date {
   return new Date(base.getTime() + seconds * MILLISECONDS_PER_SECOND);
 }
 
+/**
+ * Every `TopicRecord` member except the due time, as the set a
+ * schedule verb must leave exactly where it found it.
+ *
+ * DERIVED FROM THE RECORD RATHER THAN LISTED BY HAND. The seven
+ * columns worth naming in a sentence are not the claim; the claim
+ * is that `nextRunAt` is the ONLY exception, so the exclusion is
+ * written as an `Omit` and the list below is held against what
+ * that leaves. A column added to `topics` — or to the
+ * `schedulableColumns()` helper that reaches this record with no
+ * topic module edited at all — then has to be named here or
+ * `satisfies` refuses the list, where a hand-written seven would
+ * have gone on comparing seven members of a wider record, green
+ * forever.
+ */
+type UnmovedByASchedule = Omit<TopicRecord, 'nextRunAt'>;
+
+/** Those members, named, in the order {@link TOPIC_KEYS} uses. */
+const UNMOVED_KEYS = [
+  'domainId',
+  'enabled',
+  'id',
+  'intervalSeconds',
+  'maxIntervalSeconds',
+  'minIntervalSeconds',
+  'name',
+  'searchTerms',
+] as const satisfies readonly (keyof UnmovedByASchedule)[];
+
+/** {@link UNMOVED_KEYS}, held against what it describes. */
+type EveryUnmovedKeyListed =
+  CoversEveryKey<UnmovedByASchedule, typeof UNMOVED_KEYS>;
+
+/**
+ * The `check-types` half of that pin, per {@link EVERY_KEY_LISTED}.
+ *
+ * `satisfies` above closes the direction where the list names a
+ * member the record lacks. This closes the one that matters here:
+ * a column arriving on `TopicRecord` and not on the list would sit
+ * outside every comparison below without one case going red —
+ * which is exactly where a verb writing an extra column would
+ * hide.
+ */
+const EVERY_UNMOVED_KEY_LISTED: EveryUnmovedKeyListed = true;
+
+/**
+ * One topic's {@link UNMOVED_KEYS} members, and nothing else.
+ *
+ * Built FROM the list rather than by spreading the row and
+ * deleting the due time off it: a spread compares whatever members
+ * the record happens to carry, which is green against precisely
+ * the column nobody knew had arrived.
+ *
+ * @param topic - The row to project.
+ * @returns Its members under those keys.
+ */
+function unmovedMembers(topic: TopicRecord): Record<string, unknown> {
+  return Object.fromEntries(UNMOVED_KEYS.map((key) => [key, topic[key]]));
+}
+
+/**
+ * Reads one row back off the store, by id.
+ *
+ * @param planted - The fixture holding it.
+ * @param id - The row to read.
+ * @returns The stored row.
+ * @throws When the store answers null, for the reason
+ *   {@link topicNamed} gives: two absences compare equal, so a
+ *   comparison against a row that is not there would otherwise
+ *   pass for nobody's reason.
+ */
+async function storedTopic(
+  planted: PlantedTopics,
+  id: number,
+): Promise<TopicRecord> {
+  const found = await planted.store.findTopicById(id);
+
+  if (found === null) {
+    throw new Error('the store has no row under that id');
+  }
+
+  return found;
+}
+
 describe('what the two verbs move', () => {
   it('writes the instant the run-now clock read', async () => {
     // An EQUALITY rather than a window, which is the whole reason
@@ -3351,5 +3485,69 @@ describe('what the two verbs move', () => {
       .not.toStrictEqual(secondsAfter(FIXED_INSTANT, TOO_RARE * 2));
     expect(capped.nextRunAt)
       .not.toStrictEqual(secondsAfter(FIXED_INSTANT, CEILING));
+  });
+
+  it('leaves every other column where it found it', async () => {
+    // The pin above, read so that it is a symbol this file uses
+    // rather than one lint reports. Its value is not the claim:
+    // the claim is the TS2322 at its declaration the moment
+    // `TopicRecord` grows a column {@link UNMOVED_KEYS} misses.
+    expect(EVERY_UNMOVED_KEY_LISTED).toBe(true);
+
+    // The containment reading for both verbs, and the one every
+    // equality above is blind to: each of those compares a due
+    // time, so a verb that ALSO cleared a bound, flipped `enabled`
+    // or renamed the row answers all of them. What is compared
+    // here is the stored row against a copy of itself taken before
+    // the call, member for member, with the due time the only
+    // member the projection leaves out.
+    //
+    // Two rows rather than one, so the nullable bounds are read in
+    // both states: `transformers` carries neither bound, so a verb
+    // WRITING one moves it, and `inference` carries both, so a
+    // verb CLEARING one moves it. One row is blind to whichever
+    // direction it is not in.
+    const planted = await plantTopics();
+
+    const beforeRun = unmovedMembers(planted.transformers);
+    const beforePause = unmovedMembers(planted.inference);
+
+    await runTopicNow(
+      planted.store,
+      planted.clock.now,
+      planted.transformers.id,
+    );
+
+    // The pause's precondition, planted through the port rather
+    // than through the run-now above, per {@link schedule}. It is
+    // a write of `nextRunAt` alone, which is the one member
+    // neither comparison below reads.
+    await schedule(planted, planted.inference);
+
+    await pauseTopic(
+      planted.store,
+      planted.clock.now,
+      planted.inference.id,
+      { cycles: 1 },
+    );
+
+    // Off the STORE rather than off what the verbs answered: a
+    // verb answering an unmoved record while writing a second
+    // column satisfies a comparison against its own return value,
+    // and this surface has no other reader to report it.
+    const ran = await storedTopic(planted, planted.transformers.id);
+    const paused = await storedTopic(planted, planted.inference.id);
+
+    expect(unmovedMembers(ran)).toStrictEqual(beforeRun);
+    expect(unmovedMembers(paused)).toStrictEqual(beforePause);
+
+    // The control neither equality can carry: a verb that wrote
+    // NOTHING satisfies both, and so does one that threw before
+    // writing. The column each verb IS allowed to write has to
+    // have moved, read off the same two stored rows.
+    expect(planted.transformers.nextRunAt).toBeNull();
+    expect(ran.nextRunAt).toStrictEqual(FIXED_INSTANT);
+    expect(paused.nextRunAt)
+      .toStrictEqual(secondsAfter(FIXED_INSTANT, HOURLY));
   });
 });
