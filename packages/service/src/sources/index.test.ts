@@ -237,6 +237,15 @@ const NON_ADAPTER_MODULES = [
       + 'sources row, not how anything is read',
   },
   {
+    module: 'db-store.ts',
+    reason:
+      'the drizzle half of the HTTP port beside it, holding the '
+      + 'statements a sources row is read and written by and the two '
+      + 'reads that cross into documents without writing one: it '
+      + 'fronts no source, declares no member of the contract, and '
+      + 'never constructs an adapter',
+  },
+  {
     module: 'html-text.ts',
     reason:
       'a pure markup reduction that fronts no source and declares '
