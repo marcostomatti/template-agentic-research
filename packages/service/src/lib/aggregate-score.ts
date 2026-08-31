@@ -83,16 +83,23 @@
  *
  * ABSENCE IS DECLARED PER PART, in {@link ScorePart.absent}, and
  * there is no default. The original carried the distinction in its
- * control flow — three signals summed unconditionally and one
- * branch for the fourth — which is exactly the kind of thing that
+ * control flow — three signals summed unconditionally and one branch
+ * for the fourth — which is exactly the kind of thing that
  * disappears into a config file as an unstated assumption. Since
  * what an absent measurement means is the entire subject of this
  * module, a part that leaves it unsaid is a part nobody has thought
- * about, so the field is required. It is also the one member with
- * no home in the schema yet: `scoringWeights` is a flat map of
- * numbers with nowhere to put it, so today it comes from the caller
- * that builds the spec, and where it is stored is a decision for
- * the phase that wires this into a workflow.
+ * about, so the field is required.
+ *
+ * It is also the one member with no home in the schema:
+ * `scoringWeights` is a flat map of numbers with nowhere to put it,
+ * so it comes from the caller that builds the spec. `ar-score`'s
+ * Aggregate Finding Scores node is the caller that wires this into a
+ * workflow, and it declares the same answer for every part: a
+ * domain's `criteria` say which buckets it asked about, so a bucket
+ * nothing measured is a reading rather than a signal that happened
+ * to be unavailable. Where a per-part choice would be stored is
+ * still open, and nothing needs one until a domain wants two of its
+ * buckets to differ.
  *
  * PENALTIES ARE A LIST, in the order they apply. They are
  * multiplicative and floating-point multiplication is not
