@@ -250,6 +250,14 @@ const NON_ADAPTER_MODULES = [
       + 'fetch, which is why listing is no member of the contract',
   },
   {
+    module: 'service.ts',
+    reason:
+      'the rules the sources route group reduces to, written over '
+      + 'the HTTP port beside it: it decides what a request may ask '
+      + 'of a sources row, fronts no source, and declares no member '
+      + 'of the contract',
+  },
+  {
     module: 'store.ts',
     reason:
       'the HTTP port the sources route group is written against, '

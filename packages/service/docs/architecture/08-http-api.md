@@ -360,16 +360,29 @@ once declared it is the same on every route.
 
 ### A path below an open record collapses to `*`
 
-Three payload areas are open records whose KEYS are operator-chosen
+Five payload areas are open records whose KEYS are operator-chosen
 rather than declared: `settings.scoringWeights.<key>` and
-`settings.fieldContract.<key>` on a domain, and
-`notificationChannels.<key>` in operator settings. A key there is
-submitted content in exactly the sense above.
+`settings.fieldContract.<key>` on a domain,
+`notificationChannels.<key>` in operator settings, and
+`parserConfig.<key>` and `contract.<key>` on a source. A key there
+is submitted content in exactly the sense above.
 
 Any path segment below such a prefix is reported as `*` —
 `settings.scoringWeights.*`, never the key itself. The caller
 learns which unit of the payload failed and how it failed, and
 learns nothing it had not already sent.
+
+The source pair is declared and masks nothing today, and saying so
+is worth more than a list that reads as five equal cases. Its value
+schema is `z.unknown()` and a JSON key is always a string, so no
+issue is reachable strictly below either prefix: a `parserConfig`
+that is not an object is refused AT the member, which is the one
+name this service chose and the one segment `openCutoff` in
+`src/http/validation.ts` deliberately leaves unmasked. The
+declaration is what puts the masking in place BEFORE the narrowing
+that would need it — what a parser config holds genuinely differs
+by `kind`, so a per-kind shape is the obvious next thing to want —
+rather than after the refusal that first carried a key back.
 
 ### Request schemas are `.strict()`, and the sanitiser is what affords it
 
