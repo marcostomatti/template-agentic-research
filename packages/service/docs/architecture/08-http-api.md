@@ -1,4 +1,4 @@
-# HTTP API — the wave-1 surface and the rules every route obeys
+# HTTP API — the route surface and the rules every route obeys
 
 Wave 1 of the HTTP API is four resource groups over schema v2:
 domains, the taxonomy of categories and terms, personas, and the
@@ -7,9 +7,16 @@ share — the two envelopes on the wire, the pagination vocabulary,
 the guard every route sits behind, what a validation failure is
 allowed to say, and the paths each router declares.
 
-It is written before any of those routes exist, which is the point.
-Every rule below is one that four resource groups would otherwise
-each settle separately, and a surface whose 422 body depends on
+Wave 2 adds four more groups over the same schema: topics, sources,
+the deployment's connectors, and the export subscriptions that
+answer under `/exports`. What THEY share sits below the wave-1
+groups — the two schedule verbs and the one column they may
+write, the columns the pipeline owns and never accepts, the
+connector-secret mask, and the read-only failures queue.
+
+Each half was written before any of its routes existed, which is
+the point. Every rule below is one that each resource group would
+otherwise settle separately, and a surface whose 422 body depends on
 which router answered is not one contract but four. The routes land
 against this document; where one of them departs from it, the
 departure is argued here in the same commit rather than left for a
@@ -18,9 +25,9 @@ reader to find in a response.
 It is the document the HTTP API row of the behaviour table in
 `docs/architecture/00-overview.md` names, so a change to an
 envelope, to the pagination contract, to the guard or to a declared
-path lands here with the code. The design it implements is
-`.specs/q08-api-wave-1.md`, wave 1 of three carved out of
-`.specs/2026-08-19-backend-api.md`.
+path lands here with the code. The designs it implements are
+`.specs/q08-api-wave-1.md` and `.specs/q11-api-wave-2.md`, waves 1
+and 2 of three carved out of `.specs/2026-08-19-backend-api.md`.
 
 The framework half is not this. `lib/express/` builds the app,
 installs the middleware and registers the error handler last;
@@ -276,6 +283,27 @@ that has something in it: a table of every wave-1 route, asserted
 `401` with no credential and not-`401` with one, against a service
 built WITH an auth block.
 
+### Wave 2 sits behind the same guard, and one group raises the stakes
+
+The argument above is the same for topics, sources, connectors and
+export subscriptions. All four are operator configuration, none has an
+anonymous consumer, and no route among them varies its answer by
+claims, so none of them is argued down to `optionalAuth` either.
+
+`/connectors` is the group that would be worst to get wrong. A
+connector's `config` is where an API key for a model provider, a
+search back end or an export target is stored, and while every read of
+it is masked (see Connector secrets below), an open read surface would
+still publish which providers a deployment talks to and under what
+names. The mask is a second line, not the first one.
+
+Wave 2 adds five more mounts on the same
+`app.use(ctx.requireAuth, router)` terms, so the fall-through cost
+recorded above — one verifier run per mount a request passes — grows
+with each of them. That is the price of root-absolute mounts, it is
+paid per request rather than per matched route, and the number in that
+claim moves with the mount list rather than standing as a constant.
+
 ## Validation
 
 ### A validation detail names a field path and never a submitted value
@@ -417,10 +445,73 @@ nothing under any of them, and none of its five prefixes —
 `/domains`, `/categories`, `/terms`, `/personas`, `/settings` —
 collides with one.
 
-Waves 2 and 3 extend the same root on the same terms: `/topics`,
-`/sources`, `/connectors`, `/exports`, `/findings`, `/documents`,
-`/entities`, `/runs` and `/spend` arrive as further routers,
-mounted the same way and answering under every rule above.
+Waves 2 and 3 extend the same root on the same terms. Wave 2 takes
+four of those prefixes and the table below names them; `/findings`,
+`/documents`, `/entities`, `/runs` and `/spend` arrive with wave 3
+as further routers, mounted the same way and answering under every
+rule above.
+
+### The four prefixes wave 2 adds, and the two it borrows
+
+| Router | Module | Paths it declares |
+| --- | --- | --- |
+| `buildTopicsRouter` | `src/topics/routes.ts` | `GET /domains/:slug/topics`, `POST /domains/:slug/topics`, `PATCH /topics/:id`, `DELETE /topics/:id`, `POST /topics/:id/run-now`, `POST /topics/:id/pause` |
+| `buildSourcesRouter` | `src/sources/routes.ts` | `GET /domains/:slug/sources`, `POST /domains/:slug/sources`, `PATCH /sources/:id`, `DELETE /sources/:id` |
+| `buildSourceFailuresRouter` | `src/sources/failures-routes.ts` | `GET /sources/:id/failures` |
+| `buildConnectorsRouter` | `src/connectors/routes.ts` | `GET /connectors`, `POST /connectors`, `PATCH /connectors/:id`, `DELETE /connectors/:id` |
+| `buildSubscriptionsRouter` | `src/subscriptions/routes.ts` | `GET /domains/:slug/exports`, `POST /domains/:slug/exports`, `PATCH /exports/:id`, `DELETE /exports/:id`, `POST /exports/:id/run-now` |
+
+The four new prefixes are `/topics`, `/sources`, `/connectors` and
+`/exports`, and none of them collides with a framework path, with
+`/auth/*`, or with a wave-1 prefix. Two existing prefixes are borrowed
+rather than added: `/domains/:slug` carries two more collections, and
+`/sources/:id` carries the failures queue. That is the pattern
+`/domains/:slug/categories` already forces, and the reason every path
+here is declared root-absolute.
+
+Three of the four groups are met in their domain and written by their
+id, exactly as categories, terms and personas are. `/connectors` is
+the one that is not. A connector is deployment-level and the table
+carries no `domain_id` at all, so its list hangs off the root and its
+natural key is the (`kind`, `name`) pair rather than anything a domain
+owns.
+
+Two directory names in that table do not match the prefix they serve,
+and both splits are deliberate. `src/sources/` already holds the
+source ADAPTER contract and its registry, so the HTTP half lands
+beside it as `store.ts`, `service.ts`, `routes.ts` and the two
+`failures-*.ts` modules rather than in a second directory named for
+the same table. And the export subscriptions group is
+`src/subscriptions/` because `src/exports/` is the renderer registry
+and a subscription is not a renderer — the table is
+`export_subscriptions`, and the routes still answer under `/exports`.
+The table above is where a reader learns that, rather than a directory
+listing that reads like a misfile.
+
+### The paths wave 2 defers, and the wave that takes them
+
+`GET /sources/:id/pending-configs` and
+`POST /sources/:id/approve-config` are in the parent spec's sources
+list and are NOT in this wave. They read and rule on
+`source_config_proposals`, and they move to q13, the approvals wave,
+where they land beside the entity approvals over `research_pool`.
+
+The reason they were carved out has expired and the deferral stands on
+a second one that has not. The table was still moving when this wave
+was planned — it arrived on leg A with q09, so a route planned against
+it here would have targeted a schema somebody else was landing — and
+it is in the tree now. What has not changed is that an approval gate
+is one vocabulary and this repository has two subjects on it:
+`scripts/approve.ts` already rules on `source_config_proposals` and on
+`research_pool` from one CLI, and the HTTP half should arrive as one
+surface answering for both rather than as half a surface here and the
+other half two waves later.
+
+So the pair is scheduled rather than missing, and this is the sentence
+that says so. The same note is repeated beside the approval gate
+itself in `docs/architecture/04-sources.md` when the sources group
+lands, so a reader who reaches the gate from the pipeline side is not
+left to conclude that the API forgot it.
 
 ## Domains
 
@@ -1013,3 +1104,327 @@ call cannot be refused.
 So a `StoreRefusal` arriving out of this group would be a store doing
 something its port does not describe. It is left to answer `500`
 rather than given a plausible status no rule authorised.
+
+## Schedule verbs
+
+### Three routes write `next_run_at`, and no other route can reach it
+
+`POST /topics/:id/run-now`, `POST /topics/:id/pause` and
+`POST /exports/:id/run-now` are the whole of this surface's access to
+a schedulable row's due time. Each writes `next_run_at` and nothing
+else, through one store method declared for the purpose
+(`updateTopicSchedule`, `updateSubscriptionSchedule`), and `nextRunAt`
+is refused as an unrecognized key by every create and patch schema on
+both groups.
+
+That is two mechanisms saying one thing, and both are wanted. The
+refusal is what a caller meets. The single-purpose store method is
+what a future route meets, because a port offering exactly one
+schedule writer cannot grow a second one by accident.
+
+The two tables are `topics` and `export_subscriptions`, which are the
+two that spread `schedulableColumns()` from
+`src/db/schema/scheduling.ts`. Nothing else on this surface has a due
+time, so the rule costs the other two groups nothing.
+
+### A run-now is the extraordinary run, and refuses a disabled row
+
+`run-now` writes the service clock's instant, so the next dispatch
+tick claims the row whatever its interval said.
+
+`enabled` false is a `409` rather than a write. The dispatch claim
+reads `WHERE enabled AND next_run_at <= now()`, and the partial index
+behind it — `topics_dispatch_claim_idx`,
+`export_subscriptions_dispatch_claim_idx` — is declared over the
+enabled rows alone. Writing the clock onto a disabled row therefore
+produces a row that looks due forever and is never claimed: a silent
+no-op the caller has no way to see. The `409` says it instead, and
+enabling is a `PATCH` the caller takes first as its own decision.
+
+Calling it twice is not refused. A row already due answers `200` again
+with a later instant, because the verb describes a state — due now —
+rather than an action taken, and refusing the second call would mean
+answering `409` to a request asking for exactly what already holds.
+
+### A pause bases on the later of the clock and the stored due time
+
+`cycles` is a required member of the pause body, a positive integer
+with a declared ceiling, and anything else is a `422`. The instant
+written is `cycles` clamped intervals past a base, and the base is
+whichever of the service clock and the stored `next_run_at` is later.
+
+Both simpler rules are wrong in one direction each. Basing on the
+clock alone pulls a topic due next week FORWARD on a request to defer
+it. Basing on the stored time alone leaves an overdue row overdue, so
+a pause of a row three days late buys nothing at all until the
+dispatcher has caught up with it.
+
+A `next_run_at` of NULL is a `409`. The claim reads
+`next_run_at <= now()`, so a NULL row is not scheduled at all, and
+pausing it would SCHEDULE it — the opposite of what was asked. A
+seeded topic is exactly that row, since `data/topics.json` leaves the
+column out on purpose, so this is an ordinary state rather than a
+corner of one.
+
+Pause is not disable. It does not write `enabled`, and the schema
+keeps the two columns apart precisely so that deferring a run and
+retiring a feed stay different requests with different undo.
+
+### The clamp is the library's, and the cycle length passes through it
+
+`pauseFrom` in `src/lib/schedule.ts` calls `clampIntervalSeconds` over
+the row's own `minIntervalSeconds` and `maxIntervalSeconds` and
+multiplies the clamped seconds by `cycles`. No route re-derives the
+clamp, and no SQL counterpart is written for it: the API works out an
+absolute instant in TypeScript and stores it, where `ar-dispatch`
+expresses the same rule as `LEAST(max_interval_seconds,
+GREATEST(min_interval_seconds, interval_seconds))` inside its claim
+because there the claim and the reschedule are one statement.
+
+The arithmetic lives in the library rather than in a service because
+the library is the one place the rule is written, and it obeys the
+three dual-context rules that file is held to — no value import,
+declaration-form exports, nothing relying on module scope — so the
+splice gate keeps passing over a grown module.
+
+This narrows a sentence next door.
+`docs/architecture/06-scheduling.md` counts two of the four modes
+through the bounds, on the reading that an extraordinary run and a
+pause each write a timestamp directly. The timestamp half stays right:
+what `pauseFrom` clamps is the CYCLE LENGTH it multiplies, not the
+instant it stores. But that makes three of the four modes pass through
+the bounds rather than two, and that section is corrected in the
+commit that lands the verb rather than left to disagree with this one.
+
+### The API never claims a row, opens a run, or invokes a workflow
+
+`ar-dispatch` holds the only schedule trigger in the system, and
+`docs/architecture/01-invariants.md` carries that as a row of its own.
+A run-now that ran the work itself would be a second trigger,
+answering to no batch cap, writing no `runs` row and spending against
+no per-run ceiling — which is the shape the incident behind `capBatch`
+took.
+
+So the verbs write a column and stop. The tick that follows does the
+claiming, the `runs` insert, the routing and the invoking, exactly as
+it does for a row the periodic increment made due. `runs.scheduled_by`
+records `operator` for both operator modes, because that column
+attributes the choice rather than the arithmetic.
+
+`tests/invariants/api-schedule-containment.test.ts` is what makes this
+a property of the tree rather than a sentence here: no module under
+`src/topics/`, `src/subscriptions/`, `src/sources/` or
+`src/connectors/` names `runs`, `llm_calls`, `research_pool` or an n8n
+invocation, and the two schedule ports declare exactly one
+schedule-writing method apiece.
+
+## Pipeline-owned columns
+
+### A column the pipeline writes is answered and never accepted
+
+Five columns on a source — `cursor`, `consecutiveFailures`,
+`lastSuccessAt`, `lastFailureAt` and `flagged` — and `nextRunAt` on a
+topic and on an export subscription are projected on every read and
+refused as unrecognized keys on every write. That is the rule wave 1
+already holds for `featureVersion` and `embeddingModel` on a domain,
+applied to the columns wave 2's tables carry.
+
+Answering them matters as much as refusing them. A health counter
+nobody can read is a health counter nobody acts on, and
+`GET /domains/:slug/sources` exists so that an operator can see which
+feeds are failing before deciding which to retire.
+
+The refusal is the schemas' `.strict()` doing its ordinary work rather
+than a per-column check, which is what makes it hold for columns
+nobody has written yet: one added to these tables later is refused by
+default and has to be argued ONTO a request schema rather than quietly
+inherited by one.
+
+### `flagged` records what the pipeline saw, `enabled` what was decided
+
+`flagged` is the adapter-rot detector's output. The pipeline raises it
+when `consecutive_failures` crosses its threshold, and
+`src/db/schema/sources.ts` says in as many words that it is set by the
+pipeline and not by an operator. `enabled` is the column the schema
+provides for retiring a feed, and it IS patchable — on sources, topics
+and export subscriptions alike. That pair is the whole distinction:
+one column records what the pipeline observed and the other records
+what an operator decided, and this surface writes the second kind.
+
+Clearing `flagged` therefore has no route here, and the gap is worth
+naming rather than implying. `src/lib/source-health.ts` sets the flag
+and never clears it, because clearing it is an operator's act, and the
+act it means is a hand-written UPDATE for as long as this surface
+offers no verb for it. Offering a bare patchable boolean would be
+worse than the gap: clearing the flag without repairing the config
+that failed brings it straight back on the next pass, so the button
+that looks like a fix is the one that hides that nothing was fixed. A
+verb that clears it as part of an operation that also re-runs the
+source is the shape worth building, and it belongs with whichever wave
+owns re-running a source.
+
+`cursor` is refused for a narrower reason, and it is not that nobody
+would want it. Rewinding a feed is a real operation; it is also one
+that re-captures a window of documents, where `documents_hash_unique`
+rather than anything on this surface decides what that costs. It stays
+off the request schemas until something owns that question, rather
+than being exposed as a text field on a patch.
+
+## Connector secrets
+
+### A secret is accepted on the way in and masked on every way out
+
+`connectors.config` is a jsonb column and it is where an API key
+lives. `src/connectors/secrets.ts` declares `SECRET_CONFIG_KEYS`, the
+closed roster of key names that hold one, and the single
+`MASKED_SECRET` literal that stands in for a value under any of them.
+`maskConnectorConfig` replaces that value at any depth and whatever
+its type, and every path that answers a config runs through it: the
+list, and the rows `POST` and `PATCH` answer with.
+
+Write-only is the parent spec's word and this is what it buys. A
+caller can set a key and can tell that one is set; it cannot read one
+back, and neither can anything reading a response over its shoulder —
+a proxy log, a browser cache, a support ticket carrying a pasted body.
+
+One declaration sits behind both the masking and the refusal below.
+Two rosters, or two literals, would drift apart on the first key added
+to either, and the direction they drift in is a stored key answered in
+the clear.
+
+### The mask literal is refused as a submitted value
+
+A `config` carrying `MASKED_SECRET` as a value is a `422` naming the
+path it sat at, and never a write.
+
+The round trip this closes is the ordinary one. A caller reads a
+connector, edits one member of the masked config, and sends the whole
+object back. Without the refusal, the literal `MASKED_SECRET` is what
+gets stored as that deployment's API key, the connector stops working,
+and nothing in the response says why — the read afterwards shows the
+mask, which is what it showed before.
+
+The detail names the path and carries no value, which is the no-echo
+rule in `src/http/validation.ts` applied unchanged. The path is enough
+on its own: a caller that submitted the mask knows which member it
+copied.
+
+### A `config` is replaced whole, so an omitted key clears a secret
+
+`config` follows `settings` on a domain. A `PATCH` supplying it stores
+exactly that payload, a member left out is cleared rather than left
+standing, and a patch omitting `config` altogether leaves the stored
+payload alone.
+
+The consequence is sharper here than on a domain, so it is stated
+rather than smoothed over. A caller that reads a connector, drops the
+masked key because it has no value to put there, and patches the
+result has CLEARED that secret. The refusal above catches the caller
+that keeps the mask; nothing catches the caller that removes it,
+because that request is byte-identical to a deliberate one.
+
+A merge would trade this for a worse problem: clearing a secret would
+become unexpressible, since the request that omits a key and the
+request that removes it would be the same bytes. The whole-unit
+contract is the one a caller can reason about, and a client building a
+patch sends back the members it means to keep.
+
+### The containment is a sentinel capture, not a reading of the code
+
+`tests/api/connector-secret.test.ts` boots the assembled service with
+stdout, stderr and the console methods patched BEFORE any logger is
+constructed, writes one sentinel secret through `POST` and `PATCH`,
+reads it back through `GET`, and counts the sentinel in every response
+body and in everything the process wrote. Zero, both directions.
+
+A zero-hit scan with no live control is evidence of nothing, so the
+file carries the controls q07's bootstrap-password test established. A
+third boot mounts a route that logs the stored config and answers it
+unmasked, proving both searches would find the sentinel. The create is
+asserted `201`, and the store is asserted to hold the sentinel
+verbatim, so the zero is about a value that genuinely traversed the
+path rather than one that never arrived.
+
+The `409` a duplicate (`kind`, `name`) raises while a sentinel secret
+sits in the body is checked in the same file. A conflict detail is the
+likeliest place a submitted body leaks back, and it is the one refusal
+on this group a caller reaches while holding a real key.
+
+## The failures queue
+
+### `GET /sources/:id/failures` is read-only, and structurally so
+
+The route reads `documents` where `parse_status = 'failed'` for one
+source. It is the fail-flag-keep path's review surface: a payload that
+would not parse is KEPT rather than dropped, and this is where
+somebody reads what was kept.
+
+Read-only is a property of the port rather than a convention the
+handler observes. `SourceStore` declares no method that writes a
+document at all, so a handler cannot mutate `parse_status` by mistake
+or by a later edit — there is nothing to call.
+`src/sources/failures-routes.ts` registers one `get` and no other
+verb, and the route test reads that off the router's own `stack`
+rather than transcribing it.
+
+Retrying a failed capture is therefore not on this surface. It is a
+pipeline operation with a cost and a dedupe question attached, and a
+review queue that could also re-run work would be a second trigger of
+the kind the claim under Schedule verbs rules out.
+
+### The order is `captured_at DESC, id DESC`, so two pages agree
+
+`captured_at` alone is not a total order. A batch capture writes many
+documents inside one statement and `defaultNow()` gives them one
+timestamp, so a tie at a page boundary lets page 1 and page 2 disagree
+about which row they hold — one row shown twice and another shown
+never, with nothing in either response saying so. The `id DESC`
+tiebreak is what closes it, and the index behind both of this wave's
+document readers is `documents_source_parse_status_idx` over
+(`source_id`, `parse_status`).
+
+The window itself is the ordinary one: `?page` and `?perPage` through
+`paginationQuerySchema`, defaulting to 50, refused above 200, and a
+page past the end answering an empty list rather than a `404`. This
+route follows every pagination rule above and departs from none of
+them.
+
+### A stored body is masked, and `JSON.stringify` is not the masking
+
+`body` and `parse_error` are served as stored except that every C0
+control, DEL, every C1 control and every lone surrogate is replaced by
+its `\uXXXX` TEXT form by `maskControlBytes` in
+`src/http/control-bytes.ts`.
+
+That is deliberately more than JSON escaping does. `JSON.stringify`
+escapes C0 and lone surrogates and passes DEL and the whole C1 range
+through as raw bytes, which is exactly how a control byte reaches a
+terminal, a log file or a tracked artifact — where a raw NUL makes
+`git diff` print `Bin` forever and makes POSIX grep report no match
+for text that is present, both silently. A failed parse is the
+likeliest body in the corpus to carry one, because what made it fail
+is often what carries it.
+
+The masking is checked by re-reading the OUTPUT rather than by
+trusting the masker: a leg asserts that `JSON.stringify` of a masked
+string carries no code point below 0x20 and none in 0x7F-0x9F. A
+self-reporting redactor cannot see its own regex fail.
+
+### The body is cut by code point, and the stored length travels too
+
+`body` is cut to a module-level code-point cap, with the stored byte
+length answered as `bodyBytes` and a `bodyTruncated` flag beside it.
+`takeCodePoints` cuts by code point rather than by UTF-16 unit, so the
+cap itself can never split an astral pair into a lone surrogate that
+the masking would then have to escape.
+
+The cap is on the route from the first commit rather than added when a
+body gets big, which is the parent spec's word for it. A DLQ holds the
+payloads that broke a parser, and the payload that broke a parser by
+being enormous is exactly the one a review surface would otherwise
+fetch whole.
+
+`bodyBytes` is what lets a reader tell a cut body from a short one,
+and it is the STORED length rather than the answered one — the two
+differ by exactly what was withheld, which is the number worth having
+when deciding whether to go to the database for the rest.
