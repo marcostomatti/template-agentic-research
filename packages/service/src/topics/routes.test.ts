@@ -1,8 +1,8 @@
 /**
- * `src/topics/routes.ts` — what each of the four routes answers
- * when it refuses: the status, the envelope and the details each
- * reaches the wire with. Driven over supertest against a router
- * built by the real factory, standing on
+ * `src/topics/routes.ts` — what each of the four routes answers,
+ * refusing and landing: the status, the envelope and the members
+ * each reaches the wire with. Driven over supertest against a
+ * router built by the real factory, standing on
  * `tests/helpers/memory-research-store.ts`, so every claim here is
  * answered with no database anywhere.
  *
@@ -18,11 +18,10 @@
  * swallowed a throw on the way. So every case below reads a
  * response and none of them reads a return value.
  *
- * TEN CASES OVER SEVEN WAYS A REQUEST TO THIS ROUTER CAN BE WRONG,
- * plus the fixture guard the duplicate case rests on. The answers
- * these routes give when they LAND are a separate half and land in
- * their own commit; what stands in for them here is the control
- * each case carries in its own body.
+ * NINETEEN CASES IN THREE GROUPS. Ten cover seven ways a request to
+ * this router can be wrong; six cover what the four routes answer
+ * when they LAND; three are guards over the fixture and over the
+ * key lists both halves are read through.
  *
  * THE ADDRESS. A slug naming no domain is `404` on both operations
  * that take one, and an id naming no topic is `404` on both that
@@ -37,16 +36,19 @@
  * that. Both of those are asserted across the TWO routes that share
  * each segment inside one case, because two handlers are two
  * chances to narrow only one of them. The slug half is the only
- * reading here that `readSlug` narrows at all: every other slug
- * case sends a well-formed slug, so an unnarrowed segment answers
- * exactly the `404` they already assert — measured, as the grid
- * below records.
+ * reading in this file that `readSlug` narrows at all: every other
+ * slug sent anywhere here is well-formed, so an unnarrowed segment
+ * answers exactly what those cases already assert — measured, as
+ * the grid below records.
  *
  * THE WINDOW. This list route IS paginated, unlike the taxonomy's,
  * so a `?perPage` above the cap is `422` naming `perPage` rather
  * than a silent clamp. It is paired with a request at exactly the
  * cap, which is what says the refusal is a CAP and not a route that
- * refuses every window it is handed.
+ * refuses every window it is handed. What that pair cannot say is
+ * that the window SELECTS, since both of its reads are wide enough
+ * to carry the whole collection; the positive half reads two
+ * windows of one over the same two rows for that.
  *
  * THE PAYLOAD. A name the domain already researches is `409` with
  * `code: 'CONFLICT'` from the create AND from the rename, which is
@@ -67,7 +69,10 @@
  * this router yet. Its control is the same body with the member
  * removed, which is accepted and lands a `nextRunAt` of null — so
  * the pair says the refusal is about that MEMBER rather than about
- * a router refusing every create it is handed.
+ * a router refusing every create it is handed. Every positive case
+ * below reads the column too, from the list, the create, the patch
+ * and the row a delete leaves standing, so both halves of that rule
+ * are pinned here rather than only the half that refuses.
  *
  * AND NOTHING SUBMITTED COMES BACK THROUGH IT. The instant those
  * two requests submit is a value a refusal could quote, unlike
@@ -77,13 +82,40 @@
  * because a search that would find nothing anywhere reports a clean
  * refusal and a leaking one alike.
  *
- * ANTI-VACUITY. A router that refused everything would satisfy
- * every assertion below, so each case carries its own control in
- * the same body, varied along the axis under test: each `404` reads
- * what IS there through the SAME operation, the not-an-id case ends
- * on an id that is one, the two `409`s create and rename under a
- * free name, the over-cap `perPage` is paired with a request at
- * exactly the cap, and the refused member is removed and resent.
+ * WHAT THE POSITIVE HALF READS IS A KEY SET AND NOT A FIELD. Every
+ * answer below is held against a sorted list of the members it may
+ * carry — `TopicRecord`'s nine, the success envelope's two, the
+ * page envelope's three and `meta`'s four — because a field read
+ * is equally green against a response that grew a member nobody
+ * asserted. The lists are pinned in BOTH directions: `satisfies`
+ * refuses one naming a member the type lacks, and
+ * {@link EVERY_KEY_LISTED} is a TS2322 when the type grows one the
+ * list does not name. That second direction is not decoration on
+ * this table, which spreads `schedulableColumns()` from a helper
+ * `export_subscriptions` spreads too, so a column added there
+ * reaches this projection with nothing in this directory edited.
+ *
+ * AND EVERY WRITE IS READ BACK THROUGH THE OTHER OPERATION. What a
+ * create answered is compared against what a list carries
+ * afterwards, and what three patches answered against the same,
+ * because a write returning a row it never stored satisfies every
+ * assertion made against its own response. The neighbour row is
+ * asserted WHOLE in both cases, so a write reaching more rows than
+ * the one it addressed is a red case rather than an answer nobody
+ * compared against anything.
+ *
+ * ANTI-VACUITY. A router that refused everything, or that answered
+ * every read the same row, would satisfy most of what is below, so
+ * each case carries its own control in the same body, varied along
+ * the axis under test: each `404` reads what IS there through the
+ * SAME operation, the not-an-id case ends on an id that is one, the
+ * two `409`s create and rename under a free name, the over-cap
+ * `perPage` is paired with a request at exactly the cap, the
+ * refused member is removed and resent, the wide list read is
+ * paired with two windows of one, the full create body is paired
+ * with the two members the schema requires and nothing else, the
+ * patch is followed by two more that name other members, and the
+ * `204` is followed by the same request answering `404`.
  *
  * WHAT THIS FILE DOES NOT CLAIM. That the router sits behind
  * `ctx.requireAuth` is `tests/api/wiring.test.ts`'s claim, and what
@@ -92,49 +124,58 @@
  * below is scoped to the one channel these routes open, which is
  * the value a refused pipeline-owned member carries.
  *
- * MUTATION GRID, measured over all eleven cases by mutating
- * `routes.ts` and reading the failed `fullName` SET from a
- * `--reporter=json` run rather than a count. Eight legs, and every
- * figure belongs to this case list rather than to the task that
- * wrote it — the positive half moves all of them.
+ * MUTATION GRID, re-derived over all nineteen cases by mutating
+ * `routes.ts` one edit at a time and reading the failed `fullName`
+ * SET from a `--reporter=json` run rather than a count. Eight legs,
+ * each named by the EDIT it makes rather than by its effect, since
+ * a leg described only by its effect is one nobody can run again.
+ * Every figure belongs to this case list: the positive half moved
+ * seven of the eight, and the figures recorded here before it
+ * landed are the ones in parentheses.
  *
- * THE STATUS LEGS LAND ON CONTROLS RATHER THAN ON SUBJECTS, which
- * is what a refusals-only file looks like from the inside.
- * Answering the `POST` with `200` reddens THREE — the create halves
- * of the slug `404` and of the `409`, and the accepted control of
- * the pipeline-owned case — and not one of the three is named for a
- * create. Answering `204` as `200` reddens TWO and answering the
- * `PATCH` with `204` reddens TWO, both through the same kind of
- * control. So every status this router chooses is already pinned,
- * and what pins it is the half of each case that reads what IS
- * there.
+ * THE STATUS LEGS NOW LAND ON SUBJECTS AS WELL AS ON CONTROLS,
+ * which is the difference the positive half makes to this file.
+ * `res.status(201)` written as `200` on the create reddens FOUR
+ * (three), the added one being the case named for a create;
+ * `res.status(204)` written as `200` on the delete reddens THREE
+ * (two); `res.status(200)` written as `204` on the patch reddens
+ * THREE (two). The refusal half does pin every status this router
+ * chooses, but by the half of each case that reads what IS there;
+ * the positive half pins them by cases that are about them.
  *
- * THE ADDRESS LEGS REDDEN ONE EACH, and each reaches both routes
- * that share its segment because the narrowing lives in one helper:
- * taking the `:id` raw reddens the not-an-id case alone, and taking
- * the `:slug` raw reddens the not-a-slug case alone. The second was
- * a measured ZERO until that case landed — every other slug case
- * here sends a well-formed slug, so an unnarrowed segment answered
- * exactly the `404` they already assert, and neither this file nor
- * `service.test.ts` would have reported it.
+ * THE ADDRESS LEGS ARE STILL THE MOST UNEVEN PAIR. Returning the
+ * `:id` segment raw from {@link readId} reddens SIX (one), because
+ * every positive case addresses a row by its id. Returning the
+ * `:slug` raw from {@link readSlug} still reddens exactly ONE, the
+ * not-a-slug case, and that is this file's shape rather than an
+ * omission: every other slug it sends is well-formed.
  *
- * THE TWO WINDOW LEGS REDDEN AN IDENTICAL SET OF ONE and are still
- * two readings. A fixed `{ limit: 50, offset: 0 }` and a dropped
- * `meta` both fail the over-cap case, the first at the row count of
- * its at-cap control and the second at that control's
- * `meta.perPage`. Only the assertion failing inside the case tells
- * them apart.
+ * THE THREE WINDOW LEGS SEPARATE, where two of them used to give an
+ * identical set of one. A fixed `{ limit: 50, offset: 0 }` in place
+ * of `toStoreWindow(query)` reddens the TWO list cases and NOT the
+ * over-cap refusal, whose at-cap control asks for 200 and is
+ * answered the whole two-row collection either way. `ok(page.rows)`
+ * in place of `okPage(page.rows, meta)` reddens FIVE, which is
+ * every case here that reads a `meta` at all — the two list
+ * cases, the over-cap control, and the create and delete cases that
+ * count a collection through `meta.total`.
  *
- * ONE MEASURED ZERO, recorded rather than repaired here. Taking
- * `total` from the rows in hand reddens NOTHING, because no refusal
- * case can afford a window narrower than its collection — the page
- * in hand IS the collection in every case above. That claim belongs
- * to the positive half, which reads two windows of one over the
- * same roster.
+ * AND THE ONE MEASURED ZERO IS CLOSED. `total: page.rows.length` in
+ * place of `total: page.total` reddened NOTHING while this file was
+ * refusals only, since no refusal case can afford a window narrower
+ * than its collection. It now reddens the TWO list cases, which
+ * read two windows of one over a roster of two and assert the total
+ * of the COLLECTION on each.
  */
+import type { TopicRecord } from './store.js';
 import type {
   MemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import type {
+  PaginatedEnvelope,
+  PaginationMeta,
+  SuccessEnvelope,
+} from '../http/envelope.js';
 import type { Application } from 'express';
 
 import express from 'express';
@@ -198,6 +239,16 @@ const PATCHED_NAME = 'edge inference';
 const FREE_NAME = 'retrieval augmentation';
 
 /**
+ * A second free name, written only by the create case's control.
+ *
+ * Distinct from {@link FREE_NAME} because that case lands TWO rows
+ * in one domain and the second would otherwise be refused by the
+ * first — which would read as a fault in the route rather than as
+ * a case that collided with itself.
+ */
+const SPARE_NAME = 'context windows';
+
+/**
  * An hour, as the cadence every planted topic and every accepted
  * body below runs at.
  *
@@ -205,6 +256,39 @@ const FREE_NAME = 'retrieval augmentation';
  * the cases is varying the number.
  */
 const HOURLY = 3600;
+
+/** Half an hour, as the cadence the patch case retunes to. */
+const HALF_HOURLY = 1800;
+
+/**
+ * Ten minutes, as the floor one planted topic carries and every
+ * bounded body below writes.
+ */
+const TEN_MINUTES = 600;
+
+/** A day, as the ceiling those same rows carry. */
+const DAILY = 86400;
+
+/**
+ * The terms {@link STORED_NAME} is planted with under
+ * {@link STORED_SLUG}.
+ *
+ * Named rather than inlined in the fixture because the positive
+ * half compares that row WHOLE: the neighbour a write left alone is
+ * asserted member for member, and a literal repeated at the
+ * assertion would agree with the plant by transcription rather than
+ * by derivation.
+ */
+const STORED_TERMS = ['attention', 'transformer architecture'];
+
+/** The terms {@link PATCHED_NAME} is planted with. */
+const INFERENCE_TERMS = ['on-device inference'];
+
+/** The terms a create submits, carried by no planted row. */
+const CREATED_TERMS = ['retrieval index freshness'];
+
+/** The terms a patch replaces {@link INFERENCE_TERMS} with. */
+const PATCHED_TERMS = ['npu scheduling', 'quantisation'];
 
 /**
  * The two names {@link STORED_SLUG} is planted with, in the order
@@ -217,6 +301,17 @@ const HOURLY = 3600;
  * store's is the positive half's claim.
  */
 const LISTED_NAMES = [PATCHED_NAME, STORED_NAME];
+
+/**
+ * `paginationQuerySchema`'s own default, spelled here because that
+ * module keeps it private.
+ *
+ * Read by the two list cases, which assert `meta` WHOLE: a window
+ * nobody asked for is still a window a caller is told about, and
+ * the number reaching the wire is the claim rather than the number
+ * being a default.
+ */
+const DEFAULT_PER_PAGE = 50;
 
 /**
  * The instant the two refused bodies submit for `nextRunAt`.
@@ -338,6 +433,104 @@ const NEXT_RUN_AT_BODY = {
 };
 
 /**
+ * The members `TopicRecord` declares, as a response carries them.
+ *
+ * Written out rather than derived, because an interface has no
+ * runtime form to read keys off — and pinned in BOTH directions,
+ * since a one-directional list is exactly as green as no list at
+ * all against the drift that matters. `satisfies` closes the
+ * direction where this names a member the record lacks;
+ * {@link EVERY_KEY_LISTED} closes the one where the record grows a
+ * member nothing here learned about. The second is the direction a
+ * key-set assertion exists for: a column added to the projection
+ * reaches the wire unasserted otherwise, and no field read anywhere
+ * in this file would notice.
+ *
+ * That second direction is not decoration on THIS table. `topics`
+ * spreads `schedulableColumns()` from
+ * `src/db/schema/scheduling.ts`, which `export_subscriptions`
+ * spreads too, so a column added to that ONE helper reaches this
+ * record and every projection under it with no module in this
+ * directory edited at all.
+ */
+const TOPIC_KEYS = [
+  'domainId',
+  'enabled',
+  'id',
+  'intervalSeconds',
+  'maxIntervalSeconds',
+  'minIntervalSeconds',
+  'name',
+  'nextRunAt',
+  'searchTerms',
+] as const satisfies readonly (keyof TopicRecord)[];
+
+/** The members every body this router answers a resource in has. */
+const RESOURCE_KEYS = [
+  'data',
+  'success',
+] as const satisfies readonly (keyof SuccessEnvelope<unknown>)[];
+
+/** The same members, plus the one a windowed read adds to them. */
+const PAGE_KEYS = [
+  ...RESOURCE_KEYS,
+  'meta',
+] as const satisfies readonly (keyof PaginatedEnvelope<unknown>)[];
+
+/** The members `meta` describes the window and the collection with. */
+const META_KEYS = [
+  'page',
+  'perPage',
+  'total',
+  'totalPages',
+] as const satisfies readonly (keyof PaginationMeta)[];
+
+/**
+ * `true` only while `L` names every key of `T`.
+ *
+ * The tuple wrapper is load-bearing rather than decoration: without
+ * it the union distributes over the conditional and the answer is
+ * `boolean`, which accepts `true` as an initializer and pins
+ * nothing at all.
+ *
+ * @typeParam T - The type whose keys must all be named.
+ * @typeParam L - The list naming them, as `typeof <the const>`.
+ */
+type CoversEveryKey<T, L extends readonly PropertyKey[]> =
+  [Exclude<keyof T, L[number]>] extends [never] ? true : false;
+
+/** Every list above, held against the type it describes. */
+type EveryKeyListed =
+  CoversEveryKey<TopicRecord, typeof TOPIC_KEYS>
+  & CoversEveryKey<SuccessEnvelope<unknown>, typeof RESOURCE_KEYS>
+  & CoversEveryKey<PaginatedEnvelope<unknown>, typeof PAGE_KEYS>
+  & CoversEveryKey<PaginationMeta, typeof META_KEYS>;
+
+/**
+ * The half of the drift guard `check-types` owns.
+ *
+ * A member added to `TopicRecord`, to either envelope or to `meta`
+ * and to none of the lists above turns {@link EveryKeyListed} into
+ * `never`, and this initializer is then a TS2322 at this line —
+ * before any case can compare a response against a set that has
+ * quietly stopped describing it. Read in a case below so it is a
+ * symbol this file uses rather than one lint reports.
+ */
+const EVERY_KEY_LISTED: EveryKeyListed = true;
+
+/** {@link TOPIC_KEYS}, sorted at use rather than by hand. */
+const TOPIC_KEY_SET: readonly string[] = [...TOPIC_KEYS].sort();
+
+/** {@link RESOURCE_KEYS}, sorted. */
+const RESOURCE_KEY_SET: readonly string[] = [...RESOURCE_KEYS].sort();
+
+/** {@link PAGE_KEYS}, sorted. */
+const PAGE_KEY_SET: readonly string[] = [...PAGE_KEYS].sort();
+
+/** {@link META_KEYS}, sorted. */
+const META_KEY_SET: readonly string[] = [...META_KEYS].sort();
+
+/**
  * Just enough of an answered topic for an assertion to read it.
  *
  * `supertest` types a response body as `any`, so a callback over
@@ -397,15 +590,19 @@ function buildTopicsApp(store: MemoryResearchStore): Application {
  * refused by a row it did not have to create successfully first. No
  * route on this router can write a domain at all.
  *
- * @returns The app and the ids of the two rows planted under
- *   {@link STORED_SLUG}. The store is not handed back: every
- *   reading a case takes afterwards is a response, so a case
- *   reaching past the surface under test would be pinning the
- *   fixture rather than the router. The ids are addresses rather
- *   than readings — a request cannot name a row without one.
+ * @returns The app, the id of the domain the two rows sit in, and
+ *   their own ids. The store is not handed back: every reading a
+ *   case takes afterwards is a response, so a case reaching past
+ *   the surface under test would be pinning the fixture rather
+ *   than the router. The topic ids are addresses rather than
+ *   readings — a request cannot name a row without one. The
+ *   DOMAIN id is a reading, and the only one here that is: no
+ *   request below names it, so a row answering it is the store
+ *   having said which domain the row came out of.
  */
 async function withTopics(): Promise<{
   app: Application;
+  domainId: number;
   transformersId: number;
   inferenceId: number;
 }> {
@@ -423,7 +620,7 @@ async function withTopics(): Promise<{
   const transformers = await store.insertTopic({
     domainId: stored.id,
     name: STORED_NAME,
-    searchTerms: ['attention', 'transformer architecture'],
+    searchTerms: STORED_TERMS,
     intervalSeconds: HOURLY,
     enabled: true,
     minIntervalSeconds: null,
@@ -432,11 +629,11 @@ async function withTopics(): Promise<{
   const inference = await store.insertTopic({
     domainId: stored.id,
     name: PATCHED_NAME,
-    searchTerms: ['on-device inference'],
+    searchTerms: INFERENCE_TERMS,
     intervalSeconds: HOURLY,
     enabled: true,
-    minIntervalSeconds: 600,
-    maxIntervalSeconds: 86400,
+    minIntervalSeconds: TEN_MINUTES,
+    maxIntervalSeconds: DAILY,
   });
 
   await store.insertTopic({
@@ -451,6 +648,7 @@ async function withTopics(): Promise<{
 
   return {
     app: buildTopicsApp(store),
+    domainId: stored.id,
     transformersId: transformers.id,
     inferenceId: inference.id,
   };
@@ -472,6 +670,46 @@ function namesOf(body: { data: readonly NamedRow[] }): string[] {
 }
 
 /**
+ * Every key of a response body, sorted.
+ *
+ * The `toStrictEqual` substitute at this boundary: a row's id is
+ * the store's own, so a whole-body literal is unavailable for an
+ * answer carrying one — while a key set catches the fault a field
+ * read cannot, which is a member arriving that nobody asserted.
+ *
+ * @param value - The body, or a member of it.
+ * @returns Its own enumerable keys, sorted. An empty list for a
+ *   response that carried no body at all, which is what a `204`
+ *   answers and is the claim that case makes.
+ */
+function keysOf(value: unknown): string[] {
+  return Object.keys(value as object).sort();
+}
+
+/**
+ * The row a read carries under one name.
+ *
+ * THROWS rather than answering undefined, because the value it
+ * returns is compared against another response: an absent row would
+ * otherwise reach `toStrictEqual` as `undefined` and pass against
+ * any other absent row, which is a green nobody wrote.
+ *
+ * @param rows - A read's `data`, as it came off the wire.
+ * @param name - The name to find.
+ * @returns The row carrying it.
+ * @throws Error - When the read carries no such row.
+ */
+function topicFor(rows: readonly NamedRow[], name: string): NamedRow {
+  const row = rows.find((candidate) => candidate.name === name);
+
+  if (row === undefined) {
+    throw new Error(`The domain researches no topic named ${name}`);
+  }
+
+  return row;
+}
+
+/**
  * @param haystack - The text to search.
  * @param needle - The string to count.
  * @returns How many times the needle occurs. A count rather than a
@@ -483,16 +721,27 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// What the fixture below plants
+// What the fixture below plants, and what every answer is held to
 // ---------------------------------------------------------------------------
 
-describe('the fixture every refusal below is read through', () => {
-  it('plants distinct names and writes under a free one', () => {
+describe('the fixture every case below is read through', () => {
+  it('plants distinct names and writes under free ones', () => {
     // Without this, a create case naming a planted topic would be
     // refused 409 and read as a router fault rather than as a
     // fixture that overlapped itself.
     expect(new Set(LISTED_NAMES).size).toBe(LISTED_NAMES.length);
     expect(LISTED_NAMES).not.toContain(FREE_NAME);
+    // Two free names rather than one, because the create case lands
+    // TWO rows in the same domain and the second would otherwise be
+    // refused by the first.
+    expect(LISTED_NAMES).not.toContain(SPARE_NAME);
+    expect(FREE_NAME).not.toBe(SPARE_NAME);
+    // Name ASCENDING, which is the order a list case asserts. An
+    // expectation compared against an unsorted table pins the wrong
+    // order just as quietly as no assertion would, and the ordering
+    // claim is the one thing a list case cannot borrow from
+    // anywhere else in this file.
+    expect([...LISTED_NAMES].sort()).toStrictEqual(LISTED_NAMES);
     // And the submitted instant is not a substring of anything else
     // a refusal could carry, so the containment count below cannot
     // be satisfied by some other member of the envelope.
@@ -500,6 +749,48 @@ describe('the fixture every refusal below is read through', () => {
       JSON.stringify(NEXT_RUN_AT_BODY),
       SENTINEL_INSTANT,
     )).toBe(0);
+  });
+
+  it('plants four term lists that differ from each other', () => {
+    // What makes each replace-whole reading below a reading rather
+    // than an assumption: a store merging a submitted list into the
+    // stored one, or a handler answering the list it was handed
+    // instead of the row, satisfies every assertion made against
+    // two equal arrays.
+    const lists = [
+      STORED_TERMS,
+      INFERENCE_TERMS,
+      CREATED_TERMS,
+      PATCHED_TERMS,
+    ];
+    const joined = lists.map((list) => list.join('|'));
+
+    expect(new Set(joined).size).toBe(lists.length);
+    // And the two cadences differ, for the same reason: a patch
+    // that never wrote the interval answers the planted one.
+    expect(HALF_HOURLY).not.toBe(HOURLY);
+  });
+});
+
+describe('the shapes every positive answer is held to', () => {
+  it('names every member of each shape it asserts', () => {
+    // The `check-types` half, read here so it is a symbol this file
+    // uses rather than one lint reports unused. A member added to
+    // `TopicRecord`, to either envelope or to `meta` and to none of
+    // the lists is a TS2322 at that declaration, before any
+    // assertion below can compare a response against a set that has
+    // quietly stopped describing it.
+    expect(EVERY_KEY_LISTED).toBe(true);
+    // The page envelope IS the resource envelope plus `meta`, which
+    // is `okPage`'s stated contract and the one difference the
+    // cases below read this router's two success shapes apart by.
+    expect(PAGE_KEY_SET)
+      .toStrictEqual([...RESOURCE_KEY_SET, 'meta'].sort());
+    // And `nextRunAt` is on the record, which is the member this
+    // group is FOR: the column the dispatcher owns is ANSWERED on
+    // every read here and accepted by no request, and a projection
+    // that dropped it would leave every status assertion green.
+    expect(TOPIC_KEY_SET).toContain('nextRunAt');
   });
 });
 
@@ -776,5 +1067,366 @@ describe('a body naming the column the dispatcher owns', () => {
     // The planted control: without it both zeros above are equally
     // green against a search that would find nothing anywhere.
     expect(countOccurrences(leaked, SENTINEL_INSTANT)).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The page: one window of a domain's topics, beside the meta for it
+// ---------------------------------------------------------------------------
+
+describe('a topic list that lands', () => {
+  it('answers one window of rows beside the meta asked for', async () => {
+    const { app, domainId, transformersId } = await withTopics();
+    const topics = topicsPath(STORED_SLUG);
+
+    const whole = await request(app).get(topics);
+    // The controls, varied along the axis under test and through
+    // the SAME operation: two windows of one over the same two
+    // rows. A handler ignoring the window answers both rows to all
+    // three calls, and a total taken from the rows in hand answers
+    // 1 to each of the narrow pair — which is the reading the
+    // refusal half could not take, since no case there can afford a
+    // window narrower than its collection. The wide read is what
+    // makes the narrow ones read as narrowings OF something.
+    const first = await request(app)
+      .get(topics)
+      .query({ page: 1, perPage: 1 });
+    const second = await request(app)
+      .get(topics)
+      .query({ page: 2, perPage: 1 });
+
+    expect(whole.status).toBe(200);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    // THREE members and not two: this list applies a window, so it
+    // carries the `meta` describing one — which is the difference
+    // between the envelope `okPage` writes and the one `ok` does.
+    expect(keysOf(whole.body)).toStrictEqual(PAGE_KEY_SET);
+    expect(keysOf(whole.body.meta)).toStrictEqual(META_KEY_SET);
+    expect(whole.body.success).toBe(true);
+    expect(whole.body.meta).toStrictEqual({
+      page: 1,
+      perPage: DEFAULT_PER_PAGE,
+      total: LISTED_NAMES.length,
+      totalPages: 1,
+    });
+    // Name ascending, which the fixture cannot have arranged: the
+    // transformers row was planted first and sorts second, so this
+    // order is the store's own rather than the order the rows
+    // arrived in.
+    expect(namesOf(whole.body)).toStrictEqual(LISTED_NAMES);
+    // Every row rather than the first, so a page cannot carry one
+    // well-shaped record beside one that leaked a column.
+    for (const row of whole.body.data) {
+      expect(keysOf(row)).toStrictEqual(TOPIC_KEY_SET);
+    }
+    // One row WHOLE, against the constants the fixture plants from
+    // rather than against another response: a store answering every
+    // read the same wrong row would satisfy any cross-response
+    // compare. `domainId` is here because no list case could
+    // otherwise say which domain the rows came out of, and
+    // `nextRunAt` because a planted topic is UNSCHEDULED and the
+    // column is answered rather than hidden.
+    expect(topicFor(whole.body.data as NamedRow[], STORED_NAME))
+      .toStrictEqual({
+        id: transformersId,
+        domainId,
+        name: STORED_NAME,
+        searchTerms: STORED_TERMS,
+        intervalSeconds: HOURLY,
+        nextRunAt: null,
+        enabled: true,
+        minIntervalSeconds: null,
+        maxIntervalSeconds: null,
+      });
+    // The two windows are disjoint and each names the total of the
+    // COLLECTION, which no page could have counted from its rows.
+    expect(namesOf(first.body)).toStrictEqual([PATCHED_NAME]);
+    expect(namesOf(second.body)).toStrictEqual([STORED_NAME]);
+    expect(first.body.meta).toStrictEqual({
+      page: 1,
+      perPage: 1,
+      total: LISTED_NAMES.length,
+      totalPages: LISTED_NAMES.length,
+    });
+    expect(second.body.meta).toStrictEqual({
+      page: 2,
+      perPage: 1,
+      total: LISTED_NAMES.length,
+      totalPages: LISTED_NAMES.length,
+    });
+  });
+
+  it('answers an empty page past the end of the collection', async () => {
+    const { app } = await withTopics();
+    const topics = topicsPath(STORED_SLUG);
+
+    const past = await request(app).get(`${topics}?page=99`);
+    // The control: the same collection through a window that
+    // reaches it. Without it an empty `data` is equally green
+    // against a list route answering nothing to anybody.
+    const reached = await request(app).get(topics);
+
+    expect(past.status).toBe(200);
+    // The envelope does not change shape when the page is empty,
+    // which is what makes an overshot page a page rather than a
+    // 404: the domain is there, its topics are there, and only the
+    // window over them is empty.
+    expect(keysOf(past.body)).toStrictEqual(PAGE_KEY_SET);
+    expect(past.body.data).toStrictEqual([]);
+    // `meta` echoes the page that was ASKED FOR and describes the
+    // COLLECTION, so 99 sits beside a `totalPages` of 1 and a
+    // `total` no empty page could have been counted from.
+    expect(past.body.meta).toStrictEqual({
+      page: 99,
+      perPage: DEFAULT_PER_PAGE,
+      total: LISTED_NAMES.length,
+      totalPages: 1,
+    });
+    expect(namesOf(reached.body)).toStrictEqual(LISTED_NAMES);
+    expect(reached.body.meta.total).toBe(LISTED_NAMES.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The resource: one topic added, and the row the store answered
+// ---------------------------------------------------------------------------
+
+describe('a create that lands', () => {
+  it('answers 201 carrying the stored row, not the request', async () => {
+    const { app, domainId } = await withTopics();
+    const topics = topicsPath(STORED_SLUG);
+
+    const created = await request(app)
+      .post(topics)
+      .send({
+        name: FREE_NAME,
+        searchTerms: CREATED_TERMS,
+        intervalSeconds: HOURLY,
+        enabled: false,
+        minIntervalSeconds: TEN_MINUTES,
+        maxIntervalSeconds: DAILY,
+      });
+    // The control, along the axis under test and through the SAME
+    // operation: the two members the schema requires and nothing
+    // else. Four of this record's members are then the SERVICE's
+    // defaults rather than the request's, so the pair says a create
+    // writes what it was handed where a member was handed and
+    // defaults only where one was not — a handler defaulting
+    // unconditionally answers the first request wrongly, and one
+    // dropping absent members answers the second wrongly.
+    const sparse = await request(app)
+      .post(topics)
+      .send({ name: SPARE_NAME, intervalSeconds: HOURLY });
+
+    expect(created.status).toBe(201);
+    expect(sparse.status).toBe(201);
+    // Two members and not three on both: a create answers one
+    // resource, and there is no window for a `meta` to describe.
+    expect(keysOf(created.body)).toStrictEqual(RESOURCE_KEY_SET);
+    expect(keysOf(sparse.body)).toStrictEqual(RESOURCE_KEY_SET);
+    expect(keysOf(created.body.data)).toStrictEqual(TOPIC_KEY_SET);
+    expect(keysOf(sparse.body.data)).toStrictEqual(TOPIC_KEY_SET);
+    expect(created.body.success).toBe(true);
+    expect(created.body.data.name).toBe(FREE_NAME);
+    // The list REPLACES nothing here and is simply stored, asserted
+    // whole rather than by length: a create answering the two terms
+    // in some other order, or one of them, is a red case.
+    expect(created.body.data.searchTerms).toStrictEqual(CREATED_TERMS);
+    expect(created.body.data.intervalSeconds).toBe(HOURLY);
+    expect(created.body.data.enabled).toBe(false);
+    expect(created.body.data.minIntervalSeconds).toBe(TEN_MINUTES);
+    expect(created.body.data.maxIntervalSeconds).toBe(DAILY);
+    // UNSCHEDULED whatever else the body said, which is
+    // `InsertTopicInput` carrying no such member rather than
+    // anything the handler does: scheduling it is the separate act
+    // `POST /topics/:id/run-now` performs.
+    expect(created.body.data.nextRunAt).toBeNull();
+    // The four defaults, none of them on the sparse request: an
+    // empty term list, enabled, and neither bound.
+    expect(sparse.body.data.searchTerms).toStrictEqual([]);
+    expect(sparse.body.data.enabled).toBe(true);
+    expect(sparse.body.data.minIntervalSeconds).toBeNull();
+    expect(sparse.body.data.maxIntervalSeconds).toBeNull();
+    expect(sparse.body.data.nextRunAt).toBeNull();
+    // Neither member is on either request body — the path named
+    // the domain and nothing named an id — so both arriving right
+    // is the STORE having answered rather than the request having
+    // been echoed back under a 201.
+    expect(created.body.data.domainId).toBe(domainId);
+    expect(sparse.body.data.domainId).toBe(domainId);
+    expect(typeof created.body.data.id).toBe('number');
+    expect(created.body.data.id).not.toBe(sparse.body.data.id);
+  });
+
+  it('stores it, and leaves the collection it joined alone', async () => {
+    // Read back through the OTHER operation, so the claim is about
+    // what is stored rather than about what a call happened to
+    // answer: a create returning a row it never wrote passes the
+    // case above and fails this one.
+    const { app, domainId, transformersId } = await withTopics();
+    const topics = topicsPath(STORED_SLUG);
+
+    const created = await request(app)
+      .post(topics)
+      .send({
+        name: FREE_NAME,
+        searchTerms: CREATED_TERMS,
+        intervalSeconds: HOURLY,
+      });
+    const listed = await request(app).get(topics);
+    const rows = listed.body.data as NamedRow[];
+    const expected = [...LISTED_NAMES, FREE_NAME].sort();
+
+    expect(listed.status).toBe(200);
+    // The whole collection, so a create reaching more rows than the
+    // one it wrote is a red case here rather than an answer nobody
+    // compared against anything. Sorted at use, because where the
+    // new name falls among the planted ones is the store's ordering
+    // rather than this case's subject.
+    expect(namesOf(listed.body)).toStrictEqual(expected);
+    expect(listed.body.meta.total).toBe(expected.length);
+    expect(topicFor(rows, FREE_NAME)).toStrictEqual(created.body.data);
+    // And the row that was already there still carries what it
+    // carried, which no assertion over a created row could say: a
+    // create lands ONE row. A whole-row literal rather than a field
+    // read, since the fault worth catching here is a neighbour
+    // gaining a member or losing one on the way past a write.
+    expect(topicFor(rows, STORED_NAME)).toStrictEqual({
+      id: transformersId,
+      domainId,
+      name: STORED_NAME,
+      searchTerms: STORED_TERMS,
+      intervalSeconds: HOURLY,
+      nextRunAt: null,
+      enabled: true,
+      minIntervalSeconds: null,
+      maxIntervalSeconds: null,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The patch: the members rewritten, and the ones it never named
+// ---------------------------------------------------------------------------
+
+describe('a patch of the terms and the cadence that lands', () => {
+  it('answers 200 with the stored row afterwards', async () => {
+    const { app, domainId, inferenceId } = await withTopics();
+    const topic = `/topics/${inferenceId}`;
+
+    const retuned = await request(app)
+      .patch(topic)
+      .send({ searchTerms: PATCHED_TERMS, intervalSeconds: HALF_HOURLY });
+    // The first control: a member the patch does not name is left
+    // alone. Without it the case is equally green against a handler
+    // rewriting every column on every patch — and it runs the
+    // other way round here, since this patch names only `enabled`
+    // and the two members written above have to survive it.
+    const disabled = await request(app)
+      .patch(topic)
+      .send({ enabled: false });
+    // The second: `null` CLEARS a bound where ABSENT leaves it
+    // standing, which is the distinction `patchTopicSchema`
+    // declares `.nullable().optional()` for and the only way an
+    // operator removes a floor. A handler collapsing the two with a
+    // `??` answers these two requests the same way, and the
+    // ceiling this request never names is what reports it.
+    const unfloored = await request(app)
+      .patch(topic)
+      .send({ minIntervalSeconds: null });
+    const listed = await request(app).get(topicsPath(STORED_SLUG));
+
+    expect(retuned.status).toBe(200);
+    // Two members, not three: a patch answers one resource, and a
+    // `meta` arriving here would be the page envelope on a body
+    // that describes no window.
+    expect(keysOf(retuned.body)).toStrictEqual(RESOURCE_KEY_SET);
+    expect(keysOf(retuned.body.data)).toStrictEqual(TOPIC_KEY_SET);
+    expect(retuned.body.success).toBe(true);
+    // The list arrives REPLACED and not merged into: two members
+    // rather than the three a union of the stored and the submitted
+    // would carry, which is the store's rule reaching a caller.
+    expect(retuned.body.data.searchTerms).toStrictEqual(PATCHED_TERMS);
+    expect(retuned.body.data.intervalSeconds).toBe(HALF_HOURLY);
+    // The name, the id, the domain and both bounds came through
+    // untouched, and the request named none of them — asserted
+    // because a silent rename, a move between domains or a cleared
+    // bound would leave every read above green.
+    expect(retuned.body.data.name).toBe(PATCHED_NAME);
+    expect(retuned.body.data.id).toBe(inferenceId);
+    expect(retuned.body.data.domainId).toBe(domainId);
+    expect(retuned.body.data.minIntervalSeconds).toBe(TEN_MINUTES);
+    expect(retuned.body.data.maxIntervalSeconds).toBe(DAILY);
+    // And the column the dispatcher owns is still where the create
+    // left it: this router has no route that may write it.
+    expect(retuned.body.data.nextRunAt).toBeNull();
+    expect(disabled.status).toBe(200);
+    expect(keysOf(disabled.body.data)).toStrictEqual(TOPIC_KEY_SET);
+    expect(disabled.body.data.enabled).toBe(false);
+    // Both members written by the first patch are still there under
+    // a second that never named either.
+    expect(disabled.body.data.searchTerms).toStrictEqual(PATCHED_TERMS);
+    expect(disabled.body.data.intervalSeconds).toBe(HALF_HOURLY);
+    expect(unfloored.status).toBe(200);
+    expect(unfloored.body.data.minIntervalSeconds).toBeNull();
+    expect(unfloored.body.data.maxIntervalSeconds).toBe(DAILY);
+    // And the store holds what the last patch answered, read back
+    // through the OTHER operation: a patch answering a row it never
+    // wrote satisfies every assertion above.
+    expect(topicFor(listed.body.data as NamedRow[], PATCHED_NAME))
+      .toStrictEqual({
+        id: inferenceId,
+        domainId,
+        name: PATCHED_NAME,
+        searchTerms: PATCHED_TERMS,
+        intervalSeconds: HALF_HOURLY,
+        nextRunAt: null,
+        enabled: false,
+        minIntervalSeconds: null,
+        maxIntervalSeconds: DAILY,
+      });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The delete: what a 204 carries, and what it leaves behind
+// ---------------------------------------------------------------------------
+
+describe('a delete that lands', () => {
+  it('answers 204 with nothing at all, and takes the row', async () => {
+    const { app, transformersId } = await withTopics();
+
+    const removed = await request(app).delete(`/topics/${transformersId}`);
+    const listed = await request(app).get(topicsPath(STORED_SLUG));
+    const elsewhere = await request(app).get(topicsPath(OTHER_SLUG));
+    // The control, through the SAME operation: the identical
+    // request against an id that named a row a moment ago is a 404,
+    // which is what makes the 204 above a delete rather than what
+    // this route answers to any id it is handed.
+    const again = await request(app).delete(`/topics/${transformersId}`);
+
+    expect(removed.status).toBe(204);
+    // An EMPTY key set, which is this route's half of the shape the
+    // rest of the file reads: a deleted resource has no
+    // representation, so what is asserted is that NOTHING travelled
+    // rather than that some envelope did.
+    expect(keysOf(removed.body)).toStrictEqual([]);
+    expect(removed.text).toBe('');
+    expect(removed.type).toBe('');
+    // The row is gone, its neighbour is not, and the domain still
+    // answers a page: nothing in schema v2 points at `topics`, so
+    // this delete has neither a guard nor a cascade, and a 204 that
+    // took the collection with it would be caught here rather than
+    // by anything the delete answered.
+    expect(listed.status).toBe(200);
+    expect(namesOf(listed.body)).toStrictEqual([PATCHED_NAME]);
+    expect(listed.body.meta.total).toBe(1);
+    // The second domain still researches the name this delete took,
+    // which is the widening control: the row is addressed by an id,
+    // and a store deleting by NAME would take that one too.
+    expect(namesOf(elsewhere.body)).toStrictEqual([STORED_NAME]);
+    expect(again.status).toBe(404);
+    expect(again.body).toStrictEqual(NO_SUCH_TOPIC_BODY);
   });
 });
