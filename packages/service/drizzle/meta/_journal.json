@@ -43,6 +43,13 @@
       "when": 1788159284910,
       "tag": "0005_freezing_hairball",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788166857211,
+      "tag": "0006_tearful_kabuki",
+      "breakpoints": true
     }
   ]
 }

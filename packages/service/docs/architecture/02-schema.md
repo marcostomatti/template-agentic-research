@@ -23,7 +23,7 @@ the rules that span more than one of them.
 
 ## The roster
 
-Twenty-five tables. Each area below is one module, and that module's
+Twenty-six tables. Each area below is one module, and that module's
 header carries the argument for why its tables sit together.
 
 ### Domains — `src/db/schema/domains.ts`
@@ -361,7 +361,7 @@ migration here that was.
 
 | Owner | What it carries |
 | --- | --- |
-| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_jittery_talos.sql`, `0005_freezing_hairball.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 26 tables, 177 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 12 CHECK — the nine value-set checks generated from the tuples in `src/db/schema/values.ts`, the two spanning two columns, `research_pool_approval_check` and `source_config_proposals_approval_check`, and the singleton bound pinning `operator_settings.id` to 1. All 34 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. Both partial dispatch-claim indexes. |
+| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_jittery_talos.sql`, `0005_freezing_hairball.sql`, `0006_tearful_kabuki.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 26 tables, 177 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 12 CHECK — the nine value-set checks generated from the tuples in `src/db/schema/values.ts`, the two spanning two columns, `research_pool_approval_check` and `source_config_proposals_approval_check`, and the singleton bound pinning `operator_settings.id` to 1. All 34 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. All three indexes: the two partial dispatch-claim ones, and `documents_source_parse_status_idx`, which is not partial. |
 | Hand-written — `0002_category_depth_guard.sql` | `categories_enforce_depth()` and the `BEFORE INSERT OR UPDATE` trigger on `categories` that calls it. Two statements, one rule, and the whole of the custom-owned DDL. |
 
 The snapshot decides that split, not taste. A table's entry in

@@ -1,0 +1,1 @@
+CREATE INDEX "documents_source_parse_status_idx" ON "documents" USING btree ("source_id","parse_status");
