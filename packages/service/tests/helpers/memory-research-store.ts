@@ -1,22 +1,23 @@
 /**
  * @packageDocumentation
  * The in-memory dataset every research store port is driven through
- * in the isolated suite. All five halves are here — the domains
+ * in the isolated suite. All six halves are here — the domains
  * half, the taxonomy half with categories and terms together, the
- * personas beside them, the topics the dispatcher comes for, and the
- * operator settings the deployment as a whole is configured by.
+ * personas beside them, the topics the dispatcher comes for, the
+ * sources it reads and the review queue over what they captured, and
+ * the operator settings the deployment as a whole is configured by.
  *
- * ONE DATASET RATHER THAN FIVE FAKES, which is why this file is not
+ * ONE DATASET RATHER THAN SIX FAKES, which is why this file is not
  * named for any one of the ports it satisfies. `src/domains/store.ts`
  * records that the taxonomy, personas and settings services all
  * resolve a `:slug` through {@link DomainStore.findDomainBySlug}
- * before doing anything of their own, and `src/topics/store.ts`
- * records the same of the topics service. The taxonomy, persona and
- * topic tables all hang off `domains.id` with `ON DELETE CASCADE`,
- * so a domain deleted through one port has to be gone from the
- * others, and only shared state makes that true: five independent
- * fakes would agree with each other right up until a case deleted
- * something.
+ * before doing anything of their own, and `src/topics/store.ts` and
+ * `src/sources/store.ts` record the same of their own services. The
+ * taxonomy, persona, topic and source tables all hang off
+ * `domains.id` with `ON DELETE CASCADE`, so a domain deleted through
+ * one port has to be gone from the others, and only shared state
+ * makes that true: six independent fakes would agree with each other
+ * right up until a case deleted something.
  *
  * `operator_settings` IS THE ONE TABLE THAT HANGS OFF NOTHING, and
  * it belongs in the shared dataset for the other direction of that
@@ -190,6 +191,107 @@
  * topic delete has neither a guard nor a cascade and cannot be
  * refused at all.
  *
+ * THE SOURCES HALF CARRIES NO UNIQUE KEY AT ALL, WHICH IS A SHAPE NO
+ * OTHER HALF HERE HAS. Read off the generated SQL rather than off the
+ * schema module: the table's whole constraint set is a primary key,
+ * one CHECK and one foreign key, with no `UNIQUE` and no index beside
+ * them. So there is no duplicate-on-create refusal to imitate and no
+ * `409` for an insert to raise — two rows naming one endpoint are
+ * ordinary here, where two topics sharing a name are refused. An
+ * insert always inserts.
+ *
+ * ITS TWO WRITE MECHANISMS ARE A CHECK AND A FOREIGN KEY, and the
+ * CHECK is the first one any half here has had to imitate.
+ * `sources_kind_check` refuses a `kind` outside `SOURCE_KINDS` as a
+ * `check-violation`, on an INSERT and on an UPDATE alike, because
+ * `kind` is patchable per `SourcePatch`.
+ * `sources_domain_id_domains_id_fk` refuses a `domainId` naming no
+ * domain as a `foreign-key-violation`, and the insert alone can reach
+ * it, since `domainId` is not patchable.
+ *
+ * THE ORDER BETWEEN THEM IS ARGUED RATHER THAN MEASURED, and saying
+ * so is the honest half. A table CHECK is evaluated while the row is
+ * still being formed and a foreign key by an AFTER trigger at the end
+ * of the statement, which is the same relation the category half
+ * MEASURED between its BEFORE trigger and its own foreign key — so
+ * the CHECK is written first below on that reasoning and on no
+ * reading of this table.
+ *
+ * THE DELETE IS REFUSED FROM OUTSIDE THE ROW, WHICH IS WHERE THIS
+ * HALF DIFFERS MOST FROM THE TOPICS ONE. Nothing points at a topic,
+ * so a topic delete cannot be refused; three foreign keys point at
+ * `sources.id` and every one of them emits `ON DELETE no action`.
+ * `documents_source_id_sources_id_fk` refuses while the feed's
+ * captures are in the corpus, and
+ * `finding_sightings_source_id_sources_id_fk` refuses while sightings
+ * cite it, each as a `foreign-key-violation` naming its own key.
+ * Retiring a feed without losing either is `SourcePatch.enabled` set
+ * to false, which is what the refusal names as the operation that was
+ * wanted.
+ *
+ * WHICH OF THE TWO A SOURCE HOLDING BOTH ANSWERS IS NOT MEASURED AND
+ * IS NOT OBSERVABLE DOWNSTREAM. Both are end-of-statement checks over
+ * one statement, and the service reads the COUNTS off
+ * {@link SourceStore.countSourceDependents} rather than a constraint
+ * name off the refusal, so no caller can tell which fired. The
+ * documents key is written first below because the corpus is the
+ * larger thing the delete would have taken, and for no reason a case
+ * could check.
+ *
+ * THE THIRD REFUSING KEY IS NOT IMITATED, and the reason is that the
+ * state is unreachable rather than that it was overlooked.
+ * `source_config_proposals_source_id_sources_id_fk` refuses a source
+ * that a config proposal still names — measured in
+ * `drizzle/0005_freezing_hairball.sql` — but no port here writes a
+ * proposal and no seam below plants one, so there is no dataset this
+ * store can be in where that key would fire. A fake refusing a state
+ * it cannot reach would be inventing a rule rather than imitating
+ * one. `src/sources/store.ts` declares the throw, and the live seam
+ * is where it is discharged.
+ *
+ * TWO SEAMS PLANT WHAT NO PORT CAN WRITE, and their shapes differ
+ * because what the port can ASK about each differs.
+ * {@link MemoryResearchStore.setSourceDocuments} plants ROWS, because
+ * three methods read documents as rows — the parse-status aggregate,
+ * the failures page and its count — and a planted number could answer
+ * none of them. {@link MemoryResearchStore.setSourceSightings} plants
+ * a COUNT, because `countSourceDependents` is the only thing on this
+ * port that can ask about a sighting at all and a row would carry
+ * members nothing here reads.
+ *
+ * THE PARSE-STATUS AGGREGATE IS COUNTED FROM THOSE ROWS, never
+ * planted beside them, which is what keeps the delete guard and the
+ * list route reading one dataset — and is where this half departs
+ * from {@link MemoryResearchStore.setDomainDependents}, whose planted
+ * number IS authoritative. Every member of `DOCUMENT_PARSE_STATUSES`
+ * is present and every zero is a counted zero: the record is
+ * initialised from the tuple and then filled, so a source that has
+ * captured nothing answers zero under each member rather than an
+ * empty record. That is the trap `ParseStatusCounts` names — a status
+ * with no rows contributes no group to a grouped read, and letting
+ * the absence through would make `0` and never-counted one value.
+ *
+ * THE FAILURES QUEUE READS THOSE SAME ROWS AND WRITES NONE. `failed`
+ * is the whole of the filter and there is no status parameter, so the
+ * queue cannot be asked for the corpus. The order is `capturedAt`
+ * descending with `id` descending breaking a tie, because a batch
+ * capture gives many rows one timestamp and a tie spanning a page
+ * boundary would let two pages disagree about which row they hold.
+ * Bodies come back AS STORED — unmasked and uncut — since
+ * `src/sources/failures-service.ts` is what masks and cuts them.
+ *
+ * AND A DOMAIN TAKES ITS SOURCES WITH IT, ALONG WITH EVERYTHING
+ * PLANTED UNDER THEM. `sources.domain_id` is `ON DELETE CASCADE`, and
+ * so are the domain columns on `documents` and on `finding_sightings`
+ * — the second through `findings`, which carries its own cascade — so
+ * one statement removes the sources and the rows that were refusing
+ * their deletes together, and the end-of-statement check finds
+ * nothing left citing a source that is gone. That is why the cascade
+ * below drops both plants rather than running into its own guard, the
+ * same care `deleteCategory` is not reused inside it for. Deleting a
+ * domain is therefore permitted where deleting one of its sources is
+ * refused, and the difference is what each act means.
+ *
  * THE SETTINGS HALF REFUSES NOTHING, AND THAT IS A MEASUREMENT
  * RATHER THAN A SIMPLIFICATION. `operator_settings` carries two
  * mechanisms and neither is reachable through the port: a second
@@ -241,6 +343,17 @@
  * the caller's instance would let the call that scheduled a topic go
  * on moving the due time afterwards.
  *
+ * `sources` CARRIES TWO NULLABLE STAMPS RATHER THAN ONE, and a
+ * planted document carries a third that is never null.
+ * `last_success_at` and `last_failure_at` are the pipeline's own
+ * account of how a feed has been going, and `captured_at` is when a
+ * document arrived; all three are copied on the way out and the
+ * document's is copied on the way in as well, where the seam that
+ * plants it could otherwise keep the instance. None of the three is
+ * ever read off the clock — no method on the sources port stamps
+ * anything — so this is the same argument the due time makes rather
+ * than the one the domain stamps make.
+ *
  * SO IS EVERY `settings` PAYLOAD, for the same reason and by the
  * route a `jsonb` column takes. Drizzle serialises the payload on
  * the way in and parses a fresh object on the way out, so no caller
@@ -256,6 +369,13 @@
  * too and is copied one level shallower: a list of strings has
  * nothing below it, so a fresh array is the whole of it where a
  * `DomainSettings` payload needs a round trip.
+ *
+ * `sources.parser_config` AND `sources.contract` TAKE THE ROUND TRIP,
+ * in both directions and with no shallower option available. Neither
+ * column carries a `$type`, so what a parser config holds is the
+ * adapter's business and differs by `kind` — there is no declared
+ * depth this store could copy to instead, which is the opposite of
+ * the topics list and the same as the two settings payloads.
  *
  * IDS COME FROM 1 AND ARE NOT GAPLESS, which is the half a reader
  * would not predict. Measured against the live Postgres on a
@@ -281,10 +401,15 @@
  * counter and burns it the same way, on that reasoning and on no
  * measurement of its own: the two tables carry the same pair of
  * mechanisms over the same column, so the gap of two measured on
- * `personas` is what this one is expected to reproduce.
+ * `personas` is what this one is expected to reproduce. `sources`
+ * carries a SIXTH counter and is the one table here a DUPLICATE
+ * cannot burn: with no unique key there is nothing to conflict on, so
+ * only the kind CHECK and the domain foreign key can refuse an insert
+ * and leave the id it took unused.
  */
 import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type { OperatorSettings } from '../../src/db/schema/settings.js';
+import type { DocumentParseStatus } from '../../src/db/schema/values.js';
 import type {
   DomainDependentCounts,
   DomainPatch,
@@ -300,6 +425,16 @@ import type {
   PersonaStore,
 } from '../../src/personas/store.js';
 import type { SettingsStore } from '../../src/settings/store.js';
+import type {
+  InsertSourceInput,
+  ParseStatusCounts,
+  SourceDependentCounts,
+  SourceFailureRecord,
+  SourcePatch,
+  SourceRecord,
+  SourceStore,
+  SourceWithParseStats,
+} from '../../src/sources/store.js';
 import type {
   CategoryPatch,
   CategoryRecord,
@@ -318,58 +453,127 @@ import type {
   TopicStore,
 } from '../../src/topics/store.js';
 
+import {
+  DOCUMENT_PARSE_STATUSES,
+  SOURCE_KINDS,
+} from '../../src/db/schema/values.js';
 import { StoreRefusal } from '../../src/db/store-errors.js';
 
 /**
- * All five research ports over one dataset, plus the one seam a
+ * One planted `documents` row, as the sources half reads it.
+ *
+ * {@link SourceFailureRecord} plus the one column that record leaves
+ * out, and it is left out for a reason this shape has to supply:
+ * every row the failures queue answers is `failed` by construction,
+ * so the port's record carries no `parseStatus` at all. A plant has
+ * to carry it, because the parse-status aggregate counts across BOTH
+ * members of `DOCUMENT_PARSE_STATUSES` and a queue that could only be
+ * given failures could never answer a counted `ok`.
+ *
+ * `sourceId` and `domainId` are absent for the same reason
+ * `SourceFailureRecord` omits the first: the source is the argument
+ * {@link MemoryResearchStore.setSourceDocuments} is planting under,
+ * and the domain is its source's. `raw`, `features` and `embedding`
+ * are absent because nothing on this port reads them — the projection
+ * the queue answers is a decision about what a review surface is FOR,
+ * and a fixture carrying a stored payload and two derived vectors
+ * would be imitating a column no case can see.
+ */
+export interface MemorySourceDocument {
+  /** `documents.id`, and the tiebreak on the queue's order. */
+  readonly id: number;
+
+  /** Where the document can be read at its source, or null. */
+  readonly url: string | null;
+
+  /** The document's text as captured, verbatim and possibly empty. */
+  readonly body: string;
+
+  /**
+   * What went wrong, or null when nothing was recorded — including
+   * on a row that is `failed`, which is storable and is the shape
+   * that costs an operator the most.
+   */
+  readonly parseError: string | null;
+
+  /** When the pipeline captured it. Copied on the way in. */
+  readonly capturedAt: Date;
+
+  /**
+   * Which side of `documents_parse_status_check` the row sits on.
+   * The one member {@link SourceFailureRecord} does not carry, and
+   * what the aggregate groups by.
+   */
+  readonly parseStatus: DocumentParseStatus;
+}
+
+/**
+ * All six research ports over one dataset, plus the three seams a
  * case needs that no port declares.
  *
  * EVERY ONE OF THEM WHOLE rather than a `Pick` of it. The category
  * half stood behind a narrowed alias while the term methods were
  * unwritten, which was the honest statement of what existed rather
  * than a gap papered over with stubs; all twelve taxonomy methods,
- * all six persona ones, all seven topic ones and both settings ones
- * are here now, so a caller wanting any of the five ports entire
- * can be handed this store.
+ * all six persona ones, all seven topic ones, all nine source ones
+ * and both settings ones are here now, so a caller wanting any of
+ * the six ports entire can be handed this store.
  *
- * `TopicStore` is the first member from outside wave 1, and it joins
- * this file rather than standing on its own for the reason the
- * paragraph above gives: `topics.domain_id` cascades, so a domain
- * deleted through `DomainStore` has to take its topics with it, and
- * only shared state makes that true.
+ * `TopicStore` was the first member from outside wave 1 and
+ * `SourceStore` is the second, and both join this file rather than
+ * standing on their own for the reason the paragraph above gives:
+ * `topics.domain_id` and `sources.domain_id` both cascade, so a
+ * domain deleted through `DomainStore` has to take its topics and
+ * its sources with it, and only shared state makes that true.
  *
  * Nothing in `src/` is handed a {@link MemoryResearchStore} — a
- * service takes the port — so the seam below cannot become a way for
- * the code under test to route around it.
+ * service takes the port — so the seams below cannot become a way for
+ * the code under test to route around them.
  */
 export interface MemoryResearchStore extends
-  DomainStore, TaxonomyStore, PersonaStore, SettingsStore, TopicStore {
+  DomainStore,
+  TaxonomyStore,
+  PersonaStore,
+  SettingsStore,
+  TopicStore,
+  SourceStore {
   /**
    * Plants what a domain has ACCUMULATED, for the delete guard to
    * read back through {@link DomainStore.countDomainDependents}.
    *
-   * NOTHING HERE WRITES `sources` OR `findings`. No port declares an
-   * insert for either, and the pipeline that fills them arrives in a
-   * later phase — so the state the delete guard exists for is
-   * unreachable through the ports themselves, and without this seam
-   * every count answers zero and the guard is exercisable only
-   * against a real database. That would put the one rule the spec
-   * argues hardest for in the half of the suite that needs a
-   * container up.
+   * NOTHING HERE WRITES `findings`. No port declares an insert for
+   * it, and the pipeline that fills it arrives in a later phase — so
+   * the state the delete guard exists for is unreachable through the
+   * ports themselves, and without this seam every count answers zero
+   * and the guard is exercisable only against a real database. That
+   * would put the one rule the spec argues hardest for in the half of
+   * the suite that needs a container up.
    *
-   * `topics` IS NOW WRITABLE AND THE COUNT IS STILL PLANTED, which
-   * is the one place this file knowingly answers something a
-   * deployment would not. `TopicStore.insertTopic` below stores real
-   * rows, and `src/domains/db-store.ts` counts them, so a live
-   * domain holding a topic is refused a delete it is offered here.
-   * Reconciling the two is not a matter of counting instead:
+   * `topics` AND `sources` ARE NOW BOTH WRITABLE AND BOTH COUNTS ARE
+   * STILL PLANTED, which is the one place this file knowingly answers
+   * something a deployment would not. `TopicStore.insertTopic` and
+   * {@link SourceStore.insertSource} below store real rows, and
+   * `src/domains/db-store.ts` counts them, so a live domain holding
+   * either is refused a delete it is offered here. Reconciling the
+   * two is not a matter of counting instead:
    * `src/domains/service.test.ts` and `src/domains/routes.test.ts`
    * plant counts for tables no port can write, and a rule mixing a
    * planted number with a counted one would answer neither. So the
    * plant stays authoritative for all three members, a case wanting
-   * the guard to see a topic plants it whether or not it also
-   * inserted one, and `tests/live/api-wave2.live.test.ts` is where
-   * the counted answer is discharged.
+   * the guard to see a topic or a source plants it whether or not it
+   * also inserted one, and `tests/live/api-wave2.live.test.ts` is
+   * where the counted answer is discharged.
+   *
+   * IT IS THE OPPOSITE DECISION FROM THE SOURCES SEAMS BELOW, and the
+   * two are worth reading together. This one plants a NUMBER the
+   * guard reads back, so a stored row cannot move it;
+   * {@link MemoryResearchStore.setSourceDocuments} plants ROWS and
+   * every number over them — the parse-status aggregate, the failures
+   * count, the `documents` member of
+   * {@link SourceStore.countSourceDependents} — is COUNTED. The
+   * difference is which port owns the guard: this one answers about a
+   * domain across three tables no port fully covers, and that one
+   * answers about a source across rows the same seam supplies whole.
    *
    * @param domainId - The domain the rows hang off. Need not name a
    *   stored domain: the counts are plantable ahead of the row, and
@@ -385,6 +589,62 @@ export interface MemoryResearchStore extends
     domainId: number,
     counts: Partial<DomainDependentCounts>,
   ): void;
+
+  /**
+   * Plants the `documents` rows captured through one source, for the
+   * three reads over that table to answer from.
+   *
+   * NO PORT WRITES A `documents` ROW, and `src/sources/store.ts`
+   * states the absence IS the read-only rule rather than an omission:
+   * a handler cannot mutate `parse_status` because there is nothing
+   * on the port to call. That leaves the parse-status aggregate, the
+   * failures page and its count with no reachable state to read, so
+   * this seam supplies it — and it supplies ROWS rather than numbers,
+   * because two of those three answer rows.
+   *
+   * THE COUNTS ARE THEN COUNTED FROM WHAT WAS PLANTED, which is what
+   * keeps one dataset behind the aggregate, the queue and the
+   * `documents` member of {@link SourceStore.countSourceDependents}.
+   * A case planting one `failed` row therefore refuses that source's
+   * delete, answers `parseStats.failed` of 1, and answers a queue of
+   * one, without saying any of the three.
+   *
+   * @param sourceId - The source the rows were captured through. Need
+   *   not name a stored source: the rows are plantable ahead of it,
+   *   and every read below answers about an id rather than about a
+   *   source.
+   * @param documents - What to record, WHOLE. A second call replaces
+   *   the first rather than appending to it — the same whole-unit
+   *   rule {@link MemoryResearchStore.setDomainDependents} and
+   *   {@link DomainPatch} state, for the same reason: under an append
+   *   there is no way to express a source going back to none. Each
+   *   row's `capturedAt` is copied on the way in, so a caller that
+   *   goes on moving the `Date` it planted does not move a stored
+   *   one.
+   */
+  setSourceDocuments(
+    sourceId: number,
+    documents: readonly MemorySourceDocument[],
+  ): void;
+
+  /**
+   * Plants how many `finding_sightings` rows cite one source, for the
+   * delete guard to read back.
+   *
+   * A COUNT RATHER THAN ROWS, and that is not an inconsistency with
+   * the seam above but a reading of what the port can ask.
+   * {@link SourceStore.countSourceDependents} is the only method here
+   * that can be asked about a sighting at all — nothing lists one,
+   * nothing reads one by id — so a planted row would carry a
+   * `finding_id`, a `url` and an `observed_at` that no case could
+   * ever read back, and would imitate a shape rather than a rule.
+   *
+   * @param sourceId - The source the sightings cite. Need not name a
+   *   stored source, for the reason the seam above gives.
+   * @param count - How many. A second call replaces the first, and
+   *   zero is how a case takes a plant back.
+   */
+  setSourceSightings(sourceId: number, count: number): void;
 }
 
 /** What {@link createMemoryResearchStore} may be handed. */
@@ -463,6 +723,45 @@ const TOPIC_KEY_UNIQUE = 'topics_domain_id_name_unique';
  * there is no rows-hold-the-delete refusal to share the name with.
  */
 const TOPIC_DOMAIN_FK = 'topics_domain_id_domains_id_fk';
+
+/**
+ * The CHECK on `sources.kind`, spelled as `src/db/schema/sources.ts`
+ * spells it. The first CHECK any half here imitates, and the one
+ * mechanism both source writes can reach: `kind` is patchable, so an
+ * UPDATE meets it as readily as an INSERT.
+ */
+const SOURCE_KIND_CHECK = 'sources_kind_check';
+
+/**
+ * The foreign key from `sources.domain_id`.
+ *
+ * Like {@link TOPIC_DOMAIN_FK} and unlike {@link CATEGORY_PARENT_FK}
+ * this name stands for ONE rule: the column cascades on delete, so
+ * there is no rows-hold-the-delete refusal to share the name with.
+ */
+const SOURCE_DOMAIN_FK = 'sources_domain_id_domains_id_fk';
+
+/**
+ * The foreign key from `documents.source_id`, and the first of the
+ * two names a refused source delete can carry.
+ *
+ * `ON DELETE no action`, so the corpus a feed produced holds its
+ * delete. `src/db/schema/documents.ts` argues it at the column: a
+ * source does not own the documents it captured.
+ */
+const SOURCE_DOCUMENTS_FK = 'documents_source_id_sources_id_fk';
+
+/**
+ * The foreign key from `finding_sightings.source_id`, and the second
+ * of the two.
+ *
+ * `ON DELETE no action` for a sharper reason than the first:
+ * `src/db/schema/findings.ts` states the sightings table IS the
+ * provenance record, so a cascade would drop syndication evidence a
+ * feed at a time and every count taken afterwards would be lower with
+ * nothing saying why.
+ */
+const SOURCE_SIGHTINGS_FK = 'finding_sightings_source_id_sources_id_fk';
 
 /** Three zeros: what a domain nothing points at has accumulated. */
 const NO_DEPENDENTS: DomainDependentCounts = {
@@ -610,6 +909,92 @@ function copyTopic(row: TopicRecord): TopicRecord {
 }
 
 /**
+ * A stored `jsonb` document sharing no object with the one handed in.
+ *
+ * A JSON round trip for the reason {@link copySettings} gives, and
+ * over `unknown` rather than over a declared shape because
+ * `sources.parser_config` and `sources.contract` carry no `$type`:
+ * what a parser config holds differs by `kind`, so there is no depth
+ * a spread could be written to instead. Every value this store puts
+ * through it arrived as a `Readonly<Record<string, unknown>>` from
+ * {@link InsertSourceInput} or {@link SourcePatch}, which is what
+ * makes the round trip total — a value `JSON.stringify` answers
+ * `undefined` for could not have got here.
+ *
+ * @param document - The document to copy.
+ * @returns An equal document sharing nothing with it.
+ */
+function copyJsonDocument(document: unknown): unknown {
+  return JSON.parse(JSON.stringify(document)) as unknown;
+}
+
+/**
+ * A source record whose mutable members belong to nobody else.
+ *
+ * Four members rather than {@link copyPersona}'s none: two `jsonb`
+ * documents that take the round trip above, and two nullable stamps
+ * that are `Date` objects a caller could otherwise write through. The
+ * stamps are the pipeline's own account of how the feed has been
+ * going, and nothing on this port writes either, so they are copied
+ * on the way out alone — there is no way in.
+ *
+ * @param row - The stored row.
+ * @returns A copy safe to hand across the port.
+ */
+function copySource(row: SourceRecord): SourceRecord {
+  return {
+    ...row,
+    parserConfig: copyJsonDocument(row.parserConfig),
+    contract: copyJsonDocument(row.contract),
+    lastSuccessAt: row.lastSuccessAt === null
+      ? null
+      : copyInstant(row.lastSuccessAt),
+    lastFailureAt: row.lastFailureAt === null
+      ? null
+      : copyInstant(row.lastFailureAt),
+  };
+}
+
+/**
+ * A planted document whose `Date` belongs to nobody else.
+ *
+ * Used on the way IN, where the seam is handed a row a case built,
+ * and again on the way out through {@link failureOf}. `capturedAt` is
+ * never null, unlike the two stamps above, so there is no branch.
+ *
+ * @param row - The document to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedDocument(
+  row: MemorySourceDocument,
+): MemorySourceDocument {
+  return { ...row, capturedAt: copyInstant(row.capturedAt) };
+}
+
+/**
+ * The failures-queue projection of one planted document.
+ *
+ * COLUMN-SCOPED, and the scoping is the point rather than a saving:
+ * {@link SourceFailureRecord} carries no `parseStatus`, because every
+ * row the queue answers is `failed` by construction and a member
+ * whose value is a constant would be a column pretending to be a
+ * reading.
+ *
+ * @param row - The stored document.
+ * @returns The five members the queue answers, its `capturedAt`
+ *   copied.
+ */
+function failureOf(row: MemorySourceDocument): SourceFailureRecord {
+  return {
+    id: row.id,
+    url: row.url,
+    body: row.body,
+    parseError: row.parseError,
+    capturedAt: copyInstant(row.capturedAt),
+  };
+}
+
+/**
  * A domain record whose mutable members belong to nobody else.
  *
  * @param row - The stored row.
@@ -643,11 +1028,19 @@ export function createMemoryResearchStore(
   const terms = new Map<number, TermRecord>();
   const personas = new Map<number, PersonaRecord>();
   const topics = new Map<number, TopicRecord>();
+  const sources = new Map<number, SourceRecord>();
+
+  // The two planting seams' state, keyed by source id. Neither is a
+  // table this store's ports can write, and the header carries why
+  // one holds rows and the other a number.
+  const sourceDocuments = new Map<number, MemorySourceDocument[]>();
+  const sourceSightings = new Map<number, number>();
   let nextDomainId = 1;
   let nextCategoryId = 1;
   let nextTermId = 1;
   let nextPersonaId = 1;
   let nextTopicId = 1;
+  let nextSourceId = 1;
 
   // The whole of the settings half's state. Not a Map, because
   // there is no key: `src/settings/store.ts` states a second
@@ -1148,6 +1541,177 @@ export function createMemoryResearchStore(
     }
   }
 
+  /**
+   * One domain's sources, unordered.
+   *
+   * A fresh array every call, which is what lets
+   * {@link orderedSources} sort it in place without reaching into
+   * stored state.
+   *
+   * @param domainId - The domain to read.
+   * @returns Its sources. Empty for a domain holding none AND for an
+   *   id no domain carries — nothing points at a row that is not
+   *   there, which is the answer `countSources` is read for.
+   */
+  function sourcesOf(domainId: number): SourceRecord[] {
+    return [...sources.values()].filter((row) => row.domainId === domainId);
+  }
+
+  /**
+   * One domain's sources, ordered as
+   * `SourceStore.listSourcesWithParseStats` promises.
+   *
+   * By `id` ascending, and this is the one collection here whose
+   * order needs no collation caveat at all: `sources` has no natural
+   * key to sort on, so the port orders by the surrogate. That makes
+   * the comparison arithmetic rather than lexical, total because the
+   * id is unique, and identical on every server whatever its locale
+   * — the opposite of every sibling helper above, each of which
+   * carries a measured agreement it could in principle lose.
+   *
+   * @param domainId - The domain to read.
+   * @returns Its sources, id ascending: the order the feeds were
+   *   configured in.
+   */
+  function orderedSources(domainId: number): SourceRecord[] {
+    return sourcesOf(domainId).sort((left, right) => left.id - right.id);
+  }
+
+  /**
+   * The documents planted under one source.
+   *
+   * @param sourceId - The source to read.
+   * @returns Its planted rows, or none. A fresh array every call, so
+   *   a caller sorting or slicing what this answers cannot reach the
+   *   planted list.
+   */
+  function documentsOf(sourceId: number): MemorySourceDocument[] {
+    return [...(sourceDocuments.get(sourceId) ?? [])];
+  }
+
+  /**
+   * One source's parse-status aggregate, counted from its planted
+   * documents.
+   *
+   * EVERY MEMBER IS PRESENT AND EVERY ZERO IS A COUNTED ZERO, which
+   * is why the record is built from `DOCUMENT_PARSE_STATUSES` and
+   * then filled rather than accumulated as the rows are walked. A
+   * status carrying no rows contributes no group to the `GROUP BY`
+   * the drizzle implementation issues, and letting that absence reach
+   * a caller would make `0` and never-counted one value —
+   * `ParseStatusCounts` names the trap and `DomainDependentCounts`
+   * records it over a different read.
+   *
+   * @param sourceId - The source to count within.
+   * @returns The counts, every member of the tuple present.
+   */
+  function parseStatsOf(sourceId: number): ParseStatusCounts {
+    const counts: Record<DocumentParseStatus, number> = Object.fromEntries(
+      DOCUMENT_PARSE_STATUSES.map((status) => [status, 0]),
+    ) as Record<DocumentParseStatus, number>;
+
+    for (const row of documentsOf(sourceId)) {
+      counts[row.parseStatus] += 1;
+    }
+
+    return counts;
+  }
+
+  /**
+   * One source's failed captures, newest first.
+   *
+   * `capturedAt` descending with `id` descending breaking a tie, as
+   * `SourceStore.listSourceFailures` promises. The tiebreak is not
+   * optional: a batch capture writes many rows inside one statement
+   * and `defaultNow()` gives them one timestamp, so a tie spanning a
+   * page boundary would let two pages disagree about which row they
+   * hold.
+   *
+   * @param sourceId - The source to read.
+   * @returns Its `failed` documents in that order. A fresh array, so
+   *   the sort never reaches the planted list.
+   */
+  function failuresOf(sourceId: number): MemorySourceDocument[] {
+    return documentsOf(sourceId)
+      .filter((row) => row.parseStatus === 'failed')
+      .sort((left, right) => {
+        const byCapture = right.capturedAt.getTime()
+          - left.capturedAt.getTime();
+
+        return byCapture === 0
+          ? right.id - left.id
+          : byCapture;
+      });
+  }
+
+  /**
+   * Refuses a `kind` outside `SOURCE_KINDS`.
+   *
+   * @param kind - The transport family a source write is asking for.
+   * @throws A `check-violation` {@link StoreRefusal} naming
+   *   `sources_kind_check`. Reached from BOTH writes, unlike every
+   *   foreign-key guard above: `kind` is patchable per
+   *   {@link SourcePatch}, so an update meets the CHECK as readily as
+   *   an insert does.
+   */
+  function guardSourceKind(kind: string): void {
+    if (!(SOURCE_KINDS as readonly string[]).includes(kind)) {
+      throw new StoreRefusal({
+        reason: 'check-violation',
+        constraint: SOURCE_KIND_CHECK,
+      });
+    }
+  }
+
+  /**
+   * Refuses a `domainId` that names no stored domain.
+   *
+   * @param domainId - The domain a source insert is asking for.
+   * @throws A `foreign-key-violation` {@link StoreRefusal} naming
+   *   `sources_domain_id_domains_id_fk`. Reached from the insert
+   *   alone: `domainId` is not on {@link SourcePatch}, so no update
+   *   touches this key at all — a source cannot be moved between
+   *   domains, and the corpus it produced is why.
+   */
+  function guardSourceDomain(domainId: number): void {
+    if (!domains.has(domainId)) {
+      throw new StoreRefusal({
+        reason: 'foreign-key-violation',
+        constraint: SOURCE_DOMAIN_FK,
+      });
+    }
+  }
+
+  /**
+   * Removes every source of one domain, and everything planted under
+   * them, as `ON DELETE CASCADE` does.
+   *
+   * REACHED FROM THE DOMAIN DELETE ALONE, AND IT DOES NOT REUSE
+   * `deleteSource` — the same care {@link dropTermsOf} is separate
+   * from `deleteCategory` for, and for a sharper reason here. That
+   * method is REFUSED while documents or sightings cite the source,
+   * and reusing it would refuse a delete Postgres takes: the domain
+   * columns on `documents` and on `finding_sightings` cascade too, so
+   * one statement removes the sources and the rows that were holding
+   * them, and the end-of-statement check finds nothing left citing a
+   * source that is gone.
+   *
+   * Dropping both plants is that second half. A plant left standing
+   * would answer a dependent count for a source that no longer
+   * exists, and would leave the queue answering documents for it.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropSourcesOf(domainId: number): void {
+    for (const [sourceId, row] of sources) {
+      if (row.domainId === domainId) {
+        sourceDocuments.delete(sourceId);
+        sourceSightings.delete(sourceId);
+        sources.delete(sourceId);
+      }
+    }
+  }
+
   return {
     /** One window of the list, slug ascending. */
     async listDomains(window: StoreWindow): Promise<readonly DomainRecord[]> {
@@ -1294,6 +1858,17 @@ export function createMemoryResearchStore(
      * table, so there is no guard anywhere below this one to run
      * into.
      *
+     * ITS SOURCES GO IN THAT SAME PLACE AND THERE IS SOMETHING TO BE
+     * CAREFUL OF, which is why {@link dropSourcesOf} exists rather
+     * than a loop over `deleteSource`. Three foreign keys onto
+     * `sources.id` are `ON DELETE no action`, so that method is
+     * refused while a source's documents or sightings are there —
+     * and the domain columns on those same tables cascade, so a real
+     * delete removes the sources and the rows that were holding them
+     * together and refuses nothing. Reusing the guarded delete here
+     * would refuse a delete Postgres takes, and would do it only for
+     * the domains whose feeds have captured anything.
+     *
      * IT DOES NOT MOVE THE PLANTED DEPENDENT COUNTS OF ANY OTHER
      * DOMAIN, and dropping the topics does not move them at all:
      * {@link MemoryResearchStore.setDomainDependents} records what
@@ -1304,6 +1879,7 @@ export function createMemoryResearchStore(
       dependents.delete(id);
       dropPersonasOf(id);
       dropTopicsOf(id);
+      dropSourcesOf(id);
 
       for (const [categoryId, row] of categories) {
         if (row.domainId === id) {
@@ -2092,6 +2668,290 @@ export function createMemoryResearchStore(
     },
 
     /**
+     * One window of a domain's sources, id ascending, each with its
+     * parse-status aggregate.
+     *
+     * THE AGGREGATE IS COUNTED FOR EVERY ROW ON THE PAGE, from the
+     * documents the seam planted, and every member of
+     * `DOCUMENT_PARSE_STATUSES` is present on each — a source that
+     * has captured nothing answers a counted zero under each rather
+     * than an empty record. The drizzle implementation reads the
+     * whole page in one `GROUP BY (source_id, parse_status)` rather
+     * than a query per source; here the difference does not exist,
+     * which is exactly why the shape of the ANSWER is what this port
+     * pins.
+     *
+     * A domain holding none and an id no domain carries are one
+     * answer — the empty list — because whether the domain exists
+     * was settled by `DomainStore.findDomainBySlug` before this was
+     * called.
+     */
+    async listSourcesWithParseStats(
+      domainId: number,
+      window: StoreWindow,
+    ): Promise<readonly SourceWithParseStats[]> {
+      return orderedSources(domainId)
+        .slice(window.offset, window.offset + window.limit)
+        .map((row) => ({
+          ...copySource(row),
+          parseStats: parseStatsOf(row.id),
+        }));
+    },
+
+    /**
+     * How many sources one domain holds, ignoring any window.
+     *
+     * SOURCES AND NEVER DOCUMENTS: the document counts belong to the
+     * aggregate on each row, and this is the number `meta.total` on
+     * the page is derived from. An id no domain carries answers zero
+     * rather than failing, which is correct rather than a special
+     * case.
+     */
+    async countSources(domainId: number): Promise<number> {
+      return sourcesOf(domainId).length;
+    },
+
+    /**
+     * One source by its id, or null.
+     *
+     * WITHOUT the parse-status aggregate, deliberately: none of the
+     * three callers naming `/sources/:id` needs the counts, and
+     * counting on every lookup would put a document scan behind a
+     * patch.
+     */
+    async findSourceById(id: number): Promise<SourceRecord | null> {
+      const row = sources.get(id);
+
+      return row === undefined
+        ? null
+        : copySource(row);
+    },
+
+    /**
+     * Inserts one source, NEVER FETCHED.
+     *
+     * `cursor`, `consecutiveFailures`, both stamps and `flagged` are
+     * the column defaults whatever the caller wanted, because
+     * {@link InsertSourceInput} declares no member that could set
+     * one: the containment is the type's rather than a check here.
+     * The two `jsonb` documents are copied on the way in, so a caller
+     * that goes on editing the config it submitted does not edit the
+     * stored row.
+     *
+     * IT ALWAYS INSERTS AND CANNOT CONFLICT. `sources` carries no
+     * unique key, so there is nothing for a duplicate to land on —
+     * the one thing about this method a reader coming from the topics
+     * or personas half will expect and not find.
+     *
+     * The id comes off the counter first, so the two refusals below
+     * burn one exactly as the sequence does. No measurement of this
+     * table's own, and it is the weakest of the burn claims here for
+     * a structural reason: the gaps measured on `personas` covered a
+     * key refusal and a foreign-key one, and this table has no key at
+     * all, so only the second of that pair has a counterpart.
+     *
+     * The CHECK is asked ahead of the foreign key. Argued rather than
+     * measured — a table CHECK is evaluated while the row is still
+     * being formed and a foreign key by an AFTER trigger at the end
+     * of the statement — and the module header says so.
+     */
+    async insertSource(input: InsertSourceInput): Promise<SourceRecord> {
+      const id = nextSourceId;
+
+      nextSourceId += 1;
+
+      guardSourceKind(input.kind);
+      guardSourceDomain(input.domainId);
+
+      const row: SourceRecord = {
+        id,
+        domainId: input.domainId,
+        kind: input.kind,
+        endpoint: input.endpoint,
+        parserConfig: copyJsonDocument(input.parserConfig),
+        contract: copyJsonDocument(input.contract),
+        cursor: null,
+        consecutiveFailures: 0,
+        lastSuccessAt: null,
+        lastFailureAt: null,
+        enabled: input.enabled,
+        flagged: false,
+      };
+
+      sources.set(row.id, row);
+
+      return copySource(row);
+    },
+
+    /**
+     * Rewrites the supplied members of one source.
+     *
+     * A PATCH NAMING NO MEMBER WRITES NOTHING and answers the stored
+     * row, for the reason `updateTopic` above gives: `sources`
+     * carries no `updated_at` either, so an empty patch has literally
+     * nothing to set and drizzle throws `No values to set` on an
+     * empty update list.
+     *
+     * THE CHECK IS RE-RUN OVER THE EFFECTIVE `kind` — the patched one
+     * where the patch names it, the stored one where it does not —
+     * because a CHECK fires on every write. A stored row is always
+     * legal, so a patch that renames only the endpoint cannot be
+     * refused by it; running the guard anyway is what keeps that a
+     * consequence rather than an assumption.
+     *
+     * NO FOREIGN KEY AND NO UNIQUE KEY IS REACHABLE HERE. `domainId`
+     * is not on {@link SourcePatch} and the table has no key, so the
+     * CHECK is the whole of this method's refusal surface — the only
+     * update in this file whose one mechanism is not a duplicate.
+     *
+     * THE FIVE PIPELINE-OWNED COLUMNS ARE UNREACHABLE, whatever this
+     * is handed, because the patch type declares no member that could
+     * carry one. Both `jsonb` documents REPLACE what is stored rather
+     * than merging into it, and are copied on the way in.
+     */
+    async updateSource(
+      id: number,
+      patch: SourcePatch,
+    ): Promise<SourceRecord | null> {
+      const existing = sources.get(id);
+
+      if (existing === undefined) {
+        return null;
+      }
+
+      if (
+        patch.kind === undefined
+        && patch.endpoint === undefined
+        && patch.parserConfig === undefined
+        && patch.contract === undefined
+        && patch.enabled === undefined
+      ) {
+        return copySource(existing);
+      }
+
+      const kind = patch.kind ?? existing.kind;
+
+      guardSourceKind(kind);
+
+      const updated: SourceRecord = {
+        ...existing,
+        kind,
+        endpoint: patch.endpoint ?? existing.endpoint,
+        parserConfig: patch.parserConfig === undefined
+          ? existing.parserConfig
+          : copyJsonDocument(patch.parserConfig),
+        contract: patch.contract === undefined
+          ? existing.contract
+          : copyJsonDocument(patch.contract),
+        enabled: patch.enabled ?? existing.enabled,
+      };
+
+      sources.set(id, updated);
+
+      return copySource(updated);
+    },
+
+    /**
+     * What one source has accumulated, per dependent table.
+     *
+     * BOTH MEMBERS COUNTED FROM WHAT THE TWO SEAMS HOLD, and the
+     * document half is counted from ROWS rather than read off a
+     * planted number — the divergence
+     * {@link MemoryResearchStore.setDomainDependents} carries for the
+     * domain guard has no counterpart here, because one seam supplies
+     * every reader of that table.
+     *
+     * A zero is a counted zero, and an id no source carries answers
+     * two of them rather than failing: nothing points at a row that
+     * is not there. Whether that id should have existed is a question
+     * `findSourceById` already answered.
+     */
+    async countSourceDependents(id: number): Promise<SourceDependentCounts> {
+      return {
+        documents: documentsOf(id).length,
+        findingSightings: sourceSightings.get(id) ?? 0,
+      };
+    },
+
+    /**
+     * Deletes one source, unless something still cites it.
+     *
+     * ITS DOCUMENTS AND ITS SIGHTINGS EACH REFUSE THE DELETE, which
+     * is both columns being `ON DELETE no action` rather than a rule
+     * invented here. This is the shape `deleteCategory` has and
+     * `deleteTopic` does not, and it differs from the category one in
+     * the direction the refusal points: a category is held by its own
+     * table's children, and a source is held from outside by two
+     * tables of somebody else's rows.
+     *
+     * NO CASCADE ANYWHERE. This either removes a row nothing
+     * references or is refused; it never takes a second row with it,
+     * which is the opposite of `deleteDomain` above.
+     *
+     * THE ORDER OF THE TWO CHECKS IS NOT MEASURED AND NOT OBSERVABLE:
+     * both are end-of-statement checks over one statement, and the
+     * service reads the counts rather than the constraint name. The
+     * module header carries that whole argument, and the reason a
+     * THIRD refusing key is not imitated at all.
+     */
+    async deleteSource(id: number): Promise<boolean> {
+      if (documentsOf(id).length > 0) {
+        throw new StoreRefusal({
+          reason: 'foreign-key-violation',
+          constraint: SOURCE_DOCUMENTS_FK,
+        });
+      }
+
+      if ((sourceSightings.get(id) ?? 0) > 0) {
+        throw new StoreRefusal({
+          reason: 'foreign-key-violation',
+          constraint: SOURCE_SIGHTINGS_FK,
+        });
+      }
+
+      return sources.delete(id);
+    },
+
+    /**
+     * One window of a source's failed captures, newest first.
+     *
+     * READS DOCUMENTS AND WRITES NONE — there is no insert, update or
+     * delete over that table anywhere on this port, so the review
+     * queue is read-only structurally rather than by convention.
+     *
+     * `failed` ROWS ONLY, and the filter is this method's rather than
+     * a caller's: there is no status parameter, so the queue cannot
+     * be asked for the corpus.
+     *
+     * BODIES COME BACK AS STORED, unmasked and uncut.
+     * `src/sources/failures-service.ts` is what replaces a control
+     * byte with its text form and cuts the body to a cap, and keeping
+     * that out of here is what lets it be tested against a planted
+     * control byte with no database.
+     */
+    async listSourceFailures(
+      sourceId: number,
+      window: StoreWindow,
+    ): Promise<readonly SourceFailureRecord[]> {
+      return failuresOf(sourceId)
+        .slice(window.offset, window.offset + window.limit)
+        .map(failureOf);
+    },
+
+    /**
+     * How many of one source's documents stand at `failed`, ignoring
+     * any window.
+     *
+     * The same rows `parseStats.failed` counts on the list route,
+     * asked for differently, and the same number: one dataset behind
+     * both is what makes that true here rather than a coincidence two
+     * implementations could disagree about.
+     */
+    async countSourceFailures(sourceId: number): Promise<number> {
+      return failuresOf(sourceId).length;
+    },
+
+    /**
      * Reads the operator's configuration, or null before any write.
      *
      * NULL AND `{}` ARE TWO ANSWERS HERE, though
@@ -2155,6 +3015,21 @@ export function createMemoryResearchStore(
       counts: Partial<DomainDependentCounts>,
     ): void {
       dependents.set(domainId, { ...NO_DEPENDENTS, ...counts });
+    },
+
+    setSourceDocuments(
+      sourceId: number,
+      documents: readonly MemorySourceDocument[],
+    ): void {
+      // Copied on the way in, row by row, so a caller that goes on
+      // moving a planted `capturedAt` does not move a stored one —
+      // and the list itself is rebuilt, so pushing onto what was
+      // planted does not plant a sixth row.
+      sourceDocuments.set(sourceId, documents.map(copyPlantedDocument));
+    },
+
+    setSourceSightings(sourceId: number, count: number): void {
+      sourceSightings.set(sourceId, count);
     },
   };
 }
