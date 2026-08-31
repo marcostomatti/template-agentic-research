@@ -91,11 +91,16 @@ Paths are relative to `packages/service`.
 | Path | What it is |
 | --- | --- |
 | `lib/` | The service framework: express, mcp, service-core, errors, logger — and reserved for it. Distinct from `src/lib/`. |
-| `src/db/` | Schema v2 and the drizzle client: the tables one file per concern under `src/db/schema/`, re-exported by the `src/db/schema.ts` barrel that drizzle-kit and the client both read. |
+| `src/db/` | Schema v2 and the drizzle client: the tables one file per concern under `src/db/schema/`, re-exported by the `src/db/schema.ts` barrel that drizzle-kit and the client both read. `store-errors.ts` names no table and sits beside them: the one refusal every store port raises, and the reading of a driver error that produces it, so a service decides a status without ever seeing a SQLSTATE. |
 | `src/lib/` | Pipeline libs, written dual-context so the workflow build can splice one into a Code node body. `schedule.ts` is the first and landed in phase 3, which is what proves the splice over a library this package ships rather than a fixture; the ported wave landed in phase 4 — structured-text, delimited-record and message parsing, untrusted-text neutralization, entity-name validation, near-duplicate hashing, audit lines, chunk preparation, and the gating, scoring and feature mechanisms; phase 5 landed the wave its workflows splice: the parse engine over the two `sources` columns that configure it, the markup selector given to it rather than imported by it, fail, flag and keep as one decision about a source row, the boundary a pushed capture has to clear, the fence that keeps untrusted text evidence rather than instruction, and the version a stored feature vector is comparable under. Distinct from the framework `lib/`. |
 | `src/sources/` | The source adapter contract, the static registry that selects one adapter by the id a `sources` row names, and the adapters that satisfy the contract, landed in phase 5: `listing-api.ts` for the `api` kind, which reads the listing endpoints a row's `parser_config` names, and `push-capture.ts` for the `push` kind, whose source posted to this service rather than waiting to be read. Extraction is not theirs to hold: it lives in the parse engine under `src/lib/`, `parser-config.ts` with `markup-select.ts` given to it as the markup step, because a workflow Code node can inline a library from there and no path from here, and the alternative is a second implementation of the same reading on the canvas. Beside them the modules those adapters share — a cursor-paged listing loop over several endpoints, and the pure text reductions — which front no source, are registered nowhere, and reach the network, where they reach it at all, only through a transport their caller injects. Beside all of them the propose seam, `config-proposer.ts`, about the two columns an adapter reads rather than about any reading: a proposed `parser_config` and `contract` become a pending row an operator rules on, and only that ruling turns into the UPDATE onto the source — which is why the module declares the proposer interface and implements it nowhere. |
 | `src/exports/` | Export renderers (phase 6): one per format a subscription can be rendered into. |
-| `src/routes/`, `src/mcp/` | The API surface itself — HTTP routes and MCP tools over the schema. |
+| `src/routes/`, `src/mcp/` | The MCP tools over the schema, and the template's one starter route. The wave-1 HTTP routes are not here: each resource group holds its own router, below. |
+| `src/http/` | The shared boundary under that surface, one declaration each: the success envelope and the pagination meta derived from the window and the store's count, the slug/id param and pagination query schemas, and the boundary parser whose validation details name a field path and never a submitted value. The four groups below are its only readers today; see `docs/architecture/08-http-api.md`. |
+| `src/domains/` | A domain and its settings, addressed by slug — and the arrangement the three groups below copy: a port, one drizzle implementation of it, the rules as plain functions over the port, and a router. The port is what lets every rule be exercised with no database, so the live suite is left proving only that real Postgres agrees. |
+| `src/taxonomy/` | The categories a domain scores under and the terms each one carries. One port over both halves, because a term has no address that does not go through a category; two services, because the two halves have different rules. The one-level depth cap is enforced by a database trigger, and this surface only translates its refusal. |
+| `src/personas/` | The system text a run plays, one row per domain and role. Nothing between the port and a run keeps a copy: a run reads its personas at its own start, so an edit lands on the following run and there is no invalidation path to get wrong. |
+| `src/settings/` | Operator-level preferences, held in the single `operator_settings` row the schema pins by id. An absent row and an empty payload are the same state — the defaults apply — which is why a read before any write is answered `{}` and never a 404. Per-domain settings stay on the domain row. |
 | `workflows/src/` | n8n workflow sources, one JSON file per workflow (phase 3 onward). See `workflows/src/README.md`. |
 | `workflows/dist/`, `workflows/dist-external/` | Build output. Gitignored, and never hand-edited. |
 | `scripts/` | Operator entry points: `seed.ts` applies the `data/` bundle, `approve.ts` lists the rows waiting on a ruling and approves or rejects one. Workflow build, deploy, activation and audit landed in phase 3; the stack-lifecycle scripts and the doc-link check arrive in phase 7. See `scripts/README.md`. |
@@ -172,6 +177,7 @@ to it has a single row to keep true.
 | Exports | `src/exports/` | `docs/architecture/05-exports.md` |
 | Scheduling | `workflows/src/ar-dispatch.json`, and the schedule state in `src/db/` | `docs/architecture/06-scheduling.md` |
 | Auth | `src/auth/`, `src/db/schema/auth.ts` | `docs/architecture/07-auth.md` |
+| HTTP API | `src/http/`, `src/domains/`, `src/taxonomy/`, `src/personas/`, `src/settings/` | `docs/architecture/08-http-api.md` |
 
 A document in the right-hand column arrives with the phase that delivers
 its behaviour, so a name there can be a reservation rather than a file:
@@ -182,6 +188,14 @@ Names in that column are text, never markdown links. A link check reads
 a link as a promise that the file exists, so a linked forward reference
 is a broken link from the moment it is written — and a check that
 reports one per unwritten document is a check nobody keeps running.
+
+The left-hand column may reserve as well, and today none of it does.
+The HTTP API row named five directories ahead of the code, because
+that document was written to state the rules those routes are built
+against rather than to describe routes already written. All five
+have since landed and the Layout table above names each of them, so
+every path in the column resolves. A reservation there is discharged
+by the commit that creates the directory, not by a later pass.
 
 ### A behaviour change and its document land in the same commit
 

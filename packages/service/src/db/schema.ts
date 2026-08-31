@@ -27,6 +27,7 @@ export * from './schema/entities.js';
 export * from './schema/findings.js';
 export * from './schema/runs.js';
 export * from './schema/scheduling.js';
+export * from './schema/settings.js';
 export * from './schema/sources.js';
 export * from './schema/taxonomy.js';
 export * from './schema/users.js';

@@ -95,6 +95,12 @@ header carries the argument for why its tables sit together.
 | `auth_users` | One operator credential: the login name a request presents, the argon2id hash it is checked against, and the `sub` that session claims carry. No pipeline row points at it, and only the bootstrap upsert writes it — replacing the hash on every boot and leaving `sub` and `created_at` where they were. |
 | `auth_sessions` | One issued session token, held as a SHA-256 hash so a reader of the table cannot mint a request from it. Carries its own copy of `sub`, so verifying a token is a single-row read; an expiry that bounds it; and a nullable `revoked_at` that keeps a revoked session distinguishable from a lapsed one. |
 
+### Settings — `src/db/schema/settings.ts`
+
+| Table | What it holds |
+| --- | --- |
+| `operator_settings` | What an operator has configured about the deployment rather than about any one subject: the domain a surface opens on when a request names none, the format a digest is rendered as, which channels a notification may reach. Exactly one row, and a CHECK pinning `id` to 1 is what says so — a second configuration raises nothing by itself, leaving which one the deployment behaves as to an ORDER BY nobody wrote. |
+
 ### Outside the pipeline — `src/db/schema/users.ts`
 
 | Table | What it holds |
@@ -319,7 +325,7 @@ migration here that was.
 
 | Owner | What it carries |
 | --- | --- |
-| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_wooden_quentin_quire.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 25 tables, 173 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 11 CHECK — the nine value-set checks generated from the tuples in `src/db/schema/values.ts`, plus the two spanning two columns, `research_pool_approval_check` and `source_config_proposals_approval_check`. All 34 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. Both partial dispatch-claim indexes. |
+| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_jittery_talos.sql`, `0005_freezing_hairball.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 26 tables, 177 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 12 CHECK — the nine value-set checks generated from the tuples in `src/db/schema/values.ts`, the two spanning two columns, `research_pool_approval_check` and `source_config_proposals_approval_check`, and the singleton bound pinning `operator_settings.id` to 1. All 34 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. Both partial dispatch-claim indexes. |
 | Hand-written — `0002_category_depth_guard.sql` | `categories_enforce_depth()` and the `BEFORE INSERT OR UPDATE` trigger on `categories` that calls it. Two statements, one rule, and the whole of the custom-owned DDL. |
 
 The snapshot decides that split, not taste. A table's entry in
@@ -345,7 +351,7 @@ children of the row being written, which no table definition states.
 
 Ownership says nothing about the reading. `readMigrationSql()` in
 `tests/invariants/schema-sql.ts` concatenates every `.sql` under
-`drizzle/` and its assertions run over the whole text, so thirteen of
+`drizzle/` and its assertions run over the whole text, so fourteen of
 them land in the generated migrations and two in the hand-written one
 with nothing in the roster recording which. What does follow from the
 split is what a match there is worth. A generated statement is one of

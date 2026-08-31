@@ -15,6 +15,13 @@
  *   `AUTH_INTROSPECT_URL` + `AUTH_INTROSPECT_SECRET` point them at somebody
  *   else's RFC 7662 endpoint instead, and with neither pair configured they
  *   stay no-op passthroughs. See `src/auth/`.
+ * - The wave-1 HTTP surface — domains, the taxonomy (categories and terms),
+ *   personas and operator settings, as five routers each mounted at `/`
+ *   behind `ctx.requireAuth`. The paths those routers declare are
+ *   root-absolute, so `/domains/:slug/categories` is the string on the wire
+ *   and no mount prefix has to be carried in the reader's head. See
+ *   `src/domains/`, `src/taxonomy/`, `src/personas/`, `src/settings/` and
+ *   `docs/architecture/08-http-api.md`.
  */
 import type { AuthDeps } from './auth/index.js';
 import type { ServiceConfig } from '../lib/express/index.js';
@@ -32,13 +39,21 @@ import { config } from './config.js';
 import { createCronDependency } from './cron/index.js';
 import { createDbDependency } from './db/index.js';
 import { listUsers } from './db/users.js';
+import { buildDomainsRouter, createDbDomainStore } from './domains/index.js';
 import {
   registerEmailChannel,
   registerPushChannel,
   registerWebhookChannel,
 } from './notifications/index.js';
+import { createDbPersonaStore } from './personas/db-store.js';
+import { buildPersonasRouter } from './personas/routes.js';
 import { createRedisDependency } from './redis/index.js';
 import { exampleRouter } from './routes/example.js';
+import { createDbSettingsStore } from './settings/db-store.js';
+import { buildSettingsRouter } from './settings/routes.js';
+import { buildCategoriesRouter } from './taxonomy/categories-routes.js';
+import { createDbTaxonomyStore } from './taxonomy/db-store.js';
+import { buildTermsRouter } from './taxonomy/terms-routes.js';
 
 const logger = createLogger('template-service-express');
 
@@ -81,6 +96,53 @@ const cronDep = createCronDependency(
  * object.
  */
 const authStore = createDbAuthStore(() => dbDep.client);
+
+/**
+ * The four wave-1 stores, over the same thunk and for the same reason the
+ * auth store above takes one.
+ *
+ * `() => dbDep.client` rather than a resolved client: every
+ * `createDb*Store` here opens nothing at construction and resolves the
+ * client per call, so all five stores are legal to build before the
+ * Postgres dependency has started. What this wiring owes is only that no
+ * CALLER arrives first, and every route gets that from `register` running
+ * after the dependency array.
+ *
+ * Four constructors rather than one because the four resource groups are
+ * four PORTS over one database — see `src/domains/store.ts` and its three
+ * siblings. None of them holds state, so building them separately costs
+ * nothing.
+ */
+const domainStore = createDbDomainStore(() => dbDep.client);
+const taxonomyStore = createDbTaxonomyStore(() => dbDep.client);
+const personaStore = createDbPersonaStore(() => dbDep.client);
+const settingsStore = createDbSettingsStore(() => dbDep.client);
+
+/**
+ * The four ports as one object, which is what three of the five routers
+ * below need.
+ *
+ * `CategoryServiceStore`, `PersonaServiceStore` and `SettingsServiceStore`
+ * each intersect a `Pick` of `DomainStore` with a `Pick` of their own port,
+ * because a route addressed by `:slug` resolves the domain before it does
+ * anything else. So a router spanning two ports needs one object carrying
+ * both, and a spread is what builds it: the four ports declare 27 methods
+ * under 27 distinct names, so no member of one shadows a member of another.
+ *
+ * ONE composition rather than three, handed to all five routers including
+ * the two that reach a single port. Each router's own `store` type is what
+ * narrows it to the methods that router may reach, and a type is a stronger
+ * statement than the shape of the argument — it is checked rather than
+ * conventional. `tests/helpers/memory-research-store.ts` is the same shape
+ * from the other side: one implementation behind all four ports, which is
+ * what lets the suite drive these routers with no database up.
+ */
+const researchStore = {
+  ...domainStore,
+  ...taxonomyStore,
+  ...personaStore,
+  ...settingsStore,
+};
 
 /**
  * The clock and the TTL every session decision below is made against.
@@ -216,5 +278,26 @@ await createService({
     app.get('/me', ctx.requireAuth, (_req, res) => {
       res.json({ ok: true });
     });
+
+    // The wave-1 HTTP surface. The guard sits on the MOUNT rather than on
+    // each handler, per `docs/architecture/08-http-api.md`: a route added
+    // to one of these routers later inherits it without anyone remembering
+    // to attach it.
+    //
+    // LAST in `register`, and the position is load-bearing. Each mount is
+    // at `/` with no path of its own, so its `ctx.requireAuth` runs for
+    // every request that REACHES it and not only for the ones its router
+    // matches. Measured against a service carrying an auth block: from
+    // here, `/example`, `/auth/*`, `/users` and `/me` answer exactly as
+    // they did, because all four are mounted above; a credentialled request
+    // to the fifth router runs the guard five times, once per mount it
+    // falls through; and an unmatched path answers `401` rather than `404`
+    // to a caller with no credential, which is the one answer on this
+    // service the wave changes outside its own five prefixes.
+    app.use(ctx.requireAuth, buildDomainsRouter({ store: researchStore }));
+    app.use(ctx.requireAuth, buildCategoriesRouter({ store: researchStore }));
+    app.use(ctx.requireAuth, buildTermsRouter({ store: researchStore }));
+    app.use(ctx.requireAuth, buildPersonasRouter({ store: researchStore }));
+    app.use(ctx.requireAuth, buildSettingsRouter({ store: researchStore }));
   },
 });

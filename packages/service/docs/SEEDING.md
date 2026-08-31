@@ -15,6 +15,16 @@ for how a bundle is read, `scripts/seed-apply.ts` for how one is
 written — and the columns underneath are described in
 `docs/architecture/02-schema.md`.
 
+`data/terms.json` is the one exception to that first pointer.
+`scripts/seed-schemas.ts` reaches the term row shape rather than
+declaring it: `src/taxonomy/seed-format.ts` owns the schema, the
+file schema around it and the canonical serialiser, because the
+HTTP surface accepts and answers the same document and a lexicon
+that round-trips does so only against one declaration of its
+bytes. The argument for every rule that shape is under is in that
+module's header; everything this document says about a terms row
+still holds.
+
 ## What a seed file looks like
 
 Every file in `data/` is one JSON object with exactly two keys: the

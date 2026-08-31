@@ -13,6 +13,11 @@ in `.claude/skills/` and are pointed to below.
 | `src/lib/` | Pipeline libs, written dual-context so `scripts/build-workflows.ts` can splice one into an n8n Code node body — a node then runs the same function the suite imports rather than a second copy written for the canvas. Three rules are what that costs: no value imports, declaration-form exports only, and no reliance on module scope; the build refuses the first two by name. `schedule.ts` (the interval clamp and batch cap `ar-dispatch` applies) is the first and landed in phase 3; the ported wave landed in phase 4 — structured-text, delimited-record and message parsing, untrusted-text neutralization, entity-name validation, near-duplicate hashing, audit lines, chunk preparation, and the gating, scoring and feature mechanisms; the wave the phase-5 workflows splice landed with them — the deterministic engine `sources.parser_config` and `sources.contract` are data for, the selector matcher it takes as an injected markup step because it may not import one, fail-flag-keep as arithmetic over a source row's counters and stamps, the versioned envelope a push client posts against, the fence a model reads untrusted text through, and the pin naming which mechanism and which term set a stored feature vector was computed under. Distinct from the framework `lib/`. |
 | `src/sources/` | Source adapters: the `SourceAdapter` contract (`fetch` → `parse` → `toCanonical`, with I/O confined to the first step), the static registry that selects one of them by id — written out rather than read off the directory, so nothing runs unless it was named, and naming one costs that line plus the shipped-id expectation in `src/sources/index.test.ts` — and the adapters that satisfy that contract, landed in phase 5: `listing-api.ts` over the `api` kind, running the cursor-paged loop across the endpoints a row's `parser_config` names, and `push-capture.ts` over the `push` kind, whose payload is the envelope a client posted rather than anything this service went and read. Each leaves extraction to the parse engine under `src/lib/` — `parser-config.ts` for the field map and the contract check, with `markup-select.ts` handed in as the markup step it may not import — because a Code node can inline a library from there and no path from here, so a workflow and an adapter run one implementation. Also the modules the adapters share, which declare no member of that contract and appear in no registry: `html-text.ts`, a pure markup-to-text reduction, and `paged-list.ts`, the cursor-paged loop an adapter runs inside its own `fetch` when one `sources` row names several listing endpoints. That last one is where the requests are made, through an injected transport it refuses to run without — which is how the isolated-suite law stays readable in a signature, and why the only network reach in this directory is the one `listing-api.ts`'s `fetch` hands that transport to. Beside them `config-proposer.ts`, which no adapter reaches and which fronts no source either: the `ConfigProposer` seam a source's `parser_config` and `contract` are proposed through, the builder turning an answer into a pending `source_config_proposals` row, and the applier that refuses a row carrying no `approved_at` — declared here and implemented nowhere, so the isolated suite drives an injected stub and reaching a model server costs a proposer somebody had to construct and pass in. |
 | `src/exports/` | Export renderers, one per format a subscription can be rendered into (phase 6). A renderer returns artifacts and never dispatches them — the email format renders a draft and stops there. |
+| `src/http/` | The route boundary the wave-1 resource groups share, and the reason one 422 body does not depend on which router answered. `envelope.ts` holds the `{ success: true, data, meta? }` success envelope plus the pagination meta derived from the window and the store's own count; `schemas.ts` holds the slug and resource-id param schemas, the `?page`/`?perPage` query schema and the one translation of that window into the `limit`/`offset` a store port takes; `validation.ts` is the parse-or-throw boundary, whose `parseBody`/`parseQuery` return typed data or throw a `ValidationError` whose details name a field path and a message from a fixed vocabulary of this repo's own, never zod's wording and never a submitted value. Nothing here reaches a store or decides a rule. The failure half is deliberately the framework's `{ code, message, details? }` — see `docs/architecture/08-http-api.md`. |
+| `src/domains/` | The domains resource group, and the layering the three below it repeat: `store.ts` is the port every rule is written against, `db-store.ts` its one drizzle implementation, `service.ts` the rules as plain functions over that port, and `routes.ts` the router — which the taxonomy splits in two, one service and one router per half. `settings-payload.ts` validates the per-domain `DomainSettings` payload, which a `PATCH` replaces whole and never merges, and `index.ts` is this group's public surface: the only barrel of the four, so `src/index.ts` reaches the other three by deep import. Five endpoints — the collection, and the row by slug; a delete refuses while the domain holds topics, sources or findings, and `?cascade=confirm` is the only spelling that gets past it. |
+| `src/taxonomy/` | Categories and terms. One resource, so one port (`store.ts`) and one drizzle implementation (`db-store.ts`) cover both halves, while the rules split into `categories-service.ts` and `terms-service.ts` where they genuinely differ, each with its own router. `seed-format.ts` is the single declaration of the term seed row and file schemas plus the canonical serialiser — `scripts/seed-schemas.ts` re-exports it rather than keeping a second copy, which is what lets the `?format=seed` round trip be byte-for-byte. The one-level depth cap is the database trigger's; this surface only translates it. No barrel. |
+| `src/personas/` | The system text a run plays, one row per `(domain, role)`: `store.ts`, `db-store.ts`, `service.ts`, `routes.ts`, no barrel. Four endpoints — the collection under its domain's slug, the row by id. `role` is patchable, which no other natural key on this surface is, so a create and a patch can each propose one and each be answered 409. Nothing caches a persona: a run reads them at its own start, so an edit lands on the following run and there is no invalidation path to get wrong. |
+| `src/settings/` | Operator-level preferences — the one `operator_settings` row, whose id the database pins: `store.ts`, `db-store.ts`, `payload.ts` (the strict `OperatorSettings` validator), `service.ts`, `routes.ts`, no barrel. Two routes and no address at all, so this group reaches neither param schema, parses no query, and answers no 404 and no 409. A read before any write is `{}` rather than 404, and a `PUT` replaces the payload whole because omitting a member is how one is cleared. Per-domain settings live on the domain row and are unreachable here. |
 | `workflows/` | n8n workflow sources in `workflows/src/`, one JSON file per workflow. `ar-dispatch.json` landed in phase 3: it claims due schedulable rows and invokes the workflows they belong to, and it holds the only schedule trigger across the workflow set. Phase 5 landed the pipeline path itself, each of its workflows reached a different way. `ar-ingest.json` is what a `topic` claim dispatches to, reading a domain's enabled and unflagged sources through the adapters and turning documents into findings across the only model call in the set. `ar-capture.json` is reached from outside instead, its webhook taking what a client captured elsewhere. `ar-score.json` is invoked by both of those and scores findings against the domain's criteria deterministically, with no model call at all. `ar-research` and `ar-digest` stay reserved for phase 6. `workflows/src/README.md` carries that roster, the one-file-per-workflow rule and the marker forms a source may write. `bun run build:workflows` resolves those markers into the gitignored `workflows/dist/` (and `workflows/dist-external/` for a deploy), which is generated and never hand-edited. |
 | `data/` | Seed files only, applied to the database by `scripts/seed.ts` — nothing under it is read at runtime. The five JSON files here seed one worked example domain and stay domain-neutral; real subject matter reaches the database through an operator's own seeds. See `data/README.md`. |
 | `scripts/` | Operator entry points run by hand. Six have landed: `seed.ts` (`bun run db:seed`), `approve.ts` (`bun run approve`), `build-workflows.ts` (`bun run build:workflows`), `deploy-external.ts` (`bun run deploy:external`), `audit-workflows.ts` (`bun run audit:workflows`), and `activate-workflows.sh`, run by path rather than through a `package.json` script. Not every `.ts` here is a command: `workflow-markers.ts`, `n8n-workflow.ts` and `n8n-client.ts` are halves read by more than one of them and carry no CLI guard. The stack-lifecycle scripts and the doc-link check arrive in phase 7. `scripts/README.md` names every script and the phase each arrives in. |
@@ -142,12 +147,47 @@ Two rules bind every phase of that port:
   reference to resolve. `ARCHITECTURE.md` is the one tracked markdown file
   here that carries links: it indexes the doc set, so a commit landing a new
   architecture doc adds its row in the same commit.
+  That `<=74` is a CEILING and not the house width: each file under
+  `docs/architecture/` has its own measured population and they disagree in
+  opposite directions, so re-measure the file you are editing rather than
+  reflowing to a sibling's shape. Measured, `08-http-api.md` runs prose to
+  70 and `###` headings to 73 while `01-invariants.md` runs prose to 72 and
+  headings to 70. Measure in CHARACTERS: `awk`'s `length($0)` counts BYTES,
+  so every em dash on a line costs three, and a line that measures 74 in
+  awk may be 72 characters and perfectly legal — wrap against the
+  character count and keep awk only as the confirmation that the byte
+  ceiling did not move. No doc in the set uses a fenced code block at all,
+  so a JSON or shell example belongs in prose plus inline code, and the
+  only non-ASCII characters in the tree are U+2014 and U+00A7.
 - **Two layout maps, neither derived from the other**: the coarse `## Layout`
   table above (package-level orientation) and the finer one in
   `docs/architecture/00-overview.md` (per-area detail and rationale). A
   change that adds a directory updates BOTH, keeps them non-contradictory
   rather than identical, and inserts the row adjacent to its parent so the
   table still reads as a tree.
+  Non-contradictory-rather-than-identical is operationalisable rather than
+  aspirational, and the cheap discipline is a REGISTER split rather than a
+  content one: this file's rows carry the file inventory plus the surface
+  facts a reader working in the directory needs (which file do I open, how
+  many endpoints, is there a barrel), and `00-overview.md`'s carry the
+  design rationale with NO file names (why one port covers both taxonomy
+  halves, why nothing caches a persona). Equal granularity in both is fine
+  and keeps either table usable alone; what the rule forbids is the same
+  SENTENCE, which is exactly what a copy-paste insert produces and what
+  then drifts into two competing descriptions of one fact.
+- **A row added to either map owes a DISCHARGE sweep**, and the stale
+  sentences name none of the paths being added, so no symbol or path grep
+  finds them. Three shapes, each measured: an ARRIVAL clause beside a
+  reserved row (`Arrives with the wave-1 route groups`); the paragraph
+  legitimising left-hand-column reservations, which is falsified a SECOND
+  time when the code lands, by a different commit from the one that wrote
+  it; and the SIBLING row whose scope the new rows silently narrow (`The
+  API surface itself` became over-broad once four router-holding
+  directories landed beside it). The needles are the reservation vocabulary
+  (`reserv`, `arrives with`, `lands after`) over the JOINED prose and, for
+  the third, reading the rows ADJACENT to the insert point as a set.
+  Repair by stating the discharge as a measurement — every path in the
+  column existence-checked with a fabricated sibling asserted absent.
 
 ## Operator control plane
 
@@ -530,23 +570,36 @@ The other complement is booting it by hand, which is the only evidence a
 WIRING change has:
 `( cd packages/service && env PORT=... DATABASE_URL=<live 5433> ... bun run
 src/index.ts )` in the background, curl the surfaces, kill it. Dependency
-ORDER is NOT readable from the running service (`/_control/*` is not mounted
-in this service's config and answers 404) — take it from boot-FAILURE
-attribution instead, which is three legs: an unreachable database must name
-the FIRST dependency, a reachable-but-UNMIGRATED one must name the later
-dependency that needed the schema, and the same unmigrated database with
-the feature toggled OFF must BOOT, which is the control saying leg 2 was
-that dependency rather than something else about an empty database. Each
-leg reads as one pino line (`dep=<name>` with `dependency failed to start`)
-plus the exit code, since `createService` calls `process.exit(1)` outside
-`NODE_ENV=test`. Make a SCRATCH database rather than using `ar_live`, and
-preflight-refuse a name that already exists so the trap's drop cannot reach
-somebody else's. Trap while doing it: `( ... ) & PID=$!` captures the
-SUBSHELL, not the server, so `kill "$PID"` leaves the child holding the port
-and the NEXT run's readiness poll is answered INSTANTLY by that orphan
-— every reading then lands on the stale service and looks like a
-real regression. Use `exec` inside the subshell, preflight-refuse a port
-already answering, and re-check `ps` for orphans AFTER the run.
+ORDER is NOT readable from the running service (this service configures no
+`control` block, so `/_control/*` is an unmatched path here) — take it from
+boot-FAILURE attribution instead, which is three legs: an unreachable
+database must name the FIRST dependency, a reachable-but-UNMIGRATED one must
+name the later dependency that needed the schema, and the same unmigrated
+database with the feature toggled OFF must BOOT, which is the control saying
+leg 2 was that dependency rather than something else about an empty
+database. Each leg reads as one pino line (`dep=<name>` with
+`dependency failed to start`) plus the exit code, since `createService`
+calls `process.exit(1)` outside `NODE_ENV=test`. Make a SCRATCH database
+rather than using `ar_live`, and preflight-refuse a name that already exists
+so the trap's drop cannot reach somebody else's. Trap while doing it:
+`( ... ) & PID=$!` captures the SUBSHELL, not the server, so `kill "$PID"`
+leaves the child holding the port and the NEXT run's readiness poll is
+answered INSTANTLY by that orphan — every reading then lands on the stale
+service and looks like a real regression. Use `exec` inside the subshell,
+preflight-refuse a port already answering, and re-check `ps` for orphans
+AFTER the run.
+
+What an unmatched path ANSWERS there is not a constant, and the difference
+is the wave-1 surface rather than the control plane: the five routers mount
+at `/`, so each one's `ctx.requireAuth` runs for every request that reaches
+it. Measured all four ways against a real `createService` carrying the auth
+block `AUTH_BASIC_USER`/`AUTH_BASIC_PASSWORD` produce — with the pair set,
+an uncredentialled `/_control/status` answers `401` `application/json` and a
+credentialled one the `404` `text/html`; with it unset the guard is a
+passthrough and both answer `404`. `/health` is `200` in all four. So a
+`401` while curling the surfaces says the guard is on the mounts, not that
+the plane is mounted and refusing — and `/nope` answers identically, which
+is what says the change belongs to unmatched paths generally.
 
 `describeLivePg` is one of the gates in that directory, and the others are
 armed differently — which is the part to know before reading a run.
@@ -656,6 +709,31 @@ not let compile-cleanliness constrain a mutation leg. Read such a leg by
 the ` > `-joined NAMES a `--reporter=verbose` run prints, never by the
 failure count; `test-delta-signatures-by-task-shape` covers why the count
 can hold constant across structurally different legs.
+`--reporter=verbose` prints per-CASE lines and NO per-file line at all
+(vitest 4.1.11), so a step asking to read `the per-file lines` has to
+DERIVE the split by grouping the case lines on their `<path> > ` prefix.
+The per-file `# path (N tests)` line comes from the DEFAULT reporter under
+a two-reporter PAIR and never from verbose: passing
+`--reporter=default --reporter=json --outputFile=<f>` gives the human
+summary, the per-file lines AND the machine-readable per-file split in one
+capture, where `--reporter=json` alone leaves stdout at a single 42-byte
+`JSON report written to` line. Two readings then come free from a verbose
+capture with no second command — it IS the collected roster, so the
+collected-vs-disk set equality is the grouped file set held against
+`git ls-files` rather than a `vitest list --filesOnly` run, and bun echoes
+the FORWARDED arguments into its `$` line, which is how an appended flag is
+shown to have reached the runner rather than having been eaten by
+`bun run`.
+
+No `db-store.ts` in this package carries a colocated test file, so a claim
+handed forward to `the drizzle half's own cases` is handed to files that do
+not exist. A branch that exists only because the other implementation
+throws (an empty-patch early return, a `RETURNING` list) is pinnable at the
+LIVE SEAM and nowhere else, and each such zero is discharged per TABLE:
+landing one table's case leaves the siblings' zeros exactly as they were.
+Its leg fails as a THROW carrying drizzle's own message rather than as an
+assertion diff, so a grid runner reading only counts cannot tell it from an
+ordinary red — read `failureMessages`.
 
 The default suite READS `workflows/dist/` and never builds it. `pretest`
 runs `bun scripts/build-workflows.ts`, so the tree is written in a bun

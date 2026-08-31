@@ -1,6 +1,6 @@
 {
-  "id": "2f9fd7e9-4711-4f50-a86d-abdb6618f066",
-  "prevId": "6f97a170-c2d3-48c2-bf27-37efcbf70a16",
+  "id": "1f299c29-59e8-466e-9ade-40eb83b5b5ec",
+  "prevId": "2f9fd7e9-4711-4f50-a86d-abdb6618f066",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1644,6 +1644,119 @@
         "connectors_kind_check": {
           "name": "connectors_kind_check",
           "value": "\"connectors\".\"kind\" in ('llm', 'search', 'notebook', 'export_target')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.source_config_proposals": {
+      "name": "source_config_proposals",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "domain_id": {
+          "name": "domain_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "parser_config": {
+          "name": "parser_config",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "contract": {
+          "name": "contract",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "proposed_by": {
+          "name": "proposed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "proposed_at": {
+          "name": "proposed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "applied_at": {
+          "name": "applied_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "source_config_proposals_domain_id_domains_id_fk": {
+          "name": "source_config_proposals_domain_id_domains_id_fk",
+          "tableFrom": "source_config_proposals",
+          "tableTo": "domains",
+          "columnsFrom": [
+            "domain_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "source_config_proposals_source_id_sources_id_fk": {
+          "name": "source_config_proposals_source_id_sources_id_fk",
+          "tableFrom": "source_config_proposals",
+          "tableTo": "sources",
+          "columnsFrom": [
+            "source_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "source_config_proposals_status_check": {
+          "name": "source_config_proposals_status_check",
+          "value": "\"source_config_proposals\".\"status\" in ('pending', 'approved', 'done', 'skipped')"
+        },
+        "source_config_proposals_approval_check": {
+          "name": "source_config_proposals_approval_check",
+          "value": "\"source_config_proposals\".\"applied_at\" IS NULL OR \"source_config_proposals\".\"approved_at\" IS NOT NULL"
         }
       },
       "isRLSEnabled": false

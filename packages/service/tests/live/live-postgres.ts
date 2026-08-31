@@ -79,6 +79,7 @@ const TABLES = [
   'findings',
   'ingested_files',
   'llm_calls',
+  'operator_settings',
   'personas',
   'research_pool',
   'runs',

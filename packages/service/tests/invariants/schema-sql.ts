@@ -262,9 +262,10 @@ export interface SchemaSqlAssertion {
  * both of its halves, the pair of constraints that makes
  * `documents.hash` dedupe, both partial scheduling indexes, the
  * CHECKs behind `sources.kind` and `source_config_proposals.status`,
- * and the five holding the two auth tables together — three unique
+ * the five holding the two auth tables together — three unique
  * keys, the session-to-user foreign key, and the NOT NULL that
- * bounds a session.
+ * bounds a session — and the CHECK that makes
+ * `operator_settings` a singleton.
  *
  * A chosen sample and not the whole schema, which is the whole reason
  * {@link EmptyMigrationFileError} exists: a migration truncated to
@@ -479,6 +480,27 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
       'left to whoever reads it — a SQL comparison against NULL ' +
       'answers unknown rather than expired.',
     pattern: /^[ \t]*CREATE TABLE "auth_sessions" \([^;]*?^[ \t]*"expires_at" timestamp with time zone NOT NULL,/m,
+  },
+  // The bound is in the pattern rather than the constraint name and
+  // its column alone, and what that buys is narrower than it looks. A
+  // `sql` template value that missed `.inlineParams()` reaches the
+  // migration as `$1`, which Postgres refuses at DDL time —
+  // measured: `there is no parameter $1` — so the placeholder form
+  // is a migration that cannot apply rather than a constraint that
+  // admits everything. Loud, but only where a database is watching:
+  // the text is green through lint, check-types and this suite either
+  // way, and pinning the literal is what reports it in a run that
+  // opens no connection at all.
+  {
+    id: 'operator-settings-singleton-check',
+    description:
+      'CHECK pinning operator_settings.id to 1, which is what makes ' +
+      'the table one row rather than a convention every writer has to ' +
+      'remember. A second row raises nothing by itself: two readable ' +
+      'configurations, and which one the deployment behaves as ' +
+      'depends on an ORDER BY nobody wrote. Pins the bound as a ' +
+      'literal, so a placeholder reaching the migration is a miss.',
+    pattern: /^[ \t]*CONSTRAINT "operator_settings_singleton_check" CHECK \("operator_settings"\."id" = 1\)/m,
   },
 ];
 
