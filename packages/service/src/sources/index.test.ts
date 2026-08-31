@@ -207,10 +207,13 @@ const CASE_SUFFIX = '.test.ts';
  * at the top of its own source, and they are not on the roster for
  * one reason. The registry module is no kind of source at all: it
  * is where the contract, the registry and this check live. The
- * helpers are what an adapter reaches for. And the propose seam
- * serves the other gate this directory touches — what a source's
+ * helpers are what an adapter reaches for. The propose seam serves
+ * the other gate this directory touches — what a source's
  * arrangement will be, ruled on before it is written — which is
- * about a source rather than a reading of one.
+ * about a source rather than a reading of one. And the HTTP half
+ * of the directory is about a `sources` ROW: what the route group
+ * asks the database for, which is a different subject from how a
+ * feed is read.
  *
  * Naming them is the cost of the guard and is meant to be paid: a
  * module that satisfies no contract and appears in no registry is
@@ -245,6 +248,14 @@ const NON_ADAPTER_MODULES = [
     reason:
       'the cursor-paged listing loop an adapter runs inside its own '
       + 'fetch, which is why listing is no member of the contract',
+  },
+  {
+    module: 'store.ts',
+    reason:
+      'the HTTP port the sources route group is written against, '
+      + 'declaring what the API asks the database about a sources '
+      + 'row: it fronts no source, declares no member of the '
+      + 'contract, and never constructs an adapter',
   },
 ] as const;
 
