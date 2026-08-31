@@ -1,20 +1,28 @@
 /**
  * @packageDocumentation
  * The topic rules: reading one domain's topics, adding one,
- * retuning one, and taking one away. What
- * `/domains/:slug/topics` and `/topics/:id` reduce to once HTTP is
- * subtracted from them.
+ * retuning one, taking one away, and moving one's due time. What
+ * `/domains/:slug/topics`, `/topics/:id` and the two verbs under it
+ * reduce to once HTTP is subtracted from them.
  *
- * FOUR FUNCTIONS HERE AND TWO MORE TO COME, which is the one place
- * this module differs from its wave-1 siblings in SHAPE rather
- * than in subject. The four below are the ordinary resource
- * operations `src/personas/service.ts` also exports; the two
- * schedule verbs behind `POST /topics/:id/run-now` and
- * `POST /topics/:id/pause` are a separate act on a separate column
- * and land beside these. Nothing here reads or writes
- * `next_run_at`, and the reason is structural rather than a
- * convention: {@link TopicServiceStore} does not `Pick` the one
- * port method that writes it.
+ * SIX FUNCTIONS IN TWO GROUPS, which is the one place this module
+ * differs from its wave-1 siblings in SHAPE rather than in
+ * subject. The first four are the ordinary resource operations
+ * `src/personas/service.ts` also exports. The last two,
+ * {@link runTopicNow} and {@link pauseTopic}, are a separate act on
+ * a separate column: each reads the stored row, decides on it, and
+ * writes `next_run_at` through the one port method declared for
+ * that purpose. Nothing else here reads or writes the column, and
+ * the four above cannot reach it at all — they are handed no
+ * instant to write and derive none.
+ *
+ * THE ONE DOOR ONTO `next_run_at` IS `updateTopicSchedule`, and
+ * {@link TopicServiceStore} names it now that the verbs are here.
+ * That widening is the whole of the change: the containment is not
+ * that this module cannot reach the column but that exactly two
+ * functions do, each writing that column and nothing else, and
+ * `tests/invariants/api-schedule-containment.test.ts` is what makes
+ * it a property of the tree rather than a sentence here.
  *
  * THE BODY IS PARSED HERE RATHER THAN ABOVE, exactly as all three
  * wave-1 services argue: an operation handed an already-validated
@@ -121,9 +129,10 @@ import { z } from 'zod';
 import { ConflictError, NotFoundError } from '../../lib/errors/index.js';
 import { StoreRefusal } from '../db/store-errors.js';
 import { parseBody } from '../http/validation.js';
+import { pauseFrom } from '../lib/schedule.js';
 
 /**
- * Exactly the port methods these four functions reach, across both
+ * Exactly the port methods these six functions reach, across both
  * ports they reach them on.
  *
  * A `Pick` OF TWO PORTS RATHER THAN EITHER ONE WHOLE, for the
@@ -133,14 +142,29 @@ import { parseBody } from '../http/validation.js';
  * have this module claim to need the domain writes it never
  * issues.
  *
- * TWO TOPIC METHODS ARE DELIBERATELY OUT, and their absence is the
- * schedule containment expressed as a type. `findTopicById` is for
- * a reader that wants one row before writing it, and no operation
- * below reads before it writes; `updateTopicSchedule` is the one
- * door onto `next_run_at`, so leaving it out is what says these
- * four functions cannot reach the column even by mistake. Both
- * arrive here when the two schedule verbs land, and the widening
- * is visible in this declaration rather than buried in a call.
+ * THE TWO METHODS THE SCHEDULE VERBS ADDED ARE THE WHOLE OF WHAT
+ * THIS TYPE GREW BY, and both are theirs alone. `findTopicById` is
+ * for a reader that wants one row before writing it, which the four
+ * ordinary operations never do — {@link patchTopic} and
+ * {@link deleteTopic} let the store answer `null` for an id no row
+ * carries rather than buying a second round trip — and which both
+ * verbs must, since each decides on a stored member before writing.
+ * `updateTopicSchedule` is the one door onto `next_run_at`, and it
+ * is named here because {@link runTopicNow} and {@link pauseTopic}
+ * are the two functions on this surface permitted through it.
+ *
+ * WIDENING IT WIDENED THE ROUTER TOO, which is the cost of one
+ * type standing for six functions and is stated rather than
+ * hidden.
+ * `TopicsRouterOptions.store` in `./routes.ts` is this same type,
+ * so the four ordinary handlers now hold a store that CAN write
+ * the column. What keeps them off it is that none of them derives
+ * an instant to write: `TopicPatch` carries no `nextRunAt`, both
+ * request schemas refuse the key, and
+ * `tests/invariants/api-schedule-containment.test.ts` reads the
+ * modules rather than the types. A second `Pick` for the verbs
+ * alone would buy a narrower declaration and a second thing to keep
+ * in step; the containment is worth having in one place.
  *
  * Built with `Pick` rather than by listing signatures, so a method
  * here cannot drift from the thing it is naming: a hand-copied
@@ -153,9 +177,11 @@ export type TopicServiceStore =
     TopicStore,
     | 'countTopics'
     | 'deleteTopic'
+    | 'findTopicById'
     | 'insertTopic'
     | 'listTopics'
     | 'updateTopic'
+    | 'updateTopicSchedule'
   >;
 
 /**
@@ -182,6 +208,57 @@ const NO_SUCH_TOPIC = 'No topic carries that id';
  */
 const NAME_ALREADY_TAKEN
   = 'This domain already researches a topic of that name';
+
+/**
+ * What a caller is told when a run-now meets a disabled topic.
+ *
+ * The rule and the repair, because the repair is a different
+ * request rather than a correction to this one: `enabled` is
+ * patchable, so enabling the topic is a `PATCH` the caller takes
+ * first as its own decision. The alternative — writing the clock
+ * anyway — produces a row that looks due forever and is never
+ * claimed, since the dispatch claim reads `WHERE enabled AND
+ * next_run_at <= now()` and `topics_dispatch_claim_idx` is
+ * declared over the enabled rows alone. That is a silent no-op the
+ * caller has no way to see, which is what this sentence exists
+ * instead of.
+ */
+const TOPIC_NOT_ENABLED
+  = 'This topic is disabled, so a run now would never be claimed';
+
+/**
+ * What a caller is told when a pause meets a topic that is not
+ * scheduled.
+ *
+ * A NULL `next_run_at` is a state and not an absence: the claim
+ * reads `next_run_at <= now()`, so such a row is never claimed
+ * whatever its interval says. Pausing it would therefore SCHEDULE
+ * it — the opposite of what a pause asks for — and a topic created
+ * through {@link createTopic} or seeded from `data/topics.json` is
+ * exactly that row, so this is an ordinary state rather than a
+ * corner of one.
+ */
+const TOPIC_NOT_SCHEDULED
+  = 'This topic is not scheduled, so there is no run to defer';
+
+/**
+ * The most cycles one pause may defer a topic by.
+ *
+ * A ceiling on the REQUEST and not on the instant it produces.
+ * Nothing bounds `intervalSeconds` above, so no count small enough
+ * to be reasonable can promise a due time inside any particular
+ * range; what this bounds is how far a single call may reach, and
+ * a thousand cycles is already three years at a daily cadence and
+ * six weeks at an hourly one. A caller wanting further can pause
+ * again, and each call is a separate line in whatever recorded it.
+ *
+ * `pauseFrom` in `src/lib/schedule.ts` declares no ceiling of its
+ * own — its own TSDoc says so — because a library spliced into a
+ * Code node has no request to bound. So this is the only place the
+ * limit is written, and a caller meets it as a `422` naming
+ * `cycles` rather than as an `Invalid Date` stored as NULL.
+ */
+const MAX_PAUSE_CYCLES = 1000;
 
 /**
  * How often a topic may be run, in seconds, as both writes spell
@@ -232,11 +309,11 @@ const intervalSecondsSchema = z.number().int()
  *
  * `enabled` IS OPTIONAL AND DEFAULTS TO TRUE the same way, which
  * is what lets a topic be staged switched off. That matters
- * because of a rule this module does not hold yet:
- * `POST /topics/:id/run-now` refuses a disabled row, so a topic
- * created disabled is one an operator has to enable deliberately
- * rather than one that quietly answers a run-now with a due time
- * nothing ever reads.
+ * because of a rule this module holds two functions below:
+ * {@link runTopicNow} refuses a disabled row, so a topic created
+ * disabled is one an operator has to enable deliberately rather
+ * than one that quietly answers a run-now with a due time nothing
+ * ever reads.
  *
  * The two bounds are OPTIONAL AND NULLABLE, which distinguishes
  * two requests where a patch of the same members distinguishes
@@ -314,6 +391,52 @@ export const patchTopicSchema = z.object({
   enabled: z.boolean().optional(),
   minIntervalSeconds: intervalSecondsSchema.nullable().optional(),
   maxIntervalSeconds: intervalSecondsSchema.nullable().optional(),
+}).strict();
+
+/**
+ * The body `POST /topics/:id/pause` accepts.
+ *
+ * ONE MEMBER, REQUIRED, and the shortest body on this surface.
+ * There is nothing to default it to: a pause with no count is a
+ * request that has not said what it wants, and picking one for it
+ * would make the commonest mistake — sending `{}` — the one
+ * request that silently defers a topic by an amount nobody chose.
+ *
+ * `cycles` COUNTS INTERVALS AND NOT SECONDS, which is what makes
+ * this body readable against a row whose cadence somebody retunes
+ * later: a pause of three is three of whatever the topic runs at,
+ * not a span fixed at the moment it was asked for. `pauseFrom` in
+ * `src/lib/schedule.ts` is where that multiplication happens, over
+ * the row's own clamped interval.
+ *
+ * A POSITIVE INTEGER WITH A CEILING, and each of the three clauses
+ * is refusing something with a plausible-looking answer.
+ * `.int()` refuses a fraction, which would land the row between two
+ * intervals at a time no reader could work back out of it.
+ * `.positive()` refuses zero — which writes the base back unchanged
+ * and on an overdue row IS the extraordinary run the pause was
+ * asked to defer — and refuses a negative, which moves the due time
+ * into the past so a request to hold a row off triggers it on the
+ * next tick. {@link MAX_PAUSE_CYCLES} refuses a count large enough
+ * to carry the product past the range a `Date` holds, which
+ * serialises to `null` and stores as the unscheduled state this
+ * route answers `409` rather than create.
+ *
+ * The three fire in that order and answer three different codes —
+ * `invalid_type`, `too_small` and `too_big` — so a caller is told
+ * which of them it met.
+ *
+ * `.strict()` LIKE EVERY REQUEST SCHEMA HERE, and on this body that
+ * is what refuses `nextRunAt`: a pause names the column it moves by
+ * counting cycles, and a body proposing the instant directly would
+ * be the caller doing the arithmetic this module exists to do. It
+ * also refuses `enabled`, which is the schema saying in its own
+ * shape that a pause is not a disable.
+ */
+export const pauseTopicSchema = z.object({
+  cycles: z.number().int()
+    .positive()
+    .max(MAX_PAUSE_CYCLES),
 }).strict();
 
 /**
@@ -641,4 +764,224 @@ export async function deleteTopic(
   if (!removed) {
     throw new NotFoundError(NO_SUCH_TOPIC);
   }
+}
+
+/**
+ * Reads one topic before a verb decides on it.
+ *
+ * @param store - Where the row is read.
+ * @param id - The topic's id, as `resourceIdParamSchema` in
+ *   `src/http/schemas.ts` parsed it.
+ * @returns The stored row.
+ * @throws NotFoundError - When no topic carries the id.
+ *
+ * @remarks
+ * The two verbs read before they write and the four operations
+ * above do not, which is the whole reason `findTopicById` is on
+ * {@link TopicServiceStore} at all. Each decides on a member of the
+ * STORED row — {@link runTopicNow} on `enabled`, {@link pauseTopic}
+ * on `nextRunAt` and the two bounds — so the read is not a
+ * preliminary lookup that could be folded into the write. The
+ * write's own `null` is still handled at each call site, since the
+ * row may go between the two.
+ *
+ * Private and message-sharing with {@link patchTopic} and
+ * {@link deleteTopic}, which name the same fact: no topic carries
+ * that id.
+ */
+async function requireTopic(
+  store: TopicServiceStore,
+  id: number,
+): Promise<TopicRecord> {
+  const row = await store.findTopicById(id);
+
+  if (row === null) {
+    throw new NotFoundError(NO_SUCH_TOPIC);
+  }
+
+  return row;
+}
+
+/**
+ * Writes a due time onto one topic and answers the stored row.
+ *
+ * @param store - Where the row is written.
+ * @param id - The topic's id, already read once by the caller.
+ * @param nextRunAt - The instant to store, already decided.
+ * @returns The stored row afterwards.
+ * @throws NotFoundError - When the row went between the read and
+ *   the write.
+ *
+ * @remarks
+ * The one call into `TopicStore.updateTopicSchedule` in this
+ * module, so the column has one door on the port and one call site
+ * above it. Both verbs come through here, which is what keeps the
+ * lost-race 404 from being written twice and drifting.
+ *
+ * The port declares this write refuses nothing — no mechanism on
+ * `topics` constrains the column, and a time in the past is an
+ * overdue row rather than an invalid one — so there is no
+ * `refuseWrite` here and a `StoreRefusal` out of it would be a
+ * store doing something its port does not describe, answering 500.
+ */
+async function writeSchedule(
+  store: TopicServiceStore,
+  id: number,
+  nextRunAt: Date,
+): Promise<TopicRecord> {
+  const written = await store.updateTopicSchedule(id, nextRunAt);
+
+  if (written === null) {
+    throw new NotFoundError(NO_SUCH_TOPIC);
+  }
+
+  return written;
+}
+
+/**
+ * Brings one topic's next run forward to now.
+ *
+ * @param store - Where the row is read and written.
+ * @param now - Reads the present. A thunk, so the instant is
+ *   resolved at the moment of the write rather than when the
+ *   dependency was assembled — and so a test can put a fixed one
+ *   behind it and compare the stored value exactly.
+ * @param id - The topic's id.
+ * @returns The stored row afterwards, whose `nextRunAt` is the
+ *   instant `now` answered.
+ * @throws NotFoundError - When no topic carries the id, and when
+ *   the row went between the read and the write.
+ * @throws ConflictError - When the topic is disabled.
+ *
+ * @remarks
+ * WRITES `next_run_at` AND NOTHING ELSE. There is no second call
+ * here: the verb does not enable the row it refuses, does not touch
+ * the cadence and does not stamp anything, because
+ * `TopicStore.updateTopicSchedule` takes a bare instant and offers
+ * no member a second column could be added to.
+ *
+ * A DISABLED TOPIC IS A `409` RATHER THAN A WRITE, and the reason
+ * is that the write would appear to succeed. `enabled` false
+ * excludes the row from `topics_dispatch_claim_idx`, the partial
+ * index the dispatch claim walks, so the clock written onto it
+ * would sit there looking due forever and never be claimed. The
+ * caller enables the topic with a `PATCH` first, which is its own
+ * decision to take.
+ *
+ * IT DOES NOT RUN ANYTHING, and the name is the shortest honest one
+ * available rather than a promise. `ar-dispatch` holds the only
+ * schedule trigger in the system: it wakes on its own cron, takes
+ * what has come due with `FOR UPDATE SKIP LOCKED`, opens the `runs`
+ * row and invokes the workflow. This moves a timestamp so that the
+ * next tick picks the row up, which is why there is no run to
+ * report back and nothing here to await.
+ *
+ * CALLING IT TWICE IS NOT REFUSED. A row already due answers again
+ * with a later instant, because the verb describes a state — due
+ * now — rather than an action taken, and refusing the second call
+ * would answer `409` to a request asking for what already holds.
+ * That is the difference from the two refusals above, which are
+ * both about a state the write could not reach.
+ */
+export async function runTopicNow(
+  store: TopicServiceStore,
+  now: () => Date,
+  id: number,
+): Promise<TopicRecord> {
+  const topic = await requireTopic(store, id);
+
+  if (!topic.enabled) {
+    throw new ConflictError(TOPIC_NOT_ENABLED);
+  }
+
+  return writeSchedule(store, id, now());
+}
+
+/**
+ * Defers one topic's next run by a number of its own cycles.
+ *
+ * @param store - Where the row is read and written.
+ * @param now - Reads the present, per {@link runTopicNow}.
+ * @param id - The topic's id.
+ * @param body - The unvalidated request body, or the arguments an
+ *   MCP tool was called with.
+ * @returns The stored row afterwards, whose `nextRunAt` is `cycles`
+ *   clamped intervals past its base.
+ * @throws ValidationError - When the body does not satisfy
+ *   {@link pauseTopicSchema}, with one detail per fault.
+ * @throws NotFoundError - When no topic carries the id, and when
+ *   the row went between the read and the write.
+ * @throws ConflictError - When the topic is not scheduled.
+ *
+ * @remarks
+ * THE BASE IS WHICHEVER OF THE CLOCK AND THE STORED DUE TIME IS
+ * LATER, and both simpler rules are wrong in one direction each.
+ * Basing on the clock alone pulls a topic due next week FORWARD on
+ * a request to defer it. Basing on the stored time alone leaves an
+ * overdue row overdue, so a pause of a row three days late buys
+ * nothing at all until the dispatcher has caught up with it. The
+ * comparison is on the two instants' milliseconds rather than on
+ * the objects, which is the only reading `Date` gives.
+ *
+ * AN UNSCHEDULED TOPIC IS A `409` RATHER THAN A WRITE, because
+ * pausing it would SCHEDULE it. A NULL `next_run_at` is never
+ * claimed whatever the interval says, so the row is not waiting to
+ * run and there is no run to defer; writing a base derived from the
+ * clock would put one on the calendar that nobody asked for. That
+ * is also why the read cannot be folded into the write: the fact
+ * the refusal turns on is a stored member.
+ *
+ * THE ARITHMETIC IS THE LIBRARY'S AND IS NOT RESTATED HERE.
+ * `pauseFrom` in `src/lib/schedule.ts` puts the row's own
+ * `intervalSeconds` through `clampIntervalSeconds` against the
+ * row's own bounds and multiplies the result by `cycles`, so the
+ * clamp applies to ONE cycle rather than to the whole span. A
+ * record satisfies that function's `IntervalBounds` as it stands —
+ * the interface is named for the columns — so the row goes straight
+ * in with no renaming step between the read and the rule.
+ *
+ * IT REFUSES A `cycles` THIS SCHEMA ALREADY DID, and the second
+ * refusal is not redundant. `pauseFrom` throws a plain `Error` on
+ * anything that is not a positive integer, which would answer 500
+ * from here; nothing below can reach it, because
+ * {@link pauseTopicSchema} refuses the same values as a `422`
+ * first. The library keeps its own guard for its other caller — a
+ * Code
+ * node has no request schema in front of it — and this module
+ * keeps the boundary refusal because a `422` naming `cycles` is
+ * what a caller can act on.
+ *
+ * PAUSE IS NOT DISABLE. It writes `next_run_at` and never
+ * `enabled`: the schema keeps the two columns apart so that
+ * deferring a run and retiring a topic stay different requests
+ * with different undo. A pause of a disabled topic is not refused
+ * for being disabled either — such a row's due time is already
+ * unread,
+ * and the refusal it meets is the NULL one, since a disabled topic
+ * that was never scheduled has no run to defer.
+ */
+export async function pauseTopic(
+  store: TopicServiceStore,
+  now: () => Date,
+  id: number,
+  body: unknown,
+): Promise<TopicRecord> {
+  const input = parseBody(pauseTopicSchema, body);
+  const topic = await requireTopic(store, id);
+
+  if (topic.nextRunAt === null) {
+    throw new ConflictError(TOPIC_NOT_SCHEDULED);
+  }
+
+  const clock = now();
+  const base = topic.nextRunAt.getTime() > clock.getTime()
+    ? topic.nextRunAt
+    : clock;
+
+  return writeSchedule(store, id, pauseFrom(
+    base,
+    input.cycles,
+    topic.intervalSeconds,
+    topic,
+  ));
 }

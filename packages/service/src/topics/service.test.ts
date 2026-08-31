@@ -1,10 +1,10 @@
 /**
- * `src/topics/service.ts` — what the four topic operations refuse,
+ * `src/topics/service.ts` — what the six topic operations refuse,
  * and what they let through. Driven over
  * `tests/helpers/memory-research-store.ts`, so every claim here is
  * answered with no database anywhere.
  *
- * NINE CLAIMS IN TWO HALVES. The first five are the ways this
+ * ELEVEN CLAIMS IN TWO HALVES. The first seven are the ways this
  * module says no, and each carries the narrow CONTROL its refusal
  * needs, varied along the one axis the refusal turns on, because a
  * module refusing everything passes every assertion a refusal case
@@ -59,6 +59,35 @@
  * unrecognized keys, which is `.strict()` doing its ordinary work
  * rather than a per-column check — the reason the refusal holds
  * for a column nobody has added yet.
+ *
+ * THAT THE TWO SCHEDULE VERBS REFUSE ON A STORED MEMBER RATHER
+ * THAN ON WHAT WAS ASKED. A body says what a caller wanted;
+ * `enabled` and `nextRunAt` say what the row IS, so neither of
+ * these two 409s is reachable without reading the row first and
+ * both would be a silent no-op if the write went through instead.
+ * The table carries one row per verb with the state each turns on
+ * declared as a member, so a module reading one column for both is
+ * a named case rather than a count that still adds up, and each
+ * row's control is the same call against a row in the OTHER state.
+ * Three readings sit beside them that no single row could carry:
+ * the two sentences are distinct, a disabled topic is told from an
+ * id that names nothing by STATUS, and a disabled topic that IS
+ * scheduled is paused rather than refused — which is what says a
+ * pause is not a disable and that the run-now's guard was not
+ * copied onto it.
+ *
+ * THAT A PAUSE BODY IS ONE REQUIRED COUNT, BOUNDED AT BOTH ENDS.
+ * Four classes of refusal answering four codes: a fraction is
+ * `invalid_type` because `.int()` fires first, a zero and a
+ * negative are `too_small`, a count past the ceiling is `too_big`,
+ * and an undeclared member is `unrecognized_keys` naming `body`.
+ * The ceiling is spelled here rather than imported, so the value
+ * is pinned and not merely the fact of one, and it is a BOUNDARY
+ * rather than a number because the row a step above it is refused
+ * in the same table the control a step below sits in. Two ordering
+ * cases pin that the parse outranks both of the other refusals
+ * this verb can raise — the 404 and the 409 — since the shape of a
+ * body is a fact about the request alone.
  *
  * THAT THE TWO REASONS THE PORT DECLARES ARE TOLD APART,
  * INCLUDING THE ONE ONLY A LOST RACE REACHES. `createTopic`
@@ -129,7 +158,28 @@
  * row rather than outliving it.
  *
  * Mutation legs, run over this file with `--reporter=json` and read
- * as the failed case SET rather than as a count, against 102 cases.
+ * as the failed case SET rather than as a count. The first
+ * seventeen were measured against 102 cases and are recorded
+ * below; the schedule verbs took the file to 139 and added twelve
+ * of their own, measured there.
+ *
+ * THE OLD SEVENTEEN WERE NOT ALL RE-RUN, and the argument for that
+ * is what makes the bounded run honest rather than a shortcut. The
+ * verbs left every earlier case unchanged and every code path they
+ * do not call byte-identical, so each recorded red SET still holds
+ * over the old cases and only a DELTA over the new ones was ever in
+ * question. What narrows the legs worth reconstructing is reading
+ * what the new cases CALL: they call `createTopic` (for the
+ * fixture) and `patchTopic` (to retire a topic), and nothing else
+ * of the old surface. Those two were reconstructed and both came
+ * back at exactly their recorded figures OUTSIDE the new sections,
+ * which is what says the leg rebuilt was the leg the prose names.
+ * Defaulting `enabled` to false still reddens 4 old cases and now
+ * 2 new ones; folding the patch's `enabled` through `||` still
+ * reddens 2 old and now 5 new — the verbs being where a wrongly
+ * written `enabled` is loudest, which is the pair paying for
+ * itself.
+ *
  * Seventeen legs, ten aimed at the refusals and seven at the half
  * below them, because a grid made of one class leaves the other
  * green while looking thorough. Two of the seventeen mutate
@@ -205,6 +255,46 @@
  * all. That is the fixture's design reporting rather than any case,
  * and it is why the explicit widening control sits beside it.
  *
+ * THE TWELVE SCHEDULE LEGS, measured against 139 cases. Eleven of
+ * the twelve redden a set lying ENTIRELY inside the two new
+ * sections, which is what says the verbs' rules are pinned by the
+ * cases named for them rather than by something further down the
+ * file.
+ *
+ * The two state guards nest with their neighbours rather than
+ * overlapping. Removing the run-now's `enabled` guard reddens 4
+ * and removing the pause's NULL guard reddens 3, sharing only the
+ * distinctness case; giving the PAUSE the run-now's guard reddens
+ * exactly 1 — the disabled-but-scheduled case — which is the one
+ * reading that says the two verbs read different columns.
+ * Answering both states a 404 reddens a strict SUBSET of 2, since
+ * a wrong status still leaves an `AppError` for `refusalFrom` to
+ * hand back, and collapsing the two sentences reddens only the
+ * distinctness case.
+ *
+ * The four clauses of the cycles schema redden four DISJOINT sets,
+ * which is what says each is separately pinned. `.nonnegative()`
+ * for `.positive()` reddens 4 — the zero row plus the three cases
+ * that send a zero as their malformed body — dropping `.int()`
+ * reddens exactly 1, dropping the ceiling reddens the 2 rows past
+ * it, and dropping `.strict()` reddens the 3 undeclared-member
+ * rows. Lowering the ceiling to one reddens only the at-ceiling
+ * control, which is the reading that makes it a boundary: every
+ * refusal row stays green under it.
+ *
+ * Parsing the body AFTER reading the row reddens exactly 1, the
+ * unknown-id ordering case. The 409 ordering case stays green
+ * under it, because a read that finds the row still falls through
+ * to the parse — so the two ordering cases are one claim each
+ * rather than a pair, and only the first has a leg.
+ *
+ * The twelfth reddens ZERO and is recorded rather than repaired:
+ * basing the pause on the clock alone instead of on the later of
+ * the clock and the stored due time changes nothing here. That
+ * rule is the positive half's, and this file's schedule sections
+ * are refusals — the cases that would report it land with the
+ * verbs' positive cases.
+ *
  * What no module mutation reaches, by construction: the table
  * guards read only the tables beside them and are aimed at a later
  * edit, such as an operation added with no row or a body half
@@ -216,6 +306,9 @@
 import type { TopicPage, TopicServiceStore } from './service.js';
 import type { TopicRecord } from './store.js';
 import type { FieldError } from '../../lib/errors/index.js';
+import type {
+  MovableClock,
+} from '../../tests/helpers/memory-auth-store.js';
 import type {
   MemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
@@ -230,6 +323,9 @@ import {
   ValidationError,
 } from '../../lib/errors/index.js';
 import {
+  createMovableClock,
+} from '../../tests/helpers/memory-auth-store.js';
+import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
 import { StoreRefusal } from '../db/store-errors.js';
@@ -239,6 +335,8 @@ import {
   deleteTopic,
   listTopics,
   patchTopic,
+  pauseTopic,
+  runTopicNow,
 } from './service.js';
 
 /** The seeded worked example, and the domain every case stores. */
@@ -276,6 +374,31 @@ const HOURLY = 3600;
 const WIDE_WINDOW: StoreWindow = { limit: 50, offset: 0 };
 
 /**
+ * Where the injected clock reads, so a written instant is exact.
+ *
+ * Fixed rather than taken from the present, which is what lets a
+ * schedule case compare a stored `nextRunAt` for equality instead
+ * of asserting it fell inside a window. Nothing in this file
+ * advances it: the refusals below turn on `enabled` and on a NULL
+ * due time, neither of which is a question about elapsed time.
+ */
+const FIXED_INSTANT = new Date('2026-08-31T09:00:00.000Z');
+
+/**
+ * The ceiling `pauseTopicSchema` puts on `cycles`, re-spelled here
+ * rather than imported.
+ *
+ * The constant in `./service.ts` is private, and it would be worth
+ * keeping private even if it were not: a test reading the ceiling
+ * off the module it is checking is green for every value the
+ * module might hold, so a limit quietly lowered to one would pass.
+ * Spelling it pins the VALUE, which is the claim a caller depends
+ * on. The row a step above it and the control a step below are
+ * what make the pin a boundary rather than a number.
+ */
+const MAX_CYCLES = 1000;
+
+/**
  * Two domains, three topics, and the store holding them.
  *
  * The shape is chosen so that the one refusal that has to be
@@ -290,6 +413,18 @@ const WIDE_WINDOW: StoreWindow = { limit: 50, offset: 0 };
 interface PlantedTopics {
   /** The store, holding {@link RADAR} and {@link TRANSIT}. */
   readonly store: MemoryResearchStore;
+
+  /**
+   * The clock both schedule verbs are handed, reading
+   * {@link FIXED_INSTANT}.
+   *
+   * On the fixture rather than built per case, so that every call
+   * in one case reads one present — a run-now and the pause that
+   * follows it would otherwise be measured against two instants
+   * a millisecond or so apart, and an equality between them would
+   * be a race rather than a claim.
+   */
+  readonly clock: MovableClock;
 
   /** A topic of {@link RADAR}, and the name a duplicate takes. */
   readonly transformers: TopicRecord;
@@ -313,6 +448,7 @@ interface PlantedTopics {
  */
 async function plantTopics(): Promise<PlantedTopics> {
   const store = createMemoryResearchStore();
+  const clock = createMovableClock(FIXED_INSTANT);
 
   await store.insertDomain({ slug: RADAR, name: 'Radar', settings: {} });
   await store.insertDomain({ slug: TRANSIT, name: 'Transit', settings: {} });
@@ -335,7 +471,42 @@ async function plantTopics(): Promise<PlantedTopics> {
     intervalSeconds: HOURLY,
   });
 
-  return { store, transformers, inference, foreign };
+  return { store, clock, transformers, inference, foreign };
+}
+
+/**
+ * Gives one topic a due time, so a pause has a run to defer.
+ *
+ * Through the STORE rather than through {@link runTopicNow}, which
+ * is the one place this file plants past the subject and is worth
+ * the exception. Both verbs are under test here, and routing the
+ * pause fixture through the run-now would make a broken run-now
+ * redden the pause cases as well — noise in exactly the column
+ * where the attribution matters. `updateTopicSchedule` is the port
+ * method the verb itself writes through, so what is planted is the
+ * state a run-now leaves rather than a shape only a test can build.
+ *
+ * @param planted - The store and its rows.
+ * @param topic - The row to schedule.
+ * @param at - The instant to give it. Defaults to the clock's own
+ *   reading, which is where a run-now would have left it.
+ * @returns The stored row, now carrying a due time.
+ * @throws When the store answered null, which would mean the row
+ *   the caller was handed is not there — a fixture fault rather
+ *   than an answer any case should assert over.
+ */
+async function schedule(
+  planted: PlantedTopics,
+  topic: TopicRecord,
+  at: Date = planted.clock.now(),
+): Promise<TopicRecord> {
+  const scheduled = await planted.store.updateTopicSchedule(topic.id, at);
+
+  if (scheduled === null) {
+    throw new Error('the fixture could not schedule a topic it planted');
+  }
+
+  return scheduled;
 }
 
 /**
@@ -407,6 +578,8 @@ const OPERATIONS = [
   'deleteTopic',
   'listTopics',
   'patchTopic',
+  'pauseTopic',
+  'runTopicNow',
 ];
 
 /**
@@ -473,15 +646,54 @@ const MISSING_CASES: readonly MissingCase[] = [
     refuse: ({ store }) => deleteTopic(store, MISSING_ID),
     control: ({ store, inference }) => deleteTopic(store, inference.id),
   },
+  {
+    operation: 'runTopicNow',
+    subject: 'topic',
+    refuse: ({ store, clock }) => runTopicNow(store, clock.now, MISSING_ID),
+    control: ({ store, clock, inference }) => runTopicNow(
+      store,
+      clock.now,
+      inference.id,
+    ),
+  },
+  {
+    // The id is read before the body reaches a store, but AFTER
+    // the body is parsed: the `cycles` here is a legal one, so
+    // what this row measures is the address and not the payload.
+    // A row sending a bad body as well would answer 422 and pass
+    // for a 404 nobody checked.
+    operation: 'pauseTopic',
+    subject: 'topic',
+    refuse: ({ store, clock }) => pauseTopic(
+      store,
+      clock.now,
+      MISSING_ID,
+      { cycles: 1 },
+    ),
+    control: async (planted) => {
+      // The control needs a SCHEDULED row, since an unscheduled
+      // one is the 409 two sections below. Planted here rather
+      // than in the fixture, so the topics every other case reads
+      // stay unscheduled exactly as a create leaves them.
+      await schedule(planted, planted.inference);
+
+      return pauseTopic(
+        planted.store,
+        planted.clock.now,
+        planted.inference.id,
+        { cycles: 1 },
+      );
+    },
+  },
 ];
 
 describe('an address that names nothing', () => {
   it('covers every operation this module exports', () => {
-    // Paired by name rather than by count, so a fifth operation
+    // Paired by name rather than by count, so a seventh operation
     // added to the module without a row here is this case failing
-    // rather than a table that quietly covers four of five. The
-    // two schedule verbs land beside these and owe their own
-    // rows, which is what this guard says when they do.
+    // rather than a table that quietly covers six of seven. The
+    // two schedule verbs owed rows here when they landed, and this
+    // guard is what said so; both are in the table below.
     expect(MISSING_CASES.map((row) => row.operation).sort())
       .toEqual([...OPERATIONS].sort());
   });
@@ -724,7 +936,15 @@ describe('a name the domain already researches', () => {
 // The bodies these operations refuse
 // ---------------------------------------------------------------------------
 
-/** The two operations that take a body. */
+/**
+ * The two operations {@link BODY_CASES} covers.
+ *
+ * Not every operation here that takes a body: {@link pauseTopic}
+ * takes one too and has a table of its own further down. The two
+ * are kept apart because a pause body shares no member with these
+ * — one required `cycles` against six declared members — so every
+ * guard below would have to grow an arm that could never fire.
+ */
 const BODY_OPERATIONS = ['create', 'patch'];
 
 /**
@@ -1226,6 +1446,526 @@ describe('the bodies these operations refuse', () => {
         { field: 'name', code: 'too_small' },
         { field: 'intervalSeconds', code: 'too_small' },
       ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The states the two schedule verbs refuse
+// ---------------------------------------------------------------------------
+
+/** Both functions that write `next_run_at`. */
+const SCHEDULE_VERBS = ['pauseTopic', 'runTopicNow'];
+
+/**
+ * One verb met by a stored row it cannot act on, beside the same
+ * verb met by one it can.
+ *
+ * THE FACT EACH TURNS ON IS A STORED MEMBER, which is what makes
+ * these two refusals different in kind from every 422 below. A
+ * body says what was asked; `enabled` and `nextRunAt` say what the
+ * row is, so neither refusal is reachable without reading the row
+ * first — and both would be a silent no-op if the write went
+ * through instead. A run-now onto a disabled row writes a due time
+ * `topics_dispatch_claim_idx` excludes, and a pause of an
+ * unscheduled row SCHEDULES it.
+ *
+ * The control is a member of the row rather than a table of its
+ * own, for the reason {@link MissingCase} gives: a 409 for a state
+ * means nothing unless the identical call against the other state
+ * answers.
+ */
+interface ScheduleStateCase {
+  /** What makes this row different from every other. */
+  readonly label: string;
+
+  /** The verb under test, and half of what this table covers. */
+  readonly verb: string;
+
+  /** Which stored member the refusal turns on. */
+  readonly member: 'enabled' | 'nextRunAt';
+
+  /** The call that has to be refused. */
+  readonly refuse: (planted: PlantedTopics) => Promise<unknown>;
+
+  /** The same call against a row in the other state. */
+  readonly control: (planted: PlantedTopics) => Promise<unknown>;
+}
+
+/** Both states a verb refuses, one per verb. */
+const SCHEDULE_STATE_CASES: readonly ScheduleStateCase[] = [
+  {
+    label: 'a run-now against a topic that is disabled',
+    verb: 'runTopicNow',
+    member: 'enabled',
+    refuse: async (planted) => {
+      // Retired through the patch this surface offers for it, so
+      // the refused state is one a caller can actually produce.
+      await patchTopic(planted.store, planted.inference.id, {
+        enabled: false,
+      });
+
+      return runTopicNow(
+        planted.store,
+        planted.clock.now,
+        planted.inference.id,
+      );
+    },
+    control: ({ store, clock, inference }) => runTopicNow(
+      store,
+      clock.now,
+      inference.id,
+    ),
+  },
+  {
+    label: 'a pause against a topic that is not scheduled',
+    verb: 'pauseTopic',
+    member: 'nextRunAt',
+    // The fixture's topics are unscheduled as `createTopic` left
+    // them, so this row plants nothing: the state it refuses is
+    // the one every created and every seeded topic is already in.
+    refuse: ({ store, clock, inference }) => pauseTopic(
+      store,
+      clock.now,
+      inference.id,
+      { cycles: 1 },
+    ),
+    control: async (planted) => {
+      await schedule(planted, planted.inference);
+
+      return pauseTopic(
+        planted.store,
+        planted.clock.now,
+        planted.inference.id,
+        { cycles: 1 },
+      );
+    },
+  },
+];
+
+describe('the states the two schedule verbs refuse', () => {
+  it('carries a row for each verb', () => {
+    // Paired by name against the roster rather than counted, so a
+    // third verb added to the module without a row here is this
+    // case failing rather than a table that quietly covers two of
+    // three.
+    expect(SCHEDULE_STATE_CASES.map((row) => row.verb).sort())
+      .toEqual([...SCHEDULE_VERBS].sort());
+  });
+
+  it('turns each refusal on a different stored member', () => {
+    // The two refusals are not one rule: a module reading only
+    // `enabled` would refuse an unscheduled row for the wrong
+    // reason, or not at all.
+    expect([...new Set(SCHEDULE_STATE_CASES.map((row) => row.member))].sort())
+      .toEqual(['enabled', 'nextRunAt']);
+  });
+
+  it('labels every row distinctly', () => {
+    const labels = SCHEDULE_STATE_CASES.map((row) => row.label);
+
+    expect(labels.length).toBe(new Set(labels).size);
+  });
+
+  for (const row of SCHEDULE_STATE_CASES) {
+    it(`answers 409 to ${row.label}`, async () => {
+      const planted = await plantTopics();
+      const refusal = await refusalFrom(() => row.refuse(planted));
+
+      expect(refusal).toBeInstanceOf(ConflictError);
+      expect(refusal.code).toBe('CONFLICT');
+      expect(refusal.statusCode).toBe(409);
+
+      // No `details`: the refusal is one fact about one row, and
+      // there is no per-member count for one to carry.
+      expect(refusal.details).toBeUndefined();
+    });
+
+    it(`answers ${row.verb} against a row in the other state`, async () => {
+      // The narrow control, varied along the one axis the refusal
+      // turns on: the same verb, the same body, a row whose stored
+      // member is the other value. A verb refusing every call
+      // passes the case above and fails this one.
+      const planted = await plantTopics();
+
+      await expect(row.control(planted)).resolves.not.toThrow();
+    });
+
+    it(`writes no due time when it refuses ${row.verb}`, async () => {
+      // Read back off the row rather than off the refusal: a verb
+      // that wrote and then threw satisfies every assertion above,
+      // and this surface has no other reader of the column to
+      // report it. The fixture's topics are unscheduled, so the
+      // reading is the same for both rows — null before, null
+      // after.
+      const planted = await plantTopics();
+
+      await refusalFrom(() => row.refuse(planted));
+
+      const stored = await planted.store.findTopicById(planted.inference.id);
+
+      expect(stored?.nextRunAt).toBeNull();
+    });
+  }
+
+  it('says which of the two states was wrong', async () => {
+    // Not a pin on the wording, which is free to change: a pin on
+    // the DISTINCTION. One sentence answered to both would send an
+    // operator to enable a topic whose fault was that it had never
+    // been scheduled, and is green against every case above.
+    const said = new Set<string>();
+
+    for (const row of SCHEDULE_STATE_CASES) {
+      const planted = await plantTopics();
+      const refusal = await refusalFrom(() => row.refuse(planted));
+
+      said.add(refusal.message);
+    }
+
+    expect(said.size).toBe(SCHEDULE_STATE_CASES.length);
+  });
+
+  it('tells a disabled topic from one that names nothing', async () => {
+    // The two refusals a run-now can raise, told apart by status
+    // rather than by sentence: a row that is not there is a 404
+    // and a row that is there and disabled is a 409. A verb
+    // answering one to both would report a mistyped id as a
+    // configuration problem.
+    const planted = await plantTopics();
+
+    await patchTopic(planted.store, planted.inference.id, { enabled: false });
+
+    const disabled = await refusalFrom(() => runTopicNow(
+      planted.store,
+      planted.clock.now,
+      planted.inference.id,
+    ));
+    const absent = await refusalFrom(() => runTopicNow(
+      planted.store,
+      planted.clock.now,
+      MISSING_ID,
+    ));
+
+    expect(disabled.statusCode).toBe(409);
+    expect(absent.statusCode).toBe(404);
+  });
+
+  it('pauses a disabled topic rather than refusing it', async () => {
+    // The interaction the two rows above cannot show on their own.
+    // A pause does not read `enabled` at all, so a disabled topic
+    // that IS scheduled is paused rather than refused — pause is
+    // not disable, and the schema keeps the two columns apart on
+    // purpose. A verb that had copied the run-now's guard passes
+    // both rows above and fails this.
+    const planted = await plantTopics();
+
+    await schedule(planted, planted.inference);
+    await patchTopic(planted.store, planted.inference.id, {
+      enabled: false,
+    });
+
+    const paused = await pauseTopic(
+      planted.store,
+      planted.clock.now,
+      planted.inference.id,
+      { cycles: 1 },
+    );
+
+    expect(paused.enabled).toBe(false);
+    expect(paused.nextRunAt).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The pause bodies this surface refuses
+// ---------------------------------------------------------------------------
+
+/**
+ * One pause body, and what {@link pauseTopic} answers to it.
+ *
+ * A TABLE OF ITS OWN RATHER THAN ROWS IN {@link BODY_CASES}, and
+ * the reason is that a pause body shares no member with the other
+ * two. `cycles` is the only thing it declares; there is no `name`
+ * to be empty, no `searchTerms` to hold a non-string, and no
+ * cadence — so the guards that make the create-and-patch table
+ * readable would each have to grow an arm that could never fire.
+ * What the two tables do share is the shape of the claim: every
+ * row is submitted to the SERVICE and not to a schema, which is
+ * what says an MCP tool in wave 3 cannot be handed a body the HTTP
+ * route would have refused.
+ *
+ * FOUR CLASSES OF REFUSAL AND FOUR CODES, which is the reading the
+ * rows exist to separate. `.int()` answers `invalid_type` and
+ * fires first, so a fraction is refused for its type rather than
+ * for its size. `.positive()` answers `too_small`, which covers a
+ * zero and a negative alike. {@link MAX_CYCLES} answers `too_big`.
+ * `.strict()` answers `unrecognized_keys` at the root, naming
+ * `body` rather than the key submitted. A schema that had kept
+ * `.int()` and dropped `.positive()` passes the fraction row and
+ * fails the zero one, which is why neither stands in for the
+ * other.
+ *
+ * The rows are submitted against a SCHEDULED topic, so nothing
+ * here can pass for the `409` an unscheduled one answers. The body
+ * is parsed before the row is read, so the fixture makes no
+ * difference to what these rows measure — which is exactly why one
+ * row below sends a legal body's neighbour against an id that is
+ * not there, to pin that ordering rather than assume it.
+ */
+interface CyclesCase {
+  /** What makes this row different from every other. */
+  readonly label: string;
+
+  /** The body, unvalidated, exactly as a request would carry it. */
+  readonly body: unknown;
+
+  /** Every detail the refusal has to carry, in order. */
+  readonly details: readonly ExpectedDetail[];
+}
+
+/** The pause bodies {@link pauseTopicSchema} has to refuse. */
+const CYCLES_CASES: readonly CyclesCase[] = [
+  {
+    label: 'a pause of zero cycles',
+    body: { cycles: 0 },
+    details: [{ field: 'cycles', code: 'too_small' }],
+  },
+  {
+    label: 'a pause of minus one cycle',
+    body: { cycles: -1 },
+    details: [{ field: 'cycles', code: 'too_small' }],
+  },
+  {
+    label: 'a pause of one and a half cycles',
+    body: { cycles: 1.5 },
+    details: [{ field: 'cycles', code: 'invalid_type' }],
+  },
+  {
+    label: 'a pause one cycle past the ceiling',
+    body: { cycles: MAX_CYCLES + 1 },
+    details: [{ field: 'cycles', code: 'too_big' }],
+  },
+  {
+    // A count far past the ceiling rather than a step past it, so
+    // the two rows are not one claim: this is the value that would
+    // carry the product beyond the range a `Date` holds and store
+    // as the NULL the pause refuses to create.
+    label: 'a pause of a million cycles',
+    body: { cycles: 1_000_000 },
+    details: [{ field: 'cycles', code: 'too_big' }],
+  },
+  {
+    label: 'a pause body carrying no count at all',
+    body: {},
+    details: [{ field: 'cycles', code: 'invalid_type' }],
+  },
+  {
+    label: 'a pause clearing its count with null',
+    body: { cycles: null },
+    details: [{ field: 'cycles', code: 'invalid_type' }],
+  },
+  {
+    label: 'a pause counting cycles as a string',
+    body: { cycles: '3' },
+    details: [{ field: 'cycles', code: 'invalid_type' }],
+  },
+  {
+    label: 'a pause body that is not an object',
+    body: null,
+    details: [{ field: 'body', code: 'invalid_type' }],
+  },
+  {
+    label: 'a pause naming the instant it wants written',
+    body: { cycles: 1, nextRunAt: '2026-09-30T09:00:00.000Z' },
+    details: [{ field: 'body', code: 'unrecognized_keys' }],
+  },
+  {
+    label: 'a pause retiring the topic on its way past',
+    body: { cycles: 1, enabled: false },
+    details: [{ field: 'body', code: 'unrecognized_keys' }],
+  },
+  {
+    // Two faults and two details, in the order zod raised them:
+    // the member that is missing, then the one that is not
+    // declared. The only row here that carries more than one, and
+    // worth having because a misspelt `cycles` is the likeliest
+    // mistake this schema meets — a caller reading only the first
+    // detail would fix the count and still be refused.
+    label: 'a pause counting seconds instead of cycles',
+    body: { seconds: 3600 },
+    details: [
+      { field: 'cycles', code: 'invalid_type' },
+      { field: 'body', code: 'unrecognized_keys' },
+    ],
+  },
+];
+
+describe('the pause bodies this surface refuses', () => {
+  it('labels every row distinctly', () => {
+    const labels = CYCLES_CASES.map((row) => row.label);
+
+    expect(labels.length).toBe(new Set(labels).size);
+  });
+
+  it('names a distinct reason for each class of refusal', () => {
+    const codes = CYCLES_CASES.flatMap(
+      (row) => row.details.map((detail) => detail.code),
+    );
+
+    expect([...new Set(codes)].sort()).toEqual([
+      'invalid_type', 'too_big', 'too_small', 'unrecognized_keys',
+    ]);
+  });
+
+  it('refuses the three counts a caller is likeliest to send', () => {
+    // The scoped claim, held against the table rather than against
+    // a memory of what was written into it, and read off the BODY
+    // so renaming a row cannot satisfy it. A row deleted from any
+    // of the three stops this file covering the refusal it is
+    // named for, and nothing else here would report that.
+    const counted = new Map(CYCLES_CASES
+      .filter((row) => bodyCarries(row.body, 'cycles'))
+      .map((row) => [
+        (row.body as { cycles: unknown }).cycles,
+        row.details.map((detail) => detail.code).join(),
+      ]));
+
+    expect(counted.get(0)).toBe('too_small');
+    expect(counted.get(1.5)).toBe('invalid_type');
+    expect(counted.get(MAX_CYCLES + 1)).toBe('too_big');
+  });
+
+  it('refuses the pipeline-owned member from this body too', () => {
+    // `nextRunAt` is refused by all three bodies on this surface,
+    // and by the same clause in each: `.strict()` doing its
+    // ordinary work rather than a per-column check. Held here as
+    // well as in {@link PIPELINE_OWNED} because the pause is the
+    // one body whose whole subject IS that column.
+    const naming = CYCLES_CASES.filter(
+      (row) => bodyCarries(row.body, 'nextRunAt'),
+    );
+
+    expect(naming.length).toBe(1);
+    expect(naming.flatMap((row) => row.details.map(
+      (detail) => detail.code,
+    ))).toEqual(['unrecognized_keys']);
+  });
+
+  for (const row of CYCLES_CASES) {
+    it(`refuses ${row.label}`, async () => {
+      const planted = await plantTopics();
+
+      await schedule(planted, planted.inference);
+
+      const refusal = await refusalFrom(() => pauseTopic(
+        planted.store,
+        planted.clock.now,
+        planted.inference.id,
+        row.body,
+      ));
+
+      expect(refusal).toBeInstanceOf(ValidationError);
+      expect(refusal.code).toBe('VALIDATION_ERROR');
+      expect(refusal.statusCode).toBe(422);
+      expect(detailsOf(refusal.details as FieldError[] | undefined))
+        .toEqual([...row.details]);
+    });
+  }
+
+  it('accepts a pause of one cycle', async () => {
+    // The boundary control for the zero and the negative rows, a
+    // single step from the value they refuse. A schema that had
+    // stopped checking `cycles` at all passes those rows'
+    // neighbours and fails them; a schema refusing every count
+    // passes them and fails this.
+    const planted = await plantTopics();
+
+    await schedule(planted, planted.inference);
+
+    const paused = await pauseTopic(
+      planted.store,
+      planted.clock.now,
+      planted.inference.id,
+      { cycles: 1 },
+    );
+
+    expect(paused.nextRunAt).not.toBeNull();
+  });
+
+  it('accepts a pause at exactly the ceiling', async () => {
+    // The other boundary control, and the one that makes the
+    // ceiling a BOUNDARY rather than a number. The row above sends
+    // one more than this and is refused; a ceiling quietly lowered
+    // fails here while every refusal row stays green.
+    const planted = await plantTopics();
+
+    await schedule(planted, planted.inference);
+
+    const paused = await pauseTopic(
+      planted.store,
+      planted.clock.now,
+      planted.inference.id,
+      { cycles: MAX_CYCLES },
+    );
+
+    expect(paused.nextRunAt).not.toBeNull();
+  });
+
+  it('writes no due time when it refuses a body', async () => {
+    // Read back off the row: a verb that parsed after writing
+    // would satisfy every assertion above. The topic is scheduled
+    // first, so what this reads is the instant the fixture put
+    // there rather than a null that could also mean nothing
+    // happened.
+    const planted = await plantTopics();
+    const scheduled = await schedule(planted, planted.inference);
+
+    await refusalFrom(() => pauseTopic(
+      planted.store,
+      planted.clock.now,
+      planted.inference.id,
+      { cycles: 0 },
+    ));
+
+    const stored = await planted.store.findTopicById(planted.inference.id);
+
+    expect(stored?.nextRunAt).toStrictEqual(scheduled.nextRunAt);
+  });
+
+  it('refuses a malformed pause against an id that is not there', async () => {
+    // The ordering: the body is parsed before the row is read, so
+    // a bad body outranks an address naming nothing. The shape of
+    // a body is a fact about the request alone, and answering the
+    // same body a 422 or a 404 depending on what happens to be
+    // stored would make a caller's error depend on rows it never
+    // asked about.
+    const planted = await plantTopics();
+    const refusal = await refusalFrom(() => pauseTopic(
+      planted.store,
+      planted.clock.now,
+      MISSING_ID,
+      { cycles: 0 },
+    ));
+
+    expect(refusal).toBeInstanceOf(ValidationError);
+    expect(refusal.statusCode).toBe(422);
+  });
+
+  it('refuses a malformed pause against a topic not scheduled', async () => {
+    // The other ordering, and the one only this verb has: the
+    // parse outranks the 409 as well as the 404. The fixture's
+    // topics are unscheduled, so a module reading the row first
+    // answers 409 here and passes every other case in this
+    // section.
+    const planted = await plantTopics();
+    const refusal = await refusalFrom(() => pauseTopic(
+      planted.store,
+      planted.clock.now,
+      planted.inference.id,
+      { cycles: 0 },
+    ));
+
+    expect(refusal).toBeInstanceOf(ValidationError);
+    expect(refusal.statusCode).toBe(422);
   });
 });
 

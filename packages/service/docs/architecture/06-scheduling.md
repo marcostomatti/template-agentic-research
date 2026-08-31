@@ -101,15 +101,27 @@ writes the time and how it was worked out, never in what is stored.
 | Extraordinary run | `next_run_at = now()`, so the next tick claims the row whatever its interval says. | An operator, by UPDATE. |
 | Pause for N cycles | `next_run_at` pushed out by N intervals. | An operator, by UPDATE. |
 
-### Only one of the four is performed by anything here today
+### Two of the four are performed by something here today
 
-`workflows/src/ar-dispatch.json` is the only thing in this repository
-that writes `next_run_at`, and what it writes is the periodic
-increment. The agent path arrives with `ar-research` in phase 6. The
-two operator modes are UPDATE statements against one column and there
-is nothing to build for either: a mode nobody implemented already
-works, because the mechanism reads one column and every writer of that
-column is speaking the same language.
+`workflows/src/ar-dispatch.json` writes the periodic increment, inside
+the claim it takes. The agent path arrives with `ar-research` in phase
+6.
+
+Both operator modes are now written in TypeScript as well.
+`runTopicNow` and `pauseTopic` in `src/topics/service.ts` are the
+extraordinary run and the pause for N cycles, each writing
+`next_run_at` through `TopicStore.updateTopicSchedule` and writing
+nothing else. Neither is reachable over HTTP yet — the two routes
+under `POST /topics/:id` land in their own commit, and
+`docs/architecture/08-http-api.md` carries the rules they answer to —
+so a hand-written UPDATE is still what an operator has.
+
+That the modes worked before anything implemented them is the
+mechanism reporting rather than an accident: it reads one column, and
+every writer of that column is speaking the same language. What the
+two functions add is the decisions a bare UPDATE cannot take — a
+disabled row refused, an unscheduled one refused, and the cycle
+length put through the bounds.
 
 The seed does not write one either, and that is deliberate.
 `data/topics.json` leaves `next_run_at` out, so a seeded topic is
@@ -135,15 +147,28 @@ schedule being asked about rather than the choice that produced it.
 along with the limit that what is stored is a writer's account of
 itself and nothing checks it against what happened.
 
-### The bounds clamp an interval, so two of the four pass through them
+### The bounds clamp an interval, so three of the four pass through it
 
 `min_interval_seconds` and `max_interval_seconds` bound a GAP and not
 a time, which is what decides where they apply. They were declared for
 the agent mode, as `src/db/schema/scheduling.ts` says, and the
 periodic increment goes through them as well — both are a number of
 seconds, and each is clamped into the range before a timestamp is
-worked out from it. An extraordinary run and a pause write a timestamp
-directly, and nothing clamps either.
+worked out from it.
+
+A pause is the third. It writes a timestamp directly, like the
+extraordinary run beside it, but the timestamp is worked out from a
+COUNT OF CYCLES: `pauseTopic` in `src/topics/service.ts` calls
+`pauseFrom` in `src/lib/schedule.ts`, which puts the row's own
+`interval_seconds` through `clampIntervalSeconds` and multiplies the
+clamped result by the count. So the bounds apply to the length of one
+cycle rather than to the whole span, which is the reading a row
+carrying a floor depends on — a pause of three cycles on a topic
+proposing a minute under a floor of fifteen is forty-five minutes out
+and not three.
+
+The extraordinary run is the one mode nothing clamps. It writes the
+service clock's instant, and there is no gap in it to bound.
 
 The clamp is expressed twice on purpose. `clampIntervalSeconds` in
 `src/lib/schedule.ts` is the rule as TypeScript, for the agent path to

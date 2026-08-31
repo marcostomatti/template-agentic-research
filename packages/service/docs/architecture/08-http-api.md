@@ -1461,12 +1461,15 @@ other, and the rules they answer to are stated once for both
 schedulable groups under `Schedule verbs`. Their rows join this table
 in the commit that lands them.
 
-The containment is structural rather than a convention the router
-keeps. `TopicServiceStore` is a `Pick` over two ports and does not
-name `updateTopicSchedule`, which is the only port method that writes
-`next_run_at`, so none of the four handlers above could reach the
-column even by mistake. The verbs widening that type is a change
-visible in one declaration.
+`TopicServiceStore` now names `updateTopicSchedule`, because
+`src/topics/service.ts` holds the two verbs and one type stands for
+all six functions rather than a second `Pick` being kept in step with
+the first. So the containment is not that the four handlers above
+hold a store that cannot write `next_run_at`; it is that none of them
+derives an instant to write. `TopicPatch` carries no such member,
+both request schemas refuse the key, and
+`tests/invariants/api-schedule-containment.test.ts` reads the modules
+rather than the types.
 
 ### A topic is created unscheduled, and a verb is what schedules it
 

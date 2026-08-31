@@ -16,11 +16,18 @@
  * differs in SHAPE from its four wave-1 siblings rather than in
  * subject. `POST /topics/:id/run-now` and `POST /topics/:id/pause`
  * are the two schedule verbs, they act on a column no route below
- * can reach, and they land beside these in their own commit. The
- * containment is structural rather than a convention this file
- * keeps: `TopicServiceStore` does not `Pick` the one port method
- * that writes `next_run_at`, so no handler below could write it
- * even by mistake.
+ * writes, and they land beside these in their own commit.
+ *
+ * THE CONTAINMENT NO LONGER SITS IN THE TYPE, and saying so is the
+ * point. `TopicServiceStore` names `updateTopicSchedule` now that
+ * `./service.ts` holds the two verbs, so the store this router is
+ * handed CAN write `next_run_at` and the four handlers below are
+ * kept off it by what they do rather than by what they hold: none
+ * of them derives an instant, `TopicPatch` carries no such member,
+ * and both request schemas refuse the key.
+ * `tests/invariants/api-schedule-containment.test.ts` is what makes
+ * that a property of the tree, since it reads the modules rather
+ * than the types.
  *
  * TWO PATH SHAPES, BECAUSE A TOPIC IS MET IN ITS DOMAIN AND WRITTEN
  * BY ITS ID. The collection hangs off `/domains/:slug`, since a
@@ -172,15 +179,16 @@ export interface TopicsRouterOptions {
    * Where the domain is resolved and its topics are read and
    * written. `TopicServiceStore` and not either port whole: it is
    * the intersection of the two `Pick`s the service declares, so
-   * this router asks for exactly the methods the four functions
-   * below reach and `tests/helpers/memory-research-store.ts` can
-   * stand behind it with no database up.
+   * this router asks for the methods that module reaches and
+   * `tests/helpers/memory-research-store.ts` can stand behind it
+   * with no database up.
    *
-   * It is also what keeps `next_run_at` out of reach from here.
-   * `updateTopicSchedule` is the one port method that writes the
-   * column and it is deliberately not among the methods that type
-   * picks, so the schedule verbs widening it later is a change
-   * visible in one declaration rather than buried in a call.
+   * It NAMES `updateTopicSchedule`, which the four handlers below
+   * never call: the type widened when `./service.ts` grew the two
+   * schedule verbs, and one type stands for all six functions
+   * rather than a second `Pick` being kept in step with the first.
+   * What keeps `next_run_at` out of reach from the handlers below
+   * is stated in this module's header.
    *
    * The only member, and an options object regardless, so this
    * router is built the way its siblings are and a dependency added
