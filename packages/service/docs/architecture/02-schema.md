@@ -231,6 +231,42 @@ the claim early and the row is unlocked and still due. And a row held
 by a transaction that never finishes is passed over with no error, so
 skipped and not-yet-due are indistinguishable from outside.
 
+### One index serves both per-source document readers
+
+Three indexes are declared in the schema modules. Every other access
+path in schema v2 is a primary key, a unique key, or a sequential scan
+— Postgres builds an index for each of the first two on its own, so
+only these three were a decision somebody took.
+
+| Index | Over | What reads it |
+| --- | --- | --- |
+| `topics_dispatch_claim_idx` | (`enabled`, `next_run_at`), `WHERE enabled` | `ar-dispatch`'s claim over `topics`. |
+| `export_subscriptions_dispatch_claim_idx` | (`enabled`, `next_run_at`), `WHERE enabled` | `ar-dispatch`'s claim over `export_subscriptions`. |
+| `documents_source_parse_status_idx` | (`source_id`, `parse_status`) | The per-source parse-status aggregate behind `GET /domains/:slug/sources`, and the `parse_status = 'failed'` filter behind `GET /sources/:id/failures`. |
+
+The first two are argued in the section above; what is worth stating
+here is why the third is not shaped like them. It is deliberately NOT
+partial, because its two readers disagree about the column a `WHERE`
+would restrict: the review queue filters `parse_status` to one member,
+and the sources list groups over every member of it. Postgres uses a
+partial index only where it can prove the query's predicate implies
+the index's, so a `WHERE parse_status = 'failed'` would serve the
+queue and leave the aggregate on a sequential scan of the corpus
+table, reporting nothing while it did.
+
+`source_id` leads the key because both readers filter on it first —
+one for a page of sources, one for a single source — and
+`parse_status` follows because it is what each of them then does with
+the rows it finds there.
+
+Its limits are the ordinary ones for an index nothing is covered by.
+Both readers still go to the heap for what they display, so this one
+narrows which rows are visited rather than what is read from each. The
+aggregate is bounded by the document counts of the sources on the page
+rather than made constant. And every document holds an entry, the
+source-less ones included — a file from the ingest tray, a pasted body
+— which neither reader can ever match.
+
 ### Nothing is recorded as researched without an approval
 
 `research_pool_approval_check` is the gate, and it is a CHECK on
