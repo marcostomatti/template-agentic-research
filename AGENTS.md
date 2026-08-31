@@ -272,13 +272,21 @@ behind an ASCII placeholder token, never as a literal in the tool call.
   reporting the union against it reads as six regressions. Measured over
   780 tracked files: the matcher's five return exactly
   `origin-project : NOTICE : 10`, and the two needles assembled in
-  `packages/ui/eslint.config.mjs` return SEVEN more, of which four are
-  legitimate origin prose under the README/NOTICE clause and two are LAW
-  STATEMENTS naming their own subject (root `AGENTS.md`'s import ban spells
-  the scope it bans; `packages/ui/AGENTS.md`'s reference-free rule spells
-  the repo whose prose it restricts). Report the result bucketed by needle
-  SOURCE with the law each bucket answers to, never as one number against
-  the five-needle figure.
+  `packages/ui/eslint.config.mjs` return SEVEN more, and those SEVEN
+  decompose THREE ways rather than the two a reader expects: legitimate
+  origin prose under the README/NOTICE clause, LAW STATEMENTS naming their
+  own subject (root `AGENTS.md`'s import ban spells the scope it bans;
+  `packages/ui/AGENTS.md`'s reference-free rule spells the repo whose prose
+  it restricts), and the pre-existing comment leak this file records below
+  as the third shape both automated halves miss
+  (`packages/ui/scripts/compare-design.mjs`). Hold the total against a
+  two-way split and one member is left unaccounted, which reads exactly
+  like a leak the branch introduced — so attribute that bucket before
+  reporting it: `git log -1 -- <path>` naming a commit older than the
+  branch, plus `git diff --name-only <base>..HEAD -- packages/ui` answering
+  nothing, is two lines and settles it. Report the
+  result bucketed by needle SOURCE with the law each bucket answers to,
+  never as one number against the five-needle figure.
 - Separate a pre-existing hit from one the branch introduced with a
   merge-base hit-set DIFF, the only leg that can: `git archive <merge-base>
   | tar -x -C /tmp/<fresh-dir>` — never `rm -rf` the directory first, which
@@ -517,10 +525,14 @@ red package never masks another and a single run gives the whole picture.
   above (measured 65 == 65 == 65 for `@ar/service`), so a test file on disk
   that was never collected shows up as the total disagreeing, with no
   second command. And the SKIPPED-FILE count is a membership question
-  rather than the drifting one: `Test Files 59 passed | 6 skipped (65)`
-  against `git ls-files — 'tests/live/*.test.ts'` (6) says the skips are
+  rather than the drifting one: the summary's skipped-FILE count held
+  against `git ls-files -- 'tests/live/*.test.ts'` says the skips are
   exactly the env-gated roster, and any file skipped that is NOT in it is a
-  non-live suite that has quietly gone `.skip`. Prefer that over the
+  non-live suite that has quietly gone `.skip`. Read it as a SET and never
+  as a number — the roster grows with every added gate (six at the q06
+  wrap, seven from the q09 approval-gate stage), so a stage comparing
+  against a figure quoted here or in a plan reports a correct run as a
+  regression. Prefer that over the
   skipped CASE count, which is comparable only against HEAD's own run.
 - Of those buckets exactly one is assertable by MEMBERSHIP instead of by a
   drifting count: the OTHER (unprefixed) bucket enumerates completely as the
@@ -589,10 +601,34 @@ red package never masks another and a single run gives the whole picture.
   case added under `tests/live/`, so compare it against HEAD's own run
   rather than against a number quoted here or in a plan. When the tree IS
   HEAD there is nothing to compare and nothing to stash: `@ar/service`'s
-  `pretest` prints `1 built, stamped <sha>` a few lines above the vitest
-  banner, so that sha held against `git rev-parse --short HEAD`, plus the
-  ABSENCE of a `-dirty` suffix, says both that the artifacts under test are
-  HEAD's and that the tree is clean — in one line of one run.
+  `pretest` prints `N built, stamped <sha>` a few lines above the vitest
+  banner, N being the workflow SOURCE count rather than a constant, so
+  that sha held against `git rev-parse --short HEAD`, plus the ABSENCE of
+  a `-dirty` suffix, says both that the artifacts under test are HEAD's
+  and that the tree is clean — in one line of one run.
+- A `test:<variant>` package script runs NO `pretest`: bun's lifecycle
+  hook is `pre<the whole script name>`, so only `test` declares one here
+  and `test:parity`/`test:live` build no workflows. Their captures
+  therefore carry no `N built, stamped <sha>` line at all, and the reading
+  that line supplies (the artifacts under test are HEAD's, the tree is not
+  `-dirty`) is simply UNAVAILABLE for them — a stage gate reading a
+  variant capture owes `git status --short -uall` plus
+  `git rev-parse HEAD` by hand instead. A variant run is correspondingly
+  cheaper than the full suite rather than mysteriously faster.
+- `bun run test:live` reds are TWO populations and only one is the
+  carried-in ledger row. The second is live-only ARITY ASSERTIONS, which
+  nothing in `test:all` can reach, `tests/live/` being
+  collected-but-skipped there: a landed workflow falsified
+  `schedule-clamp.live.test.ts`'s `artifactsBuilt` equality in a file the
+  branch never edited, and a prose sweep's needles are aimed at sentences
+  and structurally cannot reach an assertion. Attribute with
+  `git ls-tree -r --name-only <merge-base> -- packages/service/workflows/src/`
+  against `git ls-files` over the same path, plus
+  `git log <base>..HEAD -- <the test file>` answering empty. The repair is
+  the count-free move applied to an ASSERTION rather than to prose
+  (`includes(...)` held against `true`). Run `test:live` BEFORE a phase's
+  prose sweep rather than as its last verification task, or the finding
+  arrives with nothing left to bundle it into.
 
 - On a tree already RED from an earlier stage, "is this red mine?" is answered
   by a before/after SET diff, never by a figure this file or an earlier commit
@@ -666,6 +702,13 @@ matching anything prints exactly the same five lines.
   controls: a definitely-absent but scannable path (in NEITHER set, so
   membership is discriminating) and a binary-allowlist path (`a/b.png`,
   false, so the predicate is not simply answering true for everything).
+  That second control is necessarily SYNTHETIC here and saying so is part
+  of the reading: ZERO tracked files carry any of the 40
+  `BINARY_EXTENSIONS` and `ALLOWLISTED_PATHS` is empty, so `isScannable` is
+  the IDENTITY over `git ls-files` and the three numbers agree trivially.
+  Print the EXCLUDED count (`tracked - scannable`) beside the verdict so
+  that zero is visible rather than implied — a reader taking `a/b.png` for
+  a real tracked file reads the derivation as stronger than it is.
 - `--staged` is VACUOUS in two shapes, and both print the same
   `nothing staged to scan` the pre-commit hook does, so the
   scanned-count-equals-staged-count rule has nothing to read there. A pure
@@ -682,10 +725,15 @@ matching anything prints exactly the same five lines.
   disk (`ls -ld`), `git check-ignore -v` must name the governing rule AND
   LINE for each with one TRACKED path asserted exit-1 so the exit-0s are
   shown discriminating, and the same grep shape must return a hit for all
-  three over a PLANTED capture. Filtering `git ls-files` through
-  `isScannable` then closes the loop for free: the trio is in NEITHER the
-  tracked nor the scanned set, which is a stronger statement than the
-  ignores alone.
+  three over a PLANTED capture. That exit code is NOT itself a three-path
+  reading: it is 0 when ANY ONE argument is ignored, measured printing two
+  lines and exiting 0 over a trio carrying a misspelt member, so parse ONE
+  OUTPUT LINE PER PATH and assert the path SET equals the trio. The record
+  is `<source>:<line>:<pattern>` TAB `<path>` and the pattern is free to
+  carry colons, so split on the TAB first and never on the whole record.
+  Filtering `git ls-files` through `isScannable` then closes the loop for
+  free: the trio is in NEITHER the tracked nor the scanned set, which is a
+  stronger statement than the ignores alone.
 - `.github/**` joins package-root `AGENTS.md` in the read-by-no-fan-out-gate
   set, for a different reason: ESLint here has no YAML plugin at all, so
   `lint:all` never opens a `.yml` whatever the ignore patterns say, and
