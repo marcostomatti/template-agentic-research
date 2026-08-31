@@ -105,11 +105,14 @@ const BUILT_WORKFLOWS = loadBuiltWorkflows();
  * A closed set that grows inside a phase rather than at the end of
  * one. That table's delivered-in column marks an entry landed as its
  * source arrives, and an id joins this list in the same commit as
- * the source it names, so an entry phase 5 has still to deliver is
- * missing here for exactly as long as its source is. What that buys
- * is the equality below staying a claim about the tree: a roster
- * written ahead of the sources would report the phase's own
- * unfinished middle as a build that lost an artifact.
+ * the source it names, so an entry a phase has still to deliver is
+ * missing here for exactly as long as its source is. Phase 5 read
+ * that way from inside, its entries arriving one source at a time;
+ * what phase 6 has still to deliver — `ar-research` and `ar-digest`
+ * — reads that way now. What that buys is the equality below staying
+ * a claim about the tree: a roster written ahead of the sources
+ * would report a phase's own unfinished middle as a build that lost
+ * an artifact.
  *
  * By id and never by file name. That README's 1:1 rule is that a
  * workflow is one file called `<workflow-id>.json`, and the build
@@ -127,6 +130,7 @@ const PHASE_3_AND_5_WORKFLOW_IDS = [
   'ar-capture',
   'ar-dispatch',
   'ar-ingest',
+  'ar-score',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -234,8 +238,9 @@ function withSendNodePlanted(workflow: BuiltWorkflow): BuiltWorkflow {
  * roster having held one workflow: it says which artifacts the build
  * is expected to produce, this says which one of them schedules.
  * `ar-ingest` parted them, `ar-capture` parted them further with a
- * trigger of its own that starts a run and sets no clock, and the
- * entries phases 5 and 6 have still to deliver part them further
+ * trigger of its own that starts a run and sets no clock, `ar-score`
+ * parted them again with another of the kind `ar-ingest` carries,
+ * and the entries phase 6 has still to deliver part them further
  * again, none of those being a schedule — so the roster grows and
  * this stays a set of one, which is the property itself and is what
  * a value derived from a list that grew with it would stop
@@ -281,10 +286,10 @@ const WEBHOOK_TRIGGER_TYPE = 'n8n-nodes-base.webhook';
  * which of its entries carries what. The two ids are what the case
  * below turns into a per-workflow expectation, and every entry the
  * roster names beyond them is expected to carry a trigger of neither
- * kind — so an `ar-score` joining the roster arrives with its own
- * row already written, and one landing with a schedule or a webhook
- * reddens here rather than passing under a count that happened to
- * stay at one.
+ * kind — which is how `ar-score` joined, its row written before its
+ * source landed, and what makes one arriving with a schedule or a
+ * webhook redden here rather than pass under a count that happened
+ * to stay at one.
  */
 const WEBHOOK_TRIGGER_WORKFLOW_ID = 'ar-capture';
 
@@ -1357,11 +1362,11 @@ describe('workflow invariants — built tree', () => {
   // rather than written out per file, so the roster stays the one
   // place a workflow is named. Every entry beyond those two is
   // expected to carry neither trigger, which is what makes this a
-  // claim about the whole tree instead of about three artifacts that
-  // happen to be in it: an `ar-score` joining the roster arrives
-  // with its row already written, and one landing with a trigger of
-  // either kind reddens here rather than passing under a count that
-  // happened to stay at one.
+  // claim about the whole tree instead of about whichever artifacts
+  // happen to be in it: `ar-score` joined with its row already
+  // written, and one landing with a trigger of either kind reddens
+  // here rather than passing under a count that happened to stay at
+  // one.
   //
   // What it rests on is the roster case above, which is what says
   // those ids are the artifacts the tree holds; a workflow missing
