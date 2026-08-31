@@ -18,18 +18,19 @@
  * swallowed a throw on the way. So every case below reads a
  * response and none of them reads a return value.
  *
- * TWENTY-FIVE CASES IN THREE GROUPS. Fifteen cover the ways a
- * request to this router can be wrong; six cover what the four
- * resource routes answer when they LAND; four are guards over the
- * two fixtures and over the key lists every half is read through.
+ * TWENTY-EIGHT CASES IN THREE GROUPS. Fifteen cover the ways a
+ * request to this router can be wrong; nine cover what the six
+ * routes answer when they LAND; four are guards over the two
+ * fixtures and over the key lists every half is read through.
  *
  * TWO FIXTURES, BECAUSE THE VERBS NEED A STATE THE LIST CASES
  * COUNT. {@link withTopics} is the collection every case above the
  * verbs reads whole — its length, its order and the neighbour a
  * write left alone — so a fourth row planted there for a verb
  * would be a row every one of those assertions had to be taught
- * about. {@link withSchedulable} plants its own three instead, one
- * per state a verb decides on, and no case reads both.
+ * about. {@link withSchedulable} plants its own four instead —
+ * one per state a verb decides on, plus one whose BOUNDS move the
+ * arithmetic a pause does — and no case reads both.
  *
  * THE ADDRESS. A slug naming no domain is `404` on both operations
  * that take one, and an id naming no topic is `404` on all FOUR
@@ -117,12 +118,37 @@
  * are RULES, and what this file adds is that one of them reached a
  * caller in this envelope.
  *
- * WHAT THE VERBS ANSWER WHEN THEY LAND IS NOT THIS FILE'S CLAIM
- * YET. Every `200` above is a control read for its status alone,
- * so no case here compares a written instant against
- * {@link CLOCK_INSTANT} except the one that needed a scheduled row
- * to exist at all. The instant, the clamped cycle length and the
- * idempotence of a second run-now land with the positive half.
+ * WHAT THE VERBS ANSWER WHEN THEY LAND IS THE LAST THING THIS
+ * FILE ADDS. A run-now writes {@link CLOCK_INSTANT} exactly, which
+ * is the equality the REQUIRED clock thunk exists for. A pause of
+ * one cycle lands one CLAMPED interval past the due time it found,
+ * read over two rows whose cycle lengths differ — an hourly
+ * unbounded one and one whose floor raises its cadence — so a
+ * handler deferring by one fixed span answers both alike and fails
+ * here. And a second run-now against the row the first left due AT
+ * the clock answers the same body again rather than a `409`: this
+ * surface neither claims a row nor opens a `runs` row, so it has
+ * no pending run to refuse a retry over, and the request an
+ * operator sends when the first appeared to do nothing is the one
+ * that has to work.
+ *
+ * EACH VERB'S WRITE IS READ BACK THROUGH THE LIST, and the rows it
+ * did NOT name are read with it. A handler writing the column on
+ * every row it can reach, or on the wrong one, answers its own
+ * subject perfectly, and the fixture is what makes that reportable:
+ * one row carries no due time at all beside two carrying the same
+ * one, so a write that spread and a column that was cleared are
+ * both a changed member of a record rather than an absence nobody
+ * compared.
+ *
+ * WHICH BASE A PAUSE TAKES IS STILL NOT THIS FILE'S CLAIM, and the
+ * grid below measures what that costs rather than leaving it
+ * implied: NO clock the pause handler could read changes any
+ * answer here, because every row this file pauses is due LATER
+ * than {@link CLOCK_INSTANT} and the stored time is then the base
+ * whatever present it was compared against. Only a row due BEFORE
+ * the fixed clock separates the two, and that row is
+ * `src/topics/service.test.ts`'s subject.
  *
  * WHAT THE POSITIVE HALF READS IS A KEY SET AND NOT A FIELD. Every
  * answer below is held against a sorted list of the members it may
@@ -160,8 +186,13 @@
  * `204` is followed by the same request answering `404`, each verb
  * refusal is paired with the same verb against a row it takes AND
  * with the other verb against its own subject, the absent body is
- * paired with an empty one refused at a different field, and the
- * zero count is paired with a count of one.
+ * paired with an empty one refused at a different field, the zero
+ * count is paired with a count of one, the run-now's instant is
+ * paired with the due time it replaced, the repeated run-now is
+ * paired with the first one that moved the row, and the pause's
+ * clamped answer is paired both with the unclamped instant it
+ * would otherwise have been and with what the same body did to a
+ * row of a different cadence.
  *
  * WHAT THIS FILE DOES NOT CLAIM. That the router sits behind
  * `ctx.requireAuth` is `tests/api/wiring.test.ts`'s claim, and what
@@ -170,24 +201,25 @@
  * below is scoped to the one channel these routes open, which is
  * the value a refused pipeline-owned member carries.
  *
- * MUTATION GRID, re-derived over all twenty-five cases by mutating
- * `routes.ts` one edit at a time and reading the failed `fullName`
- * SET from a `--reporter=json` run rather than a count. THIRTEEN
- * legs now, each named by the EDIT it makes rather than by its
- * effect, since a leg described only by its effect is one nobody
- * can run again. The eight the file already carried were all
- * re-run rather than carried forward, and only the `:id` one moved.
+ * MUTATION GRID, re-derived over all twenty-eight cases by
+ * mutating `routes.ts` one edit at a time and reading the failed
+ * `fullName` SET from a `--reporter=json` run rather than a count.
+ * THIRTEEN legs, each named by the EDIT it makes rather than by
+ * its effect, since a leg described only by its effect is one
+ * nobody can run again. All thirteen were re-run rather than
+ * carried forward, and FOUR moved — the `:id` one and the three
+ * the verbs' own cases can reach.
  *
- * THE FOUR RESOURCE-ROUTE STATUS LEGS ARE UNMOVED BY THE VERBS.
+ * THE RESOURCE-ROUTE STATUS LEGS ARE UNMOVED BY THE VERB CASES.
  * `res.status(201)` written as `200` on the create reddens FOUR;
  * `res.status(204)` written as `200` on the delete reddens THREE;
  * `res.status(200)` written as `204` on the patch reddens THREE.
- * Every figure is the one the positive half left, which is what
- * says the verb cases reach none of those four handlers.
+ * Every figure is the one the earlier positive half left, which is
+ * what says the three cases below reach none of those handlers.
  *
- * THE `:id` LEG IS THE ONE THE VERBS MOVED, from SIX to ELEVEN:
- * returning the segment raw from {@link readId} reddens every case
- * that addresses a row, and each of the five verb cases does.
+ * THE `:id` LEG MOVED AGAIN, from ELEVEN to FOURTEEN: returning
+ * the segment raw from {@link readId} reddens every case that
+ * addresses a row, and each of the three new ones does.
  * Returning the `:slug` raw from {@link readSlug} still reddens
  * exactly ONE, the not-a-slug case, and that is this file's shape
  * rather than an omission: every other slug it sends is
@@ -204,11 +236,12 @@
  *
  * THE TWO VERB STATUS LEGS SEPARATE, and neither is redundant with
  * the other. `res.status(200)` written as `201` on the run-now
- * reddens THREE — the two cases whose control is a run-now, and
- * the 404 case that drives both verbs. On the pause it reddens
- * FIVE, which is every verb case: four drive a pause as their
- * control and the fifth is about one. A router registering one
- * handler's status on the other's route is a red set of eight.
+ * reddens FIVE, three from the refusal half and both cases that
+ * are ABOUT a run-now. On the pause it reddens SIX, five from the
+ * refusal half and the one case about a pause. A router
+ * registering one handler's status on the other's route is a red
+ * set of eleven, and the two sets share only the three refusal
+ * cases that drive both verbs.
  *
  * THE BODY LEG IS EXACTLY THE PAIR IT WAS WRITTEN FOR. `req.body`
  * written as `req.body ?? {}` in the pause call reddens ONE, the
@@ -217,24 +250,47 @@
  * `{}` reading sitting inside that case rather than in one of its
  * own.
  *
- * AND TWO CLOCK LEGS, OF WHICH ONE IS A MEASURED ZERO. Having the
- * run-now read `new Date()` rather than `options.clock` reddens
- * ONE — the pause case, whose run-now control reads the answered
- * instant back. Having the PAUSE read the real present reddens
- * NOTHING, and that zero is the scope boundary showing up as a
- * measurement rather than thin coverage: no case here compares a
- * paused instant against anything, because the arithmetic is the
- * positive half's subject. Recorded so the leg is re-run there
- * rather than re-derived.
+ * AND TWO CLOCK LEGS, OF WHICH ONE IS STILL A MEASURED ZERO.
+ * Having the run-now read `new Date()` rather than `options.clock`
+ * reddens THREE, up from ONE: the pause refusal whose run-now
+ * control reads the answered instant back, and both cases below
+ * that compare it against {@link CLOCK_INSTANT}.
  *
- * ONE FALSE RED WAS MEASURED AND DISCARDED. The run-now status leg
- * first answered FOUR, the extra being a delete case that drives no
- * verb; three re-runs of that leg answered THREE with an identical
- * set. That is the macOS supertest port-steal flake, which
- * `packages/service/AGENTS.md` describes and which no helper in
- * `tests/helpers/` closes on this HEAD. A leg answering one case
- * more than its edit can reach is worth re-running before it is
- * written down.
+ * HAVING THE PAUSE READ THE REAL PRESENT STILL REDDENS NOTHING,
+ * and the cause moved even though the figure did not, so it is
+ * worth stating rather than carrying forward. It is no longer that
+ * nothing compares a paused instant — the case below compares two
+ * of them exactly. It is that `pauseTopic` bases on whichever of
+ * the clock and the stored due time is LATER, and every row this
+ * file pauses is due a day past {@link CLOCK_INSTANT}: a real
+ * present is earlier still, so the base is the stored time either
+ * way and the answer is identical. Only a row due BEFORE the fixed
+ * clock separates the two clocks, and a case planting one would be
+ * asserting which base the rule takes —
+ * `src/topics/service.test.ts`'s claim over direct calls, made
+ * there against an overdue row.
+ *
+ * THAT ZERO WAS PUT UNDER A LIVE CONTROL rather than reasoned
+ * about, because an unexplained zero and a handler that ignores
+ * the clock it was given look identical from a red count of none.
+ * A third leg handing the pause a clock LATER than every planted
+ * due time — where the base flips to the clock and the answer
+ * must move — reddens exactly ONE case, the one below. So the
+ * pause IS answered against `options.clock`, this file does read
+ * the instant it produces, and the real-present leg's zero is the
+ * base rule and nothing else.
+ *
+ * ONE FALSE RED WAS MEASURED AND DISCARDED WHEN THE VERBS LANDED.
+ * The run-now status leg first answered FOUR against the
+ * twenty-five cases of that commit, the extra being a delete case
+ * that drives no verb; three re-runs answered THREE with an
+ * identical set. That is the macOS supertest port-steal flake,
+ * which `packages/service/AGENTS.md` describes and which no helper
+ * in `tests/helpers/` closes on this HEAD. A leg answering one
+ * case more than its edit can reach is worth re-running before it
+ * is written down. The re-derivation above produced no such red:
+ * every one of the thirteen sets is explained by the edit that
+ * made it.
  */
 import type { TopicRecord } from './store.js';
 import type {
@@ -339,6 +395,22 @@ const TEN_MINUTES = 600;
 const DAILY = 86400;
 
 /**
+ * A minute, as the cadence the one bounded row below runs at.
+ *
+ * BELOW {@link TEN_MINUTES}, which is the whole point of it: that
+ * row's floor raises this number before a pause multiplies it, so
+ * an answer built from it rather than from the floor is a clamp
+ * that stopped happening on the way to the wire.
+ */
+const PER_MINUTE = 60;
+
+/**
+ * How many milliseconds a second is, for the one helper here that
+ * does arithmetic on an instant.
+ */
+const MILLISECONDS_PER_SECOND = 1000;
+
+/**
  * The terms {@link STORED_NAME} is planted with under
  * {@link STORED_SLUG}.
  *
@@ -424,6 +496,18 @@ const UNSCHEDULED_NAME = 'silicon supply';
 
 /** The name of the row the run-now refuses: scheduled, disabled. */
 const DISABLED_NAME = 'error correction';
+
+/**
+ * The name of the fourth row, which no verb refuses and only the
+ * pause arithmetic reads.
+ *
+ * It is the row whose BOUNDS move: it runs every
+ * {@link PER_MINUTE} seconds under a {@link TEN_MINUTES} floor, so
+ * one cycle of it is the floor and never the cadence. The other
+ * three run hourly and unbounded, where the clamp is the identity
+ * and a clamp that had stopped happening answers correctly.
+ */
+const CLAMPED_NAME = 'chiplet packaging';
 
 /**
  * The whole body a `404` about a domain answers with.
@@ -719,6 +803,19 @@ interface NamedRow {
 }
 
 /**
+ * The same, plus the one column the two verbs write.
+ *
+ * `string | null` and not `Date`, because this is the row as it
+ * came back OFF the wire: `Date.prototype.toJSON` ran on the way
+ * out, so what a case compares is an ISO-8601 spelling or the null
+ * a row that is not scheduled carries.
+ */
+interface ScheduledRow extends NamedRow {
+  /** When the dispatcher may next claim the row, as JSON has it. */
+  readonly nextRunAt: string | null;
+}
+
+/**
  * Reads the present, as every router built here is given it.
  *
  * A FRESH `Date` per call rather than one captured instant, so no
@@ -730,6 +827,29 @@ interface NamedRow {
  */
 function fixedClock(): Date {
   return new Date(CLOCK_INSTANT);
+}
+
+/**
+ * The instant `seconds` seconds after `base`, as the wire spells
+ * one.
+ *
+ * The arithmetic written out here rather than taken from
+ * `pauseFrom`, which is the rule two calls the other side of this
+ * router: an expected value derived from the rule it is checking
+ * agrees with that rule however wrong the rule is. ISO-8601 in and
+ * ISO-8601 out, because what the cases below compare is a JSON
+ * string — `Date.prototype.toJSON` is what put it on the wire, so
+ * nothing here has to know how a `Date` was serialised.
+ *
+ * @param base - The instant to measure from, as its ISO spelling.
+ * @param seconds - How far after it.
+ * @returns The ISO spelling of the answer.
+ */
+function instantAfter(base: string, seconds: number): string {
+  const moved = new Date(base).getTime()
+    + seconds * MILLISECONDS_PER_SECOND;
+
+  return new Date(moved).toISOString();
 }
 
 /**
@@ -847,43 +967,56 @@ async function withTopics(): Promise<{
 }
 
 /**
- * One topic per state the two verbs decide on, and the app in front
- * of them.
+ * One topic per state the two verbs decide on, one whose bounds
+ * move, and the app in front of them.
  *
- * A fixture of its own rather than three more rows in
+ * A fixture of its own rather than four more rows in
  * {@link withTopics}, because every case above reads that
  * collection WHOLE — its length, its order, and the neighbour a
  * write left alone — so a row added there for the verbs would be
  * a row every list assertion had to be taught about.
  *
- * The three rows are the two-by-two the verbs read differently,
+ * THE FIRST THREE ARE THE TWO-BY-TWO the verbs read differently,
  * minus the corner neither of them needs. {@link SCHEDULED_NAME} is
  * enabled AND scheduled, so both verbs take it and it is the
- * control in every case here. {@link UNSCHEDULED_NAME} is ENABLED
- * and carries no due time, so the pause's `409` can only be about
- * the NULL. {@link DISABLED_NAME} IS scheduled and disabled, so the
- * run-now's `409` can only be about `enabled`. Each refusal case
- * then drives the OTHER verb against its own subject and reads a
- * `200`, which is what says the two guards are two rather than one
- * guard reached twice.
+ * control in every refusal case here. {@link UNSCHEDULED_NAME} is
+ * ENABLED and carries no due time, so the pause's `409` can only be
+ * about the NULL. {@link DISABLED_NAME} IS scheduled and disabled,
+ * so the run-now's `409` can only be about `enabled`. Each refusal
+ * case then drives the OTHER verb against its own subject and reads
+ * a `200`, which is what says the two guards are two rather than
+ * one guard reached twice.
  *
- * The two due times are planted through the PORT, which is the one
- * method that writes the column at all. So a case about a verb is
- * never also a case about the verb that would otherwise have had to
- * set its fixture up.
+ * THE FOURTH IS A STATE NEITHER VERB DECIDES ON and a cadence the
+ * CLAMP does. All three above run hourly and unbounded, so the
+ * clamp over them is the identity and a pause that had stopped
+ * clamping answers them correctly; {@link CLAMPED_NAME} runs every
+ * {@link PER_MINUTE} seconds under a {@link TEN_MINUTES} floor, so
+ * one cycle of it is the floor and the cadence is a value the same
+ * request could otherwise have answered. It is scheduled and
+ * enabled, so no refusal case can reach it and none names it.
  *
- * @returns The app and the three ids a request addresses the rows
+ * The three due times are planted through the PORT, which is the
+ * one method that writes the column at all. So a case about a verb
+ * is never also a case about the verb that would otherwise have had
+ * to set its fixture up.
+ *
+ * @returns The app and the four ids a request addresses the rows
  *   by. Ids are addresses rather than readings, per
  *   {@link withTopics}; the clock is not handed back either, since
  *   {@link CLOCK_INSTANT} is the constant every case compares
  *   against and reading it off the fixture would compare the
- *   fixture with itself.
+ *   fixture with itself. The DOMAIN id is a reading, exactly as it
+ *   is there: no request below names it, so a row answering it is
+ *   the store having said which domain the row came out of.
  */
 async function withSchedulable(): Promise<{
   app: Application;
+  domainId: number;
   scheduledId: number;
   unscheduledId: number;
   disabledId: number;
+  clampedId: number;
 }> {
   const store = createMemoryResearchStore();
   const domain = await store.insertDomain({
@@ -909,15 +1042,30 @@ async function withSchedulable(): Promise<{
   const scheduledId = await plant(SCHEDULED_NAME, true);
   const unscheduledId = await plant(UNSCHEDULED_NAME, true);
   const disabledId = await plant(DISABLED_NAME, false);
+  // The one row {@link plant} cannot make: its cadence and its
+  // floor are the two numbers the clamp is read by, and every other
+  // row here shares one hourly unbounded shape on purpose.
+  const clamped = await store.insertTopic({
+    domainId: domain.id,
+    name: CLAMPED_NAME,
+    searchTerms: [],
+    intervalSeconds: PER_MINUTE,
+    enabled: true,
+    minIntervalSeconds: TEN_MINUTES,
+    maxIntervalSeconds: DAILY,
+  });
 
   await store.updateTopicSchedule(scheduledId, new Date(DUE_LATER));
   await store.updateTopicSchedule(disabledId, new Date(DUE_LATER));
+  await store.updateTopicSchedule(clamped.id, new Date(DUE_LATER));
 
   return {
     app: buildTopicsApp(store),
+    domainId: domain.id,
     scheduledId,
     unscheduledId,
     disabledId,
+    clampedId: clamped.id,
   };
 }
 
@@ -944,6 +1092,33 @@ function pausePath(id: number | string): string {
  */
 function namesOf(body: { data: readonly NamedRow[] }): string[] {
   return body.data.map((row) => row.name);
+}
+
+/**
+ * Every row a read carries, by name, against its due time.
+ *
+ * The reading the two verb cases below take over the rows they did
+ * NOT address. A verb writing the column on every row it can
+ * reach, or on the wrong one, answers its own subject perfectly and
+ * is reported only by the neighbours — and this fixture makes
+ * that reportable by planting one row with no due time at all
+ * beside two carrying the same one, so both a spread write and a
+ * cleared column show up as a changed member of this record rather
+ * than as an absence nobody compared.
+ *
+ * @param body - A paginated body, as it came off the wire.
+ * @returns Each row's name against the instant it is due, or null.
+ *   A record rather than a list, so a failure names the ROW whose
+ *   due time moved instead of an index into a page.
+ */
+function dueTimes(
+  body: { data: readonly ScheduledRow[] },
+): Record<string, string | null> {
+  const pairs = body.data.map(
+    (row): [string, string | null] => [row.name, row.nextRunAt],
+  );
+
+  return Object.fromEntries(pairs);
 }
 
 /**
@@ -1029,10 +1204,15 @@ describe('the fixture every case below is read through', () => {
   });
 
   it('plants one row per state the two verbs decide on', () => {
-    // The three names are distinct, so the fixture cannot refuse
-    // its own second write on `topics_domain_id_name_unique` and
+    // The four names are distinct, so the fixture cannot refuse
+    // one of its own writes on `topics_domain_id_name_unique` and
     // leave a case addressing an id that was never planted.
-    const names = [SCHEDULED_NAME, UNSCHEDULED_NAME, DISABLED_NAME];
+    const names = [
+      SCHEDULED_NAME,
+      UNSCHEDULED_NAME,
+      DISABLED_NAME,
+      CLAMPED_NAME,
+    ];
 
     expect(new Set(names).size).toBe(names.length);
     // And the fixture's present is EARLIER than the due time it
@@ -1049,6 +1229,15 @@ describe('the fixture every case below is read through', () => {
     // refusal.
     expect(TOPIC_DISABLED_BODY.message)
       .not.toBe(TOPIC_NOT_SCHEDULED_BODY.message);
+    // And the fourth row's floor is ABOVE its cadence, which is
+    // the whole of what makes the pause case below a reading about
+    // a CLAMP. A fixture whose bounds did not bite would answer
+    // that case correctly with no clamp happening anywhere, and
+    // the other three rows are deliberately in exactly that shape:
+    // hourly, and inside no bounds at all.
+    expect(TEN_MINUTES).toBeGreaterThan(PER_MINUTE);
+    expect(DAILY).toBeGreaterThan(TEN_MINUTES);
+    expect(HOURLY).not.toBe(TEN_MINUTES);
   });
 
   it('plants four term lists that differ from each other', () => {
@@ -1895,5 +2084,205 @@ describe('a delete that lands', () => {
     expect(namesOf(elsewhere.body)).toStrictEqual([STORED_NAME]);
     expect(again.status).toBe(404);
     expect(again.body).toStrictEqual(NO_SUCH_TOPIC_BODY);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The run-now: the instant it writes, and the retry that repeats it
+// ---------------------------------------------------------------------------
+
+describe('a run-now that lands', () => {
+  it('answers 200 carrying the instant the clock read', async () => {
+    const { app, domainId, scheduledId } = await withSchedulable();
+
+    const ran = await request(app).post(runNowPath(scheduledId));
+    // Read back through the OTHER operation, per this file's rule
+    // for every write: a verb answering a row it never stored
+    // satisfies every assertion made against its own response, and
+    // this surface has no single-item GET for a case to use
+    // instead.
+    const listed = await request(app).get(topicsPath(STORED_SLUG));
+
+    expect(ran.status).toBe(200);
+    // Two members and not three: a verb answers one resource, so a
+    // `meta` arriving here would be the page envelope on a body
+    // that describes no window at all.
+    expect(keysOf(ran.body)).toStrictEqual(RESOURCE_KEY_SET);
+    expect(keysOf(ran.body.data)).toStrictEqual(TOPIC_KEY_SET);
+    expect(ran.body.success).toBe(true);
+    // The EQUALITY the injected clock exists for, and the reason
+    // this router requires the thunk rather than defaulting it: a
+    // handler reading the real present answers a plausible instant
+    // no assertion could pin, and this line would have to be a
+    // window around the moment the suite happened to run.
+    expect(ran.body.data.nextRunAt).toBe(CLOCK_INSTANT);
+    // And NOT the due time it replaced, named rather than left
+    // implied. That value is a real instant this same request could
+    // have answered — it is what the row carried until it was
+    // sent — so naming it is what makes the equality above a WRITE
+    // rather than the row handed back as it was found.
+    expect(ran.body.data.nextRunAt).not.toBe(DUE_LATER);
+    // The whole row as the store holds it AFTERWARDS, member for
+    // member. That the verbs move `next_run_at` and no other column
+    // is `src/topics/service.test.ts`'s claim over direct calls;
+    // what this adds is that the row reaching a caller is the
+    // stored one, `domainId` included — the one member no request
+    // in this file names.
+    expect(topicFor(listed.body.data as NamedRow[], SCHEDULED_NAME))
+      .toStrictEqual({
+        id: scheduledId,
+        domainId,
+        name: SCHEDULED_NAME,
+        searchTerms: [],
+        intervalSeconds: HOURLY,
+        nextRunAt: CLOCK_INSTANT,
+        enabled: true,
+        minIntervalSeconds: null,
+        maxIntervalSeconds: null,
+      });
+    // And the three rows the request never named are where the
+    // fixture left them. A handler writing the column on every row
+    // it can reach, or on the wrong one, answers its own subject
+    // perfectly and is reported by nothing else here.
+    expect(dueTimes(listed.body)).toStrictEqual({
+      [SCHEDULED_NAME]: CLOCK_INSTANT,
+      [UNSCHEDULED_NAME]: null,
+      [DISABLED_NAME]: DUE_LATER,
+      [CLAMPED_NAME]: DUE_LATER,
+    });
+  });
+
+  it('answers a second run-now the same way, not a 409', async () => {
+    const { app, domainId, scheduledId } = await withSchedulable();
+
+    const first = await request(app).post(runNowPath(scheduledId));
+    // The row is now due AT the clock rather than a day out, which
+    // is exactly the state `ar-dispatch`'s claim reads as claimable
+    // (`enabled AND next_run_at <= now()`). So this is the request
+    // an operator sends when the first appeared to do nothing, and
+    // what it needs back is the row. A `409` here would be this
+    // surface guessing at whether a run is already under way — a
+    // state it cannot observe, since it neither claims a row nor
+    // opens a `runs` row.
+    const again = await request(app).post(runNowPath(scheduledId));
+    const listed = await request(app).get(topicsPath(STORED_SLUG));
+
+    // The first request MOVED it, which is the control the second
+    // needs: without it a pair of matching answers is equally green
+    // against a verb that wrote nothing either time.
+    expect(first.status).toBe(200);
+    expect(first.body.data.nextRunAt).toBe(CLOCK_INSTANT);
+    expect(first.body.data.nextRunAt).not.toBe(DUE_LATER);
+    // `200` with a resource envelope, asserted by its KEY SET:
+    // every refusal this router answers carries `code` and
+    // `message` where this carries `data`, so a handler that had
+    // grown a guard against a run it thinks is already pending is
+    // a red case here rather than a status nobody looked past.
+    expect(again.status).toBe(200);
+    expect(keysOf(again.body)).toStrictEqual(RESOURCE_KEY_SET);
+    // And it answered exactly what the first did, whole. The verb
+    // WRITES an instant rather than advancing one, so a second call
+    // against the same clock is the same call — which is what
+    // makes a retry safe after a response nobody saw.
+    expect(again.body).toStrictEqual(first.body);
+    expect(topicFor(listed.body.data as NamedRow[], SCHEDULED_NAME))
+      .toStrictEqual({
+        id: scheduledId,
+        domainId,
+        name: SCHEDULED_NAME,
+        searchTerms: [],
+        intervalSeconds: HOURLY,
+        nextRunAt: CLOCK_INSTANT,
+        enabled: true,
+        minIntervalSeconds: null,
+        maxIntervalSeconds: null,
+      });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The pause: one cycle out, at the length the row's own bounds allow
+// ---------------------------------------------------------------------------
+
+describe('a pause that lands', () => {
+  it('answers one clamped cycle past the stored due time', async () => {
+    const {
+      app,
+      domainId,
+      scheduledId,
+      clampedId,
+    } = await withSchedulable();
+
+    // The unbounded row first. One cycle of it is its own hourly
+    // cadence, so what this half reads is that the arithmetic
+    // multiplied the ROW's interval and not some number this
+    // surface holds.
+    const deferred = await request(app)
+      .post(pausePath(scheduledId))
+      .send({ cycles: 1 });
+    // Then the bounded one, whose cadence its floor raises. Same
+    // body, same base, and an answer built from a different number
+    // — which is the clamp reaching a caller. Which of the two
+    // candidate bases a pause takes, and what a count above one
+    // does, are `src/topics/service.test.ts`'s claims over direct
+    // calls; what this file adds is that one of them arrived in
+    // this envelope.
+    const clamped = await request(app)
+      .post(pausePath(clampedId))
+      .send({ cycles: 1 });
+    const listed = await request(app).get(topicsPath(STORED_SLUG));
+
+    expect(deferred.status).toBe(200);
+    expect(keysOf(deferred.body)).toStrictEqual(RESOURCE_KEY_SET);
+    expect(keysOf(deferred.body.data)).toStrictEqual(TOPIC_KEY_SET);
+    expect(deferred.body.success).toBe(true);
+    // Exactly ONE interval out from the due time it found, and the
+    // expected instant built by this file's own arithmetic rather
+    // than by `pauseFrom` two calls away: a value taken from the
+    // rule under test agrees with that rule however wrong it is.
+    expect(deferred.body.data.nextRunAt)
+      .toBe(instantAfter(DUE_LATER, HOURLY));
+    expect(clamped.status).toBe(200);
+    // The FLOOR and not the cadence, with the cadence named as the
+    // value not taken. `PER_MINUTE` is what an unclamped
+    // multiplication answers, and this pair is the only reading in
+    // this file that says the BOUNDS a row carries reached the
+    // instant on the wire.
+    expect(clamped.body.data.nextRunAt)
+      .toBe(instantAfter(DUE_LATER, TEN_MINUTES));
+    expect(clamped.body.data.nextRunAt)
+      .not.toBe(instantAfter(DUE_LATER, PER_MINUTE));
+    // And the two rows answered DIFFERENT instants to the same
+    // body from the same base, which is the same claim from the
+    // other side: a handler deferring by one fixed span answers
+    // both requests alike and fails here.
+    expect(clamped.body.data.nextRunAt)
+      .not.toBe(deferred.body.data.nextRunAt);
+    // The bounded row as the store holds it afterwards, whole. Its
+    // cadence and both bounds came through untouched, which is what
+    // says the clamp was READ rather than written back over the
+    // columns it read.
+    expect(topicFor(listed.body.data as NamedRow[], CLAMPED_NAME))
+      .toStrictEqual({
+        id: clampedId,
+        domainId,
+        name: CLAMPED_NAME,
+        searchTerms: [],
+        intervalSeconds: PER_MINUTE,
+        nextRunAt: instantAfter(DUE_LATER, TEN_MINUTES),
+        enabled: true,
+        minIntervalSeconds: TEN_MINUTES,
+        maxIntervalSeconds: DAILY,
+      });
+    // Both writes landed, neither reached a row it was not sent to,
+    // and the row carrying no due time still carries none: a pause
+    // SCHEDULES nothing, which is the refusal above read from the
+    // side where the verb succeeded.
+    expect(dueTimes(listed.body)).toStrictEqual({
+      [SCHEDULED_NAME]: instantAfter(DUE_LATER, HOURLY),
+      [UNSCHEDULED_NAME]: null,
+      [DISABLED_NAME]: DUE_LATER,
+      [CLAMPED_NAME]: instantAfter(DUE_LATER, TEN_MINUTES),
+    });
   });
 });
