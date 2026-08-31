@@ -129,12 +129,24 @@ export type DocumentParseStatus = (typeof DOCUMENT_PARSE_STATUSES)[number];
  * The status is the operator-facing account of the row, not the gate
  * itself — a status column can be set to whatever a writer likes. What
  * enforces the gate is the CHECK over `approved_at`/`researched_at`.
+ *
+ * Read by a second column since. `source_config_proposals.status` in
+ * `./sources.ts` is constrained to this same tuple, the two being one
+ * gate over different subjects: `scripts/approve.ts` rules on both, and
+ * a second tuple spelling the same four members is exactly the drift
+ * this module exists to prevent. Each table keeps its own timestamp
+ * pair and its own CHECK — `approved_at`/`researched_at` on
+ * `research_pool`, `approved_at`/`applied_at` on the proposals — so
+ * what is shared is the vocabulary and not the rule. The name stays the
+ * first table's rather than being generalized, which would rename the
+ * union every consumer programs against to buy what this paragraph
+ * says.
  */
 export const RESEARCH_POOL_STATUSES = ['pending', 'approved', 'done', 'skipped'] as const;
 
 /**
- * One member of {@link RESEARCH_POOL_STATUSES}; the
- * `research_pool.status` domain.
+ * One member of {@link RESEARCH_POOL_STATUSES}; the domain of
+ * `research_pool.status` and of `source_config_proposals.status`.
  */
 export type ResearchPoolStatus = (typeof RESEARCH_POOL_STATUSES)[number];
 

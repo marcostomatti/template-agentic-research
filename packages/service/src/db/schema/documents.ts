@@ -17,12 +17,13 @@
  * content itself absorbs all three without any reader having to know
  * which of them happened.
  *
- * Nothing writes these rows yet. The adapters and the parse engine
- * they run under both arrive in phase 5; what the table fixes now
+ * Phase 5 landed the writers. `ar-ingest` inserts a row per document
+ * its adapters pulled, and `ar-capture` stores one per posted body
+ * before anything has read it, both extracting through the parse
+ * engine those adapters run under. What the table fixed ahead of them
  * is the shape they write into, which is the same shape
- * `CanonicalDocument` in `src/sources/index.ts` is now narrowed to,
- * member for column, so that no adapter is ever written against a
- * guess.
+ * `CanonicalDocument` in `src/sources/index.ts` is narrowed to, member
+ * for column, so that no adapter was ever written against a guess.
  *
  * The module carries a second table, `ingested_files`, because the
  * question that one answers is about how a document ARRIVED rather
@@ -221,8 +222,8 @@ export const documents = pgTable('documents', {
    * climbs toward its threshold, and what the operator is shown is a
    * failure nobody can act on. Only the writer keeps the pair
    * together, so an adapter reporting a failure (phase 5, under the
-   * engine that arrives with it) records the reason in the same
-   * insert that sets the status.
+   * engine that landed with it) records the reason in the same insert
+   * that sets the status.
    */
   parseError: text('parse_error'),
 

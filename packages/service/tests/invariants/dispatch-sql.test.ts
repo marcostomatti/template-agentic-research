@@ -139,7 +139,7 @@ const DISPATCH_WORKFLOW_ID = 'ar-dispatch';
  * cause, and no case in this file drives the read into that state.
  * What the message owes instead is which of two edits fixes it, the
  * artifact being generated — a stale tree wants a rebuild, and a
- * source that is gone is reported by the phase-3 roster case in
+ * source that is gone is reported by the roster case in
  * `workflows.test.ts` rather than here.
  *
  * @returns The built workflow {@link DISPATCH_WORKFLOW_ID} names.
@@ -156,7 +156,7 @@ function dispatchWorkflow(): BuiltWorkflow {
       'without it leaves nothing here to hold: run ' +
       '`bun run build:workflows` if the tree is stale, and if the ' +
       'source of that name is gone from `workflows/src/`, the ' +
-      'phase-3 roster case in `workflows.test.ts` is what says so.',
+      'roster case in `workflows.test.ts` is what says so.',
     );
   }
 
@@ -1072,17 +1072,17 @@ describe('ar-dispatch invariants — built tree', () => {
   // this file otherwise reads nothing of.
   //
   // `Invoke Target Workflow` hands each claimed unit to the workflow
-  // its kind routes to, and neither of those workflows exists yet:
-  // the id resolves and nothing on the instance answers to it, so
-  // every unit this node is handed fails. They arrive one at a time,
-  // one target in phase 5 and the other in phase 6, so through phase
-  // 5 a tick records successes and failures side by side. That is
-  // the accurate record rather than a fault to suppress, and what
-  // makes it a record at all is that the failure has somewhere to
-  // go. A node that fails and routes its failure nowhere drops the
-  // item, so the row `Open Run` opened for that unit keeps the
-  // status it was opened with and nothing ever closes it — a run
-  // left running for a dispatch that finished.
+  // its kind routes to, and the two arrive one at a time: phase 5
+  // delivered `ar-ingest` for a claimed topic and `ar-digest` for a
+  // claimed subscription is phase 6's, so a tick now records
+  // successes and failures side by side. A unit routed at the second
+  // still fails — the id resolves and nothing on the instance
+  // answers to it. That is the accurate record rather than a fault
+  // to suppress, and what makes it a record at all is that the
+  // failure has somewhere to go. A node that fails and routes its
+  // failure nowhere drops the item, so the row `Open Run` opened for
+  // that unit keeps the status it was opened with and nothing ever
+  // closes it — a run left running for a dispatch that finished.
   //
   // Two things have to hold for the branch to exist and neither
   // implies the other, which is why both are in the record. The node

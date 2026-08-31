@@ -106,7 +106,7 @@ const VALUE_SET_EXPECTATIONS: readonly ValueSetExpectation[] = [
   },
   {
     exportName: 'RESEARCH_POOL_STATUSES',
-    describes: 'research_pool.status',
+    describes: 'research_pool.status, source_config_proposals.status',
     members: ['pending', 'approved', 'done', 'skipped'],
   },
   {

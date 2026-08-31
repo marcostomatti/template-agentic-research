@@ -13,23 +13,43 @@
  * that fetches inside `parse` passes its tests the day it is
  * written and fails them the first time it runs offline.
  *
- * {@link SOURCE_ADAPTERS} is EMPTY, and that is the current state
- * rather than a placeholder waiting to be filled in. No module in
- * this directory declares the five members yet: `html-text.ts` and
- * `paged-list.ts` sit beside this file as the modules adapters
- * reach for, and each says at the top of its own source that it
- * fronts no source and appears in no registry. The first adapter
- * adds its own line to that literal in the commit that lands it,
- * which is the whole of what registration costs.
+ * {@link SOURCE_ADAPTERS} holds the adapters this service ships. Each
+ * of them added its own line to that literal in the commit that
+ * landed it, which is the whole of what registration costs. The other
+ * modules beside this file are not adapters and are not in it.
+ * `html-text.ts` and `paged-list.ts` are what an adapter reaches for;
+ * `config-proposer.ts` is the seam a proposed `parser_config` and
+ * `contract` are ruled on through, which is about who may write two
+ * columns of a `sources` row rather than about reading one. Each says
+ * at the top of its own source that it fronts no source and appears
+ * in no registry.
  *
  * Node-only, deliberately, and this is the file that could not be
  * anything else: a registry names its adapters with value imports,
  * which is exactly what the dual-context rule under `src/lib/`
- * forbids. A workflow inlines the ONE adapter it needs, never the
- * registry, and `tests/build/lib-splice.test.ts` reads `src/lib/`
- * rather than this directory for that reason.
+ * forbids. Nothing in this directory is spliced into a workflow
+ * either, and that is a rule rather than a preference.
+ * `assertMarkerPath` in `scripts/workflow-markers.ts` refuses a
+ * marker path holding a `..` segment, so
+ * `__INLINE:../sources/listing-api.ts__` is turned away by name:
+ * the grammar takes that path and the path rule reports it as
+ * `a .. segment`. No module outside `src/lib/` is spliceable under
+ * any spelling, which is why `tests/build/lib-splice.test.ts`
+ * reads that directory rather than this one.
+ *
+ * So an adapter's extraction logic reaches a Code node only by
+ * living in a dual-context library the adapter also calls. Both
+ * adapters here reach `parser-config.ts` and `markup-select.ts`
+ * under `src/lib/` to extract; a workflow wanting that same
+ * extraction inlines those two libraries by name, never the
+ * adapter around them. One implementation read from two sides,
+ * with the Node-only half of an adapter — its transport, its
+ * digest, its registry line — staying here.
  */
 import { SOURCE_KINDS } from '../db/schema/values.js';
+
+import { LISTING_API_DECLARATION } from './listing-api.js';
+import { PUSH_CAPTURE_DECLARATION } from './push-capture.js';
 
 /**
  * The kinds of source an adapter can front.
@@ -71,17 +91,19 @@ export type SourceKind = (typeof SOURCE_KINDS)[number];
  *
  * The five members are the columns a CAPTURE supplies, and the nine they
  * leave out are each somebody else's. `id` is the database's and
- * `captured_at` the insert's — capture IS the insert, so no window exists
- * in which the two disagree. `domain_id` is the writer's, taken from the
+ * `captured_at` the insert's — capture IS the insert, so no window exists in
+ * which the two disagree. `domain_id` is the writer's, taken from the
  * `sources` row the adapter was constructed for, which records how the
  * adapter was reached rather than anything it read. `parse_status` and
- * `parse_error` belong to the contract check rather than to the capture:
- * the row that most needs them is one whose payload yielded no record at
- * all, so {@link SourceAdapter.toCanonical} never ran to return a shape
- * they could have sat in. And `features`, `feature_version`, `embedding`
- * and `embedding_model` are computed from the stored row long after
- * the capture that wrote it, and nothing writes any of them yet:
- * phase 4 landed the feature port but no writer.
+ * `parse_error` belong to the contract check rather than to the capture: the
+ * row that most needs them is one whose payload yielded no record at all, so
+ * {@link SourceAdapter.toCanonical} never ran to return a shape they could
+ * have sat in. And `features`, `feature_version`, `embedding` and
+ * `embedding_model` are computed from the stored row long after the capture
+ * that wrote it. Two of the four now have a writer: phase 4 landed the
+ * feature port and phase 5 wired it into `ar-ingest`, which fills `features`
+ * and `feature_version` in a pass of its own after the document is stored.
+ * Nothing writes either embedding column.
  *
  * Each member below names its column and states only what the CONTRACT
  * adds. Why the database holds a column the way it does is argued once,
@@ -217,11 +239,41 @@ export type SourceAdapterRegistry = Readonly<Record<string, SourceAdapter>>;
  * because the alternative — this module reading the directory to
  * check — is the thing being refused.
  *
- * Empty today, and {@link listSourceIds} answering with nothing is
- * the current state rather than a stub: no module in this directory
- * declares the five members yet.
+ * What stands registered is `listing-api` and `push-capture`, and
+ * they front different kinds: `api` for the cursor-paged listing
+ * loop run against the endpoint a row names, `push` for an envelope
+ * a client sent, which opens no socket at all. No registered adapter
+ * declares the `url` or `rss` kind, so a row carrying one names an
+ * id nothing here answers — which is a fact about this literal
+ * rather than an error, and {@link getSourceAdapter} answering null
+ * is how a caller finds out.
+ *
+ * Registering one is a line here plus a case, and the case is the
+ * half worth knowing about. The shipped ids are written out in
+ * `src/sources/index.test.ts` rather than read off this literal —
+ * a case deriving them from what it checks would agree with any
+ * edit to it — so that expectation is what notices a registration
+ * at all, and the set-equality guard beside it notices the opposite
+ * mistake, a module written and never named. Nothing further has to
+ * be remembered: the directory guard accounts for the module and
+ * the stored payload the id names, and the contract check walks
+ * whatever the registry holds, so both take a new entry without an
+ * edit.
+ *
+ * What every entry holds is a DECLARATION rather than a working
+ * adapter. That is the one place this contract and this registry
+ * pull against each other, and it is worth naming here:
+ * configuration binds at construction, so an adapter is per ROW,
+ * while a registry is keyed by id and holds one entry per KIND of
+ * source. A registered entry therefore carries the id and the kind
+ * a `sources` row is matched against and can reach nothing, and a
+ * run builds its own through that module's factory. Each value
+ * argues it at length in the module it comes from.
  */
-export const SOURCE_ADAPTERS: SourceAdapterRegistry = {};
+export const SOURCE_ADAPTERS: SourceAdapterRegistry = {
+  'listing-api': LISTING_API_DECLARATION,
+  'push-capture': PUSH_CAPTURE_DECLARATION,
+};
 
 /**
  * The registered ids, sorted.
@@ -233,9 +285,9 @@ export const SOURCE_ADAPTERS: SourceAdapterRegistry = {};
  *
  * @param registry - Which registry to read. Production passes
  *   nothing and gets {@link SOURCE_ADAPTERS}; the parameter is a
- *   test seam, because an empty registry cannot demonstrate that
- *   anything was sorted and a sort nothing exercises is a sort
- *   nobody checked.
+ *   test seam, because a registry holding fewer than two ids cannot
+ *   demonstrate that anything was sorted, and a sort nothing
+ *   exercises is a sort nobody checked.
  * @returns The ids in sorted order, as a new array.
  */
 export function listSourceIds(
@@ -257,9 +309,9 @@ export function listSourceIds(
  * defensive: `toString`, `valueOf` and `constructor` all answer
  * something off the prototype chain, so a stored id spelling one of
  * them would hand a function from `Object.prototype` back as though
- * it were an adapter. The case is live today rather than
- * hypothetical — the registry is empty, and the `in` operator still
- * answers true for every one of those names.
+ * it were an adapter. The case is live rather than hypothetical:
+ * the `in` operator answers true for every one of those names over
+ * the registry as it stands, whatever ids it happens to hold.
  *
  * @param id - The id to look up, as a `sources` row spells it.
  * @param registry - Which registry to read; {@link SOURCE_ADAPTERS}

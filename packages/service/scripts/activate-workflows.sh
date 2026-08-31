@@ -211,12 +211,14 @@ fi
 # Left inactive is the outcome rather than a gap. Manual-only means
 # an activation would start nothing, and the workflows `ar-dispatch`
 # reaches through an Execute Workflow node are started by it rather
-# than by anything an activation registers. Not everything still to
-# land is one of those — `ar-capture` in the phase-5 roster starts at
-# a webhook, which arms — so the split is read off each artifact
-# rather than assumed. Nothing built today is manual-only:
-# `ar-dispatch` holds the only schedule trigger in the system and
-# arms on it.
+# than by anything an activation registers. Not every workflow is one
+# of those — `ar-capture` starts at a webhook, which arms — so the
+# split is read off each artifact rather than assumed.
+#
+# Both halves are populated. `ar-dispatch` arms on the only schedule
+# trigger in the system and `ar-capture` on its webhook, while
+# `ar-ingest` is reached through an Execute Workflow node and is
+# reported and left alone.
 ARMED_IDS=()
 while read -r kind id name; do
   [ -n "${kind:-}" ] || continue

@@ -11,10 +11,20 @@
  * a row is selected by its `kind`, and one adapter serves every row of
  * its kind with nothing differing but the row it was constructed from.
  *
- * Nothing fetches these rows yet. The adapters and the parse engine
- * they run under both arrive in phase 5. What the table fixes now
- * is that everything varying per feed is stored, which is what keeps a
- * per-source branch out of the adapter that would otherwise carry it.
+ * `ar-ingest` fetches these rows, from phase 5, selecting the enabled
+ * and unflagged ones for the domain its pass ran for, and `ar-capture`
+ * resolves one out of the envelope a client posted; the adapters and
+ * the parse engine they run under landed with them. What the table
+ * fixed ahead of all of it is that everything varying per feed is
+ * stored, which is what keeps a per-source branch out of the adapter
+ * that would otherwise carry it.
+ *
+ * `source_config_proposals` is the pending half of two of those
+ * columns. A source with no `parser_config`, or one whose contract has
+ * started failing, gets a proposed arrangement written there for a
+ * person to rule on, and only the approval copies it onto the source
+ * row — so a model may propose what the pipeline extracts and never
+ * decide it.
  *
  * `connectors` is here for the other half of the same question. A
  * source is a feed the pipeline reads; a connector is a service it
@@ -24,10 +34,11 @@
  * code, so pointing either somewhere new is an INSERT and moving one
  * is an UPDATE.
  */
-import { bigint, bigserial, boolean, integer, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { bigint, bigserial, boolean, check, integer, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
-import { CONNECTOR_KINDS, SOURCE_KINDS, checkOneOf } from './values.js';
+import { CONNECTOR_KINDS, RESEARCH_POOL_STATUSES, SOURCE_KINDS, checkOneOf } from './values.js';
 
 export const sources = pgTable('sources', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
@@ -78,13 +89,14 @@ export const sources = pgTable('sources', {
    * regex, a field map — bound to the adapter when it is constructed
    * rather than handed to it per call.
    *
-   * Data the engine executes, never code. The parse engine arriving in
-   * phase 5 performs the operations it implements against the payload,
-   * directed by this column; it evaluates nothing it finds here. That
-   * is what keeps an INSERT into this table an INSERT — a column whose
-   * contents could execute would turn every writer that reaches it,
-   * the seed script and a workflow node and an operator at a psql
-   * prompt alike, into a way to run arbitrary code in the pipeline.
+   * Data the engine executes, never code. The parse engine phase 5
+   * landed, `src/lib/parser-config.ts`, performs the operations it
+   * implements against the payload, directed by this column; it
+   * evaluates nothing it finds here. That is what keeps an INSERT into
+   * this table an INSERT — a column whose contents could execute would
+   * turn every writer that reaches it, the seed script and a workflow
+   * node and an operator at a psql prompt alike, into a way to run
+   * arbitrary code in the pipeline.
    *
    * It is also what makes an extraction replayable: the same payload
    * under the same config yields the same records every time, so an
@@ -113,10 +125,11 @@ export const sources = pgTable('sources', {
    * columns, and the engine then runs what was approved
    * deterministically: a model proposes, a person decides once, and no
    * guess silently changes what the pipeline extracts. Approval is a
-   * database state rather than a branch inside a workflow — the shape
-   * `research_pool` gives this phase's other proposals, where a CHECK
-   * refuses the downstream write until the approval is recorded. The
-   * propose step is not built here; the columns it targets are.
+   * database state rather than a branch inside a workflow, and the row
+   * it is a state of is `source_config_proposals` below, whose
+   * `source_config_proposals_approval_check` refuses the record of an
+   * application on a row carrying no approval. The propose step is not
+   * built here; the columns it targets are.
    */
   parserConfig: jsonb('parser_config').default({})
     .notNull(),
@@ -260,6 +273,348 @@ export const sources = pgTable('sources', {
    * the constraint is present by grepping for it.
    */
   checkOneOf('sources_kind_check', table.kind, SOURCE_KINDS),
+]);
+
+/**
+ * `source_config_proposals` — one proposed arrangement for reading a
+ * source, held until a person rules on it.
+ *
+ * `sources.parser_config` and `sources.contract` above say how a feed
+ * is read and what a correct reading of it looks like. Where a source
+ * has neither, or where its contract has started failing, a local
+ * model is asked to propose both together. That answer is not written
+ * onto the source row. It lands here as a pending row, and only an
+ * approval moves it across.
+ *
+ * A ROW rather than a BRANCH, and the argument is
+ * `research_pool_approval_check` in `./entities.ts`, which records it
+ * at length. The proposal is written by one thing, ruled on by
+ * another and applied by a third — the propose step, then
+ * `scripts/approve.ts` and the API and UI after it, then an operator
+ * at a psql prompt when something has gone wrong. A branch lives
+ * inside one of those, so it governs the writes that one issues and
+ * leaves every other writer to its own habits, and the writes it does
+ * not cover are exactly the ones nothing was watching. A CHECK is
+ * evaluated by the server on every write, whoever makes it. The
+ * branch that would replace it is also a branch on a workflow canvas,
+ * where an edit is lost at the next import and reaches no diff on the
+ * way.
+ *
+ * `research_pool` could not hold it, and not for want of a spare
+ * column. That table names its subject through `entity_id` and its
+ * occasion through `finding_id`, carries the search terms it would be
+ * issued with, and is drained by a pass that issues them. A config
+ * proposal names a SOURCE, carries two JSONB documents rather than a
+ * list of strings, and is acted on by an UPDATE against the source
+ * row and never by a search. Filing it there would put a row in front
+ * of a drain that would try to search it, and would leave the two
+ * documents it is actually about with nowhere to live.
+ *
+ * What the two gates share is their shape, deliberately: a status
+ * that is the operator-facing account of the row, an approval
+ * timestamp, and a CHECK over the timestamps the database holds
+ * whatever the status says. The status members are literally the same
+ * tuple, `RESEARCH_POOL_STATUSES` in `./values.ts`.
+ *
+ * No unique key, so nothing stops two pending proposals standing for
+ * one source — a feed failing every pass would otherwise be refused a
+ * fresh proposal, and an operator's second, better proposal would be
+ * refused too. Which of several is the one to rule on is the review
+ * queue's question, and `proposed_at` below is what it reads.
+ *
+ * Nothing INSERTS these rows yet, and phase 5 landed both halves that
+ * would. `src/sources/config-proposer.ts` declares the propose seam
+ * and builds the pending row from an answer, and the apply step beside
+ * it refuses a proposal carrying no `approved_at` — what is missing is
+ * a proposer to construct, no module in this package implementing the
+ * interface. The operator surface between them landed too:
+ * `scripts/approve.ts` lists the pending proposals beside the pending
+ * `research_pool` rows and writes `status` and `approved_at` on one of
+ * them at a time, the interim CLI standing in until the API and the UI
+ * take approvals over.
+ */
+export const sourceConfigProposals = pgTable('source_config_proposals', {
+  /** Surrogate key; see `domains.id` for why `number` mode. */
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+
+  /**
+   * The domain whose source this proposal is about. Cascading on
+   * delete like every other domain-owned row: a proposal outliving
+   * its domain is a ruling nobody can act on, about a feed that went
+   * with the domain.
+   *
+   * Redundant against `source_id` below, which reaches the same
+   * domain through `sources.domain_id`, and carried anyway because
+   * the redundancy is what lets a domain be dropped at all. Deleting
+   * one cascades to its sources AND to these rows inside a single
+   * statement, so the end-of-statement check the refusing FK below
+   * rests on finds nothing left orphaned. Without this column that
+   * FK would refuse the cascade, and dropping a domain would fail
+   * naming a constraint on a table the operator never mentioned —
+   * the reasoning `research_pool.domain_id` in `./entities.ts`
+   * records, met here through one hop rather than two.
+   *
+   * It is also what the review queue filters on, so listing a
+   * domain's pending proposals is a predicate rather than a join.
+   */
+  domainId: bigint('domain_id', { mode: 'number' }).notNull()
+    .references(() => domains.id, { onDelete: 'cascade' }),
+
+  /**
+   * The source this proposal is for.
+   *
+   * NOT NULL: a proposed `parser_config` and `contract` are an
+   * arrangement for reading one particular feed, so a row naming no
+   * source is a proposal there is nothing to apply it to.
+   *
+   * Deliberately no `onDelete`, so it emits `ON DELETE no action`
+   * and deleting a source a proposal still names is REFUSED — the
+   * answer `documents.source_id` in `./documents.ts` and
+   * `finding_sightings.source_id` in `./findings.ts` both give, for
+   * a reason of its own here. A pending row is an outstanding
+   * question put to a person, and deleting the source under it
+   * answers that question by making it disappear; an applied row is
+   * the record of what was approved and written, and so the only
+   * account of why the source's two columns hold what they hold.
+   * Retiring a feed without losing either is the column that exists
+   * for exactly that, `sources.enabled` set to false.
+   */
+  sourceId: bigint('source_id', { mode: 'number' }).notNull()
+    .references(() => sources.id),
+
+  /**
+   * The `parser_config` being proposed: what would be written to
+   * `sources.parser_config` above if this row is approved and
+   * applied.
+   *
+   * Stored on the row rather than composed when it is ruled on, and
+   * that ordering is the gate's substance rather than a convenience
+   * — an operator approves this exact document instead of a
+   * description of what a model would answer if it were asked again.
+   * `research_pool.search_terms` in `./entities.ts` makes the same
+   * argument over a different payload, and carries the same limit: a
+   * writer editing this column after `approved_at` is set changes
+   * what was approved without the approval moving, and nothing in
+   * the schema notices.
+   *
+   * Data the engine executes and never code, on the terms the column
+   * it targets sets out, and the point is sharper here because this
+   * is a document a model wrote. `parserConfigErrors` in
+   * `src/lib/parser-config.ts` is what says a proposal is
+   * well-formed before it is offered for approval, but what makes a
+   * bad one merely wrong rather than dangerous is that the engine
+   * performs the operations it implements and evaluates nothing it
+   * finds in a config.
+   *
+   * Carries no `$type` annotation, for the reason
+   * `sources.parser_config` carries none: what a parser config holds
+   * differs by `kind`, so one interface across all four would
+   * describe none of them accurately.
+   *
+   * Defaults to an empty object so every reader faces one shape. An
+   * empty proposal is storable and says something — a model asked
+   * for a config and answering with nothing usable — and it is a
+   * proposal an operator should reject rather than one the table
+   * should refuse.
+   */
+  parserConfig: jsonb('parser_config').default({})
+    .notNull(),
+
+  /**
+   * The `contract` being proposed, and the other half of the same
+   * answer: what would be written to `sources.contract` above.
+   *
+   * Proposed together with `parser_config` and approved together,
+   * because the two describe one arrangement from both ends. An
+   * extraction rule approved without the test that says it still
+   * holds leaves nothing to notice the day the source's shape
+   * drifts, which is the failure the propose path exists to answer
+   * in the first place — a contract that has started failing is what
+   * asks for a new proposal.
+   *
+   * Two columns rather than one document holding both, so the apply
+   * step is an UPDATE naming the two columns it writes and nothing
+   * else, and so what is being proposed for each is readable without
+   * unpacking a wrapper.
+   *
+   * Defaults to an empty object, like the column it targets, and
+   * inherits that column's cost when it is left that way: where a
+   * contract declares nothing, nothing is rejected and nothing is
+   * counted, so a source whose shape has drifted reads exactly like
+   * one that is still working.
+   */
+  contract: jsonb('contract').default({})
+    .notNull(),
+
+  /**
+   * What proposed this — the `connectors.name` of the model endpoint
+   * that was asked, or whatever else a writer names itself as.
+   *
+   * Text rather than a reference to `connectors` below, and the
+   * difference is what the column is for. It records what produced
+   * these two documents at the time they were produced, which is
+   * provenance and so has to survive the connector being renamed,
+   * repointed or deleted: a refusing FK would forbid all three, and
+   * a cascading one would discard the account of where an applied
+   * config came from. A connector is also identified by (`kind`,
+   * `name`) rather than by a name alone, so a reference would have
+   * to be by id, and the stored value would then name nothing a
+   * reader recognizes.
+   *
+   * The cost is that nothing checks the name resolves, and a row can
+   * name a connector that never existed. That is the ordinary price
+   * of provenance, and it is bounded by this column being read by
+   * nobody: nothing is dispatched, addressed or authenticated from
+   * here.
+   *
+   * NOT NULL, which is not the same as non-empty. Every proposal was
+   * made by something, so an empty string is a writer that did not
+   * say rather than a proposal with no author.
+   */
+  proposedBy: text('proposed_by').notNull(),
+
+  /**
+   * Where the row stands in the gate: `pending` until it is ruled
+   * on, then `approved` and `done` along the accepted path, or
+   * `skipped` where it is refused or closed without being applied.
+   * The members are `RESEARCH_POOL_STATUSES` in `./values.ts`,
+   * enumerated in the generated SQL by the CHECK below from that one
+   * declaration.
+   *
+   * The same tuple `research_pool.status` is constrained to, shared
+   * rather than copied because the two are one gate over different
+   * subjects: `scripts/approve.ts` rules on both, and a second tuple
+   * spelling the same four members is the drift `./values.ts` exists
+   * to prevent. What the sharing costs is a name — the tuple and its
+   * union are called after the first table that used them — and that
+   * module says so where they are declared.
+   *
+   * Defaults to `pending`, the only honest state for a row nobody
+   * has looked at, and the default is also what makes it the state a
+   * proposal necessarily starts in: leaving the column out cannot
+   * pre-approve one.
+   *
+   * NOT NULL, which is what makes the CHECK cover the column at all,
+   * a CHECK evaluating to UNKNOWN being one that passes. It also
+   * keeps the row out of the hole `research_pool.status` describes,
+   * where a NULL is invisible to every equality filter over the set
+   * at once — outside the queue an operator reviews AND outside the
+   * set an apply step reads.
+   *
+   * The column is the account of the row rather than the gate
+   * itself. Nothing here refuses a transition, and a writer may set
+   * any member at any time, `done` on a row nobody approved
+   * included. What the database refuses is the other account of the
+   * same row: `source_config_proposals_approval_check` at the foot
+   * of this table reads only `approved_at` and `applied_at`, so the
+   * two accounts can disagree and only the timestamps are held to
+   * the rule.
+   */
+  status: text('status').default('pending')
+    .notNull(),
+
+  /**
+   * When the proposal was made. Defaults to now and is NOT NULL
+   * because the proposing IS the insert: there is no window in which
+   * one of these rows exists and nothing has been proposed.
+   *
+   * It is also what a review queue is ordered by, oldest first:
+   * `listPendingProposals` in `scripts/approve.ts` reads on it, the
+   * way that file's older half reads `research_pool.created_at` —
+   * which is what makes several proposals for one source workable
+   * without a key refusing the later ones. `now()` is the
+   * TRANSACTION's start time, so two rows written in one transaction
+   * tie to the microsecond and the tiebreak is `id`.
+   */
+  proposedAt: timestamp('proposed_at', { withTimezone: true }).defaultNow()
+    .notNull(),
+
+  /**
+   * When a person ruled in favour of this proposal. NULL means
+   * nobody has, which is the state every row starts in and the one
+   * an apply step passes over.
+   *
+   * Nullable with no default, for the reason no timestamp in this
+   * schema is given a placeholder: any default would date an event
+   * that never happened, and here that event is the one thing the
+   * table exists to require.
+   *
+   * The write that is refused is clearing it back to NULL on a row
+   * `applied_at` below has already stamped, under
+   * `source_config_proposals_approval_check` at the foot of this
+   * table: an approval cannot be withdrawn from a config already
+   * written onto its source.
+   */
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+
+  /**
+   * When the approved `parser_config` and `contract` were written
+   * onto the source row. NULL means they have not been, and it is
+   * the second half of what an apply step selects on: approved, and
+   * not yet applied.
+   *
+   * Kept here rather than read back off the source, which cannot
+   * answer it. `sources.parser_config` holds whatever it holds now;
+   * an operator may have edited it since, a later proposal may have
+   * overwritten it, and two proposals may have been identical. Only
+   * this column says that THIS row is the one that was written, and
+   * when.
+   *
+   * Nullable with no default, like `approved_at` above — and the
+   * pair is what `source_config_proposals_approval_check` at the
+   * foot of this table constrains: a non-NULL here requires a
+   * non-NULL there, so a row cannot record that it was applied
+   * without recording that it was approved first.
+   */
+  appliedAt: timestamp('applied_at', { withTimezone: true }),
+}, (table) => [
+  /**
+   * The gate's status domain, enumerated in the generated SQL from
+   * `RESEARCH_POOL_STATUSES` — the same tuple
+   * `research_pool_status_check` in `./entities.ts` is generated
+   * from, rendered a second time under this table's own name. Named
+   * rather than left to drizzle's derivation so the static-SQL
+   * invariant suite can assert the constraint is present by grepping
+   * for it, and so a column rename cannot quietly move the name it
+   * greps for.
+   */
+  checkOneOf('source_config_proposals_status_check', table.status, RESEARCH_POOL_STATUSES),
+
+  /**
+   * The gate itself, as a rule the database holds: a row may record
+   * that its config was applied only if it already records that it
+   * was approved. What is refused is the STATE rather than a
+   * transition, so it bites from both directions — stamping
+   * `applied_at` on a row nobody approved is rejected, and so is
+   * clearing `approved_at` on a row already applied.
+   *
+   * The argument for a CHECK rather than a branch is
+   * `research_pool_approval_check` in `./entities.ts`, in full, and
+   * it applies here unchanged: there is no single writer to put a
+   * branch in, and the branch that would replace it lives on a
+   * workflow canvas, where an edit is lost at the next import and
+   * reaches no diff on the way. This rule reads only the row being
+   * written, both of its columns, so a plain CHECK carries it —
+   * generated from this file and visible in it.
+   *
+   * Named rather than left to drizzle's derivation, for the reason
+   * the status CHECK above gives.
+   *
+   * What it does not reach is worth reading beside it. Both
+   * timestamps NULL is the pending state and passes. An approval
+   * nothing ever applies passes, indefinitely. `status` above is not
+   * consulted, so a row stamped `done` with neither timestamp set is
+   * storable. And it says nothing whatever about `sources`: both
+   * columns it reads are on THIS row, so what it enforces is that
+   * the record of an application carries the record of an approval,
+   * and not that the UPDATE onto the source passed through here at
+   * all. A writer that skips this table and rewrites
+   * `sources.parser_config` directly is refused by nothing.
+   */
+  check(
+    'source_config_proposals_approval_check',
+    sql`${table.appliedAt} IS NULL OR ${table.approvedAt} IS NOT NULL`,
+  ),
 ]);
 
 /**

@@ -75,12 +75,24 @@ gate, and irreversible once `gh pr create` returns. Four checks, all cheap:
    against `refs/pull/<n>/merge`, which it cannot create for a PR that does not
    merge cleanly — so the reading is a ref existence check, not a guess:
    `git ls-remote origin 'refs/pull/<n>/*'` answers `head` alone where a
-   MERGEABLE control PR answers `head` AND `merge`. Read
-   `gh pr view <n> --json mergeable` beside the checks. Name the conflict set
-   with `git merge-tree --write-tree --name-only origin/main HEAD`, which
-   changes no worktree state. Do NOT rebase to clear it as an afterthought
-   inside a PR task: every commit oid moves, and a body whose suite figures were
-   measured at the pre-rebase tip stops describing the head it is attached to.
+   MERGEABLE control PR answers `head` AND `merge`. That ref check is the
+   WHOLE reading and `mergeable` is only a corroborator, because GitHub
+   computes mergeability lazily and `gh` does not poll for it: measured
+   opening one PR, the subject answered `CONFLICTING` while BOTH mergeable
+   control PRs answered `UNKNOWN` and still exposed `refs/pull/<n>/merge`.
+   So `UNKNOWN` beside a present merge ref is the HEALTHY shape, not a
+   second finding — never let it stand in for the ref check. Name the
+   conflict set with
+   `git merge-tree --write-tree --name-only origin/main HEAD`, which
+   changes no worktree state. Parse it carefully: its FIRST line is the
+   written TREE OID, so a probe reading the whole block as paths reports a
+   40-hex string as a conflicting file. The name list is the CONFLICT set
+   and not the changed-file set (the narrative below it carries
+   `Auto-merging <path>` lines for files that merged cleanly), and exit 1
+   is the signal rather than an error. Do NOT rebase to clear it as an
+   afterthought inside a PR task: every commit oid moves, and a body whose
+   suite figures were measured at the pre-rebase tip stops describing the
+   head it is attached to.
 
 **Every suite figure in the body must come from a run at the PR's OWN head.** A
 loop that commits per task makes all plausible sources disagree and each was

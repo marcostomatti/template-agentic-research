@@ -17,11 +17,12 @@
  * `docs/architecture/00-overview.md` for the vocabulary that fixes
  * for the whole repository.
  *
- * Nothing writes these rows yet. `ar-ingest` turns a document into
- * findings and `ar-score` scores them against a domain's criteria,
- * both phase 5. `finding_sightings` below records where a finding
- * has been seen, and `finding_labels` after it records what an
- * operator made of one — the module's only rows a person writes.
+ * Phase 5 landed both writers. `ar-ingest` turns a document into
+ * findings and `ar-capture` writes the one a posted body yielded,
+ * while `ar-score` scores what either of them wrote against a domain's
+ * criteria. `finding_sightings` below records where a finding has been
+ * seen, and `finding_labels` after it records what an operator made of
+ * one — the module's only rows a person writes.
  */
 import { bigint, bigserial, integer, jsonb, numeric, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
@@ -214,9 +215,9 @@ export const findings = pgTable('findings', {
    * was recorded at the time.
    *
    * The other half is not a column in this schema: scoring is one
-   * mechanism over a domain's criteria rather than a per-domain
-   * pinned artifact, so the version to read this against belongs to
-   * the scorer that arrives in phase 5.
+   * mechanism over a domain's criteria rather than a per-domain pinned
+   * artifact, so the version to read this against belongs to the
+   * scorer, `ar-score` since phase 5.
    *
    * NULL means never scored, the same absence `score` above encodes,
    * which is why the two are written by one statement or by neither.
@@ -272,9 +273,11 @@ export const findings = pgTable('findings', {
  * afterwards, so a count stored at the time would be stale by the
  * moment the second source arrived.
  *
- * Nothing writes these rows yet. The adapters that meet a source's
- * items arrive in phase 5, under the engine that decides two
- * captures are the same thing.
+ * Nothing writes these rows yet, and phase 5 landed the adapters that
+ * meet a source's items without reaching them: `ar-ingest` and
+ * `ar-capture` each insert the finding and neither records a second
+ * sighting of one, the engine that decides two captures are the same
+ * thing being applied to documents rather than to findings.
  */
 export const findingSightings = pgTable('finding_sightings', {
   /** Surrogate key; see `domains.id` for why `number` mode. */

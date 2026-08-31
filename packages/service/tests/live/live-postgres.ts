@@ -83,6 +83,7 @@ const TABLES = [
   'personas',
   'research_pool',
   'runs',
+  'source_config_proposals',
   'sources',
   'terms',
   'topics',

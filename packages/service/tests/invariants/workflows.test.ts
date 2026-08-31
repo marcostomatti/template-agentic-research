@@ -86,21 +86,33 @@ import {
 const BUILT_WORKFLOWS = loadBuiltWorkflows();
 
 // ---------------------------------------------------------------------------
-// What this phase expects that tree to hold
+// What the phases that have landed expect that tree to hold
 // ---------------------------------------------------------------------------
 
 /**
- * The workflows phase 3 expects the built tree to hold, by id and in
- * the order the read hands them back.
+ * The workflows phases 3 and 5 have landed, by id and in the order
+ * the read hands them back.
  *
  * Declared rather than derived, which is what leaves a case standing
  * on it with anything to say. `buildAll` writes one artifact per
  * source under the source's own name, so a roster read out of
  * `workflows/src/` would agree with the built tree by construction,
  * holding whatever the build wrote against whatever the build wrote.
- * What is written down here is what this phase says the tree is for,
- * taken off the roster table in `workflows/src/README.md`, where the
- * entries the later phases deliver are named too.
+ * What is written down here is what those phases say the tree is
+ * for, taken off the roster table in `workflows/src/README.md`,
+ * where the entries the later phases deliver are named too.
+ *
+ * A closed set that grows inside a phase rather than at the end of
+ * one. That table's delivered-in column marks an entry landed as its
+ * source arrives, and an id joins this list in the same commit as
+ * the source it names, so an entry a phase has still to deliver is
+ * missing here for exactly as long as its source is. Phase 5 read
+ * that way from inside, its entries arriving one source at a time;
+ * what phase 6 has still to deliver — `ar-research` and `ar-digest`
+ * — reads that way now. What that buys is the equality below staying
+ * a claim about the tree: a roster written ahead of the sources
+ * would report a phase's own unfinished middle as a build that lost
+ * an artifact.
  *
  * By id and never by file name. That README's 1:1 rule is that a
  * workflow is one file called `<workflow-id>.json`, and the build
@@ -114,7 +126,12 @@ const BUILT_WORKFLOWS = loadBuiltWorkflows();
  * and the artifact an entry does name was built from a source under
  * `workflows/` — which that scan reads.
  */
-const PHASE_3_WORKFLOW_IDS = ['ar-dispatch'] as const;
+const PHASE_3_AND_5_WORKFLOW_IDS = [
+  'ar-capture',
+  'ar-dispatch',
+  'ar-ingest',
+  'ar-score',
+] as const;
 
 // ---------------------------------------------------------------------------
 // The send-free rule
@@ -209,29 +226,72 @@ function withSendNodePlanted(workflow: BuiltWorkflow): BuiltWorkflow {
 }
 
 // ---------------------------------------------------------------------------
-// The one schedule trigger
+// The one schedule trigger, and the webhook that is not one
 // ---------------------------------------------------------------------------
 
 /**
  * The workflow the one schedule trigger belongs to, by id.
  *
- * Declared rather than read off {@link PHASE_3_WORKFLOW_IDS}, which
- * spells the same id and today holds nothing else. The two are
- * separate claims that coincide while the tree holds one workflow:
- * that roster says which artifacts the build is expected to produce,
- * this says which one of them schedules. Five more workflows arrive
- * in phases 5 and 6 and none of them is a schedule, so the roster
- * grows and this stays a set of one — which is the property itself,
- * and is what a value derived from a list that grew with it would
- * stop asserting.
+ * Declared rather than read off {@link PHASE_3_AND_5_WORKFLOW_IDS},
+ * which names this id among its entries and no longer names it
+ * first. The two are separate claims that used to coincide, that
+ * roster having held one workflow: it says which artifacts the build
+ * is expected to produce, this says which one of them schedules.
+ * `ar-ingest` parted them, `ar-capture` parted them further with a
+ * trigger of its own that starts a run and sets no clock, `ar-score`
+ * parted them again with another of the kind `ar-ingest` carries,
+ * and the entries phase 6 has still to deliver part them further
+ * again, none of those being a schedule — so the roster grows and
+ * this stays a set of one, which is the property itself and is what
+ * a value derived from a list that grew with it would stop
+ * asserting.
  *
  * By id and never by file name, for the reason
- * {@link PHASE_3_WORKFLOW_IDS} gives: a workflow is one file called
- * `<workflow-id>.json`, so a file name is a derivation and an id is
- * the thing to keep in step with the roster table in
+ * {@link PHASE_3_AND_5_WORKFLOW_IDS} gives: a workflow is one file
+ * called `<workflow-id>.json`, so a file name is a derivation and an
+ * id is the thing to keep in step with the roster table in
  * `workflows/src/README.md`.
  */
 const SCHEDULE_TRIGGER_WORKFLOW_ID = 'ar-dispatch';
+
+/**
+ * The trigger type `ar-capture` is started by.
+ *
+ * Written out here rather than read off the artifact that carries
+ * it, for the reason {@link SEND_PLANT} gives about spelling a type
+ * twice: two spellings are what leave a case able to ask whether
+ * they still agree. A type read off the tree would agree with the
+ * tree by construction, and the question the case below asks —
+ * whether what starts that workflow is the trigger setting no clock
+ * — would be answering itself.
+ *
+ * Here rather than in `workflow-rosters.ts` because no matcher there
+ * is keyed to it. {@link SCHEDULE_TRIGGER_TYPE} already argues the
+ * type, naming a webhook as one of the three legitimate triggers
+ * that start a run and decide nothing about when one starts, so an
+ * export beside that one would be a roster entry no rule reads. All
+ * that is asked of the string is that {@link isScheduleTrigger}
+ * answer no to it, which is a claim about the schedule roster rather
+ * than about a webhook one.
+ */
+const WEBHOOK_TRIGGER_TYPE = 'n8n-nodes-base.webhook';
+
+/**
+ * The workflow the webhook trigger belongs to, by id.
+ *
+ * Declared beside {@link SCHEDULE_TRIGGER_WORKFLOW_ID} and read the
+ * same way, by id and never by file name, and kept apart from
+ * {@link PHASE_3_AND_5_WORKFLOW_IDS} for the reason that one gives:
+ * a roster growing with every source that lands cannot also answer
+ * which of its entries carries what. The two ids are what the case
+ * below turns into a per-workflow expectation, and every entry the
+ * roster names beyond them is expected to carry a trigger of neither
+ * kind — which is how `ar-score` joined, its row written before its
+ * source landed, and what makes one arriving with a schedule or a
+ * webhook redden here rather than pass under a count that happened
+ * to stay at one.
+ */
+const WEBHOOK_TRIGGER_WORKFLOW_ID = 'ar-capture';
 
 // ---------------------------------------------------------------------------
 // The retry guard in front of a model call
@@ -399,8 +459,8 @@ function writesLedgerRow(node: BuiltWorkflowNode): boolean {
  * A statement that keeps a ledger row, as the node making the call
  * would run it.
  *
- * Fixture SQL and not a statement any workflow carries — none
- * does, the workflows that call a model being phase 6. What is
+ * Fixture SQL and not the statement `ar-ingest`'s Ledger Model Call
+ * carries, which writes five columns where this writes two. What is
  * asserted over it is the reading. What a real ledger write owes
  * beyond an insert is the run it charges the call to, which
  * `src/db/schema/runs.ts` argues at length and which nothing here
@@ -536,20 +596,23 @@ const LEDGER_SAMPLES: readonly LedgerSample[] = [
  * A JavaScript line comment, from its slashes to the end of its
  * line.
  *
- * Stripped out of a body before anything is matched in it, for
- * the reason {@link SQL_LINE_COMMENT} is stripped out of a
- * statement: a workflow source has no comment syntax of its own,
- * so a Code node's body is one of the few tracked homes a
- * decision made at a node has. The one body the built tree
- * carries is prose for ninety-nine of its hundred and nineteen
- * lines, and most of that prose argues about the cap the node
- * applies. Read whole, a body could satisfy this rule by making
- * the case for a ceiling rather than by carrying one.
+ * Stripped out of a body before anything is matched in it, for the
+ * reason {@link SQL_LINE_COMMENT} is stripped out of a statement: a
+ * workflow source has no comment syntax of its own, so a Code node's
+ * body is one of the few tracked homes a decision made at a node
+ * has. Every body the built tree carries is mostly prose —
+ * `ar-dispatch`'s Plan Dispatch runs ninety-nine comment lines of a
+ * hundred and nineteen, and `ar-ingest`'s Apply Call Ceiling, the
+ * one body declaring a ceiling at all, ninety-two of a hundred and
+ * forty-five — and most of that prose argues about the cap the node
+ * applies. Read whole, a body could satisfy this rule by making the
+ * case for a ceiling rather than by carrying one.
  *
- * Over this tree the strip changes no answer — measured, that
- * body declares the same ceiling with its prose in or out — so
- * what it is for is the bodies phase 6 writes, and the sample
- * planted for it is what says it runs at all.
+ * Over this tree the strip still changes no answer — measured, both
+ * of those bodies name the same ceiling set with their prose in or
+ * out — so what it is for is a body whose prose spells a declaration
+ * the code does not carry, and the sample planted for it is what
+ * says it runs at all.
  *
  * Line comments and nothing else. Every comment this port writes
  * in a body is one. The two forms left unread, a block comment
@@ -600,15 +663,15 @@ const JS_LINE_COMMENT = /\/\/[^\n]*/gu;
  * is named, is read where the work is done, and is no ceiling at
  * all.
  *
- * Which is also why the value half needs the second form, and
- * why this reads the artifact and never the source. `Plan
- * Dispatch` is where `Number('25')` was measured: its cap is a
- * settings marker, so the built body carries a quoted number
- * where the source carries `Number` over marker text, which is
- * no number at all. That node's own bound is named `CAP` and is
- * not one this rule looks for — the workflow holds no model node
- * and owes no ceiling — but the FORM a resolved setting leaves
- * behind is the form a phase-6 ceiling will arrive in.
+ * Which is also why the value half needs the second form, and why
+ * this reads the artifact and never the source. `Plan Dispatch` is
+ * where `Number('25')` was measured: its cap is a settings marker,
+ * so the built body carries a quoted number where the source carries
+ * `Number` over marker text, which is no number at all. That node's
+ * own bound is named `CAP` and is not one this rule looks for —
+ * `ar-dispatch` holds no model node and owes no ceiling — but the
+ * FORM a resolved setting leaves behind is the form `ar-ingest`'s
+ * ceiling arrived in a phase later.
  *
  * A fragment is still a fragment, and that is the limit. The
  * rule reads a name and a shape and never an intent, so a
@@ -703,13 +766,12 @@ function declaredCeilings(code: string): readonly string[] {
  *
  * More than one occurrence, the declaration being the first: a
  * second is the ceiling read where the work is done. What this
- * deliberately does not read is WHERE. The origin asserted the
- * site as well as the name, matching a slice against its one
- * drafting node, which it could do because it knew what that
- * node bounded. Here the workflows that will carry a ceiling are
- * phase 6 and what they bound is theirs to choose — a slice, a
- * call like `capBatch`, a loop bound, a comparison ahead of an
- * early return — so the property this can hold is that the name
+ * deliberately does not read is WHERE. The origin asserted the site
+ * as well as the name, matching a slice against its one drafting
+ * node, which it could do because it knew what that node bounded.
+ * Here what a workflow's ceiling bounds is its own to choose — a
+ * slice, a call like `capBatch`, a loop bound, a comparison ahead of
+ * an early return — so the property this can hold is that the name
  * is read at all, which is already what parts a ceiling from a
  * constant somebody left behind.
  *
@@ -777,12 +839,12 @@ const CEILING_LINES =
 /**
  * A body that declares a ceiling and applies it.
  *
- * The origin's own shape with its name generalized: six of its
- * built bodies declare a `_PER_RUN` ceiling and take the front
- * of the batch with it, and one of the six is the drafting node
- * whose check this rule generalizes. Written about model calls
- * because that is the work the rule is about, and phase 6 is
- * where such a body lands.
+ * The origin's own shape with its name generalized: six of its built
+ * bodies declare a `_PER_RUN` ceiling and take the front of the
+ * batch with it, and one of the six is the drafting node whose check
+ * this rule generalizes. Written about model calls because that is
+ * the work the rule is about, and `ar-ingest`'s Apply Call Ceiling
+ * is where such a body first landed here.
  */
 const CEILING_BODY = `${CEILING_LINES}\nreturn calls;`;
 
@@ -1024,11 +1086,12 @@ describe('workflow invariants — built tree', () => {
   });
 
   // Held as an ordered list rather than as two sets, for two
-  // reasons. `loadBuiltWorkflows` sorts, and `PHASE_3_WORKFLOW_IDS`
-  // is written in that order. A comparison sorting both sides again
-  // would be answered by a read that never sorted at all, and a
-  // roster naming one id twice would come back as the same set as
-  // one naming it once. An array parts both.
+  // reasons. `loadBuiltWorkflows` sorts, and
+  // `PHASE_3_AND_5_WORKFLOW_IDS` is written in that order. A
+  // comparison sorting both sides again would be answered by a read
+  // that never sorted at all, and a roster naming one id twice would
+  // come back as the same set as one naming it once. An array parts
+  // both.
   //
   // Equality and not containment, because what this exists to catch
   // is an artifact whose source is gone. The build writes one
@@ -1054,12 +1117,12 @@ describe('workflow invariants — built tree', () => {
   // over the reader's surface reads: a walk that reached no workflow
   // fails on the record list rather than passing through an
   // expectation nothing ran.
-  it('holds every workflow the phase-3 roster expects', () => {
+  it('holds every workflow the phase-3 and phase-5 roster expects', () => {
     const built = BUILT_WORKFLOWS.map((workflow) => ({
       file: workflow.file,
       hasNodes: workflow.nodes.length > 0,
     }));
-    const expected = PHASE_3_WORKFLOW_IDS.map((id) => ({
+    const expected = PHASE_3_AND_5_WORKFLOW_IDS.map((id) => ({
       file: `${id}.json`,
       hasNodes: true,
     }));
@@ -1263,6 +1326,104 @@ describe('workflow invariants — built tree', () => {
     expect(found).toEqual([`${SCHEDULE_TRIGGER_WORKFLOW_ID}.json`]);
   });
 
+  // The same one-trigger rule read per workflow rather than over the
+  // tree, and what asks for a second reading is `ar-capture`. Its
+  // webhook is the first trigger in this tree that is neither a
+  // schedule nor the execute-workflow trigger `ar-ingest` carries,
+  // and all the case above can say about it is that a flat count of
+  // schedule triggers did not move — which is the answer a tree
+  // holding no webhook at all gives too.
+  //
+  // So the webhook is asserted present. `ar-capture` carrying
+  // exactly one node of {@link WEBHOOK_TRIGGER_TYPE}, held beside a
+  // schedule count of zero for that same artifact, is what leaves
+  // not counted as a schedule a claim with a subject rather than a
+  // count that stayed still.
+  //
+  // Three readings in one comparison, so a failure names which
+  // moved. The webhook counts say which artifact is started by a
+  // request. The schedule counts say `ar-dispatch` is still the only
+  // one started by a clock, which is the case above read per
+  // workflow instead of as a list of file names, and is where a
+  // second schedule prints beside the workflow that grew it. And
+  // {@link isScheduleTrigger} is asked about the type directly,
+  // which is the not-counted half with no tree in front of it.
+  //
+  // That last reading is the one `workflow-rosters.test.ts` already
+  // makes, over a webhook planted as a node rather than over one the
+  // tree holds, and it is restated here rather than left next door
+  // for what it costs: nothing, and a failure that names the matcher
+  // and the artifact in one comparison instead of sending a reader
+  // to another file to find out which of the two moved. It adds no
+  // coverage that control does not already have. What this case adds
+  // over it is the subject — that the planted type is the type an
+  // artifact in the built tree is actually started by.
+  //
+  // The expectation is derived from
+  // {@link PHASE_3_AND_5_WORKFLOW_IDS} and the two id constants
+  // rather than written out per file, so the roster stays the one
+  // place a workflow is named. Every entry beyond those two is
+  // expected to carry neither trigger, which is what makes this a
+  // claim about the whole tree instead of about whichever artifacts
+  // happen to be in it: `ar-score` joined with its row already
+  // written, and one landing with a trigger of either kind reddens
+  // here rather than passing under a count that happened to stay at
+  // one.
+  //
+  // What it rests on is the roster case above, which is what says
+  // those ids are the artifacts the tree holds; a workflow missing
+  // from the tree entirely reddens there first. What it does not
+  // reach is the limit the case above names: a trigger left
+  // `disabled` is in the artifact and on no clock, and neither a
+  // type nor a count over one parts that tree from a running one.
+  //
+  // Measured over `tests/invariants/`, five legs, 150 cases, and
+  // only the first reddens anything else. {@link isScheduleTrigger}
+  // widened onto the webhook type reddens three: this case, the
+  // one-trigger case above, and the planted webhook next door —
+  // three readings of one matcher, and the split above is what says
+  // which is which. The remaining four redden this case alone.
+  // {@link WEBHOOK_TRIGGER_TYPE} misspelt and the trigger
+  // `ar-capture` carries renamed in the built artifact are the pair
+  // that earns the second spelling: one moves the constant, one
+  // moves the tree, and the flat count above reads both as a clean
+  // tree. {@link WEBHOOK_TRIGGER_WORKFLOW_ID} moved onto another
+  // roster entry, and pointed at
+  // {@link SCHEDULE_TRIGGER_WORKFLOW_ID} so both ids name one
+  // workflow, each redden the columns rather than the type reading,
+  // which is what says the per-workflow half is not riding on it.
+  it(
+    'counts the webhook in ar-capture as no schedule and ar-dispatch as the one',
+    () => {
+      const perWorkflow = BUILT_WORKFLOWS.map((workflow) => ({
+        file: workflow.file,
+        webhooks: workflow.nodeTypes
+          .filter((type) => type === WEBHOOK_TRIGGER_TYPE).length,
+        schedules: workflow.nodeTypes
+          .filter((type) => isScheduleTrigger(type)).length,
+      }));
+      const control = {
+        perWorkflow,
+        theWebhookTypeIsAScheduleTrigger: isScheduleTrigger(
+          WEBHOOK_TRIGGER_TYPE,
+        ),
+      };
+
+      expect(control).toEqual({
+        perWorkflow: PHASE_3_AND_5_WORKFLOW_IDS.map((id) => ({
+          file: `${id}.json`,
+          webhooks: id === WEBHOOK_TRIGGER_WORKFLOW_ID
+            ? 1
+            : 0,
+          schedules: id === SCHEDULE_TRIGGER_WORKFLOW_ID
+            ? 1
+            : 0,
+        })),
+        theWebhookTypeIsAScheduleTrigger: false,
+      });
+    },
+  );
+
   // The first of the three guards in front of a model call, read
   // over built output: not one model node in any built workflow left
   // free to retry. `docs/architecture/01-invariants.md` argues what
@@ -1275,32 +1436,34 @@ describe('workflow invariants — built tree', () => {
   // the send-free case gives: `nodesMatching` labels every offender
   // `<file>:<node name>`, so the answer is the report.
   //
-  // It runs across zero nodes, and will until phase 6.
-  // `MODEL_NODE_TYPE_PREFIX` records why: the workflows that make
-  // model calls are `ar-research` and `ar-digest`, both phase 6, and
-  // phase 3 delivers `ar-dispatch` alone. The half of the predicate
-  // reading the retry setting is not merely unsatisfied over this
-  // tree, it never runs at all — the matcher answers no for every
-  // node the tree carries and the conjunction stops there. Measured:
-  // gutting that read reddens nothing here, and a matcher
-  // recognising nothing reddens nothing either, while one
-  // recognising everything reddens this case and the two cost-guard
+  // It ran across zero nodes for two phases.
+  // `MODEL_NODE_TYPE_PREFIX` records why: phase 3 delivered
+  // `ar-dispatch` alone, and the workflows that make model calls are
+  // `ar-ingest`, from phase 5, with `ar-research` and `ar-digest` to
+  // come in phase 6. Over that empty tree the half of the predicate
+  // reading the retry setting was not merely unsatisfied, it never
+  // ran at all — the matcher answered no for every node the tree
+  // carried and the conjunction stopped there. Measured then:
+  // gutting that read reddened nothing here, and a matcher
+  // recognising nothing reddened nothing either, while one
+  // recognising everything reddened this case and the two cost-guard
   // cases that follow it, each reading the same matcher for an
-  // antecedent of its own. So the only mistake in the predicate this
-  // tree can report reaches it through the matcher half, and says
-  // nothing about the read sitting behind it.
+  // antecedent of its own. So the only mistake in the predicate that
+  // tree could report reached it through the matcher half, and said
+  // nothing about the read sitting behind it. `ar-ingest`'s model
+  // node is what put that read on a real subject.
   //
-  // What stands behind it meanwhile is the roster's own controls, in
+  // What stood behind it meanwhile is the roster's own controls, in
   // `workflow-rosters.test.ts`. A type planted under the namespace
   // and a Code node whose body names a model are each other's
   // control: a matcher recognising nothing reddens the plant, one
   // recognising everything reddens the refusal, and a third case
   // holds the two fixtures against each other so neither drifts off
-  // the vendor name they share. Those three are the whole of what
-  // says the matcher is live while there is no model node to ask it
-  // about, and this case adds none of it. What it adds is that the
-  // rule is in place before the nodes are, so phase 6 lands a node
-  // rather than a node and a check.
+  // the vendor name they share. Those three were the whole of what
+  // said the matcher is live while there was no model node to ask it
+  // about, and this case added none of it. What it added is that the
+  // rule was in place before the nodes were, so phase 5 landed a
+  // node rather than a node and a check.
   //
   // The rest of what it is worth, part by part. The input is covered
   // a module away, `loadBuiltWorkflows` refusing an empty tree and
@@ -1329,35 +1492,39 @@ describe('workflow invariants — built tree', () => {
   // gives: the node that calls and the node that keeps the row are
   // two nodes, and the rule is that one workflow carries both.
   //
-  // It runs across zero workflows and will until phase 6, which is
-  // a different empty from the retry guard.
-  // `MODEL_NODE_TYPE_PREFIX` names both: that one is a claim about
-  // every model node, so it holds over none of them; this is a
-  // claim about every workflow HOLDING one, so its antecedent is
-  // false and the implication holds. This is the emptier of the
-  // two — with no workflow owing a row, the ledger read is never
-  // reached at all.
+  // It ran across zero workflows for two phases, which was a
+  // different empty from the retry guard. `MODEL_NODE_TYPE_PREFIX`
+  // names both: that one is a claim about every model node, so it
+  // held over none of them; this is a claim about every workflow
+  // HOLDING one, so its antecedent was false and the implication
+  // held. It was the emptier of the two — with no workflow owing a
+  // row, the ledger read was never reached at all. Phase 5 ended
+  // both empties at once, `ar-ingest` holding a model node and the
+  // `llm_calls` write that goes with it.
   //
-  // So what stands behind it is elsewhere, in two halves. The
+  // So what stood behind it while it was empty is elsewhere, in two
+  // halves, and that is still where the coverage argument lives. The
   // matcher is covered over planted nodes in
   // `workflow-rosters.test.ts`, by the mutual-control pair
   // `isModelNode` has there. The ledger read is covered by the case
-  // that drives it over planted statements, and by nothing else: no
-  // node in the built tree writes a ledger row, so this case cannot
-  // exercise that rule and does not. The input is covered a module
-  // away, by the two refusals the sweeps in this file rest on. There
-  // is no walk to cover, this case reading each workflow's own nodes
-  // rather than the sweep those use.
+  // that drives it over planted statements, which is what carried
+  // the rule while no node in the built tree wrote a ledger row. The
+  // input is covered a module away, by the two refusals the sweeps
+  // in this file rest on. There is no walk to cover, this case
+  // reading each workflow's own nodes rather than the sweep those
+  // use.
   //
-  // Measured, six legs. A matcher recognising every type reddens
-  // this case, the retry case and the per-run-ceiling case, all
-  // three reading the same matcher; one recognising nothing reddens
-  // none of them. The ledger read forced true and forced false each
-  // leave this case green and redden the sample-driven case instead,
-  // which is what running across zero workflows means. A model node
-  // planted into the built artifact reddens this case and the
-  // ceiling case, one node satisfying both antecedents, and stops
-  // reddening this one once a ledger write is planted beside it.
+  // Measured, six legs, over the tree as it stood before `ar-ingest`
+  // landed. A matcher recognising every type reddens this case, the
+  // retry case and the per-run-ceiling case, all three reading the
+  // same matcher; one recognising nothing reddens none of them. The
+  // ledger read forced true and forced false each left this case
+  // green and reddened the sample-driven case instead, which is what
+  // running across zero workflows meant. A model node planted into
+  // the built artifact reddened this case and the ceiling case, one
+  // node satisfying both antecedents, and stopped reddening this one
+  // once a ledger write was planted beside it — which is the shape
+  // `ar-ingest` then landed for real.
   it('holds a ledger write in every workflow that holds a model node', () => {
     const owing = BUILT_WORKFLOWS
       .filter((workflow) => holdsModelNode(workflow))
@@ -1436,28 +1603,31 @@ describe('workflow invariants — built tree', () => {
   // ONE body, nothing carrying a `const` from one Code node into
   // the next.
   //
-  // It runs across zero workflows and will until phase 6, the same
-  // empty as the ledger-row case and not the retry case's — the
-  // shape `MODEL_NODE_TYPE_PREFIX` names for both: the antecedent
-  // is false, so the implication holds and the ceiling read is
-  // never reached at all. What stands behind it meanwhile is
-  // elsewhere, in two halves. The matcher is covered over planted
-  // nodes in `workflow-rosters.test.ts`, by the mutual-control pair
-  // `isModelNode` has there. The ceiling read is covered by the
-  // case that drives it over planted bodies, and by nothing else —
-  // no workflow in the built tree holds a model node, so this case
-  // cannot exercise that rule and does not. The input is covered a
-  // module away, by the two refusals the sweeps in this file rest
-  // on. There is no walk to cover, this case reading each
-  // workflow's own nodes rather than the sweep those use.
+  // It ran across zero workflows for two phases, the same empty as
+  // the ledger-row case and not the retry case's — the shape
+  // `MODEL_NODE_TYPE_PREFIX` names for both: the antecedent was
+  // false, so the implication held and the ceiling read was never
+  // reached at all. Phase 5 ended that. `ar-ingest` holds a model
+  // node, so this case now reads a real ceiling and its answer is
+  // about the built tree rather than about an empty walk. What stood
+  // behind it meanwhile is still where the coverage argument lives,
+  // in two halves. The matcher is covered over planted nodes in
+  // `workflow-rosters.test.ts`, by the mutual-control pair
+  // `isModelNode` has there. The ceiling read is covered by the case
+  // that drives it over planted bodies, which is what carried the
+  // rule while no workflow in the built tree held a model node. The
+  // input is covered a module away, by the two refusals the sweeps
+  // in this file rest on. There is no walk to cover, this case
+  // reading each workflow's own nodes rather than the sweep those
+  // use.
   //
-  // Measured, six legs. A matcher recognising every type reddens
-  // this case, the retry case and the ledger-row case, all three
-  // reading it for an antecedent of their own; one recognising
-  // nothing reddens none of them. The ceiling read forced true and
-  // forced false each leave this case green and redden the
-  // sample-driven case instead, which is what running across zero
-  // workflows means.
+  // Measured, six legs, over the tree as it stood before `ar-ingest`
+  // landed. A matcher recognising every type reddens this case, the
+  // retry case and the ledger-row case, all three reading it for an
+  // antecedent of their own; one recognising nothing reddens none of
+  // them. The ceiling read forced true and forced false each left
+  // this case green and reddened the sample-driven case instead,
+  // which is what running across zero workflows meant.
   //
   // The fixture leg that reads this case is two coordinated edits
   // to the built artifact rather than one: a model node, to fire

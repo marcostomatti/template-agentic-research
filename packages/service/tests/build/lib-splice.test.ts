@@ -242,6 +242,54 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'entry.toLowerCase() === lowered',
     ],
   },
+  {
+    file: 'parser-config.ts',
+    ownText: [
+      'segments.length > MAX_PATH_SEGMENTS',
+      'FALSE_WORDS.includes(word)',
+      'records.push(built.record)',
+    ],
+  },
+  {
+    file: 'markup-select.ts',
+    ownText: [
+      'fragments.length >= MAX_FRAGMENTS',
+      'RAW_TEXT_ELEMENTS.includes(tag.name)',
+      'stepMatches(step, ancestor)',
+    ],
+  },
+  {
+    file: 'source-health.ts',
+    ownText: [
+      'priorFailures(prior.consecutiveFailures) + 1',
+      'prior.flagged === true || failures >= threshold',
+      'outcome.succeeded === true',
+    ],
+  },
+  {
+    file: 'capture-contract.ts',
+    ownText: [
+      'version !== CAPTURE_CONTRACT_VERSION',
+      'canonicalStamp(at, value.length) === value',
+      'names.length > MAX_PROVENANCE_MEMBERS',
+    ],
+  },
+  {
+    file: 'prompt-frame.ts',
+    ownText: [
+      'cutFenceStems(asText(text))',
+      'replace(EMBED_OR_LINK_RE, wrapAddress)',
+      'spellsFenceStem(trusted)',
+    ],
+  },
+  {
+    file: 'feature-version.ts',
+    ownText: [
+      'value.replace(FIELD_ESCAPES, escapeSeparator)',
+      'Number(hash % TERM_DIGEST_MODULUS)',
+      'mechanismVersion * TERM_DIGEST_SPAN + termSetDigest(terms)',
+    ],
+  },
 ];
 
 /**

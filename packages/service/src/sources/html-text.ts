@@ -31,9 +31,13 @@
  * both read `src/lib/`, and this file is not there. Nothing about it
  * would stop a splice — it imports nothing, keeps no state between
  * calls, and exports only declarations, which is the whole of the
- * dual-context rule — so registering it is a decision for the phase
- * that first inlines an adapter into a Code node, not a repair owed
- * here.
+ * dual-context rule — so what keeps it out is where it sits, and
+ * nothing else. No marker reaches across that gap either:
+ * `assertMarkerPath` in `scripts/workflow-markers.ts` refuses a path
+ * holding a `..` segment, so no spelling of `__INLINE:` can name a
+ * file under this directory at all. Registering it is therefore a
+ * MOVE into `src/lib/`, owed by the phase that first needs this
+ * reduction inside a Code node, and not a repair owed here.
  *
  * THE RULE the reduction holds: what a human reads is STRUCTURE, and
  * the structure survives. Paragraphs come back as blank-line

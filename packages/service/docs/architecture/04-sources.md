@@ -5,8 +5,8 @@ document is the map of `src/sources/`: the contract an adapter
 satisfies, where the line between fetching and reading falls and what
 that line buys, what binds when an adapter is constructed rather than
 when it is called, how one adapter is registered and reached by id,
-and what the text reduction those adapters share guarantees about the
-body it produces.
+what a client posting a capture has to send, and what the text
+reduction those adapters share guarantees about the body it produces.
 
 It is the document the Sources row of the behaviour table in
 `docs/architecture/00-overview.md` names, so a change to what a
@@ -16,14 +16,15 @@ is `.specs/2026-08-19-research-pipeline-port.md` — §2 for the
 and validation the contract leaves room for — and phase numbers
 throughout refer to the 7-phase sequencing in that design, §7.
 
-One of the things `src/sources/` will hold is not here yet: the
-adapters that front a source, which arrive with `ar-ingest` in
-phase 5 and bring their own section here in the commit that lands
-them. What this document covers is what phase 4 landed for them to
-be built against: the contract they will satisfy, the registry that
-will select one of them, and the two shared modules they will reach
-for — the listing loop that gets the bytes, and the reduction that
-turns markup into the text a body holds.
+Two adapters front a source here, both landed in phase 5:
+`listing-api` over an `api` endpoint and `push-capture` over an
+envelope a client sent. What phase 4 landed for them to be built
+against is most of what follows — the contract they satisfy, the
+registry that selects one of them, and the shared modules they reach
+for, which are the listing loop that gets the bytes and the reduction
+that turns markup into the text a body holds. The capture contract
+below is the exception: the boundary that judges one landed in phase
+5 beside the adapter constructed from it.
 
 ## The contract
 
@@ -184,9 +185,10 @@ indistinguishable in a red suite.
 
 ### A parser config is data the engine executes, never code
 
-Selectors, JSONPath, regex, a field map. The parse engine arriving in
-phase 5 performs the operations it implements against the payload,
-directed by that column; it evaluates nothing it finds there.
+Selectors, JSONPath, regex, a field map. The parse engine in
+`src/lib/parser-config.ts` performs the operations it implements
+against the payload, directed by that column; it evaluates nothing it
+finds there.
 
 That is what keeps an INSERT into `sources` an INSERT. A column whose
 contents could execute would turn every writer that reaches it — the
@@ -203,8 +205,169 @@ contract together. The proposal lands as a pending row for an
 operator to rule on. Only the approval writes those two columns, and
 the engine then runs what was approved deterministically: a model
 proposes, a person decides once, and no guess silently changes what
-the pipeline extracts. The propose step is phase 5's; the columns it
-targets and the shape of the answer are fixed here.
+the pipeline extracts. The section below is that path end to end,
+from what is asked to the UPDATE a ruling authorizes.
+
+## Configuration a model proposes and a person approves
+
+### The path, in the order a proposal travels it
+
+Four steps, and only the first two and the last are code in this
+directory. `src/sources/config-proposer.ts` holds them, and it fronts
+no source: it declares no member of the contract above, appears in no
+registry, and opens nothing. What it is about is the pair of
+`sources` columns an adapter reads — how records are taken out of a
+payload, and what a correct reading looks like — and the separate
+question of who is allowed to write them.
+
+Something is asked for an arrangement first. `ConfigProposer` is that
+something, as an interface: one method, handed the source it is
+proposing for and one sample payload, answering the two documents
+together. A model client over a `connectors` endpoint is the expected
+implementation and not the only one the shape admits, and nothing on
+the path asks which it was.
+
+`proposalToPendingRow` turns that answer into a
+`source_config_proposals` insert naming five columns and leaving
+every other one to its default. `status` is one it does not name, so
+a proposal is `pending` because the table says so rather than because
+the propose path said so; `approved_at` is another, and the value it
+answers has no such member at all, so a writer spreading it into an
+insert has nothing to spread. `proposeSourceConfig` is those two
+steps in one call, and the only place the seam is actually crossed.
+
+A person then rules on the row through `scripts/approve.ts`, against
+a database, with no member of this directory involved. Only after
+that does `proposalToSourceUpdate` turn the approved row into the
+UPDATE for its source — two columns, exactly as they were proposed —
+and refuse a row nobody approved.
+
+### No proposer is constructed by default
+
+`ConfigProposer` is declared here and implemented nowhere. There is
+no factory in the module, no default standing in for one, and nothing
+in this service builds one at startup: a run that wants a proposal
+builds its own from the `connectors` row naming the model endpoint it
+is entitled to call, and hands it in.
+
+That is what keeps the isolated suite offline, and it is the
+enforcement rather than a convention — the only thing in reach that
+could call a model server is a parameter, so the cases beside the
+module drive an injected stub and could not reach one if they tried.
+The transport `listing-api.ts` takes at construction is the same
+decision about the same kind of reach: a call to something outside is
+visible in the call that made it, or it does not happen. One file
+does build a real proposer,
+`tests/live/config-proposer.live.test.ts`, and it self-skips unless
+`AR_OLLAMA_URL` names a model server — which nothing in this
+repository exports and no compose service satisfies.
+
+### A proposer is shown four members of the row
+
+An id, a domain, a kind and an endpoint, copied out into a fresh
+object rather than handed over as the caller's row. The annotation is
+a floor — a caller holding a whole `sources` row satisfies it — and
+copying the members out is what makes it a ceiling.
+
+What it leaves out is the substance. `cursor` is where the last fetch
+stopped, which is state a proposal must not move. The health half is
+`src/lib/source-health.ts`'s answer and nobody else's. And the
+current `parser_config` and `contract` are withheld deliberately: a
+proposer answers what the sample payload says the arrangement should
+be, and handing it the arrangement that is currently failing gives it
+something to copy.
+
+The cost of that last omission is real and worth naming. A proposer
+cannot answer that the config is right and the source changed, and it
+cannot improve on a config by degrees. The comparison happens where
+the ruling does, with the pending row and the source row both in
+front of one person.
+
+### What is stored is what was answered
+
+Nothing on the propose path validates a proposal, and that is the
+column's own decision rather than an omission. `parserConfigErrors`
+in `src/lib/parser-config.ts` says whether a config is well-formed,
+and an operator reading the queue is who that answer is for: a
+malformed proposal is storable, says something true about what was
+asked, and is one to reject rather than one the table should refuse.
+Both documents travel from the proposer's answer to the insert unread
+and uncopied, which is what makes the approval an approval of this
+exact document.
+
+A proposer that throws, cannot be reached, or times out is let
+through untouched, for the same reason read from the other end.
+Catching it would merge two states that are not one: a proposer that
+could not be asked, and a proposer that answered something unusable.
+Only the second is a proposal. The first, caught, would put a pending
+row in front of an operator for a question nobody answered, and that
+row would read exactly like a model that had genuinely answered with
+nothing.
+
+### The ruling is a row, and the CLI is a client of it
+
+`scripts/approve.ts` is the whole operator surface until the service
+and its UI take approvals over. It rules on this gate and on
+`research_pool`, because they are one job — a person's ruling
+standing between a machine's suggestion and a machine acting on it —
+and a ruling therefore names which: `approve config 7` and
+`approve pool 7` are rulings on different rows. Both tables key on
+`bigserial`, so row 7 exists in each, and a subject inferred from the
+number would be a guess made silently on the one command that writes.
+`list` names neither and reports both queues, each under its own
+heading, which is where an operator learns the two words.
+
+It decides nothing about what may be written. Every approval it
+issues only ever stamps `approved_at`, which can satisfy the
+constraint below and never breach it, and every rejection leaves both
+of the row's timestamps exactly as it found them — so a run of the
+tool never meets a refusal at all, which is what being a client of a
+constraint means. The queue it reads is ordered oldest first on
+`proposed_at`, which is what makes several proposals for one source
+workable without a key refusing the later ones.
+
+### The database holds one half of the rule, and this module the other
+
+They are not the same rule, and reading them as one is how the gap
+between them goes unnoticed. `source_config_proposals_approval_check`
+reads the two timestamps on the proposal row, so a row cannot record
+that it was applied without recording that it was approved first. It
+is generated into the migration under `drizzle/` that
+`tests/invariants/schema-sql.test.ts` reads, and registered as an
+invariant in `docs/architecture/01-invariants.md`. What it does not
+reach is `sources` at all. Both columns it reads are on the proposal,
+so what it enforces is that the record of an application carries the
+record of an approval — not that the UPDATE onto the source passed
+through this table on its way. A writer that skips the table and
+rewrites `sources.parser_config` directly is refused by nothing.
+
+`proposalToSourceUpdate` is what stands in that gap on the apply
+path, and it keys on the same account the CHECK does: `approved_at`,
+never `status`, which the database does not consult either and which
+may disagree with it. The status column is the account of the row
+rather than the gate, so a row stamped `done` with no approval is
+storable, and a check reading it would open for one. The stamp is
+read so that a NULL column and a member a caller projected away come
+out as one answer — a row that cannot say it was approved is a row
+that was not.
+
+Its refusal is loud rather than an empty answer, and that is because
+both ways of getting this wrong are silent and permanent. An UPDATE
+with nothing in its SET clause is an error nowhere in the stack; an
+UPDATE carrying an unapproved arrangement makes every later pass of
+that source extract under something nobody agreed to, and store what
+it got. Neither is undone by anything downstream, which is the same
+argument the `flagged` column rests on, and the reason this module
+refuses where `src/lib/source-health.ts` refuses nothing.
+
+What it does not refuse is worth reading beside that. A proposal
+already applied is answered again, since re-applying writes the same
+two documents onto the same source and there is nothing to protect by
+refusing — the selection that skips applied rows belongs to whoever
+is walking the queue. A malformed `parser_config` somebody approved
+anyway is answered, because the approval is the gate and this is not
+a second one. And nothing here writes: the answer is a value, and
+whether the UPDATE happened is known only to whoever ran it.
 
 ## The registry
 
@@ -252,9 +415,10 @@ edited by anyone the seed script or an operator lets near it.
 `toString`, `valueOf` and `constructor` all answer something off
 `Object.prototype`, so a lookup reading the key directly would hand a
 function back as though it were an adapter. The case is live rather
-than hypothetical, and the empty registry is what makes it live: the
-`in` operator answers true for every one of those names over an
-object holding nothing at all.
+than hypothetical whatever the registry holds: the `in` operator
+answers true for every one of those names over the very object the
+lookup reads, so what a registered id happens to be spelt has no
+bearing on it.
 
 ### The contract check reports every member, not the first
 
@@ -284,20 +448,227 @@ not a member here: an adapter fronting several endpoints runs the
 loop in `src/sources/paged-list.ts` inside its own `fetch`, so no
 optional member is left for a conditional rule to be about.
 
-### The registry ships empty, and that is a state rather than a stub
+### What is registered, and what registering one costs
 
-No module in this directory declares the five members yet. The two
-that sit beside it front no source and each says so at the top of its
-own file. The first adapter adds its own line to the literal, and the
-directory guard is what will notice if it forgets.
+`listing-api` and `push-capture`, and they front different kinds:
+`api` for the cursor-paged listing loop run against the endpoint a
+row names, `push` for an envelope a client sent. No registered
+adapter declares the `url` or `rss` kind, so a row carrying one
+names an id nothing answers — a fact about the literal rather than
+an error, and the null `getSourceAdapter` returns is how a caller
+finds out.
 
-### The registry is Node-only, and could not be anything else
+Registering an adapter is a line in that literal plus a case. The
+shipped ids are written out in `src/sources/index.test.ts` rather
+than derived from the literal being checked, so that expectation is
+what notices a registration at all, and the set-equality guard
+beside it notices the opposite mistake — a module written and never
+named. Nothing further is owed: the directory guard accounts for the
+module and the stored payload the id names, and the contract check
+walks whatever the registry holds, so both take a new entry without
+an edit.
+
+What is registered is not a working adapter, and that is where the
+contract and the registry pull against each other. Configuration
+binds at construction, so an adapter is per ROW; a registry is keyed
+by id and holds one entry per KIND of source. The entry therefore
+carries the id and the kind a `sources` row is matched against, is
+bound to no row and names no endpoint, so it can reach nothing even
+if something called it — `listing-api`'s declaration is held to that
+by a transport that refuses, and `push-capture` has nothing to
+refuse with, no member of it opening a socket at all. A run builds
+its own adapter through that module's factory with the row it is
+for.
+
+The other modules beside the registry front no source, declare none
+of the five members and each says so at the top of its own file.
+
+### Nothing here is spliced into a workflow, the registry included
 
 A registry names its adapters with value imports, which is exactly
-what the dual-context rule under `src/lib/` forbids. That is why the
-splice roster in `tests/build/lib-splice.test.ts` reads `src/lib/`
-and not this directory: a workflow inlines the ONE adapter it needs,
-never the list of all of them.
+what the dual-context rule under `src/lib/` forbids, so the registry
+is Node-only and could not be anything else. The rest of the
+directory is out of reach for a different reason, and it is a rule
+rather than a preference: `assertMarkerPath` in
+`scripts/workflow-markers.ts` refuses a marker path holding a `..`
+segment, so `__INLINE:../sources/listing-api.ts__` is turned away by
+name. The marker grammar takes that path and the path rule reports
+it as `a .. segment` — which is the refusal that says which edit
+fixes it, rather than a malformed-marker report naming neither the
+file wanted nor the directory looked in. No module outside
+`src/lib/` is spliceable under any spelling, which is why the splice
+roster in `tests/build/lib-splice.test.ts` reads that directory and
+not this one.
+
+An adapter's extraction logic therefore reaches a Code node only by
+living in a dual-context library the adapter also calls. Both
+adapters here reach `parser-config.ts` and `markup-select.ts` under
+`src/lib/` to extract; a workflow wanting that same extraction
+inlines those two libraries by name, never the adapter around them.
+One implementation read from two sides, with the Node-only half of
+an adapter — its transport, its digest, its registry line —
+staying in this directory.
+
+## The capture contract
+
+### A push source sends its payload, and the envelope is the frame
+
+`push-capture` is the one adapter constructed from something that
+arrived rather than from an address to go and read. A `sources` row
+can name what a pull adapter should fetch; it cannot supply what a
+push client captured. The envelope is what the client supplies
+instead, and `src/lib/capture-contract.ts` is the boundary that
+decides whether this service will read one.
+
+That module sits under `src/lib/` and not in this directory, because
+`ar-capture` splices it into the Code node that judges an envelope
+and nothing here is spliceable. It is documented here all the same:
+what a capture may be is this document's own subject, and
+`push-capture.ts` is constructed from an accepted envelope. The
+module's row in the spliceable-library table of
+`docs/architecture/03-workflows.md` is a summary of the same thing
+rather than a second contract.
+
+Five members, all required, and `CAPTURE_ENVELOPE_MEMBERS` is where
+the names are declared rather than retyped.
+
+| Member | What the contract states |
+| --- | --- |
+| `version` | Which contract the client wrote to. An integer, compared for equality against `CAPTURE_CONTRACT_VERSION`, and the only member read before any other is judged. |
+| `sourceId` | The `sources` row this capture is posted against, as a positive integer — the same id `documents.source_id` carries. Whether a row by that id exists, is enabled, or is the one this client should be posting to are three questions for the workflow that has a database. |
+| `capturedAt` | When the CLIENT captured the material, as a UTC instant: the one spelling `toISOString` emits, three fraction digits or none, ending in `Z`. An offset form names the same instant and is refused anyway, so that a string sort and an instant sort over a corpus of stamps cannot disagree. |
+| `provenance` | How the capture was taken. Keyed, scalars only with `null` included, and bounded three ways — at most 32 members, a name of at most 64 characters under the class a parser config uses for a field, and text of at most 512. |
+| `body` | What was captured: text, a keyed object, or a list of them. Never read at this boundary and never converted here. An empty string is accepted, a capture that yielded no text being one to keep. |
+
+Every member is read by own key alone. An envelope inheriting one
+from a prototype has not stated it, which is what stops a payload
+carrying no data at all from reading as one stating all five.
+
+### The body is stored before the envelope is judged
+
+`ar-capture` writes `documents.raw` first, with a `parse_status` of
+`failed`, and only then asks whether the envelope is one the contract
+accepts. The ordering is the point rather than an implementation
+detail.
+
+A push source cannot be re-read. A feed that answered something
+unusable is fetched again on the next pass, so a refusal there costs
+one cycle; a capture refused before it was stored is gone, and
+whoever posted it has already moved on. So the row is written while
+the payload is still nothing but bytes, and every sentence the
+boundary returns lands in `documents.parse_error` on a row that
+already exists.
+
+What a refusal produces is a stored failure — a document an operator
+can read, replay against a corrected config, and promote — rather
+than a gap nobody can reconstruct. That is the keep half of
+fail-flag-keep arriving a step earlier than the boundary section
+above describes it. There the bytes are stored whatever the reading
+made of them; here they are stored before anything has decided that
+the envelope around them is readable at all.
+
+The key is the one thing that write cannot derive. `documents.hash`
+is NOT NULL and UNIQUE, and the digest that column eventually carries
+is over a url and a body neither of which has been read yet, so the
+row is keyed provisionally over the posted body under a prefix a
+content digest cannot hold — that digest being 64 hexadecimal
+characters, the separator is the whole of the guarantee. What the
+provisional key collapses is a second POST arriving before the first
+was promoted. Recognising a genuine repeat capture is
+`documents.hash`'s own job one group later, under the content digest
+an extraction produced.
+
+### A version this service does not accept is refused, never assumed
+
+`CAPTURE_CONTRACT_VERSION` is what this service accepts, and an
+envelope stating anything else is refused on that alone: the other
+four members are not looked at, and no fault about any of them is
+reported.
+
+A version says WHICH rules the rest of the envelope is judged by, so
+an envelope from a client this service has never met is not an
+envelope with an odd number in it. It is one whose members mean
+something the boundary does not know. Judged under these rules
+anyway, a client on a later contract that had moved `provenance`
+inside its body would be told its provenance was missing: a sentence
+naming a member the client did not get wrong, about a contract it was
+not writing to.
+
+Reporting that fault alone is the other half of the same decision.
+Five faults derived from rules that do not apply is worse than one
+sentence saying the rules do not apply, because an operator reading
+the five would go and fix them.
+
+A short list is not a clean bill, and the node running the boundary
+says so rather than leaving the silence to be read as agreement. The
+item it emits carries whether the version was the accepted one beside
+the verdict itself, so a reader can tell an envelope that broke one
+rule from one that was never judged by any of them.
+
+### How a client learns which version to send
+
+Out of band, and deliberately. The version is
+`CAPTURE_CONTRACT_VERSION` in `src/lib/capture-contract.ts`, which is
+1 today, and that constant is the authority rather than this
+sentence. An operator who creates a `push` row hands the client
+author the number along with the row id, which is already how the id
+travels: nothing on the wire announces either.
+
+Nothing on the request path answers the question either. The webhook
+responds as the request lands, before the boundary has run, so what a
+client gets back is an acknowledgement and never a verdict. And a
+refusal names the rule rather than the value, for the version as for
+every other member, so nothing this service writes spells a number
+back at whoever sent one.
+
+What does name the version is operator-facing. A refused pass writes
+a boundary entry into the `errors` of the `runs` row that closes it,
+carrying the version this service accepts beside the faults, so
+somebody reading that run can tell a client author what to change —
+travelling back the way the row id came.
+
+### Provenance is a note, and it is recorded beside the record
+
+`provenance` records how the capture was taken: which client, which
+version of it, what it was reading. The three bounds are what keep it
+a note rather than a second payload. Provenance is operator-facing —
+read beside a document by somebody deciding whether to trust it — and
+a nested structure of unbounded size read that way is a payload
+wearing a note's name. The body already has somewhere to be, is
+bounded by nothing, and is rendered to nobody until an extraction has
+run over it.
+
+Where it lands is `documents.raw`, and only for an accepted envelope.
+The node recording the verdict rewrites that column as two members:
+the note, which is the envelope with its body left out, and the
+record, which is that body. Nothing is lost by the move, the record
+being what was posted; what is gained is that the members the
+boundary accepted sit beside the material they describe. A refused
+envelope leaves the column exactly as it arrived, and the sentence it
+earned in `documents.parse_error` is the whole of what changed about
+the row.
+
+The key does not move with it. The provisional hash is a column
+rather than a derivation, so rewriting what it was derived from moves
+nothing, and a second POST of the same capture still lands on the
+same row.
+
+The client's stamp writes no column of its own.
+`documents.captured_at` is when this pipeline inserted the row and is
+the column's own default; `capturedAt` is when the client captured
+the material. Neither is derivable from the other — a client that
+captured something on a train and posted it an hour later is lying
+about neither — so the envelope's stamp is stored with the rest of
+the note, where a later reader can compare the two.
+
+One envelope becomes one document on this canvas, which is what makes
+where the note lands a question at all. `push-capture.ts` splits a
+list body into one document per entry and carries the note onto each,
+because whoever calls the adapter inserts. The workflow promotes a
+row keyed before anything read the body, so a reading split into
+several would leave every entry after the first with no row to be
+written to. A client with several items to capture posts several
+captures, and that is the contract the endpoint offers.
 
 ## The shared listing run
 

@@ -879,9 +879,16 @@ describeLivePg('dispatcher reschedule clamp (live Postgres)', () => {
   // The first guard, and the one that says what is under test came out
   // of a build made here rather than off whatever last wrote the tree.
   // Four halves, each reading a different thing: the build's own
-  // outcome, the artifact it reported writing, the nodes the built
-  // dispatcher runs a clamp in, and the nodes this file has a fixture
-  // for.
+  // outcome, whether what it reported writing carries the dispatcher,
+  // the nodes the built dispatcher runs a clamp in, and the nodes this
+  // file has a fixture for.
+  //
+  // The first is a membership rather than the whole list. The build
+  // writes every source under `workflows/src/`, so a list held whole
+  // reddens here whenever a workflow this file has nothing to say
+  // about lands beside the dispatcher, and which artifacts the tree
+  // ships is the roster case in `tests/invariants/workflows.test.ts`
+  // to judge rather than this one.
   //
   // The third and fourth are the pair that matters. One is derived
   // from the artifact and the other from the roster above, and both
@@ -893,14 +900,15 @@ describeLivePg('dispatcher reschedule clamp (live Postgres)', () => {
     const drive = fixture();
 
     expect({
-      artifactsBuilt: drive.artifactsBuilt,
+      artifactsBuiltCarryTheDispatcher:
+        drive.artifactsBuilt.includes(DISPATCH_ARTIFACT),
       buildOutcome: drive.buildOutcome,
       clampNodesInTheDispatcher: drive.clampNodes,
       nodesThisFileDrives: sorted(
         CLAIM_FIXTURES.map((claim) => claim.nodeName),
       ),
     }).toEqual({
-      artifactsBuilt: [DISPATCH_ARTIFACT],
+      artifactsBuiltCarryTheDispatcher: true,
       buildOutcome: BUILD_RAN,
       clampNodesInTheDispatcher: DRIVEN_NODE_NAMES,
       nodesThisFileDrives: DRIVEN_NODE_NAMES,

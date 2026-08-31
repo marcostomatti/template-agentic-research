@@ -1,0 +1,56 @@
+{
+  "_readme": [
+    "PAYLOAD FIXTURE for `src/sources/push-capture.ts`.",
+    "",
+    "One capture as that adapter's `fetch` returns it: the versioned",
+    "envelope `src/lib/capture-contract.ts` describes, whole, with a",
+    "body carrying two records under `items`. `parse` and",
+    "`toCanonical` are driven over it with no network, which is what",
+    "keeps the cases beside that module in the fully isolated default",
+    "suite. For a push source that seam is the ordinary path rather",
+    "than a stand-in: the stored payload IS the source.",
+    "",
+    "An envelope, not the payload itself: everything the adapter is",
+    "handed sits under `payload`, and this key does not. A header",
+    "written into the payload would reach `parse` as though a client",
+    "had posted it.",
+    "",
+    "AUTHORED, not captured. Every host is under `.invalid`, which is",
+    "reserved and resolves nowhere, and the two records are about",
+    "nothing and nobody. A fixture is committed, and a real capture",
+    "pasted in whole is the easiest way to commit somebody else's",
+    "data by accident.",
+    "",
+    "The two records differ on purpose. The first carries markup the",
+    "`body` field reads through a selector; the second carries no",
+    "`markup` member at all, so that field reads nothing and the",
+    "document is kept with an empty body and a warning. `sourceId`",
+    "here is the row the client CLAIMS to be posting against, and the",
+    "cases construct the adapter for a different one so that the",
+    "claim and the column can be told apart."
+  ],
+  "payload": {
+    "version": 1,
+    "sourceId": 41,
+    "capturedAt": "2026-08-14T09:12:33.512Z",
+    "provenance": {
+      "client": "capture-extension",
+      "client_version": "0.4.2",
+      "captured_from": "https://library.example.invalid/notes",
+      "selection_only": false
+    },
+    "body": {
+      "items": [
+        {
+          "url": "https://library.example.invalid/notes/7",
+          "title": "Tidal notation in ledger margins",
+          "markup": "<article><p>The margin   marks run in pairs.</p></article>"
+        },
+        {
+          "url": "https://library.example.invalid/notes/8",
+          "title": "A second margin hand"
+        }
+      ]
+    }
+  }
+}

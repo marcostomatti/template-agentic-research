@@ -46,6 +46,7 @@ header carries the argument for why its tables sit together.
 | Table | What it holds |
 | --- | --- |
 | `sources` | One feed the pipeline is allowed to read: which transport family fronts it, what address to reach, how records are pulled out of the payload, what that payload has to contain, where the last fetch stopped, and its health. Adding a feed is an INSERT; only a new kind of feed needs a module. |
+| `source_config_proposals` | One proposed `parser_config` and `contract` for a source, held until a person rules on it. Only the approval writes those two columns onto the source row, and a named CHECK refuses a row that records having been applied while recording no approval — so a model may propose what the pipeline extracts and never decide it. |
 | `connectors` | One external service the pipeline calls — a model, a search endpoint, a notebook, an export target. Deployment-level rather than domain-scoped: which instance answers is a fact about where this is running, and a domain names the connector it wants where the choice actually varies. |
 
 ### Scheduling — `src/db/schema/scheduling.ts`
@@ -316,7 +317,7 @@ rule otherwise refuses to create.
 
 ## Which migration owns which constraint
 
-`drizzle/` holds five files and two mechanisms. Four of them were
+`drizzle/` holds two mechanisms. All but one of its files were
 written by `db:generate`, which diffs `src/db/schema.ts` against the
 newest snapshot under `drizzle/meta/` and emits the difference;
 `0002_category_depth_guard.sql` was written by hand and is the only
@@ -324,7 +325,7 @@ migration here that was.
 
 | Owner | What it carries |
 | --- | --- |
-| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_jittery_talos.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 25 tables, 167 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 10 CHECK — the eight value-set checks generated from the tuples in `src/db/schema/values.ts`, the two-column `research_pool_approval_check`, and the singleton bound pinning `operator_settings.id` to 1. All 32 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. Both partial dispatch-claim indexes. |
+| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_jittery_talos.sql`, `0005_freezing_hairball.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 26 tables, 177 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 12 CHECK — the nine value-set checks generated from the tuples in `src/db/schema/values.ts`, the two spanning two columns, `research_pool_approval_check` and `source_config_proposals_approval_check`, and the singleton bound pinning `operator_settings.id` to 1. All 34 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. Both partial dispatch-claim indexes. |
 | Hand-written — `0002_category_depth_guard.sql` | `categories_enforce_depth()` and the `BEFORE INSERT OR UPDATE` trigger on `categories` that calls it. Two statements, one rule, and the whole of the custom-owned DDL. |
 
 The snapshot decides that split, not taste. A table's entry in
@@ -350,7 +351,7 @@ children of the row being written, which no table definition states.
 
 Ownership says nothing about the reading. `readMigrationSql()` in
 `tests/invariants/schema-sql.ts` concatenates every `.sql` under
-`drizzle/` and its assertions run over the whole text, so twelve of
+`drizzle/` and its assertions run over the whole text, so fourteen of
 them land in the generated migrations and two in the hand-written one
 with nothing in the roster recording which. What does follow from the
 split is what a match there is worth. A generated statement is one of

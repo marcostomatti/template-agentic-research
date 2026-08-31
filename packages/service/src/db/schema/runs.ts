@@ -18,10 +18,12 @@
  * and `errors` is what it could not do; a reader wanting any of the
  * three has it without parsing the other two.
  *
- * `ar-dispatch` opens these rows and is the first workflow to, one
- * against each claimed row a tick goes on to dispatch. Nothing has
- * run it: this phase ships the workflow source, and the stack that
- * would import it arrives in phase 7.
+ * `ar-dispatch` was the first workflow to open these rows, in phase 3,
+ * one against each claimed row a tick goes on to dispatch, and phase 5
+ * made it one opener of three: `ar-capture` and `ar-score` each insert
+ * a row of their own, already closed, for a pass no tick scheduled.
+ * Nothing has run any of them: those phases ship workflow sources, and
+ * the stack that would import them arrives in phase 7.
  *
  * `llm_calls` below keeps the module's second account, at the
  * granularity of one model call rather than one pass;
@@ -341,8 +343,9 @@ export const runs = pgTable('runs', {
  * from answered that with a second copy on disk, and whether the
  * pairing is carried here is phase 6's to settle.
  *
- * Nothing writes these rows yet. The workflows that call a model are
- * `ar-research` and `ar-digest`, phase 6.
+ * `ar-ingest` writes these rows, from phase 5, one per call its model
+ * node made; `ar-research` and `ar-digest` join it in phase 6. Nothing
+ * has run any of them, for the reason the `runs` header above gives.
  */
 export const llmCalls = pgTable('llm_calls', {
   /** Surrogate key; see `domains.id` for why `number` mode. */

@@ -84,8 +84,9 @@ export interface DomainSettings {
    *
    * Stored rather than compiled in because a weight is the part of
    * scoring most likely to be tuned, and tuning it should not be a
-   * deploy. The arithmetic that consumes them arrives with the scoring
-   * port in phase 5.
+   * deploy. The arithmetic that consumes them is
+   * `src/lib/aggregate-score.ts`, landed in phase 4 and spliced into
+   * `ar-score`'s scoring node in phase 5.
    */
   readonly scoringWeights?: Readonly<Record<string, number>>;
 
@@ -192,12 +193,15 @@ export const domains = pgTable('domains', {
    * zero: 0 is a version like any other, and writing it here would
    * claim a vector computed under a scheme that never existed.
    *
-   * Nothing writes or reads the column yet. Phase 4 landed the
-   * feature port that computes a vector; version pinning against
-   * it — reading a stored vector's version against the domain's,
-   * recomputing what differs, bumping when a taxonomy edit moves the
-   * numbers under a vector already stored — arrives with the writer
-   * that stores one.
+   * The column is still unwritten and unread. Phase 4 landed the
+   * feature port that computes a vector and phase 5 the writer that
+   * stores one, in `ar-ingest`; what neither landed is the pinning this
+   * column is for — reading a stored vector's version against the
+   * domain's, recomputing what differs, bumping when a taxonomy edit
+   * moves the numbers under a vector already stored. `ar-ingest` and
+   * `ar-score` compare a document's version against the one they
+   * compose per pass instead, which finds a stale row and cannot retire
+   * a whole domain's.
    */
   featureVersion: integer('feature_version'),
 
@@ -269,10 +273,11 @@ export const domains = pgTable('domains', {
  * what a run did stays attributable to one set of rows rather than to
  * whichever edit landed partway through it.
  *
- * Nothing reads these rows yet: the first workflow arrives in phase 3
- * and the model-calling ones in phase 6. The rule binds from here
- * regardless — a prompt is a row in this table before it is anything
- * else.
+ * Every workflow phase 5 landed reads these rows: `ar-ingest`,
+ * `ar-capture` and `ar-score` each open with one query for a domain's
+ * personas and its taxonomy, whether or not the pass goes on to call a
+ * model. The rule binds whatever a reader does with them — a prompt is
+ * a row in this table before it is anything else.
  */
 export const personas = pgTable('personas', {
   /** Surrogate key; see `domains.id` for why `number` mode. */

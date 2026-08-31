@@ -1041,9 +1041,12 @@ function unusableTail(warned: number): string {
  * review rather than sent anywhere — see the header.
  *
  * The fields written are `gate_score`, `gate_decision` and
- * `gate_reason`. No column carries them yet; the phase that wires
- * this gate into a workflow decides where they land, and this is
- * the one place their names are written.
+ * `gate_reason`. No column carries them, and phase 5 is where the
+ * question of where they land was settled: `ar-ingest`'s Gate
+ * Documents node spells the three names a second time and answers
+ * them onto the item it emits, for the nodes downstream of it to
+ * read. So a rename here is two edits, and the workflow source is
+ * the other one.
  *
  * @param record - The row to decide.
  * @param chunk - What `src/lib/chunk.ts` built from it.

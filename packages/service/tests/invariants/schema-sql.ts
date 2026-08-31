@@ -256,13 +256,15 @@ export interface SchemaSqlAssertion {
 /**
  * The statements the generated migration must carry.
  *
- * Fourteen entries over the constraints the parent design calls
- * database-level: the approval gate on `research_pool`, the category
- * depth guard in both of its halves, the pair of constraints that
- * makes `documents.hash` dedupe, both partial scheduling indexes, the
- * CHECK behind `sources.kind`, the five holding the two auth tables
- * together — three unique keys, the session-to-user foreign key,
- * and the NOT NULL that bounds a session — and the CHECK that makes
+ * One entry per constraint the parent design calls database-level:
+ * the approval gate on `research_pool` and the one on
+ * `source_config_proposals` beside it, the category depth guard in
+ * both of its halves, the pair of constraints that makes
+ * `documents.hash` dedupe, both partial scheduling indexes, the
+ * CHECKs behind `sources.kind` and `source_config_proposals.status`,
+ * the five holding the two auth tables together — three unique
+ * keys, the session-to-user foreign key, and the NOT NULL that
+ * bounds a session — and the CHECK that makes
  * `operator_settings` a singleton.
  *
  * A chosen sample and not the whole schema, which is the whole reason
@@ -296,9 +298,10 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
     id: 'research-pool-approval-check',
     description:
       'Approval gate on research_pool: a row may carry a researched_at ' +
-      'only once an approved_at is set. The one CHECK in this schema ' +
-      'spanning two columns, so it is named for the rule rather than ' +
-      'for a column, and the predicate is pinned beside the name.',
+      'only once an approved_at is set. A CHECK spanning two columns ' +
+      'rather than constraining one, so it is named for the rule ' +
+      'rather than for a column, and the predicate is pinned beside ' +
+      'the name.',
     pattern: /^[ \t]*CONSTRAINT "research_pool_approval_check" CHECK \("research_pool"\."researched_at" IS NULL OR "research_pool"\."approved_at" IS NOT NULL\)/m,
   },
   // The depth guard is two entries because it is two statements that
@@ -383,6 +386,39 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
       'constrained column and the membership test; the members ' +
       'themselves are covered against their tuple elsewhere.',
     pattern: /^[ \t]*CONSTRAINT "sources_kind_check" CHECK \("sources"\."kind" in \(/m,
+  },
+  // The two constraints on source_config_proposals, kept apart for the
+  // reason the depth guard is: they are generated from one table
+  // declaration and they fail into different databases. Without the
+  // status CHECK the gate's account of where a row stands admits
+  // anything a writer types; without the approval CHECK the gate
+  // itself is gone, and a row may record that a config was written
+  // onto its source with nothing recording that anybody approved it.
+  //
+  // Stops at the opening parenthesis for the reason sources.kind
+  // above does, and the members are asked for by a case of its own in
+  // the same way — sharper here, because the tuple behind them is
+  // rendered into the migrations twice, once per constrained column.
+  {
+    id: 'source-config-proposals-status-check',
+    description:
+      'CHECK constraining source_config_proposals.status to the ' +
+      'declared value set, which is what keeps a proposal inside the ' +
+      'queue an operator reviews: a member outside the set is a row ' +
+      'no status filter selects. Pins the constrained column and the ' +
+      'membership test; the members are covered against their tuple ' +
+      'elsewhere.',
+    pattern: /^[ \t]*CONSTRAINT "source_config_proposals_status_check" CHECK \("source_config_proposals"\."status" in \(/m,
+  },
+  {
+    id: 'source-config-proposals-approval-check',
+    description:
+      'Approval gate on source_config_proposals: a row may carry an ' +
+      'applied_at only once an approved_at is set. What lets a model ' +
+      'propose a parser config without being able to put one into ' +
+      'service, spanning two columns like the research_pool gate and ' +
+      'named for the rule the same way.',
+    pattern: /^[ \t]*CONSTRAINT "source_config_proposals_approval_check" CHECK \("source_config_proposals"\."applied_at" IS NULL OR "source_config_proposals"\."approved_at" IS NOT NULL\)/m,
   },
   // The five auth entries are the whole of what a database enforces
   // for the basic strategy. Everything else a verified token has to
@@ -486,6 +522,24 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
 const SOURCES_KIND_CHECK_VALUES = /^[ \t]*CONSTRAINT "sources_kind_check" CHECK \("sources"\."kind" in \((.*)\)\)/m;
 
 /**
+ * The value list inside the `source_config_proposals.status` CHECK,
+ * captured whole, and the counterpart of the one above.
+ *
+ * Keyed on the constraint name rather than on the predicate, which
+ * matters more here than it does for `sources.kind`.
+ * `RESEARCH_POOL_STATUSES` constrains two columns, so the same four
+ * literals are rendered into the migrations twice under two
+ * constraint names — and a pattern reading the membership test alone
+ * would answer about whichever table drizzle wrote first, whatever
+ * the caller asked about.
+ *
+ * Greedy to the last `))` on the line for the reason given above, and
+ * the trailing comma the generated line carries after it is outside
+ * the capture either way.
+ */
+const PROPOSAL_STATUS_CHECK_VALUES = /^[ \t]*CONSTRAINT "source_config_proposals_status_check" CHECK \("source_config_proposals"\."status" in \((.*)\)\)/m;
+
+/**
  * Every single-quoted literal in a rendered value list, in order.
  *
  * The plain form, matching what `tests/schema/value-sets.test.ts`
@@ -500,6 +554,41 @@ function literalsIn(valueList: string): readonly string[] {
 }
 
 /**
+ * The members a rendered value list names, or a throw carrying
+ * `refusal` when the CHECK is not in the text at all.
+ *
+ * Refuses rather than returning nothing. An empty list compares
+ * against a tuple as a CHECK admitting no member at all, which is a
+ * different defect from a CHECK that is gone — and the roster entry
+ * beside each caller is what reports that one.
+ *
+ * The sentence is passed in rather than assembled here, because what
+ * a reader has to be told names the tuple that has nothing to compare
+ * against and the roster entry that reports the absence properly.
+ * Neither is derivable from the pattern.
+ *
+ * @param pattern - Value-list pattern, capturing the rendered
+ * literals in its first group.
+ * @param text - Concatenated migration SQL, as
+ * {@link readMigrationSql} returns it.
+ * @param refusal - What to say when the pattern resolves nothing.
+ * @returns The literals the CHECK names, in the order it names them.
+ */
+function checkMembers(
+  pattern: RegExp,
+  text: string,
+  refusal: string,
+): readonly string[] {
+  const match = pattern.exec(text);
+
+  if (match === null) {
+    throw new Error(refusal);
+  }
+
+  return literalsIn(match[1] ?? '');
+}
+
+/**
  * The members the generated migration's `sources.kind` CHECK admits.
  *
  * Read out of the SQL rather than off `SOURCE_KINDS`, which is the
@@ -509,27 +598,55 @@ function literalsIn(valueList: string): readonly string[] {
  * generated leaves the database refusing rows the union derived from
  * it calls valid, and no other seam in this package reads both sides.
  *
- * Refuses rather than returning nothing when the constraint is not
- * there. An empty list compares against the tuple as a CHECK admitting
- * no member at all, which is a different defect from a CHECK that is
- * gone — and the roster entry beside it is what reports that one.
- *
  * @param text - Concatenated migration SQL, as
  * {@link readMigrationSql} returns it.
  * @returns The literals the CHECK names, in the order it names them.
  */
 export function sourceKindCheckMembers(text: string): readonly string[] {
-  const match = SOURCES_KIND_CHECK_VALUES.exec(text);
+  return checkMembers(
+    SOURCES_KIND_CHECK_VALUES,
+    text,
+    'No sources_kind_check CHECK resolved from the migration text, ' +
+    'so there is no value list to compare against SOURCE_KINDS. The ' +
+    'roster entry sources-kind-check reports that absence as what it ' +
+    'is; this refusal is here so the two are never confused for a ' +
+    'CHECK that admits nothing.',
+  );
+}
 
-  if (match === null) {
-    throw new Error(
-      'No sources_kind_check CHECK resolved from the migration text, ' +
-      'so there is no value list to compare against SOURCE_KINDS. The ' +
-      'roster entry sources-kind-check reports that absence as what it ' +
-      'is; this refusal is here so the two are never confused for a ' +
-      'CHECK that admits nothing.',
-    );
-  }
-
-  return literalsIn(match[1] ?? '');
+/**
+ * The members the generated migration's
+ * `source_config_proposals.status` CHECK admits.
+ *
+ * The question {@link sourceKindCheckMembers} asks, put to the other
+ * tuple a CHECK in this schema is generated from, and for the same
+ * reason: `RESEARCH_POOL_STATUSES` and the constraint are two
+ * declarations of one set, and the migration is where the second
+ * stops following the first.
+ *
+ * Keyed on this table's constraint name, because that tuple
+ * constrains two columns and so reaches the migrations as two CHECKs
+ * carrying identical value lists. Knowing which of them answered is
+ * what the name buys: `research_pool_status_check` renders the same
+ * four literals, is read by nothing here, and sits in an earlier
+ * migration — so a reading that fell through to it would report
+ * that column's rendering under this column's name.
+ *
+ * @param text - Concatenated migration SQL, as
+ * {@link readMigrationSql} returns it.
+ * @returns The literals the CHECK names, in the order it names them.
+ */
+export function proposalStatusCheckMembers(
+  text: string,
+): readonly string[] {
+  return checkMembers(
+    PROPOSAL_STATUS_CHECK_VALUES,
+    text,
+    'No source_config_proposals_status_check CHECK resolved from the ' +
+    'migration text, so there is no value list to compare against ' +
+    'RESEARCH_POOL_STATUSES. The roster entry ' +
+    'source-config-proposals-status-check reports that absence as ' +
+    'what it is; this refusal is here so the two are never confused ' +
+    'for a CHECK that admits nothing.',
+  );
 }

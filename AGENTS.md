@@ -202,12 +202,14 @@ reading).
   external service; the live files self-skip unless the service they need is
   configured, and the Postgres half runs only against the no-volume `ar_live`
   DB on port 5433, whose destructive helpers refuse any other database name.
-  There are TWO gates now, armed differently — `describeLivePg` keys on
-  `AR_LIVE_DATABASE_URL`, which `bun run test:live` sets in its own script
-  definition, and `describeLiveN8n` keys on `AR_N8N_URL`, which nothing here
-  exports and no compose service satisfies. So a live run's steady state is
-  the Postgres files running and the n8n file skipping, and "the live suite"
-  is two things whenever a skip count is being read.
+  The gates in that directory are armed differently, and only one is armed
+  by anything here — `describeLivePg` keys on `AR_LIVE_DATABASE_URL`, which
+  `bun run test:live` sets in its own script definition, while
+  `describeLiveN8n` keys on `AR_N8N_URL` and `describeLiveOllama` on
+  `AR_OLLAMA_URL`, neither of which anything here exports and no compose
+  service satisfies. So a live run's steady state is the Postgres files
+  running and every other gated file skipping, and "the live suite" is more
+  than one thing whenever a skip count is being read.
 - Security findings route to a private advisory, never a public tracker —
   and are never searched for on a public tracker first (see the
   `qa-bug-reporter` agent).
@@ -281,39 +283,21 @@ reading).
   reporting the union against it reads as six regressions. Measured over
   780 tracked files: the matcher's five return exactly
   `origin-project : NOTICE : 10`, and the two needles assembled in
-  `packages/ui/eslint.config.mjs` return SEVEN more, of which four are
-  legitimate origin prose under the README/NOTICE clause and two are LAW
-  STATEMENTS naming their own subject (root `AGENTS.md`'s import ban spells
-  the scope it bans; `packages/ui/AGENTS.md`'s reference-free rule spells
-  the repo whose prose it restricts). Report the result bucketed by needle
-  SOURCE with the law each bucket answers to, never as one number against
-  the five-needle figure.
-- The `packages/ui/eslint.config.mjs` bucket is derivable ONLY by a TEXT
-  PARSE of its declaring module, unlike the five whose `FORBIDDEN_PATTERNS`
-  is exported: importing that config resolves its plugin imports fine but
-  `Object.keys(mod)` is `['default']` alone and its two needle consts are
-  unreachable at runtime, so a regex over the file TEXT is the whole
-  derivation. Guard it or the bucket reports a clean sweep for free —
-  assert the roster is exactly 2, that each parsed fragment count is 2, and
-  that each derived value is long enough to discriminate, since an empty
-  needle matches every line and an empty roster answers zero over anything,
-  both silently.
-- The CASE FLAG alone decides whether that bucket reads as clean, and the
-  only genuine leak in it is the one a case-sensitive matcher misses.
-  Measured over 831 tracked files: case-sensitive answers 6 and
-  case-insensitive 7, the single extra being exactly the
-  `packages/ui/scripts/compare-design.mjs` docblock recorded below as the
-  third leak shape, while all 6 of the case-sensitive set are legitimate.
-  So a case-sensitive sweep here returns nothing BUT legitimate hits and
-  looks perfectly discriminating. Print the case SPLIT and the
-  capitalised-spelling-only members, never one total. Read the `four are
-  legitimate origin prose ... and two are LAW STATEMENTS` clause above as
-  SIX of the seven rather than as the whole accounting, or a reader holding
-  it against a 7-hit run reports a regression nobody made. Unlike the five,
-  this bucket needs no unguarded near-neighbour control: both needles are
-  non-zero against the real tree in the same output that reports the
-  result, which is the in-band positive control the guarded five have to
-  manufacture.
+  `packages/ui/eslint.config.mjs` return SEVEN more, and those SEVEN
+  decompose THREE ways rather than the two a reader expects: legitimate
+  origin prose under the README/NOTICE clause, LAW STATEMENTS naming their
+  own subject (root `AGENTS.md`'s import ban spells the scope it bans;
+  `packages/ui/AGENTS.md`'s reference-free rule spells the repo whose prose
+  it restricts), and the pre-existing comment leak this file records below
+  as the third shape both automated halves miss
+  (`packages/ui/scripts/compare-design.mjs`). Hold the total against a
+  two-way split and one member is left unaccounted, which reads exactly
+  like a leak the branch introduced — so attribute that bucket before
+  reporting it: `git log -1 -- <path>` naming a commit older than the
+  branch, plus `git diff --name-only <base>..HEAD -- packages/ui` answering
+  nothing, is two lines and settles it. Report the
+  result bucketed by needle SOURCE with the law each bucket answers to,
+  never as one number against the five-needle figure.
 - Separate a pre-existing hit from one the branch introduced with a
   merge-base hit-set DIFF, the only leg that can: `git archive <merge-base>
   | tar -x -C /tmp/<fresh-dir>` — never `rm -rf` the directory first, which
@@ -541,12 +525,13 @@ red package never masks another and a single run gives the whole picture.
   prefix themselves, so a generic `@ar/`-prefixed bucket tested BEFORE the
   pino rule scores pino at zero, the same way. Attribute a moved bucket by
   EMITTING SCRIPT: the vite figure is 1781 + 1781, the `@ar/ui` build
-  printed once by `@ar/ui pretest` and once nested inside `@ar/web
-  pretest`, so it can only move from that package, and `@ar/service
-  pretest` emits two lines whatever the package holds — which is why
-  landing modules under `src/lib/` or `src/sources/` cannot move any line
-  bucket at all. The `Exited with code 0` set is exactly
-  SIX and worth NAMING rather than counting — `@ar/service pretest`,
+  printed once by `@ar/ui pretest` and once nested inside `@ar/web pretest`,
+  so it can only move from that package, and `@ar/service pretest` emits one
+  line per workflow SOURCE beside its summary — three lines over a tree
+  holding one workflow and four over two — so a landed workflow moves the
+  other-`@ar/` bucket by exactly one, while a module under `src/lib/` or
+  `src/sources/` moves no bucket at all. The `Exited with code 0` set is
+  exactly SIX and worth NAMING rather than counting — `@ar/service pretest`,
   `@ar/ui pretest`, `@ar/web pretest`, `@ar/ui test`, `@ar/web test`,
   `@ar/service test`.
 - Confirming that SET needs an ANCHORED matcher, because a substring count
@@ -604,10 +589,14 @@ red package never masks another and a single run gives the whole picture.
   above (measured 65 == 65 == 65 for `@ar/service`), so a test file on disk
   that was never collected shows up as the total disagreeing, with no
   second command. And the SKIPPED-FILE count is a membership question
-  rather than the drifting one: `Test Files 59 passed | 6 skipped (65)`
-  against `git ls-files — 'tests/live/*.test.ts'` (6) says the skips are
+  rather than the drifting one: the summary's skipped-FILE count held
+  against `git ls-files -- 'tests/live/*.test.ts'` says the skips are
   exactly the env-gated roster, and any file skipped that is NOT in it is a
-  non-live suite that has quietly gone `.skip`. Prefer that over the
+  non-live suite that has quietly gone `.skip`. Read it as a SET and never
+  as a number — the roster grows with every added gate (six at the q06
+  wrap, seven from the q09 approval-gate stage), so a stage comparing
+  against a figure quoted here or in a plan reports a correct run as a
+  regression. Prefer that over the
   skipped CASE count, which is comparable only against HEAD's own run.
 - That live roster is SEVEN files now rather than the six the example
   quotes — `tests/live/api.live.test.ts` landed with the wave-1 live
@@ -691,19 +680,43 @@ red package never masks another and a single run gives the whole picture.
   cross a percentage threshold that run. What IS stable is a skeleton diff —
   strip the pino JSON, normalise durations/ports/timestamps, then `difflib`
   the rest.
-- `@ar/service` reporting skipped tests is the expected steady state, and it
-  now has TWO sources behind it: the Postgres-gated files self-skipping
-  without `AR_LIVE_DATABASE_URL`, and the n8n-gated file self-skipping
-  without `AR_N8N_URL`. A run with zero skipped means a live service leaked
-  into the default suite, not that something improved. The count is not the
-  check — it moves with every case added under `tests/live/`, so compare it
-  against HEAD's own run rather than against a number quoted here or in a
-  plan. When the tree IS HEAD there is nothing to compare and nothing to
-  stash: `@ar/service`'s `pretest` prints `1 built, stamped <sha>` a few
-  lines above the vitest banner, so that sha held against
-  `git rev-parse --short HEAD`, plus the ABSENCE of a `-dirty` suffix, says
-  both that the artifacts under test are HEAD's and that the tree is clean —
-  in one line of one run.
+- `@ar/service` reporting skipped tests is the expected steady state, and
+  every gate under `tests/live/` is a source of it: the Postgres-gated files
+  self-skipping without `AR_LIVE_DATABASE_URL`, the n8n-gated file without
+  `AR_N8N_URL`, and the proposer-gated file without `AR_OLLAMA_URL`. A run
+  with zero skipped means a live service leaked into the default suite, not
+  that something improved. The count is not the check — it moves with every
+  case added under `tests/live/`, so compare it against HEAD's own run
+  rather than against a number quoted here or in a plan. When the tree IS
+  HEAD there is nothing to compare and nothing to stash: `@ar/service`'s
+  `pretest` prints `N built, stamped <sha>` a few lines above the vitest
+  banner, N being the workflow SOURCE count rather than a constant, so
+  that sha held against `git rev-parse --short HEAD`, plus the ABSENCE of
+  a `-dirty` suffix, says both that the artifacts under test are HEAD's
+  and that the tree is clean — in one line of one run.
+- A `test:<variant>` package script runs NO `pretest`: bun's lifecycle
+  hook is `pre<the whole script name>`, so only `test` declares one here
+  and `test:parity`/`test:live` build no workflows. Their captures
+  therefore carry no `N built, stamped <sha>` line at all, and the reading
+  that line supplies (the artifacts under test are HEAD's, the tree is not
+  `-dirty`) is simply UNAVAILABLE for them — a stage gate reading a
+  variant capture owes `git status --short -uall` plus
+  `git rev-parse HEAD` by hand instead. A variant run is correspondingly
+  cheaper than the full suite rather than mysteriously faster.
+- `bun run test:live` reds are TWO populations and only one is the
+  carried-in ledger row. The second is live-only ARITY ASSERTIONS, which
+  nothing in `test:all` can reach, `tests/live/` being
+  collected-but-skipped there: a landed workflow falsified
+  `schedule-clamp.live.test.ts`'s `artifactsBuilt` equality in a file the
+  branch never edited, and a prose sweep's needles are aimed at sentences
+  and structurally cannot reach an assertion. Attribute with
+  `git ls-tree -r --name-only <merge-base> -- packages/service/workflows/src/`
+  against `git ls-files` over the same path, plus
+  `git log <base>..HEAD -- <the test file>` answering empty. The repair is
+  the count-free move applied to an ASSERTION rather than to prose
+  (`includes(...)` held against `true`). Run `test:live` BEFORE a phase's
+  prose sweep rather than as its last verification task, or the finding
+  arrives with nothing left to bundle it into.
 
 - On a tree already RED from an earlier stage, "is this red mine?" is answered
   by a before/after SET diff, never by a figure this file or an earlier commit
@@ -799,6 +812,13 @@ matching anything prints exactly the same five lines.
   controls: a definitely-absent but scannable path (in NEITHER set, so
   membership is discriminating) and a binary-allowlist path (`a/b.png`,
   false, so the predicate is not simply answering true for everything).
+  That second control is necessarily SYNTHETIC here and saying so is part
+  of the reading: ZERO tracked files carry any of the 40
+  `BINARY_EXTENSIONS` and `ALLOWLISTED_PATHS` is empty, so `isScannable` is
+  the IDENTITY over `git ls-files` and the three numbers agree trivially.
+  Print the EXCLUDED count (`tracked - scannable`) beside the verdict so
+  that zero is visible rather than implied — a reader taking `a/b.png` for
+  a real tracked file reads the derivation as stronger than it is.
 - `--staged` is VACUOUS in two shapes, and both print the same
   `nothing staged to scan` the pre-commit hook does, so the
   scanned-count-equals-staged-count rule has nothing to read there. A pure
@@ -830,10 +850,15 @@ matching anything prints exactly the same five lines.
   disk (`ls -ld`), `git check-ignore -v` must name the governing rule AND
   LINE for each with one TRACKED path asserted exit-1 so the exit-0s are
   shown discriminating, and the same grep shape must return a hit for all
-  three over a PLANTED capture. Filtering `git ls-files` through
-  `isScannable` then closes the loop for free: the trio is in NEITHER the
-  tracked nor the scanned set, which is a stronger statement than the
-  ignores alone.
+  three over a PLANTED capture. That exit code is NOT itself a three-path
+  reading: it is 0 when ANY ONE argument is ignored, measured printing two
+  lines and exiting 0 over a trio carrying a misspelt member, so parse ONE
+  OUTPUT LINE PER PATH and assert the path SET equals the trio. The record
+  is `<source>:<line>:<pattern>` TAB `<path>` and the pattern is free to
+  carry colons, so split on the TAB first and never on the whole record.
+  Filtering `git ls-files` through `isScannable` then closes the loop for
+  free: the trio is in NEITHER the tracked nor the scanned set, which is a
+  stronger statement than the ignores alone.
 - `.github/**` joins package-root `AGENTS.md` in the read-by-no-fan-out-gate
   set, for a different reason: ESLint here has no YAML plugin at all, so
   `lint:all` never opens a `.yml` whatever the ignore patterns say, and

@@ -13,9 +13,11 @@
  * afterwards as the control that says the check can still answer
  * with nothing.
  *
- * Three arrangements in here exist to stop a claim going vacuous,
- * because the registry is EMPTY and an empty registry agrees with
- * anything.
+ * Three arrangements in here exist to stop a claim going vacuous.
+ * Every entry the shipped registry holds is a declaration bound to
+ * no row, so a walk over it agrees with almost anything, and each
+ * of the three supplies the discriminating input the shipped
+ * registry cannot.
  *
  * The member roster is declared here rather than read off the
  * module, so the "every member" claim is a real set equality: a
@@ -26,16 +28,19 @@
  * both cases with the module's own opinion of itself.
  *
  * The registry walk is driven over a BUILT registry as well as over
- * the shipped one. The shipped one holds nothing, so the walk over
- * it cannot say whether a fault would have been reported at all;
- * the built one holds a perfectly good adapter filed under the
- * wrong key, which is the one fault expressible without reaching
- * past the types, and its sentence is what says the walk reports.
+ * the shipped one, and over the shipped declarations themselves
+ * re-filed under keys they cannot match. A walk over the registry
+ * as it stands reports nothing, so on its own it cannot say whether
+ * a fault would have been reported at all; a module found under the
+ * wrong key is the one fault expressible without reaching past the
+ * types, and its sentence — which names the id the module declares
+ * and the key it was found under — is what says the walk reports.
  *
- * And the directory guard asserts what it FOUND as well as what it
- * failed to classify. An empty leftover set is what a guard reading
+ * And the set-equality guard asserts what it FOUND as well as what
+ * it failed to classify. Two empty sets are what a guard reading
  * the wrong directory produces too, so the listing is held to carry
- * the module it covers and the file doing the reading.
+ * the file doing the reading and every module the exclusion roster
+ * names.
  */
 import type {
   CanonicalDocument,
@@ -180,25 +185,90 @@ const SOURCES_DIR = dirname(fileURLToPath(import.meta.url));
 /** This file, taken from itself rather than written out. */
 const THIS_FILE = basename(fileURLToPath(import.meta.url));
 
-/** The module the registry and the contract live in. */
-const REGISTRY_MODULE = 'index.ts';
+/** The extension every module in this directory carries. */
+const MODULE_SUFFIX = '.ts';
+
+/** What a colocated case file carries in place of it. */
+const CASE_SUFFIX = '.test.ts';
 
 /**
- * The modules in this directory that are deliberately not adapters.
+ * Every module in this directory that is deliberately NOT an
+ * adapter, each carrying the reason it is not one.
  *
- * Both declare no member of the contract, front no source and say so
- * at the top of their own sources: `html-text.ts` is a pure markup
- * reduction, `paged-list.ts` the listing loop an adapter runs inside
- * its own `fetch`. They are named here because the guard below has
- * to account for every entry the directory holds, and a helper is
- * the one kind of entry that is neither an adapter nor a case file.
+ * The reason sits beside the name rather than in this paragraph
+ * because this roster is what the set-equality guard SUBTRACTS from
+ * the directory listing. A name added here takes a module out of
+ * the set the registry is held against, which is the one edit that
+ * can stop the guard reporting an adapter nobody registered — so
+ * the edit is made to cost a sentence somebody has to write and a
+ * reviewer can disagree with, rather than a name in a list.
+ *
+ * None of them declares a member of the contract and each says so
+ * at the top of its own source, and they are not on the roster for
+ * one reason. The registry module is no kind of source at all: it
+ * is where the contract, the registry and this check live. The
+ * helpers are what an adapter reaches for. And the propose seam
+ * serves the other gate this directory touches — what a source's
+ * arrangement will be, ruled on before it is written — which is
+ * about a source rather than a reading of one.
  *
  * Naming them is the cost of the guard and is meant to be paid: a
  * module that satisfies no contract and appears in no registry is
  * exactly the thing a directory listing would otherwise absorb
  * without anybody deciding what it was.
  */
-const HELPER_MODULES: readonly string[] = ['html-text.ts', 'paged-list.ts'];
+const NON_ADAPTER_MODULES = [
+  {
+    module: 'index.ts',
+    reason:
+      'the contract, the registry and this check itself, which is '
+      + 'what every adapter is measured against rather than one of '
+      + 'the things being measured',
+  },
+  {
+    module: 'config-proposer.ts',
+    reason:
+      'the seam a proposed parser_config and contract are ruled on '
+      + 'through, holding no proposer of its own and fronting no '
+      + 'source: what it is about is who may write two columns of a '
+      + 'sources row, not how anything is read',
+  },
+  {
+    module: 'html-text.ts',
+    reason:
+      'a pure markup reduction that fronts no source and declares '
+      + 'no member of the contract, paired with a selector by '
+      + 'whichever caller holds both rather than by an import',
+  },
+  {
+    module: 'paged-list.ts',
+    reason:
+      'the cursor-paged listing loop an adapter runs inside its own '
+      + 'fetch, which is why listing is no member of the contract',
+  },
+] as const;
+
+/**
+ * The excluded module names alone, which is what the membership
+ * tests below read.
+ *
+ * @returns The names, in roster order.
+ */
+function nonAdapterNames(): string[] {
+  return NON_ADAPTER_MODULES.map((entry) => entry.module);
+}
+
+/**
+ * What a scaffolded adapter's stored payload is named.
+ *
+ * `bun run scaffold source-adapter` emits a trio — the module, its
+ * colocated cases, and the payload those cases are driven over — so
+ * registering an id accounts for all three files rather than for the
+ * module alone. Without this bucket the fixture beside the first
+ * adapter falls through all four, and the guard below reports it as
+ * something nobody has decided what to call.
+ */
+const PAYLOAD_SUFFIX = '-payload.json';
 
 /**
  * Everything the directory holds, sorted.
@@ -215,24 +285,80 @@ function directoryEntries(): string[] {
 }
 
 /**
+ * The adapter modules sitting beside this file.
+ *
+ * Positive rather than leftover: a module in this directory is an
+ * adapter unless it is a case file or the exclusion roster names
+ * it. That makes the set the registry is held against something a
+ * reader can derive from the listing, rather than whatever happens
+ * to survive a stack of filters.
+ *
+ * @returns The adapter module file names, in listing order.
+ */
+function adapterModules(): string[] {
+  const excluded = nonAdapterNames();
+
+  return directoryEntries()
+    .filter((entry) => entry.endsWith(MODULE_SUFFIX))
+    .filter((entry) => !entry.endsWith(CASE_SUFFIX))
+    .filter((entry) => !excluded.includes(entry));
+}
+
+/**
+ * A module file name without its extension.
+ *
+ * @param entry - The file name.
+ * @returns The stem, which for an adapter is the id its registry
+ *   key has to spell.
+ */
+function moduleStem(entry: string): string {
+  return entry.slice(0, -MODULE_SUFFIX.length);
+}
+
+/**
+ * The id every adapter module beside this file has to be registered
+ * under, sorted.
+ *
+ * Sorted on the STEMS rather than inherited from the sorted
+ * listing, and the difference is measurable rather than defensive:
+ * a shared suffix can reorder two names whose stems part at a
+ * separator, so `a-b.ts` sorts before `a.ts` while `a` sorts before
+ * `a-b`. A set equality against a sorted `listSourceIds()` would
+ * fail on that pair alone, reporting an order where nothing is
+ * missing.
+ *
+ * @returns The ids, sorted the way {@link listSourceIds} sorts.
+ */
+function adapterModuleIds(): string[] {
+  return adapterModules()
+    .map(moduleStem)
+    .sort();
+}
+
+/**
  * Every entry the guard cannot account for.
  *
- * The four buckets are the registry module itself, the colocated
- * case files, the declared helpers, and one file per registered id.
- * What falls out of all four is an adapter nobody registered, a
- * helper nobody declared, or something else entirely — and each of
- * those wants a person, which is why the answer is the names rather
- * than a count.
+ * The set equality below covers the MODULES; this covers everything
+ * else the directory holds. The three buckets are the colocated
+ * case files, the modules the exclusion roster names, and the
+ * module and stored payload of each registered id. What falls out
+ * of all three is a stored payload nobody registered, a note
+ * somebody left, or something else entirely — and each of those
+ * wants a person, which is why the answer is the names rather than
+ * a count.
  *
  * @returns The unaccounted-for names, sorted.
  */
 function unclassifiedEntries(): string[] {
-  const registered = new Set(listSourceIds().map((id) => `${id}.ts`));
+  const excluded = nonAdapterNames();
+  const registered = new Set(listSourceIds().flatMap((id) => [
+    `${id}${MODULE_SUFFIX}`,
+    `${id}${PAYLOAD_SUFFIX}`,
+  ]));
 
   return directoryEntries()
-    .filter((entry) => entry !== REGISTRY_MODULE)
-    .filter((entry) => !entry.endsWith('.test.ts'))
-    .filter((entry) => !HELPER_MODULES.includes(entry))
+    .filter((entry) => !entry.endsWith(CASE_SUFFIX))
+    .filter((entry) => !excluded.includes(entry))
     .filter((entry) => !registered.has(entry));
 }
 
@@ -258,6 +384,103 @@ function registryFaults(registry: SourceAdapterRegistry): string[] {
   }
 
   return faults;
+}
+
+/**
+ * What a wrong registry key is spelled with here.
+ *
+ * A PREFIX rather than a key written out per adapter, so every
+ * shipped module gets a key its own `id` cannot match without this
+ * file knowing any id, and so a third adapter joins the case
+ * without an edit. Constant, so prefixed keys sort in the order
+ * their ids do and an expectation built here cannot disagree with
+ * the walk about order.
+ */
+const WRONG_KEY_PREFIX = 'misfiled-';
+
+/** A registry key, and the module the registry files under it. */
+interface RegisteredAdapter {
+  /** The key the registry holds it under. */
+  key: string;
+
+  /** The module found there. */
+  adapter: SourceAdapter;
+}
+
+/**
+ * The shipped registry as key-and-module pairs, in id order.
+ *
+ * Read through {@link getSourceAdapter} rather than by indexing the
+ * literal, so a pair is what a caller holding a `sources` row would
+ * actually reach. A key the lookup cannot answer for is dropped,
+ * which is why the case below holds the pair count against the id
+ * count rather than trusting the walk to have visited everything.
+ *
+ * @returns One pair per registered id, in id order.
+ */
+function shippedAdapters(): RegisteredAdapter[] {
+  const pairs: RegisteredAdapter[] = [];
+
+  for (const key of listSourceIds()) {
+    const adapter = getSourceAdapter(key);
+
+    if (adapter !== null) {
+      pairs.push({ key, adapter });
+    }
+  }
+
+  return pairs;
+}
+
+/**
+ * The same modules, each under a key its own `id` cannot match.
+ *
+ * Built from the shipped declarations rather than from a module
+ * written in this file. What a misfiling breaks is the agreement
+ * between a real adapter and the key a `sources` row selects it by,
+ * and only the real declarations can be wrong about that — so this
+ * is the control that says nothing here rests on a module authored
+ * to fail.
+ *
+ * @param pairs - The shipped pairs, under their own keys.
+ * @returns A registry holding each of them under a prefixed key.
+ */
+function misfiledRegistry(
+  pairs: readonly RegisteredAdapter[],
+): SourceAdapterRegistry {
+  return Object.fromEntries(
+    pairs.map((pair) => [`${WRONG_KEY_PREFIX}${pair.key}`, pair.adapter]),
+  );
+}
+
+/**
+ * Every fault one shipped pair reports under its OWN key.
+ *
+ * @param pair - The pair to check.
+ * @returns The sentences, which for a registry in order is none.
+ */
+function ownKeyFaults(pair: RegisteredAdapter): string[] {
+  return sourceAdapterContractErrors(pair.adapter, pair.key);
+}
+
+/**
+ * The labelled sentence the walk reports for one misfiled module.
+ *
+ * Both names are read off the pair rather than written out: the id
+ * off the module and the key off the registry, which is the pair a
+ * person handed a failing registry has to hold in their head. A
+ * sentence naming only one of them leaves them grepping for the
+ * other, so the expectation is built to fail unless both arrive.
+ *
+ * @param pair - The shipped pair, under its own key.
+ * @returns The `<key>: <fault>` line {@link registryFaults} builds
+ *   once that pair is re-filed under a prefixed key.
+ */
+function misfiledFault(pair: RegisteredAdapter): string {
+  const key = `${WRONG_KEY_PREFIX}${pair.key}`;
+
+  return `${key}: id "${pair.adapter.id}" does not match its `
+    + `registry key "${key}"`;
 }
 
 describe('sourceAdapterContractErrors — what a module fails', () => {
@@ -396,12 +619,14 @@ describe('sourceAdapterContractErrors — what a module fails', () => {
 });
 
 describe('the registry, and how one adapter is reached', () => {
-  // The current state, asserted rather than assumed. Nothing in this
-  // directory declares the five members yet, so the shipped registry
-  // is empty — and the day that changes, this case is the one that
-  // says so, beside the guard that says the new module was named.
-  it('ships empty, and lists nothing', () => {
-    expect(listSourceIds()).toEqual([]);
+  // What the registry ships, written out rather than derived. A case
+  // that computed the answer from the same literal it is checking
+  // would agree with any edit to that literal, and this is the one
+  // case that notices an adapter being registered or unregistered at
+  // all — beside the guard below, which notices a module that was
+  // written and never named.
+  it('lists the adapters this service ships', () => {
+    expect(listSourceIds()).toEqual(['listing-api', 'push-capture']);
   });
 
   // Sorted, over keys written out of order. The shipped registry
@@ -429,11 +654,11 @@ describe('the registry, and how one adapter is reached', () => {
     expect(getSourceAdapter('beta', registry)).toBeNull();
   });
 
-  // The prototype keys, which is the case the empty registry makes
-  // LIVE rather than hypothetical: `in` answers true for every one
-  // of these names over the very object the lookup reads, so a
-  // lookup that read the key instead of asking whether it was an own
-  // key would hand back a function off `Object.prototype`.
+  // The prototype keys, and the case is live rather than
+  // hypothetical whatever the registry holds: `in` answers true for
+  // every one of these names over the very object the lookup reads,
+  // so a lookup that read the key instead of asking whether it was
+  // an own key would hand back a function off `Object.prototype`.
   //
   // The `in` assertions are the control. Without them a green run is
   // equally satisfied by a registry that had stopped being a plain
@@ -451,10 +676,8 @@ describe('the registry, and how one adapter is reached', () => {
   });
 
   // Every registered adapter satisfies the contract under its own
-  // key. Vacuous over the shipped registry today and asserted
-  // anyway, because the day it stops being vacuous is the day
-  // somebody is thinking about an adapter rather than about this
-  // file.
+  // key, over the registry as shipped rather than over one written
+  // here.
   //
   // The second half is what makes the first half a reading. A
   // perfectly good adapter filed under the wrong key is the one
@@ -466,6 +689,35 @@ describe('the registry, and how one adapter is reached', () => {
     expect(registryFaults({ alpha: satisfyingModule('beta') }))
       .toEqual(['alpha: id "beta" does not match its registry key "alpha"']);
   });
+
+  // The same walk over the declarations the service actually ships,
+  // each checked under the key it is registered under and then
+  // under a key it cannot match. The pair is the reading: the case
+  // above makes the walk report over a registry written in this
+  // file, and this one makes it report over the real modules with
+  // nothing changed but the key.
+  //
+  // The sentence names BOTH — the id the module declares and the
+  // key it was found under — which is what a person handed a
+  // failing registry needs, since either half alone leaves them
+  // grepping for the other. Driven off the registry, so an adapter
+  // registered later joins both halves without an edit here.
+  //
+  // The two length assertions are what stop the halves agreeing
+  // vacuously. A registry the lookup could answer for nothing in
+  // would give two empty lists and pass every expectation above.
+  it(
+    'reports the id and the key for a shipped adapter filed wrong',
+    () => {
+      const pairs = shippedAdapters();
+
+      expect(pairs.map(ownKeyFaults)).toEqual(pairs.map(() => []));
+      expect(registryFaults(misfiledRegistry(pairs)))
+        .toEqual(pairs.map(misfiledFault));
+      expect(pairs.length).toBe(listSourceIds().length);
+      expect(pairs.length).toBeGreaterThan(0);
+    },
+  );
 });
 
 describe('the registry names every adapter this directory holds', () => {
@@ -475,40 +727,63 @@ describe('the registry names every adapter this directory holds', () => {
   // was written and never registered is invisible to every other
   // gate in the package. This case is what reports it.
   //
-  // Both directions. An entry the four buckets cannot account for is
-  // an unregistered adapter; a registered id with no module beside
-  // it is a key naming nothing.
-  it('accounts for every entry, and every id has a module', () => {
-    const entries = directoryEntries();
+  // A set equality against the ADAPTER modules rather than a
+  // leftover list over every entry the directory holds. Both
+  // failures are real and they are different failures: a module
+  // nobody registered leaves the left side long, a key naming no
+  // module leaves the right side long, and an equality says which
+  // without anybody reading a filter chain to work it out.
+  it('registers exactly the adapter modules sitting beside it', () => {
+    expect(adapterModuleIds()).toEqual(listSourceIds());
+  });
 
+  // Everything that equality cannot speak for. A stored payload, a
+  // note, a file of any other kind is not a module and so is on
+  // neither side of it — and an entry nobody has decided what to
+  // call is exactly what a directory listing absorbs silently.
+  it('accounts for every other entry the directory holds', () => {
     expect(unclassifiedEntries()).toEqual([]);
-    expect(listSourceIds().filter((id) => !entries.includes(`${id}.ts`)))
-      .toEqual([]);
   });
 
-  // The control an empty leftover set needs. A guard pointed at a
-  // directory that does not hold what it thinks it holds produces
-  // exactly the same green, so what was FOUND is asserted too: the
-  // module this file covers, the file doing the reading, and every
-  // helper the roster declares.
-  it('reads the directory the registry and this file sit in', () => {
+  // The control two empty sets need. A guard pointed at a directory
+  // that does not hold what it thinks it holds produces exactly the
+  // same green, so what was FOUND is asserted too: the file doing
+  // the reading, and every module the exclusion roster names.
+  //
+  // That second half is also what stops a roster entry outliving
+  // the module it excuses. A name left behind after a rename
+  // excludes nothing and would never be noticed by the equality,
+  // which sees only the module that is actually there.
+  it('reads the directory it and the registry sit in', () => {
     const entries = directoryEntries();
+    const excluded = nonAdapterNames();
 
-    expect(entries).toContain(REGISTRY_MODULE);
     expect(entries).toContain(THIS_FILE);
-    expect(HELPER_MODULES.filter((helper) => !entries.includes(helper)))
-      .toEqual([]);
-    expect(HELPER_MODULES.length).toBeGreaterThan(0);
+    expect(excluded.filter((name) => !entries.includes(name))).toEqual([]);
+    expect(excluded.length).toBeGreaterThan(0);
+    expect(adapterModuleIds().length).toBeGreaterThan(0);
   });
 
-  // A helper is not an adapter, which the two rosters would let
-  // somebody assert twice. Registering a helper would make the guard
-  // above pass while the registry named a module declaring none of
-  // the five members, so the overlap is refused directly.
-  it('registers no module the helper roster declares', () => {
-    const registered = listSourceIds().map((id) => `${id}.ts`);
+  // Every exclusion carries a reason, because an entry added
+  // without one is precisely the edit this roster exists to make
+  // somebody argue for. A blank reason and a duplicated name are
+  // the two ways of adding a name while writing nothing.
+  it('gives a reason for every module it excludes', () => {
+    const reasons = NON_ADAPTER_MODULES.map((entry) => entry.reason.trim());
+    const names = nonAdapterNames();
 
-    expect(registered.filter((file) => HELPER_MODULES.includes(file)))
-      .toEqual([]);
+    expect(reasons.filter((reason) => reason === '')).toEqual([]);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  // An excluded module is not an adapter, which the two rosters
+  // would let somebody assert twice. The equality above already
+  // fails when they overlap, so what this case adds is the NAME of
+  // the edit that caused it rather than two lists that differ.
+  it('registers no module the exclusion roster names', () => {
+    const excluded = nonAdapterNames();
+    const registered = listSourceIds().map((id) => `${id}${MODULE_SUFFIX}`);
+
+    expect(registered.filter((file) => excluded.includes(file))).toEqual([]);
   });
 });
