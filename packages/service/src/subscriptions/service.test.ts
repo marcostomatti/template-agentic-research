@@ -4,18 +4,19 @@
  * over `tests/helpers/memory-research-store.ts`, so every claim
  * here is answered with no database anywhere.
  *
- * SIXTEEN CLAIMS, TEN OF THEM ABOUT A REFUSAL. The refusal half
- * carries only the CONTROLS a refusal needs to be readable: each is
- * varied along the one axis its refusal turns on, because a module
- * refusing everything passes every assertion a refusal case makes
- * on its own. The plan's six are the address, the connector, the
- * format, the triple, the pipeline-owned member and the id that
- * names nothing; the other four are the readings those six cannot
- * give on their own. The six that follow them are what these
- * operations LET THROUGH, and every one of those is read back
- * through an operation other than the one that wrote it.
+ * EIGHTEEN CLAIMS, ELEVEN OF THEM ABOUT A REFUSAL. The refusal
+ * half carries only the CONTROLS a refusal needs to be readable:
+ * each is varied along the one axis its refusal turns on, because
+ * a module refusing everything passes every assertion a refusal
+ * case makes on its own. The plan's seven are the address, the
+ * connector, the format, the triple, the pipeline-owned member,
+ * the id that names nothing and the subscription that is switched
+ * off; the other four are the readings those seven cannot give on
+ * their own. The seven that follow them are what these operations
+ * LET THROUGH, and every one of those is read back through an
+ * operation other than the one that wrote it.
  *
- * THAT AN ADDRESS NAMING NOTHING IS A 404 ON ALL FOUR OPERATIONS,
+ * THAT AN ADDRESS NAMING NOTHING IS A 404 ON ALL FIVE OPERATIONS,
  * and that the two addresses are told apart. A `:slug` naming no
  * domain and an `:id` naming no subscription are fixed in different
  * places, so a module answering one sentence to both would send an
@@ -118,6 +119,19 @@
  * built by hand here is likeliest to quote and the only channel a
  * string sentinel cannot reach.
  *
+ * THAT A DISABLED SUBSCRIPTION IS A 409 AND IS LEFT EXACTLY AS IT
+ * WAS. `enabled` false excludes a row from the partial index the
+ * dispatch claim walks, so writing the clock onto it would produce
+ * a row looking due forever and never claimed — a silent no-op the
+ * caller cannot see. Three readings sit beside the status and none
+ * substitutes for another: the same verb against a row differing
+ * in `enabled` alone, which is what says the guard is a guard
+ * rather than a verb refusing everything; the whole stored row
+ * compared afterwards, which is what says the refusal happened
+ * BEFORE the write rather than after it; and `enabled` named on
+ * its own, since a verb quietly enabling what it was handed would
+ * be undoing a suspension somebody chose.
+ *
  * THAT A LIST ANSWERS ONE DOMAIN'S SUBSCRIPTIONS AND ORDERS THEM BY
  * THE PAIR. The fixture puts a row carrying `digest`'s WHOLE pair
  * under the second domain, so a read reaching past the domain
@@ -177,14 +191,31 @@
  * at all. Measured — planting an optional member on the record
  * answers exactly one TS2322, at this file's own pin.
  *
+ * THAT A RUN NOW WRITES THE CLOCK'S INSTANT AND MOVES NOTHING
+ * ELSE. The equality is against an INJECTED instant, which is the
+ * whole reason the clock is a parameter: a verb reading the real
+ * present answers a plausible time no assertion could pin. One
+ * equality against one fixed instant is not the claim on its own,
+ * so the case calls again from a clock that has MOVED — the
+ * reading that separates the thunk being resolved at the write
+ * from one resolved when the dependency was assembled. Idempotence
+ * is its own case and its own control: two whole answers compared
+ * are equally green against a verb that wrote nothing either time,
+ * so the first call is shown moving the row off the null a create
+ * landed it at. And the containment is read off the STORE rather
+ * than off what the verb answered, member for member against a
+ * copy taken before the call, over TWO rows — one carrying neither
+ * bound and one carrying both, since one row alone is blind to
+ * whichever direction it is not in.
+ *
  * Mutation legs, run over this file with `--reporter=json` and read
  * as the failed case SET rather than as a count, measured against
- * 118 cases. Thirty-two legs, twenty-one aimed at
- * `src/subscriptions/service.ts` and eleven at
+ * 127 cases. Thirty-eight legs, twenty-five aimed at
+ * `src/subscriptions/service.ts` and thirteen at
  * `tests/helpers/memory-research-store.ts` — the natural key, the
  * page's order and what a write actually stores are all the
  * STORE's, and no leg over the service reaches any of them. Every
- * leg collected all 118 cases, which is what separates a leg that
+ * leg collected all 127 cases, which is what separates a leg that
  * legitimately reddened nothing from one whose edit broke
  * collection and scored zero identically.
  *
@@ -337,6 +368,50 @@
  * reddens 2, the two whole-record cases that also assert the key
  * set, and dropping one from it reddens 7 across both halves.
  *
+ * THE RUN-NOW VERB'S SIX LEGS SPLIT THREE AND THREE, and the
+ * figures below are the whole file rather than a bucket, every one
+ * of them landing inside the two sections the verb owns. Deleting
+ * the `enabled` guard reddens 4 — the whole of the refusal section
+ * — where making that same branch refuse EVERY run now reddens 5
+ * and is recorded as blunt: four of the five are the fixture
+ * reporting, and only the control varied on `enabled` alone is
+ * named for it. Answering the disabled state a 404 rather than a
+ * 409 reddens exactly 2, the status case and that same control,
+ * which is the narrowest of the three.
+ *
+ * Having the verb read the real present rather than the injected
+ * thunk reddens 4, and it is the leg the second call from a moved
+ * clock exists for: a fixture whose only reading were one equality
+ * against one instant would have had to be measured against a
+ * clock nobody moved. Its two store-side neighbours redden 4 and
+ * 3. Having `updateSubscriptionSchedule` ALSO flip `enabled`
+ * reaches the containment case; having it store nothing at all
+ * reddens the three positive cases and no refusal, which is what
+ * says every containment reading here is paired with a control
+ * that the permitted column did move.
+ *
+ * FIVE RECORDED LEGS WERE RE-RUN RATHER THAN QUOTED, chosen by
+ * what the new cases CALL rather than by what each leg is about,
+ * and each came back at exactly its recorded figure OUTSIDE the
+ * two new sections — which is the reading that says the leg was
+ * rebuilt and not re-derived into a neighbour. Writing `enabled`
+ * true whatever a create submitted still reddens 1 outside and
+ * gains the whole refusal section, the staged row being a create
+ * with `enabled: false`. Folding every created bound to null still
+ * reddens 2 outside and gains the containment case, which reads
+ * the two bounds in both states. Collapsing the two 404 sentences
+ * still reddens exactly 1 and gained nothing, the new address row
+ * naming the same subject the patch and the delete do. And the two
+ * projection legs behaved oppositely: answering a member the
+ * record never had still reddens 2 and gains nothing, the
+ * containment projection being BUILT from a key list rather than
+ * spread, while dropping a bound from the projection reddens 6
+ * outside and gains the containment case — which it does only
+ * because that case's fixture guard reads the planted bounds as
+ * numbers rather than merely as non-null. The remaining fifteen
+ * are refusal-TRANSLATION legs over the four ordinary operations,
+ * and the run-now verb calls none of the rules they mutate.
+ *
  * What no module mutation reaches, by construction: the table
  * guards read only the tables beside them and are aimed at a later
  * edit, such as an operation added with no row or a body half
@@ -356,6 +431,9 @@ import type {
 import type { SubscriptionRecord } from './store.js';
 import type { FieldError } from '../../lib/errors/index.js';
 import type {
+  MovableClock,
+} from '../../tests/helpers/memory-auth-store.js';
+import type {
   MemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
 import type { ConnectorRecord } from '../connectors/store.js';
@@ -370,6 +448,9 @@ import {
   ValidationError,
 } from '../../lib/errors/index.js';
 import {
+  createMovableClock,
+} from '../../tests/helpers/memory-auth-store.js';
+import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
 import { EXPORT_FORMATS } from '../db/schema/values.js';
@@ -380,6 +461,7 @@ import {
   deleteSubscription,
   listSubscriptions,
   patchSubscription,
+  runSubscriptionNow,
 } from './service.js';
 
 /** The seeded worked example, and the domain every case stores. */
@@ -413,6 +495,17 @@ const MISSING_CONNECTOR_ID = 424242;
  * boundary cases are varying.
  */
 const DAILY = 86400;
+
+/**
+ * The instant every clock in this file reads until a case moves
+ * it.
+ *
+ * A literal rather than the present, because the run-now verb
+ * writes what its clock answered and the case that pins the write
+ * compares the two exactly. A verb reading the real present
+ * answers a plausible instant no assertion could pin at all.
+ */
+const FIXED_INSTANT = new Date('2026-08-31T09:00:00.000Z');
 
 /**
  * A window wider than any collection planted here.
@@ -454,6 +547,13 @@ const UNKNOWN_FORMAT = 'csv';
 interface PlantedSubscriptions {
   /** The store, holding {@link RADAR} and {@link TRANSIT}. */
   readonly store: MemoryResearchStore;
+
+  /**
+   * The present, as the run-now verb reads it. Fixed at
+   * {@link FIXED_INSTANT} and moved only by the case that asks
+   * whether the thunk is resolved at the write.
+   */
+  readonly clock: MovableClock;
 
   /**
    * The notebook connector all three planted subscriptions deliver
@@ -505,6 +605,7 @@ interface PlantedSubscriptions {
  */
 async function plantSubscriptions(): Promise<PlantedSubscriptions> {
   const store = createMemoryResearchStore();
+  const clock = createMovableClock(FIXED_INSTANT);
 
   await store.insertDomain({ slug: RADAR, name: 'Radar', settings: {} });
   await store.insertDomain({ slug: TRANSIT, name: 'Transit', settings: {} });
@@ -537,7 +638,7 @@ async function plantSubscriptions(): Promise<PlantedSubscriptions> {
     intervalSeconds: DAILY,
   });
 
-  return { store, vault, inbox, digest, feed, foreign };
+  return { store, clock, vault, inbox, digest, feed, foreign };
 }
 
 /**
@@ -635,6 +736,7 @@ const OPERATIONS = [
   'deleteSubscription',
   'listSubscriptions',
   'patchSubscription',
+  'runSubscriptionNow',
 ];
 
 /**
@@ -651,7 +753,7 @@ interface MissingCase {
   readonly operation: string;
 
   /**
-   * Which address was wrong. Two subjects reach these four
+   * Which address was wrong. Two subjects reach these five
    * operations — a `:slug` that names no domain, and an `:id` that
    * names no subscription — and a caller has to be able to tell
    * which, since the two are fixed in different places.
@@ -711,14 +813,34 @@ const MISSING_CASES: readonly MissingCase[] = [
     refuse: ({ store }) => deleteSubscription(store, MISSING_ID),
     control: ({ store, digest }) => deleteSubscription(store, digest.id),
   },
+  {
+    // The verb reads the stored row before it decides, so an id
+    // naming nothing is answered by the LOOKUP rather than by the
+    // write — and the control is an enabled row, since the other
+    // state this verb refuses is a 409 and would pass for a
+    // missing address on a case reading only that something threw.
+    operation: 'runSubscriptionNow',
+    subject: 'subscription',
+    refuse: ({ store, clock }) => runSubscriptionNow(
+      store,
+      clock.now,
+      MISSING_ID,
+    ),
+    control: ({ store, clock, digest }) => runSubscriptionNow(
+      store,
+      clock.now,
+      digest.id,
+    ),
+  },
 ];
 
 describe('an address that names nothing', () => {
   it('covers every operation this module exports', () => {
-    // Paired by name rather than by count, so a fifth operation
+    // Paired by name rather than by count, so a sixth operation
     // added to the module without a row here is this case failing
-    // rather than a table that quietly covers four of five. The
-    // run-now verb will owe a row here when it lands.
+    // rather than a table that quietly covers five of six. The
+    // run-now verb owed a row here and has one: it addresses a
+    // subscription by id exactly as the patch and the delete do.
     expect(MISSING_CASES.map((row) => row.operation).sort())
       .toEqual([...OPERATIONS].sort());
   });
@@ -1222,7 +1344,8 @@ const BODY_OPERATIONS = ['create', 'patch'];
  *
  * `nextRunAt` is `export_subscriptions`'s own: `ar-dispatch` writes
  * it inside the claim it reschedules with, and the only door onto
- * it from here is the run-now verb that lands beside these four.
+ * it from here is `runSubscriptionNow`, which reads no body at all
+ * and so cannot be reached by a member of one.
  * `flagged` is not a column of this table at all — it is a source's
  * — and it is here for exactly that reason: the refusal is
  * `.strict()` doing its ordinary work rather than a per-column
@@ -2128,6 +2251,131 @@ describe('what a refusal is allowed to say', () => {
 });
 
 // ---------------------------------------------------------------------------
+// The state a run now refuses
+// ---------------------------------------------------------------------------
+
+/** A format nothing the fixture plants delivers in. */
+const STAGED_FORMAT = 'notion_md';
+
+/** The cadence every subscription staged below delivers at. */
+const WEEKLY = 604800;
+
+/**
+ * Stages one subscription of {@link RADAR} switched off.
+ *
+ * Through {@link createSubscription} rather than through the
+ * store, per {@link plantSubscriptions}: `enabled` is a member the
+ * create schema takes, so the state this verb refuses is one the
+ * surface itself can land rather than one only a fixture can
+ * build.
+ *
+ * @param planted - The fixture to stage it in.
+ * @param connectorId - Where it would deliver. Varied by the
+ *   caller so that two staged rows do not collide on the triple.
+ * @returns The stored row, whose `enabled` is false.
+ */
+async function stageDisabled(
+  planted: PlantedSubscriptions,
+  connectorId: number,
+): Promise<SubscriptionRecord> {
+  return createSubscription(planted.store, RADAR, {
+    format: STAGED_FORMAT,
+    connectorId,
+    intervalSeconds: WEEKLY,
+    enabled: false,
+  });
+}
+
+describe('the state a run now refuses', () => {
+  it('answers 409 to a run now on a disabled row', async () => {
+    // `enabled` false excludes the row from the partial index the
+    // dispatch claim walks, so writing the clock onto it would
+    // produce a row looking due forever and never claimed — a
+    // silent no-op the caller cannot see. The refusal carries no
+    // details: nothing about it names a member of a body, this
+    // verb reading none.
+    const planted = await plantSubscriptions();
+    const staged = await stageDisabled(planted, planted.vault.id);
+
+    const refusal = await refusalFrom(
+      () => runSubscriptionNow(planted.store, planted.clock.now, staged.id),
+    );
+
+    expect(refusal).toBeInstanceOf(ConflictError);
+    expect(refusal.code).toBe('CONFLICT');
+    expect(refusal.statusCode).toBe(409);
+    expect(refusal.details).toBeUndefined();
+  });
+
+  it('runs the same call against an enabled row', async () => {
+    // The positive control for the case above, varied along the
+    // one axis under test: same verb, same clock, same domain, two
+    // rows differing in `enabled` alone. A verb refusing every
+    // run now passes the refusal and fails this.
+    const planted = await plantSubscriptions();
+    const staged = await stageDisabled(planted, planted.inbox.id);
+
+    await expect(runSubscriptionNow(
+      planted.store,
+      planted.clock.now,
+      staged.id,
+    )).rejects.toBeInstanceOf(ConflictError);
+
+    const enabled = await createSubscription(planted.store, RADAR, {
+      format: STAGED_FORMAT,
+      connectorId: planted.vault.id,
+      intervalSeconds: WEEKLY,
+    });
+    const ran = await runSubscriptionNow(
+      planted.store,
+      planted.clock.now,
+      enabled.id,
+    );
+
+    expect(ran.enabled).toBe(true);
+    expect(ran.nextRunAt).toStrictEqual(FIXED_INSTANT);
+  });
+
+  it('leaves the disabled row exactly as it found it', async () => {
+    // Read off the STORE rather than off the refusal: a verb that
+    // wrote the instant and only then noticed the state satisfies
+    // every assertion above. The due time is the member the write
+    // would have moved, and it was null before the call.
+    const planted = await plantSubscriptions();
+    const staged = await stageDisabled(planted, planted.vault.id);
+
+    expect(staged.nextRunAt).toBeNull();
+
+    await refusalFrom(
+      () => runSubscriptionNow(planted.store, planted.clock.now, staged.id),
+    );
+
+    const stored = await planted.store.findSubscriptionById(staged.id);
+
+    expect(stored).toStrictEqual(staged);
+  });
+
+  it('does not enable the row it refused', async () => {
+    // The repair is a `PATCH` the caller takes as its own
+    // decision, so a verb quietly enabling what it was handed
+    // would answer a request nobody made — and would then be
+    // undoing a suspension somebody chose. The case above compares
+    // the whole row and reports it too; this one names it, since
+    // that is the member the refusal is about.
+    const planted = await plantSubscriptions();
+    const staged = await stageDisabled(planted, planted.vault.id);
+
+    await refusalFrom(
+      () => runSubscriptionNow(planted.store, planted.clock.now, staged.id),
+    );
+
+    const stored = await planted.store.findSubscriptionById(staged.id);
+
+    expect(stored?.enabled).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // What a list scopes to
 // ---------------------------------------------------------------------------
 
@@ -2897,5 +3145,268 @@ describe('what a delete takes', () => {
     // triple it freed.
     expect(created.id).not.toBe(digest.id);
     expect(created.intervalSeconds).toBe(HALF_DAILY);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a run now moves
+// ---------------------------------------------------------------------------
+
+/**
+ * Milliseconds in a second, so an expected instant below is
+ * arithmetic a reader can check rather than a date literal.
+ */
+const MILLISECONDS_PER_SECOND = 1000;
+
+/** An hour, as the only distance any clock here is moved by. */
+const HOURLY = 3600;
+
+/**
+ * The instant `seconds` seconds after `base`.
+ *
+ * The arithmetic written out rather than taken from the module
+ * under test: an expected value derived from the rule it is
+ * checking agrees with that rule however wrong the rule is. This
+ * verb derives nothing at all — it stores what the clock answered
+ * — so what this helper exists for is the SECOND call, where the
+ * clock has moved and the expected instant has to move with it.
+ *
+ * @param base - The instant to measure from.
+ * @param seconds - How far after it.
+ * @returns A fresh `Date`, so nothing a caller holds moves.
+ */
+function secondsAfter(base: Date, seconds: number): Date {
+  return new Date(base.getTime() + seconds * MILLISECONDS_PER_SECOND);
+}
+
+/**
+ * Every `SubscriptionRecord` member except the due time, as the
+ * set this verb must leave exactly where it found it.
+ *
+ * DERIVED FROM THE RECORD RATHER THAN LISTED BY HAND. The eight
+ * columns worth naming in a sentence are not the claim; the claim
+ * is that `nextRunAt` is the ONLY exception, so the exclusion is
+ * written as an `Omit` and the list below is held against what
+ * that leaves. A column added to `export_subscriptions` — or to
+ * the `schedulableColumns()` helper that reaches this record with
+ * no subscriptions module edited at all — then has to be named
+ * here or `satisfies` refuses the list, where a hand-written eight
+ * would have gone on comparing eight members of a wider record,
+ * green forever.
+ */
+type UnmovedByARunNow = Omit<SubscriptionRecord, 'nextRunAt'>;
+
+/** Those members, named, in the order {@link SUBSCRIPTION_KEYS} uses. */
+const UNMOVED_KEYS = [
+  'connectorId',
+  'domainId',
+  'enabled',
+  'format',
+  'id',
+  'intervalSeconds',
+  'maxIntervalSeconds',
+  'minIntervalSeconds',
+] as const satisfies readonly (keyof UnmovedByARunNow)[];
+
+/** {@link UNMOVED_KEYS}, held against what it describes. */
+type EveryUnmovedKeyListed =
+  CoversEveryKey<UnmovedByARunNow, typeof UNMOVED_KEYS>;
+
+/**
+ * The `check-types` half of that pin, per {@link EVERY_KEY_LISTED}.
+ *
+ * `satisfies` above closes the direction where the list names a
+ * member the record lacks. This closes the one that matters here:
+ * a column arriving on `SubscriptionRecord` and not on the list
+ * would sit outside the comparison below without one case going
+ * red — which is exactly where a verb writing an extra column
+ * would hide.
+ */
+const EVERY_UNMOVED_KEY_LISTED: EveryUnmovedKeyListed = true;
+
+/**
+ * One subscription's {@link UNMOVED_KEYS} members, and nothing
+ * else.
+ *
+ * Built FROM the list rather than by spreading the row and
+ * deleting the due time off it: a spread compares whatever members
+ * the record happens to carry, which is green against precisely
+ * the column nobody knew had arrived.
+ *
+ * @param row - The subscription to project.
+ * @returns Its members under those keys.
+ */
+function unmovedMembers(
+  row: SubscriptionRecord,
+): Record<string, unknown> {
+  return Object.fromEntries(UNMOVED_KEYS.map((key) => [key, row[key]]));
+}
+
+/**
+ * Reads one row back off the store, by id.
+ *
+ * @param planted - The fixture holding it.
+ * @param id - The row to read.
+ * @returns The stored row.
+ * @throws When the store answers null, for the reason
+ *   {@link subscriptionFor} gives: two absences compare equal, so
+ *   a comparison against a row that is not there would otherwise
+ *   pass for nobody's reason.
+ */
+async function storedSubscription(
+  planted: PlantedSubscriptions,
+  id: number,
+): Promise<SubscriptionRecord> {
+  const found = await planted.store.findSubscriptionById(id);
+
+  if (found === null) {
+    throw new Error('the store has no row under that id');
+  }
+
+  return found;
+}
+
+describe('what a run now moves', () => {
+  it('writes the instant the clock read', async () => {
+    // An EQUALITY rather than a window, which is the whole reason
+    // the clock is injected: a verb reading the real present
+    // answers a plausible instant no assertion could pin. The
+    // whole row is compared against the record as it was planted,
+    // per this file's discipline — a run now that also moved the
+    // cadence answers a perfectly ordinary subscription.
+    const planted = await plantSubscriptions();
+
+    const ran = await runSubscriptionNow(
+      planted.store,
+      planted.clock.now,
+      planted.digest.id,
+    );
+
+    expect(ran).toStrictEqual({
+      ...planted.digest,
+      nextRunAt: FIXED_INSTANT,
+    });
+
+    // And again from a clock that has moved. One equality against
+    // one fixed instant is also satisfied by a verb writing a
+    // constant, and by one that resolved the thunk when the
+    // dependency was assembled rather than at the write.
+    planted.clock.advanceSeconds(HOURLY);
+
+    const moved = secondsAfter(FIXED_INSTANT, HOURLY);
+    const again = await runSubscriptionNow(
+      planted.store,
+      planted.clock.now,
+      planted.digest.id,
+    );
+
+    expect(again.nextRunAt).toStrictEqual(moved);
+    expect(again.nextRunAt).not.toStrictEqual(FIXED_INSTANT);
+
+    // Read off the row rather than off the answer: a verb that
+    // answered an instant it did not store satisfies every line
+    // above, and this surface has no other reader of the column to
+    // report it.
+    const stored = await storedSubscription(planted, planted.digest.id);
+
+    expect(stored.nextRunAt).toStrictEqual(moved);
+  });
+
+  it('answers the same row to a second call', async () => {
+    // The verb describes a state — due now — rather than an action
+    // taken, so a row already due answers again instead of being
+    // refused a second time. The two whole answers are compared,
+    // not their statuses: a second call that had quietly stopped
+    // writing would also not throw.
+    const planted = await plantSubscriptions();
+
+    const first = await runSubscriptionNow(
+      planted.store,
+      planted.clock.now,
+      planted.digest.id,
+    );
+    const second = await runSubscriptionNow(
+      planted.store,
+      planted.clock.now,
+      planted.digest.id,
+    );
+
+    expect(second).toStrictEqual(first);
+
+    // The control the equality cannot carry: two matching answers
+    // are equally green against a verb that wrote nothing either
+    // time, so the FIRST call has to be shown moving the row off
+    // the null a create landed it at.
+    expect(planted.digest.nextRunAt).toBeNull();
+    expect(first.nextRunAt).toStrictEqual(FIXED_INSTANT);
+
+    const stored = await storedSubscription(planted, planted.digest.id);
+
+    expect(stored.nextRunAt).toStrictEqual(FIXED_INSTANT);
+  });
+
+  it('leaves every other column where it found it', async () => {
+    // The pin above, read so that it is a symbol this file uses
+    // rather than one lint reports. Its value is not the claim:
+    // the claim is the TS2322 at its declaration the moment
+    // `SubscriptionRecord` grows a column {@link UNMOVED_KEYS}
+    // misses.
+    expect(EVERY_UNMOVED_KEY_LISTED).toBe(true);
+
+    // The containment reading, and the one every equality above is
+    // blind to: each of those compares a due time, so a verb that
+    // ALSO cleared a bound, flipped `enabled` or re-pointed the
+    // row answers all of them. What is compared here is the stored
+    // row against a copy of itself taken before the call, member
+    // for member, with the due time the only member the projection
+    // leaves out.
+    //
+    // Two rows rather than one, so the nullable bounds are read in
+    // both states: `digest` carries neither bound, so a verb
+    // WRITING one moves it, and `feed` carries both, so a verb
+    // CLEARING one moves it. One row is blind to whichever
+    // direction it is not in.
+    const planted = await plantSubscriptions();
+
+    const beforeDigest = unmovedMembers(planted.digest);
+    const beforeFeed = unmovedMembers(planted.feed);
+
+    await runSubscriptionNow(
+      planted.store,
+      planted.clock.now,
+      planted.digest.id,
+    );
+    await runSubscriptionNow(
+      planted.store,
+      planted.clock.now,
+      planted.feed.id,
+    );
+
+    // Off the STORE rather than off what the verb answered: a verb
+    // answering an unmoved record while writing a second column
+    // satisfies a comparison against its own return value, and
+    // this surface has no other reader to report it.
+    const digest = await storedSubscription(planted, planted.digest.id);
+    const feed = await storedSubscription(planted, planted.feed.id);
+
+    expect(unmovedMembers(digest)).toStrictEqual(beforeDigest);
+    expect(unmovedMembers(feed)).toStrictEqual(beforeFeed);
+
+    // The control neither equality can carry: a verb that wrote
+    // NOTHING satisfies both, and so does one that threw before
+    // writing. The column it IS allowed to write has to have
+    // moved, read off the same two stored rows.
+    expect(planted.digest.nextRunAt).toBeNull();
+    expect(planted.feed.nextRunAt).toBeNull();
+    expect(digest.nextRunAt).toStrictEqual(FIXED_INSTANT);
+    expect(feed.nextRunAt).toStrictEqual(FIXED_INSTANT);
+
+    // And that the bounds the projection carries are the two
+    // states the pair was planted for, so a fixture whose rows had
+    // drifted into agreeing cannot leave one direction unread.
+    expect(beforeDigest.minIntervalSeconds).toBeNull();
+    expect(beforeDigest.maxIntervalSeconds).toBeNull();
+    expect(beforeFeed.minIntervalSeconds).toBeTypeOf('number');
+    expect(beforeFeed.maxIntervalSeconds).toBeTypeOf('number');
   });
 });

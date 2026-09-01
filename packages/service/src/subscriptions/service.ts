@@ -5,16 +5,22 @@
  * one. What `/domains/:slug/exports` and `/exports/:id` reduce to
  * once HTTP is subtracted from them.
  *
- * FOUR FUNCTIONS, AND THE FIFTH IS NOT HERE YET. These are the
- * ordinary resource operations every service on this surface
- * exports. `POST /exports/:id/run-now` is a separate act on a
- * separate column, writing `next_run_at` through the one port
- * method declared for it, and it lands beside these in its own task
- * — so `SubscriptionStore.findSubscriptionById` and
- * `SubscriptionStore.updateSubscriptionSchedule` are deliberately
- * not among the methods {@link SubscriptionServiceStore} picks.
- * Nothing below reads or writes the due time at all, and none of
- * the four is handed an instant or derives one.
+ * FIVE FUNCTIONS, AND ONE OF THEM IS NOT AN ORDINARY RESOURCE
+ * OPERATION. The first four are what every service on this surface
+ * exports: a list, a create, a patch and a delete.
+ * {@link runSubscriptionNow} is a separate act on a separate
+ * column — what `POST /exports/:id/run-now` reduces to — writing
+ * `next_run_at` through the one port method declared for it,
+ * reading no body at all, and taking an injected clock that none
+ * of the four takes anything of the kind of.
+ *
+ * SO THE CONTAINMENT MOVED WITH IT rather than going away. It is
+ * no longer that this module cannot reach the due time; it is that
+ * exactly ONE of the five derives an instant to write, and that it
+ * writes through `SubscriptionStore.updateSubscriptionSchedule`
+ * and through nothing else. The other four derive none,
+ * `SubscriptionPatch` carries no such member, and both request
+ * schemas refuse the key.
  *
  * THREE PORTS RATHER THAN TWO, which is the one place this module
  * differs from every service before it in SHAPE rather than in
@@ -163,7 +169,7 @@ import { StoreRefusal } from '../db/store-errors.js';
 import { parseBody } from '../http/validation.js';
 
 /**
- * Exactly the port methods these four functions reach, across the
+ * Exactly the port methods these five functions reach, across the
  * three ports they reach them on.
  *
  * A `Pick` OF THREE PORTS RATHER THAN ANY ONE WHOLE, for the
@@ -182,11 +188,25 @@ import { parseBody } from '../http/validation.js';
  * gets from the declaration alone, that a subscriptions operation
  * cannot reach a connector write.
  *
- * TWO METHODS OF `SubscriptionStore` ARE DELIBERATELY ABSENT.
- * `findSubscriptionById` and `updateSubscriptionSchedule` are the
- * run-now verb's, which lands beside these four in its own task, so
- * today this type cannot reach `next_run_at` at all rather than
- * merely choosing not to.
+ * TWO METHODS OF `SubscriptionStore` ARE HERE FOR ONE FUNCTION.
+ * `findSubscriptionById` and `updateSubscriptionSchedule` are
+ * {@link runSubscriptionNow}'s alone. That verb decides on the
+ * STORED row's `enabled` before it writes, which the four ordinary
+ * operations never do — {@link patchSubscription} and
+ * {@link deleteSubscription} let the store answer `null` for an id
+ * no row carries rather than buying a second round trip — and it
+ * is the one function on this surface permitted through the
+ * column's single door.
+ *
+ * NAMING THEM WIDENS WHAT THE OTHER FOUR HOLD, which is the cost
+ * of one type standing for five functions and is stated rather
+ * than hidden: a router handed this type hands every handler a
+ * store that CAN write `next_run_at`. What keeps four of the five
+ * off the column is that they derive no instant to write, and
+ * `tests/invariants/api-schedule-containment.test.ts` reads the
+ * modules rather than the types. A second `Pick` for the verb
+ * alone would buy a narrower declaration and a second thing to
+ * keep in step.
  *
  * Built with `Pick` rather than by listing signatures, so a method
  * here cannot drift from the thing it is naming: a hand-copied
@@ -200,9 +220,11 @@ export type SubscriptionServiceStore =
     SubscriptionStore,
     | 'countSubscriptions'
     | 'deleteSubscription'
+    | 'findSubscriptionById'
     | 'insertSubscription'
     | 'listSubscriptions'
     | 'updateSubscription'
+    | 'updateSubscriptionSchedule'
   >;
 
 /**
@@ -241,6 +263,29 @@ const NO_SUCH_SUBSCRIPTION = 'No export subscription carries that id';
  */
 const ALREADY_SUBSCRIBED
   = 'This domain already exports that format to that connector';
+
+/**
+ * What a caller is told when a run now meets a disabled
+ * subscription.
+ *
+ * The rule and the repair, because the repair is a different
+ * request rather than a correction to this one: `enabled` is
+ * patchable, so enabling the subscription is a `PATCH` the caller
+ * takes first as its own decision. The alternative — writing the
+ * clock anyway — produces a row that looks due forever and is
+ * never claimed, since the dispatch claim reads `WHERE enabled AND
+ * next_run_at <= now()` and
+ * `export_subscriptions_dispatch_claim_idx` is declared over the
+ * enabled rows alone. That is a silent no-op the caller has no way
+ * to see, which is what this sentence exists instead of.
+ *
+ * The same sentence `src/topics/service.ts` answers for the same
+ * state on the other schedulable table, spelled again rather than
+ * shared: the two groups are equal by intent rather than by
+ * derivation, exactly as {@link NO_SUCH_DOMAIN} is.
+ */
+const SUBSCRIPTION_NOT_ENABLED
+  = 'This subscription is disabled, so a run now would never be claimed';
 
 /**
  * What the one detail of a `connectorId` refusal says.
@@ -796,9 +841,10 @@ export async function createSubscription(
  * guarantees. `SubscriptionStore.updateSubscription` answers `null`
  * for an id no row carries, so a preceding lookup would buy a
  * second round trip and a second chance for the row to go in
- * between; the 404 below is the same fact either way. That is also
- * why `findSubscriptionById` is not among the methods
- * {@link SubscriptionServiceStore} picks.
+ * between; the 404 below is the same fact either way. That is why
+ * this operation issues no lookup of its own, where
+ * {@link runSubscriptionNow} — which has to read the stored
+ * `enabled` before it can decide anything — issues one.
  *
  * SO AN UNKNOWN CONNECTOR OUTRANKS AN UNKNOWN ID HERE, where on the
  * create an unknown slug outranks an unknown connector. The two
@@ -893,4 +939,89 @@ export async function deleteSubscription(
   if (!removed) {
     throw new NotFoundError(NO_SUCH_SUBSCRIPTION);
   }
+}
+
+/**
+ * Brings one subscription's next delivery forward to now.
+ *
+ * @param store - Where the row is read and written.
+ * @param now - Reads the present. A thunk, so the instant is
+ *   resolved at the moment of the write rather than when the
+ *   dependency was assembled — and so a test can put a fixed one
+ *   behind it and compare the stored value exactly.
+ * @param id - The subscription's id, as `resourceIdParamSchema` in
+ *   `src/http/schemas.ts` parsed it.
+ * @returns The stored row afterwards, whose `nextRunAt` is the
+ *   instant `now` answered.
+ * @throws NotFoundError - When no subscription carries the id, and
+ *   when the row went between the read and the write.
+ * @throws ConflictError - When the subscription is disabled.
+ *
+ * @remarks
+ * WRITES `next_run_at` AND NOTHING ELSE. There is no second write
+ * here: the verb does not enable the row it refuses, does not
+ * touch the cadence and does not stamp anything, because
+ * `SubscriptionStore.updateSubscriptionSchedule` takes a bare
+ * instant and offers no member a second column could be added to.
+ * That port method declares it refuses nothing — no mechanism on
+ * `export_subscriptions` constrains the column, and a time in the
+ * past is an overdue row rather than an invalid one — so there is
+ * no {@link refuseWrite} on this path, and a `StoreRefusal` out of
+ * it would be a store doing something its port does not describe,
+ * answering 500.
+ *
+ * A DISABLED SUBSCRIPTION IS A `409` RATHER THAN A WRITE, and the
+ * reason is that the write would appear to succeed. See
+ * {@link SUBSCRIPTION_NOT_ENABLED}: the row is excluded from the
+ * partial index the dispatch claim walks, so the instant written
+ * onto it would sit there looking due forever. Suspending a
+ * delivery and cancelling one are the two things a disabled row
+ * may be waiting for, and neither is undone quietly by a request
+ * that asked for something else.
+ *
+ * IT DOES NOT DELIVER ANYTHING, and the name is the shortest
+ * honest one available rather than a promise. `ar-dispatch` holds
+ * the only schedule trigger in the system: it wakes on its own
+ * cron, takes what has come due with `FOR UPDATE SKIP LOCKED`,
+ * opens the `runs` row and invokes the workflow. This moves one
+ * timestamp so that the next tick picks the row up, which is why
+ * there is no delivery to report back and nothing here to await.
+ *
+ * CALLING IT TWICE IS NOT REFUSED. A row already due answers again
+ * with whatever the clock reads then, because the verb describes a
+ * state — due now — rather than an action taken, and refusing the
+ * second call would answer `409` to a request asking for what
+ * already holds. That is the difference from the refusal above,
+ * which is about a state the write could not reach.
+ *
+ * TWO READS, SEQUENTIAL, AND NEITHER IS FOLDED INTO THE OTHER. The
+ * first answers the `enabled` this verb decides on, which no write
+ * reports; the second IS the write, and its own `null` is the row
+ * having gone between the two. Both are spelled here rather than
+ * behind private helpers, which at one call site apiece would name
+ * the steps without moving them: a pause verb under `/exports`
+ * would be the second caller that earns a pair, and there is none.
+ */
+export async function runSubscriptionNow(
+  store: SubscriptionServiceStore,
+  now: () => Date,
+  id: number,
+): Promise<SubscriptionRecord> {
+  const subscription = await store.findSubscriptionById(id);
+
+  if (subscription === null) {
+    throw new NotFoundError(NO_SUCH_SUBSCRIPTION);
+  }
+
+  if (!subscription.enabled) {
+    throw new ConflictError(SUBSCRIPTION_NOT_ENABLED);
+  }
+
+  const written = await store.updateSubscriptionSchedule(id, now());
+
+  if (written === null) {
+    throw new NotFoundError(NO_SUCH_SUBSCRIPTION);
+  }
+
+  return written;
 }
