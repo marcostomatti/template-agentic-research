@@ -1,8 +1,8 @@
 /**
- * `src/sources/failures-routes.ts` — what the one route answers
- * when it REFUSES: the status, the envelope and the members each
- * reaches the wire with. Driven over supertest against a router
- * built by the real factory, standing on
+ * `src/sources/failures-routes.ts` — what the one route answers,
+ * refusing and landing: the status, the envelope and the members
+ * each reaches the wire with. Driven over supertest against a
+ * router built by the real factory, standing on
  * `tests/helpers/memory-research-store.ts`, so every claim here is
  * answered with no database anywhere.
  *
@@ -10,24 +10,24 @@
  * translation, and only the translation. That an id naming no
  * source is a `NotFoundError` rather than an empty queue, that no
  * window can be built outside the schema's bounds, that a body is
- * masked and a cut one reports the stored length — those are
- * claims about the RULES and are pinned one file over, over direct
- * calls. What no call can report is whether the rule reached a
- * caller: the status `errorHandler` or the handler chose, the
- * envelope written around it, the members that envelope carried,
- * and whether a handler swallowed a throw on the way. So every
- * case below reads a response and none of them reads a return
- * value.
+ * masked and a cut one reports the stored length — those are claims
+ * about the RULES and are pinned one file over, over direct calls.
+ * What no call can report is whether the rule reached a caller: the
+ * status `errorHandler` or the handler chose, the envelope written
+ * around it, the members that envelope carried, whether a handler
+ * swallowed a throw on the way, and — the reading this queue needs
+ * more than any other route on the surface — what the SERIALISED
+ * response carries. So every case below reads a response and none
+ * of them reads a return value.
  *
- * SEVEN CASES IN FIVE GROUPS. Two guard the fixture and the
- * vocabulary every refusal is read against; one covers the
- * address; one covers the segment that is not one; one covers the
- * window; and two cover the parameter this route does not declare.
- * The POSITIVE half — what the page, its `meta` and a masked body
- * look like when the route LANDS, and the read-only reading taken
- * off the router's own `stack` — is a task of its own, and every
- * control below is a landing answer read only as far as the axis
- * its own case is about.
+ * TWELVE CASES IN NINE GROUPS. Three guard the fixture, the
+ * vocabulary every refusal is read against and the shapes every
+ * answer is held to. Four are refusals: the address, the segment
+ * that is not one, the window, and the parameter this route does
+ * not declare, that last one twice. And three are what the route
+ * answers when it LANDS — the page and its `meta`, a stored control
+ * byte reaching the wire masked, and the read-only reading taken
+ * off the router's own `stack` and off the port it is handed.
  *
  * THE ADDRESS. An id naming no source is `404` asserted against
  * ONE whole body constant, and its control is the SAME operation
@@ -88,6 +88,58 @@
  * legal and reddens the fixture guard instead of leaving a case
  * nobody notices is wrong.
  *
+ * THE PAGE. One request with no window at all beside two windows of
+ * ONE over the same three rows, which is the reading no refusal
+ * case here could take: none of them can afford a window narrower
+ * than its collection, so every page they read holds every row and
+ * a `total` counted off the rows in hand agrees with the counted
+ * one. The narrow pair is disjoint and each names the total of the
+ * COLLECTION, and the wide read is what makes them read as
+ * narrowings OF something. The envelope is asserted as a key SET
+ * with `meta` whole, one row is compared whole against the
+ * constants the fixture plants from, and every row's key set is
+ * read rather than the first's — a page cannot carry one
+ * well-shaped record beside one that leaked a column.
+ *
+ * THE ORDER REACHES THE WIRE AS THE PORT ANSWERED IT, which is the
+ * only half of the ordering this file owns: the sort itself is the
+ * store's and `./failures-service.test.ts` is where it is pinned.
+ * The three planted captures are what make even that reading
+ * possible — two share an instant and the third is older and
+ * carries the largest id, so `capturedAt` alone, `id` alone and
+ * either of them ascending each answer something different from the
+ * one right answer, and the plant is oldest-first so the answer is
+ * never the order the rows arrived in.
+ *
+ * A MASKED BODY IS RE-READ ON THE WIRE and not only in the parsed
+ * body, which is the whole reason that case is in a routes file.
+ * `JSON.stringify` escapes C0 and lone surrogates on its own and
+ * passes DEL and the entire C1 range through as themselves, so a
+ * body reaching `res.json` as stored would put two raw control
+ * bytes into the text a client, a log or a terminal receives while
+ * a reader of the PARSED body saw nothing at all. The reader is
+ * numeric and shares nothing with the module's own class, so it
+ * cannot agree with a masking regex however wrong that regex is;
+ * every zero it answers over an answered value sits beside a
+ * non-zero it answers over the stored one; and the planted control
+ * is that same reader over the text an unmasked serialisation would
+ * have written, where exactly two of the four survive.
+ *
+ * READ-ONLY IS STRUCTURAL AND IS READ AS THREE SHAPES. The router's
+ * whole route inventory is derived from its own `stack` — one path,
+ * one `get`, no second verb — rather than transcribed, since a list
+ * of paths written into a test agrees with itself whatever the
+ * router registered. Every method NAME `SourceStore` declares is
+ * classified against a document vocabulary, with two fabricated
+ * writers put through the same call in the same case so the empty
+ * answer is a reading rather than a search that could only ever
+ * come back empty. And every SIGNATURE whose name names the corpus
+ * table is held to ids and windows by a type derived from `keyof`,
+ * with a port carrying a planted writer as its negative control. A
+ * method added to that port reaches both port readings the day it
+ * lands: one through the roster's own two-directional pin, one
+ * through the template literal that derives the checked set.
+ *
  * WHAT THIS FILE DOES NOT CLAIM. That the router sits behind
  * `ctx.requireAuth` is `tests/api/wiring.test.ts`'s claim, and
  * what a refusal may CONTAIN across the whole surface is
@@ -96,70 +148,84 @@
  * routes over a `sources` ROW are not this router's at all and
  * have a file of their own.
  *
- * MUTATION GRID, derived over all seven cases by mutating one file
- * one edit at a time and reading the failed `fullName` SET from a
- * `--reporter=json` run rather than a count. TEN legs, each named
- * by the EDIT it makes rather than by its effect, since a leg
- * described only by its effect is one nobody can run again. Eight
- * mutate `./failures-routes.ts` and two mutate
- * `src/http/schemas.ts`, which is the only target that can reach
- * the bounds and the strictness this file submits queries against.
+ * MUTATION GRID, re-derived WHOLE over all twelve cases by mutating
+ * one file one edit at a time and reading the failed `fullName` SET
+ * from a `--reporter=json` run rather than a count. FIFTEEN legs,
+ * each named by the EDIT it makes rather than by its effect, since
+ * a leg described only by its effect is one nobody can run again.
+ * Eleven mutate `./failures-routes.ts`, two mutate
+ * `src/http/schemas.ts` (the only target that can reach the bounds
+ * and the strictness this file submits queries against), one
+ * mutates `tests/helpers/memory-research-store.ts`, whose sort no
+ * mutation of the router could reach, and three mutate
+ * `./failures-service.ts`, which owns the masking.
  *
- * THE ADDRESS LEG READS FIVE, and the case it leaves out is the
- * ordering showing up as a measurement. Returning the segment raw
- * from {@link readId} reddens every case that addresses a row by
- * id AND gets an answer out of the store — the `404`, the
- * not-an-id case, the window case, the undeclared-parameter case
- * and the fixture guard. The containment case is in NEITHER
- * address set, because its request is answered about the query
- * before the id is used at all.
+ * THE TEN LEGS RECORDED WHILE THIS FILE WAS REFUSALS ONLY WERE ALL
+ * RE-RUN, and SEVEN of them moved, which is what the positive half
+ * was for — five of them here, the `post` leg and the two recorded
+ * zeros in paragraphs of their own below. Returning the segment raw
+ * from {@link readId} goes 5 to 7 — every case that addresses a row
+ * by id AND gets an answer out of the store, the page and the
+ * masked row now among them — while the containment case is still
+ * in NEITHER address set, because its request is answered about the
+ * query before the id is used at all. Issuing the address parse
+ * FIRST still reddens exactly 1, the not-an-id case, which is the
+ * half of that case its over-cap segment exists for. Not parsing
+ * the query at all goes 4 to 5. `res.status(200)` written as `201`
+ * goes 4 to 6. `ok(page.rows)` in place of
+ * `okPage(page.rows, meta)` goes 1 to 2.
  *
- * ISSUING THE ADDRESS PARSE FIRST REDDENS EXACTLY ONE, the
- * not-an-id case, which is the half of that case the over-cap
- * segment exists for: every other request here gets at most one
- * thing wrong, so the two parses are indistinguishable to them.
- * NOT PARSING THE QUERY AT ALL reddens FOUR — the same case,
- * the window case and both undeclared-parameter cases.
+ * THE TWO SCHEMA LEGS ARE UNCHANGED AT 2 APIECE, which is the
+ * reading that says they are still live, and they are still
+ * separate: dropping `.max(MAX_PER_PAGE)` reddens the window case
+ * and the not-an-id case's over-cap half, dropping `.strict()`
+ * reddens both undeclared-parameter cases, and neither is reachable
+ * from the other.
  *
- * THE STATUS LEG READS FOUR. `res.status(200)` written as `201`
- * reddens every case carrying a landing control, which is all four
- * refusal cases and neither guard: the fixture guard reads two
- * pages without reading a status, and the containment case never
- * reaches a `200`. So the status IS pinned here, by no case that is
- * about it — which is what a refusals-only file's controls
- * buy.
+ * THE TWO LEGS RECORDED AS REDDENING NOTHING NOW REDDEN ONE EACH,
+ * and it is the SAME case for both. A fixed window in place of
+ * `toStoreWindow(query)` and `total: page.rows.length` in place of
+ * `total: page.total` are reported only by the page case, the one
+ * read in this file that takes a window narrower than its
+ * collection. ONE list case that pages is what those two legs cost,
+ * and no other case moves either of them.
  *
- * `ok(page.rows)` IN PLACE OF `okPage(page.rows, meta)` REDDENS
- * ONE, the window case, which is the only read here that looks at
- * `meta` at all.
+ * THE `post` LEG GOES 6 TO 9 AND IS STILL BLUNT — every case that
+ * sends a request, plus the structural one. What makes the verb a
+ * claim rather than a fixture reading is the leg beside it:
+ * registering a SECOND `post` on the same path reddens exactly 1,
+ * the structural case, because no request in the file changes its
+ * answer and only a reading off the `stack` can see the extra
+ * handler at all.
  *
- * REGISTERING THE ROUTE AS A `post` REDDENS SIX, every case that
- * sends a request. Blunt rather than thorough, and recorded as the
- * shape it is: what says the verb is a `get` and the ONLY verb is
- * the positive half's structural reading off the router's own
- * `stack`, not this leg.
- *
- * THE TWO SCHEMA LEGS SEPARATE, and neither is reachable from the
- * other. Dropping `.max(MAX_PER_PAGE)` reddens TWO, the window
- * case and the not-an-id case's over-cap half. Dropping `.strict()`
- * from `paginationQuerySchema` reddens the OTHER two, both
- * undeclared-parameter cases, and nothing else.
- *
- * AND TWO LEGS REDDEN NOTHING, both recorded rather than repaired.
- * A fixed `{ limit: 50, offset: 0 }` in place of
- * `toStoreWindow(query)` reddens ZERO, and so does
- * `total: page.rows.length` in place of `total: page.total`, for
- * one reason: no refusal case can afford a window narrower than
- * the collection it is reading, so every page here holds every row
- * and the two numbers agree. Both are the positive half's
- * claims — a page past the end over a queue of three — and
- * this file records the zeros rather than pretending to them.
+ * AND FOUR NEW LEGS AIM AT WHAT THE POSITIVE HALF ADDED. Sorting
+ * the store's queue oldest-first reddens 1, the page case. Dropping
+ * the mask from `body` reddens 1 and dropping it from `parseError`
+ * reddens the SAME 1 — the two members share a case and are told
+ * apart only by the assertion that fails inside it, which is what
+ * one case mutating both members buys over two cases mutating one
+ * each. Taking `bodyBytes` from the ANSWERED text rather than from
+ * the stored row reddens that case too, and it is the leg the
+ * expansive-masking assertion exists for: on a body with nothing to
+ * mask the two numbers agree and no other fixture here would report
+ * it.
  */
+import type {
+  SourceFailure,
+  SourceFailuresServiceStore,
+} from './failures-service.js';
+import type { SourceFailureRecord, SourceStore } from './store.js';
 import type {
   MemoryResearchStore,
   MemorySourceDocument,
 } from '../../tests/helpers/memory-research-store.js';
-import type { Application } from 'express';
+import type {
+  PaginatedEnvelope,
+  PaginationMeta,
+  SuccessEnvelope,
+} from '../http/envelope.js';
+import type { StoreWindow } from '../http/schemas.js';
+import type { Application, Router } from 'express';
 
 import express from 'express';
 import request from 'supertest';
@@ -215,8 +281,106 @@ const ABSENT_ID = 9999;
 /** How many failed captures {@link FEED_ENDPOINT} holds. */
 const PLANTED_FAILURES = 3;
 
-/** When every planted capture was taken. */
-const CAPTURED_AT = new Date('2026-03-01T00:00:00.000Z');
+/**
+ * The instant two of those three captures share.
+ *
+ * A TIE, so the queue's second sort column has something to break,
+ * and the three ids below are chosen so the right order is neither
+ * column's alone: by `id` the answer is 700, 502, 501 and so is
+ * `capturedAt` ASCENDING, while dropping the tiebreak leaves the
+ * pair in plant order. Three wrong answers, each of them different
+ * from the one right one.
+ */
+const TIED_CAPTURE = new Date('2026-03-01T00:00:00.000Z');
+
+/** When the third was taken, which is older than the pair. */
+const EARLIER_CAPTURE = new Date('2026-02-27T00:00:00.000Z');
+
+/** The newest capture, and the higher id of the tied pair. */
+const NEWEST_ID = 502;
+
+/** The lower id of that pair, and the row that stores a control. */
+const TIED_ID = 501;
+
+/** The oldest capture, which also carries the largest id. */
+const OLDEST_ID = 700;
+
+/**
+ * What the queue answers: newest first, the id breaking the tie.
+ *
+ * The plant is oldest-first, so this is never the order the rows
+ * arrived in — and this file's claim is only that the page reaches
+ * the wire in it, since the sort itself is the port's and
+ * `./failures-service.test.ts` is where it is pinned.
+ */
+const QUEUED_IDS: readonly number[] = [NEWEST_ID, TIED_ID, OLDEST_ID];
+
+/** The one capture that parsed, under {@link ITEMS_ENDPOINT}. */
+const PARSED_ID = 800;
+
+/**
+ * `paginationQuerySchema`'s own default, spelled here because that
+ * module keeps it private.
+ *
+ * Read by the page case, which asserts `meta` WHOLE: a window
+ * nobody asked for is still a window a caller is told about, and
+ * the number reaching the wire is the claim rather than the number
+ * having been a default.
+ */
+const DEFAULT_PER_PAGE = 50;
+
+/** Builds one character from its code point. */
+const charFrom = String.fromCharCode;
+
+/** A NUL, which silences a diff and a grep of whatever holds it. */
+const NUL = charFrom(0x00);
+
+/** A C1 control, which `JSON.stringify` passes through as itself. */
+const C1_CSI = charFrom(0x9b);
+
+/** An ESC, which lets stored text rewrite a terminal. */
+const ESC = charFrom(0x1b);
+
+/** A DEL, the other character serialisation leaves raw. */
+const DEL = charFrom(0x7f);
+
+/** A stored body carrying one C0 control and one C1 control. */
+const CONTROL_BODY = `a capture${NUL}that would not${C1_CSI}parse`;
+
+/** What {@link CONTROL_BODY} must reach the wire as. */
+const MASKED_BODY = 'a capture\\u0000that would not\\u009bparse';
+
+/** A stored parse error carrying an ESC and a DEL. */
+const CONTROL_ERROR = `unexpected${ESC}end of${DEL}input`;
+
+/** What {@link CONTROL_ERROR} must reach the wire as. */
+const MASKED_ERROR = 'unexpected\\u001bend of\\u007finput';
+
+/** The two code points {@link CONTROL_BODY} stores, in order. */
+const STORED_BODY_CODES: readonly number[] = [0x00, 0x9b];
+
+/** The two {@link CONTROL_ERROR} stores, on the same terms. */
+const STORED_ERROR_CODES: readonly number[] = [0x1b, 0x7f];
+
+/**
+ * The two a serialiser that had NOT masked would leave raw.
+ *
+ * `JSON.stringify` escapes C0 and lone surrogates on its own and
+ * passes DEL and the whole C1 range through as themselves, so this
+ * is what the response TEXT would carry if the two members reached
+ * `res.json` as stored — which is the half of the masking that
+ * only a reading of the wire can report at all.
+ */
+const SERIALISED_RAW_CODES: readonly number[] = [0x9b, 0x7f];
+
+/** The body of the two captures that stored nothing to mask. */
+const CLEAN_BODY = 'a capture that would not parse';
+
+/** What the writer recorded against the newest of them. */
+const CLEAN_ERROR = 'unexpected end of input';
+
+/** The oldest capture's body, distinct so the row is legible. */
+const OLDEST_BODY = 'the oldest capture, and the largest id';
 
 /**
  * The largest `perPage` the schema takes.
@@ -318,23 +482,70 @@ const UNDECLARED_QUERY_BODY = {
 /**
  * One planted `documents` row that did not parse.
  *
- * @param id - The document id, unique across the fixture because
- *   it is also the tiebreak the queue orders on.
- * @returns The row, `failed` and carrying a reason. Every capture
- *   this file plants under {@link FEED_ENDPOINT} is one: what a
- *   page SELECTS is the positive half's subject, so the queue here
- *   only has to be non-empty.
+ * @param row - The three members a case varies: the id, which is
+ *   also the tiebreak the queue orders on; the stored text; and
+ *   the reason a writer recorded, or null for the row that proves
+ *   the member is nullable on the wire too.
+ * @returns The row, `failed` and addressed under
+ *   {@link FEED_ENDPOINT}. Every capture planted under that source
+ *   is one, so the queue's `failed` filter is not what any case
+ *   here turns on.
  */
-function failedCapture(id: number): MemorySourceDocument {
+function failedCapture(row: {
+  readonly id: number;
+  readonly body: string;
+  readonly parseError: string | null;
+  readonly capturedAt: Date;
+}): MemorySourceDocument {
   return {
-    id,
-    url: `${FEED_ENDPOINT}#${id}`,
-    body: 'a capture that would not parse',
-    parseError: 'unexpected end of input',
-    capturedAt: CAPTURED_AT,
+    ...row,
+    url: `${FEED_ENDPOINT}#${row.id}`,
     parseStatus: 'failed',
   };
 }
+
+/**
+ * The three captures {@link FEED_ENDPOINT} holds, planted oldest
+ * first so the answered order is never the order they arrived in.
+ *
+ * ONE OF THEM STORES CONTROL BYTES and it is the MIDDLE row of the
+ * answer rather than the first, so a masking pass that reached
+ * only the head of a page would still be reported. The other two
+ * carry text with nothing to mask, which is what lets the page
+ * case compare a whole row without asserting anything about the
+ * masking and the masking case read a row whose neighbours are
+ * clean.
+ */
+const QUEUED_CAPTURES: readonly MemorySourceDocument[] = [
+  failedCapture({
+    id: OLDEST_ID,
+    body: OLDEST_BODY,
+    parseError: null,
+    capturedAt: EARLIER_CAPTURE,
+  }),
+  failedCapture({
+    id: TIED_ID,
+    body: CONTROL_BODY,
+    parseError: CONTROL_ERROR,
+    capturedAt: TIED_CAPTURE,
+  }),
+  failedCapture({
+    id: NEWEST_ID,
+    body: CLEAN_BODY,
+    parseError: CLEAN_ERROR,
+    capturedAt: TIED_CAPTURE,
+  }),
+];
+
+/**
+ * The path TEMPLATE the router registers, as its stack spells it.
+ *
+ * One string behind both the requests below and the structural
+ * reading, so a case cannot be addressing a path Express never
+ * matched while a separate assertion reads the registered one and
+ * agrees with itself.
+ */
+const FAILURES_TEMPLATE = '/sources/:id/failures';
 
 /**
  * The path one source's failures are read under.
@@ -342,9 +553,14 @@ function failedCapture(id: number): MemorySourceDocument {
  * @param id - The source's id, or whatever a case is sending in
  *   its place.
  * @returns The wire path, root-absolute as the router declares it.
+ *   Derived from {@link FAILURES_TEMPLATE} rather than spelled
+ *   again, and the structural case asserts no `:` survives the
+ *   substitution — an unreplaced parameter still reaches the
+ *   router as a literal segment and still answers a plausible
+ *   `422`.
  */
 function failuresPath(id: number | string): string {
-  return `/sources/${id}/failures`;
+  return FAILURES_TEMPLATE.replace(':id', String(id));
 }
 
 /**
@@ -356,6 +572,416 @@ function failuresPath(id: number | string): string {
  */
 function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
+}
+
+/**
+ * Every code point a response must not carry raw: C0, DEL, C1 and
+ * both surrogate ranges.
+ *
+ * @param text - The text to read, walked as CODE POINTS rather
+ *   than as UTF-16 units: `[...text]` answers a valid astral pair
+ *   as one element above U+FFFF, so only a surrogate standing on
+ *   its own is ever in the range below.
+ * @returns The offending code points in the order they occur, so a
+ *   zero can be read against a known positive taken by this same
+ *   function in the same case.
+ *
+ * @remarks
+ * A SECOND READER RATHER THAN THE MODULE'S OWN CLASS. Numeric
+ * comparisons rather than a pattern, so this cannot agree with a
+ * masking regex however wrong that regex is — the whole value of
+ * re-reading an output is that the reader shares nothing with what
+ * wrote it.
+ */
+function unsafeCodePoints(text: string): number[] {
+  return [...text]
+    .map((character) => character.codePointAt(0) ?? 0)
+    .filter((code) => code <= 0x1f
+      || (code >= 0x7f && code <= 0x9f)
+      || (code >= 0xd800 && code <= 0xdfff));
+}
+
+/**
+ * One answered failure, as the WIRE has it.
+ *
+ * `SourceFailure` WITH ONE MEMBER RETYPED: `capturedAt` is a
+ * `Date` across the service and arrives here as an ISO-8601
+ * string, because `res.json` serialises through `Date#toJSON`.
+ * That is why it is declared rather than imported — and it is
+ * held to the same roster the service type is, so a column renamed
+ * on either side is a refusal at {@link EVERY_KEY_LISTED} rather
+ * than a member no case looks at.
+ *
+ * `supertest` types a response body as `any`, so a callback over
+ * `body.data` would otherwise take an implicit `any` parameter
+ * that `check-types` refuses.
+ */
+interface QueuedRow {
+  /** `documents.id`, and the tiebreak the queue orders on. */
+  readonly id: number;
+
+  /** Where the document can be read at its source, or null. */
+  readonly url: string | null;
+
+  /** The captured text, cut to the service's cap and masked. */
+  readonly body: string;
+
+  /** How many bytes the STORED body occupies. */
+  readonly bodyBytes: number;
+
+  /** Whether the cap took anything. */
+  readonly bodyTruncated: boolean;
+
+  /** What the writer that saw it recorded, masked, or null. */
+  readonly parseError: string | null;
+
+  /** When the pipeline captured it, as JSON carries it. */
+  readonly capturedAt: string;
+}
+
+/**
+ * One path a router registered, with the verbs on it.
+ *
+ * Read off the router's own stack by {@link routesOf}, never
+ * written out: a list of paths spelled here would agree with
+ * itself whatever the router did.
+ */
+interface RegisteredRoute {
+  /** The express path TEMPLATE, as the router declared it. */
+  readonly path: string;
+
+  /** Every verb registered on it, lowercased and sorted. */
+  readonly verbs: readonly string[];
+}
+
+/**
+ * The members a failure row carries, as a response has them.
+ *
+ * Written out because an interface has no runtime form to read
+ * keys off, and pinned in BOTH directions, since a one-directional
+ * list is exactly as green as no list at all against the drift
+ * that matters. `satisfies` closes the direction where this names
+ * a member `SourceFailure` lacks; {@link EVERY_KEY_LISTED} closes
+ * the one where either that type or {@link QueuedRow} grows a
+ * member nothing here learned about.
+ *
+ * The second direction is the one a QUEUE needs. Every member is a
+ * stored column rewritten on the way out or a number describing
+ * that rewrite, and this is the one projection on the whole
+ * surface where a stored payload reaches a response — so a member
+ * added beside them is a disclosure rather than an untidiness.
+ */
+const FAILURE_KEYS = [
+  'body',
+  'bodyBytes',
+  'bodyTruncated',
+  'capturedAt',
+  'id',
+  'parseError',
+  'url',
+] as const satisfies readonly (keyof SourceFailure)[];
+
+/** The members every body this router answers a page in has. */
+const RESOURCE_KEYS = [
+  'data',
+  'success',
+] as const satisfies readonly (keyof SuccessEnvelope<unknown>)[];
+
+/** The same members, plus the one a windowed read adds to them. */
+const PAGE_KEYS = [
+  ...RESOURCE_KEYS,
+  'meta',
+] as const satisfies readonly (keyof PaginatedEnvelope<unknown>)[];
+
+/** The members `meta` describes the window and collection with. */
+const META_KEYS = [
+  'page',
+  'perPage',
+  'total',
+  'totalPages',
+] as const satisfies readonly (keyof PaginationMeta)[];
+
+/**
+ * Every method `SourceStore` declares.
+ *
+ * The NAME half of the read-only reading, and pinned two ways so
+ * it cannot go quietly stale: `satisfies` refuses a name the port
+ * does not carry, and {@link EVERY_KEY_LISTED} refuses a method
+ * added to the port and not to this list. Without the second, a
+ * writer landing on the port would simply be absent from the
+ * classification below and the case would stay green.
+ */
+const PORT_METHODS = [
+  'countSourceDependents',
+  'countSourceFailures',
+  'countSources',
+  'deleteSource',
+  'findSourceById',
+  'insertSource',
+  'listSourceFailures',
+  'listSourcesWithParseStats',
+  'updateSource',
+] as const satisfies readonly (keyof SourceStore)[];
+
+/**
+ * Exactly the three the router's own store narrows those to.
+ *
+ * SIX OF THE NINE ARE ABSENT, which is the router's read-only
+ * claim written as a type rather than promised in prose: every
+ * write on `SourceStore` belongs to the router beside this one.
+ */
+const QUEUE_METHODS = [
+  'countSourceFailures',
+  'findSourceById',
+  'listSourceFailures',
+] as const satisfies readonly (keyof SourceFailuresServiceStore)[];
+
+/**
+ * `true` only while `L` names every key of `T`.
+ *
+ * The tuple wrapper is load-bearing rather than decoration:
+ * without it the union distributes over the conditional and the
+ * answer is `boolean`, which accepts `true` as an initializer and
+ * pins nothing at all.
+ *
+ * @typeParam T - The type whose keys must all be named.
+ * @typeParam L - The list naming them, as `typeof <the const>`.
+ */
+type CoversEveryKey<T, L extends readonly PropertyKey[]> =
+  [Exclude<keyof T, L[number]>] extends [never] ? true : false;
+
+/** Every list above, held against the types it describes. */
+type EveryKeyListed =
+  CoversEveryKey<SourceFailure, typeof FAILURE_KEYS>
+  & CoversEveryKey<QueuedRow, typeof FAILURE_KEYS>
+  & CoversEveryKey<SuccessEnvelope<unknown>, typeof RESOURCE_KEYS>
+  & CoversEveryKey<PaginatedEnvelope<unknown>, typeof PAGE_KEYS>
+  & CoversEveryKey<PaginationMeta, typeof META_KEYS>
+  & CoversEveryKey<SourceStore, typeof PORT_METHODS>
+  & CoversEveryKey<SourceFailuresServiceStore, typeof QUEUE_METHODS>;
+
+/**
+ * The half of the drift guard `check-types` owns.
+ *
+ * A member added to the answered row, to either envelope, to
+ * `meta`, to the port or to the `Pick` the router is handed, and
+ * to none of the lists above, turns {@link EveryKeyListed} into a
+ * `never` — `false` for the list that missed it, intersected with
+ * the `true` the others still answer — and this initializer is
+ * then a TS2322 at this line, before any case can compare an
+ * answer against a set that has quietly stopped describing it.
+ * Read in a case below, so it is a symbol this file uses rather
+ * than one lint reports.
+ */
+const EVERY_KEY_LISTED: EveryKeyListed = true;
+
+/** {@link FAILURE_KEYS}, sorted at use rather than by hand. */
+const FAILURE_KEY_SET: readonly string[] = [...FAILURE_KEYS].sort();
+
+/** {@link RESOURCE_KEYS}, sorted. */
+const RESOURCE_KEY_SET: readonly string[] = [...RESOURCE_KEYS].sort();
+
+/** {@link PAGE_KEYS}, sorted. */
+const PAGE_KEY_SET: readonly string[] = [...PAGE_KEYS].sort();
+
+/** {@link META_KEYS}, sorted. */
+const META_KEY_SET: readonly string[] = [...META_KEYS].sort();
+
+/** {@link QUEUE_METHODS}, sorted. */
+const QUEUE_METHOD_SET: readonly string[] = [...QUEUE_METHODS].sort();
+
+/** The verbs a method that only READS can begin with. */
+const READING_VERBS = ['count', 'find', 'list'] as const;
+
+/**
+ * The words a port method name uses to name the corpus table.
+ *
+ * `dependent` is here beside the three obvious ones because
+ * `countSourceDependents` counts `documents` rows without spelling
+ * the word — a roster keyed on the three would classify the one
+ * method that reaches that table by counting as naming nothing.
+ */
+const DOCUMENT_NOUNS = [
+  'capture',
+  'dependent',
+  'document',
+  'failure',
+  'parsestat',
+] as const;
+
+/**
+ * @param method - A port method name.
+ * @returns Whether it names the corpus table at all.
+ */
+function namesADocument(method: string): boolean {
+  const lower = method.toLowerCase();
+
+  return DOCUMENT_NOUNS.some((noun) => lower.includes(noun));
+}
+
+/**
+ * @param methods - The names to classify.
+ * @returns Those that name a document and do NOT begin with a
+ *   reading verb, which is the whole of what this file means by a
+ *   method whose NAME writes one.
+ */
+function documentWritersIn(methods: readonly string[]): string[] {
+  return methods.filter((method) => namesADocument(method)
+    && !READING_VERBS.some((verb) => method.startsWith(verb)));
+}
+
+/**
+ * The four port methods whose names DO name the corpus table.
+ *
+ * The non-vacuity reading beside the empty writer list: a
+ * classifier matching nothing at all answers no writers over any
+ * roster, and this is what says it matched something.
+ */
+const DOCUMENT_READERS: readonly string[] = [
+  'countSourceDependents',
+  'countSourceFailures',
+  'listSourceFailures',
+  'listSourcesWithParseStats',
+];
+
+/**
+ * Two names that would each write a `documents` row.
+ *
+ * The liveness control for the classification: the same call over
+ * the real roster PLUS these two must name both, so the empty
+ * answer over the roster alone is a reading rather than a search
+ * that could only ever come back empty.
+ */
+const PLANTED_WRITERS: readonly string[] = [
+  'insertSourceFailure',
+  'markCaptureParsed',
+];
+
+/**
+ * A method name that names the corpus table.
+ *
+ * A TEMPLATE-LITERAL union rather than a list of method names, so
+ * the two pins below are DERIVED from `keyof` rather than
+ * transcribed: a method added to the port and matching any arm is
+ * in the checked set the day it lands, with nothing edited here.
+ */
+type DocumentNamed =
+  | `${string}Capture${string}`
+  | `${string}Dependent${string}`
+  | `${string}Document${string}`
+  | `${string}Failure${string}`
+  | `${string}ParseStat${string}`;
+
+/**
+ * `true` only while `T` is a list of ids and windows.
+ *
+ * The tuple wrapper around `T` is load-bearing for the reason
+ * {@link CoversEveryKey}'s is: without it the union of parameter
+ * lists distributes, the answer is `boolean`, and both
+ * initializers below are accepted whatever the port declares.
+ *
+ * @typeParam T - A `Parameters<...>` union.
+ */
+type ReadsOnly<T> = [T] extends [readonly (number | StoreWindow)[]]
+  ? true
+  : false;
+
+/**
+ * `SourceStore` with one document WRITER planted on it.
+ *
+ * The negative control for the pin below, and the reason the pin
+ * is worth having: a method that could write a `documents` row
+ * would have to TAKE one, and this is what that looks like on a
+ * signature. Its own pin reads `false`, so a derivation that had
+ * stopped matching any name — an emptied {@link DocumentNamed},
+ * say — makes `Parameters<never>` a `never` that satisfies the
+ * check trivially and turns this into a TS2322.
+ */
+interface PlantedWriterPort extends SourceStore {
+  markCaptureParsed(row: SourceFailureRecord): Promise<void>;
+}
+
+/**
+ * The SIGNATURE half of the read-only claim, `check-types`' own.
+ *
+ * Every method of `SourceStore` whose name names the corpus table
+ * is handed an id and a window and nothing else, so not one of
+ * them can be given a row to store. A writer added to the port is
+ * a TS2322 at this line rather than a method the runtime
+ * classification would have had to notice on its own.
+ */
+const DOCUMENT_READS_TAKE_NO_ROW: ReadsOnly<Parameters<
+  SourceStore[Extract<keyof SourceStore, DocumentNamed>]
+>> = true;
+
+/** The same over {@link PlantedWriterPort}, which is false. */
+const A_PLANTED_WRITER_IS_REPORTED: ReadsOnly<Parameters<
+  PlantedWriterPort[Extract<keyof PlantedWriterPort, DocumentNamed>]
+>> = false;
+
+/**
+ * @param value - Any answered object.
+ * @returns Its keys, sorted, so a comparison is about the SET.
+ */
+function keysOf(value: unknown): string[] {
+  return Object.keys(value as object).sort();
+}
+
+/**
+ * @param body - A page as the wire carried it.
+ * @returns The rows' ids, in the order they arrived.
+ */
+function idsOf(body: { data: readonly QueuedRow[] }): number[] {
+  return body.data.map((row) => row.id);
+}
+
+/**
+ * The row a page carries at one id.
+ *
+ * THROWS rather than answering undefined, because what it returns
+ * is compared as a whole record: an absent row would otherwise
+ * reach `toStrictEqual` as `undefined` and pass against any other
+ * absent one, which is a green nobody wrote.
+ *
+ * @param rows - The page's rows.
+ * @param id - The document id to find.
+ * @returns That row.
+ * @throws Error - When the page carries no row at that id.
+ */
+function rowFor(rows: readonly QueuedRow[], id: number): QueuedRow {
+  const found = rows.find((row) => row.id === id);
+
+  if (found === undefined) {
+    throw new Error(`no answered row carries the id ${id}`);
+  }
+
+  return found;
+}
+
+/**
+ * Every route a router declares, read off its own stack.
+ *
+ * DERIVED RATHER THAN TRANSCRIBED, which is the whole of what the
+ * structural case is worth: `router.stack` carries one layer per
+ * registered path, and that layer's own `stack` carries one
+ * handler layer per verb — which is where a method is legible at
+ * all. A second `post` on the same path is a second entry in the
+ * inner list rather than a second route.
+ *
+ * @param router - A built router.
+ * @returns One entry per registered path.
+ */
+function routesOf(router: Router): RegisteredRoute[] {
+  return router.stack.flatMap((layer) => {
+    const route = layer.route;
+
+    if (route === undefined) return [];
+
+    return [{
+      path: String(route.path),
+      verbs: route.stack.map((inner) => inner.method).sort(),
+    }];
+  });
 }
 
 /**
@@ -441,17 +1067,14 @@ async function withFailures(): Promise<{
     enabled: true,
   });
 
-  store.setSourceDocuments(feed.id, Array.from(
-    { length: PLANTED_FAILURES },
-    (_unused, index) => failedCapture(index + 1),
-  ));
+  store.setSourceDocuments(feed.id, QUEUED_CAPTURES);
   store.setSourceDocuments(quiet.id, [
     {
-      id: PLANTED_FAILURES + 1,
+      id: PARSED_ID,
       url: `${ITEMS_ENDPOINT}#ok`,
       body: 'a capture that parsed',
       parseError: null,
-      capturedAt: CAPTURED_AT,
+      capturedAt: TIED_CAPTURE,
       parseStatus: 'ok',
     },
   ]);
@@ -671,5 +1294,265 @@ describe('a query parameter this route does not declare', () => {
     // The envelope was built at all: a body that never arrived
     // would satisfy every count above.
     expect(answered.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The shapes every answer below is held to
+// ---------------------------------------------------------------------------
+
+describe('the shapes every answer below is held to', () => {
+  it('names every member of each shape it asserts', () => {
+    // The `check-types` half, read here so it is a symbol this
+    // file uses rather than one lint reports unused. A member
+    // added to the answered row, to either envelope, to `meta`, to
+    // `SourceStore` or to the `Pick` the router is handed and to
+    // none of the lists is a TS2322 at that declaration, before
+    // any assertion below can compare an answer against a set that
+    // has quietly stopped describing it.
+    expect(EVERY_KEY_LISTED).toBe(true);
+    // The page envelope IS the resource envelope plus `meta`,
+    // which is `okPage`'s stated contract and the one difference
+    // between the two success shapes this surface writes.
+    expect(PAGE_KEY_SET)
+      .toStrictEqual([...RESOURCE_KEY_SET, 'meta'].sort());
+    // The router's store is a SUBSET of the port rather than a
+    // list of its own, and a strict one: `satisfies` says so at
+    // the declaration for the type, and this is that pin's runtime
+    // half.
+    const port: readonly string[] = PORT_METHODS;
+
+    expect(QUEUE_METHOD_SET.filter((name) => !port.includes(name)))
+      .toStrictEqual([]);
+    expect(QUEUE_METHOD_SET.length).toBeLessThan(port.length);
+    // And the derived path is a real substitution rather than a
+    // template that reached Express as one: an unreplaced `:id`
+    // is still a literal segment and still answers a plausible
+    // refusal.
+    expect(FAILURES_TEMPLATE).toContain(':id');
+    expect(failuresPath(ABSENT_ID)).not.toContain(':');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The page: the envelope, the window it echoes and the rows in it
+// ---------------------------------------------------------------------------
+
+describe('a failures page that lands', () => {
+  it('answers one window of rows beside the meta asked for', async () => {
+    const { app, feedId } = await withFailures();
+    const failures = failuresPath(feedId);
+
+    const whole = await request(app).get(failures);
+    // The controls, varied along the axis under test and through
+    // the SAME operation: two windows of one over the same three
+    // rows. A handler ignoring the window answers all three to
+    // every call, and a `total` taken from the rows in hand
+    // answers 1 to each of the narrow pair — which is the reading
+    // no refusal case could take, since none of them can afford a
+    // window narrower than its collection.
+    const first = await request(app)
+      .get(failures)
+      .query({ page: 1, perPage: 1 });
+    const last = await request(app)
+      .get(failures)
+      .query({ page: PLANTED_FAILURES, perPage: 1 });
+
+    expect(whole.status).toBe(200);
+    expect(first.status).toBe(200);
+    expect(last.status).toBe(200);
+    // THREE members and not two: this read applies a window, so it
+    // carries the `meta` describing one — which is the difference
+    // between the envelope `okPage` writes and the one `ok` does.
+    expect(keysOf(whole.body)).toStrictEqual(PAGE_KEY_SET);
+    expect(keysOf(whole.body.meta)).toStrictEqual(META_KEY_SET);
+    expect(whole.body.success).toBe(true);
+    expect(whole.body.meta).toStrictEqual({
+      page: 1,
+      perPage: DEFAULT_PER_PAGE,
+      total: PLANTED_FAILURES,
+      totalPages: 1,
+    });
+    // The order reaches the wire as the port answered it, which is
+    // this file's half of that claim: nothing in the handler
+    // re-sorts a page it was handed, and a handler that did would
+    // be answering a different order from the one the window was
+    // taken under.
+    expect(idsOf(whole.body)).toStrictEqual(QUEUED_IDS);
+    // And one of the wrong answers the fixture was built to
+    // separate, computed here rather than named: the same three
+    // ids sorted by id alone are a different list, so the order
+    // above is neither sort column's on its own.
+    const byIdAlone = [...QUEUED_IDS].sort((left, right) => right - left);
+
+    expect(byIdAlone).not.toStrictEqual(QUEUED_IDS);
+    // Every row rather than the first, so a page cannot carry one
+    // well-shaped record beside one that leaked a column.
+    for (const row of whole.body.data) {
+      expect(keysOf(row)).toStrictEqual(FAILURE_KEY_SET);
+    }
+    // One row WHOLE, against the constants the fixture plants from
+    // rather than against another response: a store answering
+    // every read the same wrong row would satisfy any
+    // cross-response compare. `capturedAt` is asserted as the ISO
+    // spelling because that conversion is the framework's and is
+    // the one member whose type changes crossing `res.json`.
+    expect(rowFor(whole.body.data as QueuedRow[], NEWEST_ID))
+      .toStrictEqual({
+        id: NEWEST_ID,
+        url: `${FEED_ENDPOINT}#${NEWEST_ID}`,
+        body: CLEAN_BODY,
+        bodyBytes: Buffer.byteLength(CLEAN_BODY, 'utf8'),
+        bodyTruncated: false,
+        parseError: CLEAN_ERROR,
+        capturedAt: TIED_CAPTURE.toISOString(),
+      });
+    // The two narrow windows are disjoint and each names the total
+    // of the COLLECTION, which no page could have counted from its
+    // own rows.
+    expect(idsOf(first.body)).toStrictEqual([NEWEST_ID]);
+    expect(idsOf(last.body)).toStrictEqual([OLDEST_ID]);
+    expect(first.body.meta).toStrictEqual({
+      page: 1,
+      perPage: 1,
+      total: PLANTED_FAILURES,
+      totalPages: PLANTED_FAILURES,
+    });
+    expect(last.body.meta).toStrictEqual({
+      page: PLANTED_FAILURES,
+      perPage: 1,
+      total: PLANTED_FAILURES,
+      totalPages: PLANTED_FAILURES,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The rows: what a stored control byte reaches the wire as
+// ---------------------------------------------------------------------------
+
+describe('a masked body on the wire', () => {
+  it('serialises neither control byte the row stored', async () => {
+    const { app, feedId } = await withFailures();
+
+    const page = await request(app).get(failuresPath(feedId));
+    const rows = page.body.data as QueuedRow[];
+    const dirty = rowFor(rows, TIED_ID);
+
+    expect(page.status).toBe(200);
+    // The whole row, so `bodyBytes` and `bodyTruncated` are read
+    // beside the two masked members rather than left to a key set:
+    // the stored length is what tells a cut body from a short one,
+    // and masking is EXPANSIVE, so a `bodyBytes` derived from the
+    // answered text would be larger here than the row it describes.
+    expect(dirty).toStrictEqual({
+      id: TIED_ID,
+      url: `${FEED_ENDPOINT}#${TIED_ID}`,
+      body: MASKED_BODY,
+      bodyBytes: Buffer.byteLength(CONTROL_BODY, 'utf8'),
+      bodyTruncated: false,
+      parseError: MASKED_ERROR,
+      capturedAt: TIED_CAPTURE.toISOString(),
+    });
+    expect(dirty.bodyBytes)
+      .not.toBe(Buffer.byteLength(dirty.body, 'utf8'));
+    // Re-read rather than asserted absent, and against a positive
+    // taken by the SAME reader in the same case: the stored values
+    // carry exactly four offending code points between them and
+    // the answered ones carry none. A search that could only ever
+    // come back empty reports a masked row and a raw one alike.
+    expect(unsafeCodePoints(dirty.body)).toStrictEqual([]);
+    expect(unsafeCodePoints(dirty.parseError ?? '')).toStrictEqual([]);
+    expect(unsafeCodePoints(CONTROL_BODY)).toStrictEqual(STORED_BODY_CODES);
+    expect(unsafeCodePoints(CONTROL_ERROR))
+      .toStrictEqual(STORED_ERROR_CODES);
+    // The reading no direct call can take, and the reason this
+    // case is in a routes file at all: the SERIALISED response.
+    // `JSON.stringify` escapes C0 and lone surrogates on its own
+    // and passes DEL and the whole C1 range through as themselves,
+    // so a body reaching `res.json` as stored would put two raw
+    // control bytes into the text a client, a log or a terminal
+    // receives while a reader of the parsed body saw nothing.
+    expect(unsafeCodePoints(page.text)).toStrictEqual([]);
+    expect(page.text.length).toBeGreaterThan(0);
+    // The planted control for exactly that search: the same reader
+    // over the text an unmasked serialisation of these two values
+    // would have written. Two of the four survive, which is what
+    // makes the zero above a reading rather than a property of
+    // `JSON.stringify`.
+    const unmasked = JSON.stringify({
+      body: CONTROL_BODY,
+      parseError: CONTROL_ERROR,
+    });
+
+    expect(unsafeCodePoints(unmasked)).toStrictEqual(SERIALISED_RAW_CODES);
+    // And the nullable branch, on the row beside it: a mask
+    // applied unconditionally throws on a null error, and one
+    // applied to `body` alone leaves the row above's error raw —
+    // so the two rows are two claims rather than one.
+    const clean = rowFor(rows, OLDEST_ID);
+
+    expect(clean.parseError).toBeNull();
+    expect(clean.body).toBe(OLDEST_BODY);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The structure: one verb, and a port that cannot write a document
+// ---------------------------------------------------------------------------
+
+describe('what this router structurally cannot do', () => {
+  it('registers one get on one path and no other verb', () => {
+    // Built here rather than reached through {@link withFailures},
+    // because what this reads is the router's own DECLARATION: a
+    // factory registers its routes at construction and reads
+    // nothing, so no fixture is involved in the answer.
+    const store = createMemoryResearchStore();
+    const registered = routesOf(buildSourceFailuresRouter({ store }));
+
+    // The whole inventory in one comparison, derived from the
+    // stack rather than transcribed: a second path, a second verb
+    // on this one, or a `post` in place of the `get` are each a
+    // different value here. An empty stack is too, which is what
+    // keeps this from being a search that could only answer
+    // nothing.
+    expect(registered).toStrictEqual([
+      { path: FAILURES_TEMPLATE, verbs: ['get'] },
+    ]);
+    // The verb SET across the whole router, read separately, so a
+    // failure says whether a path or a verb moved.
+    expect(registered.flatMap((route) => route.verbs)).toStrictEqual(['get']);
+    // And the same reading over a router this file did NOT build
+    // read-only would differ, which is what the comparison above
+    // is worth: `sources` writes are a different router entirely
+    // and `./routes.test.ts` is where they are read.
+    expect(registered).toHaveLength(1);
+  });
+
+  it('names no port method that writes a document', () => {
+    // The roster is pinned in both directions at its declaration,
+    // so what this classifies is every method `SourceStore`
+    // declares and not a list that stopped tracking it.
+    const methods: readonly string[] = PORT_METHODS;
+
+    expect(documentWritersIn(methods)).toStrictEqual([]);
+    // Non-vacuous: the port DOES name the corpus table, four times
+    // over, and a classifier matching nothing would answer the
+    // empty list above against any roster at all.
+    expect(methods.filter(namesADocument)).toStrictEqual(DOCUMENT_READERS);
+    // And the liveness control, through the same call in the same
+    // case: two names that WOULD write a row are both reported
+    // when they sit in the roster beside the real ones.
+    expect(documentWritersIn([...methods, ...PLANTED_WRITERS]))
+      .toStrictEqual([...PLANTED_WRITERS]);
+    // The signature half, which `check-types` owns and which no
+    // name can report: every one of those four methods is handed
+    // an id and a window, so not one of them can be given a row to
+    // store. Its own negative control sits beside it — the same
+    // derivation over a port carrying a planted writer answers
+    // `false`, which is what says the derivation discriminates
+    // rather than answering `true` for everything.
+    expect(DOCUMENT_READS_TAKE_NO_ROW).toBe(true);
+    expect(A_PLANTED_WRITER_IS_REPORTED).toBe(false);
   });
 });

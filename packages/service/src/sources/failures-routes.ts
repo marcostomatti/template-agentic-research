@@ -203,12 +203,14 @@ function readId(params: unknown): number {
  * ONE VERB AND NO OTHER. This router registers no `post`, `patch`,
  * `put` or `delete`, and the store it holds declares no writer of a
  * `documents` row, so the read-only rule is two shapes rather than
- * an observance. No case in `./failures-routes.test.ts` reports
- * the VERB on its own, measured: registering this handler as a
- * `post` reddens every case in that file at once, which is a
- * fixture reading rather than a claim. What says the verb is a
- * `get` and the only one is a structural leg off the router's own
- * `stack`, and it lands with that file's positive half.
+ * an observance. Both are read structurally in
+ * `./failures-routes.test.ts` and neither by a request: the route
+ * inventory comes off this router's own `stack`, and the port's
+ * method names and signatures are classified there against a
+ * document vocabulary. Registering this handler as a `post` instead
+ * reddens nine of that file's twelve cases and registering a SECOND
+ * `post` beside it reddens exactly one — the first is the fixture
+ * reporting, the second is the claim.
  *
  * NEVER `409`. Nothing on this route decides on stored state beyond
  * whether the source is there, so the only refusals it can answer
