@@ -1,8 +1,8 @@
 /**
- * `src/sources/routes.ts` — what each of the four routes answers
- * when it REFUSES: the status, the envelope and the members each
- * reaches the wire with. Driven over supertest against a router
- * built by the real factory, standing on
+ * `src/sources/routes.ts` — what each of the four routes answers,
+ * refusing and landing: the status, the envelope and the members
+ * each reaches the wire with. Driven over supertest against a
+ * router built by the real factory, standing on
  * `tests/helpers/memory-research-store.ts`, so every claim here is
  * answered with no database anywhere.
  *
@@ -18,14 +18,12 @@
  * and whether a handler swallowed a throw on the way. So every case
  * below reads a response and none of them reads a return value.
  *
- * THIRTEEN CASES IN NINE GROUPS. Three guard the fixture and the
- * key lists every answer is read through; six cover the address;
- * one covers the window; two cover the two payload refusals; and
- * one is the delete guard, driven against both counted tables in
- * turn. The POSITIVE half —
- * what a list, a create, a patch and a delete answer when they LAND
- * — is a task of its own, and every control below is a landing
- * answer read only as far as the axis its own case is about.
+ * TWENTY CASES IN FOURTEEN GROUPS. Three guard the fixture and the
+ * key lists every answer is read through; ten cover the ways a
+ * request here can be wrong — six the address, one the window, two
+ * the payload, and one the delete guard driven against both counted
+ * tables in turn; and seven cover what the four routes answer when
+ * they LAND.
  *
  * THE ADDRESS. A slug naming no domain is `404` on both operations
  * that take one, and an id naming no source is `404` on both that
@@ -45,7 +43,10 @@
  * the cap is `422` naming `perPage` rather than a silent clamp. It
  * is paired with a request at exactly the cap, which is what says
  * the refusal is a CAP and not a route that refuses every window it
- * is handed.
+ * is handed. What that pair cannot say is that the window SELECTS,
+ * since both of its reads are wide enough to carry the whole
+ * collection; the positive half reads two windows of one over the
+ * same three rows for that.
  *
  * A `kind` OUTSIDE THE TUPLE is `422` whose one detail names `kind`
  * with code `invalid_value`, from the create AND from the patch,
@@ -101,6 +102,87 @@
  * named twice, so a third counted table reddens this case instead
  * of travelling unasserted.
  *
+ * WHAT A LIST ANSWERS IS A WINDOW AND THE COLLECTION AROUND IT.
+ * One wide read carries all three of the domain's sources beside a
+ * `meta` asserted WHOLE, and two windows of one over those same
+ * rows are read with it: a handler ignoring the window answers all
+ * three to every call, and a `total` taken from the rows in hand
+ * answers 1 to each of the narrow pair. The order is id ascending,
+ * which the addresses alone cannot report — the archive row sorts
+ * first alphabetically and was planted last — so the page's order
+ * is the store's own rule rather than the fixture's.
+ *
+ * THE FIVE HEALTH COLUMNS AND THE AGGREGATE ARE READ ON EVERY ROW,
+ * which is what this list has that no sibling group's does. The
+ * five are compared as a whole record per row against one roster
+ * — {@link HEALTH_KEYS}, held to `SourceRecord` by `satisfies` —
+ * with one row RETIRED first, so a read filling them with constants
+ * answers all three alike and fails there. The aggregate is keyed
+ * by the whole `DOCUMENT_PARSE_STATUSES` tuple on every row and not
+ * by the statuses that happen to have documents: a grouped read
+ * answers a row per status that HAS some, and an implementation
+ * handing those groups straight back answers a record whose members
+ * differ per source.
+ *
+ * AND THE FIXTURE CARRIES BOTH ABSENCE SHAPES A GROUPED READ HAS.
+ * The feed captured under BOTH members with DIFFERENT counts, so a
+ * record built with the two statuses swapped is a red case rather
+ * than a total that still adds up; its two neighbours captured
+ * nothing at all and answer a COUNTED zero under each member, which
+ * is the trap `ParseStatusCounts` names — a status with no rows
+ * contributes no group, and letting that through would make `0` and
+ * never-counted one value. One row is read member by member off the
+ * tuple so a failure names the status that went missing, and every
+ * expectation derived from the tuple is guarded by a length read,
+ * since an emptied tuple would make each of them vacuously true.
+ *
+ * A CREATE ANSWERS `201` AND THE STORED ROW, compared WHOLE against
+ * the request rather than by the members the case is named for: a
+ * create reaching a column nobody submitted is exactly as wrong as
+ * one dropping a member, and invisible to a pair of field reads.
+ * Its control is the same operation carrying the two members the
+ * schema requires and nothing else, which is what makes the three
+ * values that differ between them DEFAULTS rather than constants —
+ * an empty arrangement, an empty contract and an enabled feed. The
+ * five pipeline-owned columns are the point of the compare: no body
+ * may name one, so a create is the only place their landing value
+ * is decided at all.
+ *
+ * A PATCH REPLACES ITS ARRANGEMENT WHOLE AND MERGES NOTHING INTO
+ * IT, which is legible only because the stored config and the
+ * submitted one are keyed DISJOINTLY: the answer carries one key
+ * where a merge would carry three. The rest of that row is compared
+ * whole in the same breath, so the transport, the address, the
+ * sibling jsonb member and all five pipeline columns coming through
+ * untouched is the same assertion rather than five more. A second
+ * patch naming a member the first did not is the control that the
+ * write is not a rewrite of every column.
+ *
+ * RETIRING A FEED IS ITS OWN CASE, because `enabled` is the one
+ * health column an operator can move and because the refused delete
+ * earlier in this file names that very operation as the one that
+ * was wanted. The address, the arrangement and everything captured
+ * through the feed are read back afterwards: a retirement that took
+ * the corpus with it would leave the status and the flag green.
+ * Its control is the identical request carrying `true`.
+ *
+ * A DELETE ANSWERS `204` AND CARRIES NOTHING, asserted as an empty
+ * key set beside an empty body and an empty content type — a
+ * deleted resource has no representation, so what is claimed is
+ * that NOTHING travelled rather than that some envelope did. The
+ * row is gone, both neighbours are standing, the second domain
+ * still reads its own feed, and the identical request afterwards is
+ * a `404`: that last is what makes the `204` a delete rather than
+ * what this route answers to any id it is handed.
+ *
+ * EVERY WRITE IS READ BACK THROUGH THE OTHER OPERATION. What a
+ * create, a patch and a retirement answered is compared against
+ * what a list carries afterwards, because a write returning a row
+ * it never stored satisfies every assertion made against its own
+ * response. The collection is read WHOLE in each of those cases, so
+ * a write reaching more rows than the one it addressed is a red
+ * case rather than an answer nobody compared against anything.
+ *
  * ANTI-VACUITY. A router that refused everything, or that answered
  * every read the same row, would satisfy most of what is below, so
  * each case carries its own control in the same body, varied along
@@ -108,8 +190,15 @@
  * SAME operation, the not-an-id case ends on an id that is one, the
  * over-cap `perPage` is paired with a request at exactly the cap,
  * the refused `kind` is paired with a member of the tuple through
- * both writes, the refused member is removed and resent, and the
- * refused delete is paired with a source nothing cites.
+ * both writes, the refused member is removed and resent, the
+ * refused delete is paired with a source nothing cites, the wide
+ * list read is paired with two windows of one, the health read is
+ * taken after one row was retired, the full create body is paired
+ * with the two members the schema requires and nothing else, the
+ * arrangement patch is followed by one naming a member it never
+ * did, the retirement is paired with the same request carrying
+ * `true`, and the `204` is followed by the same request answering
+ * `404`.
  *
  * WHAT THIS FILE DOES NOT CLAIM. That the router sits behind
  * `ctx.requireAuth` is `tests/api/wiring.test.ts`'s claim, and what
@@ -120,51 +209,64 @@
  * `GET /sources/:id/failures` is not this router's route at all and
  * has a file of its own.
  *
- * MUTATION GRID, derived over all thirteen cases by mutating
+ * MUTATION GRID, re-derived over all twenty cases by mutating
  * `routes.ts` one edit at a time and reading the failed `fullName`
  * SET from a `--reporter=json` run rather than a count. EIGHT legs,
  * each named by the EDIT it makes rather than by its effect, since
  * a leg described only by its effect is one nobody can run again.
+ * All eight were re-run rather than carried forward, and SEVEN
+ * moved: a positive half addresses rows, reads statuses and reads
+ * `meta`, which is most of what this router does.
  *
- * THE TWO ADDRESS LEGS ARE NOT ONE LEG TWICE. Returning the segment
- * raw from {@link readId} reddens FIVE — every case that addresses
- * a row by id and gets an answer out of the store, which is the two
- * `404` cases, the not-an-id case, the delete guard and the kind
- * case's accepted patch. Returning it raw from {@link readSlug}
+ * THE TWO ADDRESS LEGS ARE NOT ONE LEG TWICE, and only one of them
+ * moved. Returning the segment raw from {@link readId} reddens
+ * NINE, up from five — every case that addresses a row by id AND
+ * gets an answer out of the store, which is now the two `404`
+ * cases, the not-an-id case, the delete guard, the kind case's
+ * accepted patch, both patch cases, the list's health read and the
+ * delete that lands. Returning it raw from {@link readSlug} still
  * reddens exactly ONE, the not-a-slug case, and that is this file's
  * shape rather than an omission: every other slug it sends is well
  * formed, so an unnarrowed segment answers the same `404` those
- * cases already assert.
+ * cases already assert, and no route this file added takes a
+ * `:slug` it does not already send well.
  *
- * THE `flagged` PATCH IS IN NEITHER SET, which is the ordering
- * showing up as a measurement: `patchSource` parses the body before
- * it writes, so a body the schema refuses is answered whatever the
- * id was. The kind case's patch is in the `readId` set only through
- * the ACCEPTED control beside it.
+ * THE `flagged` PATCH IS STILL IN NEITHER SET, which is the
+ * ordering showing up as a measurement: `patchSource` parses the
+ * body before it writes, so a body the schema refuses is answered
+ * whatever the id was. Nine reds against TEN cases that send an
+ * `:id` is that one case, and the kind case's patch is in the
+ * `readId` set only through the ACCEPTED control beside it.
  *
- * THE THREE STATUS LEGS SEPARATE. `res.status(201)` written as
- * `200` on the create reddens THREE, all of them landing controls
- * rather than cases named for a create. `res.status(204)` written
- * as `200` on the delete reddens THREE. `res.status(200)` written
- * as `204` on the patch reddens TWO. So the statuses ARE pinned
- * here, by no case that is about them — which is what a
- * refusals-only file's controls buy.
+ * THE THREE STATUS LEGS SEPARATE AND ALL THREE MOVED, each by
+ * exactly the cases now named for it. `res.status(201)` written as
+ * `200` on the create reddens FOUR, up from three: the landing
+ * controls plus the case that is about a create.
+ * `res.status(204)` written as `200` on the delete reddens FOUR, up
+ * from three, on the same terms. `res.status(200)` written as `204`
+ * on the patch reddens FIVE, up from two — the two patch cases and
+ * the list's health read, which retires a row through that route
+ * before it reads.
  *
  * `ok(page.rows)` IN PLACE OF `okPage(page.rows, meta)` REDDENS
- * ONE, the window case, which is the only read here that looks at
- * `meta` at all.
+ * FIVE, up from one: every case that reads a `meta` at all, which
+ * is the window refusal, the list envelope, and the three write
+ * cases that count a collection through `meta.total`.
  *
- * AND TWO LEGS REDDEN NOTHING, both recorded rather than repaired.
- * A fixed `{ limit: 50, offset: 0 }` in place of
- * `toStoreWindow(query)` reddens ZERO, and `total: page.rows.length`
- * in place of `total: page.total` reddens ZERO, for one reason: no
- * refusal case can afford a window narrower than the collection it
- * is reading, so every page here holds every row and the two
- * numbers agree. Both are the positive half's claims — two windows
- * of one over the same rows — and this file records the zeros
- * rather than pretending to them.
+ * AND THE TWO LEGS THAT REDDENED NOTHING BOTH REPORT NOW, each by
+ * the single case that gave them something to report. A fixed
+ * `{ limit: 50, offset: 0 }` in place of `toStoreWindow(query)`
+ * reddens ONE, and `total: page.rows.length` in place of
+ * `total: page.total` reddens ONE — the list case, and the same
+ * one for both. The recorded zeros were the refusal half's shape
+ * rather than a hole in it: no case there could afford a window
+ * narrower than the collection it read, so every page held every
+ * row and the two numbers agreed. Both legs are still ONE rather
+ * than more, because every other case here reads its `meta.total`
+ * through the default window over a collection that fits inside it.
  */
 import type {
+  ParseStatusCounts,
   SourceDependentCounts,
   SourceRecord,
   SourceWithParseStats,
@@ -189,7 +291,10 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
-import { SOURCE_KINDS } from '../db/schema/values.js';
+import {
+  DOCUMENT_PARSE_STATUSES,
+  SOURCE_KINDS,
+} from '../db/schema/values.js';
 
 import { buildSourcesRouter } from './routes.js';
 
@@ -253,6 +358,57 @@ const TRANSIT_ENDPOINT = 'https://example.test/transit/feed.xml';
 /** An endpoint no planted row carries, and every create submits. */
 const FRESH_ENDPOINT = 'https://example.test/radar/releases.atom';
 
+/**
+ * A second endpoint no planted row carries.
+ *
+ * The sparse create's address, so the two creates in one case land
+ * two rows rather than one: `sources` has no unique key at all, so
+ * a pair sharing an address would be storable and the page they
+ * joined could not tell them apart.
+ */
+const SPARE_ENDPOINT = 'https://example.test/radar/digest.json';
+
+/** A third, and the address the patch case repoints a feed onto. */
+const MOVED_ENDPOINT = 'https://example.test/radar/items.v2';
+
+/**
+ * The arrangement {@link ITEMS_ENDPOINT} is read under.
+ *
+ * TWO keys rather than one, because the patch case's whole claim is
+ * that a submitted arrangement REPLACES this one: a merge answers
+ * the union, and a union is only distinguishable from a replacement
+ * where the stored value carries a key the request did not send.
+ */
+const ITEMS_CONFIG = { itemsAt: 'data.releases', page: 'cursor' };
+
+/** The contract its payloads are held to, and no patch names. */
+const ITEMS_CONTRACT = { required: ['title'] };
+
+/** The arrangement a create submits, keyed unlike every other. */
+const FRESH_CONFIG = { selector: 'main article', follow: false };
+
+/** The contract that create submits beside it. */
+const FRESH_CONTRACT = { required: ['title', 'url'] };
+
+/**
+ * The arrangement the patch case writes over {@link ITEMS_CONFIG}.
+ *
+ * Keyed DISJOINTLY from what is stored, so a merge is legible as a
+ * key set of three where a replacement is one of one.
+ */
+const PATCHED_CONFIG = { xmlPath: 'channel.item' };
+
+/**
+ * `paginationQuerySchema`'s own default, spelled here because that
+ * module keeps it private.
+ *
+ * Read by the list case, which asserts `meta` WHOLE: a window
+ * nobody asked for is still a window a caller is told about, and
+ * the number reaching the wire is the claim rather than the number
+ * being a default.
+ */
+const DEFAULT_PER_PAGE = 50;
+
 /** The transport {@link FEED_ENDPOINT} and the neighbour are read under. */
 const RSS_KIND = 'rss';
 
@@ -301,20 +457,54 @@ const REFUSED_MEMBER = 'flagged';
 const CAPTURED_AT = new Date('2026-08-30T11:00:00.000Z');
 
 /**
+ * How many documents {@link FEED_ENDPOINT} captured that PARSED.
+ *
+ * DIFFERENT from {@link FAILED_CAPTURES}, which is what makes the
+ * aggregate legible on the page: a record built with the two
+ * statuses swapped counts correctly under any fixture that gives
+ * them the same total.
+ */
+const OK_CAPTURES = 2;
+
+/** How many of its captures did not parse under their contract. */
+const FAILED_CAPTURES = 1;
+
+/**
  * How many documents the corpus holds through {@link FEED_ENDPOINT}.
+ *
+ * The two statuses summed rather than a third literal beside them,
+ * so the delete guard's count and the aggregate's are one reading:
+ * `countSourceDependents` counts a source's documents whatever
+ * side of the parse check they sit on.
  *
  * DIFFERENT from {@link HELD_SIGHTINGS}, which is what makes the
  * two counts in a refusal legible: a record built with the members
  * swapped answers a total that still adds up and two numbers in the
  * wrong places.
  */
-const HELD_DOCUMENTS = 2;
+const HELD_DOCUMENTS = OK_CAPTURES + FAILED_CAPTURES;
 
 /** How many sightings cite {@link ITEMS_ENDPOINT}. */
-const HELD_SIGHTINGS = 3;
+const HELD_SIGHTINGS = 4;
 
 /** How many sources {@link STORED_SLUG} is planted with. */
 const PLANTED_SOURCES = 3;
+
+/**
+ * The addresses those three answer at, in the order a page carries
+ * them.
+ *
+ * ID ASCENDING, which the endpoints alone cannot report: the
+ * archive row sorts FIRST alphabetically and was planted LAST, so a
+ * list answering this order is the store's own rule rather than the
+ * addresses' or the fixture's. Held to the count above by a guard,
+ * so a fourth planted row cannot leave this list describing three.
+ */
+const LISTED_ENDPOINTS = [
+  FEED_ENDPOINT,
+  ITEMS_ENDPOINT,
+  ARCHIVE_ENDPOINT,
+];
 
 /**
  * The whole body a `404` about a domain answers with.
@@ -510,6 +700,30 @@ const DEPENDENT_KEYS = [
   'findingSightings',
 ] as const satisfies readonly (keyof SourceDependentCounts)[];
 
+/**
+ * The columns an operator reads a feed's HEALTH off.
+ *
+ * Four are the pipeline's own and `enabled` is the operator's,
+ * which is the pairing that makes the reading useful: a feed
+ * failing every pass and a feed somebody switched off are two
+ * states an operator has to tell apart, and both reach the wire
+ * here. `cursor` is the pipeline's fifth column and is not a health
+ * reading at all — it is where the last pass got to — so it sits
+ * in {@link SOURCE_KEYS} and in every whole-row compare below
+ * rather than in this roster.
+ *
+ * Held to `SourceRecord` by `satisfies`, so a renamed column is a
+ * refusal here rather than a string nobody reads, and to
+ * {@link ListedRow} by the `Pick` beneath it.
+ */
+const HEALTH_KEYS = [
+  'consecutiveFailures',
+  'enabled',
+  'flagged',
+  'lastFailureAt',
+  'lastSuccessAt',
+] as const satisfies readonly (keyof SourceRecord)[];
+
 /** The members every body this router answers a resource in has. */
 const RESOURCE_KEYS = [
   'data',
@@ -585,6 +799,38 @@ const PAGE_KEY_SET: readonly string[] = [...PAGE_KEYS].sort();
 const META_KEY_SET: readonly string[] = [...META_KEYS].sort();
 
 /**
+ * What the aggregate reads as for a source that captured nothing.
+ *
+ * Built from `DOCUMENT_PARSE_STATUSES` rather than from two
+ * literals, so a member added to that tuple is expected here the
+ * day it lands rather than left out of every comparison below. The
+ * cast is what `Object.fromEntries` costs: it answers an index
+ * signature, and the record this stands for is keyed by the tuple.
+ *
+ * An emptied tuple would make every expectation built from it
+ * vacuously true, which the shapes case guards with a length read.
+ */
+const NO_CAPTURES: ParseStatusCounts = Object.fromEntries(
+  DOCUMENT_PARSE_STATUSES.map((status) => [status, 0]),
+) as ParseStatusCounts;
+
+/**
+ * What it reads as for {@link FEED_ENDPOINT}, the one planted
+ * source that captured anything.
+ *
+ * Spread over {@link NO_CAPTURES} rather than written out, so a
+ * status added to the tuple arrives here as a counted zero. The two
+ * named members carry DIFFERENT numbers, which is what makes the
+ * record legible: one built with the two statuses swapped counts
+ * correctly under any fixture that gives them the same total.
+ */
+const FEED_COUNTS: ParseStatusCounts = {
+  ...NO_CAPTURES,
+  ok: OK_CAPTURES,
+  failed: FAILED_CAPTURES,
+};
+
+/**
  * Just enough of an answered source for an assertion to read it.
  *
  * `supertest` types a response body as `any`, so a callback over
@@ -612,15 +858,75 @@ interface AddressedRow {
 }
 
 /**
+ * The same row as a LIST answers it: the five health columns, and
+ * the aggregate no other read on this router carries.
+ *
+ * `string | null` on the two stamps rather than `Date`, because
+ * this is the row as it came back OFF the wire — `res.json`
+ * serialises through `Date#toJSON`, so a source a pass has read
+ * answers an ISO-8601 spelling where one nothing has read answers
+ * null. Every row this file plants or creates is the second, which
+ * is what {@link NEVER_FETCHED} records.
+ */
+interface ListedRow extends AddressedRow {
+  /** How many passes in a row have failed since the last success. */
+  readonly consecutiveFailures: number;
+
+  /** Whether the pipeline may read the feed at all. */
+  readonly enabled: boolean;
+
+  /** Whether the adapter-rot detector has spoken about it. */
+  readonly flagged: boolean;
+
+  /** When a pass last failed, as JSON carries it. */
+  readonly lastFailureAt: string | null;
+
+  /** When a pass last succeeded, on the same terms. */
+  readonly lastSuccessAt: string | null;
+
+  /** The parse-status aggregate, keyed by the whole tuple. */
+  readonly parseStats: Readonly<Record<string, number>>;
+}
+
+/**
+ * Exactly the members {@link HEALTH_KEYS} names, as the wire has
+ * them.
+ *
+ * `Pick` over {@link ListedRow} rather than a second hand-written
+ * interface, so the roster is the only place those five are listed:
+ * a member added to it that the wire row does not declare is a
+ * refusal at this line.
+ */
+type SourceHealth = Pick<ListedRow, (typeof HEALTH_KEYS)[number]>;
+
+/**
+ * What every health column reads as on a source nothing has
+ * fetched, which is every source this file plants or creates.
+ *
+ * Typed as {@link SourceHealth}, so a column added to
+ * {@link HEALTH_KEYS} is a missing member here rather than a roster
+ * the expectations below quietly stopped covering.
+ */
+const NEVER_FETCHED: SourceHealth = {
+  consecutiveFailures: 0,
+  enabled: true,
+  flagged: false,
+  lastFailureAt: null,
+  lastSuccessAt: null,
+};
+
+/**
  * One planted `documents` row, as the seam takes it.
  *
  * @param id - The document id, unique here because it is also the
  *   tiebreak the failures queue orders on — a queue this router
  *   does not serve, but one dataset stands behind both.
- * @returns The row, `ok` rather than `failed`: what these cases
- *   need from a document is that it CITES a source, which is the
- *   `documents_source_id_sources_id_fk` refusal and is the same
- *   whichever side of the parse check the row sits on.
+ * @returns The row, on the `ok` side of the parse check. The
+ *   delete guard needs only that a document CITES a source, which
+ *   is the `documents_source_id_sources_id_fk` refusal and is the
+ *   same whichever side it sits on; the list's aggregate groups
+ *   ACROSS both members of `DOCUMENT_PARSE_STATUSES`, so
+ *   {@link failedCapture} supplies the other.
  */
 function capture(id: number): MemorySourceDocument {
   return {
@@ -631,6 +937,51 @@ function capture(id: number): MemorySourceDocument {
     capturedAt: CAPTURED_AT,
     parseStatus: 'ok',
   };
+}
+
+/**
+ * One planted `documents` row that did NOT parse.
+ *
+ * @param id - The document id, on the same terms {@link capture}
+ *   gives.
+ * @returns The row, `failed` and carrying the reason. A fixture
+ *   that could plant only the `ok` side would leave a record keyed
+ *   by the wrong status counting correctly, which is the whole of
+ *   why this exists beside its sibling.
+ */
+function failedCapture(id: number): MemorySourceDocument {
+  return {
+    ...capture(id),
+    parseError: 'the payload did not match the contract',
+    parseStatus: 'failed',
+  };
+}
+
+/**
+ * Every document the corpus holds through {@link FEED_ENDPOINT}.
+ *
+ * Built FROM the two counts rather than beside them, so the plant
+ * and every expectation read off {@link FEED_COUNTS} are one
+ * statement: a fixture listing its rows by hand can disagree with
+ * the constants a case compares against, and nothing would report
+ * it.
+ *
+ * @returns {@link OK_CAPTURES} rows that parsed followed by
+ *   {@link FAILED_CAPTURES} that did not, ids ascending and
+ *   distinct — the failures queue orders on that tiebreak, and one
+ *   dataset stands behind both readers.
+ */
+function feedCaptures(): MemorySourceDocument[] {
+  const parsed = Array.from(
+    { length: OK_CAPTURES },
+    (_unused, index) => capture(index + 1),
+  );
+  const refused = Array.from(
+    { length: FAILED_CAPTURES },
+    (_unused, index) => failedCapture(OK_CAPTURES + index + 1),
+  );
+
+  return [...parsed, ...refused];
 }
 
 /**
@@ -677,6 +1028,55 @@ function domainIdsOf(body: { data: readonly AddressedRow[] }): number[] {
  */
 function keysOf(value: unknown): string[] {
   return Object.keys(value as object).sort();
+}
+
+/**
+ * The row a read carries at one address.
+ *
+ * THROWS rather than answering undefined, because the value it
+ * returns is compared against another response: an absent row would
+ * otherwise reach `toStrictEqual` as `undefined` and pass against
+ * any other absent row, which is a green nobody wrote. Two rows may
+ * share an address on this table — `sources` carries no unique key
+ * — which no case below plants and which would answer the first.
+ *
+ * @param rows - A read's `data`, as it came off the wire.
+ * @param endpoint - The address to look for.
+ * @returns The row reading it.
+ * @throws Error - When the read carries no such row.
+ */
+function sourceFor(
+  rows: readonly ListedRow[],
+  endpoint: string,
+): ListedRow {
+  const row = rows.find((candidate) => candidate.endpoint === endpoint);
+
+  if (row === undefined) {
+    throw new Error(`The page carries no source reading ${endpoint}`);
+  }
+
+  return row;
+}
+
+/**
+ * The health of one answered source.
+ *
+ * Written out member by member rather than folded off the roster,
+ * because {@link SourceHealth} is then what checks it: a column
+ * added to {@link HEALTH_KEYS} is a missing member here rather than
+ * a key a fold would have silently skipped.
+ *
+ * @param row - The source, as a read answered it.
+ * @returns Exactly the members {@link HEALTH_KEYS} names.
+ */
+function healthOf(row: ListedRow): SourceHealth {
+  return {
+    consecutiveFailures: row.consecutiveFailures,
+    enabled: row.enabled,
+    flagged: row.flagged,
+    lastFailureAt: row.lastFailureAt,
+    lastSuccessAt: row.lastSuccessAt,
+  };
 }
 
 /**
@@ -734,6 +1134,16 @@ function buildSourcesApp(store: MemoryResearchStore): Application {
  * is what says a list is a page of one DOMAIN's sources rather than
  * of the table, and it is the row every delete leaves standing.
  *
+ * ITS DOCUMENTS STRADDLE THE PARSE CHECK, which the delete guard
+ * has no use for and the list's aggregate does: {@link OK_CAPTURES}
+ * of them parsed and {@link FAILED_CAPTURES} did not, so the record
+ * on that row carries a different number under each member of
+ * `DOCUMENT_PARSE_STATUSES` while its two neighbours carry a
+ * counted zero under both. Those are the two absence shapes a
+ * grouped read has — a source contributing no group at all, and one
+ * contributing some groups but not all — and a fixture holding only
+ * one of them leaves half the fold unproven.
+ *
  * EACH COUNTED TABLE IS PLANTED ALONE, which is what makes the
  * refusal name a table rather than a total. A guard reading one of
  * the two, or summing them before either is counted, answers a row
@@ -788,8 +1198,8 @@ async function withSources(): Promise<{
     domainId: stored.id,
     kind: API_KIND,
     endpoint: ITEMS_ENDPOINT,
-    parserConfig: { itemsAt: 'data.releases' },
-    contract: { required: ['title'] },
+    parserConfig: ITEMS_CONFIG,
+    contract: ITEMS_CONTRACT,
     enabled: true,
   });
   const archive = await store.insertSource({
@@ -810,7 +1220,7 @@ async function withSources(): Promise<{
     enabled: true,
   });
 
-  store.setSourceDocuments(feed.id, [capture(1), capture(2)]);
+  store.setSourceDocuments(feed.id, feedCaptures());
   store.setSourceSightings(items.id, HELD_SIGHTINGS);
 
   return {
@@ -841,10 +1251,21 @@ describe('the fixture every case below is read through', () => {
     ];
 
     expect(new Set(endpoints).size).toBe(endpoints.length);
+    // The page's order is the count's, so a fourth planted row
+    // cannot leave the list of addresses describing three.
+    expect(LISTED_ENDPOINTS).toHaveLength(PLANTED_SOURCES);
     // The two counts differ, which is what makes a refusal's
     // `details` legible: a record built with the members swapped
     // answers a total that still adds up.
     expect(HELD_DOCUMENTS).not.toBe(HELD_SIGHTINGS);
+    // And the two parse statuses differ from each other for the
+    // same reason one level down: an aggregate built with the two
+    // members swapped counts correctly under any fixture that gives
+    // them the same total. Both are above zero, so the row reaches
+    // the page having captured under each.
+    expect(OK_CAPTURES).not.toBe(FAILED_CAPTURES);
+    expect(OK_CAPTURES).toBeGreaterThan(0);
+    expect(FAILED_CAPTURES).toBeGreaterThan(0);
     // And both are above zero, so each refusal below is reached by
     // a table that actually holds something. A plant of none would
     // leave the delete landing and the case reading as a guard that
@@ -905,6 +1326,19 @@ describe('the shapes every answer below is held to', () => {
     // every read here and accepted by no request, and a projection
     // that dropped it would leave both of them green.
     expect(SOURCE_KEY_SET).toContain(REFUSED_MEMBER);
+    // The health roster is a SUBSET of the record rather than a
+    // list of its own: `satisfies` says so at the declaration for
+    // the type, and this is that pin's runtime half — a column
+    // renamed on the record and not on the roster is named here.
+    expect(HEALTH_KEYS.filter((key) => !SOURCE_KEY_SET.includes(key)))
+      .toStrictEqual([]);
+    // The expectations read a health off name exactly the roster.
+    expect(keysOf(NEVER_FETCHED)).toStrictEqual([...HEALTH_KEYS].sort());
+    // Every aggregate expectation below is DERIVED from the status
+    // tuple, so an emptied tuple would make each of them vacuously
+    // true. Two members is what `documents_parse_status_check`
+    // carries.
+    expect(DOCUMENT_PARSE_STATUSES.length).toBeGreaterThan(1);
   });
 });
 
@@ -1273,5 +1707,479 @@ describe('a delete of a source the corpus still cites', () => {
     expect(endpointsOf(afterwards.body)).toStrictEqual(
       [FEED_ENDPOINT, ITEMS_ENDPOINT],
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The page: one window of a domain's sources, beside the meta for it
+// ---------------------------------------------------------------------------
+
+describe('a source list that lands', () => {
+  it('answers one window of rows beside the meta asked for', async () => {
+    const { app, domainId, itemsId } = await withSources();
+    const sources = sourcesPath(STORED_SLUG);
+
+    const whole = await request(app).get(sources);
+    // The controls, varied along the axis under test and through
+    // the SAME operation: two windows of one over the same three
+    // rows. A handler ignoring the window answers all three to
+    // every call, and a total taken from the rows in hand answers 1
+    // to each of the narrow pair — which is the reading the refusal
+    // half could not take, since no case there can afford a window
+    // narrower than its collection. The wide read is what makes the
+    // narrow ones read as narrowings OF something.
+    const first = await request(app)
+      .get(sources)
+      .query({ page: 1, perPage: 1 });
+    const last = await request(app)
+      .get(sources)
+      .query({ page: PLANTED_SOURCES, perPage: 1 });
+
+    expect(whole.status).toBe(200);
+    expect(first.status).toBe(200);
+    expect(last.status).toBe(200);
+    // THREE members and not two: this list applies a window, so it
+    // carries the `meta` describing one — which is the difference
+    // between the envelope `okPage` writes and the one `ok` does.
+    expect(keysOf(whole.body)).toStrictEqual(PAGE_KEY_SET);
+    expect(keysOf(whole.body.meta)).toStrictEqual(META_KEY_SET);
+    expect(whole.body.success).toBe(true);
+    expect(whole.body.meta).toStrictEqual({
+      page: 1,
+      perPage: DEFAULT_PER_PAGE,
+      total: PLANTED_SOURCES,
+      totalPages: 1,
+    });
+    // Id ascending, which the addresses alone cannot report: the
+    // archive row sorts FIRST alphabetically and was planted LAST,
+    // so this order is the store's own rather than the endpoints'
+    // or the order a case happened to read them in.
+    expect(endpointsOf(whole.body)).toStrictEqual(LISTED_ENDPOINTS);
+    // Every row rather than the first, so a page cannot carry one
+    // well-shaped record beside one that leaked a column. The list
+    // row is the record PLUS the aggregate, which is the one read
+    // on this router that answers more than the table holds.
+    for (const row of whole.body.data) {
+      expect(keysOf(row)).toStrictEqual(LISTED_KEY_SET);
+    }
+    // One row WHOLE, against the constants the fixture plants from
+    // rather than against another response: a store answering every
+    // read the same wrong row would satisfy any cross-response
+    // compare. `domainId` is here because nothing else in this case
+    // could say which domain the rows came out of, and the five
+    // pipeline-owned columns because this projection is the whole
+    // of how they reach a caller at all.
+    expect(sourceFor(whole.body.data as ListedRow[], ITEMS_ENDPOINT))
+      .toStrictEqual({
+        id: itemsId,
+        domainId,
+        kind: API_KIND,
+        endpoint: ITEMS_ENDPOINT,
+        parserConfig: ITEMS_CONFIG,
+        contract: ITEMS_CONTRACT,
+        cursor: null,
+        consecutiveFailures: 0,
+        lastSuccessAt: null,
+        lastFailureAt: null,
+        enabled: true,
+        flagged: false,
+        parseStats: NO_CAPTURES,
+      });
+    // The two windows are disjoint and each names the total of the
+    // COLLECTION, which no page could have counted from its rows.
+    expect(endpointsOf(first.body)).toStrictEqual([FEED_ENDPOINT]);
+    expect(endpointsOf(last.body)).toStrictEqual([ARCHIVE_ENDPOINT]);
+    expect(first.body.meta).toStrictEqual({
+      page: 1,
+      perPage: 1,
+      total: PLANTED_SOURCES,
+      totalPages: PLANTED_SOURCES,
+    });
+    expect(last.body.meta).toStrictEqual({
+      page: PLANTED_SOURCES,
+      perPage: 1,
+      total: PLANTED_SOURCES,
+      totalPages: PLANTED_SOURCES,
+    });
+    // And every row came out of the ONE domain the path named,
+    // which a length alone cannot say: the fixture plants a fourth
+    // source under a second domain, and a store answering the whole
+    // table would satisfy every count above and fail here.
+    expect(new Set(domainIdsOf(whole.body))).toStrictEqual(
+      new Set([domainId]),
+    );
+  });
+
+  it('carries the health and the aggregate on every row', async () => {
+    const { app, itemsId } = await withSources();
+
+    // One feed is retired first, so a read filling the health
+    // columns with constants answers all three rows alike and fails
+    // here. `enabled` is the one of the five an operator can move
+    // at all — the other four are the pipeline's, and both request
+    // schemas refuse them.
+    const retired = await request(app)
+      .patch(`/sources/${itemsId}`)
+      .send({ enabled: false });
+    const listed = await request(app).get(sourcesPath(STORED_SLUG));
+    const rows = listed.body.data as ListedRow[];
+
+    expect(retired.status).toBe(200);
+    expect(listed.status).toBe(200);
+    // All five columns on all three rows, as whole records per row:
+    // a projection dropping one of them answers a perfectly
+    // plausible source, and the retired row is what says the read
+    // is a reading rather than a constant.
+    expect(rows.map(healthOf)).toStrictEqual([
+      NEVER_FETCHED,
+      { ...NEVER_FETCHED, enabled: false },
+      NEVER_FETCHED,
+    ]);
+    // The aggregate is keyed by the WHOLE tuple on every row and
+    // not by the statuses that happen to have documents: a grouped
+    // read answers a row per status that HAS some, so an
+    // implementation handing those groups straight back answers a
+    // record whose members differ per source. Read off the tuple
+    // `documents_parse_status_check` is generated from, so the two
+    // are one reading rather than two literals that agree today.
+    const tuple = [...DOCUMENT_PARSE_STATUSES].sort();
+
+    expect(rows.map((row) => keysOf(row.parseStats)))
+      .toStrictEqual(rows.map(() => tuple));
+    // The counts, per row. The feed captured under BOTH members and
+    // the two numbers differ, so a record built with the statuses
+    // swapped is a red case rather than a total that still adds up;
+    // its two neighbours captured nothing at all and answer a
+    // COUNTED zero under each member, which is a different fact
+    // from a member nobody counted.
+    expect(sourceFor(rows, FEED_ENDPOINT).parseStats)
+      .toStrictEqual(FEED_COUNTS);
+    expect(sourceFor(rows, ITEMS_ENDPOINT).parseStats)
+      .toStrictEqual(NO_CAPTURES);
+    expect(sourceFor(rows, ARCHIVE_ENDPOINT).parseStats)
+      .toStrictEqual(NO_CAPTURES);
+    // And member by member off the same tuple for the row that
+    // captured none, so a failure names the STATUS that went
+    // missing rather than the record it sat in.
+    const empty = sourceFor(rows, ARCHIVE_ENDPOINT).parseStats;
+
+    expect(DOCUMENT_PARSE_STATUSES.map((status) => ({
+      status,
+      count: empty[status],
+    }))).toStrictEqual(DOCUMENT_PARSE_STATUSES.map((status) => ({
+      status,
+      count: 0,
+    })));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The resource: one source added, and the row the store answered
+// ---------------------------------------------------------------------------
+
+describe('a create that lands', () => {
+  it('answers 201 carrying the stored row, not the request', async () => {
+    const { app, domainId } = await withSources();
+    const sources = sourcesPath(STORED_SLUG);
+
+    const created = await request(app)
+      .post(sources)
+      .send({
+        kind: ACCEPTED_KIND,
+        endpoint: FRESH_ENDPOINT,
+        parserConfig: FRESH_CONFIG,
+        contract: FRESH_CONTRACT,
+        enabled: false,
+      });
+    // The control, along the axis under test and through the SAME
+    // operation: the two members the schema requires and nothing
+    // else. Three of this record's members are then the SERVICE's
+    // defaults rather than the request's, so the pair says a create
+    // writes what it was handed where a member was handed and
+    // defaults only where one was not — a handler defaulting
+    // unconditionally answers the first request wrongly, and one
+    // dropping absent members answers the second wrongly.
+    const sparse = await request(app)
+      .post(sources)
+      .send({ kind: RSS_KIND, endpoint: SPARE_ENDPOINT });
+
+    expect(created.status).toBe(201);
+    expect(sparse.status).toBe(201);
+    // Two members and not three on both: a create answers one
+    // resource, and there is no window for a `meta` to describe.
+    expect(keysOf(created.body)).toStrictEqual(RESOURCE_KEY_SET);
+    expect(keysOf(sparse.body)).toStrictEqual(RESOURCE_KEY_SET);
+    // The record and NOT the list row: no `parseStats` on either,
+    // which is the one member the aggregate adds and the difference
+    // the two success shapes are read apart by.
+    expect(keysOf(created.body.data)).toStrictEqual(SOURCE_KEY_SET);
+    expect(keysOf(sparse.body.data)).toStrictEqual(SOURCE_KEY_SET);
+    expect(created.body.success).toBe(true);
+    // The whole row, so a create reaching a member nobody submitted
+    // is a red case rather than an answer three field reads agreed
+    // with. The five pipeline-owned columns are the point of the
+    // compare: no body may name one, so a create is the only place
+    // their landing value is decided at all.
+    expect(created.body.data).toStrictEqual({
+      id: created.body.data.id,
+      domainId,
+      kind: ACCEPTED_KIND,
+      endpoint: FRESH_ENDPOINT,
+      parserConfig: FRESH_CONFIG,
+      contract: FRESH_CONTRACT,
+      cursor: null,
+      consecutiveFailures: 0,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      enabled: false,
+      flagged: false,
+    });
+    // The three defaults, none of them on the sparse request: an
+    // empty arrangement, an empty contract, and a feed the pipeline
+    // may read. The `enabled: false` above is what makes the last
+    // of those a DEFAULT rather than a constant — a handler writing
+    // true whatever arrived passes here and fails the compare.
+    expect(sparse.body.data.parserConfig).toStrictEqual({});
+    expect(sparse.body.data.contract).toStrictEqual({});
+    expect(sparse.body.data.enabled).toBe(true);
+    expect(sparse.body.data.flagged).toBe(false);
+    // Neither member is on either request body — the path named
+    // the domain and nothing named an id — so both arriving right
+    // is the STORE having answered rather than the request having
+    // been echoed back under a 201.
+    expect(sparse.body.data.domainId).toBe(domainId);
+    expect(typeof created.body.data.id).toBe('number');
+    expect(created.body.data.id).not.toBe(sparse.body.data.id);
+  });
+
+  it('stores it, and leaves the feeds already read alone', async () => {
+    // Read back through the OTHER operation, so the claim is about
+    // what is stored rather than about what a call happened to
+    // answer: a create returning a row it never wrote passes the
+    // case above and fails this one.
+    const { app, domainId, itemsId } = await withSources();
+    const sources = sourcesPath(STORED_SLUG);
+
+    const created = await request(app)
+      .post(sources)
+      .send({ kind: ACCEPTED_KIND, endpoint: FRESH_ENDPOINT });
+    const listed = await request(app).get(sources);
+    const elsewhere = await request(app).get(sourcesPath(OTHER_SLUG));
+    const rows = listed.body.data as ListedRow[];
+
+    expect(listed.status).toBe(200);
+    // The whole collection, so a create reaching more rows than the
+    // one it wrote is a red case here rather than an answer nobody
+    // compared against anything. It sorts LAST because the page is
+    // ordered by id and this row is the newest.
+    expect(endpointsOf(listed.body))
+      .toStrictEqual([...LISTED_ENDPOINTS, FRESH_ENDPOINT]);
+    expect(listed.body.meta.total).toBe(PLANTED_SOURCES + 1);
+    // The created row on the page is the record the create answered
+    // PLUS the aggregate, which is what says a source arrives with
+    // counted zeros rather than with no counts at all.
+    expect(sourceFor(rows, FRESH_ENDPOINT)).toStrictEqual({
+      ...created.body.data,
+      parseStats: NO_CAPTURES,
+    });
+    // And a row that was already there still carries what it
+    // carried, which no assertion over a created row could say: a
+    // create lands ONE row. A whole-row literal rather than a field
+    // read, since the fault worth catching is a neighbour gaining a
+    // member or losing one on the way past a write.
+    expect(sourceFor(rows, ITEMS_ENDPOINT)).toStrictEqual({
+      id: itemsId,
+      domainId,
+      kind: API_KIND,
+      endpoint: ITEMS_ENDPOINT,
+      parserConfig: ITEMS_CONFIG,
+      contract: ITEMS_CONTRACT,
+      cursor: null,
+      consecutiveFailures: 0,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      enabled: true,
+      flagged: false,
+      parseStats: NO_CAPTURES,
+    });
+    // The second domain read one feed before this create and reads
+    // one after it. The path named a domain, and a write stamping
+    // another one answers a perfectly plausible row filed under
+    // configuration nobody asked about — nothing on this table
+    // refuses a misfiled row, there being no unique key for it to
+    // collide with, so the two collections read whole are the only
+    // reading that reports it.
+    expect(endpointsOf(elsewhere.body)).toStrictEqual([TRANSIT_ENDPOINT]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The patch: the arrangement replaced, and the feed retired
+// ---------------------------------------------------------------------------
+
+describe('a patch of the arrangement that lands', () => {
+  it('answers 200 with the arrangement replaced whole', async () => {
+    const { app, domainId, itemsId } = await withSources();
+    const source = `/sources/${itemsId}`;
+
+    const retuned = await request(app)
+      .patch(source)
+      .send({ parserConfig: PATCHED_CONFIG });
+    // The control: a second patch naming a member the first did
+    // not. Without it the case is equally green against a handler
+    // rewriting every column on every patch — and it runs the
+    // other way round here, since the arrangement written above has
+    // to survive a request that never names it.
+    const repointed = await request(app)
+      .patch(source)
+      .send({ endpoint: MOVED_ENDPOINT });
+    const listed = await request(app).get(sourcesPath(STORED_SLUG));
+    const rows = listed.body.data as ListedRow[];
+
+    expect(retuned.status).toBe(200);
+    // Two members, not three: a patch answers one resource, and a
+    // `meta` arriving here would be the page envelope on a body
+    // that describes no window. The record and not the list row,
+    // for the reason the create's answer is.
+    expect(keysOf(retuned.body)).toStrictEqual(RESOURCE_KEY_SET);
+    expect(keysOf(retuned.body.data)).toStrictEqual(SOURCE_KEY_SET);
+    expect(retuned.body.success).toBe(true);
+    // The whole row afterwards, which is what says the members this
+    // request did not name came through untouched: the transport,
+    // the address, the sibling jsonb member and all five of the
+    // pipeline's own. A silent repoint or a cleared contract would
+    // leave a `parserConfig` read green on its own.
+    expect(retuned.body.data).toStrictEqual({
+      id: itemsId,
+      domainId,
+      kind: API_KIND,
+      endpoint: ITEMS_ENDPOINT,
+      parserConfig: PATCHED_CONFIG,
+      contract: ITEMS_CONTRACT,
+      cursor: null,
+      consecutiveFailures: 0,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      enabled: true,
+      flagged: false,
+    });
+    // REPLACED and not merged into: ONE key rather than the three a
+    // union of the stored arrangement and the submitted one would
+    // carry. That is the store's rule reaching a caller, and the
+    // only shape under which removing a selector is expressible at
+    // all — the two are keyed disjointly so the difference has
+    // somewhere to show.
+    expect(keysOf(retuned.body.data.parserConfig))
+      .toStrictEqual(keysOf(PATCHED_CONFIG));
+    expect(keysOf(ITEMS_CONFIG)).toHaveLength(2);
+    expect(repointed.status).toBe(200);
+    // The arrangement the first patch wrote is still there under a
+    // second that never named it, and the address it did name moved.
+    expect(repointed.body.data.parserConfig).toStrictEqual(PATCHED_CONFIG);
+    expect(repointed.body.data.endpoint).toBe(MOVED_ENDPOINT);
+    // And the store holds what the last patch answered, read back
+    // through the OTHER operation: a patch answering a row it never
+    // wrote satisfies every assertion above. The collection is read
+    // whole beside it, so a patch reaching a neighbour is a red
+    // case rather than a write nobody looked past.
+    expect(sourceFor(rows, MOVED_ENDPOINT)).toStrictEqual({
+      ...repointed.body.data,
+      parseStats: NO_CAPTURES,
+    });
+    expect(endpointsOf(listed.body)).toStrictEqual(
+      [FEED_ENDPOINT, MOVED_ENDPOINT, ARCHIVE_ENDPOINT],
+    );
+    expect(listed.body.meta.total).toBe(PLANTED_SOURCES);
+  });
+});
+
+describe('a patch that retires a feed', () => {
+  it('answers 200 switched off, keeping the corpus it read', async () => {
+    const { app, feedId } = await withSources();
+    const source = `/sources/${feedId}`;
+
+    const retired = await request(app)
+      .patch(source)
+      .send({ enabled: false });
+    const listed = await request(app).get(sourcesPath(STORED_SLUG));
+    const rows = listed.body.data as ListedRow[];
+    // The control, along the axis under test and through the SAME
+    // operation: the identical request carrying `true`. Without it
+    // the reads above are equally green against a handler writing
+    // false to whatever column it is handed.
+    const revived = await request(app)
+      .patch(source)
+      .send({ enabled: true });
+
+    expect(retired.status).toBe(200);
+    expect(keysOf(retired.body.data)).toStrictEqual(SOURCE_KEY_SET);
+    expect(retired.body.data.enabled).toBe(false);
+    // RETIRING IS NOT DELETING, which is the whole reason this
+    // column is patchable and no other health column is: the
+    // address, the arrangement and everything captured through the
+    // feed stay exactly where they were, and the refused delete
+    // earlier in this file names this very operation as the one
+    // that was wanted. `flagged` is read beside it because the two
+    // are different facts — a feed somebody switched off is not
+    // one an adapter found broken — and no request reaches the
+    // second.
+    expect(retired.body.data.endpoint).toBe(FEED_ENDPOINT);
+    expect(retired.body.data.parserConfig).toStrictEqual({});
+    expect(retired.body.data.flagged).toBe(false);
+    expect(retired.body.data.consecutiveFailures).toBe(0);
+    // Read back through the OTHER operation: the row is still on
+    // the page, still switched off, and its documents are still
+    // counted under both statuses. A retirement that took the
+    // corpus with it would leave every read above green.
+    expect(endpointsOf(listed.body)).toStrictEqual(LISTED_ENDPOINTS);
+    expect(healthOf(sourceFor(rows, FEED_ENDPOINT)))
+      .toStrictEqual({ ...NEVER_FETCHED, enabled: false });
+    expect(sourceFor(rows, FEED_ENDPOINT).parseStats)
+      .toStrictEqual(FEED_COUNTS);
+    expect(revived.status).toBe(200);
+    expect(revived.body.data.enabled).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The delete: what a 204 carries, and what it leaves behind
+// ---------------------------------------------------------------------------
+
+describe('a delete that lands', () => {
+  it('answers 204 with nothing at all, and takes the row', async () => {
+    const { app, archiveId } = await withSources();
+
+    const removed = await request(app).delete(`/sources/${archiveId}`);
+    const listed = await request(app).get(sourcesPath(STORED_SLUG));
+    const elsewhere = await request(app).get(sourcesPath(OTHER_SLUG));
+    // The control, through the SAME operation: the identical
+    // request against an id that named a row a moment ago is a 404,
+    // which is what makes the 204 above a delete rather than what
+    // this route answers to any id it is handed.
+    const again = await request(app).delete(`/sources/${archiveId}`);
+
+    expect(removed.status).toBe(204);
+    // An EMPTY key set, which is this route's half of the shape the
+    // rest of the file reads: a deleted resource has no
+    // representation, so what is asserted is that NOTHING travelled
+    // rather than that some envelope did.
+    expect(keysOf(removed.body)).toStrictEqual([]);
+    expect(removed.text).toBe('');
+    expect(removed.type).toBe('');
+    // The row is gone and both neighbours are not — including the
+    // two whose corpus and sightings refuse their own deletes,
+    // which is what says this delete was addressed by id rather
+    // than applied to the domain's feeds.
+    expect(listed.status).toBe(200);
+    expect(endpointsOf(listed.body))
+      .toStrictEqual([FEED_ENDPOINT, ITEMS_ENDPOINT]);
+    expect(listed.body.meta.total).toBe(PLANTED_SOURCES - 1);
+    // The second domain still reads its own feed, which is the
+    // widening control: nothing about this request named a domain
+    // at all, and a store deleting by ADDRESS rather than by id
+    // would have had a second row to consider.
+    expect(endpointsOf(elsewhere.body)).toStrictEqual([TRANSIT_ENDPOINT]);
+    expect(again.status).toBe(404);
+    expect(again.body).toStrictEqual(NO_SUCH_SOURCE_BODY);
   });
 });
