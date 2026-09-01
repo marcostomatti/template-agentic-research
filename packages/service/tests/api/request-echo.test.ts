@@ -50,7 +50,9 @@
  * surface. {@link EchoProbe.masksAPath} is where each row says which
  * it is and the table guard asserts both groups are populated, so a
  * record narrowed or widened later reddens the row it changed rather
- * than sliding into the other group's assertions.
+ * than sliding into the other group's assertions. Both shapes read
+ * their answer through `detailFieldsOf`, and the planted window below
+ * is where that reader is shown finding a field at all.
  *
  * TWO OF THE THREE WINDOWS ASSERT A ZERO, AND THE SPLIT BETWEEN THEM
  * IS THE FILE'S ONE REAL FINDING. The body channels and the query
@@ -92,28 +94,44 @@
  * go — and that route does on purpose everything the surface is
  * forbidden to do. It writes the submitted body to the console, to
  * stderr, into the message of the error it throws and into that
- * error's one detail, and each of those is then counted with the same
+ * error's first detail, and it leaks the operator's own key as an
+ * UNCOLLAPSED field path through the request logger and a second
+ * detail. Each of those is then counted with the same
  * {@link countSentinel} both zeros are counted with.
  *
- * FOUR CHANNELS RATHER THAN ONE PLANT, because this file makes four
+ * FIVE CHANNELS RATHER THAN ONE PLANT, because this file makes five
  * claims and one leak would prove one of them. {@link PLANTED_LEAKS}
  * declares where each is expected to land and the cases read it row
- * by row. Two of the four exist because nothing else in the package
+ * by row. Two of the five exist because nothing else in the package
  * can reach them: no module under `src/` writes to the console, and
  * the framework writes to stderr on no healthy boot, so those two
  * patches had no live control at all before this window and their
- * mutation legs were measured zeros. The other two are the channel
- * split above made checkable — the thrown MESSAGE lands in both texts
- * and the DETAIL lands in the response alone, because
+ * mutation legs were measured zeros. Two more are the channel split
+ * above made checkable — the thrown MESSAGE lands in both texts and
+ * the DETAIL lands in the response alone, because
  * `lib/errors/handler.ts` logs the one and not the other.
+ *
+ * THE FIFTH IS THE ONE WAVE 2 MADE NECESSARY, and it is the only
+ * channel here whose leaked text is a field PATH. The open-record
+ * rows assert that a masking answer carries `<prefix>.*` and that an
+ * inert one carries no detail at all, and both of those are satisfied
+ * by a `detailFieldsOf` that had stopped finding fields — so the
+ * plant answers {@link PLANTED_OPEN_PATH} through that same reader
+ * and logs it through the per-request `pino-http` child. Its body is
+ * the shape the three inert rows submit, and the path it leaks is
+ * BUILT from the key that body carried rather than spelled, which is
+ * what a leg answering a constant reddens.
  *
  * WHAT THE PLANTED WINDOW DOES NOT DO is assert a containment claim
  * of its own, and it reaches no store: its route reads the body,
- * writes it out four times and throws. It is also invisible to every
- * mutation of `src/http/validation.ts` by construction, which is the
- * point rather than a limit — a control that moved with the subject
- * would be a second measurement of the subject instead of evidence
- * that the instrument works.
+ * leaks it through five channels and throws. It is also invisible to
+ * every mutation of `src/http/validation.ts` by construction, which
+ * is the point rather than a limit — a control that moved with the
+ * subject would be a second measurement of the subject instead of
+ * evidence that the instrument works. Measured: dropping the
+ * open-path collapse reddens three cases and not one of them is
+ * planted, even now that a planted row answers an open path of its
+ * own.
  *
  * HOW THE CAPTURE WORKS is `tests/auth/secret-logging.test.ts`'s
  * mechanism, unchanged and for its reasons. pino picks its
@@ -148,7 +166,9 @@
  * controls rather than none: the planted window above, which is the
  * direct one, and the query window's hundred and fourteen, which is
  * the same counter over the same kind of capture returning a known
- * non-zero in the same run as the body window's zero.
+ * non-zero in the same run as the body window's zero. The open-record
+ * rows' other reader, `detailFieldsOf`, has the planted window as its
+ * ONE live control and nothing else.
  *
  * ONE BOOT PER WINDOW IS BOUNDED BY THE SHIPPED RATE LIMITER, and the
  * headroom is worth reading in the run that spends it. `lib/express`
@@ -161,17 +181,46 @@
  * flaky containment claim rather than as a limit, and the repair is a
  * boot per channel rather than a wider window.
  *
- * TWENTY MUTATIONS WERE RUN AGAINST THESE EIGHTY-EIGHT CASES, twice
- * each, and NONE of them is a measured zero. Two of the forty runs
- * disagreed with their twin and both disagreements were the macOS
- * supertest port-steal flake rather than the leg — one of them
- * presenting as `socket hang up` during the boot, which fails the
- * whole FILE and therefore reads exactly like a leg reddening all
- * eighty-eight — so each was run twice more and its set taken from
- * the agreeing pair. SEVENTEEN of the twenty came back at the figure
- * this header carried before the wave-2 rows landed, which is what
- * says the legs were rebuilt rather than re-derived into neighbours;
- * three moved, and each moved for a reason the table predicts.
+ * TWENTY-FOUR MUTATIONS NOW COVER THESE NINETY CASES, and the BOUNDED
+ * shape of the latest run is part of the reading. The twenty recorded
+ * below were each run twice against the eighty-eight cases the wave-2
+ * rows left, and NONE of them is a measured zero. The fifth planted
+ * channel added FOUR legs of its own and could reach only EIGHT of
+ * the twenty, so those eight were re-run twice each and the other
+ * twelve stand on that earlier measurement — which is the honest half
+ * to say out loud, because a leg not re-run is not a leg that held.
+ *
+ * WHAT MOVED WHEN THE FIFTH CHANNEL WAS ARMED is three of the eight,
+ * and each moved by exactly the cases the new row answers. Not
+ * mounting the planted route went SIX to EIGHT. A sink that records
+ * nothing went FIVE to SIX, the extra red being the open-record row —
+ * its log half goes through `req.log` and therefore through the
+ * STREAM patch, while the planted CONSOLE row stays green, which is
+ * the two-mechanism reading that leg has always carried with a third
+ * subject under it. And logging `details` beside `{ code, cause }` in
+ * `lib/errors/handler.ts` went TWO to THREE, the second detail's
+ * marker joining the first in a capture that should hold neither.
+ *
+ * THE OTHER FIVE CAME BACK UNMOVED, which is the reading that says
+ * the recorded figures are still live rather than a re-derivation
+ * into neighbours. Dropping the console write, dropping the stderr
+ * write and leaking a constant BODY each answered TWO again; the two
+ * module legs re-run as controls answered NINETEEN and THREE. Those
+ * two cannot reach the plant at all — it builds its own
+ * `ValidationError` and never enters `src/http/validation.ts` — so a
+ * run moving them and the plant together would have measured
+ * something else. One caution measured on the way: the
+ * details-logging leg spelled as `err.toJSON()` rather than as
+ * `err.details` reddens FOUR, not three, because it re-logs the
+ * message as well. That is the neighbour, not the leg.
+ *
+ * THE RUN-EACH-LEG-TWICE RULE EARNED ITS KEEP AGAIN. One of the
+ * twenty-four pairs disagreed — the sink leg, at NINETY against SIX —
+ * which is the macOS supertest port-steal flake landing in
+ * `beforeAll` and failing the whole FILE, a presentation that reads
+ * exactly like the broadest leg in the grid. Three further runs
+ * agreed at six, member for member, and that is the set recorded
+ * above.
  *
  * SIX LAND ON A MODULE. Adding `issue.keys` to a detail's message
  * reddens NINETEEN — the eighteen unrecognized-key rows and, less
@@ -192,12 +241,14 @@
  * carries one claim rather than two — reddens FIVE: all three
  * `POST /domains` body rows, the body window's capture case, and the
  * planted window's head-to-head. And logging `details` beside
- * `{ code, cause }` in `lib/errors/handler.ts` reddens TWO, both of
+ * `{ code, cause }` in `lib/errors/handler.ts` reddens THREE, all of
  * them planted cases. That leg WAS the first measured zero: no detail
  * this surface answers carries the sentinel, so widening what is
- * logged reached nothing until a planted detail gave it a subject.
+ * logged reached nothing until a planted detail gave it a subject,
+ * and it gained its third red when a second planted detail landed
+ * beside the first.
  *
- * THE OTHER FOURTEEN ARE FIXTURE LEGS, and four of them report
+ * THE OTHER EIGHTEEN ARE FIXTURE LEGS, and four of them report
  * something a reader would otherwise get wrong. Dropping the console
  * patch reddens TWO, and it was the second measured zero for the same
  * reason: no module under `src/` writes to the console, so that patch
@@ -234,8 +285,8 @@
  * reading the transport count as one site rather than two reddens the
  * query capture case, two open-record rows sharing a masked path
  * redden the distinct-path case, and a sink that records nothing
- * reddens FIVE — both capture cases through their `listening` and
- * `request completed` controls, plus three planted ones. The planted
+ * reddens SIX — both capture cases through their `listening` and
+ * `request completed` controls, plus four planted ones. The planted
  * CONSOLE row stays green under that last leg, which is the reading
  * in it: the console patch and the stream sink are two mechanisms,
  * and only a leg per mechanism says so. The THIRD leg to move is here
@@ -246,24 +297,41 @@
  * list and their `404` both report where a masking row's single `.*`
  * assertion reports once.
  *
- * FOUR LEGS AIM AT THE PLANT ITSELF, since a control nothing can
- * break is not one. Not mounting the planted route reddens SIX —
+ * EIGHT LEGS AIM AT THE PLANT ITSELF, since a control nothing can
+ * break is not one. Not mounting the planted route reddens EIGHT —
  * every planted case except the table guard, which reads only the
- * table and is the survivor that says the other six reach the window
- * at all. Dropping the console write reddens TWO and dropping the
- * stderr write another TWO, each its own channel row plus the
+ * table and is the survivor that says the other eight reach the
+ * window at all. Dropping the console write reddens TWO and dropping
+ * the stderr write another TWO, each its own channel row plus the
  * head-to-head. And making the planted route leak a constant instead
  * of the submitted body reddens TWO: the markers still land where the
  * table says, so the per-channel rows stay green and only the two
  * counts that tie a marker to a sentinel report it — which is what
  * those two totals are for.
  *
- * THE HEAD-TO-HEAD CASE IS IN EIGHT OF THE TWENTY RED SETS, more than
- * any other case in the file, and it held at eight across the wave-2
- * rows. That is what a control looks like when it is load-bearing:
- * every leg that touches what the process writes is reported by it —
- * the module leak, the leg widening what is logged, the leg dropping
- * the console patch, the sink, and all four plant legs.
+ * THE FOUR NEWEST AIM AT THE FIFTH CHANNEL, and no two of them redden
+ * the same set. Dropping its LOG write reddens TWO, its own channel
+ * row and the head-to-head, exactly as the console and stderr legs
+ * do. Dropping its DETAIL reddens THREE — the channel row, the
+ * field-path case and the answered total — which is the asymmetry the
+ * row exists for: one write per text, read by two different
+ * instruments. Leaking a CONSTANT key rather than the submitted one
+ * reddens THREE, and so does answering the path COLLAPSED as
+ * `<prefix>.*`. That last one is the fault this channel models: a
+ * route masking what it leaks is indistinguishable from one leaking
+ * nothing at every reading except the field-path case, which is why
+ * that case reads the ANSWER's fields rather than the constant it
+ * compares them to.
+ *
+ * THE HEAD-TO-HEAD CASE IS IN ELEVEN OF THE TWENTY-FOUR RED SETS,
+ * more than any other case in the file. It held at eight across the
+ * wave-2 rows and moved to eleven with the fifth planted channel,
+ * which is what a control looks like when it is load-bearing: every
+ * leg that touches what the process writes is reported by it — the
+ * module leak, the leg widening what is logged, the leg dropping the
+ * console patch, the sink, and seven of the eight plant legs. The one
+ * plant leg it does NOT report is the open-record DETAIL, whose write
+ * never reaches the capture at all.
  *
  * WHICH ROWS HAVE A LIVE SUBJECT AND WHICH REST ON THE CONTROLS.
  * Twenty-two of the forty-two body rows are reddened by a module leg
@@ -280,7 +348,10 @@
  * second omission. What all twenty rest on is the per-row sent-bytes
  * control and the planted window, which is exactly the difference
  * between a zero nobody can read and a zero measured with an
- * instrument shown working in the same run.
+ * instrument shown working in the same run. For those last three the
+ * instrument is `detailFieldsOf` rather than {@link countSentinel},
+ * since what they assert is an EMPTY list, and the fifth planted
+ * channel is the run in which that reader answers a non-empty one.
  *
  * WHAT IS OUT OF REACH HERE is the driver channel, and it is out of
  * reach by construction rather than by omission. A `ConflictError`
@@ -1053,6 +1124,29 @@ const DEFAULT_SENTINEL_QUERY = `${SENTINEL}=${SENTINEL}`;
  */
 const PLANTED_PATH = '/planted-leak-control';
 
+/**
+ * The open-record prefix the planted body puts its sentinel below.
+ *
+ * `parserConfig` is one of the three open paths wave 2 declared, so
+ * the planted body is the shape those rows submit rather than a
+ * body invented for the plant — which is what makes the leak below
+ * a control on THEIR channel and not a fifth write that happens to
+ * carry the needle.
+ */
+const PLANTED_OPEN_PREFIX = 'parserConfig';
+
+/**
+ * The field path a leaking handler would name, uncollapsed.
+ *
+ * What `openPaths` in `src/http/validation.ts` turns into
+ * `parserConfig.*` before a detail reaches the wire, and therefore
+ * exactly what the six open-record rows assert never arrives. The
+ * planted route answers it whole and logs it — which is the one
+ * channel the plant was missing after wave 2 declared three more
+ * open paths.
+ */
+const PLANTED_OPEN_PATH = `${PLANTED_OPEN_PREFIX}.${SENTINEL}`;
+
 /** One deliberate leak the planted route writes. */
 interface PlantedLeak {
   /** What the case reading it is named for. */
@@ -1081,7 +1175,7 @@ interface PlantedLeak {
  * answer zero over the surface's own rows and are each caught
  * here.
  *
- * The four rows are not interchangeable — they are the four
+ * The five rows are not interchangeable — they are the five
  * channels the file makes a claim about. CONSOLE is the only live
  * control the console patch has at all: no module under `src/`
  * writes to the console today, so without this row that patch's
@@ -1094,6 +1188,17 @@ interface PlantedLeak {
  * and does NOT log `details`, so the header's claim that the two
  * zeros cover different channels is measured here rather than
  * argued.
+ *
+ * OPEN PATH is the row wave 2 made necessary, and it is the only
+ * one whose leaked text is a field PATH. The six open-record rows
+ * assert two things this file could not otherwise read: that a
+ * masked answer carries `<prefix>.*` and that an inert one carries
+ * no detail at all — and both of those are satisfied by a
+ * `detailFieldsOf` that had stopped finding fields. This row
+ * answers {@link PLANTED_OPEN_PATH} through that same reader and
+ * logs it through the per-request `pino-http` child, so the
+ * channel's two claims each have an instrument shown working in
+ * the same run.
  */
 const PLANTED_LEAKS = [
   {
@@ -1122,6 +1227,16 @@ const PLANTED_LEAKS = [
     captured: 0,
     answered: 2,
   },
+  {
+    // Once in each text, and through two different mechanisms: the
+    // per-request `pino-http` child for the capture, a second
+    // detail's `field` for the answer. The only row whose leaked
+    // text is a PATH rather than a body.
+    channel: 'an open-record path it answers and logs',
+    marker: 'planted-open-path-leak',
+    captured: 1,
+    answered: 1,
+  },
 ] as const satisfies readonly PlantedLeak[];
 
 /** What {@link countSentinel} must answer over the planted capture. */
@@ -1133,22 +1248,47 @@ const PLANTED_ANSWERED_TOTAL = PLANTED_LEAKS
   .reduce((total, leak) => total + leak.answered, 0);
 
 /**
+ * The detail field the open-record leak answers.
+ *
+ * Its marker written immediately ahead of the path, exactly as
+ * every other planted write is spelled, so one string carries one
+ * marker and one sentinel and the two totals above stay
+ * comparable. Read back through {@link detailFieldsOf} rather than
+ * counted, which is what makes it a control on the reader the six
+ * open-record rows share.
+ */
+const PLANTED_OPEN_FIELD = `${PLANTED_LEAKS[4].marker} ${PLANTED_OPEN_PATH}`;
+
+/**
  * The one row the planted window submits.
  *
  * An {@link EchoProbe} so it travels the same `captureProbes` path
  * every other row does — the same URL builder, the same sent-bytes
- * control and the same response map. Its channel is `field value`
- * because that is where its sentinel sits in the body it sends; it
- * is deliberately absent from {@link ALL_PROBES}, so no coverage
- * guard reads it and the route set stays exactly the mounted
- * surface.
+ * control and the same response map. It is deliberately absent
+ * from {@link ALL_PROBES}, so no coverage guard reads it and the
+ * route set stays exactly the mounted surface.
+ *
+ * Its channel is `open-record key`, and the body is the shape the
+ * three inert wave-2 rows submit: the sentinel as the operator's
+ * own key below a declared open prefix. That is what lets the
+ * route below leak a PATH built from what was submitted rather
+ * than one built from a constant. It carries the sentinel exactly
+ * ONCE, which is the property the two planted totals rest on —
+ * every leak writes one marker ahead of one occurrence, so a
+ * marker count and a sentinel count are comparable.
+ *
+ * {@link EchoProbe.masksAPath} is absent rather than false: that
+ * member says whether a SCHEMA can refuse below its own prefix,
+ * and the planted route parses nothing at all. The table guard
+ * that would ask reads {@link ALL_PROBES}, which this row is not
+ * in.
  */
 const PLANTED_PROBE = {
-  channel: 'field value',
+  channel: 'open-record key',
   method: 'post',
   path: PLANTED_PATH,
   note: 'planted leak',
-  body: { plantedValue: SENTINEL },
+  body: { [PLANTED_OPEN_PREFIX]: { [SENTINEL]: 'echo' } },
 } as const satisfies EchoProbe;
 
 /**
@@ -1372,7 +1512,9 @@ function registeredWriteLabels(): string[] {
  * purpose and in one place. The submitted body is serialised once
  * and written out four times: to the console, to stderr, into the
  * message of the error this route throws and into that error's
- * one detail. `createService` registers `errorHandler` LAST, so
+ * first detail. A fifth write leaks the operator's own key as an
+ * uncollapsed field PATH, into the request logger and into a
+ * second detail. `createService` registers `errorHandler` LAST, so
  * the throw reaches the same handler every refusal on the surface
  * reaches and is answered in the same envelope — which is what makes
  * planted response a control on the readers the real rows use and
@@ -1388,6 +1530,17 @@ function plantLeakingRoute(app: Application): void {
   app.post(PLANTED_PATH, async (req) => {
     const submitted = JSON.stringify(req.body);
 
+    // The operator-chosen key, read back out of the body the way a
+    // handler building a field path would reach it — derived
+    // rather than spelled, so a leg leaking a constant is reported
+    // here as well as by the two totals.
+    const record = (req.body as Record<string, unknown>)[
+      PLANTED_OPEN_PREFIX
+    ] ?? {};
+    const openPath = Object.keys(record as Record<string, unknown>)
+      .map((key) => `${PLANTED_OPEN_PREFIX}.${key}`)
+      .join(' ');
+
     // Reaches the capture only through the five console patches:
     // under vitest the console does NOT route through
     // `process.stdout.write`, so this row is the one live control
@@ -1397,6 +1550,13 @@ function plantLeakingRoute(app: Application): void {
     // The second stream, which nothing on a healthy boot writes
     // to — so it is the one live control the stderr redirect has.
     process.stderr.write(`${PLANTED_LEAKS[1].marker} ${submitted}\n`);
+
+    // The log half of the open-record channel. `req.log` is the
+    // per-request child `pino-http` attaches, so this record goes
+    // to the destination the framework's own records go to and is
+    // captured by the stdout patch — which is the channel a
+    // handler that logged a field path would actually use.
+    req.log.warn(`${PLANTED_LEAKS[4].marker} ${openPath}`);
 
     await Promise.resolve();
 
@@ -1408,6 +1568,15 @@ function plantLeakingRoute(app: Application): void {
       {
         field: `${PLANTED_LEAKS[3].marker} ${submitted}`,
         message: `${PLANTED_LEAKS[3].marker} ${submitted}`,
+      },
+      {
+        // The answer half of the open-record channel, and the
+        // shape the collapse exists to prevent: the operator key
+        // whole, where every masked row answers `<prefix>.*`. Its
+        // message carries no sentinel, so this detail contributes
+        // one marker and one occurrence like every other write.
+        field: `${PLANTED_LEAKS[4].marker} ${openPath}`,
+        message: 'an open-record path, answered uncollapsed',
       },
     ]);
   });
@@ -2052,6 +2221,35 @@ describe('the planted-leak control', () => {
       expect(countMarker(response.text, leak.marker)).toBe(leak.answered);
     });
   }
+
+  it('answers the open-record path a masked row would collapse', () => {
+    const window = openedWindow(plantedWindow);
+    const response = answerTo(window, PLANTED_PROBE);
+    const fields = detailFieldsOf(response);
+
+    // Read through the SAME reader the six open-record rows are
+    // read through. Their two assertions — a masked row's `.*` and
+    // an inert row's empty list — are each satisfied by a
+    // `detailFieldsOf` that had stopped finding fields at all, and
+    // this is the run in which it is shown finding one.
+    expect(fields).toContain(PLANTED_OPEN_FIELD);
+
+    // And the shape the collapse in `src/http/validation.ts`
+    // exists to prevent: the operator key whole, where every
+    // masking row on the surface answers `<prefix>.*` instead. Read
+    // off the ANSWER rather than off the constant, so a route that
+    // masked what it leaked reddens here.
+    expect(fields.filter((field) => field.includes('.*')))
+      .toStrictEqual([]);
+    expect(fields.filter((field) => countSentinel(field) > 0).length)
+      .toBeGreaterThan(0);
+
+    // The key it names is the one the request sent, which is what
+    // separates a leak of submitted content from a leak of a
+    // constant this file happens to also spell.
+    expect(countSentinel(sentBytesOf(PLANTED_PROBE))).toBeGreaterThan(0);
+    expect(PLANTED_OPEN_FIELD).toContain(SENTINEL);
+  });
 
   it('plants a distinct channel in each row it declares', () => {
     const markers = PLANTED_LEAKS.map((leak) => leak.marker);
