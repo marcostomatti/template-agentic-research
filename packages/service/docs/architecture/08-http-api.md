@@ -2023,3 +2023,181 @@ first. Nothing points at a row that is not there, so the count is
 zero, the guard passes, and the store answers that it removed
 nothing — the same `404` a lookup would have raised, one round trip
 earlier.
+
+## Export subscriptions
+
+### A subscription is met in its domain and written by its id
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /domains/:slug/exports` | `200` with one page of the domain's subscriptions, format ascending with the connector id ascending beside it, plus `meta`. `404` for an unknown slug, `422` for a segment that is not a slug and for the pagination faults every list route answers. |
+| `POST /domains/:slug/exports` | `201` with the stored row, unscheduled. `422` for a body the schema refuses and for a `connectorId` no connector carries, `404` for an unknown slug, `409` when the domain already exports that format to that connector. |
+| `PATCH /exports/:id` | `200` with the row afterwards. `422` for a body the schema refuses, for a `connectorId` no connector carries and for a segment that is not an id, `404` for an unknown id, `409` when the resulting triple is taken. |
+| `DELETE /exports/:id` | `204` with no body. `404` for an unknown id, `422` for a segment that is not one. Never `409`: nothing hangs off a subscription. |
+| `POST /exports/:id/run-now` | `200` with the row afterwards, whose `nextRunAt` is the service clock's instant. `404` for an unknown id, `422` for a segment that is not one, `409` when the subscription is disabled. Reads no body. |
+
+`src/subscriptions/routes.ts` declares all five and decides none of
+them: each handler reads the address, derives the window, calls the
+matching function in `src/subscriptions/service.ts` and chooses a
+status.
+
+The collection hangs off `/domains/:slug` because a subscription is a
+standing request for what one domain produces, and a caller holding a
+slug should not have to look an id up to read it. The other three
+address `/exports/:id` instead, for the reason a topic is written by
+id: the row carries its own `domain_id`, the one rule that spans a
+domain — a format delivered to a connector at most once — is the
+database's, and repeating the slug would let a request name a domain
+the row does not belong to.
+
+### The path base is `/exports` and the directory is `subscriptions`
+
+They differ on purpose, and this is the section that says why, since
+a reader looking up `POST /exports/:id/run-now` will find it in
+`src/subscriptions/routes.ts` and has no other way to learn that this
+is deliberate. The wave-2 prefix table above records the same split
+one line at a time; here is the argument.
+
+`src/exports/` was already taken when this group was planned, by the
+RENDERER registry q12 fills. A renderer turns a domain's material
+into the bytes of one format; a subscription is a standing request to
+deliver those bytes to one connector on a cadence. They are two
+different things about one word, and putting both under one directory
+would make the registry and the HTTP surface look like halves of one
+module. So the directory is named for the table it serves,
+`export_subscriptions`, exactly as `src/topics/` and `src/connectors/`
+are.
+
+The prefix stays `/exports` because it is the caller's noun rather
+than the schema's. What a client is asking for is an export,
+delivered on a schedule; `/subscriptions` would read as a billing
+noun on a surface that has none, and `/export-subscriptions` would be
+the only hyphenated prefix here. The one cost is paid in the `404`
+message, which names the resource in full — `No export subscription
+carries that id` — so a caller that met it while addressing
+`/exports/:id` is told the noun it would search this document for.
+
+`src/sources/` splits the other way round for a different reason, and
+the two are not one pattern: there the directory name matches the
+prefix and it is the CONTENTS that are shared, the HTTP half sitting
+beside an adapter contract that was there first.
+
+### A subscription is created unscheduled, and the verb schedules it
+
+`POST /domains/:slug/exports` lands a row whose `nextRunAt` is null
+whatever the request said, because `InsertSubscriptionInput` carries
+no such member. A null due time is never claimed — the dispatch claim
+reads `WHERE enabled AND next_run_at <= now()` — so a subscription
+created here and never run-now'd sits at null until something writes
+an instant.
+
+That is the same state a seeded subscription is in, and the same rule
+`Topics` above states for the other schedulable table. The
+alternative, defaulting a create to due-now, would make importing a
+domain's exports a burst of deliveries nobody asked for.
+
+`enabled` defaults to true, so a subscription staged switched off is
+one the body said `enabled: false` for. That row is legal, and it is
+the one state `POST /exports/:id/run-now` refuses: the rules behind
+that `409`, and behind the verb generally, are stated once for both
+schedulable groups under `Schedule verbs` above, because the topics
+group has a run-now answering to the same ones. Duplicating them here
+would give this surface two places to disagree with itself.
+
+There is no pause under this prefix, which is where this router is
+shorter than the topics one rather than a copy of it. A pause defers
+a question that would otherwise be asked. A delivery nobody wants for
+a while is one an operator switches off with `enabled: false` and
+switches back on — a digest that skipped three cycles and one that
+was suspended are the same thing to whoever reads it. The verb would
+be additive if that turns out to be wrong.
+
+### The natural key is a triple, and both writes can propose one
+
+`export_subscriptions_domain_id_format_connector_id_unique` is over
+(`domain_id`, `format`, `connector_id`), so a domain taking one
+format to two connectors is ordinary, and so is a domain taking two
+formats to one. Only the whole triple collides. `POST` can propose a
+taken one and so can a `PATCH` that re-formats or re-points, since
+`patchSubscriptionSchema` carries two thirds of the key, and both
+answer `409` with the same sentence — which names all three parts,
+because a message naming the format alone would send an operator
+looking for a collision that is not there.
+
+`domainId` is the third and is NOT patchable, so no request here can
+move a subscription between domains. A subscription is a request
+ABOUT the material one domain produces, and a move would carry it to
+another domain's.
+
+### A `connectorId` naming no row is a `422`, not a `404`
+
+Both writes that can name a connector resolve it before they write,
+through `ConnectorStore.findConnectorById`, and an id no row carries
+is a `422` whose one detail names `connectorId` and carries
+`code: 'unknown_connector'` — the service's own code rather than one
+of zod's, since the shape was legal and the value was a positive
+integer, and what failed is a question only the store could answer.
+
+The difference from the `404` a bad `:slug` answers is the difference
+between an address and a payload. A slug is where the request was
+SENT, so a slug naming nothing means there is nothing at that
+address. A `connectorId` is something the request SUBMITTED, so an id
+naming nothing means one member of the body is wrong and the refusal
+names it. `parentId` on a category is the same column shape answered
+the same way.
+
+Resolving it rather than translating the foreign key is what leaves
+`export_subscriptions_connector_id_connectors_id_fk` holding only the
+race, and it is what makes the `PATCH` answer the same `422` for the
+same fault as the `POST`. A foreign-key refusal that does reach the
+boundary is that race, and the insert can lose two of them: it is
+answered as the domain `404`, which misattributes the rarer one and
+errs in the safer direction, since a caller told its address is gone
+re-reads the address while a caller told its body is wrong would go
+looking at a member that was correct.
+
+### A delete cannot be refused, and it is not a disable
+
+Nothing in schema v2 points at `export_subscriptions`, re-derived
+from the generated SQL rather than from a plan, so `DELETE
+/exports/:id` has no guard and no `?cascade=confirm` for one to be
+waived by. It answers `204` or the `404` and `422` its address can
+raise, and nothing else.
+
+A delete and a disable are different operations and this surface
+offers both, because it means both. `enabled: false` through the
+patch keeps the format, the destination and the cadence and stops the
+subscription coming due; the delete removes them. Neither reaches
+work already dispatched: `ar-dispatch` claims a row and commits its
+reschedule in one transaction, so by the time a delete can take the
+row the render it claimed for has already gone out.
+
+### This group answers no config, and so masks nothing
+
+The credential a delivery authenticates with is not on this table. A
+subscription stores a `connector_id`, and the `config` holding an API
+key is a column of `connectors` — which `Connector secrets` above
+masks on every path that answers one. So no route here reads that
+column, no route here masks anything, and a caller wanting to know
+where a delivery goes reads `GET /connectors`: one request for the
+whole page rather than one per row, and the surface that does the
+masking.
+
+That is also why this list route joins nothing. A row answers the id
+it delivers to, and expanding it into the connector would put a
+masked config inside a page that has no other reason to carry one.
+
+### The list reads the window and nothing else
+
+`GET /domains/:slug/exports` takes `?page` and `?perPage` through
+`paginationQuerySchema` unchanged — no `?format`, no `?connectorId`,
+and no extension of the kind `GET /connectors` declares. The window
+is the ordinary one: defaulting to 50, refused above 200, and a page
+past the end answering an empty list rather than a `404`. This route
+follows every pagination rule above and departs from none of them.
+
+A filter would be a narrowing nobody has asked for over a collection
+a single page already holds — a domain's standing export requests are
+counted in single figures, bounded by how many formats there are
+times how many connectors a deployment runs. It would be additive if
+that stops being true.
