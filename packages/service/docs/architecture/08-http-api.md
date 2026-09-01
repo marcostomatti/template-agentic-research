@@ -291,9 +291,11 @@ The consequence is about evidence rather than about behaviour. A
 green local run says nothing about whether the guard is on a mount,
 because there the guard is a no-op that a missing mount is
 indistinguishable from. `tests/api/wiring.test.ts` is the reading
-that has something in it: a table of every wave-1 route, asserted
-`401` with no credential and not-`401` with one, against a service
-built WITH an auth block.
+that has something in it: a table of every route on the surface,
+asserted `401` with no credential and not-`401` with one, against a
+service built WITH an auth block. The table is held equal to the
+labels read off the mounted routers' own `stack`, so a route added
+to a router and not to the table is a route with no reading here.
 
 ### Wave 2 sits behind the same guard, and one group raises the stakes
 
