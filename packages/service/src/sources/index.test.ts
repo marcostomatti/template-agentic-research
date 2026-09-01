@@ -259,6 +259,14 @@ const NON_ADAPTER_MODULES = [
       + 'fetch, which is why listing is no member of the contract',
   },
   {
+    module: 'routes.ts',
+    reason:
+      'the four HTTP routes the sources rules are reached through, '
+      + 'declaring an address, a window, a status and an envelope '
+      + 'and no rule of its own: it fronts no source, declares no '
+      + 'member of the contract, and never constructs an adapter',
+  },
+  {
     module: 'service.ts',
     reason:
       'the rules the sources route group reduces to, written over '

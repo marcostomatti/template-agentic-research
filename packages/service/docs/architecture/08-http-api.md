@@ -521,10 +521,12 @@ surface answering for both rather than as half a surface here and the
 other half two waves later.
 
 So the pair is scheduled rather than missing, and this is the sentence
-that says so. The same note is repeated beside the approval gate
-itself in `docs/architecture/04-sources.md` when the sources group
-lands, so a reader who reaches the gate from the pipeline side is not
-left to conclude that the API forgot it.
+that says so. The same note sits beside the approval gate itself in
+`docs/architecture/04-sources.md`, under `The HTTP half of this gate
+is scheduled`, so a reader who reaches the gate from the pipeline
+side is not left to conclude that the API forgot it. The `Sources`
+group below repeats it a third time, where a reader looking up the
+four routes would otherwise find six expected and four listed.
 
 ## Domains
 
@@ -1581,3 +1583,182 @@ deleted in between. The fact to report is the one the lookup itself
 reports — no domain carries that slug — so it is the same `404` rather
 than a `500`, and a caller re-issuing the request gets one answer for
 one state however the timing fell.
+
+## Sources
+
+### A source is met in its domain and written by its id
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /domains/:slug/sources` | `200` with one page of the domain's sources, id ascending, each carrying its five health columns and a `parseStats` record, plus `meta`. `404` for an unknown slug, `422` for a segment that is not a slug and for the pagination faults every list route answers. |
+| `POST /domains/:slug/sources` | `201` with the stored row, never fetched. `422` for a body the schema refuses, `404` for an unknown slug. Never `409`. |
+| `PATCH /sources/:id` | `200` with the row afterwards. `422` for a body the schema refuses and for a segment that is not an id, `404` for an unknown id. Never `409`. |
+| `DELETE /sources/:id` | `204` with no body. `404` for an unknown id, `422` for a segment that is not one. `409` while documents or sightings still cite the source, carrying both counts in `details`; and `409` with no `details` at all when a key the guard does not count refuses the write. |
+
+`src/sources/routes.ts` declares all four and decides none of them:
+each handler reads the address, derives the window, calls the
+matching function in `src/sources/service.ts` and chooses a status.
+
+The collection hangs off `/domains/:slug` because a source is a feed
+a domain reads, and a caller holding a slug should not have to look
+an id up to list one. The two writes address `/sources/:id` instead,
+for the reason a persona is written by id: the row carries its own
+`domain_id`, no rule on this table spans a domain at all, and
+repeating the slug would let a request name a domain the row does
+not belong to.
+
+`GET /sources/:id/failures` shares that second prefix and is NOT on
+this router. It is `buildSourceFailuresRouter` in
+`src/sources/failures-routes.ts`, because its subject is a
+`documents` row rather than a `sources` one, and its rules are
+stated under `The failures queue` above. Two routers under one
+prefix is what the prefix table records and what `src/index.ts`
+mounts.
+
+There are no schedule verbs on this group. `sources` spreads no
+`schedulableColumns()` and carries no `next_run_at` at all — a feed
+is read when the topic that needs it comes due — so there is no due
+time to bring forward and no cycle to count, and this router is
+handed no clock.
+
+### A list answers the health columns and a parse-status aggregate
+
+Every row of `GET /domains/:slug/sources` carries the whole
+`sources` row and one member the table does not have: a `parseStats`
+record keyed by `DOCUMENT_PARSE_STATUSES`, counting the documents
+captured through that source on each side of
+`documents_parse_status_check`.
+
+It is one grouped read over the whole page rather than one query per
+row, and every member comes back present. A source that has captured
+nothing answers a counted zero under each, which is the same
+distinction the taxonomy's term counts draw: a left join gives a
+parent with no children exactly one null-extended row, so a count of
+rows answers one where a count of children answers zero.
+
+The record is the store's to count. Nothing in the service or the
+router fills a gap in it, because a gap filled at those layers would
+be filled on the in-memory path and not on the live one.
+
+The five columns beside it are what an operator reads a feed's
+health off: `consecutive_failures`, `last_success_at`,
+`last_failure_at`, `flagged` and `enabled`. Four are the pipeline's
+and the fifth is the operator's, which is the pairing that makes the
+reading useful — a feed failing every pass and a feed somebody
+switched off are two states that have to be told apart.
+
+### No create here can be refused, because the table has no key
+
+`sources` carries no unique constraint at all, only
+`sources_kind_check`. So `POST /domains/:slug/sources` has nothing
+for a duplicate to land on and answers no `409`, which is the
+departure from every other resource group on this surface.
+
+Two rows naming one endpoint are ordinary rather than a fault: the
+same feed read under two kinds, or a second row differing only in
+`parser_config` while an arrangement is being cut over. The cost is
+that a double POST leaves two rows fetching one feed and nothing
+here notices.
+
+A `kind` outside `SOURCE_KINDS` is a `422` from the boundary rather
+than a CHECK refusal from the database, because both request schemas
+hold the member to the same tuple `sources_kind_check` is generated
+from. A CHECK refusal reaching the service therefore means the tuple
+and the column have drifted apart, which is a deployment fault a
+caller cannot act on: it answers `500`, and dressing it as a `422`
+would tell an operator to fix a request that was correct.
+
+### `kind` is patchable, and both jsonb members replace whole
+
+`PATCH /sources/:id` accepts `kind`, which no natural key on this
+surface is patchable in. This table can afford it because it has no
+natural key: repointing a feed at a different transport is an
+ordinary correction — a source configured as `url` that turns out to
+serve an `api` payload — and what it changes is which adapter reads
+the row on the next pass. The documents already captured stay
+exactly where they are.
+
+`parserConfig` and `contract` are replaced whole and never merged,
+which is the rule a domain's `settings` is written under. An omitted
+key is therefore a cleared key, and `{}` is how a caller empties one
+of them rather than a workaround.
+
+Every member of this patch distinguishes two requests and not three,
+which is where it differs from the topics patch: absent leaves the
+column alone, present writes it, and no member is nullable, because
+every column a request may reach here is NOT NULL.
+
+`domainId` is on neither schema, so no request can move a feed
+between domains. The corpus it produced carries the old domain on
+every row, so a move would leave a feed in one domain and its
+documents in another with nothing in the schema to notice.
+
+### A delete is refused absolutely, and the counts say what holds it
+
+`documents.source_id` and `finding_sightings.source_id` both emit
+`ON DELETE no action`, so the database refuses whoever asks.
+`DELETE /sources/:id` reads both counts first so that the refusal
+can say what the delete would have taken, and answers `409` carrying
+them in `details`.
+
+There is no `?cascade=confirm` here and nothing for one to
+authorise, which is the difference from `DELETE /domains/:slug`.
+What a domain cascade takes is the domain's own configuration, which
+an operator can be shown and can authorise. What this would take is
+a corpus and the syndication evidence citing it, and
+`src/db/schema/findings.ts` argues at the column that the sightings
+table IS the provenance record: a cascade would drop that evidence a
+feed at a time, and every count taken afterwards would be lower with
+nothing saying why.
+
+So the refusal names the operation that was wanted instead.
+`enabled: false` through the patch keeps the endpoint, the
+arrangement and the corpus and stops the pipeline reading, and the
+message says so.
+
+BOTH COUNTS AT ZERO IS NOT A PROMISE THE DELETE WILL LAND, and the
+second `409` is what that costs. A third key —
+`source_config_proposals_source_id_sources_id_fk` — refuses a source
+a config proposal still names and is not counted, and a capture can
+write a document between the count and the write. Both arrive as an
+ordinary foreign-key refusal out of the write and are answered `409`
+with NO `details`, because the counted sentence names two tables
+this one is reached with at zero. Two zeros invented there would say
+the opposite of what happened.
+
+### The pipeline's five columns are answered and never accepted
+
+`cursor`, `consecutiveFailures`, `lastSuccessAt`, `lastFailureAt`
+and `flagged` are projected on every read this group answers and
+declared by neither request schema, so `.strict()` refuses each as
+an unrecognized key. That is the surface-wide rule above applied to
+the columns this table carries for the pipeline, and it is stated
+here because this is the group that carries the most of them.
+
+`flagged` is the one worth arguing rather than asserting. It is the
+adapter-rot detector's output, so clearing it without repairing the
+config that failed brings it straight back — a patchable boolean
+would be a button that hides that nothing was fixed. `enabled` is
+the column the schema provides for retiring a feed, and it IS
+patchable.
+
+### The pending-config pair is not on this router, and q13 takes it
+
+`GET /sources/:id/pending-configs` and
+`POST /sources/:id/approve-config` are in the parent spec's sources
+list and are not among the four routes above. They read and rule on
+`source_config_proposals`, and they move to q13, the approvals wave,
+where they land beside the entity approvals over `research_pool`.
+
+`The paths wave 2 defers` above carries the whole argument, and the
+same note sits beside the approval gate itself in
+`docs/architecture/04-sources.md`. In short: the reason they were
+carved out has expired — the table arrived on leg A with q09 and is
+in the tree — and the deferral stands on the reason that has not,
+which is that an approval gate is one vocabulary with two subjects
+and `scripts/approve.ts` already rules on both from one CLI. The
+HTTP half should arrive as one surface answering for both rather
+than as half a surface here and the other half two waves later.
+
+So this group is four routes rather than six on purpose, and this is
+the sentence that says so.
