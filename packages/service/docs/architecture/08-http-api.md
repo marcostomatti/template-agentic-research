@@ -1726,6 +1726,45 @@ with NO `details`, because the counted sentence names two tables
 this one is reached with at zero. Two zeros invented there would say
 the opposite of what happened.
 
+### The queue under this prefix is read-only, ordered and capped
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /sources/:id/failures` | `200` with one page of the source's failed captures, `captured_at` descending with `id` descending breaking a tie, plus `meta`. `404` for an unknown id, `422` for a segment that is not one and for the pagination faults every list route answers — an undeclared parameter among them, naming `query` rather than the parameter. Never `409`. |
+
+`buildSourceFailuresRouter` in `src/sources/failures-routes.ts` is
+the whole of it: one `get`, no other verb, and a store that is the
+three-read `Pick` `src/sources/failures-service.ts` declares. The
+read-only rule is therefore two shapes rather than an observance
+— a retry button could not be added here by a small edit,
+because there would be nothing on the store for it to call.
+
+The order, the masking and the cap are ANSWERED by this router
+rather than chosen in it. The page arrives `captured_at DESC,
+id DESC` because that is the port's rule, and the bodies arrive cut
+to a code-point cap and masked because that is the service's. A
+handler re-sorting a page it was handed would be answering a
+different order from the one the window was taken under, which is
+how two pages come to disagree about which row they hold; a handler
+trimming a string it was given would be a second cap nobody would
+notice drifting from the first. `The failures queue` above carries
+the whole of each argument, and this is the sentence that says which
+layer holds it.
+
+The window is the ordinary one and departs from nothing above:
+`?page` and `?perPage` through `paginationQuerySchema`, defaulting
+to 50, refused above 200, and a page past the end answering an empty
+list. A source whose captures all parsed answers an empty list too,
+with a `200` — which is what tells it apart from an id no
+source carries, and what the lookup in front of both document reads
+exists for.
+
+The query is read before the address, as on the list route beside
+it. Both faults are facts about the request alone and neither costs
+a read, so a request getting both wrong is answered about the
+window: the half a caller can fix without knowing anything about
+what is stored.
+
 ### The pipeline's five columns are answered and never accepted
 
 `cursor`, `consecutiveFailures`, `lastSuccessAt`, `lastFailureAt`

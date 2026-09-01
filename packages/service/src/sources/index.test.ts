@@ -246,6 +246,15 @@ const NON_ADAPTER_MODULES = [
       + 'never constructs an adapter',
   },
   {
+    module: 'failures-routes.ts',
+    reason:
+      'the one HTTP route the read-only review queue is reached '
+      + 'through, declaring an address, a window, a status and an '
+      + 'envelope and no rule of its own: it fronts no source, '
+      + 'declares no member of the contract, and never constructs '
+      + 'an adapter',
+  },
+  {
     module: 'failures-service.ts',
     reason:
       'the rules behind the read-only review queue, whose subject '
