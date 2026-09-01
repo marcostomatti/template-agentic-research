@@ -424,7 +424,7 @@ function countedTotal(
  *   would turn a bug in this package into a silent success.
  *
  * @remarks
- * The four sibling drizzle stores are the same three lines and are
+ * The sibling drizzle stores are the same three lines and are
  * deliberately not imported, for the reason `src/topics/db-store.ts`
  * states: each is reached only from inside its own directory, so
  * importing one from another would be the first edge between two
