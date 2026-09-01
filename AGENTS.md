@@ -342,6 +342,29 @@ reading).
   the counter-intuitive half: both needles scan the WHOLE tree, so the
   branch's new files elsewhere sit inside their surface even though the
   ESLint rule declaring them reaches only `packages/ui` imports.
+- Read that bucket as a CASE SPLIT and never as one number: the SEVEN
+  recorded above is the case-INSENSITIVE reading alone. Measured over 954
+  tracked files at the q11 tip, the case-SENSITIVE reading answers SIX, and
+  the single case-insensitive-only member is exactly the third bucket — the
+  `packages/ui/scripts/compare-design.mjs:11` docblock, whose spelling is
+  Capitalised. So a bucket run with a case-sensitive matcher (a bare `git
+  grep`, or a `String.includes`) answers six, reads as a hit somebody
+  repaired, and misses the one genuine leak in the tree while agreeing with
+  nothing recorded here. Both readings do carry a LIVE third-party control
+  against the real tree — six hits across five files, and one
+  case-insensitive-only — which is the opposite of the five-needle bucket,
+  whose origin-HOST control this file records as dead.
+- Derive those two needles from the declaration's ARRAY form and assert the
+  FRAGMENT COUNT, never the needle's length: both are `['a', 'b'].join('-')`
+  here rather than the `+`-concatenation a parser reaches for, so collecting
+  every quoted string in the expression captures the SEPARATOR as a third
+  fragment and builds a needle of the SAME LENGTH that answers ZERO over the
+  whole tree (measured 12 characters either way, 0 hits against 1). The
+  fragment-built planted control cannot report it: it plants whatever was
+  derived and duly returns both ids, so it proves the MATCHER runs and says
+  nothing about whether the NEEDLE is right. What catches a mis-derived
+  needle is the fragment count held against the array's arity, plus the real
+  tree's own carried-in hits being non-zero.
 - On a tree that already carries legitimate hits there is no zero to lean
   on, and the only reading separating yours from carried-in is a
   before/after hit SET diff taken with the SAME matcher:
