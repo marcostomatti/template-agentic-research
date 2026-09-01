@@ -1,17 +1,18 @@
 /**
  * `src/connectors/service.ts` — what the four connector operations
- * refuse. Driven over `tests/helpers/memory-research-store.ts`, so
- * every claim here is answered with no database anywhere.
+ * refuse, and what they let through. Driven over
+ * `tests/helpers/memory-research-store.ts`, so every claim here is
+ * answered with no database anywhere.
  *
- * NINE CLAIMS, ALL OF THEM REFUSALS. What these operations let
- * through is the subject of the section this file gains next; what
- * is here is every way this module says no, each carrying the
- * narrow CONTROL its refusal needs, varied along the one axis the
- * refusal turns on. A module refusing everything passes every
- * assertion a refusal case makes on its own, which is what the
- * controls exist against — and on this group several of those
- * controls are also the first readings anywhere that a config
- * leaves this module masked.
+ * THIRTEEN CLAIMS, NINE OF THEM REFUSALS. The first nine are every
+ * way this module says no, each carrying the narrow CONTROL its
+ * refusal needs, varied along the one axis the refusal turns on: a
+ * module refusing everything passes every assertion a refusal case
+ * makes on its own, which is what those controls exist against. The
+ * last four are what the four operations LAND, and on this group
+ * that half is where the write-only rule is finally read from both
+ * sides — what a caller is answered, and what the store was left
+ * holding, in the same case.
  *
  * THAT AN ADDRESS NAMING NOTHING IS A 404, ON THE TWO OPERATIONS
  * THAT TAKE ONE. `connectors` hangs off no domain, so there is no
@@ -114,13 +115,64 @@
  * place a submitted body leaks back, and it is the one refusal on
  * this group a caller reaches while holding a real key.
  *
+ * THAT EVERY CONFIG A READ ANSWERS IS MASKED, which is the
+ * write-only rule seen from the side a caller stands on. The page
+ * carries TWO credentials under two DIFFERENT rostered keys, so a
+ * module masking the first row, or the first key, answers a
+ * perfectly plausible page and fails; and the stored rows are
+ * counted in the same case, so the zero on the wire is a statement
+ * about values that genuinely traversed this path rather than about
+ * a fixture that never carried one. A config holding no rostered
+ * key comes back as itself, which is the control the masked rows
+ * cannot supply and which a module masking wholesale would fail.
+ *
+ * THAT A CREATE ANSWERS THE MASK AND STORES THE SECRET. Both halves
+ * are read in one case, because either alone describes a different
+ * module: an answer carrying the credential back would be the very
+ * artifact the masking exists against, and a write that stored the
+ * mask would leave the deployment holding a connector that cannot
+ * authenticate, with nothing on the wire saying so.
+ *
+ * THAT A PATCH REPLACES `config` WHOLE, SO AN OMITTED KEY IS A
+ * CLEARED SECRET. Read off the STORE and not off the answer, which
+ * is the only reading that tells a credential that is gone from one
+ * the mask is hiding, and paired with the same patch sending a
+ * ROTATED secret — a module clearing every rostered key on every
+ * patch passes the first and fails the second. A patch naming the
+ * name alone is the third of the three: it reaches no config at
+ * all, and the credential is still there and still itself.
+ *
+ * THAT A DELETE TAKES THE ROW AND THE CREDENTIAL WITH IT. The page
+ * afterwards is compared as whole records, the id is unusable by a
+ * patch as well as by a second delete, and the port's own lookup
+ * answers null — the one read that would still see a config the
+ * masking had hidden.
+ *
  * Mutation legs, run over this file with `--reporter=json` and read
- * as the failed case SET rather than as a count. Twenty-two legs
- * against 96 cases, each named by the EDIT it makes rather than by
- * its effect. Twenty-one mutate `./service.ts` and one mutates
- * `tests/helpers/memory-research-store.ts`, which is the only
- * target that can reach the per-kind half of the natural key at
- * all.
+ * as the failed case SET rather than as a count. Thirty legs
+ * against 117 cases, each named by the EDIT it makes rather than by
+ * its effect, plus two `check-types` legs that are not vitest runs
+ * at all. Twenty-four mutate `./service.ts`, five mutate
+ * `tests/helpers/memory-research-store.ts` — the only target that
+ * can reach the natural key's per-kind half, the page's ORDER, its
+ * filter or the replace-whole rule — and one mutates
+ * `src/db/schema/values.ts`.
+ *
+ * THE POSITIVE HALF WAS ADDED AFTER THE TWENTY-TWO LEGS BELOW WERE
+ * RECORDED, so every one of them was re-derived from its own
+ * sentence and re-run. Nineteen came back at exactly their recorded
+ * figures with no red at all in the four new sections, which is the
+ * reading that says they are still the legs this prose names.
+ * THREE moved, all by GAINING new-section reds and none by losing
+ * an old one: the guard-refuses-every-delete leg, the
+ * written-record-unmasked leg, and the list-unmasked leg whose
+ * recorded ZERO the new half exists to close. Two were rebuilt
+ * WRONG on the first attempt and are worth the warning: an edit
+ * that DELETED the create's mask check rather than moving it below
+ * the insert reddens 5 where the recorded leg reddens 1, and
+ * narrowing `CONNECTOR_KINDS` itself rather than the schema's enum
+ * reddens 14 where the recorded leg reddens 2. Both are neighbours
+ * of the leg their sentence names, not the leg.
  *
  * The two `.strict()` legs redden 4 apiece and their sets are
  * DISJOINT, which is what says the two schemas are separately
@@ -191,18 +243,27 @@
  * leaves-the-connector-standing cases stay green, because the STORE
  * refuses the delete whatever this module decided. That is the
  * port's own claim showing up as a leg that cannot reach it. Making
- * the guard refuse EVERY delete reddens 9 and is the blunt leg
- * rather than a rule: three of its reds are in the address section.
+ * the guard refuse EVERY delete reddens 13 and is the blunt leg
+ * rather than a rule: 9 outside the positive half, three of those
+ * in the address section, plus all four of what-a-delete-takes.
  * Sharing one sentence between the counted and the raced refusal
  * reddens exactly 1.
  *
- * The two masking legs split by call site and one of them reads
- * zero. Answering a written record unmasked reddens 2, both of them
- * controls in the mask section. Answering the LIST unmasked reddens
- * ZERO, and that is the scope boundary rather than a hole: no case
- * here reads a config off a page, a list answering every config
- * masked being a positive case and the subject of the section this
- * file gains next.
+ * The two masking legs split by call site and BOTH now report,
+ * which is the change the positive half made. Answering a written
+ * record unmasked reddens 8: the 2 controls in the mask section it
+ * always reached, plus 6 across the new half, since a create is
+ * compared against its own stored row and every page below is
+ * compared against the rows the writes answered. Answering the LIST
+ * unmasked reddens 4, all of them new, where the refusals-only file
+ * recorded a ZERO and named this half as what would close it.
+ *
+ * That 4 is worth reading as a SET rather than as a number: the
+ * leaves-a-config-alone case is NOT in it, and cannot be. It
+ * compares the answered config against the STORED one, which an
+ * unmasked list satisfies exactly as a masked list does over a row
+ * carrying no rostered key. The four that do report are the ones
+ * comparing a page against a masked write.
  *
  * The store leg reaches what no service mutation could. Having the
  * in-memory store compare NAMES alone rather than the pair reddens
@@ -211,15 +272,47 @@
  * refusing what the database does not is a second contract, and
  * this file is where it is caught.
  *
+ * EIGHT LEGS ARE THE POSITIVE HALF'S OWN and five of them mutate
+ * the in-memory store, because what a read ANSWERS is decided
+ * there as often as here. Having the store MERGE a patched config
+ * rather than replace it reddens 6 — the three replace-whole cases
+ * plus three acceptance controls in the refusal half — and it is
+ * the leg the cleared-secret claim rests on. Having the SERVICE
+ * default an omitted config to `{}` reddens exactly 2, the rename
+ * and the empty patch, which are the only two requests that name no
+ * config at all. Having the store MASK on the way in reddens 10,
+ * split 3 old and 7 new, and is what says the credential reaches
+ * the column as submitted.
+ *
+ * The three read legs are narrow and disjoint. Answering the page
+ * in insertion order reddens 16 and is BLUNT rather than a claim —
+ * 6 of its reds sit in the refusal half, every collection read-back
+ * comparing an ordered list. Ignoring the filter reddens exactly 2,
+ * both list cases that narrow. Taking `total` from the rows in hand
+ * reddens exactly 2, the two cases that read a window narrower than
+ * its collection, which is the whole budget a paging claim needs.
+ *
+ * The key-set pin is TWO legs and only one is a vitest run. Adding
+ * a member to the record this module answers reddens 2, exactly the
+ * cases that read `Object.keys`. The other half is `check-types`:
+ * planting an OPTIONAL member on `ConnectorRecord`, and separately
+ * on `ConnectorPage`, answers exactly ONE diagnostic apiece, both
+ * at the {@link EVERY_KEY_LISTED} line and both reading
+ * `Type 'true' is not assignable to type 'never'` — `never` and not
+ * `false`, the pin being an intersection of two reads.
+ *
  * What no module mutation reaches, by construction: the table
  * guards read only the tables beside them and are aimed at a later
  * edit, such as an operation added with no row or a half deleted
  * whole. The planted containment control is invisible to every leg
  * for the same reason and deliberately so: it proves the SEARCH,
- * where the rethrow legs prove the SUBJECT.
+ * where the rethrow legs prove the SUBJECT. The roster reads in the
+ * positive half are the same shape: nothing in `./service.ts` can
+ * move a key into `SECRET_CONFIG_KEYS` or out of it, and that guard
+ * is aimed at the edit which would.
  */
 
-import type { ConnectorServiceStore } from './service.js';
+import type { ConnectorPage, ConnectorServiceStore } from './service.js';
 import type { ConnectorFilter, ConnectorRecord } from './store.js';
 import type { FieldError } from '../../lib/errors/index.js';
 import type {
@@ -241,7 +334,7 @@ import {
 import { CONNECTOR_KINDS } from '../db/schema/values.js';
 import { StoreRefusal } from '../db/store-errors.js';
 
-import { MASKED_SECRET } from './secrets.js';
+import { MASKED_SECRET, SECRET_CONFIG_KEYS } from './secrets.js';
 import {
   createConnector,
   deleteConnector,
@@ -2163,5 +2256,660 @@ describe('what a refusal is allowed to say', () => {
     }))).toEqual([SENTINEL_NAME, SENTINEL_KEY, SENTINEL_SECRET].map(
       (needle) => ({ needle, occurrences: 0 }),
     ));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a list answers
+// ---------------------------------------------------------------------------
+
+/**
+ * The members `ConnectorRecord` declares.
+ *
+ * Written out rather than derived, an interface having no runtime
+ * form to read keys off, and pinned in BOTH directions: `satisfies`
+ * closes the direction where this names a member the record lacks,
+ * and {@link EVERY_KEY_LISTED} closes the one where the record
+ * grows a member nothing here learned about.
+ *
+ * The second direction is the one this group needs most. A column
+ * added to `connectors` is answered on every read the day it lands,
+ * and a credential is exactly the kind of thing that arrives that
+ * way — so a member appearing here without a masking decision
+ * behind it is a `check-types` failure rather than a projection
+ * nobody re-read.
+ */
+const CONNECTOR_KEYS = [
+  'config',
+  'id',
+  'kind',
+  'name',
+] as const satisfies readonly (keyof ConnectorRecord)[];
+
+/** The two members a page carries around its rows. */
+const PAGE_KEYS = [
+  'rows',
+  'total',
+] as const satisfies readonly (keyof ConnectorPage)[];
+
+/**
+ * `true` only while `L` names every key of `T`.
+ *
+ * The tuple wrapper is load-bearing rather than decoration: without
+ * it the union distributes over the conditional and the answer is
+ * `boolean`, which accepts `true` as an initializer and pins
+ * nothing at all.
+ *
+ * @typeParam T - The type whose keys must all be named.
+ * @typeParam L - The list naming them, as `typeof <the const>`.
+ */
+type CoversEveryKey<T, L extends readonly PropertyKey[]> =
+  [Exclude<keyof T, L[number]>] extends [never] ? true : false;
+
+/** The two lists above, held against the types they describe. */
+type EveryKeyListed =
+  CoversEveryKey<ConnectorRecord, typeof CONNECTOR_KEYS>
+  & CoversEveryKey<ConnectorPage, typeof PAGE_KEYS>;
+
+/**
+ * The half of the drift guard `check-types` owns.
+ *
+ * A member added to `ConnectorRecord` or to `ConnectorPage` and to
+ * neither list above collapses {@link EveryKeyListed} to `never`,
+ * and this initializer is then a TS2322 at this line — before any
+ * case can compare a record against a set that has quietly stopped
+ * describing it. An INTERSECTION rather than one read, so the
+ * message names `never` rather than `false`. Read in a case below,
+ * so it is a symbol this file uses rather than one lint reports.
+ */
+const EVERY_KEY_LISTED: EveryKeyListed = true;
+
+/** {@link CONNECTOR_KEYS}, sorted at use rather than by hand. */
+const CONNECTOR_KEY_SET: readonly string[] = [...CONNECTOR_KEYS].sort();
+
+/** {@link PAGE_KEYS}, sorted. */
+const PAGE_KEY_SET: readonly string[] = [...PAGE_KEYS].sort();
+
+/**
+ * `SECRET_CONFIG_KEYS` as plain strings.
+ *
+ * The tuple's members are literal types, so `includes` over it as
+ * declared refuses any argument that is not already one of them
+ * — which makes the second membership read below, over keys the
+ * roster must NOT name, impossible to compile at all.
+ */
+const ROSTERED: readonly string[] = SECRET_CONFIG_KEYS;
+
+/**
+ * The rostered keys the configs here file a credential under.
+ *
+ * TWO RATHER THAN ONE, AND DIFFERENT FROM EACH OTHER: a module
+ * matching a single key answers one row masked and the other
+ * verbatim, which is the fault a page-wide claim exists to report
+ * and which one secret-bearing row cannot see.
+ */
+const SECRET_MEMBERS = ['apiKey', 'token'];
+
+/**
+ * The keys those same configs carry that nothing masks.
+ *
+ * Read against the roster in the other direction, so a member
+ * ADDED to `SECRET_CONFIG_KEYS` — `endpoint` being the plausible
+ * one — is a named failure here rather than a case below quietly
+ * asserting that a value which should now be masked came back as
+ * itself.
+ */
+const PLAIN_MEMBERS = ['endpoint', 'vault'];
+
+/** A row of a third kind carrying a credential of its own. */
+const SEARCH_NAME = 'discovery';
+
+/** Where that row says its service answers. */
+const SEARCH_ENDPOINT = 'https://search.example.test/query';
+
+/** What it authenticates with, under the second rostered key. */
+const SEARCH_TOKEN = 'search-live-credential';
+
+/**
+ * Reads the whole deployment through the window every case here
+ * but two uses.
+ *
+ * @param planted - The store and its rows.
+ * @returns The page, every config masked.
+ */
+async function everyConnector(
+  planted: PlantedConnectors,
+): Promise<ConnectorPage> {
+  return listConnectors(planted.store, EVERY_KIND, WIDE_WINDOW);
+}
+
+/**
+ * Finds one answered connector by the name it carries.
+ *
+ * @param rows - What a read answered.
+ * @param name - The name to look for.
+ * @returns The row carrying it. Every name planted here is unique
+ *   across the kinds, which the key is not: two rows may share one
+ *   under different kinds, and this would answer the first.
+ * @throws When no row carries it. A `find` answering `undefined`
+ *   compares equal to another `undefined`, so a case reading a row
+ *   back against a write that never landed would otherwise pass
+ *   for nobody's reason.
+ */
+function connectorAt(
+  rows: readonly ConnectorRecord[],
+  name: string,
+): ConnectorRecord {
+  const found = rows.find((row) => row.name === name);
+
+  if (found === undefined) {
+    throw new Error('no answered row carries that name');
+  }
+
+  return found;
+}
+
+/**
+ * The keys of a stored jsonb document.
+ *
+ * `ConnectorRecord.config` is `unknown` by design — the port takes
+ * no view of what a client's arrangement holds — so a case reading
+ * its SHAPE says so here once rather than casting on every line.
+ *
+ * @param document - What a read answered.
+ * @returns Its own keys, sorted.
+ */
+function keysOf(document: unknown): string[] {
+  return Object.keys(document as object).sort();
+}
+
+describe('what a list answers', () => {
+  it('holds every key set against the type it describes', () => {
+    // The runtime half of the pin above. What it asserts is not the
+    // `true` — that is a constant — but that the symbol exists to
+    // be read: its VALUE is the statement `check-types` makes at
+    // the declaration, which is a TS2322 the moment either type
+    // grows a member no list names.
+    expect(EVERY_KEY_LISTED).toBe(true);
+
+    // The fixture's two secret keys and its two plain ones, read
+    // against the RUNTIME roster in both directions. A key moving
+    // into `SECRET_CONFIG_KEYS` or out of it makes the cases below
+    // assert the opposite of what they were written for, and this
+    // is the only line that would say so.
+    expect(SECRET_MEMBERS.filter((key) => !ROSTERED.includes(key)))
+      .toEqual([]);
+    expect(PLAIN_MEMBERS.filter((key) => ROSTERED.includes(key)))
+      .toEqual([]);
+    expect(new Set(SECRET_MEMBERS).size).toBe(SECRET_MEMBERS.length);
+  });
+
+  it('answers every config masked', async () => {
+    // The claim the write-only rule reduces to on the read side,
+    // and the section this file was missing. TWO rows carry a
+    // credential, under two different rostered keys, so a module
+    // masking the first row or the first key answers a perfectly
+    // plausible page and fails here. The page is compared WHOLE
+    // against the rows the writes answered, which is what says the
+    // two reads agree about what a caller may see.
+    const planted = await plantConnectors();
+    const search = await createConnector(planted.store, {
+      kind: 'search',
+      name: SEARCH_NAME,
+      config: { endpoint: SEARCH_ENDPOINT, token: SEARCH_TOKEN },
+    });
+    const page = await everyConnector(planted);
+
+    expect(page.rows).toStrictEqual([
+      planted.fallback,
+      planted.model,
+      planted.archive,
+      search,
+    ]);
+
+    // Counted rather than asserted, and counted on BOTH sides: the
+    // stored rows still hold the credentials verbatim, so the zero
+    // below is about values that genuinely traversed this path
+    // rather than about a fixture that never carried one.
+    const storedModel = await planted.store.findConnectorById(
+      planted.model.id,
+    );
+    const storedSearch = await planted.store.findConnectorById(search.id);
+
+    expect(masksIn(page.rows.map((row) => row.config))).toBe(2);
+    expect(masksIn([storedModel?.config, storedSearch?.config])).toBe(0);
+    expect(storedModel?.config).toStrictEqual({
+      endpoint: MODEL_ENDPOINT,
+      apiKey: MODEL_SECRET,
+    });
+    expect(storedSearch?.config).toStrictEqual({
+      endpoint: SEARCH_ENDPOINT,
+      token: SEARCH_TOKEN,
+    });
+
+    // The sorted key SET beside the records the case compares. A
+    // member arriving on a row by spread — a column nobody
+    // projected — is invisible to a compare against records this
+    // same module answered, and is exactly what these lines catch.
+    expect(page.rows.map((row) => Object.keys(row).sort()))
+      .toEqual(page.rows.map(() => [...CONNECTOR_KEY_SET]));
+    expect(Object.keys(page).sort()).toEqual([...PAGE_KEY_SET]);
+  });
+
+  it('leaves a config with no rostered key alone', async () => {
+    // The other direction of the claim above, and the control it
+    // rests on: a module replacing the config wholesale, or masking
+    // every value in it, answers the two secret-bearing rows
+    // correctly and fails here. Read against the STORED document
+    // rather than against a literal, so the two are one reading,
+    // and the keys are read beside it so an emptied config cannot
+    // satisfy the equality from both sides at once.
+    const planted = await plantConnectors();
+    const page = await everyConnector(planted);
+    const stored = await planted.store.findConnectorById(
+      planted.archive.id,
+    );
+    const answered = connectorAt(page.rows, ARCHIVE_NAME);
+
+    expect(answered.config).toStrictEqual(stored?.config);
+    expect(keysOf(answered.config)).toEqual(['vault']);
+    expect(masksIn(answered.config)).toBe(0);
+  });
+
+  it('orders the page by kind and then by name', async () => {
+    // The port's contract, and the fixture separates it from both
+    // orders that would agree with it on a smaller one: insertion
+    // order answers the model first, and name-only order answers
+    // the notebook first. Neither matches what the pair produces.
+    const planted = await plantConnectors();
+    const page = await everyConnector(planted);
+    const answered = page.rows.map((row) => row.name);
+
+    expect(page.rows.map((row) => row.kind))
+      .toEqual(['llm', 'llm', 'notebook']);
+    expect(answered).toEqual([FALLBACK_NAME, MODEL_NAME, ARCHIVE_NAME]);
+    expect([...answered].sort()).not.toEqual(answered);
+    expect([MODEL_NAME, FALLBACK_NAME, ARCHIVE_NAME]).not.toEqual(answered);
+  });
+
+  it('narrows the page to the kind it was given', async () => {
+    // What a filter SELECTS, which is this module's half of the
+    // `?kind` parameter — holding it to `CONNECTOR_KINDS` is
+    // `./routes.ts`'s. The count is read through the SAME filter as
+    // the rows, so a module narrowing one and not the other answers
+    // a page whose `meta.total` describes a different collection.
+    const planted = await plantConnectors();
+    const models = await listConnectors(
+      planted.store,
+      { kind: 'llm' },
+      WIDE_WINDOW,
+    );
+    const every = await everyConnector(planted);
+
+    expect(models.rows).toStrictEqual([planted.fallback, planted.model]);
+    expect(models.total).toBe(2);
+    expect(every.total).toBe(3);
+  });
+
+  it('answers an empty page for a kind no row carries', async () => {
+    // Nothing failed to read: the collection is there and the
+    // narrowing selected none of it, which is the same answer a
+    // window past the end gives. The unnarrowed read beside it is
+    // the control — a module answering an empty page to everything
+    // passes the first half of this and fails the second.
+    const planted = await plantConnectors();
+    const none = await listConnectors(
+      planted.store,
+      { kind: 'search' },
+      WIDE_WINDOW,
+    );
+    const held = await everyConnector(planted);
+
+    expect(none).toStrictEqual({ rows: [], total: 0 });
+    expect(held.total).toBe(3);
+  });
+
+  it('reports the collection rather than the page in hand', async () => {
+    // `total` is a second question rather than the length of the
+    // rows in hand, and the refusal half of this file could not say
+    // so: its one window was wider than every collection, so a
+    // total taken off the rows would have been right there. This
+    // window holds one row of three.
+    const planted = await plantConnectors();
+    const page = await listConnectors(planted.store, EVERY_KIND, {
+      limit: 1,
+      offset: 0,
+    });
+
+    expect(page.rows).toStrictEqual([planted.fallback]);
+    expect(page.total).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a create lands
+// ---------------------------------------------------------------------------
+
+/** A name no fixture row carries, for a second notebook. */
+const VAULT_NAME = 'offsite';
+
+describe('what a create lands', () => {
+  it('answers the masked row the store holds unmasked', async () => {
+    // The two halves of one write, read on both sides in one case.
+    // What the caller gets back is the mask, though the caller is
+    // the one who just sent the credential — a create answered
+    // with the secret in it would be the very artifact this surface
+    // exists to keep it out of. What the store holds is the value
+    // as submitted, byte for byte, because a masked write would
+    // leave the deployment with a connector that cannot
+    // authenticate and nothing on the wire saying so.
+    const planted = await plantConnectors();
+    const created = await createConnector(planted.store, {
+      kind: 'search',
+      name: SEARCH_NAME,
+      config: { endpoint: SEARCH_ENDPOINT, token: SEARCH_TOKEN },
+    });
+    const stored = await planted.store.findConnectorById(created.id);
+
+    expect(created).toStrictEqual({
+      id: created.id,
+      kind: 'search',
+      name: SEARCH_NAME,
+      config: { endpoint: SEARCH_ENDPOINT, token: MASKED_SECRET },
+    });
+    expect(stored).toStrictEqual({
+      id: created.id,
+      kind: 'search',
+      name: SEARCH_NAME,
+      config: { endpoint: SEARCH_ENDPOINT, token: SEARCH_TOKEN },
+    });
+
+    // The id is the store's own — no body here carries one — and
+    // the sorted key set beside it, since the id is the one member
+    // a whole-row compare cannot pin against anything but itself.
+    expect(created.id).toBeGreaterThan(planted.archive.id);
+    expect(Object.keys(created).sort()).toEqual([...CONNECTOR_KEY_SET]);
+  });
+
+  it('turns an omitted config into an empty one', async () => {
+    // The member is optional in the schema and REQUIRED by
+    // `InsertConnectorInput`, so what an absence means is decided
+    // in the service and is readable here rather than left to a
+    // column only one of the two implementations has. The empty
+    // object is a complete value: for a connector it means there is
+    // nowhere to reach, which is a row the pipeline cannot call
+    // rather than one it calls with defaults.
+    const { store } = await plantConnectors();
+    const created = await createConnector(store, {
+      kind: 'notebook',
+      name: VAULT_NAME,
+    });
+    const stored = await store.findConnectorById(created.id);
+
+    expect(created.config).toStrictEqual({});
+    expect(stored?.config).toStrictEqual({});
+  });
+
+  it('lands the row on the page a read answers', async () => {
+    // Read back through the OTHER operation, so the claim is about
+    // what is stored rather than about what one call happened to
+    // answer: a create returning a row it never wrote passes every
+    // case above and fails this. The whole page is compared, which
+    // says in the same line that the three rows already there are
+    // still there and still say what they said.
+    const planted = await plantConnectors();
+    const created = await createConnector(planted.store, {
+      kind: 'search',
+      name: SEARCH_NAME,
+      config: { endpoint: SEARCH_ENDPOINT, token: SEARCH_TOKEN },
+    });
+    const page = await everyConnector(planted);
+
+    expect(page.rows).toStrictEqual([
+      planted.fallback,
+      planted.model,
+      planted.archive,
+      created,
+    ]);
+    expect(connectorAt(page.rows, SEARCH_NAME).config)
+      .toStrictEqual({ endpoint: SEARCH_ENDPOINT, token: MASKED_SECRET });
+  });
+
+  it('counts the new row in the total a page reports', async () => {
+    // `total` is a second question rather than the length of the
+    // rows in hand, so a create the count never saw would leave a
+    // page claiming to be the whole of a deployment it is not. Read
+    // through a window of one, so the two numbers cannot agree by
+    // accident.
+    const planted = await plantConnectors();
+
+    await createConnector(planted.store, {
+      kind: 'search',
+      name: SEARCH_NAME,
+    });
+
+    const page = await listConnectors(planted.store, EVERY_KIND, {
+      limit: 1,
+      offset: 0,
+    });
+
+    expect(page.rows).toHaveLength(1);
+    expect(page.total).toBe(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a patch retunes
+// ---------------------------------------------------------------------------
+
+/** The credential a patch writes in place of a stored one. */
+const ROTATED_SECRET = 'model-rotated-credential';
+
+describe('what a patch retunes', () => {
+  it('clears a secret by being sent the config without it', async () => {
+    // THE REPLACE-WHOLE RULE AT ITS SHARPEST. A caller sends the
+    // document it wants to exist, so omitting a member removes it
+    // — and on this table the member is a live credential, which
+    // makes the request doing it by accident byte-identical to the
+    // one doing it on purpose. Both readings are here because
+    // neither is enough: the answer says the key is gone, and only
+    // the STORE can say the value went with it rather than being
+    // masked out of a row that still holds it.
+    const planted = await plantConnectors();
+    const patched = await patchConnector(planted.store, planted.model.id, {
+      config: { endpoint: MODEL_ENDPOINT },
+    });
+    const stored = await planted.store.findConnectorById(planted.model.id);
+
+    expect(patched).toStrictEqual({
+      ...planted.model,
+      config: { endpoint: MODEL_ENDPOINT },
+    });
+    expect(stored?.config).toStrictEqual({ endpoint: MODEL_ENDPOINT });
+    expect(keysOf(planted.model.config)).toEqual(['apiKey', 'endpoint']);
+    expect(keysOf(stored?.config)).toEqual(['endpoint']);
+  });
+
+  it('stores the config it replaced', async () => {
+    // Read back through the list, so the claim is about the stored
+    // row rather than about what the patch answered, and compared
+    // as a WHOLE PAGE: a patch reaching more rows than the id it
+    // was given answers the same row and is invisible to every
+    // other case in this section.
+    const planted = await plantConnectors();
+
+    await patchConnector(planted.store, planted.model.id, {
+      config: { endpoint: MODEL_ENDPOINT },
+    });
+
+    const page = await everyConnector(planted);
+
+    expect(page.rows).toStrictEqual([
+      planted.fallback,
+      { ...planted.model, config: { endpoint: MODEL_ENDPOINT } },
+      planted.archive,
+    ]);
+  });
+
+  it('keeps a secret the same patch sent again', async () => {
+    // The control the clearing above rests on: a module clearing
+    // every rostered key on every patch — or masking on the way IN
+    // as well as on the way out — passes that case and fails this.
+    // A rotated credential is the ordinary request here, and the
+    // value stored is the one submitted rather than the one that
+    // was there.
+    const planted = await plantConnectors();
+    const patched = await patchConnector(planted.store, planted.model.id, {
+      config: { endpoint: MODEL_ENDPOINT, apiKey: ROTATED_SECRET },
+    });
+    const stored = await planted.store.findConnectorById(planted.model.id);
+
+    expect(patched.config).toStrictEqual({
+      endpoint: MODEL_ENDPOINT,
+      apiKey: MASKED_SECRET,
+    });
+    expect(stored?.config).toStrictEqual({
+      endpoint: MODEL_ENDPOINT,
+      apiKey: ROTATED_SECRET,
+    });
+  });
+
+  it('clears the config when it is sent an empty object', async () => {
+    // An empty object is a complete value and the only way to
+    // express holding no arrangement at all, so a store treating it
+    // as an absence leaves the stored config standing and answers a
+    // row that looks right — which here means a credential the
+    // operator believes they have just removed.
+    const planted = await plantConnectors();
+    const patched = await patchConnector(planted.store, planted.model.id, {
+      config: {},
+    });
+    const stored = await planted.store.findConnectorById(planted.model.id);
+
+    expect(patched).toStrictEqual({ ...planted.model, config: {} });
+    expect(stored?.config).toStrictEqual({});
+  });
+
+  it('renames a connector without reaching its config', async () => {
+    // A patch naming one member leaves the other alone, and on this
+    // table the other member is the credential. The whole record is
+    // compared against the row as it was, and the STORE is read
+    // beside it: a service defaulting the config it was not sent
+    // would have cleared the secret, and the masked answer looks
+    // identical either way.
+    const planted = await plantConnectors();
+    const patched = await patchConnector(planted.store, planted.model.id, {
+      name: FRESH_NAME,
+    });
+    const stored = await planted.store.findConnectorById(planted.model.id);
+
+    expect(patched).toStrictEqual({ ...planted.model, name: FRESH_NAME });
+    expect(stored?.config).toStrictEqual({
+      endpoint: MODEL_ENDPOINT,
+      apiKey: MODEL_SECRET,
+    });
+    expect(stored?.name).toBe(FRESH_NAME);
+  });
+
+  it('answers the stored row to a patch naming nothing', async () => {
+    // The port's rule rather than this module's: `connectors`
+    // carries no `updated_at`, so a patch with no member has
+    // literally nothing to set and the row it answers is the row
+    // that was there. The stored config is read beside it, since a
+    // module that took the empty patch as a clear would answer a
+    // record that differs in the one member the mask hides.
+    const planted = await plantConnectors();
+    const patched = await patchConnector(
+      planted.store,
+      planted.model.id,
+      {},
+    );
+    const stored = await planted.store.findConnectorById(planted.model.id);
+
+    expect(patched).toStrictEqual(planted.model);
+    expect(stored?.config).toStrictEqual({
+      endpoint: MODEL_ENDPOINT,
+      apiKey: MODEL_SECRET,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a delete takes
+// ---------------------------------------------------------------------------
+
+describe('what a delete takes', () => {
+  it('answers nothing and leaves the siblings standing', async () => {
+    // The other side of the guard two sections up: a connector no
+    // subscription names, where the whole of what the operation
+    // answers is `undefined` and the whole of what it did is read
+    // back off the page. The siblings are compared as WHOLE records
+    // — a delete that took the right row and edited the one beside
+    // it answers the same page of names.
+    const planted = await plantConnectors();
+
+    await expect(deleteConnector(planted.store, planted.archive.id))
+      .resolves.toBeUndefined();
+
+    const page = await everyConnector(planted);
+
+    expect(page.rows).toStrictEqual([planted.fallback, planted.model]);
+    expect(page.total).toBe(2);
+  });
+
+  it('takes the stored credential with the row', async () => {
+    // What a delete takes on THIS group that it takes on no other:
+    // the row is where the credential lived, and after this there
+    // is no read anywhere that answers it, masked or otherwise.
+    // Read through the port's own lookup rather than through the
+    // list, which is the one reading that would still see a config
+    // the masking had hidden. The sibling is read in the same
+    // case — a store answering null to everything passes the
+    // line above.
+    const planted = await plantConnectors();
+
+    await deleteConnector(planted.store, planted.model.id);
+
+    const gone = await planted.store.findConnectorById(planted.model.id);
+    const kept = await planted.store.findConnectorById(planted.fallback.id);
+
+    expect(gone).toBeNull();
+    expect(kept).not.toBeNull();
+  });
+
+  it('answers 404 to a second delete of the same id', async () => {
+    // The row is gone rather than merely unlisted, which no read
+    // above can say: a delete that unlinked the row without
+    // removing it answers this second call as a success.
+    const planted = await plantConnectors();
+
+    await deleteConnector(planted.store, planted.archive.id);
+
+    const refusal = await refusalFrom(
+      () => deleteConnector(planted.store, planted.archive.id),
+    );
+
+    expect(refusal).toBeInstanceOf(NotFoundError);
+    expect(refusal.statusCode).toBe(404);
+  });
+
+  it('answers 404 from a patch of the id it took', async () => {
+    // The id is unusable by every operation that names one rather
+    // than only by the delete that took it: a store dropping the
+    // row from the collection while leaving it addressable passes
+    // both reads above and answers this patch — with a config it
+    // still holds.
+    const planted = await plantConnectors();
+
+    await deleteConnector(planted.store, planted.archive.id);
+
+    const refusal = await refusalFrom(() => patchConnector(
+      planted.store,
+      planted.archive.id,
+      { name: FRESH_NAME },
+    ));
+
+    expect(refusal).toBeInstanceOf(NotFoundError);
+    expect(refusal.statusCode).toBe(404);
   });
 });
