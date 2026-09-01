@@ -159,23 +159,33 @@ here as a known departure rather than patched from a route group.
 
 ## Pagination
 
-### Every PAGINATED list takes `?page` and `?perPage`, and nothing else
+### Every PAGINATED list reads `?page` and `?perPage` and no other window
 
 `page` is 1-based. Neither `limit`/`offset`, nor `pageSize`, nor
 `per_page` is accepted anywhere. The store ports take `limit` and
 `offset` because that is what SQL takes, and the translation
 happens once, in `src/http/schemas.ts`.
 
-No router declares a pagination vocabulary of its own. Three do
-declare a query schema for something else, and none of the three
+No router declares a pagination vocabulary of its own. Four
+declare a query schema of some other shape, and none of the four
 is a second spelling of a window: the confirmation on
 `DELETE /domains/:slug`, the empty one that refuses every parameter
-on `GET /domains/:slug/categories`, and the `?format` on
-`GET /categories/:id/terms`. Only the last competes with this
-schema on the same route, and it competes by REPLACING it — a
-request naming `?format` is judged against that schema instead,
-which is what makes `?format=seed&page=2` a refusal rather than a
-window silently dropped.
+on `GET /domains/:slug/categories`, the `?format` on
+`GET /categories/:id/terms`, and the `?kind` on `GET /connectors`.
+The third competes with this schema on the same route, and it
+competes by REPLACING it — a request naming `?format` is judged
+against that schema instead, which is what makes
+`?format=seed&page=2` a refusal rather than a window silently
+dropped.
+
+The fourth does not compete at all: `src/connectors/routes.ts`
+EXTENDS the schema below rather than respelling it, adding one
+optional `?kind` held to `CONNECTOR_KINDS` and inheriting the
+default, the cap and the strictness unchanged. That is the shape a
+list-route filter should take here — the window stays one
+declaration, and a parameter this surface does not declare is still
+a `422` naming `query`. The `Connectors` group below carries the
+argument.
 
 One wave-1 list route is not paginated at all, and the capital is
 what keeps this rule true rather than nearly true:
@@ -190,8 +200,10 @@ rather than a page and reads through no window at all, while the
 same route without `?format` is an ordinary paginated list. That
 is one route stepping out of this rule for one request, not a
 third parameter joining the two spellings above. Every other list
-route on the surface reads through the schema named above and
-through nothing else.
+route on the surface reads its WINDOW through the schema named
+above and through nothing else; `GET /connectors` reads one
+further parameter beside it, through an extension of that same
+schema rather than through a second one.
 
 Those names match `PaginationMeta` in
 `packages/ui/src/cache/types.ts`, which declares the same four
@@ -896,8 +908,9 @@ would let a request name a domain the row does not belong to.
 ### This collection is paginated, and the taxonomy is the exception
 
 `GET /domains/:slug/personas` reads through the `?page`/`?perPage`
-schema every other list route on the surface reads through, and
-answers `meta` beside its rows. A domain carries three personas today,
+schema itself, unextended — as every list route on the surface
+except `GET /connectors` does — and answers `meta` beside its
+rows. A domain carries three personas today,
 so the window is doing nothing yet — but nothing caps how many roles a
 pipeline may come to play, and a collection that grows unbounded is
 one a caller should be paging through before it has to.
@@ -1835,3 +1848,178 @@ than as half a surface here and the other half two waves later.
 
 So this group is four routes rather than six on purpose, and this is
 the sentence that says so.
+
+## Connectors
+
+### A connector is deployment-level, and addressed by nothing but id
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /connectors` | `200` with one page of the deployment's connectors, kind ascending with name ascending beside it, every `config` masked, plus `meta`. `422` for a `?kind` outside `CONNECTOR_KINDS` and for the pagination faults every list route answers. Never `404`: the collection has no address. |
+| `POST /connectors` | `201` with the stored row, config masked. `422` for a body the schema refuses, including a `config` that submits the mask literal. `409` when the deployment already carries that kind by that name. |
+| `PATCH /connectors/:id` | `200` with the row afterwards, config masked. `422` for a body the schema refuses and for a segment that is not an id, `404` for an unknown id, `409` when the RESULTING name is one that kind already holds. |
+| `DELETE /connectors/:id` | `204` with no body. `404` for an unknown id, `422` for a segment that is not one. `409` while export subscriptions still name the connector, carrying the count in `details`; and `409` with no `details` at all when one is written between the count and the delete. |
+
+`src/connectors/routes.ts` declares all four and decides none of
+them: each handler reads the address, derives the window and the
+filter, calls the matching function in `src/connectors/service.ts`
+and chooses a status.
+
+This is the one resource group on the surface that is not met in a
+domain. `connectors` carries no `domain_id` at all — which model
+endpoint answers, or which notebook an export is handed to, is a
+fact about the deployment — so the collection hangs off the root,
+there is no `:slug` to narrow, and no route here can answer a `404`
+about a domain. A connector outlives every domain that named it,
+and which domain wanted which connector is recorded where it varies,
+in an `export_subscriptions` row.
+
+There are no schedule verbs on this group and this router is handed
+no clock. Nothing here reads the present: `connectors` spreads no
+`schedulableColumns()` and carries no `next_run_at`.
+
+There is no single-item `GET` either, which matters more here than
+on the groups beside it. The list and the two writes are the whole
+of what answers a `config` at all, so the masking rule below has
+three paths out to hold rather than four.
+
+### The list takes a `?kind`, and it is the surface's one exception
+
+`GET /connectors` is the only list route here that reads a query
+parameter beyond the window. `?kind` narrows the page to one family
+of service and is held to `CONNECTOR_KINDS`, the same tuple
+`connectors_kind_check` is generated from, so a family nobody
+registered is a `422` naming the parameter rather than an empty page
+whose emptiness a caller cannot account for.
+
+The schema is `paginationQuerySchema` EXTENDED rather than a second
+window respelt beside it, so `?page` and `?perPage` mean here
+exactly what they mean everywhere else and the default, the cap and
+the strictness are the ones `src/http/schemas.ts` argues for. That
+last one is the half worth measuring: `.extend()` preserves
+`.strict()`, so `?knid=llm` is still a `422` naming `query` rather
+than a typo silently answered as an unfiltered page.
+
+A kind is a FILTER and not a scope. Absent answers every connector
+the deployment holds, and a registered kind no row carries answers
+an empty page with a `200`, exactly as a window past the end does.
+`meta.total` counts the rows the same filter selects, so
+`?kind=llm` answers how many `llm` connectors there are and not how
+many connectors there are.
+
+### A secret goes in and never comes back out
+
+`connectors.config` is where an API key lives, and every one of the
+three routes above that answers a config answers it MASKED: the
+value under any `SECRET_CONFIG_KEYS` member is replaced by the
+single `MASKED_SECRET` literal, `__masked_secret__`, at any depth
+and whatever its type. That includes the row a `POST` answers,
+though the caller has just sent the credential — a create is
+answered by the shape a read answers, and a body carrying the key
+back would be the artifact the masking exists to prevent.
+
+`Connector secrets` above carries the whole rule and its containment
+proof. What this group's routes add is where it is applied: in
+`src/connectors/service.ts`, once, and not in the router or the
+store. `ConnectorStore` answers the config as STORED, because the
+live suite compares a write against the raw row and `ar-ingest`
+reads the column directly, so the mask is a property of what this
+SURFACE answers rather than of what is held.
+
+A `config` submitting `__masked_secret__` as a value is a `422` and
+never a write, from both writes, naming the path with every
+operator-chosen segment masked to `*` — `config.*` for a member and
+`config.*.*` for one inside it, one detail per occurrence. The round
+trip it closes is the ordinary one: a caller reads a connector,
+edits one member of the masked config, and sends the whole object
+back, at which point the literal would be stored as that
+deployment's API key.
+
+### A `config` is replaced whole, so an omitted key clears a secret
+
+A `PATCH` supplying `config` stores exactly that payload. A member
+left out is CLEARED rather than left standing, and a patch omitting
+`config` altogether leaves the stored payload alone. `{}` is
+therefore how a caller empties one rather than a workaround, and
+`settings` on a domain is written under the same rule.
+
+The consequence is sharper here than on a domain and is stated
+rather than smoothed over. A caller that reads a connector, drops
+the masked key because it has no value to put there, and patches the
+result has cleared that secret — and nothing catches it, that
+request being byte-identical to a deliberate clear. The refusal
+above catches the caller that KEEPS the mask; this is the one it
+cannot. A merge would trade it for a worse problem, since clearing
+would then be unexpressible; `Connector secrets` above argues that
+trade in full.
+
+### The pair is the natural key, and both writes can propose one
+
+`connectors_kind_name_unique` is over (`kind`, `name`), so one name
+under two kinds is ordinary and only the pair collides. `POST` can
+propose a taken pair and so can a `PATCH` that renames, and both
+answer `409` with the same sentence — which names the PAIR rather
+than the name, because a message naming the name alone would send an
+operator looking for a collision that is not there.
+
+The mask refusal is reached BEFORE the conflict, so a create that
+both submits the mask and names a taken pair is a `422`. That is the
+ordinary ordering of a fact about the request ahead of a fact about
+the rows.
+
+### `kind` is not patchable, which the sources group's is
+
+The two columns look alike and are not. A source's kind selects the
+adapter that reads that one row, so a patch there reaches only what
+it names. A connector's kind is read by rows and by queries that are
+not this one: an `export_subscriptions` row names a connector by id
+while MEANING one of a particular kind, and the foreign key
+constrains the id alone, so a kind patch would silently re-point
+live subscriptions at another family. `ar-ingest`'s model lookup
+selects `WHERE c.kind = 'llm' ORDER BY c.id LIMIT 1`, so the same
+patch changes which row the pipeline calls without touching the row
+it was reading. Neither is visible to any constraint.
+
+So a connector whose kind is wrong is a different connector: delete
+it and create the one that was meant, which is an explicit act with
+a delete guard in front of it. A body naming `kind` is refused as an
+unrecognized key, so its detail names `body` rather than `kind` —
+the same word refused by a different mechanism from the one that
+refuses a `?kind`, which is worth knowing when reading a detail.
+
+Leaving the member off the patch schema also keeps
+`connectors_kind_check` off the update, so a `PATCH` here can raise
+exactly one database mechanism.
+
+### A delete is refused while a subscription still names the row
+
+`export_subscriptions_connector_id_connectors_id_fk` is the ONE
+foreign key onto `connectors.id`, re-derived from the generated SQL
+rather than from a plan, and it emits `ON DELETE no action`. So the
+statement is refused whatever the guard decided; what the guard buys
+is a refusal a caller can read, carrying the count in `details`
+where the bare foreign-key error says only that something is in the
+way.
+
+There is no `?cascade=confirm` here and nothing for one to
+authorise, which is the difference from `DELETE /domains/:slug` and
+is a decision about what each act takes. A domain cascade takes the
+domain's own configuration, which an operator can be shown and can
+authorise. This would cancel deliveries that OTHER domains asked
+for, and the operator retiring a shared service is not the operator
+who subscribed to it. So the refusal names `/exports` as where those
+subscriptions are edited instead.
+
+The second `409` is a race rather than a key nobody counts, which is
+where this group differs from the sources delete. The counted set is
+complete, so a subscription written between the count and the write
+is the only state that reaches it — and it answers a different
+sentence with NO `details`, because inventing a zero there would say
+the opposite of what happened and because the two want different
+next acts: retry, or go and look at `/exports`.
+
+An unknown id falls through the guard rather than being looked up
+first. Nothing points at a row that is not there, so the count is
+zero, the guard passes, and the store answers that it removed
+nothing — the same `404` a lookup would have raised, one round trip
+earlier.
