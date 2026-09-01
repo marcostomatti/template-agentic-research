@@ -1,18 +1,19 @@
 /**
  * `src/subscriptions/service.ts` — what the four export
- * subscription operations refuse. Driven over
- * `tests/helpers/memory-research-store.ts`, so every claim here is
- * answered with no database anywhere.
+ * subscription operations refuse, and what they let through. Driven
+ * over `tests/helpers/memory-research-store.ts`, so every claim
+ * here is answered with no database anywhere.
  *
- * TEN CLAIMS, AND EVERY ONE OF THEM IS ABOUT A REFUSAL. What these
- * operations LET THROUGH is the next task's half, and this one
+ * SIXTEEN CLAIMS, TEN OF THEM ABOUT A REFUSAL. The refusal half
  * carries only the CONTROLS a refusal needs to be readable: each is
  * varied along the one axis its refusal turns on, because a module
  * refusing everything passes every assertion a refusal case makes
  * on its own. The plan's six are the address, the connector, the
  * format, the triple, the pipeline-owned member and the id that
  * names nothing; the other four are the readings those six cannot
- * give on their own.
+ * give on their own. The six that follow them are what these
+ * operations LET THROUGH, and every one of those is read back
+ * through an operation other than the one that wrote it.
  *
  * THAT AN ADDRESS NAMING NOTHING IS A 404 ON ALL FOUR OPERATIONS,
  * and that the two addresses are told apart. A `:slug` naming no
@@ -117,15 +118,85 @@
  * built by hand here is likeliest to quote and the only channel a
  * string sentinel cannot reach.
  *
+ * THAT A LIST ANSWERS ONE DOMAIN'S SUBSCRIPTIONS AND ORDERS THEM BY
+ * THE PAIR. The fixture puts a row carrying `digest`'s WHOLE pair
+ * under the second domain, so a read reaching past the domain
+ * cannot tell the two deliveries apart by their natural key at all,
+ * and the page is compared as WHOLE RECORDS rather than as pairs.
+ * The order is read over a collection arranged so that neither
+ * single-column reading answers it: the two rows sharing a format
+ * go in LAST and sort FIRST, and the one written first sits on the
+ * HIGHER connector id, so a page in insertion order and a page
+ * sorted on the format alone are each wrong in a different place.
+ *
+ * THAT ONE DOMAIN HOLDS ONE FORMAT AT TWO CONNECTORS AND TWO
+ * FORMATS AT ONE. The acceptance controls beside the 409s say each
+ * write was TAKEN; this says the collection can hold both shapes at
+ * once, which is the reading a list keyed on any PAIR of the three
+ * columns could not give. It is the same widening the refusal half
+ * plants, read off a page rather than off a write.
+ *
+ * THAT A CREATE LANDS UNSCHEDULED AND ENABLED, and that both are
+ * DEFAULTS rather than constants. A null due time is the state
+ * `ar-dispatch` never claims and the run-now verb exists to leave;
+ * `enabled` true is what a body may override, and the case staging
+ * a subscription switched off is what says the surface reads the
+ * member rather than writing a literal. The two bounds are folded
+ * here and distinguished by the patch, so the create's
+ * absent-equals-null case and the patch's clear-with-null case are
+ * two claims rather than one written twice.
+ *
+ * THAT A PATCH REACHES THE MEMBER IT NAMED AND NO OTHER. Every
+ * write is compared as a WHOLE record against the row as it was,
+ * with only the overridden members differing, and the cadence is
+ * read back through the list rather than off the answer. The two
+ * bounds carry the three-request distinction on their own: absent
+ * leaves the stored bound alone, a number sets it, and `null`
+ * clears it, which a `??` anywhere between the schema and the port
+ * would collapse. `enabled` is read in both directions, since a
+ * member folded through `||` writes true for a submitted false, and
+ * a member no longer written at all is green in whichever direction
+ * the stored value already pointed.
+ *
+ * THAT A DELETE TAKES ONE ROW AND FREES ITS TRIPLE. Nothing in
+ * schema v2 points at `export_subscriptions`, so the whole of what
+ * this operation answers is nothing and the whole of what it did is
+ * read off the page afterwards. Three readings no page can give sit
+ * beside it: the second domain still carries the pair, a second
+ * delete of the same id is a 404, and the create that takes the
+ * freed triple lands a NEW row rather than the old one back.
+ *
+ * THAT THE ANSWERED KEY SET IS PINNED IN BOTH DIRECTIONS. A list of
+ * `SubscriptionRecord`'s members is held to the record by
+ * `satisfies` and the record to the list by a conditional read
+ * through {@link EVERY_KEY_LISTED}, with the sorted set asserted
+ * over an ANSWERED row beside it. The type half is the one THIS
+ * table needs: `export_subscriptions` spreads
+ * `schedulableColumns()`, so a column added to that one helper
+ * reaches every projection here with no subscriptions module edited
+ * at all. Measured — planting an optional member on the record
+ * answers exactly one TS2322, at this file's own pin.
+ *
  * Mutation legs, run over this file with `--reporter=json` and read
  * as the failed case SET rather than as a count, measured against
- * 90 cases. Twenty legs, eighteen aimed at
- * `src/subscriptions/service.ts` and two at
- * `tests/helpers/memory-research-store.ts`, because the natural key
- * is the STORE's and no leg over the service can reach it. Every
- * leg collected all 90 cases, which is what separates a leg that
+ * 118 cases. Thirty-two legs, twenty-one aimed at
+ * `src/subscriptions/service.ts` and eleven at
+ * `tests/helpers/memory-research-store.ts` — the natural key, the
+ * page's order and what a write actually stores are all the
+ * STORE's, and no leg over the service reaches any of them. Every
+ * leg collected all 118 cases, which is what separates a leg that
  * legitimately reddened nothing from one whose edit broke
  * collection and scored zero identically.
+ *
+ * THE TWENTY LEGS THE REFUSALS-ONLY FILE RECORDED WERE RE-RUN
+ * RATHER THAN QUOTED, and each figure below is the reds OUTSIDE the
+ * four positive sections. Sixteen of the twenty came back unmoved
+ * in every direction, which is the reading that says they are still
+ * live: they are refusal-TRANSLATION legs, and a positive case has
+ * nothing to say about which status a refusal wears. The four that
+ * gained new reds are the four whose edit changes what an accepted
+ * write STORES or what a page holds, and each is noted where it
+ * sits.
  *
  * Collapsing the two 404 sentences into one reddens exactly 1, the
  * distinctness case, which is the narrowest reading in this file.
@@ -141,11 +212,13 @@
  * there — through the foreign key rather than the lookup — so the
  * ordering case is green under it, which is this module's stated
  * misattribution showing up as a leg that cannot reach it. Making
- * the patch's resolution UNCONDITIONAL reddens 10 across four
- * sections and is recorded as blunt rather than as coverage: a
- * lookup of `undefined` refuses every patch, so the one case named
- * for the conditional carries the claim and the other nine are the
- * fixture reporting.
+ * the patch's resolution UNCONDITIONAL reddens 10 outside the
+ * positive sections and 19 in all, and is recorded as blunt rather
+ * than as coverage: a lookup of `undefined` refuses every patch, so
+ * the one case named for the conditional carries the claim and the
+ * other eighteen are the fixture reporting. It is the first of the
+ * four legs the positive half moved, and the one it moved for the
+ * least interesting reason.
  *
  * The two `.strict()` legs redden 4 apiece and their sets are
  * DISJOINT, which says the two schemas are separately pinned rather
@@ -170,6 +243,15 @@
  * ordering case — which is the three-faults-one-code claim paying
  * for itself, since the missing-member and explicit-null rows are
  * in that set and a string schema answers `invalid_type` to both.
+ *
+ * WHICH four the narrowing leg drops moves its figure, so the leg
+ * is named by its EDIT rather than by its arity. Omitting
+ * `notion_md` — the one member no case here spells — is the leg
+ * recorded above, and it still answers 1. Omitting `email_draft`
+ * answers 4: the body table's whole-shape acceptance case patches
+ * to that format, and the positive half's widening and ordering
+ * cases both deliver it. That is the second of the four legs the
+ * positive half moved.
  *
  * The triple legs nest. Rethrowing the unique refusal reddens 7 —
  * all three 409 cases, both read-back controls, the containment row
@@ -196,17 +278,64 @@
  * undeclared reason a 409 rather than rethrowing it reddens only
  * the first rethrow case.
  *
- * The two store legs reach what no service mutation can, the key
- * being the STORE's. Keying it on `(domain, format)` reddens
- * exactly 2 — one of them the widening control that exists for it,
- * the other the format acceptance loop, which delivers five formats
- * to one connector. Keying it across every domain rather than
- * within one reddens 77 of 90 and is recorded rather than read: the
- * fixture plants a row carrying another domain's whole pair, so
- * `plantSubscriptions` cannot build its dataset at all under that
- * edit. That is the fixture's design reporting rather than any
- * case, and it is why the three explicit widening controls sit
- * beside it.
+ * THE TWO RECORDED STORE LEGS REACH WHAT NO SERVICE MUTATION CAN,
+ * the key being the STORE's, and both are among the four the
+ * positive half moved. Keying it on `(domain, format)` reddens 2
+ * outside the positive sections — the widening control that exists
+ * for it and the format acceptance loop, which delivers five
+ * formats to one connector — and 4 in all, the two added reds being
+ * the page that carries one format at two connectors and the page
+ * whose order is read. Keying it across every domain rather than
+ * within one reddens 77 outside and 104 in all, and is recorded
+ * rather than read: the fixture plants a row carrying another
+ * domain's whole pair, so {@link plantSubscriptions} cannot build
+ * its dataset at all under that edit. That is the fixture's design
+ * reporting rather than any case, and it is why the three explicit
+ * widening controls sit beside it.
+ *
+ * THE PAGE'S ORDER IS THE STORE'S AND IT IS TWO CLAIMS RATHER THAN
+ * ONE. Dropping the connector tie-break reddens 2, both in the
+ * positive half and both the cases the fixture was arranged for;
+ * reversing the format comparison reddens 7, of which 2 sit in the
+ * refusal half, where two read-back controls happen to compare a
+ * page as a list. Neither is reachable from the other, and the
+ * tie-break leg would read ZERO against a fixture whose tied rows
+ * had been written in the tie-break's own order — which is the
+ * whole reason the row sorting FIRST is the one written LAST.
+ *
+ * THE DOMAIN SCOPE IS THREE LEGS AND ONE OF THEM IS A DUPLICATE.
+ * Reading the LIST past its domain reddens 13 and counting past it
+ * reddens 10, both spanning the refusal half and the positive one,
+ * and their sets are different — a page holding the wrong rows and
+ * a total describing the wrong collection are separate faults. The
+ * third, making the store's shared `subscriptionsOf` helper ignore
+ * its argument, answers a red set IDENTICAL to the
+ * across-every-domain key leg above, member for member at 104: the
+ * key lookup reads through that same helper, so the two edits are
+ * one edit as far as this file can see. It is recorded rather than
+ * kept, since a leg that cannot be told from its neighbour pins
+ * nothing the neighbour does not.
+ *
+ * THE SERVICE'S OWN POSITIVE LEGS ARE NARROW, WHICH IS WHAT SAYS
+ * THE POSITIVE HALF IS NOT ONE ASSERTION WRITTEN FIVE TIMES. Taking
+ * a page's `total` from the rows in hand reddens 2, and both are
+ * the cases that read a window narrower than their collection —
+ * every other positive case reads the default window over a
+ * collection that fits inside it and cannot report either. Writing
+ * `enabled` true whatever the create submitted reddens exactly 1,
+ * the staged-off case. Folding every created bound to null reddens
+ * 2, one of them in the patch section, since the case that clears a
+ * floor first needs one to have been stored.
+ *
+ * THREE MORE STORE LEGS COVER WHAT A PATCH WRITES AND WHAT A
+ * PROJECTION ANSWERS. Collapsing an absent patched bound and an
+ * explicit `null` reddens 2, one in each half, which is what makes
+ * the create's fold and the patch's clear two claims. Folding a
+ * patched `enabled` through `||` reddens 2, both suspension cases.
+ * And the projection is pinned in both directions at runtime as
+ * well as in the type system: answering a member it never had
+ * reddens 2, the two whole-record cases that also assert the key
+ * set, and dropping one from it reddens 7 across both halves.
  *
  * What no module mutation reaches, by construction: the table
  * guards read only the tables beside them and are aimed at a later
@@ -214,9 +343,16 @@
  * deleted whole. The planted containment control is invisible to
  * every leg for the same reason and deliberately so: it proves the
  * SEARCH, where the rethrow legs prove the SUBJECT.
+ * {@link EVERY_KEY_LISTED} is invisible to all of them too, and for
+ * a third reason: its claim is `check-types`'s rather than this
+ * suite's, so the leg that reports it is a planted column and not
+ * an edit to any rule.
  */
 
-import type { SubscriptionServiceStore } from './service.js';
+import type {
+  SubscriptionPage,
+  SubscriptionServiceStore,
+} from './service.js';
 import type { SubscriptionRecord } from './store.js';
 import type { FieldError } from '../../lib/errors/index.js';
 import type {
@@ -1988,5 +2124,778 @@ describe('what a refusal is allowed to say', () => {
     expect(refusal.cause).toBeInstanceOf(StoreRefusal);
     expect(Object.keys(refusal.toJSON()).sort())
       .toEqual(['code', 'message']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a list scopes to
+// ---------------------------------------------------------------------------
+
+/**
+ * The members `SubscriptionRecord` declares.
+ *
+ * Written out rather than derived, because an interface has no
+ * runtime form to read keys off — and pinned in BOTH directions,
+ * since a one-directional list is exactly as green as no list at
+ * all against the drift that matters. `satisfies` closes the
+ * direction where this names a member the record lacks;
+ * {@link EVERY_KEY_LISTED} closes the one where the record grows a
+ * member nothing here learned about.
+ *
+ * The second direction is the one THIS table needs.
+ * `export_subscriptions` spreads `schedulableColumns()` from
+ * `src/db/schema/scheduling.ts`, and so does `topics`, so a column
+ * added to that one helper reaches `SubscriptionRecord` and every
+ * projection under it with no subscriptions module edited at all —
+ * and every field-by-field assertion below stays green while the
+ * surface answers a member nobody argued onto it.
+ */
+const SUBSCRIPTION_KEYS = [
+  'connectorId',
+  'domainId',
+  'enabled',
+  'format',
+  'id',
+  'intervalSeconds',
+  'maxIntervalSeconds',
+  'minIntervalSeconds',
+  'nextRunAt',
+] as const satisfies readonly (keyof SubscriptionRecord)[];
+
+/** The two members a page carries around its rows. */
+const PAGE_KEYS = [
+  'rows',
+  'total',
+] as const satisfies readonly (keyof SubscriptionPage)[];
+
+/**
+ * `true` only while `L` names every key of `T`.
+ *
+ * The tuple wrapper is load-bearing rather than decoration:
+ * without it the union distributes over the conditional and the
+ * answer is `boolean`, which accepts `true` as an initializer and
+ * pins nothing at all.
+ *
+ * @typeParam T - The type whose keys must all be named.
+ * @typeParam L - The list naming them, as `typeof <the const>`.
+ */
+type CoversEveryKey<T, L extends readonly PropertyKey[]> =
+  [Exclude<keyof T, L[number]>] extends [never] ? true : false;
+
+/** Both lists above, held against the types they describe. */
+type EveryKeyListed =
+  CoversEveryKey<SubscriptionRecord, typeof SUBSCRIPTION_KEYS>
+  & CoversEveryKey<SubscriptionPage, typeof PAGE_KEYS>;
+
+/**
+ * The half of the drift guard `check-types` owns.
+ *
+ * A member added to `SubscriptionRecord` or to `SubscriptionPage`
+ * and to neither list above collapses {@link EveryKeyListed} to
+ * `never` — an intersection of `true` and `false` — and this
+ * initializer is then a TS2322 at this line, before any case can
+ * compare a record against a set that has quietly stopped
+ * describing it. Read in a case below, so it is a symbol this file
+ * uses rather than one lint reports.
+ */
+const EVERY_KEY_LISTED: EveryKeyListed = true;
+
+/** {@link SUBSCRIPTION_KEYS}, sorted at use rather than by hand. */
+const SUBSCRIPTION_KEY_SET: readonly string[] = [...SUBSCRIPTION_KEYS].sort();
+
+/** {@link PAGE_KEYS}, sorted. */
+const PAGE_KEY_SET: readonly string[] = [...PAGE_KEYS].sort();
+
+/** A third domain, invented in the same neutral register. */
+const SEABED = 'example-seabed-mapping';
+
+/**
+ * The format one domain takes to BOTH connectors below.
+ *
+ * A member the fixture plants nowhere, so the widening case adds
+ * the whole pair itself: two rows differing in their destination
+ * alone are what make one format to two connectors a reading off a
+ * PAGE rather than a pair of accepted writes.
+ *
+ * It also sorts before every format the fixture does plant, which
+ * is what lets the ordering case below disagree with the order the
+ * rows were written in.
+ */
+const SHARED_FORMAT = 'email_draft';
+
+/** Twelve hours, as the cadence every write below proposes. */
+const HALF_DAILY = 43200;
+
+/**
+ * Finds one answered subscription by the pair that names it within
+ * its domain.
+ *
+ * @param rows - What a read answered.
+ * @param format - The format half of the pair.
+ * @param connectorId - The destination half.
+ * @returns The row carrying both.
+ * @throws When no row does. A `find` answering `undefined`
+ *   compares equal to another `undefined`, so a case reading a
+ *   stored row back against a write that never landed would
+ *   otherwise pass for nobody's reason.
+ */
+function subscriptionFor(
+  rows: readonly SubscriptionRecord[],
+  format: string,
+  connectorId: number,
+): SubscriptionRecord {
+  const found = rows.find(
+    (row) => row.format === format && row.connectorId === connectorId,
+  );
+
+  if (found === undefined) {
+    throw new Error('no answered row carries that pair');
+  }
+
+  return found;
+}
+
+/**
+ * @param rows - The rows a page answered.
+ * @returns The natural key of each, in the order they came back.
+ *   The PAIR rather than two lists of one column each, because two
+ *   single-column lists leave the pairing unasserted: a page whose
+ *   formats and connectors are each right in isolation can still
+ *   have them on the wrong rows.
+ */
+function pairsOf(rows: readonly SubscriptionRecord[]): string[] {
+  return rows.map((row) => `${row.format}/${row.connectorId}`);
+}
+
+describe('what a list scopes to', () => {
+  it('holds both key sets against the types they describe', () => {
+    // The runtime half of the pin above. What it asserts is not
+    // the `true` — that is a constant — but that the symbol exists
+    // to be read: its VALUE is the statement `check-types` makes
+    // at the declaration, which is a TS2322 the moment either type
+    // grows a member neither list names.
+    expect(EVERY_KEY_LISTED).toBe(true);
+  });
+
+  it('answers the subscriptions of the domain it was given', async () => {
+    // The scoping claim, and the fixture is what makes it sharp:
+    // TRANSIT carries `digest`'s WHOLE pair, so a read reaching
+    // past the domain answers three rows here and cannot tell the
+    // two deliveries apart by their natural key at all. Whole
+    // records rather than pairs, so a page assembled out of the
+    // right pairs and the wrong rows is this case failing.
+    const planted = await plantSubscriptions();
+    const { store } = planted;
+    const here = await listSubscriptions(store, RADAR, WIDE_WINDOW);
+    const there = await listSubscriptions(store, TRANSIT, WIDE_WINDOW);
+
+    expect(here.rows).toStrictEqual([planted.digest, planted.feed]);
+    expect(here.total).toBe(2);
+    expect(there.rows).toStrictEqual([planted.foreign]);
+    expect(there.total).toBe(1);
+
+    // The sorted key SET beside the records the case compares, and
+    // read off the ANSWERED row rather than the planted one. A
+    // member arriving by spread — a column nobody projected — is
+    // invisible to a compare against a record this same module
+    // built, and is exactly what this line catches.
+    const listed = subscriptionFor(
+      here.rows,
+      planted.digest.format,
+      planted.vault.id,
+    );
+
+    expect(Object.keys(listed).sort()).toEqual([...SUBSCRIPTION_KEY_SET]);
+    expect(Object.keys(here).sort()).toEqual([...PAGE_KEY_SET]);
+  });
+
+  it('tells the two rows of one pair apart by their domain', async () => {
+    // The scoping claim read from the other end. The two rows
+    // share a format AND a destination — the whole of what the key
+    // has left once the domain is fixed — so a read answering
+    // EITHER of them under both slugs passes a pair-only
+    // comparison and fails this.
+    const planted = await plantSubscriptions();
+    const { store } = planted;
+    const here = await listSubscriptions(store, RADAR, WIDE_WINDOW);
+    const there = await listSubscriptions(store, TRANSIT, WIDE_WINDOW);
+    const mine = subscriptionFor(
+      here.rows,
+      planted.digest.format,
+      planted.vault.id,
+    );
+    const theirs = subscriptionFor(
+      there.rows,
+      planted.foreign.format,
+      planted.vault.id,
+    );
+
+    expect(mine.format).toBe(theirs.format);
+    expect(mine.connectorId).toBe(theirs.connectorId);
+    expect(mine.domainId).not.toBe(theirs.domainId);
+    expect(mine.id).not.toBe(theirs.id);
+  });
+
+  it('carries one format to two connectors and two to one', async () => {
+    // The two shapes the natural key permits WITHIN one domain,
+    // read off a page rather than off the writes that landed them.
+    // The acceptance controls beside the 409s above say each write
+    // was taken; this says the collection can hold both at once,
+    // which is what a list keyed on any PAIR of the three columns
+    // could not answer. RADAR already takes two formats to
+    // `vault`, so the two writes here are the other shape.
+    const planted = await plantSubscriptions();
+
+    await createSubscription(planted.store, RADAR, {
+      format: SHARED_FORMAT,
+      connectorId: planted.inbox.id,
+      intervalSeconds: HALF_DAILY,
+    });
+    await createSubscription(planted.store, RADAR, {
+      format: SHARED_FORMAT,
+      connectorId: planted.vault.id,
+      intervalSeconds: HALF_DAILY,
+    });
+
+    const page = await listSubscriptions(planted.store, RADAR, WIDE_WINDOW);
+    const pairs = pairsOf(page.rows);
+
+    expect(pairs).toEqual([
+      `${SHARED_FORMAT}/${planted.vault.id}`,
+      `${SHARED_FORMAT}/${planted.inbox.id}`,
+      `${planted.digest.format}/${planted.vault.id}`,
+      `${planted.feed.format}/${planted.vault.id}`,
+    ]);
+    expect(page.total).toBe(4);
+
+    // The two shapes named apart, so a page answering four rows of
+    // one of them fails here rather than passing a list this case
+    // had only read as a whole.
+    const toVault = `/${planted.vault.id}`;
+
+    expect(pairs.filter((pair) => pair.startsWith(SHARED_FORMAT)))
+      .toHaveLength(2);
+    expect(pairs.filter((pair) => pair.endsWith(toVault))).toHaveLength(3);
+  });
+
+  it('orders the page by the format and the connector', async () => {
+    // The order the port promises, over a collection arranged so
+    // that no single-column reading answers it. The two rows
+    // sharing the added format go in LAST and sort FIRST, so a
+    // page in insertion order is wrong; the one written first sits
+    // on the HIGHER connector id, so a stable sort on the format
+    // alone hands that tie back the other way round. The ids are
+    // read rather than the pairs, since the pairs are what the
+    // case above already compared.
+    const planted = await plantSubscriptions();
+    const early = await createSubscription(planted.store, RADAR, {
+      format: SHARED_FORMAT,
+      connectorId: planted.inbox.id,
+      intervalSeconds: HALF_DAILY,
+    });
+    const late = await createSubscription(planted.store, RADAR, {
+      format: SHARED_FORMAT,
+      connectorId: planted.vault.id,
+      intervalSeconds: HALF_DAILY,
+    });
+    const page = await listSubscriptions(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(page.rows.map((row) => row.id))
+      .toEqual([late.id, early.id, planted.digest.id, planted.feed.id]);
+
+    // What makes the line above a claim: both single-column
+    // readings of this collection answer something else.
+    expect(early.id).toBeLessThan(late.id);
+    expect(planted.inbox.id).toBeGreaterThan(planted.vault.id);
+  });
+
+  it('reports the collection rather than the page in hand', async () => {
+    // `total` is a second question rather than the length of the
+    // rows in hand, and the refusal half of this file could not
+    // say so: its one window is wider than every collection it
+    // reads, so a total taken off the rows would have been right
+    // there. This window holds one row of two.
+    const planted = await plantSubscriptions();
+    const page = await listSubscriptions(planted.store, RADAR, {
+      limit: 1,
+      offset: 0,
+    });
+
+    expect(page.rows).toStrictEqual([planted.digest]);
+    expect(page.total).toBe(2);
+  });
+
+  it('answers an empty page for a domain subscribing to none', async () => {
+    // A domain subscribing to nothing and a slug naming no domain
+    // are two states, and this is the one that is not a 404: the
+    // collection is there and empty. The RADAR read beside it is
+    // the control — a module answering an empty page to everything
+    // passes the first half of this and fails the second.
+    const planted = await plantSubscriptions();
+
+    await planted.store.insertDomain({
+      slug: SEABED,
+      name: 'Seabed',
+      settings: {},
+    });
+
+    const empty = await listSubscriptions(planted.store, SEABED, WIDE_WINDOW);
+    const held = await listSubscriptions(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(empty).toStrictEqual({ rows: [], total: 0 });
+    expect(held.total).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a create lands
+// ---------------------------------------------------------------------------
+
+/** The format every create below adds to a domain. */
+const FRESH_FORMAT = 'pdf';
+
+/** A floor no planted row carries, for the create that sets one. */
+const FRESH_FLOOR = 1800;
+
+/** A ceiling no planted row carries, for the same create. */
+const FRESH_CEILING = 259200;
+
+describe('what a create lands', () => {
+  it('answers a row that is unscheduled and enabled', async () => {
+    // The whole row rather than the two members the case is named
+    // for. A null due time is never claimed by `ar-dispatch`, and
+    // an enabled row is the only kind the run-now verb will
+    // schedule — but a create reaching a member nobody submitted
+    // is exactly as wrong and is invisible to a pair of field
+    // reads.
+    const planted = await plantSubscriptions();
+    const created = await createSubscription(planted.store, RADAR, {
+      format: FRESH_FORMAT,
+      connectorId: planted.vault.id,
+      intervalSeconds: HALF_DAILY,
+    });
+
+    expect(created).toStrictEqual({
+      id: created.id,
+      domainId: planted.digest.domainId,
+      format: FRESH_FORMAT,
+      connectorId: planted.vault.id,
+      intervalSeconds: HALF_DAILY,
+      nextRunAt: null,
+      enabled: true,
+      minIntervalSeconds: null,
+      maxIntervalSeconds: null,
+    });
+
+    // The id is the store's own — no body here carries one — and
+    // the sorted key set beside it, since the id is the one member
+    // a whole-row compare cannot pin against anything but itself.
+    expect(created.id).toBeGreaterThan(planted.foreign.id);
+    expect(Object.keys(created).sort()).toEqual([...SUBSCRIPTION_KEY_SET]);
+  });
+
+  it('stages a subscription switched off when asked', async () => {
+    // The control that makes the `enabled: true` above a DEFAULT
+    // rather than a constant: a service writing true whatever was
+    // submitted passes the case above and fails this. It is also
+    // the state the run-now verb refuses, so a subscription staged
+    // off is one an operator enables deliberately rather than one
+    // answering a run-now with a due time nothing would read.
+    const { store, vault } = await plantSubscriptions();
+    const created = await createSubscription(store, RADAR, {
+      format: FRESH_FORMAT,
+      connectorId: vault.id,
+      intervalSeconds: HALF_DAILY,
+      enabled: false,
+    });
+
+    expect(created.enabled).toBe(false);
+    expect(created.nextRunAt).toBeNull();
+  });
+
+  it('folds an absent bound and an explicit null together', async () => {
+    // On a create there is nothing stored for an absent bound to
+    // leave alone, so the two spellings mean one thing and the
+    // service folds them. One bound is submitted null and the
+    // other omitted in the same call, so the two paths are read
+    // against each other rather than one at a time.
+    const { store, vault } = await plantSubscriptions();
+    const created = await createSubscription(store, RADAR, {
+      format: FRESH_FORMAT,
+      connectorId: vault.id,
+      intervalSeconds: HALF_DAILY,
+      minIntervalSeconds: null,
+    });
+
+    expect(created.minIntervalSeconds).toBeNull();
+    expect(created.maxIntervalSeconds).toBeNull();
+  });
+
+  it('lands the bounds a body did supply', async () => {
+    // The control for the case above: a service folding every
+    // bound to null passes it and fails this. Both members, since
+    // a floor written from the ceiling's value is a plausible row
+    // no single-bound read would report.
+    const { store, vault } = await plantSubscriptions();
+    const created = await createSubscription(store, RADAR, {
+      format: FRESH_FORMAT,
+      connectorId: vault.id,
+      intervalSeconds: HALF_DAILY,
+      minIntervalSeconds: FRESH_FLOOR,
+      maxIntervalSeconds: FRESH_CEILING,
+    });
+
+    expect(created.minIntervalSeconds).toBe(FRESH_FLOOR);
+    expect(created.maxIntervalSeconds).toBe(FRESH_CEILING);
+  });
+
+  it('stores the row it answered', async () => {
+    // Read back through the OTHER operation, so the claim is about
+    // what is stored rather than about what one call happened to
+    // answer: a create returning a row it never wrote passes every
+    // case above and fails this.
+    const planted = await plantSubscriptions();
+    const created = await createSubscription(planted.store, RADAR, {
+      format: FRESH_FORMAT,
+      connectorId: planted.vault.id,
+      intervalSeconds: HALF_DAILY,
+    });
+    const page = await listSubscriptions(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(subscriptionFor(page.rows, FRESH_FORMAT, planted.vault.id))
+      .toStrictEqual(created);
+  });
+
+  it('writes into the domain the path addressed', async () => {
+    // The `:slug` reached the WRITE rather than only a lookup: a
+    // create stamping another domain answers a perfectly plausible
+    // row and files it under configuration nobody asked about. The
+    // triple is one RADAR already carries, so a write landing
+    // there would be REFUSED rather than merely misfiled — the
+    // sharper failure, and the reason this pair was chosen over a
+    // free one.
+    const planted = await plantSubscriptions();
+
+    await createSubscription(planted.store, TRANSIT, {
+      format: planted.feed.format,
+      connectorId: planted.vault.id,
+      intervalSeconds: HALF_DAILY,
+    });
+
+    const here = await listSubscriptions(planted.store, TRANSIT, WIDE_WINDOW);
+    const there = await listSubscriptions(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(pairsOf(here.rows)).toEqual([
+      `${planted.foreign.format}/${planted.vault.id}`,
+      `${planted.feed.format}/${planted.vault.id}`,
+    ]);
+    expect(here.total).toBe(2);
+    expect(there.rows).toStrictEqual([planted.digest, planted.feed]);
+  });
+
+  it('counts the new row in the total a page reports', async () => {
+    // `total` is a second question rather than the length of the
+    // rows in hand, so a create the count never saw would leave a
+    // page claiming to be the whole of a domain it is not. Read
+    // through a window of one, so the two numbers cannot agree by
+    // accident.
+    const { store, vault } = await plantSubscriptions();
+
+    await createSubscription(store, RADAR, {
+      format: FRESH_FORMAT,
+      connectorId: vault.id,
+      intervalSeconds: HALF_DAILY,
+    });
+
+    const page = await listSubscriptions(store, RADAR, {
+      limit: 1,
+      offset: 0,
+    });
+
+    expect(page.rows).toHaveLength(1);
+    expect(page.total).toBe(3);
+  });
+
+  it('leaves the subscriptions the domain already had', async () => {
+    // A write lands one row. The two the fixture planted are still
+    // there and still say what they said, which no assertion over
+    // the created row could report.
+    const planted = await plantSubscriptions();
+
+    await createSubscription(planted.store, RADAR, {
+      format: FRESH_FORMAT,
+      connectorId: planted.vault.id,
+      intervalSeconds: HALF_DAILY,
+    });
+
+    const page = await listSubscriptions(planted.store, RADAR, WIDE_WINDOW);
+    const held = planted.vault.id;
+
+    expect(subscriptionFor(page.rows, planted.digest.format, held))
+      .toStrictEqual(planted.digest);
+    expect(subscriptionFor(page.rows, planted.feed.format, held))
+      .toStrictEqual(planted.feed);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a patch retunes
+// ---------------------------------------------------------------------------
+
+/** Six hours, as the cadence a patch below moves a row to. */
+const SIX_HOURLY = 21600;
+
+/** A floor above the one `feed` was planted with. */
+const RAISED_FLOOR = 7200;
+
+/** A ceiling below the one it was planted with. */
+const LOWERED_CEILING = 172800;
+
+describe('what a patch retunes', () => {
+  it('moves the cadence and leaves the bounds alone', async () => {
+    // Compared against the row as it was rather than field by
+    // field: a patch reaching a second member answers a plausible
+    // subscription and quietly changes what it delivers or where.
+    // `feed` carries both bounds, so they are in the compare by
+    // being absent from the override — a patch writing a bound
+    // from the cadence it was handed is exactly the shape a
+    // field-by-field read would pass.
+    const { store, feed } = await plantSubscriptions();
+    const patched = await patchSubscription(store, feed.id, {
+      intervalSeconds: SIX_HOURLY,
+    });
+
+    expect(patched).toStrictEqual({ ...feed, intervalSeconds: SIX_HOURLY });
+    expect(feed.intervalSeconds).not.toBe(SIX_HOURLY);
+  });
+
+  it('stores the cadence it retuned', async () => {
+    // Read back through the list, so the claim is about the stored
+    // row rather than about what the patch answered. A module
+    // answering a row it never wrote passes the case above.
+    const { store, feed, vault } = await plantSubscriptions();
+
+    await patchSubscription(store, feed.id, {
+      intervalSeconds: SIX_HOURLY,
+    });
+
+    const page = await listSubscriptions(store, RADAR, WIDE_WINDOW);
+
+    expect(subscriptionFor(page.rows, feed.format, vault.id))
+      .toStrictEqual({ ...feed, intervalSeconds: SIX_HOURLY });
+  });
+
+  it('moves both interval bounds and leaves the cadence', async () => {
+    // `feed` was planted with both bounds set, so this is the
+    // write that MOVES them rather than the one that adds them.
+    // `intervalSeconds` is in the compare by being absent from the
+    // override, which is the case above read the other way round.
+    const { store, feed } = await plantSubscriptions();
+    const patched = await patchSubscription(store, feed.id, {
+      minIntervalSeconds: RAISED_FLOOR,
+      maxIntervalSeconds: LOWERED_CEILING,
+    });
+
+    expect(patched).toStrictEqual({
+      ...feed,
+      minIntervalSeconds: RAISED_FLOOR,
+      maxIntervalSeconds: LOWERED_CEILING,
+    });
+    expect(feed.minIntervalSeconds).not.toBe(RAISED_FLOOR);
+    expect(feed.maxIntervalSeconds).not.toBe(LOWERED_CEILING);
+  });
+
+  it('sets a bound on a subscription that carried none', async () => {
+    // The other transition, and the one the case above cannot
+    // make: `digest` was created with neither bound, so a store
+    // treating a stored null as nothing to write passes the move
+    // and fails this.
+    const { store, digest } = await plantSubscriptions();
+    const patched = await patchSubscription(store, digest.id, {
+      minIntervalSeconds: RAISED_FLOOR,
+      maxIntervalSeconds: LOWERED_CEILING,
+    });
+
+    expect(digest.minIntervalSeconds).toBeNull();
+    expect(digest.maxIntervalSeconds).toBeNull();
+    expect(patched).toStrictEqual({
+      ...digest,
+      minIntervalSeconds: RAISED_FLOOR,
+      maxIntervalSeconds: LOWERED_CEILING,
+    });
+  });
+
+  it('clears one bound and leaves the other alone', async () => {
+    // The third request the two bounds distinguish here and the
+    // create above folds away: absent leaves the stored bound
+    // alone, a number sets it, and `null` CLEARS it. A `??`
+    // anywhere between the schema and the port collapses the first
+    // and the third, and the ceiling in this same call is what
+    // says the clear reached one member rather than both.
+    const { store, feed } = await plantSubscriptions();
+    const patched = await patchSubscription(store, feed.id, {
+      minIntervalSeconds: null,
+    });
+
+    expect(patched).toStrictEqual({ ...feed, minIntervalSeconds: null });
+    expect(feed.minIntervalSeconds).not.toBeNull();
+    expect(patched.maxIntervalSeconds).toBe(feed.maxIntervalSeconds);
+  });
+
+  it('suspends a subscription without cancelling it', async () => {
+    // `enabled` is the column the schema provides for stopping a
+    // delivery, and this is the whole of what a suspension writes:
+    // the format, the destination and the cadence stay, which is
+    // what makes it reversible and what makes it different from
+    // the delete below.
+    const { store, digest } = await plantSubscriptions();
+    const patched = await patchSubscription(store, digest.id, {
+      enabled: false,
+    });
+
+    expect(digest.enabled).toBe(true);
+    expect(patched).toStrictEqual({ ...digest, enabled: false });
+  });
+
+  it('keeps a suspended subscription on its page', async () => {
+    // `enabled` is not a filter on this read. A list quietly
+    // hiding suspended rows would leave an operator with no way to
+    // find the delivery they had just stopped, and every count in
+    // the refusal half of this file would still add up.
+    const { store, digest, vault } = await plantSubscriptions();
+
+    await patchSubscription(store, digest.id, { enabled: false });
+
+    const page = await listSubscriptions(store, RADAR, WIDE_WINDOW);
+
+    expect(page.total).toBe(2);
+    expect(subscriptionFor(page.rows, digest.format, vault.id).enabled)
+      .toBe(false);
+  });
+
+  it('brings a suspended subscription back', async () => {
+    // The member is not one-way, and this is what says so. A
+    // service folding `enabled` through `||` rather than `??`
+    // writes true for a submitted false and fails the suspension
+    // above; one that had stopped writing the column at all passes
+    // that case only while the stored value already differed, and
+    // fails here.
+    const { store, digest } = await plantSubscriptions();
+
+    await patchSubscription(store, digest.id, { enabled: false });
+
+    const revived = await patchSubscription(store, digest.id, {
+      enabled: true,
+    });
+
+    expect(revived).toStrictEqual(digest);
+  });
+
+  it('retunes the subscription it named and no other', async () => {
+    // The whole of both domains read back: three rows, one cadence
+    // moved. A patch reaching more rows than the id it was given
+    // answers the same row and is invisible to every case above.
+    // The second domain is in the sweep because its subscription
+    // carries `digest`'s whole pair, so a patch keyed on the
+    // triple rather than on the id would reach across the two.
+    const planted = await plantSubscriptions();
+
+    await patchSubscription(planted.store, planted.digest.id, {
+      intervalSeconds: SIX_HOURLY,
+    });
+
+    const { store } = planted;
+    const here = await listSubscriptions(store, RADAR, WIDE_WINDOW);
+    const there = await listSubscriptions(store, TRANSIT, WIDE_WINDOW);
+
+    expect(subscriptionFor(here.rows, planted.feed.format, planted.vault.id))
+      .toStrictEqual(planted.feed);
+    expect(there.rows).toStrictEqual([planted.foreign]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a delete takes
+// ---------------------------------------------------------------------------
+
+describe('what a delete takes', () => {
+  it('answers nothing and leaves the sibling standing', async () => {
+    // Nothing in schema v2 points at `export_subscriptions`, so
+    // this delete has neither a guard nor a confirmation to give
+    // it: the whole of what it answers is nothing, and the whole
+    // of what it did is read back off the page. The sibling is
+    // compared as a WHOLE record — a delete that took the right
+    // row and edited the one beside it answers the same page of
+    // pairs.
+    const planted = await plantSubscriptions();
+
+    await expect(deleteSubscription(planted.store, planted.digest.id))
+      .resolves.toBeUndefined();
+
+    const page = await listSubscriptions(planted.store, RADAR, WIDE_WINDOW);
+
+    expect(page.rows).toStrictEqual([planted.feed]);
+    expect(page.total).toBe(1);
+  });
+
+  it('leaves the second domain subscribed to that pair', async () => {
+    // A subscription in each domain carries the same format and
+    // the same destination, so a delete keyed on the triple rather
+    // than on the id takes both and passes any count that only
+    // looked at one of them.
+    const planted = await plantSubscriptions();
+
+    await deleteSubscription(planted.store, planted.digest.id);
+
+    const there = await listSubscriptions(
+      planted.store,
+      TRANSIT,
+      WIDE_WINDOW,
+    );
+
+    expect(there.rows).toStrictEqual([planted.foreign]);
+    expect(there.total).toBe(1);
+  });
+
+  it('answers 404 to a second delete of the same id', async () => {
+    // The row is gone rather than merely unlisted, which no read
+    // above can say: a delete that unlinked the row without
+    // removing it answers this second call as a success.
+    const { store, digest } = await plantSubscriptions();
+
+    await deleteSubscription(store, digest.id);
+
+    const refusal = await refusalFrom(
+      () => deleteSubscription(store, digest.id),
+    );
+
+    expect(refusal).toBeInstanceOf(NotFoundError);
+    expect(refusal.statusCode).toBe(404);
+  });
+
+  it('frees the triple the delete took out of the domain', async () => {
+    // The natural key went with the row rather than outliving it,
+    // which neither read above can say: an index keeping the entry
+    // answers the same page and refuses this create as a
+    // duplicate.
+    const { store, digest, vault } = await plantSubscriptions();
+
+    await deleteSubscription(store, digest.id);
+
+    const created = await createSubscription(store, RADAR, {
+      format: digest.format,
+      connectorId: vault.id,
+      intervalSeconds: HALF_DAILY,
+    });
+
+    expect(created.format).toBe(digest.format);
+    expect(created.connectorId).toBe(vault.id);
+
+    // A new row rather than the old one back: a sequence does not
+    // roll back over a row that went, and the cadence the
+    // cancelled subscription delivered at did not come with the
+    // triple it freed.
+    expect(created.id).not.toBe(digest.id);
+    expect(created.intervalSeconds).toBe(HALF_DAILY);
   });
 });
