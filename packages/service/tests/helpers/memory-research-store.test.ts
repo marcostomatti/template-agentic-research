@@ -1,10 +1,10 @@
 /**
- * `tests/helpers/memory-research-store.ts` in all six ports it
+ * `tests/helpers/memory-research-store.ts` in all seven ports it
  * implements — the claims that make it a second implementation of
  * `DomainStore`, of `TaxonomyStore` WHOLE with categories and terms
- * together, of `PersonaStore`, of `TopicStore`, of `SourceStore` and
- * of `SettingsStore`, rather than a bag that stores what it is
- * handed.
+ * together, of `PersonaStore`, of `TopicStore`, of `SourceStore`, of
+ * `ConnectorStore` and of `SettingsStore`, rather than a bag that
+ * stores what it is handed.
  *
  * THAT IT REFUSES WHAT POSTGRES REFUSES. Every refusal case names
  * the `reason` a SQLSTATE classifies to and the constraint the
@@ -37,8 +37,16 @@
  * and `documents_source_id_sources_id_fk` beside
  * `finding_sightings_source_id_sources_id_fk`, two `ON DELETE no
  * action` keys in other tables that each hold the delete of a source
- * their rows still cite. The settings half adds NONE, and that is a
- * measurement rather than a gap — see below.
+ * their rows still cite. The connectors half adds THREE and reaches
+ * them from three calls as well, in a shape that is the sources
+ * half's mirrored: `connectors_kind_name_unique` refusing on an
+ * INSERT and on an UPDATE alike because `name` is patchable,
+ * `connectors_kind_check` refusing on the INSERT alone because
+ * `kind` is not, and
+ * `export_subscriptions_connector_id_connectors_id_fk`, a single
+ * `ON DELETE no action` key in another table holding the delete of a
+ * connector its rows still name. The settings half adds NONE, and
+ * that is a measurement rather than a gap — see below.
  *
  * THAT IT REFUSES THEM IN THE MEASURED ORDER. Four cases exist only
  * for that, because a request carrying two faults at once is the
@@ -175,6 +183,81 @@
  * thrown error, and offering a caller a tidy status the database
  * never gave is the failure being ruled out.
  *
+ * THAT THE CONNECTORS HALF REFUSES TWO MECHANISMS SITTING ON
+ * DIFFERENT WRITES, which is the mirror of the sources half rather
+ * than a copy of it. `connectors_kind_name_unique` refuses a kind
+ * and name pair the deployment already carries on an INSERT and on
+ * an UPDATE alike, because `name` is patchable;
+ * `connectors_kind_check` refuses a `kind` outside `CONNECTOR_KINDS`
+ * on the INSERT alone, because `kind` is deliberately absent from
+ * `ConnectorPatch` and no update here is written against the CHECK.
+ * There is no order between them and none is claimed: the key opens
+ * on the very column the CHECK constrains, so a write proposing a
+ * kind outside the tuple can duplicate nothing.
+ *
+ * THAT ITS KEY IS PER KIND AND ITS CHECK IS READ OFF THE RUNTIME
+ * TUPLE. Three cases widen rather than narrow, which is the
+ * direction a refusal case cannot reach on its own: the same name
+ * under a second kind is accepted, a rename onto a name a second
+ * kind holds is accepted, and every member of `CONNECTOR_KINDS` is
+ * looped over and accepted rather than a list written out here. That
+ * last one is two-directional for free — a member ADDED to the tuple
+ * reaches the case, and a store narrowing the guard to some of them
+ * fails it — and it is what keeps the refusal case above from being
+ * satisfied by a store that refuses every kind.
+ *
+ * THAT ITS DELETE IS REFUSED FROM OUTSIDE THE ROW BY EXACTLY ONE
+ * KEY. `export_subscriptions_connector_id_connectors_id_fk` is `ON
+ * DELETE no action`, so a connector an export subscription still
+ * names holds its own delete — one key rather than the sources
+ * half's two, re-derived from the generated SQL rather than taken
+ * from a plan, which is the reading that half's plan got wrong. The
+ * refusal case carries its positive control in the same body, the
+ * SAME call over the sibling nothing names, and the count case
+ * beside it reads what a `409` would carry.
+ *
+ * THAT NO DOMAIN DELETE REACHES IT AT ALL, which is the claim only
+ * this half and the settings half can make and which they make
+ * differently. `connectors` carries no `domain_id`, so a connector
+ * outlives every domain that named it; the case deletes a domain
+ * holding sources and a topic, asserts THOSE are gone as its control
+ * that the delete reached anything, and then asserts all three
+ * connectors are standing. A store sparing the connectors by sparing
+ * everything fails it.
+ *
+ * THAT ITS PAGE IS ORDERED BY THE PAIR AND NARROWED BY A FILTER
+ * RATHER THAN SCOPED BY AN OWNER. The fixture is written in an order
+ * no read answers — the notebook goes in first and its name sorts
+ * before both of the others — so one case tells an ordering by
+ * `(kind, name)` from an ordering by insertion and from one by name
+ * alone. The kind is a FILTER and not a scope: an absent one answers
+ * every row rather than none, and a kind no row carries is an empty
+ * page rather than a refusal. The count reads through the same
+ * predicate, which one case holds against the page it describes.
+ *
+ * THAT ITS `config` IS COPIED IN BOTH DIRECTIONS, AND THAT THIS IS
+ * THE ONE COPIED DOCUMENT IN THIS FILE THAT IS A LIVE CREDENTIAL.
+ * The port answers the column AS STORED — masking is
+ * `src/connectors/service.ts`'s, one layer up — so what the copy
+ * rules out is a caller writing into a stored secret through a
+ * member the port declares `readonly`. There is one case per ANSWER
+ * SITE rather than one per helper, each mutating one level down and
+ * comparing against the fixture FUNCTION rather than against a
+ * record an earlier call answered: a store handing out its own
+ * object has aliased the two, and the comparison would then hold one
+ * lie against itself and pass. A seventh case reads the credential
+ * out of the REFUSAL as well, counted the way the sibling halves
+ * count a name, because a refusal built over a config is the first
+ * thing on this surface that could carry one onward.
+ *
+ * THAT ITS `config` IS REPLACED WHOLE RATHER THAN MERGED INTO, which
+ * on this table has a sharper consequence than on a domain's
+ * `settings` and is asserted rather than smoothed over: a patch
+ * omitting a secret's key has CLEARED that secret, and the request
+ * doing it by accident is byte-identical to the one doing it on
+ * purpose. Under a merge the credentials survive the case that
+ * replaces the config with an endpoint alone.
+ *
  * THAT THE SETTINGS HALF REFUSES NOTHING AT ALL, which no case here
  * can assert directly and which is therefore stated rather than
  * pinned. `operator_settings` carries two mechanisms — a second
@@ -214,9 +297,9 @@
  *
  * THAT NOTHING MUTABLE IS SHARED ACROSS THE BOUNDARY. Every `Date`,
  * every `settings` payload — a domain's and the operator's alike
- * — and every category, term, persona, topic and source row is
- * copied in both directions, so a caller cannot write into stored
- * state through a field the port declares `readonly`. A topic
+ * — and every category, term, persona, topic, source and connector
+ * row is copied in both directions, so a caller cannot write into
+ * stored state through a field the port declares `readonly`. A topic
  * carries two mutable members rather than one and they are separate
  * claims: its
  * `searchTerms` list, which a caller could otherwise push a term
@@ -312,7 +395,7 @@
  * write from a position the rule allows, the delete-refused case
  * removes the childless row with the very same call, and the term
  * foreign-key case writes the same row into a category that exists.
- * The three containment readings over a serialised error count
+ * The containment readings over a serialised error count
  * occurrences rather than asserting absence, with the same count
  * taken over a planted message: a search that would find nothing
  * anywhere reports a clean refusal and a leaking one alike.
@@ -322,6 +405,112 @@
  * rather than as a count. Every figure below moves again when a
  * later task adds a case to this file, so re-derive the whole grid
  * rather than appending legs for the new rows.
+ *
+ * THE CONNECTORS HALF FOLLOWED THE FILE'S SUBSTITUTE TOO, and the
+ * argument that closes it is stronger here than for either half
+ * above. Read the case totals below as SNAPSHOTS taken at each
+ * half's landing rather than as claims about today: the 294 the
+ * sources paragraph states and the 228 the topics one states were
+ * each true when written, which is also why the paragraph above says
+ * every figure moves again when a later task adds a case.
+ *
+ * The file holds 328 cases, of which 34 are this half's. What was
+ * run is this half's OWN twenty-three legs plus the EIGHT
+ * recorded ones a new half can reach — the same eight the sources
+ * half re-ran. The rest are closed by the same reasoning: every old
+ * case is untouched and every non-connector path in the store is
+ * byte-identical, with not even the one added line in `deleteDomain`
+ * the topics and sources halves each needed, since `connectors`
+ * hangs off no domain and the cascade was left exactly as it was.
+ * The liveness control held on all eight — each recorded leg's red
+ * set OUTSIDE the connectors describes came back at exactly its
+ * recorded figure (95, 7, 59, 33, 48, 8, 6 and 4), which is what
+ * says these are the legs the prose names and not eight new ones
+ * that happen to redden something.
+ *
+ * THE CONNECTORS HALF MOVED EXACTLY ONE OF THOSE EIGHT, by one case,
+ * and that is the narrowest a half has moved this file — narrower
+ * than the settings half's three, and for the same structural reason
+ * read from the other end. `connectors` hangs off nothing, so only a
+ * connectors case that writes elsewhere ON PURPOSE can reach another
+ * half's rules at all, and there is exactly one: the cascade case,
+ * which plants a source and a topic so that the domain delete it
+ * drives has something to be seen taking. Refusing every topic
+ * insert as a duplicate went 48 to 49 through it. The other seven
+ * are identical member for member — no connectors case plants a
+ * category, a term or a persona, reads a domain's dates or touches
+ * the operator's row.
+ *
+ * Twenty-three connector legs redden between 0 and 32, and EVERY red
+ * one of them lands wholly inside the connectors describes — the
+ * mirror of the paragraph above. Refusing every connector insert is
+ * this half's whole-half control and reddens 32 of the 34; the two
+ * survivors are exactly the cases that write no connector at all
+ * (the CHECK refusal, which needs no stored row to be refused, and
+ * the delete answering false for an id nothing carries).
+ *
+ * The two write mechanisms redden DISJOINT sets, which is the
+ * sources half's split arriving at different writes: skipping the
+ * key on the INSERT reddens 5, and ALL FIVE are `refusalFrom`
+ * throwing rather than an assertion failing — the id-burn case
+ * included, which would otherwise have read the wrong id and passed
+ * for nobody's reason. Skipping it on the UPDATE reddens 1, the
+ * rename the kind already holds. Skipping the CHECK reddens 2, one
+ * of them in the id describe, because the burn is pinned once per
+ * mechanism; taking the id after both checks reddens exactly those 2
+ * id cases and nothing else.
+ *
+ * The two WIDENING legs are what the acceptance cases exist for and
+ * they are disjoint from the narrowing ones. Refusing a connector in
+ * conflict with ITSELF reddens 3 — the case named for it plus two
+ * ordinary patch cases, which is what says those cases exercise the
+ * rule rather than passing over it, since a patch naming no name
+ * still resolves to the stored one. Making the key global rather
+ * than per kind reddens 3 across two describes, both sibling-kind
+ * acceptance cases and the tuple loop. Narrowing the tuple to three
+ * of its four members reddens exactly 1, that loop, which no
+ * refusal case in this half can reach.
+ *
+ * The three delete legs redden 2, 1 and 1 and NEST rather than
+ * standing apart: accepting the delete while subscriptions name the
+ * row reddens 2, naming another table's key on the refusal reddens
+ * 1 inside it, and answering a planted count as zero reddens the
+ * count case alone, which is the one the guard's `409` is read
+ * through.
+ *
+ * The four read legs over the list are two NESTED pairs. Ordering by
+ * insertion reddens 4 and ordering by name alone reddens 2 inside it
+ * — the fixture is written so that both are wrong in different
+ * places — and the fourth red of the first is a config case, since
+ * the copy leg reads the first row of a filtered page. Ignoring the
+ * filter on the page reddens 2 and ignoring it on the COUNT reddens
+ * 3, overlapping in 2: the third is the key case that counts one
+ * kind after writing into another, which is what says the count is
+ * a claim of its own rather than the page's length. Ignoring the
+ * window reddens 1, the one case that pages.
+ *
+ * The copy legs are one per ANSWER SITE and they NEST, which is the
+ * term half's shape rather than the category half's and for the term
+ * half's reason: `listConnectors` maps through the copy helper
+ * instead of building an object of its own. Answering the stored
+ * connector by reference reddens 3 — the read, the list and the
+ * fresh-object case — and answering it by reference from the READ
+ * alone reddens 2, inside it. Storing the object an insert was
+ * handed and storing the one a patch was handed redden ONE CASE EACH
+ * and are disjoint, which is the split the sources half could not
+ * make with two documents on one write. Merging the config rather
+ * than replacing it reddens 2. Clearing every connector on a domain
+ * delete reddens 1, the widening leg the cascade case exists for.
+ *
+ * And writing on a connector patch that names no member reddens
+ * NOTHING, the SIXTH honest zero in this file and the same one the
+ * category, term, topic and source legs measure, for the same
+ * reason: the early return exists because drizzle throws on an empty
+ * update list, and this store has no such throw to observe. It keeps
+ * the WEAKER pinning of those four rather than the persona one —
+ * `src/connectors/db-store.ts` and a live case patching a connector
+ * with an empty patch are both later tasks, so today the branch is
+ * pinned by `src/connectors/store.ts`'s TSDoc and by nothing else.
  *
  * THE SOURCES HALF DID NOT FOLLOW IT EITHER, and it followed the
  * TOPICS half's substitute instead — which the paragraph below sets
@@ -768,6 +957,10 @@ import type {
   MemoryResearchStore,
   MemorySourceDocument,
 } from './memory-research-store.js';
+import type {
+  ConnectorRecord,
+  InsertConnectorInput,
+} from '../../src/connectors/store.js';
 import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type { OperatorSettings } from '../../src/db/schema/settings.js';
 import type {
@@ -795,6 +988,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 
 import {
+  CONNECTOR_KINDS,
   DOCUMENT_PARSE_STATUSES,
   SOURCE_KINDS,
 } from '../../src/db/schema/values.js';
@@ -810,6 +1004,16 @@ const TRANSIT = 'example-urban-transit';
 
 /** A window wide enough to read every row any case here writes. */
 const WHOLE_COLLECTION = { limit: 50, offset: 0 };
+
+/**
+ * The connector filter that narrows nothing.
+ *
+ * `{}` rather than an omitted argument, because `ConnectorFilter` is
+ * REQUIRED on both methods that take it and only its member is
+ * optional: an optional parameter would make an omitted argument mean
+ * something an implementation had to decide.
+ */
+const EVERY_KIND = {};
 
 /** Three taxonomy keys, in the same neutral register as the slugs. */
 const PLATFORMS = 'platforms';
@@ -1484,6 +1688,164 @@ async function onlyFailure(
   }
 
   return row;
+}
+
+/**
+ * Three connector names, in the same neutral register as the slugs.
+ *
+ * The two under one kind sort in the order they are written; the
+ * third sorts BEFORE both by name and AFTER both by kind, which is
+ * what lets one fixture tell an ordering by the pair from an
+ * ordering by either column alone.
+ */
+const MODEL_HOST = 'example-model-host';
+const SPARE_MODEL = 'example-spare-model';
+const ARCHIVE_NOTEBOOK = 'example-archive-notebook';
+
+/** Where a connector's client would reach, on the unresolvable TLD. */
+const MODEL_ENDPOINT = 'https://example.invalid/v1/chat';
+
+/**
+ * A stand-in credential, and the needle the containment case counts.
+ *
+ * `connectors.config` is the one column reached in this file the
+ * schema DECLARES one to be held in — `src/db/schema/sources.ts`
+ * says whatever authenticates the call is held there. The store
+ * answers it AS STORED, masking being `src/connectors/service.ts`'s,
+ * so what a case here can ask is narrower than what the sentinel
+ * capture asks of the assembled service: that a REFUSAL built over a
+ * config carrying this does not carry it onward.
+ */
+const SECRET_TOKEN = 'example-secret-token-value';
+
+/**
+ * A connector config with something one level down to write through.
+ *
+ * A function rather than a constant, for the reason
+ * {@link domainInput} is one: the copy cases WRITE into the config
+ * they submitted, which is the whole point of them, and a shared
+ * object would carry that write into every case after it.
+ *
+ * @param token - What to store as the credential.
+ * @returns A config naming an endpoint and a nested secret.
+ */
+function connectorConfig(
+  token: string = SECRET_TOKEN,
+): Record<string, unknown> {
+  return { endpoint: MODEL_ENDPOINT, credentials: { apiKey: token } };
+}
+
+/** What {@link addConnector} defaults when a case is not about it. */
+type ConnectorDefaults = Partial<
+  Omit<InsertConnectorInput, 'kind' | 'name'>
+>;
+
+/**
+ * Inserts a connector, defaulting the member a case is not about.
+ *
+ * `config` is required on the port — a default is a decision, and
+ * the port takes none — so the default lives here, where a case that
+ * cares about it can see itself overriding it. Empty is what the
+ * column defaults to and what `src/connectors/service.ts` supplies,
+ * so it is the right default rather than a convenient one.
+ *
+ * @param store - The store to write to.
+ * @param kind - The family the row fronts, and half its natural key.
+ * @param name - Which instance of that family, and the other half.
+ * @param values - The one member a case may care about.
+ * @returns The stored row.
+ */
+async function addConnector(
+  store: MemoryResearchStore,
+  kind: string,
+  name: string,
+  values: ConnectorDefaults = {},
+): Promise<ConnectorRecord> {
+  return store.insertConnector({
+    kind,
+    name,
+    config: values.config ?? {},
+  });
+}
+
+/**
+ * A deployment carrying three connectors across two kinds.
+ *
+ * WRITTEN IN AN ORDER NO READ ANSWERS: the notebook goes in first
+ * and holds id 1, so a page reading in insertion order is
+ * distinguishable from one reading by the pair. Two rows share a
+ * kind, which is what a per-kind claim needs, and the third gives
+ * the filter something to leave out and the delete something to
+ * leave standing.
+ *
+ * NO DOMAIN, which is this fixture's one structural difference from
+ * every sibling above: `connectors` hangs off nothing, so there is
+ * nothing to insert one under.
+ *
+ * @param store - The store to write to.
+ * @returns The three rows, named for what each fronts.
+ */
+async function seedConnectors(
+  store: MemoryResearchStore,
+): Promise<{
+  notebook: ConnectorRecord;
+  spare: ConnectorRecord;
+  model: ConnectorRecord;
+}> {
+  const notebook = await addConnector(
+    store,
+    'notebook',
+    ARCHIVE_NOTEBOOK,
+  );
+  const spare = await addConnector(store, 'llm', SPARE_MODEL);
+  const model = await addConnector(store, 'llm', MODEL_HOST, {
+    config: connectorConfig(),
+  });
+
+  return { notebook, spare, model };
+}
+
+/**
+ * Reads a connector that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no row carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readConnector(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<ConnectorRecord> {
+  const row = await store.findConnectorById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored connector under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * The credential record a stored config must carry, ready to be
+ * written into.
+ *
+ * @param config - The config to reach into.
+ * @returns Its `credentials`, cast writable — which is exactly the
+ *   promise a shared reference would break behind the type system's
+ *   back.
+ * @throws When the config carries none, so a copy case cannot
+ *   quietly mutate nothing and pass for nobody's reason.
+ */
+function credentialsOf(config: unknown): Record<string, unknown> {
+  const held = (config as { credentials?: unknown }).credentials;
+
+  if (held === undefined || held === null) {
+    throw new Error('expected the config to carry credentials');
+  }
+
+  return held as Record<string, unknown>;
 }
 
 /**
@@ -6093,6 +6455,567 @@ describe('the planted capture instant crossing the boundary', () => {
 
     expect(first.capturedAt).not.toBe(second.capturedAt);
     expect(capturedAt(first)).toBe(capturedAt(second));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The key this half refuses on, and the CHECK that sits beside it
+// ---------------------------------------------------------------------------
+
+describe('the connectors_kind_name_unique key', () => {
+  it('refuses a second connector on a pair already held', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    const refusal = await refusalFrom(
+      () => addConnector(store, 'llm', MODEL_HOST),
+    );
+
+    expect(refusal).toBeInstanceOf(StoreRefusal);
+
+    // The positive control, in this body rather than in a sibling
+    // case: a store refusing every write passes the assertion above.
+    const accepted = await addConnector(store, 'llm', 'example-third');
+
+    expect(accepted.name).toBe('example-third');
+    expect(await store.countConnectors(EVERY_KIND)).toBe(4);
+  });
+
+  it('names the mechanism and the constraint that refused', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    const refusal = await refusalFrom(
+      () => addConnector(store, 'llm', MODEL_HOST),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe('connectors_kind_name_unique');
+  });
+
+  it('takes the same name under a second kind', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    // The key is `(kind, name)` and not `name`, so this is the
+    // widening control: a store holding names globally unique refuses
+    // a write the database takes. One name under two kinds is
+    // ordinary, which is what `src/connectors/store.ts` says the pair
+    // is for.
+    const accepted = await addConnector(store, 'search', MODEL_HOST);
+
+    expect(accepted.kind).toBe('search');
+    expect(accepted.name).toBe(MODEL_HOST);
+    expect(await store.countConnectors({ kind: 'llm' })).toBe(2);
+  });
+
+  it('leaves the standing connector exactly as it was', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    await refusalFrom(() => addConnector(store, 'llm', MODEL_HOST, {
+      config: { endpoint: 'https://example.invalid/rewritten' },
+    }));
+
+    expect(await readConnector(store, model.id)).toStrictEqual(model);
+    expect(await store.countConnectors(EVERY_KIND)).toBe(3);
+  });
+
+  it('puts neither the name nor the secret in what it threw', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    const refusal = await refusalFrom(
+      () => addConnector(store, 'llm', MODEL_HOST, {
+        config: connectorConfig(),
+      }),
+    );
+    const serialised = JSON.stringify({
+      ...refusal,
+      message: refusal.message,
+      stack: refusal.stack,
+    });
+
+    // The name is what every sibling half counts; the CREDENTIAL is
+    // what only this one can. A refusal built over a config is the
+    // first thing on this surface that could carry one onward.
+    expect(countOccurrences(serialised, MODEL_HOST)).toBe(0);
+    expect(countOccurrences(serialised, SECRET_TOKEN)).toBe(0);
+
+    // The same searches over a message that DOES carry both, so the
+    // two zeros are readings rather than searches finding nothing
+    // anywhere.
+    const planted = JSON.stringify({
+      ...refusal,
+      message: `duplicate key ${MODEL_HOST} ${SECRET_TOKEN}`,
+    });
+
+    expect(countOccurrences(planted, MODEL_HOST)).toBe(1);
+    expect(countOccurrences(planted, SECRET_TOKEN)).toBe(1);
+  });
+
+  it('refuses a rename onto a name the kind already holds', async () => {
+    const store = createMemoryResearchStore();
+    const { model, spare } = await seedConnectors(store);
+
+    // The same mechanism on an UPDATE, which this table reaches
+    // because `name` is patchable: both writes open on the key.
+    const refusal = await refusalFrom(
+      () => store.updateConnector(spare.id, { name: MODEL_HOST }),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe('connectors_kind_name_unique');
+    expect(await readConnector(store, spare.id)).toStrictEqual(spare);
+    expect(await readConnector(store, model.id)).toStrictEqual(model);
+  });
+
+  it('takes a rename onto a name a SECOND kind holds', async () => {
+    const store = createMemoryResearchStore();
+    const { spare, notebook } = await seedConnectors(store);
+
+    // The resulting pair is checked within the STORED kind, since
+    // `kind` is not patchable: a name another kind carries is not a
+    // conflict, which is the same widening control the insert case
+    // makes and the patch has to make for itself.
+    const patched = await store.updateConnector(spare.id, {
+      name: ARCHIVE_NOTEBOOK,
+    });
+
+    expect(patched?.name).toBe(ARCHIVE_NOTEBOOK);
+    expect(patched?.kind).toBe('llm');
+    expect(await readConnector(store, notebook.id)).toStrictEqual(notebook);
+  });
+
+  it('takes a patch writing a name back over itself', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    // A row is not in conflict with itself. A store looking the pair
+    // up without excluding the row being written refuses this.
+    const patched = await store.updateConnector(model.id, {
+      name: MODEL_HOST,
+      config: { endpoint: MODEL_ENDPOINT },
+    });
+
+    expect(patched?.name).toBe(MODEL_HOST);
+    expect(patched?.config).toStrictEqual({ endpoint: MODEL_ENDPOINT });
+  });
+});
+
+describe('the connectors_kind_check', () => {
+  it('refuses an insert whose kind is outside the tuple', async () => {
+    const store = createMemoryResearchStore();
+
+    const refusal = await refusalFrom(
+      () => addConnector(store, 'telepathy', MODEL_HOST),
+    );
+
+    expect(refusal.reason).toBe('check-violation');
+    expect(refusal.constraint).toBe('connectors_kind_check');
+    expect(await store.countConnectors(EVERY_KIND)).toBe(0);
+  });
+
+  it('takes every member of the tuple it is held to', async () => {
+    const store = createMemoryResearchStore();
+
+    // The acceptance control, looped over the RUNTIME tuple rather
+    // than a list written out here: a member added to
+    // `CONNECTOR_KINDS` reaches this case, and a store narrowing the
+    // guard to some of them fails it. Without this, a store refusing
+    // every kind passes the case above.
+    for (const kind of CONNECTOR_KINDS) {
+      const accepted = await addConnector(store, kind, MODEL_HOST);
+
+      expect(accepted.kind).toBe(kind);
+    }
+
+    expect(await store.countConnectors(EVERY_KIND))
+      .toBe(CONNECTOR_KINDS.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sequence behind connectors.id, and the refusals that burn it
+// ---------------------------------------------------------------------------
+
+describe('the connector id sequence', () => {
+  it('hands the first connector id 1', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const inserted = await addConnector(store, 'llm', MODEL_HOST);
+
+    // Its own counter, and none of the other six: the domain above
+    // holds id 1 as well.
+    expect(inserted.id).toBe(1);
+    expect(domain.id).toBe(1);
+  });
+
+  it('burns an id on a refused insert, as the sequence does', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+    await refusalFrom(() => addConnector(store, 'llm', MODEL_HOST));
+
+    const next = await addConnector(store, 'llm', 'example-fourth');
+
+    // 5 rather than 4: the three seeded connectors took 1, 2 and 3,
+    // and the refusal took the fourth. No measurement on `connectors`
+    // of its own — the reasoning is `personas`', where two refused
+    // inserts between two accepted ones left a gap of two against the
+    // live server.
+    expect(next.id).toBe(5);
+  });
+
+  it('burns one on a CHECK refusal as well', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+    await refusalFrom(() => addConnector(store, 'telepathy', MODEL_HOST));
+
+    const next = await addConnector(store, 'llm', 'example-fourth');
+
+    // The counter advances ahead of EVERY check rather than ahead of
+    // the key check alone, which is the half of the personas
+    // measurement a key-only burn would satisfy anyway.
+    expect(next.id).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The delete refused from outside the row, by the one key there is
+// ---------------------------------------------------------------------------
+
+describe('the subscriptions that hold a connector delete', () => {
+  it('refuses while an export subscription names it', async () => {
+    const store = createMemoryResearchStore();
+    const { model, spare } = await seedConnectors(store);
+
+    store.setConnectorSubscriptions(model.id, 2);
+
+    // `export_subscriptions.connector_id` is `ON DELETE no action`,
+    // and `src/db/schema/scheduling.ts` argues it at the column: a
+    // connector is shared, so retiring one service should not quietly
+    // cancel deliveries in every domain that named it.
+    const refusal = await refusalFrom(() => store.deleteConnector(model.id));
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+    expect(await readConnector(store, model.id)).toStrictEqual(model);
+
+    // The positive control, in this body rather than a sibling case:
+    // the SAME call over the sibling nothing names. A store refusing
+    // every delete passes the assertions above.
+    expect(await store.deleteConnector(spare.id)).toBe(true);
+    expect(await store.countConnectors(EVERY_KIND)).toBe(2);
+  });
+
+  it('counts what the delete would have taken', async () => {
+    const store = createMemoryResearchStore();
+    const { model, spare } = await seedConnectors(store);
+
+    store.setConnectorSubscriptions(model.id, 3);
+
+    // The guard reads a count and takes no view of it; the `409` is
+    // `src/connectors/service.ts`'s, and carries this number so a
+    // caller learns what stands in the way rather than only that
+    // something did.
+    expect(await store.countConnectorDependents(model.id))
+      .toStrictEqual({ exportSubscriptions: 3 });
+    expect(await store.countConnectorDependents(spare.id))
+      .toStrictEqual({ exportSubscriptions: 0 });
+  });
+
+  it('stops refusing once the subscriptions are taken back', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    store.setConnectorSubscriptions(model.id, 1);
+    await refusalFrom(() => store.deleteConnector(model.id));
+
+    // A whole-unit plant: the second call REPLACES the first rather
+    // than adding to it, and zero is how a case takes a plant back.
+    store.setConnectorSubscriptions(model.id, 0);
+
+    expect(await store.deleteConnector(model.id)).toBe(true);
+    expect(await store.findConnectorById(model.id)).toBeNull();
+  });
+
+  it('answers false for an id no connector carries', async () => {
+    const store = createMemoryResearchStore();
+
+    // A counted zero rather than a refusal for an id nothing points
+    // at, which is correct rather than a special case — and the
+    // delete that follows removes nothing without throwing.
+    expect(await store.countConnectorDependents(404))
+      .toStrictEqual({ exportSubscriptions: 0 });
+    expect(await store.deleteConnector(404)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The cascade that never arrives
+// ---------------------------------------------------------------------------
+
+describe('the domain delete a connector outlives', () => {
+  it('leaves every connector standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSources(store, RADAR);
+    const { model, notebook } = await seedConnectors(store);
+
+    await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // The control that says the delete reached anything at all: the
+    // domain's own sources and topics are gone in the same call.
+    expect(await store.findSourceById(feed.id)).toBeNull();
+    expect(await store.countTopics(domain.id)).toBe(0);
+
+    // `connectors` carries no `domain_id`, so nothing here is the
+    // cascade's to take. A connector outlives every domain that named
+    // it — which is what an `export_subscriptions` row records and a
+    // column on this table would have got wrong.
+    expect(await store.countConnectors(EVERY_KIND)).toBe(3);
+    expect(await readConnector(store, model.id)).toStrictEqual(model);
+    expect(await readConnector(store, notebook.id)).toStrictEqual(notebook);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a page of connectors answers, and what narrows it
+// ---------------------------------------------------------------------------
+
+describe('the connector list', () => {
+  it('orders by kind, then by name within it', async () => {
+    const store = createMemoryResearchStore();
+    const { model, spare, notebook } = await seedConnectors(store);
+
+    const page = await store.listConnectors(EVERY_KIND, WHOLE_COLLECTION);
+
+    // Neither insertion order (the notebook went in first) nor name
+    // order (its name sorts before both of the others): one fixture
+    // tells the pair from either column alone.
+    expect(page.map((row) => row.id))
+      .toStrictEqual([model.id, spare.id, notebook.id]);
+  });
+
+  it('answers one window of it', async () => {
+    const store = createMemoryResearchStore();
+    const { spare, notebook } = await seedConnectors(store);
+
+    const second = await store.listConnectors(EVERY_KIND, {
+      limit: 2,
+      offset: 1,
+    });
+
+    expect(second.map((row) => row.id)).toStrictEqual([spare.id, notebook.id]);
+    expect(await store.countConnectors(EVERY_KIND)).toBe(3);
+  });
+
+  it('narrows to one kind, and counts the same way', async () => {
+    const store = createMemoryResearchStore();
+    const { model, spare } = await seedConnectors(store);
+
+    const page = await store.listConnectors({ kind: 'llm' }, WHOLE_COLLECTION);
+
+    // The count reads through the same predicate the page did, which
+    // is the whole of what keeps a page's `meta.total` from
+    // describing a different collection than the page.
+    expect(page.map((row) => row.id)).toStrictEqual([model.id, spare.id]);
+    expect(await store.countConnectors({ kind: 'llm' })).toBe(2);
+    expect(await store.countConnectors({ kind: 'notebook' })).toBe(1);
+  });
+
+  it('answers an empty page for a kind no row carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    // Neither an error nor a refusal: nothing failed to read. The
+    // whole-collection read beside it is what says the store held
+    // rows to leave out.
+    expect(await store.listConnectors({ kind: 'search' }, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+    expect(await store.countConnectors({ kind: 'search' })).toBe(0);
+    expect(await store.countConnectors(EVERY_KIND)).toBe(3);
+  });
+});
+
+describe('the single connector read', () => {
+  it('answers the stored row by its id', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    expect(await store.findConnectorById(model.id)).toStrictEqual({
+      id: model.id,
+      kind: 'llm',
+      name: MODEL_HOST,
+      config: connectorConfig(),
+    });
+  });
+
+  it('answers null for an id no connector carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    expect(await store.findConnectorById(404)).toBeNull();
+  });
+});
+
+describe('the connector patch', () => {
+  it('writes nothing for a patch naming no member', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    // `connectors` carries no `updated_at`, so an empty patch has
+    // literally nothing to set and drizzle throws `No values to set`
+    // on an empty update list. The stored row is answered instead —
+    // a decision `src/connectors/store.ts` takes for both
+    // implementations rather than leaving them to disagree.
+    expect(await store.updateConnector(model.id, {})).toStrictEqual(model);
+    expect(await readConnector(store, model.id)).toStrictEqual(model);
+  });
+
+  it('renames without touching the config', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    const patched = await store.updateConnector(model.id, {
+      name: 'example-renamed-host',
+    });
+
+    expect(patched?.name).toBe('example-renamed-host');
+    expect(patched?.config).toStrictEqual(connectorConfig());
+  });
+
+  it('replaces the config whole rather than merging into it', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    await store.updateConnector(model.id, {
+      config: { endpoint: MODEL_ENDPOINT },
+    });
+
+    // A caller sends the object it wants to exist, which is the only
+    // shape under which removing a member is expressible at all — and
+    // on this table that means a patch omitting a secret's key has
+    // CLEARED that secret. Under a merge the credentials survive.
+    expect((await readConnector(store, model.id)).config)
+      .toStrictEqual({ endpoint: MODEL_ENDPOINT });
+  });
+
+  it('answers null for an id no connector carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    expect(await store.updateConnector(404, { name: MODEL_HOST })).toBeNull();
+    expect(await store.countConnectors(EVERY_KIND)).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The one copied document here that is a live credential
+// ---------------------------------------------------------------------------
+
+describe('the connector config crossing the boundary', () => {
+  it('does not store the object an insert was handed', async () => {
+    const store = createMemoryResearchStore();
+    const submitted = connectorConfig();
+
+    const inserted = await addConnector(store, 'llm', MODEL_HOST, {
+      config: submitted,
+    });
+
+    // One level down, which is what makes the round trip the right
+    // copy rather than a spread: a spread would leave the caller
+    // holding the credentials.
+    credentialsOf(submitted).apiKey = 'written through the insert';
+
+    expect((await readConnector(store, inserted.id)).config)
+      .toStrictEqual(connectorConfig());
+  });
+
+  it('does not store the object a patch was handed', async () => {
+    const store = createMemoryResearchStore();
+    const { spare } = await seedConnectors(store);
+    const submitted = connectorConfig();
+
+    await store.updateConnector(spare.id, { config: submitted });
+
+    credentialsOf(submitted).apiKey = 'written through the patch';
+
+    expect((await readConnector(store, spare.id)).config)
+      .toStrictEqual(connectorConfig());
+  });
+
+  it('answers a config a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    credentialsOf(model.config).apiKey = 'written through the insert answer';
+
+    const read = await readConnector(store, model.id);
+
+    credentialsOf(read.config).apiKey = 'written through a read';
+
+    // Against the fixture function rather than against the record the
+    // insert answered: a store handing out its own object has aliased
+    // the two, and the comparison would then hold one lie against
+    // itself and pass.
+    expect((await readConnector(store, model.id)).config)
+      .toStrictEqual(connectorConfig());
+  });
+
+  it('answers a config the list cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    const [listed] = await store.listConnectors(
+      { kind: 'llm' },
+      WHOLE_COLLECTION,
+    );
+
+    if (listed === undefined) {
+      throw new Error('expected the llm page to carry a row');
+    }
+
+    credentialsOf(listed.config).apiKey = 'written through the list';
+
+    expect((await readConnector(store, listed.id)).config)
+      .toStrictEqual(connectorConfig());
+  });
+
+  it('answers a fresh config on every read', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    const first = await readConnector(store, model.id);
+    const second = await readConnector(store, model.id);
+
+    expect(first.config).not.toBe(second.config);
+    expect(first.config).toStrictEqual(second.config);
+  });
+
+  it('stores an empty config as a value rather than a default', async () => {
+    const store = createMemoryResearchStore();
+    const { spare } = await seedConnectors(store);
+
+    // Empty is a complete value and the column's default, and for a
+    // connector it means there is nowhere to reach — the row names a
+    // service the pipeline cannot call rather than one it calls with
+    // defaults. So a config nobody filled in reads back as `{}`
+    // rather than as anything this store invented.
+    expect(spare.config).toStrictEqual({});
+    expect((await readConnector(store, spare.id)).config).toStrictEqual({});
   });
 });
 

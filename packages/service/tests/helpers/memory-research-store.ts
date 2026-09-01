@@ -1,13 +1,14 @@
 /**
  * @packageDocumentation
  * The in-memory dataset every research store port is driven through
- * in the isolated suite. All six halves are here — the domains
+ * in the isolated suite. All seven halves are here — the domains
  * half, the taxonomy half with categories and terms together, the
  * personas beside them, the topics the dispatcher comes for, the
- * sources it reads and the review queue over what they captured, and
- * the operator settings the deployment as a whole is configured by.
+ * sources it reads and the review queue over what they captured, the
+ * connectors the deployment reaches other services through, and the
+ * operator settings it is configured by.
  *
- * ONE DATASET RATHER THAN SIX FAKES, which is why this file is not
+ * ONE DATASET RATHER THAN SEVEN FAKES, which is why this file is not
  * named for any one of the ports it satisfies. `src/domains/store.ts`
  * records that the taxonomy, personas and settings services all
  * resolve a `:slug` through {@link DomainStore.findDomainBySlug}
@@ -16,18 +17,25 @@
  * taxonomy, persona, topic and source tables all hang off
  * `domains.id` with `ON DELETE CASCADE`, so a domain deleted through
  * one port has to be gone from the others, and only shared state
- * makes that true: six independent fakes would agree with each other
- * right up until a case deleted something.
+ * makes that true: seven independent fakes would agree with each
+ * other right up until a case deleted something.
  *
- * `operator_settings` IS THE ONE TABLE THAT HANGS OFF NOTHING, and
- * it belongs in the shared dataset for the other direction of that
- * same rule. It carries no `domain_id` and no foreign key, so a
+ * `operator_settings` IS ONE OF TWO TABLES THAT HANG OFF NOTHING,
+ * and it belongs in the shared dataset for the other direction of
+ * that same rule. It carries no `domain_id` and no foreign key, so a
  * domain delete leaves it exactly as it was — including a
  * `defaultDomainSlug` naming the domain that has just gone. That is
  * the behaviour rather than an omission: `src/settings/store.ts`
  * carries why a dangling slug reads as no default being set, and a
  * settings fake standing on its own could not be asked the question
  * at all.
+ *
+ * `connectors` IS THE SECOND, and the pair differ in where they are
+ * pointed AT rather than in what they hang off. Nothing references
+ * the settings row, while an `export_subscriptions` row names a
+ * connector — so the connectors half below carries a guarded delete
+ * where the settings half cannot be refused anything at all, and a
+ * domain delete reaches neither.
  *
  * IT REFUSES WHAT POSTGRES REFUSES, as the {@link StoreRefusal} the
  * port declares and as nothing else. A fake that merely stores what
@@ -292,6 +300,68 @@
  * domain is therefore permitted where deleting one of its sources is
  * refused, and the difference is what each act means.
  *
+ * THE CONNECTORS HALF HANGS OFF NO DOMAIN AT ALL, WHICH IS A SHAPE
+ * ONLY THE SETTINGS HALF SHARES. `connectors` carries no `domain_id`
+ * — `src/db/schema/sources.ts` argues it at the table: which model
+ * endpoint answers, or which notebook an export is handed to, is a
+ * fact about the deployment rather than about any one domain's
+ * subject matter — so no method in this half takes a domain, no case
+ * plants one to hang a row off, and the cascade below reaches nothing
+ * of it. Which domain wanted which connector is recorded where it
+ * varies, in an `export_subscriptions` row, so a connector outlives
+ * every domain that named it.
+ *
+ * ITS TWO WRITE MECHANISMS ARE A KEY AND A CHECK, AND THEY SIT ON
+ * DIFFERENT WRITES — the mirror of the sources half, whose CHECK
+ * sits on both writes and whose foreign key sits on one.
+ * `connectors_kind_name_unique` refuses a kind and name pair the
+ * deployment already carries, as a `unique-violation`, on an INSERT
+ * and on an UPDATE alike, because `name` is patchable per
+ * `ConnectorPatch`. `connectors_kind_check` refuses a `kind` outside
+ * `CONNECTOR_KINDS` as a `check-violation`, and the INSERT alone
+ * reaches it: `kind` is deliberately absent from that patch type, so
+ * no update here is ever written against the CHECK.
+ *
+ * THE TWO CANNOT BE VIOLATED AT ONCE, so this half imitates no order
+ * and claims none. The key opens on the very column the CHECK
+ * constrains: every stored row's `kind` is inside the tuple, because
+ * the CHECK kept it there, so a write proposing a kind outside the
+ * tuple can duplicate nothing. That is the term half's sentence over
+ * a different pair of mechanisms, and `src/connectors/store.ts`
+ * states it for the port.
+ *
+ * ITS DELETE IS REFUSED FROM OUTSIDE THE ROW AND BY EXACTLY ONE KEY,
+ * which is the sources half's shape narrowed to a single mechanism
+ * — and narrowed on a reading of the generated SQL rather than on a
+ * plan, since that is the reading the sources half's plan got wrong.
+ * `export_subscriptions_connector_id_connectors_id_fk` is the whole
+ * of it. So this half has no unimitated key of its own, and the
+ * sentence the sources half owes about a state it cannot reach has no
+ * counterpart here.
+ *
+ * ITS ONE SEAM PLANTS A COUNT, and that is
+ * {@link MemoryResearchStore.setSourceSightings}' shape taken for
+ * that seam's reason rather than the documents seam's:
+ * `countConnectorDependents` is the only method on this port that can
+ * be asked about a subscription at all. The number is AUTHORITATIVE
+ * the way {@link MemoryResearchStore.setDomainDependents}' is, and
+ * today it is the only decision available — no port here writes an
+ * `export_subscriptions` row, so there is nothing to count from. When
+ * the subscriptions half lands, this seam meets the question that
+ * domain guard already answered, and the seam's own TSDoc is where
+ * the answer is owed.
+ *
+ * AND ITS `config` TAKES THE ROUND TRIP, in both directions, for the
+ * reason the two source documents take it and with one consequence
+ * they do not carry. `connectors.config` declares no `$type` — what
+ * a client needs differs by `kind` — so there is no depth a spread
+ * could be written to instead. The consequence is that this is the
+ * one column in this file holding a CREDENTIAL: the port answers it
+ * AS STORED, masking being `src/connectors/service.ts`'s, so the copy
+ * is what keeps a caller from writing into a stored secret and what
+ * keeps a caller that kept an answered row from reading one this
+ * store has since replaced.
+ *
  * THE SETTINGS HALF REFUSES NOTHING, AND THAT IS A MEASUREMENT
  * RATHER THAN A SIMPLIFICATION. `operator_settings` carries two
  * mechanisms and neither is reachable through the port: a second
@@ -376,6 +446,9 @@
  * adapter's business and differs by `kind` — there is no declared
  * depth this store could copy to instead, which is the opposite of
  * the topics list and the same as the two settings payloads.
+ * `connectors.config` IS THE THIRD, on that same reasoning and with
+ * the credential the connectors paragraphs above carry: it is the one
+ * copied document here that is a live secret.
  *
  * IDS COME FROM 1 AND ARE NOT GAPLESS, which is the half a reader
  * would not predict. Measured against the live Postgres on a
@@ -405,8 +478,20 @@
  * carries a SIXTH counter and is the one table here a DUPLICATE
  * cannot burn: with no unique key there is nothing to conflict on, so
  * only the kind CHECK and the domain foreign key can refuse an insert
- * and leave the id it took unused.
+ * and leave the id it took unused. `connectors` carries a SEVENTH,
+ * and burns it on both of ITS mechanisms on the same reasoning: a
+ * key refusal and a non-key refusal are the pair the `personas` gap
+ * of two was measured over, and this table's CHECK stands where that
+ * measurement's foreign key did.
  */
+import type {
+  ConnectorDependentCounts,
+  ConnectorFilter,
+  ConnectorPatch,
+  ConnectorRecord,
+  ConnectorStore,
+  InsertConnectorInput,
+} from '../../src/connectors/store.js';
 import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type { OperatorSettings } from '../../src/db/schema/settings.js';
 import type { DocumentParseStatus } from '../../src/db/schema/values.js';
@@ -454,6 +539,7 @@ import type {
 } from '../../src/topics/store.js';
 
 import {
+  CONNECTOR_KINDS,
   DOCUMENT_PARSE_STATUSES,
   SOURCE_KINDS,
 } from '../../src/db/schema/values.js';
@@ -508,16 +594,17 @@ export interface MemorySourceDocument {
 }
 
 /**
- * All six research ports over one dataset, plus the three seams a
+ * All seven research ports over one dataset, plus the four seams a
  * case needs that no port declares.
  *
  * EVERY ONE OF THEM WHOLE rather than a `Pick` of it. The category
  * half stood behind a narrowed alias while the term methods were
  * unwritten, which was the honest statement of what existed rather
  * than a gap papered over with stubs; all twelve taxonomy methods,
- * all six persona ones, all seven topic ones, all nine source ones
- * and both settings ones are here now, so a caller wanting any of
- * the six ports entire can be handed this store.
+ * all six persona ones, all seven topic ones, all nine source ones,
+ * all seven connector ones and both settings ones are here now, so a
+ * caller wanting any of the seven ports entire can be handed this
+ * store.
  *
  * `TopicStore` was the first member from outside wave 1 and
  * `SourceStore` is the second, and both join this file rather than
@@ -525,6 +612,14 @@ export interface MemorySourceDocument {
  * `topics.domain_id` and `sources.domain_id` both cascade, so a
  * domain deleted through `DomainStore` has to take its topics and
  * its sources with it, and only shared state makes that true.
+ *
+ * `ConnectorStore` is the third and joins for the OTHER reason,
+ * which is `SettingsStore`'s. `connectors` hangs off no domain, so
+ * no cascade reaches it and nothing here forces it into the shared
+ * dataset — what does is the composed store `src/index.ts` builds
+ * and the surface that reads across the two: an export subscription
+ * pairs a domain with a connector, so the delete this port guards is
+ * refused by rows a later half of this same file will write.
  *
  * Nothing in `src/` is handed a {@link MemoryResearchStore} — a
  * service takes the port — so the seams below cannot become a way for
@@ -536,7 +631,8 @@ export interface MemoryResearchStore extends
   PersonaStore,
   SettingsStore,
   TopicStore,
-  SourceStore {
+  SourceStore,
+  ConnectorStore {
   /**
    * Plants what a domain has ACCUMULATED, for the delete guard to
    * read back through {@link DomainStore.countDomainDependents}.
@@ -645,6 +741,38 @@ export interface MemoryResearchStore extends
    *   zero is how a case takes a plant back.
    */
   setSourceSightings(sourceId: number, count: number): void;
+
+  /**
+   * Plants how many `export_subscriptions` rows name one connector,
+   * for the delete guard to read back.
+   *
+   * A COUNT RATHER THAN ROWS, which is
+   * {@link MemoryResearchStore.setSourceSightings}' shape taken for
+   * that seam's own reason:
+   * {@link ConnectorStore.countConnectorDependents} is the only
+   * method on that port that can be asked about a subscription at
+   * all — nothing lists one, nothing reads one by id — so a planted
+   * row would carry a domain, a format and a due time no case could
+   * read back, and would imitate a shape rather than a rule.
+   *
+   * THE NUMBER IS AUTHORITATIVE, which is
+   * {@link MemoryResearchStore.setDomainDependents}' decision rather
+   * than the sources documents'. Today it is the only decision
+   * available: `SubscriptionStore` is a later task, so no port here
+   * writes an `export_subscriptions` row and there is nothing to
+   * count from. When that half lands this seam meets the question the
+   * domain guard already answered — a planted number a stored row
+   * cannot move — and the answer is owed HERE, in this TSDoc and in
+   * the module header, whichever way it goes.
+   *
+   * @param connectorId - The connector the subscriptions name. Need
+   *   not name a stored connector: the count is plantable ahead of
+   *   the row, and the guard answers about an id rather than about a
+   *   connector.
+   * @param count - How many. A second call replaces the first, and
+   *   zero is how a case takes a plant back.
+   */
+  setConnectorSubscriptions(connectorId: number, count: number): void;
 }
 
 /** What {@link createMemoryResearchStore} may be handed. */
@@ -762,6 +890,46 @@ const SOURCE_DOCUMENTS_FK = 'documents_source_id_sources_id_fk';
  * nothing saying why.
  */
 const SOURCE_SIGHTINGS_FK = 'finding_sightings_source_id_sources_id_fk';
+
+/**
+ * The natural key on `connectors`, spelled as
+ * `src/db/schema/sources.ts` spells it. The one key both connector
+ * writes name: `name` is patchable per `ConnectorPatch`, so an
+ * UPDATE reaches it as readily as an INSERT.
+ */
+const CONNECTOR_KEY_UNIQUE = 'connectors_kind_name_unique';
+
+/**
+ * The CHECK on `connectors.kind`, and the second CHECK this file
+ * imitates.
+ *
+ * Unlike {@link SOURCE_KIND_CHECK} an INSERT alone reaches it:
+ * `kind` is deliberately absent from `ConnectorPatch`, because a
+ * connector's kind is read by rows and queries that are not this one
+ * and neither could see the edit. So no update here is ever written
+ * against this name.
+ */
+const CONNECTOR_KIND_CHECK = 'connectors_kind_check';
+
+/**
+ * The foreign key from `export_subscriptions.connector_id`, and the
+ * ONE name a refused connector delete can carry.
+ *
+ * `ON DELETE no action`, so a connector an export subscription still
+ * names holds its own delete. `src/db/schema/scheduling.ts` argues it
+ * at the column: a domain going away takes its own configuration with
+ * it, but a connector is shared, and retiring one service should not
+ * quietly cancel deliveries in every domain that named it.
+ *
+ * Exactly one, re-derived from the generated SQL rather than taken
+ * from a plan — the reading the sources half's plan got wrong by
+ * one, where a sibling leg's migration had added a third refusing key
+ * nobody had named. So unlike that half there is no key here left
+ * unimitated, and no dataset this store can be in that a deployment
+ * would refuse a delete over while this one takes it.
+ */
+const CONNECTOR_SUBSCRIPTIONS_FK
+  = 'export_subscriptions_connector_id_connectors_id_fk';
 
 /** Three zeros: what a domain nothing points at has accumulated. */
 const NO_DEPENDENTS: DomainDependentCounts = {
@@ -913,13 +1081,15 @@ function copyTopic(row: TopicRecord): TopicRecord {
  *
  * A JSON round trip for the reason {@link copySettings} gives, and
  * over `unknown` rather than over a declared shape because
- * `sources.parser_config` and `sources.contract` carry no `$type`:
- * what a parser config holds differs by `kind`, so there is no depth
- * a spread could be written to instead. Every value this store puts
+ * `sources.parser_config`, `sources.contract` and
+ * `connectors.config` carry no `$type`: what a parser config or a
+ * client's address holds differs by `kind`, so there is no depth a
+ * spread could be written to instead. Every value this store puts
  * through it arrived as a `Readonly<Record<string, unknown>>` from
- * {@link InsertSourceInput} or {@link SourcePatch}, which is what
- * makes the round trip total — a value `JSON.stringify` answers
- * `undefined` for could not have got here.
+ * {@link InsertSourceInput}, {@link SourcePatch},
+ * {@link InsertConnectorInput} or {@link ConnectorPatch}, which is
+ * what makes the round trip total — a value `JSON.stringify`
+ * answers `undefined` for could not have got here.
  *
  * @param document - The document to copy.
  * @returns An equal document sharing nothing with it.
@@ -995,6 +1165,33 @@ function failureOf(row: MemorySourceDocument): SourceFailureRecord {
 }
 
 /**
+ * A connector record whose config belongs to nobody else.
+ *
+ * ONE MEMBER rather than {@link copySource}'s four:
+ * `ConnectorRecord` carries a single `jsonb` document and no `Date`
+ * at all, `connectors` declaring neither of the stamps `domains`
+ * carries nor the due time `topics` does. So this is
+ * {@link copyCategory}'s shallow shape with one member added rather
+ * than a narrowing of {@link copySource}.
+ *
+ * It is also the one copy in this file standing between a caller and
+ * a value the schema DECLARES to be a credential — `config` in
+ * `src/db/schema/sources.ts` says whatever authenticates the call is
+ * held there. `src/connectors/store.ts` answers the config AS
+ * STORED — masking is `src/connectors/service.ts`'s, one layer up
+ * — so what this rules out is a caller writing into a stored secret
+ * through a member the port declares `readonly`, and a caller that
+ * kept an answered row going on reading one this store has since
+ * replaced.
+ *
+ * @param row - The stored row.
+ * @returns A copy safe to hand across the port.
+ */
+function copyConnector(row: ConnectorRecord): ConnectorRecord {
+  return { ...row, config: copyJsonDocument(row.config) };
+}
+
+/**
  * A domain record whose mutable members belong to nobody else.
  *
  * @param row - The stored row.
@@ -1029,18 +1226,22 @@ export function createMemoryResearchStore(
   const personas = new Map<number, PersonaRecord>();
   const topics = new Map<number, TopicRecord>();
   const sources = new Map<number, SourceRecord>();
+  const connectors = new Map<number, ConnectorRecord>();
 
-  // The two planting seams' state, keyed by source id. Neither is a
-  // table this store's ports can write, and the header carries why
-  // one holds rows and the other a number.
+  // The three planting seams' state, the first two keyed by source id
+  // and the third by connector id. None is a table this store's ports
+  // can write, and the header carries why one holds rows and the
+  // other two a number.
   const sourceDocuments = new Map<number, MemorySourceDocument[]>();
   const sourceSightings = new Map<number, number>();
+  const connectorSubscriptions = new Map<number, number>();
   let nextDomainId = 1;
   let nextCategoryId = 1;
   let nextTermId = 1;
   let nextPersonaId = 1;
   let nextTopicId = 1;
   let nextSourceId = 1;
+  let nextConnectorId = 1;
 
   // The whole of the settings half's state. Not a Map, because
   // there is no key: `src/settings/store.ts` states a second
@@ -1709,6 +1910,100 @@ export function createMemoryResearchStore(
         sourceSightings.delete(sourceId);
         sources.delete(sourceId);
       }
+    }
+  }
+
+  /**
+   * The connectors one filter selects, unordered.
+   *
+   * A fresh array every call, which is what lets
+   * {@link orderedConnectors} sort it in place without reaching into
+   * stored state.
+   *
+   * NO OWNER IS TAKEN, unlike every sibling helper above.
+   * `connectors` carries no `domain_id`, so a kind is a FILTER rather
+   * than a scope: an absent one answers every row rather than none,
+   * which is what `ConnectorFilter` says the member is for.
+   *
+   * @param filter - What to narrow to, or `{}` for every connector.
+   * @returns The rows under it. Empty for a kind no row carries,
+   *   which is an answer rather than a failure to read.
+   */
+  function connectorsMatching(filter: ConnectorFilter): ConnectorRecord[] {
+    return [...connectors.values()].filter(
+      (row) => filter.kind === undefined || row.kind === filter.kind,
+    );
+  }
+
+  /**
+   * The connectors one filter selects, ordered as
+   * `ConnectorStore.listConnectors` promises.
+   *
+   * By `kind` ascending with `name` ascending beside it, compared by
+   * code unit. The collation caveat {@link orderedTerms} carries
+   * applies to the second column and NOT to the first: a kind is a
+   * member of `CONNECTOR_KINDS`, four lowercase ASCII words a
+   * collation cannot disagree about, while a name is free text an
+   * operator chose.
+   *
+   * The order is total because the PAIR is unique, so unlike every
+   * other ordered read here there is no tie-break to forget — a
+   * property of `connectors_kind_name_unique` rather than of the
+   * comparison.
+   *
+   * @param filter - What to narrow to, or `{}` for every connector.
+   * @returns The rows, kind ascending then name ascending.
+   */
+  function orderedConnectors(filter: ConnectorFilter): ConnectorRecord[] {
+    return connectorsMatching(filter).sort((left, right) => {
+      if (left.kind !== right.kind) {
+        return left.kind < right.kind
+          ? -1
+          : 1;
+      }
+
+      if (left.name === right.name) {
+        return 0;
+      }
+
+      return left.name < right.name
+        ? -1
+        : 1;
+    });
+  }
+
+  /**
+   * @param kind - The family to look within.
+   * @param name - The name to look for.
+   * @returns The row carrying that pair, or undefined. At most one
+   *   can, which is what `connectors_kind_name_unique` guarantees and
+   *   what the two writes below enforce.
+   */
+  function connectorByKey(
+    kind: string,
+    name: string,
+  ): ConnectorRecord | undefined {
+    return [...connectors.values()].find(
+      (row) => row.kind === kind && row.name === name,
+    );
+  }
+
+  /**
+   * Refuses a `kind` outside `CONNECTOR_KINDS`.
+   *
+   * @param kind - The family a connector insert is asking for.
+   * @throws A `check-violation` {@link StoreRefusal} naming
+   *   `connectors_kind_check`. Reached from the INSERT alone, which
+   *   is where this CHECK differs from {@link guardSourceKind}:
+   *   `kind` is absent from `ConnectorPatch`, so no update here is
+   *   written against it and none can be refused by it.
+   */
+  function guardConnectorKind(kind: string): void {
+    if (!(CONNECTOR_KINDS as readonly string[]).includes(kind)) {
+      throw new StoreRefusal({
+        reason: 'check-violation',
+        constraint: CONNECTOR_KIND_CHECK,
+      });
     }
   }
 
@@ -2952,6 +3247,220 @@ export function createMemoryResearchStore(
     },
 
     /**
+     * One window of the connector list, kind ascending with name
+     * ascending beside it, narrowed to one kind or to none.
+     *
+     * TAKES NO OWNER, which is the one structural difference between
+     * this list and every other one here: `connectors` hangs off no
+     * domain, so `GET /connectors` has nothing to be scoped by and a
+     * filter that names no kind answers the whole deployment.
+     *
+     * THE CONFIG COMES BACK UNMASKED, on every row and on every read
+     * below. `src/connectors/store.ts` carries the whole argument:
+     * the live suite compares a write against the raw row, the
+     * sentinel capture watches the assembled service rather than a
+     * store, and `ar-ingest` reads the column directly. So masking is
+     * `src/connectors/service.ts`'s and nothing here calls it.
+     */
+    async listConnectors(
+      filter: ConnectorFilter,
+      window: StoreWindow,
+    ): Promise<readonly ConnectorRecord[]> {
+      return orderedConnectors(filter)
+        .slice(window.offset, window.offset + window.limit)
+        .map(copyConnector);
+    },
+
+    /**
+     * How many connectors the same filter selects, ignoring any
+     * window.
+     *
+     * The same predicate the list read through, which is the whole
+     * of what keeps a page's `meta.total` from describing a
+     * different collection than the page. A kind no row carries
+     * answers zero rather than failing.
+     */
+    async countConnectors(filter: ConnectorFilter): Promise<number> {
+      return connectorsMatching(filter).length;
+    },
+
+    /** One connector by its id, config unmasked, or null. */
+    async findConnectorById(id: number): Promise<ConnectorRecord | null> {
+      const row = connectors.get(id);
+
+      return row === undefined
+        ? null
+        : copyConnector(row);
+    },
+
+    /**
+     * Inserts one connector.
+     *
+     * THE CONFIG IS COPIED ON THE WAY IN, so a caller that goes on
+     * editing the object it submitted does not edit a stored
+     * credential — the sharper half of the rule
+     * {@link copyConnector} carries, since what is being written
+     * through here is the value a client authenticates with.
+     *
+     * The id comes off the counter first, so both refusals below burn
+     * one exactly as the sequence does. No measurement of this
+     * table's own: the reasoning is `personas`', where two refused
+     * inserts between two accepted ones left a gap of two against the
+     * live server, and this table's CHECK stands where that
+     * measurement's foreign key did.
+     *
+     * The CHECK is asked ahead of the key, matching `insertSource`
+     * above and argued the same way — a table CHECK is evaluated
+     * while the row is still being formed, and a unique index
+     * afterwards. NOTHING CAN OBSERVE THAT ORDER HERE, and saying so
+     * is the honest half: the key opens on the very column the CHECK
+     * constrains, so a write proposing a kind outside the tuple can
+     * duplicate nothing — there is nothing stored under that kind.
+     */
+    async insertConnector(
+      input: InsertConnectorInput,
+    ): Promise<ConnectorRecord> {
+      const id = nextConnectorId;
+
+      nextConnectorId += 1;
+
+      guardConnectorKind(input.kind);
+
+      if (connectorByKey(input.kind, input.name) !== undefined) {
+        throw new StoreRefusal({
+          reason: 'unique-violation',
+          constraint: CONNECTOR_KEY_UNIQUE,
+        });
+      }
+
+      const row: ConnectorRecord = {
+        id,
+        kind: input.kind,
+        name: input.name,
+        config: copyJsonDocument(input.config),
+      };
+
+      connectors.set(row.id, row);
+
+      return copyConnector(row);
+    },
+
+    /**
+     * Rewrites the supplied members of one connector.
+     *
+     * A PATCH NAMING NEITHER MEMBER WRITES NOTHING and answers the
+     * stored row, for the reason `updateSource` above gives:
+     * `connectors` carries no `updated_at` either, so an empty patch
+     * has literally nothing to set and drizzle throws `No values to
+     * set` on an empty update list.
+     *
+     * `kind` IS UNREACHABLE, whatever this is handed, because
+     * `ConnectorPatch` declares no member that could carry one — the
+     * containment is the type's rather than a check here. That is
+     * also what keeps the CHECK off this write, so a rename raises
+     * exactly one mechanism where a source patch can raise its own
+     * CHECK.
+     *
+     * WHAT IS CHECKED IS THE RESULTING NAME WITHIN THE STORED KIND,
+     * and a row is not in conflict with itself: the row found under
+     * the resulting pair is a refusal only when it is a different
+     * row. A name another KIND carries is not a conflict at all,
+     * which is what makes the key per-kind rather than global.
+     *
+     * `config` REPLACES THE STORED DOCUMENT WHOLE and is copied on
+     * the way in, never merged into what is there. A caller sends the
+     * object it wants to exist, which is the only shape under which
+     * removing a member is expressible — and on this table that
+     * means a patch omitting a secret's key has CLEARED that secret,
+     * which `src/connectors/store.ts` states rather than smooths
+     * over.
+     */
+    async updateConnector(
+      id: number,
+      patch: ConnectorPatch,
+    ): Promise<ConnectorRecord | null> {
+      const existing = connectors.get(id);
+
+      if (existing === undefined) {
+        return null;
+      }
+
+      if (patch.name === undefined && patch.config === undefined) {
+        return copyConnector(existing);
+      }
+
+      const name = patch.name ?? existing.name;
+      const holder = connectorByKey(existing.kind, name);
+
+      if (holder !== undefined && holder.id !== id) {
+        throw new StoreRefusal({
+          reason: 'unique-violation',
+          constraint: CONNECTOR_KEY_UNIQUE,
+        });
+      }
+
+      const updated: ConnectorRecord = {
+        ...existing,
+        name,
+        config: patch.config === undefined
+          ? existing.config
+          : copyJsonDocument(patch.config),
+      };
+
+      connectors.set(id, updated);
+
+      return copyConnector(updated);
+    },
+
+    /**
+     * What still names one connector, per dependent table.
+     *
+     * ONE MEMBER READ OFF THE SEAM, and the number is AUTHORITATIVE
+     * rather than counted — the shape
+     * {@link MemoryResearchStore.setDomainDependents} has and the
+     * sources documents do not. Nothing here writes an
+     * `export_subscriptions` row, so there is no dataset to count
+     * from; {@link MemoryResearchStore.setConnectorSubscriptions}
+     * carries what happens when there is.
+     *
+     * A zero is a counted zero, and an id no connector carries
+     * answers one rather than failing: nothing points at a row that
+     * is not there. Whether that id should have existed is a question
+     * `findConnectorById` already answered.
+     */
+    async countConnectorDependents(
+      id: number,
+    ): Promise<ConnectorDependentCounts> {
+      return { exportSubscriptions: connectorSubscriptions.get(id) ?? 0 };
+    },
+
+    /**
+     * Deletes one connector, unless a subscription still names it.
+     *
+     * REFUSED FROM OUTSIDE THE ROW AND BY ONE KEY, which is
+     * `deleteSource`'s shape narrowed to a single mechanism — and
+     * narrowed on a reading of the generated SQL rather than on a
+     * plan. `export_subscriptions_connector_id_connectors_id_fk` is
+     * the whole of it.
+     *
+     * NO CASCADE ANYWHERE AND NO DOMAIN ABOVE IT. This either removes
+     * a row nothing references or is refused, and no delete of a
+     * domain reaches it at all: a connector outlives every domain
+     * that named it, which is what `deleteDomain` above does NOT do
+     * to this table.
+     */
+    async deleteConnector(id: number): Promise<boolean> {
+      if ((connectorSubscriptions.get(id) ?? 0) > 0) {
+        throw new StoreRefusal({
+          reason: 'foreign-key-violation',
+          constraint: CONNECTOR_SUBSCRIPTIONS_FK,
+        });
+      }
+
+      return connectors.delete(id);
+    },
+
+    /**
      * Reads the operator's configuration, or null before any write.
      *
      * NULL AND `{}` ARE TWO ANSWERS HERE, though
@@ -3030,6 +3539,10 @@ export function createMemoryResearchStore(
 
     setSourceSightings(sourceId: number, count: number): void {
       sourceSightings.set(sourceId, count);
+    },
+
+    setConnectorSubscriptions(connectorId: number, count: number): void {
+      connectorSubscriptions.set(connectorId, count);
     },
   };
 }
