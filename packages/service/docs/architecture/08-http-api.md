@@ -1301,6 +1301,18 @@ caller can set a key and can tell that one is set; it cannot read one
 back, and neither can anything reading a response over its shoulder —
 a proxy log, a browser cache, a support ticket carrying a pasted body.
 
+The match reads a key's NAME and reads it case-insensitively, because
+the two mistakes cost different amounts. A key the roster fails to
+recognise is a credential on the wire and nothing downstream reports
+it. A key it recognises that holds no credential is a member answered
+as the mask, which the caller sees at once and can rename. So the
+roster errs wide, though not so wide as to swallow ordinary
+configuration: a name earns its place when the name ALONE says the
+value authenticates something, which `apiKey` does and a bare `key`
+does not. Case is the only spelling difference the match absorbs —
+`api_key` and `apiKey` are separate rows, and a third convention costs
+a row rather than a rule.
+
 One declaration sits behind both the masking and the refusal below.
 Two rosters, or two literals, would drift apart on the first key added
 to either, and the direction they drift in is a stored key answered in
