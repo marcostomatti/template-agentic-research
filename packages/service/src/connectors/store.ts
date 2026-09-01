@@ -237,10 +237,11 @@ export interface ConnectorRecord {
  * `string` rather than `ConnectorKind`, matching
  * {@link ConnectorRecord.kind} for the same reason. A filter that
  * could only express members of today's tuple could not ask about a
- * row written under a member since removed. `./service.ts` holds a
- * `?kind` from the wire to `CONNECTOR_KINDS` before it gets here,
- * so the narrowing is at the boundary and the port stays as wide as
- * the column.
+ * row written under a member since removed. `./routes.ts` holds a
+ * `?kind` from the wire to `CONNECTOR_KINDS` in its list query
+ * schema, before either this port or `./service.ts` sees one, so the
+ * narrowing is at the boundary and the port stays as wide as the
+ * column.
  */
 export interface ConnectorFilter {
   /**

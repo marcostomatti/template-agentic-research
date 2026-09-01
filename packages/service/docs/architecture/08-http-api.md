@@ -360,29 +360,37 @@ once declared it is the same on every route.
 
 ### A path below an open record collapses to `*`
 
-Five payload areas are open records whose KEYS are operator-chosen
+Six payload areas are open records whose KEYS are operator-chosen
 rather than declared: `settings.scoringWeights.<key>` and
 `settings.fieldContract.<key>` on a domain,
-`notificationChannels.<key>` in operator settings, and
-`parserConfig.<key>` and `contract.<key>` on a source. A key there
-is submitted content in exactly the sense above.
+`notificationChannels.<key>` in operator settings,
+`parserConfig.<key>` and `contract.<key>` on a source, and
+`config.<key>` on a connector. A key there is submitted content in
+exactly the sense above.
 
 Any path segment below such a prefix is reported as `*` —
-`settings.scoringWeights.*`, never the key itself. The caller
-learns which unit of the payload failed and how it failed, and
-learns nothing it had not already sent.
+`settings.scoringWeights.*`, never the key itself. The caller learns
+which unit of the payload failed and how it failed, and learns nothing
+it had not already sent.
 
-The source pair is declared and masks nothing today, and saying so
-is worth more than a list that reads as five equal cases. Its value
-schema is `z.unknown()` and a JSON key is always a string, so no
-issue is reachable strictly below either prefix: a `parserConfig`
-that is not an object is refused AT the member, which is the one
-name this service chose and the one segment `openCutoff` in
-`src/http/validation.ts` deliberately leaves unmasked. The
-declaration is what puts the masking in place BEFORE the narrowing
-that would need it — what a parser config holds genuinely differs
-by `kind`, so a per-kind shape is the obvious next thing to want —
-rather than after the refusal that first carried a key back.
+The source pair and the connector's `config` are declared and mask
+nothing that zod raises today, and saying so is worth more than a list
+that reads as six equal cases. Their value schema is `z.unknown()` and
+a JSON key is always a string, so no issue is reachable strictly below
+any of the three: a `parserConfig` that is not an object is refused AT
+the member, which is the one name this service chose and the one
+segment `openCutoff` in `src/http/validation.ts` deliberately leaves
+unmasked. The declaration is what puts the masking in place BEFORE the
+narrowing that would need it — what a parser config holds genuinely
+differs by `kind`, so a per-kind shape is the obvious next thing to
+want — rather than after the refusal that first carried a key back.
+
+The connector's `config` is the one prefix a refusal reaches below
+already, and it is not zod's. The masked-secret rule in
+`src/connectors/service.ts` walks the submitted record itself, so
+`openPaths` cannot see it; that rule masks the path it reports by
+hand, one `*` per segment, which is why the same law holds for a
+detail no schema built.
 
 ### Request schemas are `.strict()`, and the sanitiser is what affords it
 
@@ -1320,8 +1328,11 @@ the clear.
 
 ### The mask literal is refused as a submitted value
 
-A `config` carrying `MASKED_SECRET` as a value is a `422` naming the
-path it sat at, and never a write.
+A `config` carrying `MASKED_SECRET` as a value is a `422` naming where
+it sat, and never a write. `findMaskedSecretPaths` reports the literal
+wherever it is and not only under a rostered key, because a value that
+reads as a sentinel is never one somebody meant to store and because
+the key it was copied onto need not be the key it was copied from.
 
 The round trip this closes is the ordinary one. A caller reads a
 connector, edits one member of the masked config, and sends the whole
@@ -1330,10 +1341,21 @@ gets stored as that deployment's API key, the connector stops working,
 and nothing in the response says why — the read afterwards shows the
 mask, which is what it showed before.
 
-The detail names the path and carries no value, which is the no-echo
-rule in `src/http/validation.ts` applied unchanged. The path is enough
-on its own: a caller that submitted the mask knows which member it
-copied.
+The walk runs before the write is issued, so a body carrying the mask
+costs the table no round trip; it also runs before the conflict is
+met, so a create that both submits the mask and names a pair the
+deployment already carries is a `422` rather than a `409`.
+
+The detail carries no value, and it names the path with every
+operator-chosen segment masked to `*`: `config.*` for a member of the
+config, `config.*.*` for one inside it, one detail per occurrence.
+That is the no-echo rule in `src/http/validation.ts` applied whole
+rather than only its first half — a key inside an open record is
+submitted content in the same sense a value is, and this refusal is
+the one thing on the surface that reaches BELOW the `openPaths`
+prefix, so it masks by hand what a zod issue there would have been
+masked by. What survives is the depth and the count, which is enough:
+a caller that submitted the mask knows which member it copied.
 
 ### A `config` is replaced whole, so an omitted key clears a secret
 
