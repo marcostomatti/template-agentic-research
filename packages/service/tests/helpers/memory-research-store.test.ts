@@ -1,10 +1,10 @@
 /**
- * `tests/helpers/memory-research-store.ts` in all seven ports it
+ * `tests/helpers/memory-research-store.ts` in all eight ports it
  * implements — the claims that make it a second implementation of
  * `DomainStore`, of `TaxonomyStore` WHOLE with categories and terms
  * together, of `PersonaStore`, of `TopicStore`, of `SourceStore`, of
- * `ConnectorStore` and of `SettingsStore`, rather than a bag that
- * stores what it is handed.
+ * `ConnectorStore`, of `SubscriptionStore` and of `SettingsStore`,
+ * rather than a bag that stores what it is handed.
  *
  * THAT IT REFUSES WHAT POSTGRES REFUSES. Every refusal case names
  * the `reason` a SQLSTATE classifies to and the constraint the
@@ -45,8 +45,21 @@
  * `kind` is not, and
  * `export_subscriptions_connector_id_connectors_id_fk`, a single
  * `ON DELETE no action` key in another table holding the delete of a
- * connector its rows still name. The settings half adds NONE, and
- * that is a measurement rather than a gap — see below.
+ * connector its rows still name. The subscriptions half adds FOUR
+ * and reaches them from two writes, which is the widest write
+ * surface of any half here: the triple
+ * `export_subscriptions_domain_id_format_connector_id_unique`
+ * refusing on an INSERT and on an UPDATE alike, `format` and
+ * `connectorId` both being patchable;
+ * `export_subscriptions_format_check` refusing on both writes too,
+ * which is the sources half's shape rather than the connectors
+ * half's; `export_subscriptions_domain_id_domains_id_fk` refusing on
+ * the INSERT alone, `domainId` being unpatchable; and
+ * `export_subscriptions_connector_id_connectors_id_fk` on both —
+ * the one constraint this file imitates from BOTH ENDS, the
+ * connectors half meeting it as a refused DELETE. The settings half
+ * adds NONE, and that is a measurement rather than a gap — see
+ * below.
  *
  * THAT IT REFUSES THEM IN THE MEASURED ORDER. Four cases exist only
  * for that, because a request carrying two faults at once is the
@@ -258,6 +271,90 @@
  * purpose. Under a merge the credentials survive the case that
  * replaces the config with an endpoint alone.
  *
+ * THAT THE SUBSCRIPTIONS HALF KEYS ON A TRIPLE, AND THAT TWO THIRDS
+ * OF IT ARE PATCHABLE. No PAIR of the domain, the format and the
+ * connector identifies a subscription, so the widening controls a
+ * per-kind key needs become THREE here and each is a case: a second
+ * format at one connector, a second connector for one format, and
+ * the same pair under a second domain. A store keying on any pair
+ * refuses one of the three. The refusals come in two on the INSERT
+ * and two on the UPDATE — a re-point onto a held triple and a
+ * reformat onto one — because a store checking only the member it
+ * was handed passes whichever of the two it happened to check.
+ *
+ * THAT ITS CHECK SITS ON BOTH WRITES AND ITS TWO FOREIGN KEYS SIT ON
+ * DIFFERENT ONES. `export_subscriptions_format_check` is
+ * `sources_kind_check`'s shape rather than `connectors_kind_check`'s,
+ * `format` being patchable, so it has an insert case and a patch
+ * case; `export_subscriptions_domain_id_domains_id_fk` has an insert
+ * case and a case asserting the patch cannot reach it at all, since
+ * `SubscriptionPatch` declares no `domainId`; and
+ * `export_subscriptions_connector_id_connectors_id_fk` has both,
+ * because re-pointing a delivery is exactly the request that can name
+ * a connector somebody has just retired. The acceptance control loops
+ * the RUNTIME `EXPORT_FORMATS` rather than a list written out here,
+ * and does it at ONE connector, so it is the key's second widening
+ * control in the same body.
+ *
+ * THAT ONE CONSTRAINT IS IMITATED FROM BOTH ENDS, which is true of no
+ * other mechanism in this file. Read from `connectors` the connector
+ * foreign key holds a DELETE; read from here it refuses a WRITE. One
+ * case drives both in the same body and asserts they name the same
+ * key and the same reason, so a rename on either side that missed the
+ * other reddens here rather than in a deployment.
+ *
+ * THAT A DOMAIN TAKES ITS SUBSCRIPTIONS AND STOPS THERE. The cascade
+ * on `domain_id` takes them; the `ON DELETE no action` on
+ * `connector_id` points the other way, so the connectors those rows
+ * named are left standing — which is a domain delete CLEARING
+ * subscriptions out of a connector's way rather than taking the
+ * connector with them. Both halves are cases, and the second one
+ * carries the count of the removed rows beside it so a store sparing
+ * the connectors by sparing everything fails.
+ *
+ * THAT ITS DELETE CANNOT BE REFUSED, re-derived rather than assumed:
+ * nothing in the generated SQL references
+ * `public.export_subscriptions`, read in the same command as the one
+ * reference to `public.connectors` that is the live needle beside it.
+ * The case drives the connector delete in the same body, refused
+ * under the very rule this one has no counterpart of, which is what
+ * says the acceptance is a fact about the table rather than a store
+ * that refuses nothing.
+ *
+ * THAT THIS HALF INTRODUCES THE FILE'S SECOND KNOWN DIVERGENCE, and
+ * that it is pinned rather than left to be discovered.
+ * `countConnectorDependents` reads what
+ * `setConnectorSubscriptions` planted and never the rows this half
+ * writes, so a stored subscription answers a counted zero and its
+ * connector's delete LANDS where a deployment would refuse it —
+ * the decision `setDomainDependents` already took, for its reason,
+ * and the seam's own TSDoc carries why. Two cases read it from either
+ * face: the connector deleted out from under a stored subscription,
+ * and the row left behind naming an id nothing carries. Each carries
+ * a control in the same body — the plant still refusing a delete,
+ * and the foreign-key guard still refusing a write onto the gone id
+ * — so neither case describes a guard that had simply stopped
+ * working. `tests/live/api-wave2.live.test.ts` is where the counted
+ * answer is discharged.
+ *
+ * THAT ITS PAGE IS ORDERED BY THE PAIR AND SCOPED BY ITS DOMAIN. The
+ * fixture is written in an order no read answers, and the second half
+ * of that is arithmetic rather than taste: `feed` goes in first while
+ * its format sorts last, and `archive` goes in before `digest` though
+ * its connector sorts after. Seeded the other way round, an ordering
+ * by format ALONE and an ordering by the pair agree, and the
+ * connector tie-break is pinned by nothing — measured, the leg
+ * dropping it reddened ZERO cases until the seed was reordered, and
+ * reddens 3 now.
+ *
+ * THAT ITS DUE TIME IS THE ONE MUTABLE MEMBER IT CARRIES, and it is
+ * `topics.next_run_at` again rather than a second claim: both tables
+ * spread the same `schedulableColumns()` helper. So the topic half's
+ * six cases repeat here over one column instead of two, the seventh
+ * being the branch a subscription nobody has run now needs — a
+ * copy reaching for the instant unconditionally throws on a null, and
+ * the three answer sites are asserted in one body.
+ *
  * THAT THE SETTINGS HALF REFUSES NOTHING AT ALL, which no case here
  * can assert directly and which is therefore stated rather than
  * pinned. `operator_settings` carries two mechanisms — a second
@@ -405,6 +502,102 @@
  * rather than as a count. Every figure below moves again when a
  * later task adds a case to this file, so re-derive the whole grid
  * rather than appending legs for the new rows.
+ *
+ * THE SUBSCRIPTIONS HALF FOLLOWED THE FILE'S SUBSTITUTE AS WELL, and
+ * it is the last half this file will get, so read the case totals
+ * below as SNAPSHOTS taken at each half's landing rather than as
+ * claims about today — the 328 the connectors paragraph states was
+ * true when written, which is also why the paragraph above says every
+ * figure moves again when a later task adds a case.
+ *
+ * The file holds 390 cases, of which 62 are this half's. What was run
+ * is this half's OWN twenty-six legs plus the EIGHT recorded ones a
+ * new half can reach — the same eight the sources and connectors
+ * halves re-ran. The rest are closed by the same reasoning: every old
+ * case is untouched and every non-subscription path in the store is
+ * byte-identical but for the one added line in `deleteDomain`. The
+ * liveness control held on all eight — each recorded leg's red set
+ * OUTSIDE the subscriptions describes came back at exactly its
+ * recorded figure (95, 7, 59, 33, 49, 8, 6 and 4, the fifth being the
+ * connectors half's 48 plus the one case it added), which is what
+ * says these are the legs the prose names and not eight new ones that
+ * happen to redden something.
+ *
+ * THE SUBSCRIPTIONS HALF MOVED EXACTLY TWO OF THOSE EIGHT, by one
+ * case each, and both are legs its fixture plants INTO rather than
+ * legs about its own rules — the shape the sources and connectors
+ * halves both measured. Refusing a null parent as a missing one went
+ * 95 to 96 through the case that deletes a category to show the
+ * cascade is not what removed the subscriptions, and refusing every
+ * topic insert as a duplicate went 49 to 50 through the case that
+ * seeds a topic to delete a domain over. The other six are identical
+ * member for member: no subscriptions case writes a term, a persona
+ * or a source, reads a domain's dates or touches the operator's row.
+ *
+ * Twenty-six subscription legs redden between 0 and 56, and every red
+ * one lands wholly inside the subscriptions describes but ONE —
+ * having the cascade take the connectors as well reddens the
+ * connectors half's `leaves every connector standing`, which is a
+ * widening leg reaching another half's claim rather than a leak.
+ * Refusing every subscription insert is this half's whole-half
+ * control and reddens 56 of the 62; the six survivors are exactly the
+ * cases that write no subscription at all (the two empty-collection
+ * list reads and the four unknown-id answers off the read, the patch,
+ * the schedule write and the delete).
+ *
+ * The key's legs split by WRITE and then by what they widen. Skipping
+ * it on the INSERT reddens 4 and on the UPDATE 2, disjoint. Refusing
+ * a row in conflict with ITSELF reddens 7, which is what says the
+ * ordinary patch cases exercise the rule rather than passing over it,
+ * since a patch naming neither third still resolves to the stored
+ * pair. Making the key global rather than per domain reddens 3. And
+ * the two legs that key on a PAIR are BLUNT rather than thorough,
+ * which is the honest reading and not a hole: 55 and 54, because the
+ * fixture cannot be seeded at all when a pair is treated as the key
+ * — two of its three rows share each pair by construction. Score
+ * them as the fixture reporting, exactly as the sources half scores
+ * its own domain-scope leg.
+ *
+ * The CHECK and the two foreign keys redden DISJOINT sets and the
+ * arithmetic is per write, not per mechanism: skipping the format
+ * CHECK reddens 2 on the insert and 1 on the patch; narrowing the
+ * guard to four literals rather than the runtime tuple reddens 2,
+ * which is the direction the refusal cases cannot reach and which
+ * narrowing the TUPLE itself could not report either, since the
+ * acceptance case LOOPS that tuple. Skipping the domain foreign key
+ * reddens 2 and the connector one 3 on each write. Taking the id
+ * after the four checks reddens exactly the 3 id cases.
+ *
+ * The read legs are four singletons rather than nests. Ordering by
+ * insertion reddens 3 and ordering by format ALONE reddens 3, and
+ * the second of those is the leg the fixture had to be reordered for
+ * — it reddened ZERO until `archive` was written ahead of
+ * `digest`. Ignoring the window reddens 2 and ignoring the domain
+ * scope 4.
+ *
+ * The copy legs NEST, which is the term half's shape rather than the
+ * category half's and for the term half's reason:
+ * `listSubscriptions` maps through the copy helper instead of
+ * building an object of its own. Answering the stored row by
+ * reference reddens 7 and answering only its `Date` by reference
+ * reddens 4, inside it. Storing the `Date` the schedule write was
+ * handed reddens 1, and so does having that write also flip
+ * `enabled` — the containment case's own row is already enabled,
+ * so it is the SECOND fixture row, planted disabled, that reports it.
+ *
+ * The cascade legs are 3 and 3: leaving the subscriptions standing,
+ * and taking the connectors as well. Refusing every delete reddens 4.
+ *
+ * And writing on a subscription patch that names no member reddens
+ * NOTHING, the SEVENTH honest zero in this file and the same one the
+ * category, term, topic, source and connector legs measure, for the
+ * same reason: the early return exists because drizzle throws on an
+ * empty update list, and this store has no such throw to observe. It
+ * keeps the WEAKER pinning of those five rather than the persona one
+ * — `src/subscriptions/db-store.ts` and a live case patching a
+ * subscription with an empty patch are both later tasks, so today the
+ * branch is pinned by `src/subscriptions/store.ts`'s TSDoc and by
+ * nothing else.
  *
  * THE CONNECTORS HALF FOLLOWED THE FILE'S SUBSTITUTE TOO, and the
  * argument that closes it is stronger here than for either half
@@ -975,6 +1168,11 @@ import type {
   SourceRecord,
 } from '../../src/sources/store.js';
 import type {
+  InsertSubscriptionInput,
+  SubscriptionPatch,
+  SubscriptionRecord,
+} from '../../src/subscriptions/store.js';
+import type {
   CategoryRecord,
   TermRecord,
   TermValues,
@@ -990,6 +1188,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CONNECTOR_KINDS,
   DOCUMENT_PARSE_STATUSES,
+  EXPORT_FORMATS,
   SOURCE_KINDS,
 } from '../../src/db/schema/values.js';
 import { StoreRefusal } from '../../src/db/store-errors.js';
@@ -1846,6 +2045,163 @@ function credentialsOf(config: unknown): Record<string, unknown> {
   }
 
   return held as Record<string, unknown>;
+}
+
+/**
+ * Two export formats, both members of `EXPORT_FORMATS`.
+ *
+ * `OBSIDIAN` sorts BEFORE `RSS`, which is what lets one page tell an
+ * ordering by the pair from an ordering by the connector alone.
+ */
+const OBSIDIAN = 'obsidian_md';
+const RSS = 'rss';
+
+/** A daily cadence, in seconds: what a digest is delivered at. */
+const DAILY = 86400;
+
+/**
+ * What {@link addSubscription} defaults when a case is not about it.
+ */
+type SubscriptionDefaults = Partial<
+  Omit<InsertSubscriptionInput, 'domainId' | 'format' | 'connectorId'>
+>;
+
+/**
+ * Inserts a subscription, defaulting the members a case is not about.
+ *
+ * Every member of `InsertSubscriptionInput` is required on the port
+ * — a default is a decision, and the port takes none — so the
+ * defaults live here, where a case that cares about one can see
+ * itself overriding it. The bounds default to null rather than to a
+ * number, because null is what a subscription with no floor and no
+ * ceiling carries.
+ *
+ * @param store - The store to write to.
+ * @param domainId - The domain whose material is exported.
+ * @param format - What to render, and the second third of the key.
+ * @param connectorId - Where it is delivered, and the last third.
+ * @param values - The four members a case may care about.
+ * @returns The stored row.
+ */
+async function addSubscription(
+  store: MemoryResearchStore,
+  domainId: number,
+  format: string,
+  connectorId: number,
+  values: SubscriptionDefaults = {},
+): Promise<SubscriptionRecord> {
+  return store.insertSubscription({
+    domainId,
+    format,
+    connectorId,
+    intervalSeconds: values.intervalSeconds ?? DAILY,
+    enabled: values.enabled ?? true,
+    minIntervalSeconds: values.minIntervalSeconds ?? null,
+    maxIntervalSeconds: values.maxIntervalSeconds ?? null,
+  });
+}
+
+/**
+ * A domain subscribing to two formats across two connectors, over
+ * the deployment {@link seedConnectors} builds.
+ *
+ * THREE ROWS AND NO PAIR OF THEM SHARES A TRIPLE, which is what a key
+ * over three columns needs before any claim about it can be made:
+ * `digest` and `feed` share a connector and differ by format,
+ * `digest` and `archive` share a format and differ by connector. A
+ * store keying on either pair refuses one of the two.
+ *
+ * WRITTEN IN AN ORDER NO READ ANSWERS, AND THE SECOND HALF OF THAT IS
+ * ARITHMETIC RATHER THAN TASTE. `feed` goes in first and holds the
+ * lowest id while its format sorts LAST, so a page reading in
+ * insertion order is distinguishable from one reading by the pair.
+ * `archive` then goes in BEFORE `digest` though its connector sorts
+ * after: the two share a format, so the connector is the only thing
+ * separating them, and a store dropping that tie-break answers them
+ * in the order they were written. Seeded the other way round the two
+ * orders agree and the tie-break is pinned by nothing — measured,
+ * the leg that drops it reddened zero cases.
+ *
+ * @param store - The store to write to.
+ * @param slug - The domain to build them under.
+ * @returns The domain, the three connectors, and the three rows.
+ */
+async function seedSubscriptions(
+  store: MemoryResearchStore,
+  slug: string,
+): Promise<{
+  domain: DomainRecord;
+  model: ConnectorRecord;
+  notebook: ConnectorRecord;
+  digest: SubscriptionRecord;
+  feed: SubscriptionRecord;
+  archive: SubscriptionRecord;
+}> {
+  const domain = await store.insertDomain(domainInput(slug));
+  const { model, notebook } = await seedConnectors(store);
+  const feed = await addSubscription(store, domain.id, RSS, notebook.id);
+  const archive = await addSubscription(store, domain.id, OBSIDIAN, model.id);
+  const digest = await addSubscription(
+    store,
+    domain.id,
+    OBSIDIAN,
+    notebook.id,
+  );
+
+  return { domain, model, notebook, digest, feed, archive };
+}
+
+/**
+ * Reads a subscription that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no row carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readSubscription(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<SubscriptionRecord> {
+  const row = await store.findSubscriptionById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored subscription under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * The due time a subscription must carry, ready to be read as a
+ * number.
+ *
+ * @param row - The row to reach into.
+ * @returns Its `nextRunAt` in milliseconds — a primitive, which is
+ *   what the copy cases compare against so that a store handing its
+ *   own `Date` out cannot hold one lie against itself and pass.
+ * @throws When the subscription is unscheduled, so a case about a due
+ *   time cannot quietly assert over a null.
+ */
+function dueFor(row: SubscriptionRecord): number {
+  if (row.nextRunAt === null) {
+    throw new Error('expected the subscription to carry a due time');
+  }
+
+  return row.nextRunAt.getTime();
+}
+
+/**
+ * The natural key of a subscription, as one string.
+ *
+ * @param row - The row to read.
+ * @returns Its format and connector joined, which is what the pair
+ *   ordering is asserted over: two single-column lists would leave
+ *   the pairing itself unasserted.
+ */
+function tripleOf(row: SubscriptionRecord): string {
+  return `${row.format}/${row.connectorId}`;
 }
 
 /**
@@ -7016,6 +7372,1087 @@ describe('the connector config crossing the boundary', () => {
     // rather than as anything this store invented.
     expect(spare.config).toStrictEqual({});
     expect((await readConnector(store, spare.id)).config).toStrictEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The widest key in this file, and the only one over three columns
+// ---------------------------------------------------------------------------
+
+describe('the triple that keys a subscription', () => {
+  it('refuses a second row on a triple already held', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addSubscription(store, domain.id, RSS, notebook.id),
+    );
+
+    expect(refusal).toBeInstanceOf(StoreRefusal);
+
+    // The positive control, in this body rather than in a sibling
+    // case: a store refusing every write passes the assertion above.
+    const accepted = await addSubscription(
+      store,
+      domain.id,
+      'pdf',
+      notebook.id,
+    );
+
+    expect(accepted.format).toBe('pdf');
+    expect(await store.countSubscriptions(domain.id)).toBe(4);
+  });
+
+  it('names the mechanism and the constraint that refused', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addSubscription(store, domain.id, RSS, notebook.id),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_domain_id_format_connector_id_unique');
+  });
+
+  it('takes a second format at one connector', async () => {
+    const store = createMemoryResearchStore();
+    const planted = await seedSubscriptions(store, RADAR);
+    const { domain, notebook, digest } = planted;
+
+    // The first of the three widening controls a triple needs, and
+    // the fixture already carries it: `digest` and `feed` differ by
+    // format alone. A store keying on `(domain, connector)` refuses
+    // the write that produced it.
+    expect(digest.connectorId).toBe(notebook.id);
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+
+  it('takes a second connector for one format', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model, archive } = await seedSubscriptions(store, RADAR);
+
+    // The second: `digest` and `archive` differ by connector alone,
+    // which a store keying on `(domain, format)` refuses. One domain
+    // wanting one digest delivered to two destinations is ordinary.
+    expect(archive.format).toBe(OBSIDIAN);
+    expect(archive.connectorId).toBe(model.id);
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+
+  it('takes the same pair under a second domain', async () => {
+    const store = createMemoryResearchStore();
+    const { notebook } = await seedSubscriptions(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+
+    // The third: the key is scoped by the domain, so a second domain
+    // subscribing to the same format at the same connector is not a
+    // conflict at all. A store keying on `(format, connector)`
+    // refuses this.
+    const accepted = await addSubscription(
+      store,
+      transit.id,
+      RSS,
+      notebook.id,
+    );
+
+    expect(accepted.domainId).toBe(transit.id);
+    expect(await store.countSubscriptions(transit.id)).toBe(1);
+  });
+
+  it('leaves the standing subscription exactly as it was', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook, feed } = await seedSubscriptions(store, RADAR);
+
+    await refusalFrom(() => addSubscription(
+      store,
+      domain.id,
+      RSS,
+      notebook.id,
+      { intervalSeconds: 60, enabled: false },
+    ));
+
+    expect(await readSubscription(store, feed.id)).toStrictEqual(feed);
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+
+  it('refuses a re-point onto a triple already held', async () => {
+    const store = createMemoryResearchStore();
+    const { model, digest, archive } = await seedSubscriptions(store, RADAR);
+
+    // The same mechanism on an UPDATE, which this table reaches
+    // through TWO of the three key columns: `connectorId` here.
+    const refusal = await refusalFrom(
+      () => store.updateSubscription(digest.id, { connectorId: model.id }),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_domain_id_format_connector_id_unique');
+    expect(await readSubscription(store, digest.id)).toStrictEqual(digest);
+    expect(await readSubscription(store, archive.id)).toStrictEqual(archive);
+  });
+
+  it('refuses a reformat onto a triple already held', async () => {
+    const store = createMemoryResearchStore();
+    const { digest, feed } = await seedSubscriptions(store, RADAR);
+
+    // And `format` here: the other patchable third of the key. Two
+    // cases rather than one, because a store checking only the
+    // member it was handed passes whichever of the two it checked.
+    const refusal = await refusalFrom(
+      () => store.updateSubscription(digest.id, { format: RSS }),
+    );
+
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_domain_id_format_connector_id_unique');
+    expect(await readSubscription(store, feed.id)).toStrictEqual(feed);
+  });
+
+  it('takes a re-point onto a triple nothing holds', async () => {
+    const store = createMemoryResearchStore();
+    const { model, feed } = await seedSubscriptions(store, RADAR);
+
+    // The re-pointing `src/db/schema/scheduling.ts` says the
+    // connector delete's refusal exists to make explicit, and the
+    // acceptance control the two refusals above need.
+    const patched = await store.updateSubscription(feed.id, {
+      connectorId: model.id,
+    });
+
+    expect(patched?.connectorId).toBe(model.id);
+    expect(patched?.format).toBe(RSS);
+  });
+
+  it('takes a patch writing the triple back over itself', async () => {
+    const store = createMemoryResearchStore();
+    const { notebook, digest } = await seedSubscriptions(store, RADAR);
+
+    // A row is not in conflict with itself. A store looking the
+    // triple up without excluding the row being written refuses this.
+    const patched = await store.updateSubscription(digest.id, {
+      format: OBSIDIAN,
+      connectorId: notebook.id,
+      intervalSeconds: 900,
+    });
+
+    expect(patched?.intervalSeconds).toBe(900);
+    expect(patched?.format).toBe(OBSIDIAN);
+  });
+
+  it('frees the triple a deleted subscription held', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook, feed } = await seedSubscriptions(store, RADAR);
+
+    await store.deleteSubscription(feed.id);
+
+    const accepted = await addSubscription(
+      store,
+      domain.id,
+      RSS,
+      notebook.id,
+    );
+
+    expect(accepted.id).not.toBe(feed.id);
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+});
+
+describe('the export_subscriptions_format_check', () => {
+  it('refuses an insert whose format is outside the tuple', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addSubscription(store, domain.id, 'telegram', notebook.id),
+    );
+
+    expect(refusal.reason).toBe('check-violation');
+    expect(refusal.constraint).toBe('export_subscriptions_format_check');
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+
+  it('refuses a PATCH whose format is outside the tuple', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSubscriptions(store, RADAR);
+
+    // BOTH writes reach this CHECK, which is `sources_kind_check`'s
+    // shape rather than `connectors_kind_check`'s: `format` is
+    // patchable, because it selects the renderer that runs for THIS
+    // row and nothing outside the row reads it.
+    const refusal = await refusalFrom(
+      () => store.updateSubscription(feed.id, { format: 'telegram' }),
+    );
+
+    expect(refusal.reason).toBe('check-violation');
+    expect(refusal.constraint).toBe('export_subscriptions_format_check');
+    expect(await readSubscription(store, feed.id)).toStrictEqual(feed);
+  });
+
+  it('takes every member of the tuple it is held to', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const connector = await addConnector(store, 'notebook', ARCHIVE_NOTEBOOK);
+
+    // The acceptance control, looped over the RUNTIME tuple rather
+    // than a list written out here: a member added to
+    // `EXPORT_FORMATS` reaches this case, and a store narrowing the
+    // guard to some of them fails it. Without this, a store refusing
+    // every format passes the two cases above. Every format at ONE
+    // connector, so the loop is the key's second widening control as
+    // well: a store keying on `(domain, connector)` refuses its
+    // second turn.
+    for (const format of EXPORT_FORMATS) {
+      const accepted = await addSubscription(
+        store,
+        domain.id,
+        format,
+        connector.id,
+      );
+
+      expect(accepted.format).toBe(format);
+    }
+
+    expect(await store.countSubscriptions(domain.id))
+      .toBe(EXPORT_FORMATS.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The two foreign keys, one per end of the row
+// ---------------------------------------------------------------------------
+
+describe('the subscription domain foreign key', () => {
+  it('refuses an insert naming no stored domain', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addSubscription(store, 404, OBSIDIAN, notebook.id),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_domain_id_domains_id_fk');
+
+    // The positive control: the SAME write into a domain that exists.
+    const accepted = await addSubscription(
+      store,
+      domain.id,
+      'pdf',
+      notebook.id,
+    );
+
+    expect(accepted.domainId).toBe(domain.id);
+  });
+
+  it('is unreachable from the patch, which names no domain', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    // `SubscriptionPatch` declares no `domainId`, so the containment
+    // is the type's; the cast is what lets a case ask what happens
+    // when one arrives anyway, which is the reading a route's
+    // `.strict()` schema cannot give from inside `src/`.
+    const patched = await store.updateSubscription(
+      digest.id,
+      { domainId: 404 } as SubscriptionPatch,
+    );
+
+    expect(patched?.domainId).toBe(digest.domainId);
+    expect((await readSubscription(store, digest.id)).domainId)
+      .toBe(digest.domainId);
+  });
+});
+
+describe('the subscription connector foreign key', () => {
+  it('refuses an insert naming no stored connector', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model } = await seedSubscriptions(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addSubscription(store, domain.id, 'pdf', 404),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+
+    // The positive control: the SAME write at a connector that is
+    // there. A store refusing every insert passes the assertions
+    // above.
+    const accepted = await addSubscription(store, domain.id, 'pdf', model.id);
+
+    expect(accepted.connectorId).toBe(model.id);
+  });
+
+  it('refuses a re-point onto no stored connector', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSubscriptions(store, RADAR);
+
+    // BOTH writes reach it, `connectorId` being patchable — the
+    // re-pointing the connector delete's own refusal exists to make
+    // explicit, which is exactly the operation that can name a row
+    // somebody has just retired.
+    const refusal = await refusalFrom(
+      () => store.updateSubscription(feed.id, { connectorId: 404 }),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+    expect(await readSubscription(store, feed.id)).toStrictEqual(feed);
+  });
+
+  it('refuses a re-point onto a connector just deleted', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSubscriptions(store, RADAR);
+    const retired = await addConnector(store, 'search', 'example-retired');
+
+    // The race `src/subscriptions/store.ts` describes, reached
+    // directly rather than argued: the service resolves the connector
+    // before writing, so what is left is the row going away in
+    // between. This store's connector guard reads a planted count, so
+    // nothing holds the delete and the window is openable by hand.
+    expect(await store.deleteConnector(retired.id)).toBe(true);
+
+    const refusal = await refusalFrom(
+      () => store.updateSubscription(feed.id, { connectorId: retired.id }),
+    );
+
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+  });
+
+  it('names the constraint the connector guard names', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model } = await seedSubscriptions(store, RADAR);
+
+    store.setConnectorSubscriptions(model.id, 1);
+
+    // ONE CONSTRAINT READ FROM BOTH ENDS, which no other mechanism in
+    // this file is. The connector guard refuses a DELETE and this
+    // half refuses a WRITE, and both name the same key — so a
+    // rename on either side that missed the other would show up here
+    // rather than in a deployment.
+    const held = await refusalFrom(() => store.deleteConnector(model.id));
+    const written = await refusalFrom(
+      () => addSubscription(store, domain.id, 'email_draft', 404),
+    );
+
+    expect(written.constraint).toBe(held.constraint);
+    expect(held.reason).toBe(written.reason);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sequence behind export_subscriptions.id, and the four refusals
+// that burn it
+// ---------------------------------------------------------------------------
+
+describe('the subscription id sequence', () => {
+  it('hands the first subscription id 1', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const connector = await addConnector(store, 'notebook', ARCHIVE_NOTEBOOK);
+    const inserted = await addSubscription(
+      store,
+      domain.id,
+      OBSIDIAN,
+      connector.id,
+    );
+
+    // Its own counter, and none of the other seven: the domain and
+    // the connector above each hold id 1 as well.
+    expect(inserted.id).toBe(1);
+    expect(domain.id).toBe(1);
+    expect(connector.id).toBe(1);
+  });
+
+  it('burns an id on a refused insert, as the sequence does', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    await refusalFrom(
+      () => addSubscription(store, domain.id, RSS, notebook.id),
+    );
+
+    const next = await addSubscription(store, domain.id, 'pdf', notebook.id);
+
+    // 5 rather than 4: the three seeded rows took 1, 2 and 3, and the
+    // refusal took the fourth. No measurement on this table of its
+    // own — the reasoning is `personas`', where two refused inserts
+    // between two accepted ones left a gap of two against the live
+    // server.
+    expect(next.id).toBe(5);
+  });
+
+  it('burns one on a CHECK refusal as well', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    await refusalFrom(
+      () => addSubscription(store, domain.id, 'telegram', notebook.id),
+    );
+
+    const next = await addSubscription(store, domain.id, 'pdf', notebook.id);
+
+    expect(next.id).toBe(5);
+  });
+
+  it('burns one on each foreign key too', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    // The counter advances ahead of EVERY check rather than ahead of
+    // the key check alone, and this table has four to say it over.
+    await refusalFrom(
+      () => addSubscription(store, 404, OBSIDIAN, notebook.id),
+    );
+    await refusalFrom(() => addSubscription(store, domain.id, 'pdf', 404));
+
+    const next = await addSubscription(store, domain.id, 'pdf', notebook.id);
+
+    expect(next.id).toBe(6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The cascade that arrives, and the one it deliberately stops short of
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its subscriptions', () => {
+  it('takes the subscriptions of the domain it removes', async () => {
+    const store = createMemoryResearchStore();
+    const planted = await seedSubscriptions(store, RADAR);
+    const { domain, digest, feed, archive } = planted;
+
+    // `export_subscriptions.domain_id` is `ON DELETE CASCADE`, and
+    // nothing in schema v2 points at `export_subscriptions`, so there
+    // is no guard below this one to refuse it the way
+    // `categories.parent_id` refuses a category delete.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findSubscriptionById(digest.id)).toBeNull();
+    expect(await store.findSubscriptionById(feed.id)).toBeNull();
+    expect(await store.findSubscriptionById(archive.id)).toBeNull();
+    expect(await store.countSubscriptions(domain.id)).toBe(0);
+    expect(await store.listSubscriptions(domain.id, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+  });
+
+  it('leaves the connectors those rows named standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model, notebook } = await seedSubscriptions(store, RADAR);
+
+    await store.deleteDomain(domain.id);
+
+    // The cascade stops exactly where the schema stops it. The
+    // `ON DELETE cascade` is on `domain_id`; `connector_id` carries
+    // `ON DELETE no action` and points the other way, so a domain
+    // delete clears subscriptions OUT of a connector's way rather
+    // than taking the connector with them.
+    expect(await store.countSubscriptions(domain.id)).toBe(0);
+    expect(await store.countConnectors(EVERY_KIND)).toBe(3);
+    expect(await readConnector(store, model.id)).toStrictEqual(model);
+    expect(await readConnector(store, notebook.id)).toStrictEqual(notebook);
+  });
+
+  it('leaves a second domain subscriptions standing', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedSubscriptions(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+    const kept = await addSubscription(
+      store,
+      transit.id,
+      RSS,
+      radar.notebook.id,
+    );
+
+    await store.deleteDomain(radar.domain.id);
+
+    expect(await store.countSubscriptions(transit.id)).toBe(1);
+    expect(await readSubscription(store, kept.id)).toStrictEqual(kept);
+  });
+
+  it('takes the subscriptions and the topics together', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, digest } = await seedSubscriptions(store, RADAR);
+    const topic = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    // Every foreign key onto `domains.id` cascades, so one delete
+    // reaches the subscriptions and the topics in the same statement.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findSubscriptionById(digest.id)).toBeNull();
+    expect(await store.findTopicById(topic.id)).toBeNull();
+  });
+
+  it('is the only thing that removes one in bulk', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, digest } = await seedSubscriptions(store, RADAR);
+
+    // The other half of the cascade claim: a subscription goes when
+    // its domain goes and at no other time, so deleting the taxonomy
+    // under a domain leaves every subscription of it standing.
+    const category = await addCategory(store, domain.id, PLATFORMS);
+
+    expect(await store.deleteCategory(category.id)).toBe(true);
+    expect(await readSubscription(store, digest.id)).toStrictEqual(digest);
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+
+  it('frees the triples the deleted domain held', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    await store.deleteDomain(domain.id);
+
+    const rebuilt = await store.insertDomain(domainInput(RADAR));
+    const accepted = await addSubscription(
+      store,
+      rebuilt.id,
+      RSS,
+      notebook.id,
+    );
+
+    expect(accepted.format).toBe(RSS);
+    expect(await store.countSubscriptions(rebuilt.id)).toBe(1);
+  });
+});
+
+describe('the connector delete a stored subscription does not hold', () => {
+  it('leaves the planted dependent count to the seam', async () => {
+    const store = createMemoryResearchStore();
+    const { model, archive } = await seedSubscriptions(store, RADAR);
+
+    // The SECOND place this file knowingly answers something a
+    // deployment would not, pinned rather than left to be discovered:
+    // `countConnectorDependents` reads what
+    // `setConnectorSubscriptions` planted and never the rows this
+    // half writes, so a stored subscription answers a counted zero
+    // and its connector's delete lands.
+    // `src/connectors/db-store.ts` counts the rows instead, and
+    // `MemoryResearchStore.setConnectorSubscriptions` carries why the
+    // two are not reconciled here.
+    expect(archive.connectorId).toBe(model.id);
+    expect(await store.countConnectorDependents(model.id))
+      .toStrictEqual({ exportSubscriptions: 0 });
+    expect(await store.deleteConnector(model.id)).toBe(true);
+
+    // And the plant is what a case wanting the guard reaches for,
+    // whether or not a subscription is stored. Without this the
+    // assertions above would equally describe a guard that had
+    // stopped reading the seam at all.
+    const guarded = await addConnector(store, 'search', 'example-guarded');
+
+    store.setConnectorSubscriptions(guarded.id, 1);
+
+    const refusal = await refusalFrom(
+      () => store.deleteConnector(guarded.id),
+    );
+
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+  });
+
+  it('leaves the subscription behind a deleted connector', async () => {
+    const store = createMemoryResearchStore();
+    const { model, archive } = await seedSubscriptions(store, RADAR);
+
+    await store.deleteConnector(model.id);
+
+    // The other face of the same divergence, and the reason it is
+    // worth a case rather than a sentence: the row survives naming an
+    // id nothing carries, which is a state a deployment's
+    // `ON DELETE no action` makes unreachable. A later write to it
+    // still meets the foreign-key guard, so the store is inconsistent
+    // in exactly one direction and says so.
+    expect(await readSubscription(store, archive.id)).toStrictEqual(archive);
+
+    const refusal = await refusalFrom(
+      () => store.updateSubscription(archive.id, { connectorId: model.id }),
+    );
+
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The one mutable member a subscription record carries
+// ---------------------------------------------------------------------------
+
+describe('the subscription due time crossing the boundary', () => {
+  it('lands an unscheduled row, which is not an absent one', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    // `InsertSubscriptionInput` declares no member that could set it,
+    // so the null is the type's doing rather than a default. Read
+    // back as well as answered, since a store echoing its argument
+    // would answer null having stored anything at all.
+    expect(digest.nextRunAt).toBeNull();
+    expect((await readSubscription(store, digest.id)).nextRunAt).toBeNull();
+  });
+
+  it('does not store the Date object it was handed', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+    const due = new Date('2026-03-01T00:00:00.000Z');
+
+    await store.updateSubscriptionSchedule(digest.id, due);
+
+    // The copy on the way IN. A store holding this instance lets the
+    // run-now that scheduled the subscription go on moving its due
+    // time afterwards, through a member the port declares `readonly`.
+    due.setTime(Date.parse('2030-06-01T00:00:00.000Z'));
+
+    expect(dueFor(await readSubscription(store, digest.id)))
+      .toBe(Date.parse('2026-03-01T00:00:00.000Z'));
+  });
+
+  it('answers a due time the write cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    const written = await store.updateSubscriptionSchedule(
+      digest.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    if (written === null) {
+      throw new Error('expected the schedule write to answer a row');
+    }
+
+    const scheduledAt = dueFor(written);
+
+    written.nextRunAt?.setTime(0);
+
+    // Against the primitive captured BEFORE the mutation: a store
+    // handing its own `Date` out has aliased the two, and comparing
+    // against `written.nextRunAt` would hold one lie against itself.
+    expect(dueFor(await readSubscription(store, digest.id)))
+      .toBe(scheduledAt);
+  });
+
+  it('answers a due time the read cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    await store.updateSubscriptionSchedule(
+      digest.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    const read = await readSubscription(store, digest.id);
+    const scheduledAt = dueFor(read);
+
+    read.nextRunAt?.setTime(0);
+
+    expect(dueFor(await readSubscription(store, digest.id)))
+      .toBe(scheduledAt);
+  });
+
+  it('answers a due time the list cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, digest } = await seedSubscriptions(store, RADAR);
+
+    await store.updateSubscriptionSchedule(
+      digest.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    const page = await store.listSubscriptions(domain.id, WHOLE_COLLECTION);
+    const [listed] = page.filter((row) => row.id === digest.id);
+
+    if (listed === undefined) {
+      throw new Error('expected the list to answer the scheduled row');
+    }
+
+    const scheduledAt = dueFor(listed);
+
+    listed.nextRunAt?.setTime(0);
+
+    expect(dueFor(await readSubscription(store, digest.id)))
+      .toBe(scheduledAt);
+  });
+
+  it('answers a fresh Date on every read', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    await store.updateSubscriptionSchedule(
+      digest.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    const first = await readSubscription(store, digest.id);
+    const second = await readSubscription(store, digest.id);
+
+    expect(first.nextRunAt).not.toBe(second.nextRunAt);
+    expect(dueFor(first)).toBe(dueFor(second));
+  });
+
+  it('keeps a null a null across every answer', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSubscriptions(store, RADAR);
+
+    // The branch the copy needs and the three answer sites it has to
+    // survive: a subscription nobody has run now is unscheduled, and
+    // a copy reaching for the instant unconditionally would throw
+    // here rather than answer.
+    const patched = await store.updateSubscription(feed.id, {
+      intervalSeconds: 900,
+    });
+    const page = await store.listSubscriptions(domain.id, WHOLE_COLLECTION);
+
+    expect(patched?.nextRunAt).toBeNull();
+    expect((await readSubscription(store, feed.id)).nextRunAt).toBeNull();
+    expect(page.filter((row) => row.nextRunAt !== null)).toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a page of subscriptions answers, and what scopes it
+// ---------------------------------------------------------------------------
+
+describe('the subscription list', () => {
+  it('orders by format, then by connector within it', async () => {
+    const store = createMemoryResearchStore();
+    const planted = await seedSubscriptions(store, RADAR);
+    const { domain, model, notebook } = planted;
+
+    const page = await store.listSubscriptions(domain.id, WHOLE_COLLECTION);
+
+    // The natural key per row rather than two single-column lists,
+    // which would leave the pairing itself unasserted. The fixture is
+    // written so the right order is wrong under every single-column
+    // reading: `feed` goes in first and sorts LAST, and the two
+    // `obsidian_md` rows are separated by the connector alone.
+    expect(page.map(tripleOf)).toStrictEqual([
+      `${OBSIDIAN}/${notebook.id}`,
+      `${OBSIDIAN}/${model.id}`,
+      `${RSS}/${notebook.id}`,
+    ]);
+    expect(page.map((row) => row.id))
+      .toStrictEqual([planted.digest.id, planted.archive.id, planted.feed.id]);
+  });
+
+  it('reads only the window it was given', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model } = await seedSubscriptions(store, RADAR);
+
+    const page = await store.listSubscriptions(domain.id, {
+      limit: 1,
+      offset: 1,
+    });
+
+    expect(page.map(tripleOf)).toStrictEqual([`${OBSIDIAN}/${model.id}`]);
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+
+  it('answers an empty window past the end', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedSubscriptions(store, RADAR);
+
+    expect(await store.listSubscriptions(domain.id, { limit: 50, offset: 50 }))
+      .toStrictEqual([]);
+  });
+
+  it('lists only the subscriptions of the domain asked about', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedSubscriptions(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+
+    await addSubscription(store, transit.id, RSS, radar.model.id);
+
+    const page = await store.listSubscriptions(
+      radar.domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    expect(page.map((row) => row.id))
+      .toStrictEqual([radar.digest.id, radar.archive.id, radar.feed.id]);
+    expect(await store.countSubscriptions(transit.id)).toBe(1);
+  });
+
+  it('answers an empty list for a domain subscribing to none', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    expect(await store.listSubscriptions(domain.id, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+    expect(await store.countSubscriptions(domain.id)).toBe(0);
+  });
+
+  it('answers zero for an id no domain carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.countSubscriptions(404)).toBe(0);
+    expect(await store.listSubscriptions(404, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+  });
+
+  it('answers rows a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedSubscriptions(store, RADAR);
+
+    const [listed] = await store.listSubscriptions(domain.id, WHOLE_COLLECTION);
+
+    if (listed === undefined) {
+      throw new Error('expected the list to answer a row');
+    }
+
+    (listed as { format: string }).format = 'written through the list';
+
+    // Against the constants rather than against the records the
+    // writes answered: a store handing its own objects out has
+    // ALIASED the two, and the comparison then holds one lie against
+    // itself and passes.
+    const reread = await store.listSubscriptions(domain.id, WHOLE_COLLECTION);
+
+    expect(reread.map((row) => row.format))
+      .toStrictEqual([OBSIDIAN, OBSIDIAN, RSS]);
+  });
+});
+
+describe('the single subscription read', () => {
+  it('answers null for an id no subscription carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.findSubscriptionById(404)).toBeNull();
+  });
+
+  it('answers a row a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+    const interval = digest.intervalSeconds;
+
+    const read = await readSubscription(store, digest.id);
+
+    (read as { intervalSeconds: number }).intervalSeconds = 1;
+
+    // Against a primitive read BEFORE the mutation: comparing
+    // against `digest.intervalSeconds` would compare one lie against
+    // itself, since a store handing its own objects out aliased the
+    // two.
+    expect((await readSubscription(store, digest.id)).intervalSeconds)
+      .toBe(interval);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The three subscription writes that are not the insert
+// ---------------------------------------------------------------------------
+
+describe('the subscription patch', () => {
+  it('rewrites the members it names and leaves the rest', async () => {
+    const store = createMemoryResearchStore();
+    const { notebook, digest } = await seedSubscriptions(store, RADAR);
+
+    const patched = await store.updateSubscription(digest.id, {
+      intervalSeconds: 900,
+      enabled: false,
+    });
+
+    expect(patched?.intervalSeconds).toBe(900);
+    expect(patched?.enabled).toBe(false);
+    expect(patched?.format).toBe(OBSIDIAN);
+    expect(patched?.connectorId).toBe(notebook.id);
+  });
+
+  it('clears a bound with a null and leaves it alone when absent', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model } = await seedSubscriptions(store, RADAR);
+    const bounded = await addSubscription(store, domain.id, 'pdf', model.id, {
+      minIntervalSeconds: 300,
+      maxIntervalSeconds: 86400,
+    });
+
+    // The three requests a nullable member distinguishes: absent
+    // leaves the ceiling alone, an explicit null clears the floor. A
+    // store reaching for `??` collapses the two and makes removing a
+    // floor unexpressible.
+    const patched = await store.updateSubscription(bounded.id, {
+      minIntervalSeconds: null,
+    });
+
+    expect(patched?.minIntervalSeconds).toBeNull();
+    expect(patched?.maxIntervalSeconds).toBe(86400);
+
+    const lowered = await store.updateSubscription(bounded.id, {
+      maxIntervalSeconds: 43200,
+    });
+
+    expect(lowered?.maxIntervalSeconds).toBe(43200);
+    expect(lowered?.minIntervalSeconds).toBeNull();
+  });
+
+  it('writes a false enabled rather than ignoring it', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    // `enabled` is NOT NULL and defaults true, so `false` is a value
+    // being written rather than a member being left alone. This is
+    // the column for suspending a delivery; cancelling it is the
+    // delete, and a run-now is neither.
+    await store.updateSubscription(digest.id, { enabled: false });
+
+    expect((await readSubscription(store, digest.id)).enabled).toBe(false);
+  });
+
+  it('answers the stored row for a patch naming no member', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    // `export_subscriptions` carries no `updated_at`, so an empty
+    // patch has literally nothing to set and drizzle throws `No
+    // values to set` on an empty update list. The port decides the
+    // answer rather than leaving its two implementations to disagree.
+    expect(await store.updateSubscription(digest.id, {}))
+      .toStrictEqual(digest);
+  });
+
+  it('cannot reach the due time whatever it is handed', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    // `SubscriptionPatch` declares no `nextRunAt`, so the containment
+    // is the type's; the cast is what lets a case ask what happens
+    // when one arrives anyway, which is the reading a route's
+    // `.strict()` schema cannot give from inside `src/`.
+    const patched = await store.updateSubscription(
+      digest.id,
+      { nextRunAt: new Date('2026-03-01T00:00:00.000Z') } as SubscriptionPatch,
+    );
+
+    expect(patched?.nextRunAt).toBeNull();
+    expect((await readSubscription(store, digest.id)).nextRunAt).toBeNull();
+  });
+
+  it('answers null from a patch naming no stored row', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.updateSubscription(404, { enabled: false })).toBeNull();
+  });
+
+  it('answers a row a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    const patched = await store.updateSubscription(digest.id, {
+      intervalSeconds: 900,
+    });
+
+    if (patched === null) {
+      throw new Error('expected the patch to answer a row');
+    }
+
+    (patched as { intervalSeconds: number }).intervalSeconds = 1;
+
+    expect((await readSubscription(store, digest.id)).intervalSeconds)
+      .toBe(900);
+  });
+});
+
+describe('the subscription schedule write', () => {
+  it('writes the instant it is handed and nothing else', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+    const due = new Date('2026-03-01T00:00:00.000Z');
+
+    const written = await store.updateSubscriptionSchedule(digest.id, due);
+
+    // The whole record against the row before the call, with only
+    // the due time permitted to differ: the port says this method
+    // writes one column, and asserting the column alone would pass
+    // against a store that also re-pointed the connector.
+    expect(written).toStrictEqual({ ...digest, nextRunAt: due });
+  });
+
+  it('takes no view of the instant it is handed', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model } = await seedSubscriptions(store, RADAR);
+    const row = await addSubscription(store, domain.id, 'pdf', model.id, {
+      enabled: false,
+      minIntervalSeconds: 300,
+      maxIntervalSeconds: 900,
+    });
+    const past = new Date('2020-01-01T00:00:00.000Z');
+
+    // A time in the past on a DISABLED row: no clamp, no clock and
+    // no reading of `enabled`. All three are decisions
+    // `src/subscriptions/service.ts` takes, and a store taking them
+    // would move a rule into the half that needs a database.
+    const written = await store.updateSubscriptionSchedule(row.id, past);
+
+    expect(written?.nextRunAt?.toISOString())
+      .toBe('2020-01-01T00:00:00.000Z');
+    expect(written?.enabled).toBe(false);
+  });
+
+  it('moves a due time that is already set', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    await store.updateSubscriptionSchedule(
+      digest.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+    await store.updateSubscriptionSchedule(
+      digest.id,
+      new Date('2026-03-08T00:00:00.000Z'),
+    );
+
+    expect((await readSubscription(store, digest.id)).nextRunAt?.toISOString())
+      .toBe('2026-03-08T00:00:00.000Z');
+  });
+
+  it('answers null for an id no subscription carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.updateSubscriptionSchedule(404, new Date()))
+      .toBeNull();
+  });
+});
+
+describe('the subscription delete', () => {
+  it('removes one and leaves its domain standing', async () => {
+    const store = createMemoryResearchStore();
+    const planted = await seedSubscriptions(store, RADAR);
+    const { domain, digest, feed } = planted;
+
+    expect(await store.deleteSubscription(digest.id)).toBe(true);
+    expect(await store.findSubscriptionById(digest.id)).toBeNull();
+    expect(await readSubscription(store, feed.id)).toStrictEqual(feed);
+    expect(await readDomain(store, RADAR)).toStrictEqual(domain);
+  });
+
+  it('answers false for an id no subscription carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.deleteSubscription(404)).toBe(false);
+  });
+
+  it('cannot be refused, unlike the connector delete', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model, digest } = await seedSubscriptions(store, RADAR);
+
+    store.setConnectorSubscriptions(model.id, 1);
+
+    // Nothing in schema v2 points at `export_subscriptions`, so there
+    // is no guard to run into and no state a subscription can be in
+    // that holds its delete. The connector beside it IS refused,
+    // under the very rule this one has no counterpart of — which is
+    // what says the acceptance above is a fact about the table rather
+    // than a store that refuses nothing.
+    expect(await store.deleteSubscription(digest.id)).toBe(true);
+    expect(await store.countSubscriptions(domain.id)).toBe(2);
+
+    const refusal = await refusalFrom(() => store.deleteConnector(model.id));
+
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
   });
 });
 

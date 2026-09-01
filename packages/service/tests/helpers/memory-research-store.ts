@@ -1,12 +1,13 @@
 /**
  * @packageDocumentation
  * The in-memory dataset every research store port is driven through
- * in the isolated suite. All seven halves are here — the domains
+ * in the isolated suite. All eight halves are here — the domains
  * half, the taxonomy half with categories and terms together, the
  * personas beside them, the topics the dispatcher comes for, the
  * sources it reads and the review queue over what they captured, the
- * connectors the deployment reaches other services through, and the
- * operator settings it is configured by.
+ * connectors the deployment reaches other services through, the
+ * export subscriptions that pair the two, and the operator settings
+ * it is configured by.
  *
  * ONE DATASET RATHER THAN SEVEN FAKES, which is why this file is not
  * named for any one of the ports it satisfies. `src/domains/store.ts`
@@ -362,6 +363,89 @@
  * keeps a caller that kept an answered row from reading one this
  * store has since replaced.
  *
+ * THE SUBSCRIPTIONS HALF IS THE ONLY ONE STANDING BETWEEN TWO
+ * OTHERS, which is why it is last and why it could not have been a
+ * fake of its own. `export_subscriptions.domain_id` cascades, so its
+ * rows are the domains half's to take, and its `connector_id` names
+ * a `connectors` row, so its writes are the connectors half's to be
+ * refused by. Every other half here answers to at most one
+ * neighbour. One dataset is what lets a write ask whether a
+ * connector another half stored is still there, and two fakes would
+ * agree with each other until a case deleted one.
+ *
+ * ITS NATURAL KEY IS A TRIPLE, THE WIDEST IN THIS FILE, AND BOTH
+ * WRITES REACH IT. The key
+ * `export_subscriptions_domain_id_format_connector_id_unique` is
+ * declared over the domain, the format and the connector together
+ * because no PAIR of the three identifies a subscription: one domain
+ * may want the same digest in two formats, and may want one format
+ * delivered to two destinations. So the two widening controls a
+ * per-kind key needs become three here — a second format under one
+ * connector, a second connector under one format, and the same triple
+ * under a second domain — and a store keying on any pair refuses a
+ * write the database takes.
+ *
+ * FOUR MECHANISMS SIT ON ITS TWO WRITES, WHICH IS THE WIDEST WRITE
+ * SURFACE OF ANY HALF HERE. The triple above refuses on an INSERT
+ * and on an UPDATE alike, `format` and `connectorId` both being
+ * patchable. `export_subscriptions_format_check` refuses a format
+ * outside `EXPORT_FORMATS` on both writes too — the sources half's
+ * shape rather than the connectors half's, and for the sources
+ * half's reason: a format selects the renderer that runs for THIS
+ * row and nothing outside the row reads it.
+ * `export_subscriptions_domain_id_domains_id_fk` refuses a domain
+ * that is not there, and the INSERT alone reaches it, `domainId`
+ * being unpatchable. And
+ * `export_subscriptions_connector_id_connectors_id_fk` refuses a
+ * connector that is not there, on both writes, because re-pointing
+ * a delivery is the operation `src/db/schema/scheduling.ts` says the
+ * connector delete's own refusal exists to make explicit.
+ *
+ * THAT LAST KEY IS THE ONE CONSTRAINT THIS FILE IMITATES FROM BOTH
+ * ENDS, and the two ends are different rules. Read from `connectors`
+ * it holds a DELETE: a connector an export subscription still names
+ * cannot go, which is the connectors half's guarded delete above. Read
+ * from here it refuses a WRITE: a subscription naming a connector that
+ * is not there cannot land. The port in `src/subscriptions/store.ts`
+ * calls the second a race rather than an ordinary refusal, the service
+ * having resolved the connector before writing — but a race a
+ * deployment can lose is a state this store can be put in directly, so
+ * the guard is imitated rather than argued away.
+ *
+ * ITS ONLY UNOBSERVABLE ORDER IS ARGUED AND NOT MEASURED, which is
+ * the sources half's answer to the same question. Four mechanisms
+ * make six pairings and three of them cannot both fire at all: the
+ * key opens on the very columns the CHECK and each foreign key
+ * constrain, so a write proposing a format outside the tuple, or a
+ * domain or connector that is not there, can duplicate nothing. What
+ * is left — the CHECK beside a missing parent, and the two foreign
+ * keys beside each other — is reachable, and the order below rests
+ * on when a server evaluates each KIND of mechanism rather than on
+ * any reading of this table. No case pins it.
+ *
+ * ITS DELETE CANNOT BE REFUSED, and that is a re-derivation rather
+ * than an assumption: nothing in the generated SQL references
+ * `public.export_subscriptions`, read in the same command as the one
+ * reference to `public.connectors` that is the live needle beside it.
+ * `briefings` is the near miss and is not one — the schema module
+ * `src/db/schema/runs.ts` states that no foreign key runs between the
+ * two, so a rendered digest outlives the subscription that asked for
+ * it as stored text rather than as a reference. So this half has a
+ * guarded delete on neither side of it: it is refused by nothing, and
+ * what it CLEARS is the connectors half's refusal.
+ *
+ * IT DOES NOT CLEAR THAT REFUSAL HERE, AND THAT IS THIS FILE'S
+ * SECOND KNOWN DIVERGENCE. `ConnectorStore.countConnectorDependents`
+ * reads what {@link MemoryResearchStore.setConnectorSubscriptions}
+ * planted and never the rows this half writes, exactly as the domain
+ * guard reads a planted number over real topics and sources. The
+ * seam's own TSDoc carries why — `src/connectors/service.test.ts`
+ * and `src/connectors/routes.test.ts` reach that guard by planting
+ * over a store holding no subscription at all, and a rule mixing a
+ * planted number with a counted one answers neither — and
+ * `tests/live/api-wave2.live.test.ts` is where the counted answer is
+ * discharged.
+ *
  * THE SETTINGS HALF REFUSES NOTHING, AND THAT IS A MEASUREMENT
  * RATHER THAN A SIMPLIFICATION. `operator_settings` carries two
  * mechanisms and neither is reachable through the port: a second
@@ -412,6 +496,11 @@
  * copied in both directions and a null stays a null. A store holding
  * the caller's instance would let the call that scheduled a topic go
  * on moving the due time afterwards.
+ * `export_subscriptions.next_run_at` is the SECOND and is the same
+ * column: both tables spread the same `schedulableColumns()` helper,
+ * so the argument carries over word for word rather than being made
+ * again, and it is the ONLY mutable member a subscription record
+ * carries.
  *
  * `sources` CARRIES TWO NULLABLE STAMPS RATHER THAN ONE, and a
  * planted document carries a third that is never null.
@@ -482,7 +571,12 @@
  * and burns it on both of ITS mechanisms on the same reasoning: a
  * key refusal and a non-key refusal are the pair the `personas` gap
  * of two was measured over, and this table's CHECK stands where that
- * measurement's foreign key did.
+ * measurement's foreign key did. `export_subscriptions` carries an
+ * EIGHTH and burns it on all FOUR of its mechanisms, which is the
+ * same reasoning again and the widest reach it has had: the
+ * `personas` gap of two was measured over a key refusal and a
+ * foreign-key one, and this table's four are that pair plus a CHECK
+ * and a second foreign key.
  */
 import type {
   ConnectorDependentCounts,
@@ -521,6 +615,12 @@ import type {
   SourceWithParseStats,
 } from '../../src/sources/store.js';
 import type {
+  InsertSubscriptionInput,
+  SubscriptionPatch,
+  SubscriptionRecord,
+  SubscriptionStore,
+} from '../../src/subscriptions/store.js';
+import type {
   CategoryPatch,
   CategoryRecord,
   CategoryWithTermCount,
@@ -541,6 +641,7 @@ import type {
 import {
   CONNECTOR_KINDS,
   DOCUMENT_PARSE_STATUSES,
+  EXPORT_FORMATS,
   SOURCE_KINDS,
 } from '../../src/db/schema/values.js';
 import { StoreRefusal } from '../../src/db/store-errors.js';
@@ -594,7 +695,7 @@ export interface MemorySourceDocument {
 }
 
 /**
- * All seven research ports over one dataset, plus the four seams a
+ * All eight research ports over one dataset, plus the four seams a
  * case needs that no port declares.
  *
  * EVERY ONE OF THEM WHOLE rather than a `Pick` of it. The category
@@ -602,9 +703,9 @@ export interface MemorySourceDocument {
  * unwritten, which was the honest statement of what existed rather
  * than a gap papered over with stubs; all twelve taxonomy methods,
  * all six persona ones, all seven topic ones, all nine source ones,
- * all seven connector ones and both settings ones are here now, so a
- * caller wanting any of the seven ports entire can be handed this
- * store.
+ * all seven connector ones, all seven subscription ones and both
+ * settings ones are here now, so a caller wanting any of the eight
+ * ports entire can be handed this store.
  *
  * `TopicStore` was the first member from outside wave 1 and
  * `SourceStore` is the second, and both join this file rather than
@@ -619,7 +720,18 @@ export interface MemorySourceDocument {
  * dataset — what does is the composed store `src/index.ts` builds
  * and the surface that reads across the two: an export subscription
  * pairs a domain with a connector, so the delete this port guards is
- * refused by rows a later half of this same file will write.
+ * refused by rows the half below it writes.
+ *
+ * `SubscriptionStore` IS THE FOURTH AND IS THE ONE THAT NEEDS BOTH
+ * REASONS AT ONCE, which is why it is last and why it could not have
+ * stood on its own at all. `export_subscriptions.domain_id`
+ * cascades, so a domain deleted through `DomainStore` has to take its
+ * subscriptions with it — the topics and sources argument — and
+ * `export_subscriptions.connector_id` names a `connectors` row, so a
+ * write here has to be able to ask whether that row is there — the
+ * connectors argument, read from the writing end. A subscriptions
+ * fake standing alone could answer neither question, and two fakes
+ * would agree with each other until a case deleted something.
  *
  * Nothing in `src/` is handed a {@link MemoryResearchStore} — a
  * service takes the port — so the seams below cannot become a way for
@@ -632,7 +744,8 @@ export interface MemoryResearchStore extends
   SettingsStore,
   TopicStore,
   SourceStore,
-  ConnectorStore {
+  ConnectorStore,
+  SubscriptionStore {
   /**
    * Plants what a domain has ACCUMULATED, for the delete guard to
    * read back through {@link DomainStore.countDomainDependents}.
@@ -755,15 +868,24 @@ export interface MemoryResearchStore extends
    * row would carry a domain, a format and a due time no case could
    * read back, and would imitate a shape rather than a rule.
    *
-   * THE NUMBER IS AUTHORITATIVE, which is
-   * {@link MemoryResearchStore.setDomainDependents}' decision rather
-   * than the sources documents'. Today it is the only decision
-   * available: `SubscriptionStore` is a later task, so no port here
-   * writes an `export_subscriptions` row and there is nothing to
-   * count from. When that half lands this seam meets the question the
-   * domain guard already answered — a planted number a stored row
-   * cannot move — and the answer is owed HERE, in this TSDoc and in
-   * the module header, whichever way it goes.
+   * THE NUMBER IS AUTHORITATIVE, AND STAYS SO NOW THAT THERE IS
+   * SOMETHING TO COUNT — which is the question this TSDoc was left
+   * owing and which it answers here.
+   * {@link SubscriptionStore.insertSubscription} below writes real
+   * `export_subscriptions` rows, so counting them was available; what
+   * rules it out is that `src/connectors/service.test.ts` and
+   * `src/connectors/routes.test.ts` reach this guard by PLANTING,
+   * over a store holding no subscription at all, and a rule mixing a
+   * planted number with a counted one answers neither. So this is
+   * {@link MemoryResearchStore.setDomainDependents}' decision taken
+   * for {@link MemoryResearchStore.setDomainDependents}' reason, and
+   * it is a KNOWN DIVERGENCE rather than a simplification: a
+   * subscription stored here does not hold its connector's delete,
+   * where `src/connectors/db-store.ts` counts the rows and a
+   * deployment refuses it. `tests/live/api-wave2.live.test.ts` is
+   * where the counted answer is discharged, and one case in
+   * `tests/helpers/memory-research-store.test.ts` pins the divergence
+   * rather than leaving it to be discovered.
    *
    * @param connectorId - The connector the subscriptions name. Need
    *   not name a stored connector: the count is plantable ahead of
@@ -929,6 +1051,63 @@ const CONNECTOR_KIND_CHECK = 'connectors_kind_check';
  * would refuse a delete over while this one takes it.
  */
 const CONNECTOR_SUBSCRIPTIONS_FK
+  = 'export_subscriptions_connector_id_connectors_id_fk';
+
+/**
+ * The natural key on `export_subscriptions`, spelled as
+ * `src/db/schema/scheduling.ts` spells it, and the widest key in this
+ * file: a triple rather than a pair.
+ *
+ * No PAIR of the three identifies a subscription — one domain may
+ * want the same digest in two formats, and may want one format
+ * delivered to two destinations — so a key over either pair would
+ * refuse the second row. Both writes name it: `format` and
+ * `connectorId` are patchable per `SubscriptionPatch`, so an UPDATE
+ * reaches it as readily as an INSERT.
+ */
+const SUBSCRIPTION_KEY_UNIQUE
+  = 'export_subscriptions_domain_id_format_connector_id_unique';
+
+/**
+ * The CHECK on `export_subscriptions.format`, and the third CHECK
+ * this file imitates.
+ *
+ * {@link SOURCE_KIND_CHECK}'s shape rather than
+ * {@link CONNECTOR_KIND_CHECK}'s: BOTH writes reach it, `format`
+ * being patchable, because a format selects the renderer that runs
+ * for THIS row and nothing outside the row reads it.
+ */
+const SUBSCRIPTION_FORMAT_CHECK = 'export_subscriptions_format_check';
+
+/**
+ * The foreign key from `export_subscriptions.domain_id`, reached by
+ * the INSERT alone.
+ *
+ * `domainId` is deliberately absent from `SubscriptionPatch` — a
+ * subscription is a request ABOUT the material its domain produces,
+ * so a move would carry it to another domain's — which is what keeps
+ * this name off the update, exactly as {@link TOPIC_DOMAIN_FK} is
+ * kept off the topic patch.
+ */
+const SUBSCRIPTION_DOMAIN_FK
+  = 'export_subscriptions_domain_id_domains_id_fk';
+
+/**
+ * The foreign key from `export_subscriptions.connector_id`, read from
+ * the side that WRITES it rather than from the side it protects.
+ *
+ * One key and two directions. {@link CONNECTOR_SUBSCRIPTIONS_FK} is
+ * this same constraint named for what it refuses on the other port —
+ * a connector delete an export subscription holds — and the two are
+ * spelled apart here because a reader meeting either one is asking a
+ * different question. This end is the race
+ * `src/subscriptions/store.ts` describes: the service resolves the
+ * connector before writing, so an ordinary request hands the database
+ * a live id, and what is left is the connector removed between that
+ * read and this write. Both writes reach it, `connectorId` being
+ * patchable.
+ */
+const SUBSCRIPTION_CONNECTOR_FK
   = 'export_subscriptions_connector_id_connectors_id_fk';
 
 /** Three zeros: what a domain nothing points at has accumulated. */
@@ -1192,6 +1371,30 @@ function copyConnector(row: ConnectorRecord): ConnectorRecord {
 }
 
 /**
+ * A subscription record whose due time belongs to nobody else.
+ *
+ * {@link copyTopic}'s shape with the list taken out:
+ * `SubscriptionRecord` carries one mutable member and it is the same
+ * one — a `Date` that is null on a subscription nobody has scheduled
+ * — because `export_subscriptions` and `topics` spread the same
+ * `schedulableColumns()` helper. Its `format` and its two ids are
+ * primitives, and the table carries neither of the stamps `domains`
+ * does nor a `jsonb` column at all, so the spread is the whole of the
+ * rest.
+ *
+ * @param row - The stored row.
+ * @returns A copy safe to hand across the port.
+ */
+function copySubscription(row: SubscriptionRecord): SubscriptionRecord {
+  return {
+    ...row,
+    nextRunAt: row.nextRunAt === null
+      ? null
+      : copyInstant(row.nextRunAt),
+  };
+}
+
+/**
  * A domain record whose mutable members belong to nobody else.
  *
  * @param row - The stored row.
@@ -1227,6 +1430,7 @@ export function createMemoryResearchStore(
   const topics = new Map<number, TopicRecord>();
   const sources = new Map<number, SourceRecord>();
   const connectors = new Map<number, ConnectorRecord>();
+  const subscriptions = new Map<number, SubscriptionRecord>();
 
   // The three planting seams' state, the first two keyed by source id
   // and the third by connector id. None is a table this store's ports
@@ -1242,6 +1446,7 @@ export function createMemoryResearchStore(
   let nextTopicId = 1;
   let nextSourceId = 1;
   let nextConnectorId = 1;
+  let nextSubscriptionId = 1;
 
   // The whole of the settings half's state. Not a Map, because
   // there is no key: `src/settings/store.ts` states a second
@@ -2007,6 +2212,163 @@ export function createMemoryResearchStore(
     }
   }
 
+  /**
+   * One domain's export subscriptions, unordered.
+   *
+   * A fresh array every call, which is what lets
+   * {@link orderedSubscriptions} sort it in place without reaching
+   * into stored state.
+   *
+   * @param domainId - The domain to read.
+   * @returns Its subscriptions. Empty for a domain subscribing to
+   *   nothing AND for an id no domain carries — nothing points at a
+   *   row that is not there, which is the answer `countSubscriptions`
+   *   is read for.
+   */
+  function subscriptionsOf(domainId: number): SubscriptionRecord[] {
+    return [...subscriptions.values()].filter(
+      (row) => row.domainId === domainId,
+    );
+  }
+
+  /**
+   * One domain's subscriptions, ordered as
+   * `SubscriptionStore.listSubscriptions` promises.
+   *
+   * By `format` ascending with `connectorId` ascending beside it, and
+   * the ordering needs HALF the collation caveat its siblings carry.
+   * The first column is free text to the type system but not to the
+   * database: `export_subscriptions_format_check` holds it to
+   * `EXPORT_FORMATS`, five lower-case ASCII identifiers whose only
+   * punctuation is an underscore, so no locale this deployment could
+   * carry orders them differently from `<`. The second is arithmetic,
+   * as {@link orderedSources}' is.
+   *
+   * @param domainId - The domain to read.
+   * @returns Its subscriptions, format ascending then connector
+   *   ascending. The order is total because the pair is unique within
+   *   one domain — it is what the natural key has left once the
+   *   domain is fixed — so there is no tie-break to forget.
+   */
+  function orderedSubscriptions(domainId: number): SubscriptionRecord[] {
+    return subscriptionsOf(domainId).sort((left, right) => {
+      if (left.format === right.format) {
+        return left.connectorId - right.connectorId;
+      }
+
+      return left.format < right.format
+        ? -1
+        : 1;
+    });
+  }
+
+  /**
+   * @param domainId - The domain to look within.
+   * @param format - The format to look for.
+   * @param connectorId - The destination to look for.
+   * @returns The row carrying that triple, or undefined. At most one
+   *   can, which is what
+   *   `export_subscriptions_domain_id_format_connector_id_unique`
+   *   guarantees and what the two writes below enforce.
+   */
+  function subscriptionByTriple(
+    domainId: number,
+    format: string,
+    connectorId: number,
+  ): SubscriptionRecord | undefined {
+    return subscriptionsOf(domainId).find(
+      (row) => row.format === format && row.connectorId === connectorId,
+    );
+  }
+
+  /**
+   * Refuses a `format` that no member of `EXPORT_FORMATS` matches.
+   *
+   * @param format - The format a subscription write is proposing.
+   * @throws A `check-violation` {@link StoreRefusal} naming
+   *   `export_subscriptions_format_check`. Reached from BOTH writes,
+   *   as {@link guardSourceKind} is and unlike
+   *   {@link guardConnectorKind}: `format` is patchable.
+   */
+  function guardSubscriptionFormat(format: string): void {
+    if (!(EXPORT_FORMATS as readonly string[]).includes(format)) {
+      throw new StoreRefusal({
+        reason: 'check-violation',
+        constraint: SUBSCRIPTION_FORMAT_CHECK,
+      });
+    }
+  }
+
+  /**
+   * Refuses a `domainId` that names no stored domain.
+   *
+   * @param domainId - The domain a subscription insert is asking for.
+   * @throws A `foreign-key-violation` {@link StoreRefusal} naming
+   *   `export_subscriptions_domain_id_domains_id_fk`. Reached from
+   *   the insert alone: `domainId` is not on `SubscriptionPatch`, so
+   *   no update touches this key at all.
+   */
+  function guardSubscriptionDomain(domainId: number): void {
+    if (!domains.has(domainId)) {
+      throw new StoreRefusal({
+        reason: 'foreign-key-violation',
+        constraint: SUBSCRIPTION_DOMAIN_FK,
+      });
+    }
+  }
+
+  /**
+   * Refuses a `connectorId` that names no stored connector.
+   *
+   * THE ONE GUARD HERE READING ANOTHER HALF'S TABLE, which is what
+   * shared state buys and what a subscriptions fake standing alone
+   * could not have done at all. Both writes reach it, `connectorId`
+   * being patchable — the re-pointing
+   * `src/db/schema/scheduling.ts` says the connector delete's own
+   * refusal exists to make explicit.
+   *
+   * @param connectorId - The destination a subscription write names.
+   * @throws A `foreign-key-violation` {@link StoreRefusal} naming
+   *   `export_subscriptions_connector_id_connectors_id_fk` — the
+   *   constraint {@link CONNECTOR_SUBSCRIPTIONS_FK} spells from the
+   *   other end.
+   */
+  function guardSubscriptionConnector(connectorId: number): void {
+    if (!connectors.has(connectorId)) {
+      throw new StoreRefusal({
+        reason: 'foreign-key-violation',
+        constraint: SUBSCRIPTION_CONNECTOR_FK,
+      });
+    }
+  }
+
+  /**
+   * Removes every subscription of one domain, as `ON DELETE CASCADE`
+   * does.
+   *
+   * Reached from the domain delete alone, and unable to refuse
+   * anything — which is what makes sharing it safe in the way
+   * reusing a guarded delete would not be. There is no guarded
+   * subscription delete to reuse in any case: nothing points at
+   * `export_subscriptions`.
+   *
+   * IT DOES NOT REACH THE CONNECTORS THOSE ROWS NAMED, and that is
+   * the cascade stopping exactly where the schema stops it. The
+   * `ON DELETE cascade` is on `domain_id`; `connector_id` carries
+   * `ON DELETE no action` and points the other way. So a domain
+   * delete clears subscriptions OUT of a connector's way rather than
+   * taking the connector with them.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropSubscriptionsOf(domainId: number): void {
+    for (const [subscriptionId, row] of subscriptions) {
+      if (row.domainId === domainId) {
+        subscriptions.delete(subscriptionId);
+      }
+    }
+  }
+
   return {
     /** One window of the list, slug ascending. */
     async listDomains(window: StoreWindow): Promise<readonly DomainRecord[]> {
@@ -2164,6 +2526,17 @@ export function createMemoryResearchStore(
      * would refuse a delete Postgres takes, and would do it only for
      * the domains whose feeds have captured anything.
      *
+     * ITS EXPORT SUBSCRIPTIONS GO IN THAT SAME PLACE, and this is
+     * the one cascade line whose neighbours are NOT all cascading.
+     * `export_subscriptions.domain_id` is `ON DELETE CASCADE` like
+     * every other foreign key onto `domains.id`, so the rows go; but
+     * the `connector_id` on those same rows is `ON DELETE no action`
+     * and points OUT of the domain, so the connectors they named do
+     * not. A domain delete therefore clears subscriptions out of a
+     * connector's way rather than taking the connector with them,
+     * which is what makes `connectors` and `operator_settings` the
+     * two tables no domain delete reaches.
+     *
      * IT DOES NOT MOVE THE PLANTED DEPENDENT COUNTS OF ANY OTHER
      * DOMAIN, and dropping the topics does not move them at all:
      * {@link MemoryResearchStore.setDomainDependents} records what
@@ -2175,6 +2548,7 @@ export function createMemoryResearchStore(
       dropPersonasOf(id);
       dropTopicsOf(id);
       dropSourcesOf(id);
+      dropSubscriptionsOf(id);
 
       for (const [categoryId, row] of categories) {
         if (row.domainId === id) {
@@ -3458,6 +3832,269 @@ export function createMemoryResearchStore(
       }
 
       return connectors.delete(id);
+    },
+
+    /**
+     * One window of a domain's export subscriptions, format
+     * ascending with the connector ascending beside it.
+     *
+     * A domain subscribing to nothing and an id no domain carries are
+     * one answer here — the empty list — because whether the domain
+     * exists was settled by `DomainStore.findDomainBySlug` before
+     * this was called.
+     */
+    async listSubscriptions(
+      domainId: number,
+      window: StoreWindow,
+    ): Promise<readonly SubscriptionRecord[]> {
+      return orderedSubscriptions(domainId)
+        .slice(window.offset, window.offset + window.limit)
+        .map(copySubscription);
+    },
+
+    /**
+     * How many subscriptions one domain holds, ignoring any window.
+     *
+     * An id no domain carries answers zero rather than failing,
+     * which is correct rather than a special case: nothing points at
+     * a row that is not there.
+     */
+    async countSubscriptions(domainId: number): Promise<number> {
+      return subscriptionsOf(domainId).length;
+    },
+
+    /** One subscription by its id, or null. */
+    async findSubscriptionById(
+      id: number,
+    ): Promise<SubscriptionRecord | null> {
+      const row = subscriptions.get(id);
+
+      return row === undefined
+        ? null
+        : copySubscription(row);
+    },
+
+    /**
+     * Inserts one subscription, UNSCHEDULED.
+     *
+     * `nextRunAt` is null on the row this answers whatever the
+     * caller wanted, because `InsertSubscriptionInput` declares no
+     * member that could set it: the containment is the type's rather
+     * than a check here, exactly as it is on `insertTopic` above.
+     *
+     * The id comes off the counter first, so every refusal below
+     * burns one exactly as the sequence does. No measurement of this
+     * table's own: it carries the same kind of pair `personas` does,
+     * where two refused inserts between two accepted ones left a gap
+     * of two against the live server.
+     *
+     * FOUR MECHANISMS AND THE WIDEST WRITE IN THIS FILE, checked in
+     * the order a server evaluates them: the CHECK while the row is
+     * still being formed, the unique index next, and the two foreign
+     * keys at the end of the statement. Only ONE of the six pairings
+     * is observable in principle and none is claimed here. The CHECK
+     * and the key cannot both fire, the key opening on the very
+     * column the CHECK constrains — a write proposing a format
+     * outside the tuple can duplicate nothing, since every stored
+     * row's format is inside it. Neither can the key and either
+     * foreign key, for the same reason read on the other two thirds
+     * of the triple. What IS reachable together is the CHECK beside a
+     * missing parent, and the two foreign keys beside each other, and
+     * `src/sources/store.ts`'s half of this argument applies word for
+     * word: the order below is argued from when a server evaluates
+     * each kind of mechanism and rests on no reading of this table,
+     * so no case pins it.
+     */
+    async insertSubscription(
+      input: InsertSubscriptionInput,
+    ): Promise<SubscriptionRecord> {
+      const id = nextSubscriptionId;
+
+      nextSubscriptionId += 1;
+
+      guardSubscriptionFormat(input.format);
+
+      if (
+        subscriptionByTriple(
+          input.domainId,
+          input.format,
+          input.connectorId,
+        ) !== undefined
+      ) {
+        throw new StoreRefusal({
+          reason: 'unique-violation',
+          constraint: SUBSCRIPTION_KEY_UNIQUE,
+        });
+      }
+
+      guardSubscriptionDomain(input.domainId);
+      guardSubscriptionConnector(input.connectorId);
+
+      const row: SubscriptionRecord = {
+        id,
+        domainId: input.domainId,
+        format: input.format,
+        connectorId: input.connectorId,
+        intervalSeconds: input.intervalSeconds,
+        nextRunAt: null,
+        enabled: input.enabled,
+        minIntervalSeconds: input.minIntervalSeconds,
+        maxIntervalSeconds: input.maxIntervalSeconds,
+      };
+
+      subscriptions.set(row.id, row);
+
+      return copySubscription(row);
+    },
+
+    /**
+     * Rewrites the supplied members of one subscription.
+     *
+     * A PATCH NAMING NO MEMBER WRITES NOTHING and answers the stored
+     * row, for the reason `updateTopic` above gives:
+     * `export_subscriptions` carries no `updated_at` either, so an
+     * empty patch has nothing to set and drizzle throws on an empty
+     * update list.
+     *
+     * TWO THIRDS OF THE KEY ARE PATCHABLE AND THE THIRD IS NOT, so
+     * what is checked is the resulting pair within the STORED domain,
+     * and no update reaches the domain foreign key at all. A row is
+     * not in conflict with itself, so the row found under the
+     * resulting triple is a refusal only when it is a different row.
+     * That is the topic patch's rule over two moving parts rather
+     * than one.
+     *
+     * IT REACHES THREE MECHANISMS WHERE THE INSERT REACHES FOUR, and
+     * the missing one is the domain key rather than anything about
+     * this write. The CHECK is here because `format` is patchable —
+     * where `updateConnector` reaches no CHECK at all — and the
+     * connector foreign key is here because re-pointing is the
+     * operation `src/db/schema/scheduling.ts` says the connector
+     * delete's refusal exists to make explicit.
+     *
+     * THE TWO BOUNDS DISTINGUISH THREE REQUESTS and the three NOT
+     * NULL members distinguish two, which is why they are written
+     * differently below — the rule `CategoryPatch.parentId` carries
+     * in `src/taxonomy/store.ts`.
+     */
+    async updateSubscription(
+      id: number,
+      patch: SubscriptionPatch,
+    ): Promise<SubscriptionRecord | null> {
+      const existing = subscriptions.get(id);
+
+      if (existing === undefined) {
+        return null;
+      }
+
+      if (
+        patch.format === undefined
+        && patch.connectorId === undefined
+        && patch.intervalSeconds === undefined
+        && patch.enabled === undefined
+        && patch.minIntervalSeconds === undefined
+        && patch.maxIntervalSeconds === undefined
+      ) {
+        return copySubscription(existing);
+      }
+
+      const format = patch.format ?? existing.format;
+      const connectorId = patch.connectorId ?? existing.connectorId;
+
+      guardSubscriptionFormat(format);
+
+      const holder = subscriptionByTriple(
+        existing.domainId,
+        format,
+        connectorId,
+      );
+
+      if (holder !== undefined && holder.id !== id) {
+        throw new StoreRefusal({
+          reason: 'unique-violation',
+          constraint: SUBSCRIPTION_KEY_UNIQUE,
+        });
+      }
+
+      guardSubscriptionConnector(connectorId);
+
+      const updated: SubscriptionRecord = {
+        ...existing,
+        format,
+        connectorId,
+        intervalSeconds: patch.intervalSeconds ?? existing.intervalSeconds,
+        enabled: patch.enabled ?? existing.enabled,
+        minIntervalSeconds: patch.minIntervalSeconds === undefined
+          ? existing.minIntervalSeconds
+          : patch.minIntervalSeconds,
+        maxIntervalSeconds: patch.maxIntervalSeconds === undefined
+          ? existing.maxIntervalSeconds
+          : patch.maxIntervalSeconds,
+      };
+
+      subscriptions.set(id, updated);
+
+      return copySubscription(updated);
+    },
+
+    /**
+     * Writes one subscription's due time, AND NOTHING ELSE.
+     *
+     * `updateTopicSchedule`'s shape and its reasons, one caller
+     * shorter: `POST /exports/:id/run-now` is this column's whole
+     * access, there being no pause verb under `/exports`, so nothing
+     * here is ever handed an instant `pauseFrom` derived.
+     *
+     * The instant is COPIED on the way in, which is what the run-now
+     * needs from this method rather than a nicety: a service holding
+     * the `Date` it passed could otherwise go on moving the stored
+     * due time after the write, through a member the port declares
+     * `readonly`.
+     *
+     * It takes no view of the instant: no clamp, no clock, no reading
+     * of `enabled` and no comparison against the stored due time. All
+     * four are `src/subscriptions/service.ts`'s, because all four are
+     * decisions rather than facts a database reports.
+     */
+    async updateSubscriptionSchedule(
+      id: number,
+      nextRunAt: Date,
+    ): Promise<SubscriptionRecord | null> {
+      const existing = subscriptions.get(id);
+
+      if (existing === undefined) {
+        return null;
+      }
+
+      const updated: SubscriptionRecord = {
+        ...existing,
+        nextRunAt: copyInstant(nextRunAt),
+      };
+
+      subscriptions.set(id, updated);
+
+      return copySubscription(updated);
+    },
+
+    /**
+     * Deletes one subscription.
+     *
+     * Nothing in schema v2 points at `export_subscriptions` — read
+     * off the generated SQL rather than the schema, and with the
+     * `connectors` key as the live needle beside it — so this is
+     * `deleteTopic`'s shape rather than `deleteConnector`'s: neither
+     * a guard nor a cascade, and a delete that cannot be refused.
+     *
+     * It is also what CLEARS a refusal one port over. A connector is
+     * held by the rows that name it, so cancelling here is exactly
+     * what lets `deleteConnector` land — in a deployment. It does not
+     * do so in this store, whose connector guard reads a planted
+     * number rather than these rows;
+     * {@link MemoryResearchStore.setConnectorSubscriptions} carries
+     * that divergence and where it is discharged.
+     */
+    async deleteSubscription(id: number): Promise<boolean> {
+      return subscriptions.delete(id);
     },
 
     /**
