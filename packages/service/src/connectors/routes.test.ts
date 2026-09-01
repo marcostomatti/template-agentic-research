@@ -18,13 +18,15 @@
  * handler swallowed a throw on the way. So every case below reads
  * a response and none of them reads a return value.
  *
- * TWELVE CASES IN EIGHT GROUPS. Four guard the fixture, the two
- * vocabularies every refusal is read against and the shapes every
- * answer is held to. Three cover the address, two the query, two
- * the payload, and one the delete guard. The POSITIVE half — what
- * a list, a create, a patch and a delete answer when they LAND —
- * is a task of its own, and every control below is a landing
- * answer read only as far as the axis its own case is about.
+ * TWENTY CASES IN THIRTEEN GROUPS. Four guard the fixture, the
+ * two vocabularies every refusal is read against and the shapes
+ * every answer is held to. Eight cover the refusals — three the
+ * address, two the query, two the payload and one the delete
+ * guard — and eight cover what a list, a `?kind`, a create, a
+ * patch and a delete answer when they LAND. A control in the
+ * refusal half is a landing answer read only as far as the axis
+ * its own case is about; the positive half is where each of them
+ * is read whole.
  *
  * ONE ADDRESS SHAPE AND NOT TWO, which is where this file is
  * shorter than every other resource group's. `connectors` hangs
@@ -103,6 +105,58 @@
  * rather than named twice, so a second counted table reddens this
  * case instead of travelling unasserted.
  *
+ * THE PAGE IS READ THROUGH THREE WINDOWS AND NOT ONE. A list that
+ * fits inside the default window can report neither a `total`
+ * taken from the rows in hand nor a handler ignoring the window
+ * entirely — every page holds every row and the two numbers
+ * agree. So the landing list case reads the collection whole and
+ * then twice more through a window of ONE, which is what makes
+ * `meta` a reading rather than a shape. The order it asserts is
+ * the PAIR: kind ascending with name ascending beside it, which
+ * neither column alone, nor the order the rows were planted in,
+ * nor the order of their ids would have agreed with.
+ *
+ * AND WHICH ROWS A `?kind` ANSWERS IS ASSERTED HERE, RATHER THAN
+ * HOW MANY. The refusal half's control could say only that a
+ * registered member was SERVED, which an unfiltered page also is;
+ * these two cases name the rows that came back and read the
+ * narrowing's own `total` beside them — `?kind=llm` answers how
+ * many `llm` connectors there are and not how many connectors
+ * there are. One of them pages INSIDE the narrowing, which is the
+ * only request in this file where the filter and the window are
+ * read together.
+ *
+ * A CREATE IS ANSWERED MASKED THOUGH THE CALLER JUST SENT THE
+ * SECRET, and both halves of that are read. The rostered key
+ * comes back carrying the literal while its unrostered sibling
+ * comes back as it was sent, so the mask replaces a VALUE rather
+ * than standing in for a document; and the credential is COUNTED
+ * in the serialised answer against a planted envelope carrying
+ * it, since a search that would find nothing anywhere reports a
+ * clean response and a leaking one alike. That the STORE holds
+ * the secret verbatim is `./service.test.ts`'s claim over direct
+ * calls — no read this router offers can answer an unmasked
+ * config, so this file cannot take that reading and says so where
+ * the case would otherwise look like it had.
+ *
+ * A MASKED COLUMN A PATCH REPLACES WHOLE NEEDS THREE REQUESTS,
+ * and none of the three is reachable from the others. A patch
+ * SENDING a rotated value answers the mask and drops the sibling
+ * member the stored document carried, which is the replace-whole
+ * rule reaching a caller. A patch naming only the NAME leaves the
+ * credential where it was, which is what a service defaulting the
+ * member it was not sent would fail. And a patch whose config
+ * OMITS the rostered key answers that key GONE — the one channel
+ * a wire reading has for telling a secret a read is hiding from
+ * one a write has taken away.
+ *
+ * EVERY WRITE IS READ BACK THROUGH THE LIST. A create or a patch
+ * answering a row it never wrote satisfies every assertion about
+ * its own response, so each landing write is followed by the
+ * collection read whole: the row it wrote held against what it
+ * answered, a neighbour held against the constants the fixture
+ * plants from, and the page's own `total` beside them.
+ *
  * ANTI-VACUITY. A router that refused everything, or that answered
  * every read the same row, would satisfy most of what is below, so
  * each case carries its own control in the same body, varied along
@@ -125,69 +179,75 @@
  * are the operator's own config key and the value a bad `?kind`
  * carries.
  *
- * MUTATION GRID, derived over all twelve cases by mutating one
+ * MUTATION GRID, derived over all twenty cases by mutating one
  * file one edit at a time and reading the failed `fullName` SET
- * from a `--reporter=json` run rather than a count. FOURTEEN legs,
+ * from a `--reporter=json` run rather than a count. SIXTEEN legs,
  * each named by the EDIT it makes rather than by its effect, since
  * a leg described only by its effect is one nobody can run again.
  * Ten mutate `./routes.ts`, two mutate `src/http/schemas.ts` — the
  * only target that can reach the bound and the strictness the list
- * schema INHERITS — and two mutate `./service.ts`, which owns the
- * masking and the delete guard.
+ * schema INHERITS — and four mutate `./service.ts`, which owns the
+ * masking and the delete guard. Every leg COLLECTED all twenty
+ * cases, which is what separates a leg that reddened nothing from
+ * one that failed to load and scored zero looking the same.
  *
- * THE ONE ADDRESS LEG REDDENS SIX, which is every case that
- * addresses a row by id. Returning the segment raw from
- * {@link readId} reaches both `404` cases, the not-an-id case, the
- * taken-pair case, the delete guard and the mask case — that last
- * one only through the ACCEPTED control beside it, since
- * `patchConnector` parses the body before it uses the id and the
- * refused half of that case is answered whatever the segment was.
- * There is no second address leg here: `connectors` hangs off no
- * domain, so this group has no `:slug` to narrow.
+ * FOURTEEN OF THE SIXTEEN CAME BACK AT THE FIGURE THE REFUSALS-
+ * ONLY GRID RECORDED, counted OUTSIDE the five landing groups —
+ * which is the reading that says these are the legs that prose
+ * named and not neighbours re-derived from it. What each gained
+ * INSIDE them is the positive half's own contribution and is
+ * listed beside it.
  *
- * THE THREE STATUS LEGS SEPARATE. `res.status(201)` written as
- * `200` on the create reddens TWO, both of them landing controls
- * rather than cases named for a create. `res.status(200)` written
- * as `204` on the patch reddens TWO. `res.status(204)` written as
- * `200` on the delete reddens THREE. So the statuses ARE pinned
- * here, by no case that is about them — which is what a
- * refusals-only file's controls buy.
+ * THE ONE ADDRESS LEG REDDENS NINE, six of them the refusals it
+ * already reached. Returning the segment raw from {@link readId}
+ * reaches every case that gets an ANSWER OUT OF THE STORE by id,
+ * which is not the set of cases that NAME a row: the three it
+ * gained are the two landing patches and the landing delete, and
+ * the landing create is in neither, `POST /connectors` addressing
+ * nothing at all. There is still no second address leg here:
+ * `connectors` hangs off no domain, so this group has no `:slug`.
+ *
+ * THE THREE STATUS LEGS EACH GAINED THE CASES NOW NAMED FOR THEM.
+ * `res.status(201)` written as `200` on the create goes 2 to 4,
+ * `res.status(200)` as `204` on the patch goes 2 to 4, and
+ * `res.status(204)` as `200` on the delete goes 3 to 4. All three
+ * were already pinned by controls in cases about something else;
+ * what the positive half adds is a case that fails for its own
+ * reason.
  *
  * `ok(page.rows)` IN PLACE OF `okPage(page.rows, meta)` REDDENS
- * ONE, the extension case, which is the only read here that looks
- * at `meta` at all.
+ * SEVEN, up from one. Every landing case that reads a collection
+ * counts it through `meta`, so this leg reaches the landing list,
+ * both filter cases, the create read-back, the patch read-back and
+ * the delete.
  *
- * THE FOUR QUERY LEGS REDDEN ONE EACH, IN TWO PAIRS, and neither
- * member of either pair is reachable from the other. Spelling
- * `kind` as `z.string()` and dropping the `.extend()` altogether
- * both land on the `?kind` case — the first serves the
- * unregistered family, the second refuses the registered one — so
- * they are told apart by which assertion inside it fails. Dropping
- * `.max(MAX_PER_PAGE)` and dropping `.strict()` in
- * `src/http/schemas.ts` both land on the case beside it, which is
- * exactly what that case exists to report: an extension that lost
- * either property is invisible everywhere else in this file.
+ * THE FOUR QUERY LEGS SPLIT THREE AND ONE. Spelling `kind` as
+ * `z.string()`, and dropping `.max(MAX_PER_PAGE)` and `.strict()`
+ * in `src/http/schemas.ts`, each still redden exactly the one case
+ * written for them — none of the three moved, no landing case
+ * sending a malformed query at all. Dropping the `.extend()`
+ * altogether goes 1 to 3: it refuses the REGISTERED member, so
+ * both filter cases fall beside the refusal case that already
+ * reported it.
  *
- * THE TWO SERVICE LEGS REDDEN ONE EACH. Answering a create's row
- * UNMASKED reddens the mask case, through the control that reads
- * the literal back in place of a real credential — the refusals in
- * that case cannot report it, being refusals. Skipping the
- * dependent guard reddens the delete case.
+ * THE FOUR SERVICE LEGS. Answering a create's row UNMASKED goes 1
+ * to 3, a patch's UNMASKED reddens 3, and the LIST unmasked
+ * reddens 3. The last two are legs this file could not run at all
+ * before the landing cases existed, and the list one is the leg
+ * `./service.test.ts` records as reddening ZERO in its own
+ * refusals-only half — so the claim it was waiting for is here.
+ * Skipping the dependent guard still reddens exactly the
+ * delete-guard case.
  *
- * AND THREE LEGS REDDEN NOTHING, all recorded rather than
- * repaired. A fixed `{ limit: 50, offset: 0 }` in place of
- * `toStoreWindow(query)` reddens ZERO, and taking `total` from
- * `page.rows.length` rather than from `page.total` reddens ZERO,
- * for one reason: no refusal case can afford a window narrower
- * than the collection it is reading, so every page here holds
- * every row and the two numbers agree. Both become exactly one
- * red — the SAME red — as soon as one list case pages, which is
- * the positive half's.
- * Passing `{}` where the filter is built reddens ZERO for the
- * complementary reason: the `?kind` control asserts that a
- * registered member was SERVED, which an unfiltered page also is.
- * Which rows a `?kind` answers is the positive half's claim too,
- * and this file records the zero rather than pretending to it.
+ * AND THE THREE LEGS THAT REDDENED NOTHING NOW REDDEN TWO EACH,
+ * which is what the positive half was owed for. A fixed
+ * `{ limit: 50, offset: 0 }` in place of `toStoreWindow(query)`,
+ * and a `total` taken from `page.rows.length` rather than from
+ * `page.total`, each reach the two cases that read a window
+ * NARROWER than the collection under it — the landing list and
+ * the page inside the narrowing. Passing `{}` where the filter is
+ * built reaches the two cases that assert WHICH rows a `?kind`
+ * answered. No leg in this grid reddens zero.
  */
 import type {
   ConnectorDependentCounts,
@@ -326,6 +386,92 @@ const HELD_SUBSCRIPTIONS = 2;
 
 /** How many connectors the fixture plants. */
 const PLANTED_CONNECTORS = 3;
+
+/**
+ * The window `src/http/schemas.ts` applies to a list that names
+ * none.
+ *
+ * Declared here rather than imported, because the constant behind
+ * it is private to that module and a test importing it would agree
+ * with itself however it were respelt. What the page case pins is
+ * the window a caller who asked for nothing is served.
+ */
+const DEFAULT_PER_PAGE = 50;
+
+/**
+ * A fourth kind, carried by no planted row and by both creates
+ * that land.
+ *
+ * It sorts BEFORE both planted kinds, which is what makes the
+ * read-back case's ordering claim a claim: a created row that
+ * sorts first though it was written last cannot be an append.
+ */
+const EXPORT_KIND = 'export_target';
+
+/** The name both landing creates file their row under. */
+const SPARE_NAME = 'nightly';
+
+/**
+ * The credential the landing create submits.
+ *
+ * Distinct from every other secret here, so the case counting it
+ * in a serialised answer cannot be satisfied by a value some other
+ * row put there.
+ */
+const FRESH_SECRET = 'staging-live-credential';
+
+/**
+ * A sibling member of that config, under a key nobody rostered.
+ *
+ * What makes the create's compare a claim about a VALUE rather
+ * than about a document: this member comes back as it was sent
+ * while its neighbour does not, and a module masking the config
+ * whole would answer both alike.
+ */
+const FRESH_VAULT = 'staging-vault';
+
+/** How the fixture's notebook connector is arranged. */
+const ARCHIVE_VAULT = 'research';
+
+/** The arrangement a config patch replaces the model's with. */
+const PATCHED_VAULT = 'model-notes';
+
+/**
+ * The three planted rows in the order the port answers them: kind
+ * ascending, with name ascending beside it.
+ *
+ * Neither the order they were planted in nor the order of their
+ * ids — the model row was written FIRST and sorts second — and
+ * neither the order their names alone would give, since `archive`
+ * sorts before both `llm` names and comes last. So a page in this
+ * order is the store having applied BOTH columns rather than any
+ * single one a simpler comparison would also have agreed with.
+ */
+const LISTED_PAIRS = [
+  `${LLM_KIND}/${FALLBACK_NAME}`,
+  `${LLM_KIND}/${MODEL_NAME}`,
+  `${NOTEBOOK_KIND}/${ARCHIVE_NAME}`,
+];
+
+/** The planted rows a `?kind=llm` selects, in page order. */
+const LLM_PAIRS = LISTED_PAIRS.slice(0, 2);
+
+/** The planted rows a `?kind=notebook` selects. */
+const NOTEBOOK_PAIRS = LISTED_PAIRS.slice(2);
+
+/**
+ * The model row's config as every read of it answers: the endpoint
+ * the operator wrote, and the mask where the credential is.
+ *
+ * Built from the exported literal rather than spelled out, because
+ * what that literal IS belongs to `./secrets.test.ts`; what these
+ * comparisons pin is that it is what arrives in a credential's
+ * place, on every one of the three paths a config leaves by.
+ */
+const MASKED_MODEL_CONFIG = {
+  endpoint: MODEL_ENDPOINT,
+  [ROSTERED_KEY]: MASKED_SECRET,
+};
 
 /**
  * The whole body a `404` about a connector answers with.
@@ -623,6 +769,27 @@ interface AddressedRow {
 }
 
 /**
+ * A connector as a page carries it, which on this group is the
+ * record itself.
+ *
+ * `connectors` declares no timestamp, so nothing here is rendered
+ * by `Date#toJSON` on the way out and the wire shape and the port
+ * shape are the same four members — the one resource group on
+ * this surface where that is true, and why this file needs no
+ * string-typed restatement of a column the record types as a
+ * `Date`. What it adds over {@link AddressedRow} is the two
+ * members the positive cases read: the id a write answered, and
+ * the config every read answers masked.
+ */
+interface ListedRow extends AddressedRow {
+  /** The row's own id, as the store stamped it. */
+  readonly id: number;
+
+  /** The stored document, with every rostered value replaced. */
+  readonly config: Record<string, unknown>;
+}
+
+/**
  * The path one connector is patched and deleted under.
  *
  * @param id - The connector's id, or whatever a case is sending in
@@ -649,6 +816,50 @@ function kindsOf(body: { data: readonly AddressedRow[] }): string[] {
  */
 function namesOf(body: { data: readonly AddressedRow[] }): string[] {
   return body.data.map((row) => row.name);
+}
+
+/**
+ * @param body - A paginated body, as it came off the wire.
+ * @returns Each row as `<kind>/<name>`, in page order. The natural
+ *   key `connectors_kind_name_unique` declares, so ONE list says
+ *   both which rows came back and in what order — where two lists
+ *   of the columns separately would leave the pairing unasserted.
+ */
+function pairsOf(body: { data: readonly AddressedRow[] }): string[] {
+  return body.data.map((row) => `${row.kind}/${row.name}`);
+}
+
+/**
+ * @param body - A paginated body, as it came off the wire.
+ * @returns Each row's id, in the order the page carried them. Read
+ *   beside {@link pairsOf} so an ordering claim says the page is
+ *   not the order the store stamped its rows in.
+ */
+function idsOf(body: { data: readonly ListedRow[] }): number[] {
+  return body.data.map((row) => row.id);
+}
+
+/**
+ * Finds one answered row by its natural key.
+ *
+ * @param rows - The rows a page answered.
+ * @param pair - The `<kind>/<name>` to look for.
+ * @returns That row, whole.
+ * @throws Error - When the page carries none, which is what keeps
+ *   a `find` answering `undefined` from turning a missing row into
+ *   a comparison against nothing.
+ */
+function connectorFor(
+  rows: readonly ListedRow[],
+  pair: string,
+): ListedRow {
+  const found = rows.find((row) => `${row.kind}/${row.name}` === pair);
+
+  if (found === undefined) {
+    throw new Error(`no connector answered for ${pair}`);
+  }
+
+  return found;
 }
 
 /**
@@ -766,7 +977,7 @@ async function withConnectors(): Promise<{
   const archive = await store.insertConnector({
     kind: NOTEBOOK_KIND,
     name: ARCHIVE_NAME,
-    config: { vault: 'research' },
+    config: { vault: ARCHIVE_VAULT },
   });
 
   store.setConnectorSubscriptions(archive.id, HELD_SUBSCRIPTIONS);
@@ -983,7 +1194,9 @@ describe('a ?kind outside the tuple', () => {
     expect(registered.status).toBe(200);
     // The narrowing answered rows rather than nothing, which is
     // what says the accepted member reached the store as a filter.
-    // WHICH rows it answers is the positive half's claim.
+    // WHICH rows it answers is asserted further down, under `a
+    // ?kind that narrows the page` — this control cannot say it,
+    // an unfiltered page being equally non-empty.
     expect(registered.body.data.length).toBeGreaterThan(0);
 
     // A COUNT rather than an absence, over the serialised body:
@@ -1212,5 +1425,465 @@ describe('a delete of a connector a subscription names', () => {
     expect(namesOf(afterwards.body)).toContain(ARCHIVE_NAME);
     expect(namesOf(afterwards.body)).not.toContain(FALLBACK_NAME);
     expect(kindsOf(afterwards.body)).toContain(NOTEBOOK_KIND);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The page: one window of the deployment's connectors, and its meta
+// ---------------------------------------------------------------------------
+
+describe('a connector list that lands', () => {
+  it('answers one window of rows beside its own meta', async () => {
+    const planted = await withConnectors();
+    const { app, modelId, fallbackId, archiveId } = planted;
+
+    const whole = await request(app).get('/connectors');
+    // The controls, varied along the axis under test and through
+    // the SAME read: two windows of one over the same three rows.
+    // A handler ignoring the window answers all three to every
+    // call, and a `total` taken from the rows in hand answers 1 to
+    // each of the narrow pair. Neither is a reading the refusal
+    // half could take — no case there can afford a window
+    // narrower than the collection it reads, so every page there
+    // holds every row and the two numbers agree.
+    const first = await request(app)
+      .get('/connectors')
+      .query({ page: 1, perPage: 1 });
+    const last = await request(app)
+      .get('/connectors')
+      .query({ page: PLANTED_CONNECTORS, perPage: 1 });
+
+    expect(whole.status).toBe(200);
+    expect(first.status).toBe(200);
+    expect(last.status).toBe(200);
+    // THREE members and not two: this list applies a window, so it
+    // carries the `meta` describing one — which is the whole
+    // difference between the envelope `okPage` writes and the one
+    // `ok` does, and the only place in this file it is read.
+    expect(keysOf(whole.body)).toStrictEqual(PAGE_KEY_SET);
+    expect(keysOf(whole.body.meta)).toStrictEqual(META_KEY_SET);
+    expect(whole.body.success).toBe(true);
+    expect(whole.body.meta).toStrictEqual({
+      page: 1,
+      perPage: DEFAULT_PER_PAGE,
+      total: PLANTED_CONNECTORS,
+      totalPages: 1,
+    });
+    // Kind ascending with name ascending beside it, which neither
+    // column alone and no arrival order would have agreed with:
+    // the model row was planted FIRST and sorts second, and the
+    // notebook row sorts LAST though its name sorts before both
+    // the others'. The ids read in the same order are what say the
+    // page is not simply the order the store stamped them in.
+    expect(pairsOf(whole.body)).toStrictEqual(LISTED_PAIRS);
+    expect(idsOf(whole.body))
+      .toStrictEqual([fallbackId, modelId, archiveId]);
+    // Every row rather than the first, so a page cannot carry one
+    // well-shaped record beside one that leaked a column.
+    for (const row of whole.body.data) {
+      expect(keysOf(row)).toStrictEqual(CONNECTOR_KEY_SET);
+    }
+    // One row WHOLE, against the constants the fixture plants from
+    // rather than against another response: a store answering
+    // every read the same wrong row would satisfy any
+    // cross-response compare. The config is the point of it —
+    // this list is one of the three ways a config reaches a caller
+    // at all, and it reaches this one masked.
+    const rows = whole.body.data as ListedRow[];
+
+    expect(connectorFor(rows, `${LLM_KIND}/${MODEL_NAME}`))
+      .toStrictEqual({
+        id: modelId,
+        kind: LLM_KIND,
+        name: MODEL_NAME,
+        config: MASKED_MODEL_CONFIG,
+      });
+    // The two windows are disjoint and each names the total of the
+    // COLLECTION, which no page could have counted from its rows.
+    expect(pairsOf(first.body)).toStrictEqual(LISTED_PAIRS.slice(0, 1));
+    expect(pairsOf(last.body)).toStrictEqual(LISTED_PAIRS.slice(-1));
+    expect(first.body.meta).toStrictEqual({
+      page: 1,
+      perPage: 1,
+      total: PLANTED_CONNECTORS,
+      totalPages: PLANTED_CONNECTORS,
+    });
+    expect(last.body.meta).toStrictEqual({
+      page: PLANTED_CONNECTORS,
+      perPage: 1,
+      total: PLANTED_CONNECTORS,
+      totalPages: PLANTED_CONNECTORS,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The filter: which rows a ?kind answers, and which it counts
+// ---------------------------------------------------------------------------
+
+describe('a ?kind that narrows the page', () => {
+  it('answers only that kind, and counts only those', async () => {
+    const { app } = await withConnectors();
+
+    const llm = await request(app)
+      .get('/connectors')
+      .query({ kind: LLM_KIND });
+    const notebook = await request(app)
+      .get('/connectors')
+      .query({ kind: NOTEBOOK_KIND });
+    // The control, along the axis under test and through the SAME
+    // read: no `?kind` at all, which is every connector the
+    // deployment holds. Without it the two narrowings above are
+    // equally green against a route answering one fixed subset.
+    const unfiltered = await request(app).get('/connectors');
+
+    // A split that is neither empty nor the whole page on either
+    // side, which is what makes the two narrowings different
+    // claims rather than one taken twice.
+    expect(LLM_PAIRS.length).toBeGreaterThan(0);
+    expect(NOTEBOOK_PAIRS.length).toBeGreaterThan(0);
+    expect([...LLM_PAIRS, ...NOTEBOOK_PAIRS]).toStrictEqual(LISTED_PAIRS);
+    expect(llm.status).toBe(200);
+    expect(notebook.status).toBe(200);
+    expect(unfiltered.status).toBe(200);
+    // WHICH rows, and not how many: a page of the right length is
+    // what an unfiltered read of a narrower window would also have
+    // answered, and the refusal half's `?kind` control could say
+    // no more than that a registered member was served. This is
+    // the case that owns the filter.
+    expect(pairsOf(llm.body)).toStrictEqual(LLM_PAIRS);
+    expect(pairsOf(notebook.body)).toStrictEqual(NOTEBOOK_PAIRS);
+    expect(pairsOf(unfiltered.body)).toStrictEqual(LISTED_PAIRS);
+    // And the filter reached the COUNT as well as the page, which
+    // is the half a caller pages by: `meta.total` answers how many
+    // `llm` connectors there are rather than how many connectors
+    // there are. A handler narrowing the rows alone answers three
+    // to both of these and leaves every assertion above green.
+    expect(llm.body.meta.total).toBe(LLM_PAIRS.length);
+    expect(notebook.body.meta.total).toBe(NOTEBOOK_PAIRS.length);
+    expect(unfiltered.body.meta.total).toBe(PLANTED_CONNECTORS);
+  });
+
+  it('narrows the window it pages and the total', async () => {
+    const { app } = await withConnectors();
+
+    // The second `llm` row through a window of one, which is the
+    // one request in this file where the filter and the window are
+    // read together. A handler applying the narrowing to the page
+    // and not to the count answers the collection's `totalPages`
+    // here and sends a caller to a page that does not exist.
+    const second = await request(app)
+      .get('/connectors')
+      .query({ kind: LLM_KIND, page: 2, perPage: 1 });
+
+    expect(second.status).toBe(200);
+    expect(pairsOf(second.body)).toStrictEqual(LLM_PAIRS.slice(1));
+    // `totalPages` is the filtered total at a window of one, so
+    // both numbers below are the narrowing rather than the
+    // deployment — which holds one more row than either.
+    expect(second.body.meta).toStrictEqual({
+      page: 2,
+      perPage: 1,
+      total: LLM_PAIRS.length,
+      totalPages: LLM_PAIRS.length,
+    });
+    expect(PLANTED_CONNECTORS).toBeGreaterThan(LLM_PAIRS.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The resource: one connector added, and the mask it answers
+// ---------------------------------------------------------------------------
+
+describe('a create that lands', () => {
+  it('answers 201 carrying the mask, not the secret', async () => {
+    const { app } = await withConnectors();
+
+    const created = await request(app)
+      .post('/connectors')
+      .send({
+        kind: NOTEBOOK_KIND,
+        name: FRESH_NAME,
+        config: { [ROSTERED_KEY]: FRESH_SECRET, vault: FRESH_VAULT },
+      });
+    // The control, along the axis under test and through the SAME
+    // operation: the two members the schema requires and nothing
+    // else. `config` is then the SERVICE's default rather than the
+    // request's, so the pair says a create writes what it was
+    // handed where a member was handed and defaults only where one
+    // was not — a handler defaulting unconditionally answers the
+    // first request wrongly and this one right.
+    const sparse = await request(app)
+      .post('/connectors')
+      .send({ kind: EXPORT_KIND, name: SPARE_NAME });
+
+    expect(created.status).toBe(201);
+    expect(sparse.status).toBe(201);
+    // Two members and not three on both: a create answers one
+    // resource, and there is no window for a `meta` to describe.
+    expect(keysOf(created.body)).toStrictEqual(RESOURCE_KEY_SET);
+    expect(keysOf(sparse.body)).toStrictEqual(RESOURCE_KEY_SET);
+    expect(created.body.success).toBe(true);
+    // The whole row, so a create reaching a member nobody
+    // submitted is a red case rather than an answer three field
+    // reads agreed with. The config is the point of the compare:
+    // the operator's own key came back as it was sent and the
+    // rostered one did not, which is the mask replacing a VALUE
+    // rather than standing in for a document.
+    expect(created.body.data).toStrictEqual({
+      id: created.body.data.id,
+      kind: NOTEBOOK_KIND,
+      name: FRESH_NAME,
+      config: { [ROSTERED_KEY]: MASKED_SECRET, vault: FRESH_VAULT },
+    });
+    // The default, on the request that named no config: an empty
+    // document rather than an absent member. A connector with
+    // nowhere to reach is a complete row, which is what the
+    // column's own default says as well.
+    expect(sparse.body.data).toStrictEqual({
+      id: sparse.body.data.id,
+      kind: EXPORT_KIND,
+      name: SPARE_NAME,
+      config: {},
+    });
+    // Neither id is on either request body — `POST /connectors`
+    // names no row at all — so both arriving is the STORE having
+    // stamped them rather than the request having been echoed back
+    // under a 201.
+    expect(typeof created.body.data.id).toBe('number');
+    expect(created.body.data.id).not.toBe(sparse.body.data.id);
+
+    // A COUNT rather than an absence, over the serialised answer:
+    // the credential the caller just sent is the one value a
+    // create could plausibly repeat, and a response body is
+    // exactly the artifact the mask exists to keep it out of.
+    const answered = JSON.stringify(created.body);
+    const leaked = JSON.stringify({
+      ...created.body,
+      data: {
+        ...created.body.data,
+        config: { [ROSTERED_KEY]: FRESH_SECRET, vault: FRESH_VAULT },
+      },
+    });
+
+    expect(countOccurrences(answered, FRESH_SECRET)).toBe(0);
+    // The planted control: without it the zero above is equally
+    // green against a search that would find nothing anywhere.
+    expect(countOccurrences(leaked, FRESH_SECRET)).toBe(1);
+  });
+
+  it('stores it, and leaves the deployment alone', async () => {
+    // Read back through the OTHER operation, so the claim is about
+    // what is stored rather than about what a call happened to
+    // answer: a create returning a row it never wrote passes the
+    // case above and fails this one.
+    const { app, modelId } = await withConnectors();
+    const pair = `${EXPORT_KIND}/${SPARE_NAME}`;
+
+    const created = await request(app)
+      .post('/connectors')
+      .send({
+        kind: EXPORT_KIND,
+        name: SPARE_NAME,
+        config: { [ROSTERED_KEY]: FRESH_SECRET },
+      });
+    const listed = await request(app).get('/connectors');
+    const rows = listed.body.data as ListedRow[];
+
+    expect(created.status).toBe(201);
+    expect(listed.status).toBe(200);
+    // The whole collection in order, so a create reaching more
+    // rows than the one it wrote is a red case here rather than an
+    // answer nobody compared against anything. The new row sorts
+    // FIRST though it was written last, which is what says the
+    // page is the store's ordering rather than an append.
+    expect(pairsOf(listed.body)).toStrictEqual([pair, ...LISTED_PAIRS]);
+    expect(listed.body.meta.total).toBe(PLANTED_CONNECTORS + 1);
+    // The stored row is the one the create answered, mask and all.
+    // What a caller may never read back is the credential; what it
+    // may is that a value is there under that key. That the store
+    // holds the secret VERBATIM is `./service.test.ts`'s claim
+    // over direct calls — no read on this router can answer an
+    // unmasked config, which is the containment rather than a gap
+    // in what is asserted here.
+    expect(connectorFor(rows, pair)).toStrictEqual(created.body.data);
+    expect(keysOf(connectorFor(rows, pair).config))
+      .toStrictEqual([ROSTERED_KEY]);
+    expect(countOccurrences(JSON.stringify(listed.body), FRESH_SECRET))
+      .toBe(0);
+    // And a row that was already there still carries what it
+    // carried, which no assertion over a created row could say: a
+    // create lands ONE row.
+    expect(connectorFor(rows, `${LLM_KIND}/${MODEL_NAME}`))
+      .toStrictEqual({
+        id: modelId,
+        kind: LLM_KIND,
+        name: MODEL_NAME,
+        config: MASKED_MODEL_CONFIG,
+      });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The patch: a credential rotated, and one a request never named
+// ---------------------------------------------------------------------------
+
+describe('a patch that rotates a credential', () => {
+  it('answers 200 with the config replaced whole', async () => {
+    const { app, modelId } = await withConnectors();
+    const model = `${LLM_KIND}/${MODEL_NAME}`;
+
+    const rotated = await request(app)
+      .patch(connectorPath(modelId))
+      .send({
+        config: { [ROSTERED_KEY]: ROTATED_SECRET, vault: PATCHED_VAULT },
+      });
+    const listed = await request(app).get('/connectors');
+    const rows = listed.body.data as ListedRow[];
+
+    expect(rotated.status).toBe(200);
+    // Two members, not three: a patch answers one resource, and a
+    // `meta` arriving here would be the page envelope on a body
+    // that describes no window.
+    expect(keysOf(rotated.body)).toStrictEqual(RESOURCE_KEY_SET);
+    expect(keysOf(rotated.body.data)).toStrictEqual(CONNECTOR_KEY_SET);
+    expect(rotated.body.success).toBe(true);
+    // The whole row afterwards, which is what says the members
+    // this request did not name came through untouched — and the
+    // config REPLACED rather than merged into: the endpoint the
+    // stored document carried is gone, because this request did
+    // not carry it. That is the store's rule reaching a caller,
+    // and the only shape under which dropping a setting is
+    // expressible at all.
+    expect(rotated.body.data).toStrictEqual({
+      id: modelId,
+      kind: LLM_KIND,
+      name: MODEL_NAME,
+      config: { [ROSTERED_KEY]: MASKED_SECRET, vault: PATCHED_VAULT },
+    });
+    expect(keysOf(MASKED_MODEL_CONFIG)).toContain('endpoint');
+    expect(keysOf(rotated.body.data.config)).not.toContain('endpoint');
+    // The rotated credential is not on the wire either, counted
+    // against the same planted control shape the create uses: a
+    // write is the one request that carries a live secret INTO
+    // this surface, and it is answered by a read.
+    const leaked = JSON.stringify({
+      ...rotated.body,
+      data: {
+        ...rotated.body.data,
+        config: { [ROSTERED_KEY]: ROTATED_SECRET },
+      },
+    });
+
+    expect(countOccurrences(JSON.stringify(rotated.body), ROTATED_SECRET))
+      .toBe(0);
+    expect(countOccurrences(leaked, ROTATED_SECRET)).toBe(1);
+    // And the store holds what the patch answered, read back
+    // through the OTHER operation: a patch answering a row it
+    // never wrote satisfies every assertion above. The collection
+    // is read whole beside it, so a patch reaching a neighbour is
+    // a red case rather than a write nobody looked past — and the
+    // page order is unmoved, this patch having named no column the
+    // read is sorted by.
+    expect(connectorFor(rows, model)).toStrictEqual(rotated.body.data);
+    expect(pairsOf(listed.body)).toStrictEqual(LISTED_PAIRS);
+    expect(listed.body.meta.total).toBe(PLANTED_CONNECTORS);
+  });
+
+  it('clears a key a config omits, and keeps the rest', async () => {
+    const { app, modelId, fallbackId } = await withConnectors();
+    const model = connectorPath(modelId);
+
+    // A patch naming only a SIBLING member: the credential is
+    // still there and still itself afterwards, which is what a
+    // service defaulting the member it was not sent would fail.
+    const renamed = await request(app)
+      .patch(model)
+      .send({ name: FRESH_NAME });
+    // The same row's config replaced WITHOUT the rostered key,
+    // which on this surface is how a credential is cleared. The
+    // answer can tell the two states apart where a masked value on
+    // its own cannot: a hidden secret is the key present carrying
+    // the literal, and a cleared one is the key gone.
+    const cleared = await request(app)
+      .patch(model)
+      .send({ config: { vault: PATCHED_VAULT } });
+    // The control: a patch carrying no member at all, which is a
+    // legal call answering the stored row. `connectors` has no
+    // `updated_at` for an empty write to stamp, so the port
+    // answers without writing rather than refusing.
+    const untouched = await request(app)
+      .patch(connectorPath(fallbackId))
+      .send({});
+
+    expect(renamed.status).toBe(200);
+    // `kind` came through though no patch can name it: the column
+    // is absent from `patchConnectorSchema` rather than guarded
+    // here, and a row whose kind moved would be a different
+    // connector.
+    expect(renamed.body.data).toStrictEqual({
+      id: modelId,
+      kind: LLM_KIND,
+      name: FRESH_NAME,
+      config: MASKED_MODEL_CONFIG,
+    });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.data).toStrictEqual({
+      id: modelId,
+      kind: LLM_KIND,
+      name: FRESH_NAME,
+      config: { vault: PATCHED_VAULT },
+    });
+    // The key is GONE rather than masked, which is the whole
+    // difference between a secret a read is hiding and one a write
+    // has taken away — and the rename above is what says the
+    // clearing was this request rather than something every patch
+    // here does.
+    expect(keysOf(cleared.body.data.config)).not.toContain(ROSTERED_KEY);
+    expect(keysOf(renamed.body.data.config)).toContain(ROSTERED_KEY);
+    expect(untouched.status).toBe(200);
+    expect(untouched.body.data).toStrictEqual({
+      id: fallbackId,
+      kind: LLM_KIND,
+      name: FALLBACK_NAME,
+      config: {},
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The delete: what a 204 carries, and what it leaves behind
+// ---------------------------------------------------------------------------
+
+describe('a delete that lands', () => {
+  it('answers 204 with nothing, and takes the row', async () => {
+    const { app, fallbackId } = await withConnectors();
+
+    const removed = await request(app).delete(connectorPath(fallbackId));
+    const listed = await request(app).get('/connectors');
+    // The control, through the SAME operation: the identical
+    // request against an id that named a row a moment ago is a
+    // 404, which is what makes the 204 above a delete rather than
+    // what this route answers to any id it is handed.
+    const again = await request(app).delete(connectorPath(fallbackId));
+
+    expect(removed.status).toBe(204);
+    // An EMPTY key set and nothing on the wire at all, which is
+    // this route's half of the shape the rest of the file reads: a
+    // deleted resource has no representation, and on this group
+    // that also means a delete is not a last chance to read a
+    // config.
+    expect(keysOf(removed.body)).toStrictEqual([]);
+    expect(removed.text).toBe('');
+    expect(removed.type).toBe('');
+    // The row is gone and both neighbours are not — including the
+    // one whose subscriptions refuse its own delete, which is what
+    // says this delete was addressed by id rather than applied to
+    // the kind the row sat in.
+    expect(listed.status).toBe(200);
+    expect(pairsOf(listed.body)).toStrictEqual(LISTED_PAIRS.slice(1));
+    expect(listed.body.meta.total).toBe(PLANTED_CONNECTORS - 1);
+    expect(again.status).toBe(404);
+    expect(again.body).toStrictEqual(NO_SUCH_CONNECTOR_BODY);
   });
 });
