@@ -107,28 +107,30 @@ writes the time and how it was worked out, never in what is stored.
 the claim it takes. The agent path is the one still to arrive, with
 `ar-research` in phase 6.
 
-Both operator modes are now reachable over HTTP. `runTopicNow` and
-`pauseTopic` in `src/topics/service.ts` are the extraordinary run
-and the pause for N cycles, each writing `next_run_at` through
-`TopicStore.updateTopicSchedule` and writing nothing else, and
-`src/topics/routes.ts` answers them at the two paths the table
-names. `docs/architecture/08-http-api.md` carries the rules both
-obey, stated once for the two schedulable groups.
+Both operator modes are now reachable over HTTP, on both schedulable
+tables. `runTopicNow` and `pauseTopic` in `src/topics/service.ts` are
+the extraordinary run and the pause for N cycles over `topics`, and
+`runSubscriptionNow` in `src/subscriptions/service.ts` is the
+extraordinary run over `export_subscriptions`; there is no pause verb
+on that second table, which is why the pause row of the table above
+names one route where the run-now row names two. Each writes
+`next_run_at` through its own port's schedule method and writes
+nothing else, and `src/topics/routes.ts` and
+`src/subscriptions/routes.ts` answer them at the three paths the table
+names. `docs/architecture/08-http-api.md` carries the rules they obey,
+stated once for the two schedulable groups.
 
-A hand-written UPDATE remains a fourth writer rather than a
-fallback, and the table keeps naming it for that reason: nothing in
-the database refuses one, so a row whose due time nobody can account
-for was set by something, and the modes above are the vocabulary for
-saying which. The export subscriptions half of the run-now row is
-the route `src/subscriptions/routes.ts` will answer; the topics half
-answers today.
+A hand-written UPDATE remains a fourth writer rather than a fallback,
+and the table keeps naming it for that reason: nothing in the database
+refuses one, so a row whose due time nobody can account for was set by
+something, and the modes above are the vocabulary for saying which.
 
 That the modes worked before anything implemented them is the
 mechanism reporting rather than an accident: it reads one column, and
-every writer of that column is speaking the same language. What the
-two functions add is the decisions a bare UPDATE cannot take — a
-disabled row refused, an unscheduled one refused, and the cycle
-length put through the bounds.
+every writer of that column is speaking the same language. What those
+verbs add is the decisions a bare UPDATE cannot take — a disabled row
+refused, an unscheduled one refused, and the cycle length put through
+the bounds.
 
 The seed does not write one either, and that is deliberate.
 `data/topics.json` leaves `next_run_at` out, so a seeded topic is
