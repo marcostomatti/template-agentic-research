@@ -211,9 +211,9 @@ const CASE_SUFFIX = '.test.ts';
  * the other gate this directory touches — what a source's
  * arrangement will be, ruled on before it is written — which is
  * about a source rather than a reading of one. And the HTTP half
- * of the directory is about a `sources` ROW: what the route group
- * asks the database for, which is a different subject from how a
- * feed is read.
+ * of the directory is about a `sources` ROW and the `documents`
+ * captured through one: what the route group asks the database for,
+ * which is a different subject from how a feed is read.
  *
  * Naming them is the cost of the guard and is meant to be paid: a
  * module that satisfies no contract and appears in no registry is
@@ -244,6 +244,15 @@ const NON_ADAPTER_MODULES = [
       + 'reads that cross into documents without writing one: it '
       + 'fronts no source, declares no member of the contract, and '
       + 'never constructs an adapter',
+  },
+  {
+    module: 'failures-service.ts',
+    reason:
+      'the rules behind the read-only review queue, whose subject '
+      + 'is a documents row rather than a sources one: it resolves '
+      + 'the source the path names, masks and caps what the failed '
+      + 'captures stored, fronts no source, and declares no member '
+      + 'of the contract',
   },
   {
     module: 'html-text.ts',
