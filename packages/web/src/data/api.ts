@@ -60,12 +60,67 @@
  * is not.
  *
  * Nothing here copies, filters or reshapes what a fixture accessor
- * answered. Each of those functions documents its own aliasing stance
- * (`listConnectors` copies because there is nothing to filter on,
+ * answered, and the SESSION DRAFT STORE is the one exception. Each of
+ * those functions documents its own aliasing stance (`listConnectors`
+ * copies because there is nothing to filter on,
  * `listSearchSuggestions` hands back the shared frozen array on
  * purpose), and a second policy layered here would silently override a
- * decision made where it is explained. {@link fetchDomains} is the one
- * exception, for a reason its own docblock gives.
+ * decision made where it is explained. {@link fetchDomains} bends the
+ * same rule in the small, for a reason its own docblock gives: there
+ * is no accessor over there to inherit a stance from.
+ *
+ * The overlay is an EXCEPTION to that rule rather than a repeal of it,
+ * because it decides nothing a fixture accessor decided. `applyDrafts`
+ * never grows, shrinks or reorders the list it is handed, and never
+ * touches a row this tab has not edited — so membership, order and
+ * every unedited row are still exactly what the fixture answered, by
+ * identity and not merely by value. What it adds is the one thing no
+ * fixture module can answer, sitting as they all do below the store
+ * and importing nothing from it: what this tab has done since it
+ * loaded. An editor that saves nothing is worse than the placeholder
+ * it replaced, so a save has to be visible to the read that would show
+ * it — and visible HERE, because on the day this seam becomes HTTP the
+ * server answers that question and `./drafts.ts` is deleted alongside
+ * the fixture modules in one commit.
+ *
+ * Three shapes reach it, and the list is worth reading before adding a
+ * write: a save no read shows is worse than no save at all.
+ * {@link fetchDocuments}, {@link fetchFindings}, {@link fetchSources},
+ * {@link fetchPersonas} and {@link fetchConnectors} answer the drafted
+ * rows themselves, through {@link deliverDomainRows} or — for the one
+ * deployment-scoped resource — {@link CONNECTOR_DRAFTS}.
+ * {@link fetchSourceStatusCounts} COUNTS them, and composes
+ * `countSourceStatuses` over the overlaid list rather than calling
+ * `summarizeSources`; that is not a second policy but the very
+ * decomposition `summarizeSources` already is, and the whole reason
+ * that accessor exists is that the stat cards and the table must never
+ * come to disagree. {@link fetchExportSubscriptions} answers a join
+ * WRAPPING a drafted row, so {@link overlaySubscription} replaces the
+ * drafted subscription and re-resolves its destination through the
+ * fixture layer's own `getConnector` — refusing a drafted delivery to
+ * nowhere exactly as `summarizeExportSubscriptions` refuses a stored
+ * one, instead of rendering a stale connector beside an edited row.
+ *
+ * Every other read is untouched for a stated reason rather than by
+ * oversight. `domains`, `entities` and `settings` name no draft
+ * resource at all — nothing edits a domain or a subject, and
+ * `Settings` carries no id to key a draft on, which `./drafts.ts`
+ * explains — so {@link fetchDomains}, {@link fetchDomain},
+ * {@link fetchVerdicts}, {@link fetchEntities} and
+ * {@link fetchSettings} pass fixture answers straight through, as do
+ * the four shell and spend reads that mirror no table.
+ * {@link fetchCategorySummaries} is the one real NARROWING:
+ * `summarizeCategories` builds its per-category literal inside its own
+ * body instead of out of two exported functions, so an overlay there
+ * would have to rebuild that literal at the seam, which is precisely
+ * the second policy the rule forbids. Its `termCount` cannot drift
+ * whatever the store holds, the overlay being unable to insert or
+ * delete a term; its polarity split can, once a term editor records
+ * one, and that is what the narrowing costs.
+ *
+ * Two resources `./drafts.ts` declares have no read here yet: `terms`
+ * and `source-proposals`. Their accessors and their overlays arrive
+ * together, with the surfaces that need them.
  *
  * What this barrel deliberately does NOT answer, so the next author
  * reads an omission rather than a gap: nothing loads a single row by
@@ -87,6 +142,11 @@
  */
 
 import type { ExportSubscriptionSummary } from './connectors';
+import type {
+  DomainDraftResource,
+  DraftScope,
+  DraftableRow,
+} from './drafts';
 import type { CategorySummary } from './lexicon';
 import type { SourceStatusCounts } from './sources';
 import type {
@@ -106,14 +166,23 @@ import type {
   SearchSuggestion,
 } from '@ar/ui';
 
-import { listConnectors, summarizeExportSubscriptions } from './connectors';
+import {
+  getConnector,
+  listConnectors,
+  summarizeExportSubscriptions,
+} from './connectors';
 import { listDocuments, listEntities, listFindings } from './digest';
 import { DOMAINS, getDomain, resolveVerdictVocabulary } from './domains';
+import {
+  applyDrafts,
+  deploymentDraftScope,
+  domainDraftScope,
+} from './drafts';
 import { summarizeCategories } from './lexicon';
 import { listPersonas } from './personas';
 import { getSettings } from './settings';
 import { getOperator, listNotifications, listSearchSuggestions } from './shell';
-import { listSources, summarizeSources } from './sources';
+import { countSourceStatuses, listSources } from './sources';
 import { getSpendSummary } from './spend';
 
 /**
@@ -167,6 +236,90 @@ function deliverForDomain<T>(
   read: (domain: Domain) => T,
 ): Promise<T> {
   return deliver(() => read(getDomain(slug)));
+}
+
+/**
+ * The seam, scoped to one domain, with that domain's drafts of one
+ * resource composed onto the rows it answers.
+ *
+ * The commonest of the three overlay shapes, and the reason most of
+ * the accessors below stayed one line: the read is unchanged and the
+ * scope is built from the SLUG THIS CALL WAS HANDED, so an edit made
+ * under one domain is invisible under every other without any accessor
+ * having to remember that.
+ *
+ * The scope is assembled before {@link deliverForDomain} rather than
+ * inside its callback, which changes nothing about the refusal:
+ * {@link domainDraftScope} cannot throw, and `getDomain` still runs
+ * inside {@link deliver}. A draft recorded under a slug no domain
+ * carries is therefore recorded, never reached, and never able to turn
+ * that slug's rejection into a resolved empty page.
+ *
+ * @typeParam T - The row shape the accessor answers.
+ * @param slug - A resolved domain slug.
+ * @param resource - Which of that domain's resources these rows are.
+ * @param read - The fixture accessor, called once the domain is known.
+ * @returns Its rows with this tab's edits applied, in the fixture's own
+ * order; a rejection if no domain carries the slug.
+ */
+function deliverDomainRows<T extends DraftableRow>(
+  slug: string,
+  resource: DomainDraftResource,
+  read: (domain: Domain) => readonly T[],
+): Promise<readonly T[]> {
+  const scope = domainDraftScope(slug, resource);
+
+  return deliverForDomain(slug, (domain) => applyDrafts(scope, read(domain)));
+}
+
+/**
+ * Where an edit to a connector is filed.
+ *
+ * A module constant rather than a call inside {@link fetchConnectors},
+ * because there is nothing per-call to build it from: `connectors`
+ * carries no `domain_id`, so one scope serves every read for the life
+ * of the tab. That asymmetry with {@link deliverDomainRows} is the same
+ * one this module's docblock draws around the accessor itself.
+ */
+const CONNECTOR_DRAFTS: DraftScope = deploymentDraftScope('connectors');
+
+/**
+ * One export summary with this tab's edit to its subscription applied.
+ *
+ * The third overlay shape: the drafted row is not the answer but a
+ * MEMBER of it, so the draft cannot simply be handed back in the row's
+ * place. A summary whose subscription is undrafted comes back as the
+ * very object `summarizeExportSubscriptions` built — identity, not a
+ * rebuilt twin — and only a drafted one is replaced.
+ *
+ * The destination is re-resolved rather than carried over, and that is
+ * the deliberate half. An edit that moves a delivery to another
+ * connector and left the old one rendered beside it would be a wrong
+ * answer that looks like a saved one; asking the fixture layer's own
+ * `getConnector` makes a drafted subscription exactly as correct as a
+ * stored one, THROWING on a destination nothing carries for the reason
+ * `summarizeExportSubscriptions` gives — a delivery to nowhere is not
+ * the same thing as a cancelled subscription, and the throw becomes a
+ * rejection at {@link deliver} like every other refusal here.
+ *
+ * @param scope - This domain's subscription drafts.
+ * @param summary - One summary as the fixture layer assembled it.
+ * @returns It unchanged, or a fresh one carrying the drafted
+ * subscription and that subscription's own destination.
+ * @throws If a drafted subscription names a connector nothing carries.
+ */
+function overlaySubscription(
+  scope: DraftScope,
+  summary: ExportSubscriptionSummary,
+): ExportSubscriptionSummary {
+  const [drafted = summary.subscription] = applyDrafts(
+    scope,
+    [summary.subscription],
+  );
+
+  return drafted === summary.subscription
+    ? summary
+    : { subscription: drafted, connector: getConnector(drafted.connectorId) };
 }
 
 /**
@@ -239,18 +392,34 @@ export function fetchVerdicts(slug: string): Promise<readonly string[]> {
  * has captured nothing, and a rejection for one that does not exist.
  */
 export function fetchDocuments(slug: string): Promise<readonly Document[]> {
-  return deliverForDomain(slug, (domain) => listDocuments(domain.id));
+  return deliverDomainRows(
+    slug,
+    'documents',
+    (domain) => listDocuments(domain.id),
+  );
 }
 
 /**
  * One domain's findings — what the digest surface is a list of.
  *
+ * The sort is the fixture's and the overlay does not redo it, which is
+ * `applyDrafts`' never-reorders rule seen from the one accessor whose
+ * order is derived from a field. A drafted VERDICT — the edit the
+ * digest's row action actually makes — changes nothing about position;
+ * a drafted score would leave the row where the stored one ranked,
+ * until the day the endpoint behind this seam does the sorting.
+ *
  * @param slug - A resolved domain slug.
- * @returns Its findings, highest score first with the unscored last;
- * `[]` for a domain that has produced none.
+ * @returns Its findings, highest STORED score first with the unscored
+ * last, this tab's edits applied in place; `[]` for a domain that has
+ * produced none.
  */
 export function fetchFindings(slug: string): Promise<readonly Finding[]> {
-  return deliverForDomain(slug, (domain) => listFindings(domain.id));
+  return deliverDomainRows(
+    slug,
+    'findings',
+    (domain) => listFindings(domain.id),
+  );
 }
 
 /**
@@ -299,7 +468,11 @@ export function fetchCategorySummaries(
  * has configured none.
  */
 export function fetchSources(slug: string): Promise<readonly Source[]> {
-  return deliverForDomain(slug, (domain) => listSources(domain.id));
+  return deliverDomainRows(
+    slug,
+    'sources',
+    (domain) => listSources(domain.id),
+  );
 }
 
 /**
@@ -311,14 +484,25 @@ export function fetchSources(slug: string): Promise<readonly Source[]> {
  * the table have to agree, and a page counting its own rows is a page
  * that can come to disagree with the classifier.
  *
+ * Which is exactly why this one counts the OVERLAID list. It composes
+ * `countSourceStatuses` over `listSources` — the two calls
+ * `summarizeSources` is, in its order, with the overlay between them —
+ * so a source an operator has just disabled is disabled in the cards
+ * and in the table on the same render rather than in one of them.
+ *
  * @param slug - A resolved domain slug.
- * @returns A count per status, zeros included; all zeros for a domain
- * with no sources.
+ * @returns A count per status, zeros included, over this tab's view of
+ * the sources; all zeros for a domain with none.
  */
 export function fetchSourceStatusCounts(
   slug: string,
 ): Promise<SourceStatusCounts> {
-  return deliverForDomain(slug, (domain) => summarizeSources(domain.id));
+  const scope = domainDraftScope(slug, 'sources');
+
+  return deliverForDomain(
+    slug,
+    (domain) => countSourceStatuses(applyDrafts(scope, listSources(domain.id))),
+  );
 }
 
 /**
@@ -328,7 +512,11 @@ export function fetchSourceStatusCounts(
  * @returns Its personas, in role order; `[]` for a domain with none.
  */
 export function fetchPersonas(slug: string): Promise<readonly Persona[]> {
-  return deliverForDomain(slug, (domain) => listPersonas(domain.id));
+  return deliverDomainRows(
+    slug,
+    'personas',
+    (domain) => listPersonas(domain.id),
+  );
 }
 
 /**
@@ -340,7 +528,9 @@ export function fetchPersonas(slug: string): Promise<readonly Persona[]> {
  * not. Rejects rather than dropping a row if a subscription names a
  * connector nothing carries, which is `summarizeExportSubscriptions`
  * refusing to render a delivery to nowhere as a domain that cancelled
- * it.
+ * it — and {@link overlaySubscription} makes the same refusal on a
+ * DRAFTED destination, so an edit cannot buy itself a laxer rule than
+ * the stored row had.
  *
  * @param slug - A resolved domain slug.
  * @returns A summary per subscription, in subscription order; `[]` for
@@ -349,10 +539,13 @@ export function fetchPersonas(slug: string): Promise<readonly Persona[]> {
 export function fetchExportSubscriptions(
   slug: string,
 ): Promise<readonly ExportSubscriptionSummary[]> {
-  return deliverForDomain(
-    slug,
-    (domain) => summarizeExportSubscriptions(domain.id),
-  );
+  const scope = domainDraftScope(slug, 'export-subscriptions');
+
+  return deliverForDomain(slug, (domain) => {
+    const summaries = summarizeExportSubscriptions(domain.id);
+
+    return summaries.map((summary) => overlaySubscription(scope, summary));
+  });
 }
 
 /**
@@ -361,12 +554,16 @@ export function fetchExportSubscriptions(
  *
  * Takes no slug: `connectors` carries no `domain_id`, so the cards are
  * the same whichever domain is active. Secrets are redacted in the
- * fixture rather than here.
+ * fixture rather than here. Its drafts are filed the same way, under
+ * {@link CONNECTOR_DRAFTS}, so an edit made while one domain was
+ * active is still there under the next — which is what the cards
+ * already do with the stored rows.
  *
- * @returns The connectors, in configuration order.
+ * @returns The connectors, in configuration order, this tab's edits
+ * applied. Never the stored table.
  */
 export function fetchConnectors(): Promise<readonly Connector[]> {
-  return deliver(listConnectors);
+  return deliver(() => applyDrafts(CONNECTOR_DRAFTS, listConnectors()));
 }
 
 /**

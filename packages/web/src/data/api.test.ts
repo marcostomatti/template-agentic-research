@@ -1,9 +1,23 @@
-import type { Domain } from './types';
+import type { ExportSubscriptionSummary } from './connectors';
+import type { DraftScope, DraftableRow } from './drafts';
+import type {
+  Connector,
+  Document,
+  Domain,
+  Finding,
+  Persona,
+  Source,
+} from './types';
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as api from './api';
-import { CONNECTORS, listConnectors, summarizeExportSubscriptions } from './connectors';
+import {
+  CONNECTORS,
+  listConnectors,
+  listExportSubscriptions,
+  summarizeExportSubscriptions,
+} from './connectors';
 import { listDocuments, listEntities, listFindings } from './digest';
 import {
   DEFAULT_DOMAIN_SLUG,
@@ -12,11 +26,22 @@ import {
   getDomain,
   resolveVerdictVocabulary,
 } from './domains';
+import {
+  deploymentDraftScope,
+  domainDraftScope,
+  recordDraft,
+  resetDrafts,
+} from './drafts';
 import { summarizeCategories } from './lexicon';
 import { listPersonas } from './personas';
 import { SETTINGS } from './settings';
 import { NOTIFICATIONS, OPERATOR, SEARCH_SUGGESTIONS } from './shell';
-import { listSources, summarizeSources } from './sources';
+import {
+  classifySource,
+  countSourceStatuses,
+  listSources,
+  summarizeSources,
+} from './sources';
 import { WEEK_SPEND } from './spend';
 
 // The module is imported as a NAMESPACE rather than by name, which is
@@ -248,6 +273,16 @@ async function outcomeOf(read: BarrelAccessor, slug: string): Promise<string> {
 
   return 'resolved';
 }
+
+beforeEach(() => {
+  // `./drafts.ts` is module-scoped state and `./api.ts` now reads it on
+  // every accessor, so without this every pass-through claim in this
+  // file would be made against whatever the case before it recorded.
+  // It also makes the ORDER of the blocks below stop mattering, which
+  // is what lets the overlay cases sit at the end of an existing file
+  // rather than in one of their own.
+  resetDrafts();
+});
 
 describe('the barrel export surface', () => {
   it('exports nothing beyond the two case tables below', () => {
@@ -667,5 +702,578 @@ describe('the unknown-slug rule, over the module export surface', () => {
         answered: entry.seeded,
       });
     });
+  });
+});
+
+/**
+ * One accessor whose answer carries rows the draft store may replace,
+ * with everything a case needs to drive the overlay end to end.
+ *
+ * `field` and `mark` are what keep these cases off a tautology. An
+ * edit is only evidence if it names a field the surface's editor
+ * really writes and a value the fixture does not already hold, and
+ * both of those are claims the first test below MAKES rather than
+ * assumes — a typo in either would otherwise still round-trip through
+ * the store and every assertion here would still pass.
+ */
+interface OverlaidCase {
+  /** Its exported name, for the partition check and the titles. */
+  readonly name: string;
+  /** The draft resource its rows are filed under. */
+  readonly resource: string;
+  /** Where a draft of those rows is filed, for a given slug. */
+  readonly scopeFor: (slug: string) => DraftScope;
+  /** What the fixture layer stores for that slug, read directly. */
+  readonly storedRows: (slug: string) => readonly DraftableRow[];
+  /** The drafted rows inside an answer, in the answer's own order. */
+  readonly rowsIn: (answered: unknown) => readonly DraftableRow[];
+  /** The accessor under test. */
+  readonly read: (slug: string) => Promise<unknown>;
+  /** A field the surface's editor really writes. */
+  readonly field: string;
+  /** What to write into it. Never a value the fixture already holds. */
+  readonly mark: unknown;
+}
+
+/**
+ * Every accessor whose ANSWER carries drafted rows.
+ *
+ * {@link api.fetchSourceStatusCounts} is overlaid too and is
+ * deliberately absent: it answers a count rather than the rows, so
+ * none of the row-shaped claims below can be made about it and it has
+ * a block of its own further down. The partition test names all three
+ * populations so that absence is a decision on the record rather than
+ * an accessor nobody wired up.
+ */
+const ROW_OVERLAID: readonly OverlaidCase[] = [
+  {
+    name: 'fetchDocuments',
+    resource: 'documents',
+    scopeFor: (slug) => domainDraftScope(slug, 'documents'),
+    storedRows: (slug) => listDocuments(getDomain(slug).id),
+    rowsIn: (answered) => answered as readonly Document[],
+    read: api.fetchDocuments,
+    // What the sources surface's failures list rules on.
+    field: 'parseError',
+    mark: 'drafted parse error',
+  },
+  {
+    name: 'fetchFindings',
+    resource: 'findings',
+    scopeFor: (slug) => domainDraftScope(slug, 'findings'),
+    storedRows: (slug) => listFindings(getDomain(slug).id),
+    rowsIn: (answered) => answered as readonly Finding[],
+    read: api.fetchFindings,
+    // The digest row action's own edit, and the reason the ordering
+    // narrowing in `fetchFindings`' docblock costs nothing today.
+    field: 'verdict',
+    mark: 'drafted-verdict',
+  },
+  {
+    name: 'fetchSources',
+    resource: 'sources',
+    scopeFor: (slug) => domainDraftScope(slug, 'sources'),
+    storedRows: (slug) => listSources(getDomain(slug).id),
+    rowsIn: (answered) => answered as readonly Source[],
+    read: api.fetchSources,
+    field: 'endpoint',
+    mark: 'https://drafted.example.test/feed',
+  },
+  {
+    name: 'fetchPersonas',
+    resource: 'personas',
+    scopeFor: (slug) => domainDraftScope(slug, 'personas'),
+    storedRows: (slug) => listPersonas(getDomain(slug).id),
+    rowsIn: (answered) => answered as readonly Persona[],
+    read: api.fetchPersonas,
+    field: 'systemText',
+    mark: 'Drafted system text.',
+  },
+  {
+    name: 'fetchExportSubscriptions',
+    resource: 'export-subscriptions',
+    scopeFor: (slug) => domainDraftScope(slug, 'export-subscriptions'),
+    storedRows: (slug) => listExportSubscriptions(getDomain(slug).id),
+    // The one case whose drafted row is a MEMBER of the answer rather
+    // than the answer: the accessor hands back the join, and only the
+    // subscription inside it is keyed by a draft.
+    rowsIn: (answered) => (answered as readonly ExportSubscriptionSummary[])
+      .map((summary) => summary.subscription),
+    read: api.fetchExportSubscriptions,
+    field: 'intervalSeconds',
+    mark: 987_654,
+  },
+  {
+    name: 'fetchConnectors',
+    resource: 'connectors',
+    // The one deployment-scoped case, so its scope ignores the slug —
+    // which is the property the cross-domain block below cannot ask of
+    // it, and says so rather than exempting it silently.
+    scopeFor: () => deploymentDraftScope('connectors'),
+    storedRows: () => listConnectors(),
+    rowsIn: (answered) => answered as readonly Connector[],
+    read: api.fetchConnectors,
+    field: 'name',
+    mark: 'drafted-connector',
+  },
+];
+
+/**
+ * The overlaid cases a second domain can leak into.
+ *
+ * {@link api.fetchConnectors} is filed under the deployment scope and
+ * there is no other slug for its drafts to arrive from, so the
+ * cross-domain claim is not one this table can make about it. Derived
+ * by name rather than by a `kind` flag on the case, because there is
+ * exactly one and a flag would read as though more were expected.
+ */
+const DOMAIN_OVERLAID = ROW_OVERLAID.filter(
+  (overlaid) => overlaid.name !== 'fetchConnectors',
+);
+
+/**
+ * The accessor that composes the overlay into a DERIVATION rather than
+ * answering the drafted rows.
+ *
+ * One member, and a list rather than a bare name so the partition
+ * below is a set claim over three populations that add up to the
+ * barrel.
+ */
+const DERIVED_OVERLAID: readonly string[] = ['fetchSourceStatusCounts'];
+
+/**
+ * The reads the overlay deliberately does not reach.
+ *
+ * Written out rather than derived, for the reason {@link
+ * UNSCOPED_EXEMPT} gives: derived, an accessor that lost its overlay
+ * would move into this list on its own and the partition would still
+ * balance. `./api.ts` carries a stated reason for every name here —
+ * three resources nothing edits, the settings singleton that has no id
+ * to key on, the four shell and spend reads that mirror no table, and
+ * the one real narrowing on the lexicon summaries.
+ */
+const NOT_OVERLAID: readonly string[] = [
+  'fetchDomains',
+  'fetchDomain',
+  'fetchVerdicts',
+  'fetchEntities',
+  'fetchCategorySummaries',
+  'fetchSettings',
+  'fetchSpendSummary',
+  'fetchSearchSuggestions',
+  'fetchNotifications',
+  'fetchOperator',
+];
+
+/**
+ * The row at `index`, or a failure naming how short the list came up.
+ *
+ * Also the non-emptiness guard every overlay case rests on: a fixture
+ * that lost its rows would otherwise let the assertions below pass
+ * over nothing at all.
+ *
+ * @typeParam T - The row shape.
+ * @param rows - The list to read.
+ * @param index - Which row is wanted.
+ * @returns That row.
+ * @throws If the list is shorter than the index.
+ */
+function rowAt<T>(rows: readonly T[], index: number): T {
+  const row = rows[index];
+
+  if (row === undefined) {
+    throw new Error(`No row at index ${index} of ${rows.length}.`);
+  }
+
+  return row;
+}
+
+/**
+ * One named field of a row, read without knowing the row's type.
+ *
+ * Over `Object.entries` rather than through a cast to an index
+ * signature, which is what lets one case table cover six unrelated row
+ * shapes with no assertion TypeScript had to be talked out of. An
+ * absent field reads as `undefined`, and the vacuity guard beside each
+ * case is what rules that out rather than this.
+ *
+ * @param row - The row to read.
+ * @param field - Which of its fields.
+ * @returns Whatever it holds, or `undefined` if it carries no such key.
+ */
+function fieldOf(row: DraftableRow, field: string): unknown {
+  return Object.entries(row).find(([key]) => key === field)?.[1];
+}
+
+/**
+ * The edit a case records: the stored row with one field rewritten.
+ *
+ * Spreads the row at RUNTIME, so the draft carries every field the
+ * fixture row carried even though the static type here is only
+ * {@link DraftableRow}. That matters for the identity assertions —
+ * what comes back has to be a whole row, not the id and one field.
+ *
+ * @param row - The stored row being edited.
+ * @param field - Which field the editor writes.
+ * @param mark - What it writes.
+ * @returns The edited copy, ready for `recordDraft`.
+ */
+function draftOf(
+  row: DraftableRow,
+  field: string,
+  mark: unknown,
+): DraftableRow {
+  return { ...row, [field]: mark };
+}
+
+describe('the draft overlay', () => {
+  it('partitions the barrel into overlaid, derived and untouched', () => {
+    // The guard the rest of this file's overlay claims rest on. Every
+    // case below is made over `ROW_OVERLAID`, so an accessor that was
+    // given an overlay and no case — or lost one and kept its case —
+    // would be covered by nothing and reported by nothing. The three
+    // populations are literals, so moving an accessor between them is
+    // a failure here rather than a silent re-reading of the rule.
+    // Arrange
+    const claimed = [
+      ...ROW_OVERLAID.map((overlaid) => overlaid.name),
+      ...DERIVED_OVERLAID,
+      ...NOT_OVERLAID,
+    ].sort();
+
+    // Act
+    const exported = Object.keys(api).sort();
+
+    // Assert
+    expect(claimed).toEqual(exported);
+    expect(ROW_OVERLAID).toHaveLength(6);
+    expect(DERIVED_OVERLAID).toHaveLength(1);
+    expect(NOT_OVERLAID).toHaveLength(10);
+  });
+
+  it('names each overlaid resource once', () => {
+    // The near-miss the set comparison cannot catch: two cases filed
+    // under one resource would cover that resource twice and leave
+    // another accessor overlaid by a scope no case ever builds.
+    // Arrange
+    const named = ROW_OVERLAID.map((overlaid) => overlaid.resource);
+
+    // Act
+    const duplicated = named.filter(
+      (resource, index) => named.indexOf(resource) !== index,
+    );
+
+    // Assert
+    expect(duplicated).toEqual([]);
+  });
+
+  ROW_OVERLAID.forEach((overlaid) => {
+    it(`edits a real field to a value the fixture does not hold: ${overlaid.name}`, () => {
+      // The vacuity guard for every case that follows. A `field` the
+      // row does not carry, or a `mark` equal to what it already
+      // holds, both round-trip through the store perfectly and make
+      // the overlay assertions below pass while proving nothing about
+      // the surface that is supposed to write them.
+      // Arrange
+      const stored = overlaid.storedRows(DEFAULT_DOMAIN_SLUG);
+
+      // Act
+      const target = rowAt(stored, 0);
+
+      // Assert
+      expect(stored.length).toBeGreaterThan(1);
+      expect(Object.keys(target)).toContain(overlaid.field);
+      expect(fieldOf(target, overlaid.field)).not.toBe(overlaid.mark);
+    });
+
+    it(`answers the edited row: ${overlaid.name}`, async () => {
+      // The whole point of the seam's write half. A save an editor
+      // believes it made and no read shows is worse than no save at
+      // all, so the read that would display this row has to show the
+      // edit on the very next call.
+      // Arrange
+      const stored = overlaid.storedRows(DEFAULT_DOMAIN_SLUG);
+      const target = rowAt(stored, 0);
+      const draft = draftOf(target, overlaid.field, overlaid.mark);
+
+      recordDraft(overlaid.scopeFor(DEFAULT_DOMAIN_SLUG), draft);
+
+      // Act
+      const answered = overlaid.rowsIn(
+        await overlaid.read(DEFAULT_DOMAIN_SLUG),
+      );
+      const shown = answered.filter((row) => row.id === target.id);
+
+      // Assert
+      expect(shown).toEqual([draft]);
+      expect(fieldOf(rowAt(shown, 0), overlaid.field)).toBe(overlaid.mark);
+      expect(rowAt(shown, 0)).not.toBe(target);
+    });
+
+    it(`leaves every unedited row identical to the fixture: ${overlaid.name}`, async () => {
+      // `applyDrafts` hands undrafted rows back as the very objects it
+      // was given, so this is IDENTITY rather than deep equality —
+      // strictly more than byte-identical, and the difference matters:
+      // an overlay that rebuilt every row would satisfy `toEqual` and
+      // would be a second policy layered at the seam.
+      // Arrange
+      const stored = overlaid.storedRows(DEFAULT_DOMAIN_SLUG);
+      const target = rowAt(stored, 0);
+
+      recordDraft(
+        overlaid.scopeFor(DEFAULT_DOMAIN_SLUG),
+        draftOf(target, overlaid.field, overlaid.mark),
+      );
+
+      // Act
+      const answered = overlaid.rowsIn(
+        await overlaid.read(DEFAULT_DOMAIN_SLUG),
+      );
+      const compared = answered.map((row, index) => ({
+        id: row.id,
+        identical: row === stored[index],
+      }));
+
+      // Assert — membership and order are the fixture's, and exactly
+      // one row is not the fixture's own object.
+      expect(answered.map((row) => row.id)).toEqual(
+        stored.map((row) => row.id),
+      );
+      expect(compared.filter((entry) => !entry.identical)).toEqual([
+        { id: target.id, identical: false },
+      ]);
+    });
+  });
+
+  DOMAIN_OVERLAID.forEach((overlaid) => {
+    it(`shows a draft only under the slug it was recorded for: ${overlaid.name}`, async () => {
+      // The cross-domain guard, read through the accessor rather than
+      // through the store: the scope is built from the slug the CALL
+      // was handed, so an accessor that closed over one fixed slug
+      // shows one domain's edits to every other. Same resource, same
+      // row id, other domain, and the seeded read must not see it.
+      //
+      // Its LIMIT, measured rather than assumed: a scope hardcoded to
+      // any slug reddens this file — except one hardcoded to the
+      // SEEDED slug, which stays green everywhere. Only one fixture
+      // domain carries rows, so a read of the other overlays an empty
+      // list whatever scope it built. Closing that leg needs a second
+      // populated domain, not another assertion.
+      // Arrange
+      const stored = overlaid.storedRows(DEFAULT_DOMAIN_SLUG);
+      const target = rowAt(stored, 0);
+
+      recordDraft(
+        overlaid.scopeFor(SPARSE_DOMAIN_SLUG),
+        draftOf(target, overlaid.field, overlaid.mark),
+      );
+
+      // Act
+      const answered = overlaid.rowsIn(
+        await overlaid.read(DEFAULT_DOMAIN_SLUG),
+      );
+
+      // Assert
+      expect(answered).toEqual(stored);
+      expect(answered.filter((row, index) => row !== stored[index])).toEqual([]);
+    });
+  });
+
+  it('still rejects an unknown slug with drafts recorded under it', async () => {
+    // The property `deliverDomainRows` builds its scope outside
+    // `deliverForDomain` for, made explicit. The overlay runs on rows
+    // the domain lookup already produced, so a draft filed under a
+    // slug nothing carries is recorded, never reached, and cannot turn
+    // a rejection into a resolved empty page — which a cache hook
+    // would render as a domain that exists and has nothing in it.
+    // Written over `SCOPED_EXPORTS`, so an accessor is in this claim
+    // from the moment `./api.ts` exports it.
+    // Arrange
+    DOMAIN_OVERLAID.forEach((overlaid) => {
+      const stored = overlaid.storedRows(DEFAULT_DOMAIN_SLUG);
+
+      recordDraft(
+        overlaid.scopeFor(UNKNOWN_SLUG),
+        draftOf(rowAt(stored, 0), overlaid.field, overlaid.mark),
+      );
+    });
+
+    // Act
+    const outcomes = await Promise.all(
+      SCOPED_EXPORTS.map(async ([name, read]) => ({
+        name,
+        outcome: await outcomeOf(read, UNKNOWN_SLUG),
+      })),
+    );
+
+    // Assert
+    expect(outcomes).toHaveLength(SCOPED_EXPORTS.length);
+    expect(outcomes.filter((entry) => entry.outcome !== REFUSAL)).toEqual([]);
+  });
+
+  it('answers the fixtures unchanged when nothing has been recorded', async () => {
+    // The commonest state by far, and the one the rest of this file
+    // silently depends on: every pass-through claim above is made
+    // against a store the hook emptied. Asserted here as well so that
+    // an overlay which somehow applied on an empty store would be
+    // reported by a case that says so, rather than by twenty that do
+    // not mention drafts at all.
+    // Arrange
+    const domain = getDomain(DEFAULT_DOMAIN_SLUG);
+
+    // Act
+    const answers = await Promise.all(
+      ROW_OVERLAID.map(async (overlaid) => ({
+        name: overlaid.name,
+        rows: overlaid.rowsIn(await overlaid.read(DEFAULT_DOMAIN_SLUG)),
+      })),
+    );
+
+    // Assert
+    expect(answers).toHaveLength(ROW_OVERLAID.length);
+    answers.forEach((entry) => {
+      const stored = rowAt(
+        ROW_OVERLAID.filter((overlaid) => overlaid.name === entry.name),
+        0,
+      ).storedRows(domain.slug);
+
+      expect({ name: entry.name, rows: entry.rows }).toEqual({
+        name: entry.name,
+        rows: stored,
+      });
+    });
+  });
+});
+
+describe('the overlay behind the derived source counts', () => {
+  it('counts the sources this tab sees rather than the stored ones', async () => {
+    // What `fetchSourceStatusCounts` composing `countSourceStatuses`
+    // over the overlaid list buys: a source an operator has just
+    // disabled is disabled in the stat cards on the same render it is
+    // disabled in the table. The target is CHOSEN as one the
+    // classifier does not already call `disabled`, so the draft is a
+    // real move rather than a no-op the counts could not report.
+    // Arrange
+    const domain = getDomain(DEFAULT_DOMAIN_SLUG);
+    const stored = listSources(domain.id);
+    const target = rowAt(
+      stored.filter((source) => classifySource(source) !== 'disabled'),
+      0,
+    );
+    const was = classifySource(target);
+    const before = summarizeSources(domain.id);
+
+    recordDraft(
+      domainDraftScope(DEFAULT_DOMAIN_SLUG, 'sources'),
+      { ...target, enabled: false },
+    );
+
+    // Act
+    const counts = await api.fetchSourceStatusCounts(DEFAULT_DOMAIN_SLUG);
+
+    // Assert
+    expect(was).not.toBe('disabled');
+    expect(counts.disabled).toBe(before.disabled + 1);
+    expect(counts[was]).toBe(before[was] - 1);
+    expect(Object.values(counts).reduce((sum, count) => sum + count, 0)).toBe(
+      Object.values(before).reduce((sum, count) => sum + count, 0),
+    );
+  });
+
+  it('agrees with the table it sits above', async () => {
+    // The invariant `summarizeSources` exists for, asserted across the
+    // two accessors that have to honour it together. An overlay added
+    // to one and not the other passes every test in this file except
+    // this one: the cards would count the stored rows while the table
+    // rendered the edited ones.
+    // Arrange
+    const domain = getDomain(DEFAULT_DOMAIN_SLUG);
+    const target = rowAt(
+      listSources(domain.id).filter(
+        (source) => classifySource(source) !== 'disabled',
+      ),
+      0,
+    );
+
+    recordDraft(
+      domainDraftScope(DEFAULT_DOMAIN_SLUG, 'sources'),
+      { ...target, enabled: false },
+    );
+
+    // Act
+    const sources = await api.fetchSources(DEFAULT_DOMAIN_SLUG);
+    const counts = await api.fetchSourceStatusCounts(DEFAULT_DOMAIN_SLUG);
+
+    // Assert — and the draft moved something, without which the
+    // agreement above would hold over the stored rows too.
+    expect(counts).toEqual(countSourceStatuses(sources));
+    expect(counts).not.toEqual(summarizeSources(domain.id));
+  });
+});
+
+describe('the overlay behind the export join', () => {
+  it('re-resolves the destination of a drafted subscription', async () => {
+    // The third overlay shape's deliberate half. The drafted row is a
+    // MEMBER of the answer, so replacing it alone would leave the old
+    // connector rendered beside an edited delivery — a wrong answer
+    // that looks like a saved one. `overlaySubscription` asks the
+    // fixture layer's own `getConnector` instead.
+    // Arrange
+    const domain = getDomain(DEFAULT_DOMAIN_SLUG);
+    const target = rowAt(listExportSubscriptions(domain.id), 0);
+    const targets = listConnectors().filter(
+      (connector) => connector.kind === 'export_target',
+    );
+    const elsewhere = rowAt(
+      targets.filter((connector) => connector.id !== target.connectorId),
+      0,
+    );
+
+    recordDraft(
+      domainDraftScope(DEFAULT_DOMAIN_SLUG, 'export-subscriptions'),
+      { ...target, connectorId: elsewhere.id },
+    );
+
+    // Act
+    const answered = await api.fetchExportSubscriptions(DEFAULT_DOMAIN_SLUG);
+    const shown = answered.filter(
+      (summary) => summary.subscription.id === target.id,
+    );
+
+    // Assert
+    expect(elsewhere.id).not.toBe(target.connectorId);
+    expect(shown.map((summary) => summary.connector)).toEqual([elsewhere]);
+    expect(shown.map((summary) => summary.subscription.connectorId)).toEqual([
+      elsewhere.id,
+    ]);
+  });
+
+  it('rejects a drafted delivery to a destination nothing carries', async () => {
+    // The other half of that decision: a drafted subscription is held
+    // to the same rule as a stored one. A delivery to nowhere is not
+    // the same thing as a cancelled subscription, so the read refuses
+    // rather than dropping the row — and refuses by REJECTING, which
+    // is what keeps a cache hook rendering an error state instead of
+    // the exception reaching the render.
+    // Arrange
+    const domain = getDomain(DEFAULT_DOMAIN_SLUG);
+    const target = rowAt(listExportSubscriptions(domain.id), 0);
+    const absent = Math.max(
+      ...listConnectors().map((connector) => connector.id),
+    ) + 1;
+
+    recordDraft(
+      domainDraftScope(DEFAULT_DOMAIN_SLUG, 'export-subscriptions'),
+      { ...target, connectorId: absent },
+    );
+
+    // Act
+    const outcome = await outcomeOf(
+      api.fetchExportSubscriptions,
+      DEFAULT_DOMAIN_SLUG,
+    );
+
+    // Assert
+    expect(outcome).toBe(`rejected: Unknown connector id: ${absent}`);
   });
 });
