@@ -19,14 +19,18 @@
  * export subscription, never to the renderer.
  *
  * That is the send-free invariant, and this contract holds it by
- * construction: {@link ExportRenderer} has exactly one member, it returns
+ * construction: {@link ExportRenderer} has exactly one method, it returns
  * {@link ExportArtifact} values, and the shape leaves nowhere for a
  * dispatch call to live. The register in
- * `docs/architecture/01-invariants.md` carries the executor-side row; on
- * this side the type is the whole enforcement. A member that delivers —
- * `send`, `deliver`, `publish` — would put a send path back inside the
- * renderer layer, so no renderer grows one, whatever its format implies
- * about where the bytes end up.
+ * `docs/architecture/01-invariants.md` carries a row for each half of the
+ * rule: the node-type scan over built workflows, and
+ * `tests/invariants/exports-send-free.test.ts` over every module in this
+ * directory — because a module here is free to import a transport, reach
+ * it inside the method it declares and satisfy this interface exactly, so
+ * the type is not the whole of the enforcement on this side either. A
+ * member that delivers — `send`, `deliver`, `publish` — would put a send
+ * path back inside the renderer layer, so no renderer grows one, whatever
+ * its format implies about where the bytes end up.
  */
 
 import type { DomainSettings } from '../db/schema/domains.js';
