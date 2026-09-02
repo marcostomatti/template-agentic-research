@@ -54,6 +54,22 @@
  * keys are intersected against it so a member added to the drain
  * cannot travel by being forgotten about.
  *
+ * ## The corpus reaches the gate twice and answers the same twice
+ *
+ * `tests/lib/injection-fixtures.ts` records, for every name an
+ * extractor could answer with having read one of the six vectors,
+ * what the gate owes it. `tests/lib/injection.test.ts` holds the
+ * LIBRARY to that record; the corpus section below holds this NODE
+ * to the same one, over the copy spliced into the built artifact,
+ * paired by candidate id so a candidate added to the roster later
+ * joins the run with no edit here.
+ *
+ * What the workflow position adds is the REBUILD. The library
+ * returns a refusal carrying no name; this node composes a new item
+ * out of four ids, so the claim that nothing of a refused name
+ * travels is a claim about code the library cases cannot reach, and
+ * it is made here over every refused candidate at once.
+ *
  * ## The vacuity guard
  *
  * `DRIVEN` records every node name this file actually ran and the
@@ -82,6 +98,7 @@ import {
   ENTITY_NAME_REJECTIONS,
   MAX_ENTITY_NAME_LENGTH,
 } from '../../src/lib/validate-entity-name.js';
+import { INJECTION_CANDIDATES } from '../lib/injection-fixtures.js';
 
 import { codeNodes } from './code-node.js';
 
@@ -534,6 +551,202 @@ describe('ar-research — Gate Candidate Names passes a name', () => {
 
   it('marks an accepted candidate with no reason at all', () => {
     expect(jsonAt(both, 0)['name_reason']).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Gate Candidate Names, over the injection corpus
+// ---------------------------------------------------------------------------
+
+/**
+ * The reasons this corpus reaches through the node, and the one it
+ * does not.
+ *
+ * A second spelling of the roster `tests/lib/injection.test.ts`
+ * declares beside the library, and deliberately not an import of
+ * it: two files stating the same closed set is what makes a
+ * divergence report, where one file reading the other's list would
+ * agree with whatever that list had become. Each holds its own
+ * roster against `ENTITY_NAME_REJECTIONS` with the same declared
+ * gap, so the two cannot come apart without one of them failing.
+ *
+ * `empty` is that gap, and it is a claim about the CORPUS rather
+ * than about the node. Every candidate is a name a model could
+ * plausibly have answered with after reading a document that named
+ * something, so none of them is nothing. The node reaches the
+ * reason from a drained row naming no subject at all, which the
+ * section above drives.
+ */
+const REASONS_THE_CORPUS_REACHES: readonly string[] = [
+  'forbidden_syntax',
+  'invalid_character',
+  'non_answer',
+  'too_long',
+];
+
+/** The one reason no candidate in this corpus produces. */
+const REASONS_NO_CANDIDATE_REACHES: readonly string[] = ['empty'];
+
+/** Every candidate id, sorted, as the pairing is held against. */
+const CANDIDATE_IDS = INJECTION_CANDIDATES
+  .map((candidate) => candidate.id)
+  .sort();
+
+/**
+ * Whether any member of an answered item spells `value`.
+ *
+ * Reads the members rather than a serialization of the row, because
+ * `JSON.stringify` escapes a line break and a quote character and
+ * this corpus is made of both: a leak of such a value would come
+ * back as a clean sweep from a scan over the serialized form.
+ */
+function quotes(row: Record<string, unknown>, value: string): boolean {
+  return Object.values(row).some((member) => String(member).includes(value));
+}
+
+describe('ar-research — Gate Candidate Names, over the corpus', () => {
+  // ONE batch rather than one run per candidate, so the cardinality
+  // claim is over the corpus whole: a node that dropped its
+  // refusals answers eight items where nineteen went in, and no
+  // per-candidate run could report that.
+  //
+  // The pairing key is pool_id, and a key of that kind is the only
+  // one available. A refusal keeps four ids and the name it refused
+  // is not one of them, so nothing on a refused item says which
+  // candidate it was about unless each candidate arrives on its own
+  // intention. Pairing by POSITION would read a corpus that gained
+  // an entry as a suite quietly asserting the wrong claims about
+  // every entry after it.
+  const corpus = payloads(gate(INJECTION_CANDIDATES.map(
+    (candidate) => drained({
+      pool_id: candidate.id,
+      entity_name: candidate.value,
+    }),
+  )));
+  const byId = new Map(corpus.map((row) => [String(row['pool_id']), row]));
+  const accepted = corpus.filter((row) => row['name_ok'] === true);
+  const refused = corpus.filter((row) => row['name_ok'] === false);
+
+  it('answers one item per candidate, keyed by the id it read', () => {
+    expect(corpus).toHaveLength(INJECTION_CANDIDATES.length);
+    expect([...byId.keys()].sort()).toEqual(CANDIDATE_IDS);
+  });
+
+  // THE CLAIM, held against what the fixtures RECORD rather than
+  // against a live call to the library beside them. That is what
+  // makes it a reading of the workflow position:
+  // tests/lib/injection.test.ts holds the library to the same
+  // written record, so the two positions answer to one authority
+  // and a splice that had gone stale fails here alone.
+  it('answers every candidate as the roster records it', () => {
+    const apart: string[] = [];
+
+    for (const candidate of INJECTION_CANDIDATES) {
+      const row = byId.get(candidate.id);
+      const owed = candidate.expected;
+
+      if (row === undefined) {
+        apart.push(`${candidate.id}: unanswered`);
+        continue;
+      }
+
+      if (row['name_ok'] !== owed.ok) {
+        apart.push(`${candidate.id}: name_ok`);
+        continue;
+      }
+
+      if (owed.ok && row['entity_name'] !== owed.name) {
+        apart.push(`${candidate.id}: entity_name`);
+      }
+
+      if (owed.ok && row['name_reason'] !== null) {
+        apart.push(`${candidate.id}: name_reason`);
+      }
+
+      if (!owed.ok && row['name_reason'] !== owed.reason) {
+        apart.push(`${candidate.id}: name_reason`);
+      }
+    }
+
+    expect(apart).toEqual([]);
+  });
+
+  // What the workflow position adds to the library's own reading of
+  // the same corpus: the refusal here is REBUILT rather than
+  // returned, so a member the drain carries could travel on one by
+  // being copied. Read over the whole item rather than the three
+  // members the section above names, and over every refused
+  // candidate at once, so a member added to the drain has to pass
+  // this before it can reach a prompt.
+  it('carries no part of a name it refused, over the corpus', () => {
+    const carried: string[] = [];
+
+    for (const candidate of INJECTION_CANDIDATES) {
+      const row = byId.get(candidate.id);
+
+      if (row === undefined || row['name_ok'] !== false) {
+        continue;
+      }
+
+      const members = Object.keys(row).sort();
+
+      if (members.join() !== REFUSAL_MEMBERS.join()) {
+        carried.push(`${candidate.id}: members`);
+      }
+
+      if (quotes(row, candidate.value)) {
+        carried.push(`${candidate.id}: value`);
+      }
+    }
+
+    expect(carried).toEqual([]);
+  });
+
+  // The liveness control the sweep above needs, taken off the
+  // node's own answers rather than off a planted row: an accepted
+  // item carries its normalized name by design, so the scan must
+  // find one in every one of them. A matcher that had stopped
+  // matching reports the refusals clean and fails here instead.
+  it('reads a name back out of every answer that carries one', () => {
+    const blind = accepted
+      .filter((row) => !quotes(row, String(row['entity_name'])))
+      .map((row) => String(row['pool_id']));
+
+    expect(accepted.length).toBeGreaterThan(0);
+    expect(blind).toEqual([]);
+  });
+
+  // The coverage guard, in both directions and read off what the
+  // node ACTUALLY answered rather than off the fixtures' own
+  // labels. A reason the roster names and nothing reaches fails
+  // naming itself; a reason nothing names and something reaches
+  // fails as unregistered. The second assertion is what holds the
+  // pair to the library's whole vocabulary, so a reason added there
+  // and reached by no candidate cannot pass unnoticed either.
+  it('reaches every reason this corpus registers, and no other', () => {
+    const produced = refused.map((row) => String(row['name_reason']));
+    const closed = [
+      ...REASONS_THE_CORPUS_REACHES,
+      ...REASONS_NO_CANDIDATE_REACHES,
+    ];
+
+    expect([...new Set(produced)].sort())
+      .toEqual([...REASONS_THE_CORPUS_REACHES].sort());
+    expect(closed.sort()).toEqual([...ENTITY_NAME_REJECTIONS].sort());
+  });
+
+  // Both endings, and deliberately without a count.
+  // tests/lib/injection.test.ts pins the corpus at nineteen
+  // candidates and eight acceptances, which is the right place for
+  // it: this file is the one a candidate added later has to join
+  // with no edit, and a second count here would be a second
+  // authority that such a candidate falsifies. What it owes instead
+  // is that the corpus still reaches both endings, a node stuck on
+  // either one satisfying half of the cases above.
+  it('is driven over names the node both accepts and refuses', () => {
+    expect(accepted.length).toBeGreaterThan(0);
+    expect(refused.length).toBeGreaterThan(0);
+    expect(accepted.length + refused.length).toBe(corpus.length);
   });
 });
 
