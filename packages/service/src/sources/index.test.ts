@@ -207,10 +207,13 @@ const CASE_SUFFIX = '.test.ts';
  * at the top of its own source, and they are not on the roster for
  * one reason. The registry module is no kind of source at all: it
  * is where the contract, the registry and this check live. The
- * helpers are what an adapter reaches for. And the propose seam
- * serves the other gate this directory touches — what a source's
+ * helpers are what an adapter reaches for. The propose seam serves
+ * the other gate this directory touches — what a source's
  * arrangement will be, ruled on before it is written — which is
- * about a source rather than a reading of one.
+ * about a source rather than a reading of one. And the HTTP half
+ * of the directory is about a `sources` ROW and the `documents`
+ * captured through one: what the route group asks the database for,
+ * which is a different subject from how a feed is read.
  *
  * Naming them is the cost of the guard and is meant to be paid: a
  * module that satisfies no contract and appears in no registry is
@@ -234,6 +237,33 @@ const NON_ADAPTER_MODULES = [
       + 'sources row, not how anything is read',
   },
   {
+    module: 'db-store.ts',
+    reason:
+      'the drizzle half of the HTTP port beside it, holding the '
+      + 'statements a sources row is read and written by and the two '
+      + 'reads that cross into documents without writing one: it '
+      + 'fronts no source, declares no member of the contract, and '
+      + 'never constructs an adapter',
+  },
+  {
+    module: 'failures-routes.ts',
+    reason:
+      'the one HTTP route the read-only review queue is reached '
+      + 'through, declaring an address, a window, a status and an '
+      + 'envelope and no rule of its own: it fronts no source, '
+      + 'declares no member of the contract, and never constructs '
+      + 'an adapter',
+  },
+  {
+    module: 'failures-service.ts',
+    reason:
+      'the rules behind the read-only review queue, whose subject '
+      + 'is a documents row rather than a sources one: it resolves '
+      + 'the source the path names, masks and caps what the failed '
+      + 'captures stored, fronts no source, and declares no member '
+      + 'of the contract',
+  },
+  {
     module: 'html-text.ts',
     reason:
       'a pure markup reduction that fronts no source and declares '
@@ -245,6 +275,30 @@ const NON_ADAPTER_MODULES = [
     reason:
       'the cursor-paged listing loop an adapter runs inside its own '
       + 'fetch, which is why listing is no member of the contract',
+  },
+  {
+    module: 'routes.ts',
+    reason:
+      'the four HTTP routes the sources rules are reached through, '
+      + 'declaring an address, a window, a status and an envelope '
+      + 'and no rule of its own: it fronts no source, declares no '
+      + 'member of the contract, and never constructs an adapter',
+  },
+  {
+    module: 'service.ts',
+    reason:
+      'the rules the sources route group reduces to, written over '
+      + 'the HTTP port beside it: it decides what a request may ask '
+      + 'of a sources row, fronts no source, and declares no member '
+      + 'of the contract',
+  },
+  {
+    module: 'store.ts',
+    reason:
+      'the HTTP port the sources route group is written against, '
+      + 'declaring what the API asks the database about a sources '
+      + 'row: it fronts no source, declares no member of the '
+      + 'contract, and never constructs an adapter',
   },
 ] as const;
 

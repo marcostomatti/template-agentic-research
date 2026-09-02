@@ -34,7 +34,7 @@
  * other stops two reads becoming two rows — and each table's own
  * comments carry the half of the argument belonging to it.
  */
-import { bigint, bigserial, integer, jsonb, pgTable, real, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, index, integer, jsonb, pgTable, real, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
 import { sources } from './sources.js';
@@ -336,6 +336,43 @@ export const documents = pgTable('documents', {
    * suite can assert the constraint is present by grepping for it.
    */
   checkOneOf('documents_parse_status_check', table.parseStatus, DOCUMENT_PARSE_STATUSES),
+
+  /**
+   * What the two per-source document readers stand on. The sources
+   * list behind `GET /domains/:slug/sources` answers each row a
+   * parse-status aggregate, counted for a whole page of sources in one
+   * `GROUP BY (source_id, parse_status)` rather than in a query per
+   * source; the review queue behind `GET /sources/:id/failures` reads
+   * one source's `parse_status = 'failed'` rows. Both filter on
+   * `source_id` first, which is why it leads the key, and
+   * `parse_status` is what each of them then does with the rows it
+   * finds there.
+   *
+   * Deliberately NOT partial, unlike the two dispatch-claim indexes in
+   * `./scheduling.ts`, because the two readers disagree about the
+   * column a `WHERE` would restrict. Postgres uses a partial index
+   * only where it can prove the query's own predicate implies the
+   * index's, so a `WHERE parse_status = 'failed'` — the shape those
+   * two use, and the one an author reaches for here — would serve the
+   * failures filter and leave the aggregate on a sequential scan of
+   * the corpus table. A plan that falls back reports nothing, so that
+   * cost would be paid in silence.
+   *
+   * Three limits belong beside it. Neither read is covered: the
+   * failures queue fetches `body`, `parse_error` and `captured_at` off
+   * the heap, so the index narrows which rows are visited and not what
+   * is read from each of them. The aggregate is bounded by the
+   * document counts of the sources on the page rather than made
+   * constant. And every document carries an entry here, the
+   * source-less ones included — an ingested file, a pasted body —
+   * which neither reader can ever match.
+   *
+   * Named for the reader rather than derived from its columns, the way
+   * the dispatch-claim pair is: an index found in the generated SQL,
+   * or in a plan, says which query it was added for, and the
+   * static-SQL invariant suite greps for that name.
+   */
+  index('documents_source_parse_status_idx').on(table.sourceId, table.parseStatus),
 ]);
 
 /**

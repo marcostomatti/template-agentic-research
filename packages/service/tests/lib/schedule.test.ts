@@ -1,7 +1,7 @@
 /**
- * The scheduling arithmetic `ar-dispatch` applies to a row it has
- * claimed: the clamp, driven over the case table beside this file,
- * and the batch cap, driven over two rosters declared inside it.
+ * The scheduling arithmetic in `src/lib/schedule.ts`: the clamp and
+ * the pause, both driven over case tables beside this file, and the
+ * batch cap, driven over two rosters declared inside it.
  *
  * What is covered is `clampIntervalSeconds` over a row that carries
  * no bounds at all — nothing is refused, and what comes back is what
@@ -17,6 +17,15 @@
  * cap it takes bounds the batch that comes back — the whole of
  * that batch where it fits under the cap, and exactly `cap` items
  * off the front of it where it does not.
+ *
+ * `pauseFrom` is the third, and it is covered over a row the clamp
+ * leaves alone, over each of the three bound shapes that move a
+ * cycle's length, and over every shape of cycle count it turns
+ * away. What the pause adds to the clamp is an ORDER of its own:
+ * the bounds are applied to the length of ONE cycle and the count
+ * multiplies what comes back, so a rule clamping the whole span
+ * answers differently for every bounded row and identically for a
+ * row asking one cycle.
  *
  * The unbounded section carries a limit, and it belongs in front of
  * its cases rather than behind them: both of its claims hold for a
@@ -46,14 +55,13 @@
  * and the sections before them are what make that an ordering
  * rather than a preference for the smaller number.
  *
- * The cap refusal section carries a limit of that shape one more
- * time, and its is the starkest of the four: every claim in it is
+ * The two refusal sections carry a limit of that shape one more
+ * time, and theirs is the starkest of the five: every claim in it is
  * satisfied in full by a function that refuses whatever it is
  * handed. Nothing a roster of refusals can say parts those two, so
- * that section closes on a guard instead — one cap the rule must
- * take, a single step from the zero it turns away. The section
- * after it is what stops that guard being the whole of the
- * evidence: every claim there is over a cap the rule took and a
+ * each closes on a guard instead — one value the rule must take, a
+ * single step from the zero it turns away. What stops that guard
+ * being the whole of the evidence is the section after it: every claim there is over a cap the rule took and a
  * batch it came back with, so a rule refusing everything reddens
  * the lot of them rather than one line.
  *
@@ -70,7 +78,9 @@
  *
  * The clamp rows are imported rather than written here because the
  * same ones drive the SQL expression the dispatcher carries and the
- * spliced copy a Code node runs. That makes the table a second thing
+ * spliced copy a Code node runs. The pause rows are imported for a
+ * weaker reason — they have no second reader — and sit beside the
+ * clamp rows they lean on. That makes both tables a second thing
  * worth guarding: a claim written as a walk over a roster passes
  * when the roster is empty, and every claim here is such a walk.
  * Both cap rosters are declared in this file instead, since nothing
@@ -78,19 +88,23 @@
  * walked the same way, and each carries a guard of its own for the
  * same reason.
  */
-import type { ClampCase } from './schedule-cases.js';
+import type { ClampCase, PauseCase } from './schedule-cases.js';
+import type { IntervalBounds } from '../../src/lib/schedule.js';
 
 import { describe, expect, it } from 'vitest';
 
-import { capBatch, clampIntervalSeconds } from '../../src/lib/schedule.js';
+import { capBatch, clampIntervalSeconds, pauseFrom } from '../../src/lib/schedule.js';
 
 import {
   CAPPED_CLAMP_CASES,
   CLAMP_CASES,
+  CLAMPED_PAUSE_CASES,
   CROSSED_BOUND_CLAMP_CASES,
   FLOORED_CLAMP_CASES,
   INERT_BOUND_CLAMP_CASES,
+  PAUSE_CASES,
   UNBOUNDED_CLAMP_CASES,
+  UNBOUNDED_PAUSE_CASES,
 } from './schedule-cases.js';
 
 // ---------------------------------------------------------------------------
@@ -102,8 +116,21 @@ function sorted(ids: readonly string[]): readonly string[] {
   return [...ids].sort();
 }
 
+/**
+ * The whole of what the three bound predicates below read.
+ *
+ * Both case tables carry a `bounds`, so a predicate asking about
+ * one answers for a clamp row and a pause row alike. Narrowed to
+ * `ClampCase` instead, each would have to be written out a second
+ * time for the pause rows — and the crossed-bounds reading is the
+ * one property both tables lean on hardest.
+ */
+interface BoundedCase {
+  readonly bounds: IntervalBounds;
+}
+
 /** Whether a case's row carries neither a floor nor a ceiling. */
-function carriesNoBounds(testCase: ClampCase): boolean {
+function carriesNoBounds(testCase: BoundedCase): boolean {
   return testCase.bounds.minIntervalSeconds === null
     && testCase.bounds.maxIntervalSeconds === null;
 }
@@ -122,7 +149,7 @@ function carriesNoBounds(testCase: ClampCase): boolean {
  * that agree are silent about a crossed row because they all ask
  * this, and the fifth takes exactly what they leave.
  */
-function boundsAgree(testCase: ClampCase): boolean {
+function boundsAgree(testCase: BoundedCase): boolean {
   const { minIntervalSeconds: floor, maxIntervalSeconds: ceiling } = testCase.bounds;
 
   return floor === null || ceiling === null || floor <= ceiling;
@@ -139,7 +166,7 @@ function boundsAgree(testCase: ClampCase): boolean {
  * groups or to none, which is the failure the membership guards are
  * there to catch rather than to cause.
  */
-function hasCrossedBounds(testCase: ClampCase): boolean {
+function hasCrossedBounds(testCase: BoundedCase): boolean {
   return !boundsAgree(testCase);
 }
 
@@ -655,7 +682,7 @@ interface RefusedCap {
  * Those answers are not themselves distinct: measured over
  * {@link CLAIMED_BATCH}, `0` and `NaN` both come back empty. So
  * the roster is keyed on the shape of the cap rather than on what
- * `slice` would have produced, and {@link REFUSED_CAP_SHAPES} is
+ * `slice` would have produced, and {@link REFUSED_VALUE_SHAPES} is
  * what a guard holds it against.
  */
 const REFUSED_CAPS: readonly RefusedCap[] = [
@@ -687,25 +714,37 @@ const REFUSED_CAPS: readonly RefusedCap[] = [
 ];
 
 /**
- * The shapes of cap the rule turns away, declared so a guard can
- * assert set equality against them rather than count rows.
+ * The shapes of value a rule holding out for a positive integer
+ * turns away, declared so a guard can assert set equality against
+ * them rather than count rows.
  *
  * A count passes for five rows all holding a fraction, which
  * exercises one comparison five times while reading as coverage of
  * everything the rule refuses.
+ *
+ * Both refusal rosters in this file are held against these five.
+ * `capBatch` and `pauseFrom` turn a value away on one predicate,
+ * written once in `src/lib/schedule.ts` and repeated in each, so a
+ * shape one roster covers and the other does not is a gap rather
+ * than a difference between the two rules.
  */
-const REFUSED_CAP_SHAPES = ['zero', 'negative', 'a fraction', 'not a number', 'infinite'] as const;
+const REFUSED_VALUE_SHAPES = ['zero', 'negative', 'a fraction', 'not a number', 'infinite'] as const;
 
 /**
- * Which of {@link REFUSED_CAP_SHAPES} a cap has, or a sixth answer
- * for one the rule would take.
+ * Which of {@link REFUSED_VALUE_SHAPES} a value has, or a sixth
+ * answer for one a rule holding out for a positive integer takes.
  *
- * Total over every number rather than narrowed to the roster, so a
- * cap that reached the roster without the property names its own
- * shape in the failure instead of being read as a duplicate of
- * whichever row it happened to resemble. That sixth answer is the
- * one which cannot appear in the declared roster, so it is what a
- * wrongly rostered cap comes back as.
+ * Written once and read by both refusal rosters, since the two
+ * rules refuse on the same predicate. A classifier per roster
+ * would be that predicate written out a third and a fourth time,
+ * each free to drift from the rule it is judging.
+ *
+ * Total over every number rather than narrowed to a roster, so a
+ * value that reached one without the property names its own shape
+ * in the failure instead of being read as a duplicate of whichever
+ * row it happened to resemble. That sixth answer is the one which
+ * cannot appear in the declared roster, so it is what a wrongly
+ * rostered value comes back as.
  *
  * That sixth answer is what {@link capReach} asks this function
  * for, so a cap rostered among the ones the rule TAKES is placed
@@ -716,24 +755,24 @@ const REFUSED_CAP_SHAPES = ['zero', 'negative', 'a fraction', 'not a number', 'i
  * finite either, and a fraction is what the last pair leaves over
  * rather than a comparison of its own.
  */
-function capShape(cap: number): string {
-  if (Number.isInteger(cap) && cap > 0) {
+function positiveIntegerShape(value: number): string {
+  if (Number.isInteger(value) && value > 0) {
     return 'a positive integer';
   }
 
-  if (Number.isNaN(cap)) {
+  if (Number.isNaN(value)) {
     return 'not a number';
   }
 
-  if (!Number.isFinite(cap)) {
+  if (!Number.isFinite(value)) {
     return 'infinite';
   }
 
-  if (cap === 0) {
+  if (value === 0) {
     return 'zero';
   }
 
-  return Number.isInteger(cap)
+  return Number.isInteger(value)
     ? 'negative'
     : 'a fraction';
 }
@@ -804,9 +843,9 @@ describe('capBatch — a cap that is not a positive integer', () => {
   // would exercise one comparison five times while reading as
   // coverage of everything the rule refuses.
   it('holds one cap for each shape the rule turns away', () => {
-    const covered = REFUSED_CAPS.map((refused) => capShape(refused.cap));
+    const covered = REFUSED_CAPS.map((refused) => positiveIntegerShape(refused.cap));
 
-    expect(sorted(covered)).toEqual(sorted(REFUSED_CAP_SHAPES));
+    expect(sorted(covered)).toEqual(sorted(REFUSED_VALUE_SHAPES));
   });
 
   // Filtered rather than asserted per row, so a failure names
@@ -960,20 +999,20 @@ const CAP_REACHES = [
  * turns away.
  *
  * Total over every number rather than narrowed to the roster, for
- * the reason {@link capShape} is: a cap that reached the roster
+ * the reason {@link positiveIntegerShape} is: a cap that reached the roster
  * without the property names its own shape in the failure instead
  * of being read as a duplicate of whichever row it resembled.
  * That fourth answer is the one which cannot appear in
  * {@link CAP_REACHES}, so it is what a wrongly rostered cap comes
  * back as.
  *
- * It asks {@link capShape} first rather than comparing lengths of
+ * It asks {@link positiveIntegerShape} first rather than comparing lengths of
  * its own, so a cap belonging in {@link REFUSED_CAPS} is reported
  * as one instead of being placed by an arithmetic the rule never
  * reaches for it.
  */
 function capReach(cap: number): string {
-  if (capShape(cap) !== 'a positive integer') {
+  if (positiveIntegerShape(cap) !== 'a positive integer') {
     return 'a cap the rule turns away';
   }
 
@@ -1150,5 +1189,655 @@ describe('capBatch — a cap that is a positive integer', () => {
       .map((taken) => taken.id);
 
     expect(shared).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reading the pause table
+// ---------------------------------------------------------------------------
+
+/**
+ * The bounds a row carries when it carries none, written once so
+ * the refusal reader can hand the rule a pairing the clamp has
+ * nothing to say about.
+ *
+ * A refusal is reached before the clamp is, so what the bounds are
+ * cannot matter to it — and that is exactly why they are the inert
+ * pairing here rather than an interesting one. A refusal roster
+ * driven over bounds that moved something would be two claims in
+ * one, and the failure would not say which of them broke.
+ */
+const UNCLAMPED_BOUNDS: IntervalBounds = {
+  minIntervalSeconds: null,
+  maxIntervalSeconds: null,
+};
+
+/**
+ * The instant the refusal roster measures from.
+ *
+ * Text rather than a `Date`, and turned into one per call, so no
+ * claim in the refusal section can be reached by a rule that moved
+ * a base a claim before it had handed in.
+ */
+const REFUSED_PAUSE_BASE = '2026-03-01T00:00:00.000Z';
+
+/**
+ * The bound shapes the clamped pause rows cover, declared so a
+ * guard can assert set equality against them rather than count
+ * rows.
+ *
+ * The three are the ones the clamp table already parts a wrong twin
+ * on, and a count passes for three rows all carrying a floor, which
+ * exercises one delegation three times while reading as coverage of
+ * every shape a bound comes in.
+ */
+const PAUSE_BOUND_SHAPES = [
+  'a floor with no ceiling',
+  'a ceiling with no floor',
+  'bounds that cross',
+] as const;
+
+/**
+ * Which of {@link PAUSE_BOUND_SHAPES} a pause row carries, or one
+ * of two further answers for a row carrying neither.
+ *
+ * Total over every row rather than narrowed to the clamped group,
+ * for the reason {@link positiveIntegerShape} is: a row that
+ * reached the group without the property names its own shape in the
+ * failure instead of being read as a duplicate of whichever row it
+ * happened to resemble. The two answers outside the roster are what
+ * a wrongly rostered row comes back as.
+ *
+ * The crossed reading is asked ahead of the two single-bound ones
+ * because a crossed row carries both bounds, and {@link
+ * hasCrossedBounds} is asked for rather than a comparison written
+ * here, so this placement and the clamp table's partition cannot
+ * come to disagree about which rows cross.
+ */
+function pauseBoundShape(testCase: PauseCase): string {
+  if (carriesNoBounds(testCase)) {
+    return 'no bound at all';
+  }
+
+  if (hasCrossedBounds(testCase)) {
+    return 'bounds that cross';
+  }
+
+  if (testCase.bounds.maxIntervalSeconds === null) {
+    return 'a floor with no ceiling';
+  }
+
+  return testCase.bounds.minIntervalSeconds === null
+    ? 'a ceiling with no floor'
+    : 'two bounds that agree';
+}
+
+/**
+ * How far out a pause row reaches, declared so a guard can assert
+ * set equality against it rather than count rows.
+ *
+ * Two members rather than a count because the two are not
+ * interchangeable. A rule that added one interval and ignored the
+ * count answers every single-cycle row correctly, and a group
+ * holding only those would be green for it.
+ */
+const PAUSE_CYCLE_REACHES = ['one cycle', 'many cycles'] as const;
+
+/**
+ * Which of {@link PAUSE_CYCLE_REACHES} a row asks for, or a third
+ * answer for a count the rule turns away.
+ *
+ * It asks {@link positiveIntegerShape} first rather than comparing
+ * against one of its own, so a row carrying a count that belongs in
+ * the refusal roster is reported as one instead of being placed by
+ * a reading the rule never reaches for it.
+ */
+function pauseCycleReach(testCase: PauseCase): string {
+  if (positiveIntegerShape(testCase.cycles) !== 'a positive integer') {
+    return 'a cycle count the rule turns away';
+  }
+
+  return testCase.cycles === 1
+    ? 'one cycle'
+    : 'many cycles';
+}
+
+/**
+ * The instant `pauseFrom` answered a row with.
+ *
+ * The base is constructed here, per call, rather than held on the
+ * row: the table records ISO-8601 text precisely so that no reader
+ * shares a mutable instant with another, and a helper that cached
+ * one would put back what the table was shaped to avoid.
+ */
+function pausedFor(testCase: PauseCase): Date {
+  return pauseFrom(
+    new Date(testCase.base),
+    testCase.cycles,
+    testCase.intervalSeconds,
+    testCase.bounds,
+  );
+}
+
+/** That instant as ISO-8601 text, which is how the table holds it. */
+function pausedInstant(testCase: PauseCase): string {
+  return pausedFor(testCase).toISOString();
+}
+
+/**
+ * Whether the rule turned a row away rather than answering it.
+ *
+ * A predicate rather than a helper that rethrows, for the reason
+ * {@link isRefused} is one: a claim can filter the whole roster and
+ * name every row that was refused, where a throwing helper cannot
+ * be called from inside a filter at all.
+ */
+function pauseIsRefused(testCase: PauseCase): boolean {
+  try {
+    pausedFor(testCase);
+
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * How far past its base a row's RECORDED answer sits, in seconds.
+ *
+ * Read off the table rather than off the rule, so a claim built on
+ * it says something about the fixture. Every guard tying `expected`
+ * to a property goes through here.
+ */
+function secondsRecorded(testCase: PauseCase): number {
+  return (Date.parse(testCase.expected) - Date.parse(testCase.base)) / 1000;
+}
+
+/**
+ * Whether a row's recorded answer sits a whole number of its own
+ * intervals in front of its base.
+ *
+ * The tie between `expected` and a property, for the rows nothing
+ * clamps. It stops short of naming WHICH multiple on purpose: that
+ * number is `pauseFrom` written out again, and a guard asserting it
+ * would hold for whatever the rule became. Forward is half the
+ * claim — a pause that answered an instant at or before its base
+ * has deferred nothing, and on an overdue row it is an
+ * extraordinary run wearing the wrong name.
+ */
+function sitsOnAWholeInterval(testCase: PauseCase): boolean {
+  const span = secondsRecorded(testCase);
+
+  return span > 0 && span % testCase.intervalSeconds === 0;
+}
+
+/**
+ * The seconds past the base a rule clamping the whole SPAN would
+ * have answered with.
+ *
+ * The wrong twin, written out so a guard can assert the table parts
+ * from it. Clamping after the multiplication rather than before is
+ * the single likeliest way to write this rule by accident, it
+ * agrees with the real one on every row nothing clamps and on every
+ * row asking a single cycle, and no case comparing an answer
+ * against `expected` says which of the two produced it.
+ */
+function spanClampedSeconds(testCase: PauseCase): number {
+  return clampIntervalSeconds(
+    testCase.intervalSeconds * testCase.cycles,
+    testCase.bounds,
+  );
+}
+
+/**
+ * A row's ceiling multiplied by the cycles it asks for, or null
+ * where the row declares no ceiling.
+ *
+ * Null rather than a sentinel, for the reason {@link byId}'s reader
+ * may answer one: a row whose ceiling turned out to be absent then
+ * puts a `null` beside a number and reddens.
+ */
+function ceilingCycles(testCase: PauseCase): number | null {
+  const ceiling = testCase.bounds.maxIntervalSeconds;
+
+  return ceiling === null
+    ? null
+    : ceiling * testCase.cycles;
+}
+
+/**
+ * One reading per pause row, keyed by id, so a comparison is a
+ * single expression over two whole maps.
+ *
+ * {@link byId} aimed at this table, with the same argument for the
+ * shape — comparing the maps fails on a missing key as well as on
+ * a wrong value, and prints the pair — and the same limit, that it
+ * cannot fail for holding no keys at all.
+ */
+function byPause<V>(
+  cases: readonly PauseCase[],
+  read: (testCase: PauseCase) => V,
+): Record<string, V> {
+  return Object.fromEntries(cases.map((testCase) => [testCase.id, read(testCase)]));
+}
+
+// ---------------------------------------------------------------------------
+// The pause table, where nothing moves the cycle
+// ---------------------------------------------------------------------------
+
+describe('pause case table — the rows carrying no bounds', () => {
+  // The membership guard both clamp groups carry, aimed at this
+  // table. It fails in both directions for the reason theirs do: a
+  // bounded row dropped in here would be judged by claims written
+  // for rows nothing clamps, and an unbounded row appended to the
+  // table and not to the group is a row this file never reaches.
+  it('is exactly the rows in the table that carry neither bound', () => {
+    const declared = UNBOUNDED_PAUSE_CASES.map((testCase) => testCase.id);
+    const unbounded = PAUSE_CASES.filter(carriesNoBounds).map((testCase) => testCase.id);
+
+    expect(sorted(declared)).toEqual(sorted(unbounded));
+  });
+
+  // Set equality against the roster rather than a count, and the
+  // two members are not interchangeable: a rule that added one
+  // interval and ignored the count answers every single-cycle row
+  // correctly, so a group holding only those would be green for it.
+  // The distinctness half is the same vacuity one step along — four
+  // rows all asking three cycles turn a multiplication into one
+  // datum asserted four times over.
+  it('asks for one cycle and for several, no two counts alike', () => {
+    const covered = [...new Set(UNBOUNDED_PAUSE_CASES.map(pauseCycleReach))];
+    const counts = UNBOUNDED_PAUSE_CASES.map((testCase) => testCase.cycles);
+
+    expect(sorted(covered)).toEqual(sorted(PAUSE_CYCLE_REACHES));
+    expect(new Set(counts).size).toBe(counts.length);
+  });
+
+  // The recorded-answer guard the clamp groups carry, and the
+  // weakest of them by some way: this table has no second reader to
+  // serve, so a guard naming WHICH multiple `expected` sits at would
+  // be `pauseFrom` written out again and would hold for whatever the
+  // rule became. What is left is still worth asserting — forward,
+  // and landing on an interval boundary, are both properties a row
+  // typed by hand can fail, and neither is satisfied by an answer
+  // that copied the base.
+  it('records an answer a whole number of intervals past the base', () => {
+    const misplaced = UNBOUNDED_PAUSE_CASES
+      .filter((testCase) => !sitsOnAWholeInterval(testCase))
+      .map((testCase) => testCase.id);
+
+    expect(misplaced).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A pause with nothing to move its cycle
+// ---------------------------------------------------------------------------
+
+describe('pauseFrom — a row carrying neither bound', () => {
+  // The positive control the refusal section needs, at roster scale
+  // rather than as the single value that section closes on. Every
+  // count here is one the rule must take, and a rule refusing
+  // whatever it is handed reddens all of them.
+  it('refuses none of them', () => {
+    const refused = UNBOUNDED_PAUSE_CASES.filter(pauseIsRefused).map((testCase) => testCase.id);
+
+    expect(refused).toEqual([]);
+  });
+
+  // The claim the group exists for. Asserted against the recorded
+  // column rather than against an instant worked out here, which is
+  // where this parts from the clamp sections: those hold an answer
+  // against the row's own proposal or bound, and an arithmetic over
+  // a base, an interval and a count has no such column to be held
+  // against without being the rule a second time. The guard above
+  // is what ties the column to a property instead.
+  it('answers each with the instant the row records', () => {
+    expect(byPause(UNBOUNDED_PAUSE_CASES, pausedInstant))
+      .toEqual(byPause(UNBOUNDED_PAUSE_CASES, (testCase) => testCase.expected));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The pause table, where a bound moves the cycle
+// ---------------------------------------------------------------------------
+
+describe('pause case table — the rows a bound moves', () => {
+  // The other half of the membership guard above, so the two groups
+  // are a partition of the table rather than two lists drawn from
+  // it. Written as what the unbounded predicate leaves over, so the
+  // pair cannot come to overlap or to leave a row between them.
+  it('is exactly the rows in the table that carry a bound', () => {
+    const declared = CLAMPED_PAUSE_CASES.map((testCase) => testCase.id);
+
+    const bounded = PAUSE_CASES
+      .filter((testCase) => !carriesNoBounds(testCase))
+      .map((testCase) => testCase.id);
+
+    expect(sorted(declared)).toEqual(sorted(bounded));
+  });
+
+  // Set equality against the declared shapes rather than a count.
+  // The three are the shapes the clamp table parts a wrong twin on
+  // — a floor with no ceiling is where standing a missing bound in
+  // makes the floor do nothing, and crossed bounds are where
+  // applying the ceiling first answers with the floor — so three
+  // rows all carrying a floor would exercise one delegation three
+  // times while reading as coverage of every shape.
+  it('holds one row for each bound shape the clamp parts a twin on', () => {
+    const covered = CLAMPED_PAUSE_CASES.map(pauseBoundShape);
+
+    expect(sorted(covered)).toEqual(sorted(PAUSE_BOUND_SHAPES));
+  });
+
+  // The fixture guard this group cannot do without, and it is the
+  // opposite of the one next door: the unbounded group needs a
+  // single cycle in it, and this one needs every row to ask for
+  // more. At one cycle a rule clamping the whole span answers the
+  // same instant as one clamping the length, so a clamped row asking
+  // for one would sit here fully green while saying nothing about
+  // the order the two operations are applied in.
+  it('asks for more than one cycle in every row', () => {
+    const single = CLAMPED_PAUSE_CASES
+      .filter((testCase) => pauseCycleReach(testCase) !== 'many cycles')
+      .map((testCase) => testCase.id);
+
+    expect(single).toEqual([]);
+  });
+
+  // The recorded-answer guard, aimed at the one row whose answer a
+  // property can name outright. A crossed row's cycle is its
+  // CEILING rather than its floor, and multiplying the floor out
+  // gives a different instant for every row here, so this is what
+  // says the column those rows are judged by carries the property
+  // the clamp beside it proves the rule has. The non-empty check is
+  // this claim's own vacuity guard, since a filter that matched
+  // nothing would compare two empty maps and pass.
+  it('records the ceiling multiplied out for the rows that cross', () => {
+    const crossed = CLAMPED_PAUSE_CASES.filter(hasCrossedBounds);
+
+    expect(crossed.length).toBeGreaterThan(0);
+    expect(byPause(crossed, secondsRecorded)).toEqual(byPause(crossed, ceilingCycles));
+  });
+
+  // The guard the whole clamped group rests on. Every claim about
+  // these rows compares an answer against `expected`, and a row
+  // whose recorded answer happened to equal what a span-clamping
+  // rule would give satisfies that comparison for the wrong rule as
+  // readily as for the right one — so it would sit in the group
+  // fully green while saying nothing, and no other case here would
+  // report it. Named per offending row rather than counted, since
+  // the repair is to move that row's interval or its count.
+  it('records an answer no rule clamping the whole span could give', () => {
+    const agreeing = CLAMPED_PAUSE_CASES
+      .filter((testCase) => secondsRecorded(testCase) === spanClampedSeconds(testCase))
+      .map((testCase) => testCase.id);
+
+    expect(agreeing).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A pause whose cycle a bound moves
+// ---------------------------------------------------------------------------
+
+describe('pauseFrom — a row whose bounds move the cycle length', () => {
+  // The refusal claim aimed where it says most. Bounds that cross
+  // are the one input in this table that is not merely unusual but
+  // self-contradictory, and they are what a rule that VALIDATED
+  // rather than clamped would turn away first. Nothing upstream
+  // refuses such a row either: no CHECK relates the two columns.
+  it('refuses none of them', () => {
+    const refused = CLAMPED_PAUSE_CASES.filter(pauseIsRefused).map((testCase) => testCase.id);
+
+    expect(refused).toEqual([]);
+  });
+
+  // The claim this file's third subject exists for, and the only
+  // one in it whose content is the ORDER two operations are applied
+  // in rather than a value. Every row here is recorded at an
+  // instant a span-clamping rule cannot produce — asserted by a
+  // guard of its own, which reddens separately — so an answer
+  // matching the column is an answer that clamped the length of one
+  // cycle and multiplied afterwards. The crossed row carries a
+  // second order with it: its cycle is the ceiling, which is what
+  // `clampIntervalSeconds` owes for a contradictory pair, so a
+  // pause re-deriving the clamp instead of calling it would have to
+  // get that right twice.
+  it('answers each with the instant the row records', () => {
+    expect(byPause(CLAMPED_PAUSE_CASES, pausedInstant))
+      .toEqual(byPause(CLAMPED_PAUSE_CASES, (testCase) => testCase.expected));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The base a pause was handed
+// ---------------------------------------------------------------------------
+
+describe('pauseFrom — the base it was handed', () => {
+  // Neither claim here is reachable from an answer, which is why
+  // they are cases rather than a remark. `setSeconds` and its
+  // family move a `Date` in place and hand back a number, so the
+  // shortest way to write this arithmetic mutates the caller's
+  // instant and answers correctly at the same time — and the
+  // caller is a service that read that instant off a stored row.
+  // Every other case in this file would stay green for it.
+  it('leaves every base where it found it', () => {
+    const moved = PAUSE_CASES
+      .filter((testCase) => {
+        const base = new Date(testCase.base);
+
+        pauseFrom(base, testCase.cycles, testCase.intervalSeconds, testCase.bounds);
+
+        return base.toISOString() !== testCase.base;
+      })
+      .map((testCase) => testCase.id);
+
+    expect(moved).toEqual([]);
+  });
+
+  // The half the claim above cannot reach. A rule that moved the
+  // base and answered with THAT object leaves every recorded
+  // instant matching, and the mutation claim names it — but a rule
+  // that answered the base unmoved for a row whose product came to
+  // zero would be caught by neither, so identity is asked about
+  // separately from the instant.
+  it('answers a Date of its own rather than the one it was handed', () => {
+    const handedBack = PAUSE_CASES
+      .filter((testCase) => {
+        const base = new Date(testCase.base);
+
+        return pauseFrom(base, testCase.cycles, testCase.intervalSeconds, testCase.bounds) === base;
+      })
+      .map((testCase) => testCase.id);
+
+    expect(handedBack).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reading the cycle counts the rule turns away
+// ---------------------------------------------------------------------------
+
+/**
+ * One cycle count the rule turns away: the value, and what the
+ * arithmetic would have written to `next_run_at` for it instead.
+ *
+ * Declared in this file beside the two cap rosters and for the same
+ * reason — a value is taken or turned away by one function in one
+ * place, so none of the three has anywhere to drift to. The pause
+ * TABLE records an answer per row and has none to record for a
+ * value that never reaches an answer, which is the other half of
+ * why these rows are not in it.
+ */
+interface RefusedCycles {
+  /**
+   * Stable id, and what a failure names. Every claim in this
+   * section filters the roster and prints the ids left standing, so
+   * an offending count is named rather than counted.
+   */
+  readonly id: string;
+
+  /**
+   * What the row stands for, which here is the due time this count
+   * would have produced — measured rather than reasoned about,
+   * since what the arithmetic does with each of them is the whole of
+   * why the rule refuses instead of passing the value through.
+   */
+  readonly standsFor: string;
+
+  /** The count itself, as a request body would carry it. */
+  readonly cycles: number;
+}
+
+/**
+ * The cycle counts `pauseFrom` refuses, one row per shape of wrong.
+ *
+ * Five rows for three shapes, because `not an integer` is three
+ * separate failures and the arithmetic answers each of them
+ * differently. Measured: a zero writes the base back unchanged,
+ * which on an overdue row is the extraordinary run the pause was
+ * asked to defer; a negative moves the due time INTO the past, so a
+ * request to hold a row off triggers it on the next tick; a
+ * fraction lands between two intervals at a time no reader can work
+ * back out of the row; and `NaN` and either infinity give an
+ * `Invalid Date`, which serialises to `null` and stores as a
+ * `next_run_at` of NULL — the unscheduled state a pause answers
+ * `409` rather than create.
+ *
+ * None of those is exotic. The count arrives in a request body, and
+ * a schema is the first thing to turn one away rather than the only
+ * one: this rule is also reached from the MCP surface wave 3
+ * registers over the same service functions, and a library that
+ * trusted its caller would be trusting whichever of the two got
+ * there.
+ *
+ * Two of those answers are not distinct — `NaN` and an infinity
+ * both date as invalid — so the roster is keyed on the shape of the
+ * count rather than on what the arithmetic produced, and
+ * {@link REFUSED_VALUE_SHAPES} is what a guard holds it against.
+ */
+const REFUSED_CYCLE_COUNTS: readonly RefusedCycles[] = [
+  {
+    id: 'cycles-zero',
+    standsFor: 'a pause that writes the base back, deferring nothing',
+    cycles: 0,
+  },
+  {
+    id: 'cycles-negative',
+    standsFor: 'a pause that moves the due time into the past',
+    cycles: -1,
+  },
+  {
+    id: 'cycles-fraction',
+    standsFor: 'a due time between two intervals that nobody wrote',
+    cycles: 2.5,
+  },
+  {
+    id: 'cycles-not-a-number',
+    standsFor: 'an Invalid Date, which stores as the NULL a pause refuses',
+    cycles: Number.NaN,
+  },
+  {
+    id: 'cycles-infinite',
+    standsFor: 'a product past the range a Date can hold, invalid too',
+    cycles: Number.POSITIVE_INFINITY,
+  },
+];
+
+/**
+ * The message `pauseFrom` refused a count with, or null when it
+ * took the count and answered.
+ *
+ * A reader rather than a helper that throws, for the reason
+ * {@link refusalFor} is one, and it is that function aimed at the
+ * other rule. Anything that is not an `Error` is rethrown rather
+ * than reported as a refusal: the rule throws a plain `Error` by
+ * design, so the message is all there is to pin it by, and a reader
+ * taking whatever was thrown would report a `RangeError` raised
+ * inside `toISOString` as the refusal under test.
+ *
+ * The bounds and the interval are the inert pairing, so what this
+ * varies is the count alone.
+ */
+function pauseRefusalFor(cycles: number): string | null {
+  try {
+    pauseFrom(new Date(REFUSED_PAUSE_BASE), cycles, 3600, UNCLAMPED_BOUNDS);
+
+    return null;
+  } catch (cause) {
+    if (!(cause instanceof Error)) {
+      throw cause;
+    }
+
+    return cause.message;
+  }
+}
+
+/** Whether a count's refusal quotes the value it was handed. */
+function refusalNamesItsCount(refused: RefusedCycles): boolean {
+  const message = pauseRefusalFor(refused.cycles);
+
+  return message !== null && message.includes(String(refused.cycles));
+}
+
+// ---------------------------------------------------------------------------
+// A cycle count the rule will not take
+// ---------------------------------------------------------------------------
+
+describe('pauseFrom — a cycle count that is not a positive integer', () => {
+  // The roster guard every section in this file carries, aimed at
+  // this roster and holding it against the same five shapes the cap
+  // roster is held against. Both rules refuse on one predicate, so
+  // a shape one roster covers and the other does not is a gap
+  // rather than a difference between them.
+  it('holds one count for each shape the rule turns away', () => {
+    const covered = REFUSED_CYCLE_COUNTS.map((refused) => positiveIntegerShape(refused.cycles));
+
+    expect(sorted(covered)).toEqual(sorted(REFUSED_VALUE_SHAPES));
+  });
+
+  // Filtered rather than asserted per row, so a failure names every
+  // count that got through instead of stopping at the first. This
+  // is the opposite of what the clamp beside it claims: that rule
+  // answers whatever it is handed, and this one turns a count away
+  // rather than multiplying by it, which has a plausible-looking
+  // answer for every value in the roster and reports none of them.
+  it('refuses every one of them', () => {
+    const taken = REFUSED_CYCLE_COUNTS
+      .filter((refused) => pauseRefusalFor(refused.cycles) === null)
+      .map((refused) => refused.id);
+
+    expect(taken).toEqual([]);
+  });
+
+  // Not a second reading of the claim above it, and the reason is
+  // the reason the rule throws a plain `Error` at all: it is
+  // spliced into a Code node, where a throw reaches an operator as
+  // its message and a constructor name crosses nothing. So there is
+  // no class to pin the refusal by, and a bare `it threw` is green
+  // for any failure on the path — including the `RangeError` an
+  // `Invalid Date` raises when something downstream asks it for
+  // text. The value quoted in the message is what parts this
+  // refusal from those.
+  it('names the count it was handed in every refusal', () => {
+    const silent = REFUSED_CYCLE_COUNTS
+      .filter((refused) => !refusalNamesItsCount(refused))
+      .map((refused) => refused.id);
+
+    expect(silent).toEqual([]);
+  });
+
+  // The guard the three claims above rest on, and the only case in
+  // this section that moves when the rule refuses EVERYTHING: a
+  // section of nothing but refusals is fully green for a function
+  // that turns away whatever it is handed. A count of 1 rather than
+  // a comfortable one, because it is a single step from the zero
+  // the roster refuses — a guard built on a count nobody would
+  // question says nothing about where the rule is keyed. The two
+  // sections of positive claims above are what stop this line being
+  // the whole of the evidence.
+  it('takes the smallest count it admits', () => {
+    expect(pauseRefusalFor(1)).toBeNull();
   });
 });

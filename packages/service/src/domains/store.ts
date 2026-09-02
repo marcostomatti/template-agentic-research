@@ -244,12 +244,13 @@ export interface DomainPatch {
  * the caller that has to await a database, and a synchronous member
  * would be one drizzle could not satisfy.
  *
- * Three other modules read a domain through this port rather than
- * declaring a lookup of their own: the taxonomy, personas and
- * settings services all resolve a `:slug` (or a `defaultDomainSlug`)
- * through {@link DomainStore.findDomainBySlug} before doing anything
- * of their own. One in-memory implementation therefore stands behind
- * all four ports, over one dataset, which is what keeps a domain
+ * Four other modules read a domain through this port rather than
+ * declaring a lookup of their own: the taxonomy, personas, topics
+ * and settings services all resolve a `:slug` (or a
+ * `defaultDomainSlug`) through
+ * {@link DomainStore.findDomainBySlug} before doing anything of
+ * their own. One in-memory implementation therefore stands behind
+ * all five ports, over one dataset, which is what keeps a domain
  * deleted in one of them deleted in the others.
  */
 export interface DomainStore {
@@ -266,9 +267,10 @@ export interface DomainStore {
    *
    * @param window - `limit` and `offset`, as `toStoreWindow` in
    *   `src/http/schemas.ts` derived them from `?page`/`?perPage`. The
-   *   type is declared there rather than here because it is shared by
-   *   all four wave-1 ports, and it is already validated by the time
-   *   it arrives, so no implementation re-checks its bounds.
+   *   type is declared there rather than here because every
+   *   windowed port shares it — the four of wave 1 and
+   *   `TopicStore` beside them — and it is already validated by the
+   *   time it arrives, so no implementation re-checks its bounds.
    * @returns The rows in that window, possibly empty. A window past
    *   the end of the collection is an empty list rather than an
    *   error: the collection exists, and only the window over it is

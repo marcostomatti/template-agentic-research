@@ -23,7 +23,7 @@ the rules that span more than one of them.
 
 ## The roster
 
-Twenty-five tables. Each area below is one module, and that module's
+Twenty-six tables. Each area below is one module, and that module's
 header carries the argument for why its tables sit together.
 
 ### Domains — `src/db/schema/domains.ts`
@@ -231,6 +231,42 @@ the claim early and the row is unlocked and still due. And a row held
 by a transaction that never finishes is passed over with no error, so
 skipped and not-yet-due are indistinguishable from outside.
 
+### One index serves both per-source document readers
+
+Three indexes are declared in the schema modules. Every other access
+path in schema v2 is a primary key, a unique key, or a sequential scan
+— Postgres builds an index for each of the first two on its own, so
+only these three were a decision somebody took.
+
+| Index | Over | What reads it |
+| --- | --- | --- |
+| `topics_dispatch_claim_idx` | (`enabled`, `next_run_at`), `WHERE enabled` | `ar-dispatch`'s claim over `topics`. |
+| `export_subscriptions_dispatch_claim_idx` | (`enabled`, `next_run_at`), `WHERE enabled` | `ar-dispatch`'s claim over `export_subscriptions`. |
+| `documents_source_parse_status_idx` | (`source_id`, `parse_status`) | The per-source parse-status aggregate behind `GET /domains/:slug/sources`, and the `parse_status = 'failed'` filter behind `GET /sources/:id/failures`. |
+
+The first two are argued in the section above; what is worth stating
+here is why the third is not shaped like them. It is deliberately NOT
+partial, because its two readers disagree about the column a `WHERE`
+would restrict: the review queue filters `parse_status` to one member,
+and the sources list groups over every member of it. Postgres uses a
+partial index only where it can prove the query's predicate implies
+the index's, so a `WHERE parse_status = 'failed'` would serve the
+queue and leave the aggregate on a sequential scan of the corpus
+table, reporting nothing while it did.
+
+`source_id` leads the key because both readers filter on it first —
+one for a page of sources, one for a single source — and
+`parse_status` follows because it is what each of them then does with
+the rows it finds there.
+
+Its limits are the ordinary ones for an index nothing is covered by.
+Both readers still go to the heap for what they display, so this one
+narrows which rows are visited rather than what is read from each. The
+aggregate is bounded by the document counts of the sources on the page
+rather than made constant. And every document holds an entry, the
+source-less ones included — a file from the ingest tray, a pasted body
+— which neither reader can ever match.
+
 ### Nothing is recorded as researched without an approval
 
 `research_pool_approval_check` is the gate, and it is a CHECK on
@@ -325,7 +361,7 @@ migration here that was.
 
 | Owner | What it carries |
 | --- | --- |
-| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_jittery_talos.sql`, `0005_freezing_hairball.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 26 tables, 177 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 12 CHECK — the nine value-set checks generated from the tuples in `src/db/schema/values.ts`, the two spanning two columns, `research_pool_approval_check` and `source_config_proposals_approval_check`, and the singleton bound pinning `operator_settings.id` to 1. All 34 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. Both partial dispatch-claim indexes. |
+| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_jittery_talos.sql`, `0005_freezing_hairball.sql`, `0006_tearful_kabuki.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 26 tables, 177 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 12 CHECK — the nine value-set checks generated from the tuples in `src/db/schema/values.ts`, the two spanning two columns, `research_pool_approval_check` and `source_config_proposals_approval_check`, and the singleton bound pinning `operator_settings.id` to 1. All 34 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. All three indexes: the two partial dispatch-claim ones, and `documents_source_parse_status_idx`, which is not partial. |
 | Hand-written — `0002_category_depth_guard.sql` | `categories_enforce_depth()` and the `BEFORE INSERT OR UPDATE` trigger on `categories` that calls it. Two statements, one rule, and the whole of the custom-owned DDL. |
 
 The snapshot decides that split, not taste. A table's entry in
@@ -351,7 +387,7 @@ children of the row being written, which no table definition states.
 
 Ownership says nothing about the reading. `readMigrationSql()` in
 `tests/invariants/schema-sql.ts` concatenates every `.sql` under
-`drizzle/` and its assertions run over the whole text, so fourteen of
+`drizzle/` and its assertions run over the whole text, so fifteen of
 them land in the generated migrations and two in the hand-written one
 with nothing in the roster recording which. What does follow from the
 split is what a match there is worth. A generated statement is one of

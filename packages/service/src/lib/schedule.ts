@@ -1,7 +1,8 @@
 /**
  * @packageDocumentation
- * Scheduling arithmetic — the rules `ar-dispatch` applies to a row it has
- * claimed, expressed as TypeScript.
+ * Scheduling arithmetic: the rules `ar-dispatch` applies to a row it
+ * has claimed, and the rule the API applies to a row an operator has
+ * asked to hold off, both expressed as TypeScript.
  *
  * The dispatcher holds the only schedule trigger in the system, and
  * carries it already — it wakes on its own cron, and one node behind that
@@ -26,6 +27,17 @@
  * — no I/O, no clock, no database handle. A rule reaching for one of those
  * could neither be spliced into a node nor be tested without the thing it
  * reached for.
+ *
+ * {@link pauseFrom} is the one rule here the dispatcher never runs.
+ * Its caller is the HTTP surface, where `POST /topics/:id/pause`
+ * works out an absolute due time and stores it — so the pause has
+ * no SQL twin to agree with, the dispatcher's reschedule being an
+ * expression inside the statement that claims the row rather than
+ * a call into anything. It lives here rather than in a service
+ * because this is the one place the clamp is written, and a pause
+ * is that clamp multiplied out. `docs/architecture/08-http-api.md`
+ * carries the rest of that argument, including the base the caller
+ * works out and hands in.
  *
  * Dual-context is what shapes the file. A workflow source writing
  * `__INLINE:schedule.ts__` has this module transpiled and spliced into its
@@ -71,9 +83,11 @@
  * all. Module-level STATE fails quietly instead: a counter or a memo
  * lives as long as the process that imported this file, and only as
  * long as the one execution that ran the spliced copy, and neither
- * context reports the difference. {@link clampIntervalSeconds} and
- * {@link capBatch} therefore take everything they read as an argument
- * and keep nothing between calls. `tests/build/schedule-splice.test.ts`
+ * context reports the difference. Every function here therefore takes
+ * everything it reads as an argument and keeps nothing between calls,
+ * and the file's one module-level declaration is a constant nothing
+ * writes to — the same number in both contexts, which is what parts
+ * a constant from state. `tests/build/schedule-splice.test.ts`
  * is the nearest thing to a check on that: it puts this library through
  * the shipped build and then through `new Function`, which supplies no
  * `require` and no `module` exactly as a Code node does not. An
@@ -290,4 +304,118 @@ export function capBatch<T>(items: readonly T[], cap: number): T[] {
   }
 
   return items.slice(0, cap);
+}
+
+/**
+ * Milliseconds in a second, which is the whole of the unit change
+ * between a schedulable row's columns and a `Date`.
+ *
+ * A module-level constant rather than a literal at the point of
+ * use, and the third dual-context rule is untouched by it: what
+ * that rule forbids is module-level STATE, which lives as long as
+ * the process that imported this file and only as long as the one
+ * execution that ran the spliced copy. A number that is never
+ * written to is the same number in both contexts.
+ */
+const MILLISECONDS_PER_SECOND = 1000;
+
+/**
+ * The instant a row paused for `cycles` cycles becomes due again.
+ *
+ * The answer is `base` plus `cycles` intervals, where the interval
+ * is the row's own proposal put through {@link clampIntervalSeconds}
+ * against the row's own bounds. The clamp is applied to ONE cycle
+ * and the count multiplies what comes back, which is not the same
+ * rule as clamping the whole span: a row proposing a minute under a
+ * floor of fifteen and paused for three cycles is due in
+ * forty-five minutes here and in fifteen under the other reading.
+ * The bounds bound how often a row may run, so they belong on the
+ * length of a cycle; a pause for several is a decision about how
+ * many of those to skip.
+ *
+ * `base` is worked out by the caller and never by this function.
+ * The rule it is worked out under is the API's rather than the
+ * library's, and `docs/architecture/08-http-api.md` carries it: the
+ * base is whichever of the service clock and the row's stored
+ * `next_run_at` is LATER, so a pause of a row due next week does
+ * not pull it forward and a pause of a row three days late does not
+ * leave it overdue. Neither of those readings is expressible here,
+ * because neither the clock nor the row is a thing this function
+ * has — which is the point: nothing in `src/lib/` reads a clock, and
+ * a rule that reached for one could neither be spliced into a Code
+ * node nor be tested without the thing it reached for.
+ *
+ * The base is READ and never moved. `Date` is mutable and its
+ * setters answer a number rather than an instant, so the shortest
+ * way to write this arithmetic moves the caller's own object and
+ * comes back with the right answer at the same time. What that
+ * costs is invisible from the answer: the caller here is a service
+ * holding the instant it read off the stored row, and the next
+ * thing it does with that instant is decide whether the write it
+ * just made was the one it meant.
+ *
+ * A `cycles` that is not a positive integer is refused rather than
+ * multiplied by, which is the argument {@link capBatch} makes for a
+ * cap and it holds one for one. Measured: a zero writes `base` back
+ * unchanged, and on an overdue row whose base is therefore the
+ * clock that is the extraordinary run the pause was asked to defer;
+ * a negative moves the due time INTO the past, so a request to hold
+ * a row off triggers it on the next tick instead; a fraction lands
+ * between two intervals at a time no reader can work back out of
+ * the row; and `NaN` or either infinity gives an `Invalid Date`,
+ * which serialises to `null` and stores as a `next_run_at` of NULL
+ * — the unscheduled state the pause route answers `409` rather than
+ * create. Every one of them has a plausible-looking answer and none
+ * of them reports.
+ *
+ * The refusal is a plain `Error` carrying the value it was handed
+ * rather than a class of its own, for the reason `capBatch`'s is:
+ * this module is spliced into a Code node, where a throw reaches an
+ * operator as its message and a constructor name crosses nothing,
+ * so the message is the whole of what gets read and it is what a
+ * caller pins.
+ *
+ * It is not the first refusal on the path and does not stand in for
+ * one. The pause body's schema turns a bad `cycles` away with a
+ * `422` naming the field, and it also declares a CEILING this
+ * function does not: nothing here bounds the product, so a count
+ * absurd enough to carry the answer past the range a `Date` holds
+ * gets an `Invalid Date` rather than a refusal. What this refusal
+ * is for is the second caller — the MCP surface registers over the
+ * same service functions, and a library that trusted its caller
+ * would be trusting whichever of the two got there.
+ *
+ * Nothing else is refused, and the clamp is why: it answers every
+ * proposal it is handed, including a zero, a negative and a pair of
+ * bounds that cross. So an interval this function cannot make sense
+ * of does not exist, and an `Invalid Date` handed in as `base`
+ * comes back as one rather than as a refusal — the caller's instant
+ * is the caller's to have got right.
+ *
+ * @param base - The instant the pause is measured from.
+ * @param cycles - How many clamped intervals to move past it.
+ * @param intervalSeconds - The interval the row proposes, in seconds.
+ * @param bounds - The row's own floor and ceiling.
+ * @returns A new `Date`, `cycles` clamped intervals past `base`.
+ * @throws {Error} When `cycles` is not a positive integer.
+ */
+export function pauseFrom(
+  base: Date,
+  cycles: number,
+  intervalSeconds: number,
+  bounds: IntervalBounds,
+): Date {
+  if (!Number.isInteger(cycles) || cycles <= 0) {
+    throw new Error(
+      '[schedule] pause cycles must be a positive integer, not ' +
+      `${cycles}. Either the pause request carried a value that is not ` +
+      'one, or it reached here without being parsed into a number.',
+    );
+  }
+
+  const clampedSeconds = clampIntervalSeconds(intervalSeconds, bounds);
+
+  return new Date(
+    base.getTime() + clampedSeconds * cycles * MILLISECONDS_PER_SECOND,
+  );
 }

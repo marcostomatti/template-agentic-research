@@ -49,7 +49,7 @@
  * depends on an `ORDER BY` nobody wrote.
  *
  * NO REFUSAL IS REACHABLE THROUGH THIS PORT, which is the substantive
- * difference from the three sibling ports and the reason no method
+ * difference from every sibling port and the reason no method
  * below documents a `StoreRefusal` — the error
  * `src/db/store-errors.ts` declares. The table carries exactly two
  * mechanisms and neither can fire from here, measured against the

@@ -27,7 +27,9 @@ an item scheduled beside the seven phases rather than inside them, so
 its cell in the phase column names the item rather than a number.
 The request-echo row is that
 shape again, drawn from the binding constraints in
-`.specs/q08-api-wave-1.md`.
+`.specs/q08-api-wave-1.md`, and the connector-secret row likewise, from
+the constraints section of `.specs/q11-api-wave-2.md`, which asks for
+sentinel tests in both directions over a value the surface stores.
 
 ## The register
 
@@ -51,7 +53,8 @@ shape again, drawn from the binding constraints in
 | The origin checkout a parity run reads is named in the environment and nowhere else — no tracked file records the path, and no default stands in for it | `tests/invariants/parity-origin-hygiene.test.ts`, over `tests/helpers/port-parity.ts` and every file under `tests/parity/`, with the roster it reads held set-equal against that directory so a file added later cannot go unscanned | 4 | Implemented |
 | No log line and no HTTP response carries the bootstrap password | `tests/auth/secret-logging.test.ts`, booting the service with a sentinel `AUTH_BASIC_PASSWORD` and reading stdout, stderr and the response body back across the bootstrap, a login, and a malformed login carrying the sentinel | q07 | Implemented |
 | No file under `src/` or `lib/` outside `src/auth/` and `src/db/schema/auth.ts` names a password hash or a session-token hash | `tests/invariants/auth-containment.test.ts`, over the identifier roster and the walker in `tests/invariants/auth-containment.ts`, which refuses to report a result at all when it read no files | q07 | Implemented |
-| No request body content reaches a response body or a log line through a validation detail | `tests/api/request-echo.test.ts`, submitting one sentinel through every wave-1 write route as a field value, as an unrecognized key, as an open-record key and as a query parameter, and counting it in each answer and in everything the process wrote — with a third boot mounting a route that leaks the same sentinel through four channels as the control on the count | q08 | Implemented |
+| No request body content reaches a response body or a log line through a validation detail | `tests/api/request-echo.test.ts`, submitting one sentinel through every write route the service mounts as a field value, as an unrecognized key, as an open-record key and as a query parameter, and counting it in each answer and in everything the process wrote — with a third boot mounting a route that leaks the same sentinel through every channel this surface is forbidden to leak through, as the control on the count | q08 | Implemented |
+| No stored connector secret reaches a response body, a log line or an error detail | `tests/api/connector-secret.test.ts`, booting the assembled service over a sentinel credential written through `POST /connectors`, rotated through `PATCH /connectors/:id`, read back through `GET /connectors` and submitted once more to a create the store refuses, and counting it in every answer and in everything the process wrote — with a second boot whose route reads the stored config back and leaks it to the console, to stderr and into what it answers, as the control on both counts | q11 | Implemented |
 
 ## Reading the register
 
@@ -577,4 +580,72 @@ off a log line is the wrapper each `db-store.ts` puts over every write,
 translating a driver failure into a `StoreRefusal` carrying a reason and
 a constraint name and nothing else. No sentinel reaches it here: a
 conflict needs a stored row to collide with, and every window this row's
-artifact opens is over an empty store.
+artifact opens is over an empty store. The row below is where one does
+reach it — that window creates a connector and then collides with it
+deliberately, with a credential in the body of the create that collides.
+
+### A stored credential is the one secret this surface hands back
+
+The bootstrap password row above is about a value that reaches the
+service and stops there. A connector config is the opposite: it is
+stored so that a later pass can authenticate with it, and the surface
+that wrote it is also the surface that answers it. Every read of
+`/connectors` is an opportunity to hand the credential back to whoever
+asked, and a `GET` is what an operator, a browser tab and a caching
+proxy all reach for.
+
+Masking is what closes that, and it closes it in one place.
+`src/connectors/secrets.ts` declares the key roster and the single
+literal, and `src/connectors/service.ts` puts every record it answers
+through the same walk — the list, and the rows both writes answer with.
+`docs/architecture/08-http-api.md` carries that mechanism and the
+read-modify-write round trip the refusal on the way in exists to close.
+What the register adds is why the property is worth a row.
+
+It is worth one because a read path added without the mask reads exactly
+like every read path that has one. A resource service answering a stored
+row is a handful of lines, none of which mentions a credential; the type
+system has nothing to object to, since the column is `unknown` either
+way; and the suite stays green, because a masked answer and an unmasked
+one differ in one member of one object. That is the argument the two
+auth rows make, applied to a value the surface is expected to hand back
+rather than to one it is expected never to mention.
+
+Three destinations, and they are not one claim. A response body goes to
+whoever sent the request. A log line goes to everyone who reads logs,
+and `pino-http` records every request the service answers, so that line
+is written whether a handler wanted to write one or not. An error
+`details` list is the third: `errorHandler` answers an `AppError`'s
+`toJSON()` and logs its `code`, `cause` and `message`, so a value
+reaching a constructed message reaches both destinations and one
+reaching a detail reaches the response alone.
+
+So the check is a sentinel rather than a review, on the argument the
+bootstrap-password row makes. One credential is written through
+`POST /connectors`, rotated through `PATCH /connectors/:id`, read back
+through `GET /connectors` and submitted once more to a create the store
+refuses, and the sentinel it is spelled with is counted in each answer
+and in everything the process wrote while answering. The store is read
+directly inside the same window, so the zeros are about a value that
+really was accepted and really was stored rather than about a column
+holding nothing.
+
+Its pass is a zero, so a second boot mounts a route that reads the same
+stored config back out of the store and leaks it — to the console, to
+stderr, and into the body it answers unmasked — and the same counter
+reports all three. Without it a capture that stopped reading, a counter
+that stopped matching and a surface that leaks nothing answer alike. Two
+of those three planted channels are also the only live control their
+patch has: nothing under `src/` writes to the console, and the framework
+writes to stderr on no healthy boot.
+
+What `Implemented` means here is narrower than the heading in one way
+and wider in another. Narrower: the window substitutes the in-memory
+store for the drizzle one, so what it holds to the rule is the surface
+above the port rather than the column beneath it, and the live suite is
+where a real `connectors` row is read back raw. Wider: the row covers a
+refusal as well as the three answers. A conflict is the one answer on
+this surface free to carry a `details` list, and the create that raises
+one had the credential in the body that reached the handler — so the two
+zeros over it are two claims, one closed by `details` never being logged
+and the other by no message here being built out of anything submitted.

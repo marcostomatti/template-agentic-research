@@ -369,6 +369,37 @@ anyway is answered, because the approval is the gate and this is not
 a second one. And nothing here writes: the answer is a value, and
 whether the UPDATE happened is known only to whoever ran it.
 
+### The HTTP half of this gate is scheduled, and q13 is when
+
+`scripts/approve.ts` is still the whole operator surface, and the
+sources route group wave 2 adds does not change that.
+`src/sources/routes.ts` declares four routes over a `sources` row —
+the list, the create, the patch and the delete — and rules on no
+proposal at all. `GET /sources/:id/pending-configs` and
+`POST /sources/:id/approve-config` are in the parent spec's list for
+that group and are deliberately not among them.
+
+They move to q13, the approvals wave, where they land beside the
+entity approvals over `research_pool`. The reason they were carved
+out of wave 2 has expired and is worth naming rather than repeating:
+this table was still arriving on the other leg when that wave was
+planned, so a route written against it would have targeted a schema
+somebody else was landing. It is in the tree now.
+
+What has not expired is the reason the section above gives for one
+command ruling on both queues. An approval gate is one vocabulary
+and this repository has two subjects on it, so the HTTP half should
+arrive as one surface answering for both rather than as half a
+surface two waves before the other. A `pending-configs` route
+landing alone would have to settle the subject word for itself, and
+`approve pool 7` would be a CLI ruling with no route beside it.
+
+So the pair is scheduled rather than forgotten, and this is the
+sentence a reader who reached this gate from the pipeline side finds
+it in. `docs/architecture/08-http-api.md` carries the same note from
+the API side, once under `The paths wave 2 defers` and once in its
+`Sources` group.
+
 ## The registry
 
 `SOURCE_ADAPTERS` in `src/sources/index.ts`: a literal mapping an id

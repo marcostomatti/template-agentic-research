@@ -1,9 +1,10 @@
 /**
- * `tests/helpers/memory-research-store.ts` in all four ports it
+ * `tests/helpers/memory-research-store.ts` in all eight ports it
  * implements — the claims that make it a second implementation of
  * `DomainStore`, of `TaxonomyStore` WHOLE with categories and terms
- * together, of `PersonaStore` and of `SettingsStore`, rather than a
- * bag that stores what it is handed.
+ * together, of `PersonaStore`, of `TopicStore`, of `SourceStore`, of
+ * `ConnectorStore`, of `SubscriptionStore` and of `SettingsStore`,
+ * rather than a bag that stores what it is handed.
  *
  * THAT IT REFUSES WHAT POSTGRES REFUSES. Every refusal case names
  * the `reason` a SQLSTATE classifies to and the constraint the
@@ -22,8 +23,43 @@
  * `personas_domain_id_role_unique`, which refuses on an INSERT and
  * on an UPDATE alike, and `personas_domain_id_domains_id_fk`, which
  * the insert alone can reach because `domainId` is not patchable.
- * The settings half adds NONE, and that is a measurement rather than
- * a gap — see below.
+ * The topics half adds two more in that same shape and reaches them
+ * from two writes as well: `topics_domain_id_name_unique`, which
+ * refuses on an INSERT and on an UPDATE because `name` is
+ * patchable, and `topics_domain_id_domains_id_fk`, which the insert
+ * alone can reach because `domainId` is not. The sources half adds
+ * FOUR and reaches them from three calls, which is the widest
+ * mechanism surface of any half here and the only one whose delete
+ * is refused from OUTSIDE the row: `sources_kind_check`, the first
+ * CHECK this file imitates, refusing on an INSERT and on an UPDATE
+ * alike because `kind` is patchable;
+ * `sources_domain_id_domains_id_fk`, which the insert alone reaches;
+ * and `documents_source_id_sources_id_fk` beside
+ * `finding_sightings_source_id_sources_id_fk`, two `ON DELETE no
+ * action` keys in other tables that each hold the delete of a source
+ * their rows still cite. The connectors half adds THREE and reaches
+ * them from three calls as well, in a shape that is the sources
+ * half's mirrored: `connectors_kind_name_unique` refusing on an
+ * INSERT and on an UPDATE alike because `name` is patchable,
+ * `connectors_kind_check` refusing on the INSERT alone because
+ * `kind` is not, and
+ * `export_subscriptions_connector_id_connectors_id_fk`, a single
+ * `ON DELETE no action` key in another table holding the delete of a
+ * connector its rows still name. The subscriptions half adds FOUR
+ * and reaches them from two writes, which is the widest write
+ * surface of any half here: the triple
+ * `export_subscriptions_domain_id_format_connector_id_unique`
+ * refusing on an INSERT and on an UPDATE alike, `format` and
+ * `connectorId` both being patchable;
+ * `export_subscriptions_format_check` refusing on both writes too,
+ * which is the sources half's shape rather than the connectors
+ * half's; `export_subscriptions_domain_id_domains_id_fk` refusing on
+ * the INSERT alone, `domainId` being unpatchable; and
+ * `export_subscriptions_connector_id_connectors_id_fk` on both —
+ * the one constraint this file imitates from BOTH ENDS, the
+ * connectors half meeting it as a refused DELETE. The settings half
+ * adds NONE, and that is a measurement rather than a gap — see
+ * below.
  *
  * THAT IT REFUSES THEM IN THE MEASURED ORDER. Four cases exist only
  * for that, because a request carrying two faults at once is the
@@ -39,15 +75,42 @@
  * the live Postgres. It is the half a fake gets wrong by writing
  * its checks in the order they read well.
  *
- * THE TERM AND PERSONA HALVES ADD NO ORDER OF THEIR OWN, and saying
- * so is part of the claim rather than a gap in it. The term key and
- * the term foreign key are both about `category_id`, so a write
- * naming a category that does not exist cannot also duplicate a
- * pattern inside it — there is nothing stored there to duplicate —
- * and no case can tell which is asked first. The persona key and
- * the persona foreign key stand in that same relation over
- * `domain_id`, and `personas` carries no CHECK and no trigger at
- * all, so this half has two mechanisms and nothing between them.
+ * THE TERM, PERSONA AND TOPIC HALVES ADD NO ORDER OF THEIR OWN, and
+ * saying so is part of the claim rather than a gap in it. The term
+ * key and the term foreign key are both about `category_id`, so a
+ * write naming a category that does not exist cannot also duplicate
+ * a pattern inside it — there is nothing stored there to duplicate
+ * — and no case can tell which is asked first. The persona pair and
+ * the topic pair stand in that same relation over `domain_id`, and
+ * neither `personas` nor `topics` carries a CHECK or a trigger at
+ * all, so each of those halves has two mechanisms and nothing
+ * between them.
+ *
+ * THE SOURCES HALF HAS AN ORDER AND IT IS ARGUED RATHER THAN
+ * MEASURED, which is a third answer to the same question and is
+ * stated as such. A table CHECK is evaluated while the row is being
+ * formed and a foreign key by an AFTER trigger at the end of the
+ * statement — the same relation the category half MEASURED between
+ * its BEFORE trigger and its own foreign key — so
+ * `sources_kind_check` is asked first, on that reasoning and on no
+ * reading of this table. No case pins it, because a write can carry
+ * both faults and this file does not claim to know what a server
+ * answers then. The two DELETE keys have no order either, and there
+ * the reason is stronger than an absence of measurement: both are
+ * end-of-statement checks over one statement, and
+ * `src/sources/service.ts` reads the COUNTS rather than the
+ * constraint name, so nothing downstream can tell which fired.
+ *
+ * THAT ONE REFUSING KEY IS DELIBERATELY NOT IMITATED, and the reason
+ * is unreachability rather than oversight.
+ * `source_config_proposals_source_id_sources_id_fk` is a third
+ * `ON DELETE no action` key onto `sources.id`, but no port here
+ * writes a proposal and no seam plants one, so there is no dataset
+ * this store can be in where it would fire. A fake refusing a state
+ * it cannot reach would be inventing a rule rather than imitating
+ * one. There is no case for it, and that absence is why
+ * `SourceStore.deleteSource` declares the throw rather than
+ * promising that two zero counts mean the delete will land.
  *
  * THAT ITS IDS COME FROM 1 AND ARE NOT GAPLESS. A refused insert
  * burns an id here because it burns one in Postgres, measured on a
@@ -62,8 +125,56 @@
  * refused inserts between two accepted ones left a gap of two with
  * the FOREIGN KEY refusal included, which is why that half pins the
  * burn twice — once on the key and once on the foreign key. The
- * cases pin all of it, so a later case cannot come to depend on a
- * gaplessness only the fake has.
+ * topics half pins the burn twice as well and on NO measurement of
+ * its own: `topics` carries the same pair of mechanisms over the
+ * same column `personas` does, so the gap of two measured there is
+ * what its counter is expected to reproduce, and saying which
+ * figure rests on a measurement is half the claim. `sources` pins
+ * the burn twice as well, and its pair is the odd one: with NO
+ * unique key there is no duplicate to burn an id, so the two cases
+ * are the kind CHECK and the domain foreign key — and only the
+ * second has a counterpart in the `personas` measurement the figure
+ * rests on. The cases pin all of it, so a later case cannot come to
+ * depend on a gaplessness only the fake has.
+ *
+ * THAT A DELETE CAN BE REFUSED BY ROWS IN ANOTHER TABLE, which is
+ * the sources half's shape and no other's. `documents.source_id` and
+ * `finding_sightings.source_id` are both `ON DELETE no action`, so a
+ * feed whose captures are in the corpus cannot be removed until they
+ * are — argued at both columns, and most sharply at the second,
+ * where `src/db/schema/findings.ts` states the sightings table IS
+ * the provenance record. The two are separate claims rather than one
+ * rule read twice, and one case exists only to say so: a source
+ * carrying a sighting and NO document is refused, which a guard
+ * reading the documents alone would take. Each refusal case carries
+ * its positive control in the same body — the SAME call over the
+ * sibling source nothing cites — and one case beside them drives the
+ * `enabled` patch the refusal names as the operation that was
+ * wanted, while the delete is still being refused.
+ *
+ * THAT THE PARSE-STATUS AGGREGATE IS COUNTED AND EVERY ZERO IS A
+ * COUNTED ZERO. The record is built from `DOCUMENT_PARSE_STATUSES`
+ * and then filled rather than accumulated as the rows are walked, so
+ * a source that has captured nothing answers zero under each member
+ * and so does a member with no rows on a source that has captured
+ * plenty. Those two are separate cases: the first is the trap
+ * `ParseStatusCounts` names — a status with no rows contributes no
+ * group to a grouped read — and the second is the same claim from an
+ * end an empty source cannot reach. A third case derives the key set
+ * from the tuple rather than listing it, so a member added there
+ * reddens here rather than leaving a status the aggregate silently
+ * drops.
+ *
+ * THAT NOTHING ON THIS PORT WRITES A `documents` ROW, which is a
+ * structural claim a case can only approach. `src/sources/store.ts`
+ * says the absence IS the read-only rule; what this file can add is
+ * that a queue read and a queue count leave the aggregate exactly as
+ * it was, and that every document any case here has to exist came
+ * through a SEAM rather than through a method. Two seams, and their
+ * shapes differ on purpose — rows for the documents, because three
+ * reads answer rows, and a number for the sightings, because
+ * `countSourceDependents` is the only thing that can ask about one
+ * at all.
  *
  * THAT AN UPSERT REWRITES THREE COLUMNS AND KEEPS THE STORED ROW'S
  * ID. Measured: the statement answered the STORED id with `weight`,
@@ -84,6 +195,165 @@
  * refusal: a `StoreRefusal` would satisfy any assertion about a
  * thrown error, and offering a caller a tidy status the database
  * never gave is the failure being ruled out.
+ *
+ * THAT THE CONNECTORS HALF REFUSES TWO MECHANISMS SITTING ON
+ * DIFFERENT WRITES, which is the mirror of the sources half rather
+ * than a copy of it. `connectors_kind_name_unique` refuses a kind
+ * and name pair the deployment already carries on an INSERT and on
+ * an UPDATE alike, because `name` is patchable;
+ * `connectors_kind_check` refuses a `kind` outside `CONNECTOR_KINDS`
+ * on the INSERT alone, because `kind` is deliberately absent from
+ * `ConnectorPatch` and no update here is written against the CHECK.
+ * There is no order between them and none is claimed: the key opens
+ * on the very column the CHECK constrains, so a write proposing a
+ * kind outside the tuple can duplicate nothing.
+ *
+ * THAT ITS KEY IS PER KIND AND ITS CHECK IS READ OFF THE RUNTIME
+ * TUPLE. Three cases widen rather than narrow, which is the
+ * direction a refusal case cannot reach on its own: the same name
+ * under a second kind is accepted, a rename onto a name a second
+ * kind holds is accepted, and every member of `CONNECTOR_KINDS` is
+ * looped over and accepted rather than a list written out here. That
+ * last one is two-directional for free — a member ADDED to the tuple
+ * reaches the case, and a store narrowing the guard to some of them
+ * fails it — and it is what keeps the refusal case above from being
+ * satisfied by a store that refuses every kind.
+ *
+ * THAT ITS DELETE IS REFUSED FROM OUTSIDE THE ROW BY EXACTLY ONE
+ * KEY. `export_subscriptions_connector_id_connectors_id_fk` is `ON
+ * DELETE no action`, so a connector an export subscription still
+ * names holds its own delete — one key rather than the sources
+ * half's two, re-derived from the generated SQL rather than taken
+ * from a plan, which is the reading that half's plan got wrong. The
+ * refusal case carries its positive control in the same body, the
+ * SAME call over the sibling nothing names, and the count case
+ * beside it reads what a `409` would carry.
+ *
+ * THAT NO DOMAIN DELETE REACHES IT AT ALL, which is the claim only
+ * this half and the settings half can make and which they make
+ * differently. `connectors` carries no `domain_id`, so a connector
+ * outlives every domain that named it; the case deletes a domain
+ * holding sources and a topic, asserts THOSE are gone as its control
+ * that the delete reached anything, and then asserts all three
+ * connectors are standing. A store sparing the connectors by sparing
+ * everything fails it.
+ *
+ * THAT ITS PAGE IS ORDERED BY THE PAIR AND NARROWED BY A FILTER
+ * RATHER THAN SCOPED BY AN OWNER. The fixture is written in an order
+ * no read answers — the notebook goes in first and its name sorts
+ * before both of the others — so one case tells an ordering by
+ * `(kind, name)` from an ordering by insertion and from one by name
+ * alone. The kind is a FILTER and not a scope: an absent one answers
+ * every row rather than none, and a kind no row carries is an empty
+ * page rather than a refusal. The count reads through the same
+ * predicate, which one case holds against the page it describes.
+ *
+ * THAT ITS `config` IS COPIED IN BOTH DIRECTIONS, AND THAT THIS IS
+ * THE ONE COPIED DOCUMENT IN THIS FILE THAT IS A LIVE CREDENTIAL.
+ * The port answers the column AS STORED — masking is
+ * `src/connectors/service.ts`'s, one layer up — so what the copy
+ * rules out is a caller writing into a stored secret through a
+ * member the port declares `readonly`. There is one case per ANSWER
+ * SITE rather than one per helper, each mutating one level down and
+ * comparing against the fixture FUNCTION rather than against a
+ * record an earlier call answered: a store handing out its own
+ * object has aliased the two, and the comparison would then hold one
+ * lie against itself and pass. A seventh case reads the credential
+ * out of the REFUSAL as well, counted the way the sibling halves
+ * count a name, because a refusal built over a config is the first
+ * thing on this surface that could carry one onward.
+ *
+ * THAT ITS `config` IS REPLACED WHOLE RATHER THAN MERGED INTO, which
+ * on this table has a sharper consequence than on a domain's
+ * `settings` and is asserted rather than smoothed over: a patch
+ * omitting a secret's key has CLEARED that secret, and the request
+ * doing it by accident is byte-identical to the one doing it on
+ * purpose. Under a merge the credentials survive the case that
+ * replaces the config with an endpoint alone.
+ *
+ * THAT THE SUBSCRIPTIONS HALF KEYS ON A TRIPLE, AND THAT TWO THIRDS
+ * OF IT ARE PATCHABLE. No PAIR of the domain, the format and the
+ * connector identifies a subscription, so the widening controls a
+ * per-kind key needs become THREE here and each is a case: a second
+ * format at one connector, a second connector for one format, and
+ * the same pair under a second domain. A store keying on any pair
+ * refuses one of the three. The refusals come in two on the INSERT
+ * and two on the UPDATE — a re-point onto a held triple and a
+ * reformat onto one — because a store checking only the member it
+ * was handed passes whichever of the two it happened to check.
+ *
+ * THAT ITS CHECK SITS ON BOTH WRITES AND ITS TWO FOREIGN KEYS SIT ON
+ * DIFFERENT ONES. `export_subscriptions_format_check` is
+ * `sources_kind_check`'s shape rather than `connectors_kind_check`'s,
+ * `format` being patchable, so it has an insert case and a patch
+ * case; `export_subscriptions_domain_id_domains_id_fk` has an insert
+ * case and a case asserting the patch cannot reach it at all, since
+ * `SubscriptionPatch` declares no `domainId`; and
+ * `export_subscriptions_connector_id_connectors_id_fk` has both,
+ * because re-pointing a delivery is exactly the request that can name
+ * a connector somebody has just retired. The acceptance control loops
+ * the RUNTIME `EXPORT_FORMATS` rather than a list written out here,
+ * and does it at ONE connector, so it is the key's second widening
+ * control in the same body.
+ *
+ * THAT ONE CONSTRAINT IS IMITATED FROM BOTH ENDS, which is true of no
+ * other mechanism in this file. Read from `connectors` the connector
+ * foreign key holds a DELETE; read from here it refuses a WRITE. One
+ * case drives both in the same body and asserts they name the same
+ * key and the same reason, so a rename on either side that missed the
+ * other reddens here rather than in a deployment.
+ *
+ * THAT A DOMAIN TAKES ITS SUBSCRIPTIONS AND STOPS THERE. The cascade
+ * on `domain_id` takes them; the `ON DELETE no action` on
+ * `connector_id` points the other way, so the connectors those rows
+ * named are left standing — which is a domain delete CLEARING
+ * subscriptions out of a connector's way rather than taking the
+ * connector with them. Both halves are cases, and the second one
+ * carries the count of the removed rows beside it so a store sparing
+ * the connectors by sparing everything fails.
+ *
+ * THAT ITS DELETE CANNOT BE REFUSED, re-derived rather than assumed:
+ * nothing in the generated SQL references
+ * `public.export_subscriptions`, read in the same command as the one
+ * reference to `public.connectors` that is the live needle beside it.
+ * The case drives the connector delete in the same body, refused
+ * under the very rule this one has no counterpart of, which is what
+ * says the acceptance is a fact about the table rather than a store
+ * that refuses nothing.
+ *
+ * THAT THIS HALF INTRODUCES THE FILE'S SECOND KNOWN DIVERGENCE, and
+ * that it is pinned rather than left to be discovered.
+ * `countConnectorDependents` reads what
+ * `setConnectorSubscriptions` planted and never the rows this half
+ * writes, so a stored subscription answers a counted zero and its
+ * connector's delete LANDS where a deployment would refuse it —
+ * the decision `setDomainDependents` already took, for its reason,
+ * and the seam's own TSDoc carries why. Two cases read it from either
+ * face: the connector deleted out from under a stored subscription,
+ * and the row left behind naming an id nothing carries. Each carries
+ * a control in the same body — the plant still refusing a delete,
+ * and the foreign-key guard still refusing a write onto the gone id
+ * — so neither case describes a guard that had simply stopped
+ * working. `tests/live/api-wave2.live.test.ts` is where the counted
+ * answer is discharged.
+ *
+ * THAT ITS PAGE IS ORDERED BY THE PAIR AND SCOPED BY ITS DOMAIN. The
+ * fixture is written in an order no read answers, and the second half
+ * of that is arithmetic rather than taste: `feed` goes in first while
+ * its format sorts last, and `archive` goes in before `digest` though
+ * its connector sorts after. Seeded the other way round, an ordering
+ * by format ALONE and an ordering by the pair agree, and the
+ * connector tie-break is pinned by nothing — measured, the leg
+ * dropping it reddened ZERO cases until the seed was reordered, and
+ * reddens 3 now.
+ *
+ * THAT ITS DUE TIME IS THE ONE MUTABLE MEMBER IT CARRIES, and it is
+ * `topics.next_run_at` again rather than a second claim: both tables
+ * spread the same `schedulableColumns()` helper. So the topic half's
+ * six cases repeat here over one column instead of two, the seventh
+ * being the branch a subscription nobody has run now needs — a
+ * copy reaching for the instant unconditionally throws on a null, and
+ * the three answer sites are asserted in one body.
  *
  * THAT THE SETTINGS HALF REFUSES NOTHING AT ALL, which no case here
  * can assert directly and which is therefore stated rather than
@@ -124,9 +394,17 @@
  *
  * THAT NOTHING MUTABLE IS SHARED ACROSS THE BOUNDARY. Every `Date`,
  * every `settings` payload — a domain's and the operator's alike
- * — and every category, term and persona row is copied in both
- * directions, so a caller cannot write into stored state through a
- * field the port declares `readonly`. The operator's payload has
+ * — and every category, term, persona, topic, source and connector
+ * row is copied in both directions, so a caller cannot write into
+ * stored state through a field the port declares `readonly`. A topic
+ * carries two mutable members rather than one and they are separate
+ * claims: its
+ * `searchTerms` list, which a caller could otherwise push a term
+ * onto through a `readonly` array, and its `nextRunAt`, which is
+ * the first date here that arrives as an ARGUMENT rather than off
+ * the clock — so the schedule write is copied on the way IN as well
+ * as out, and a caller that kept the `Date` it passed cannot go on
+ * moving the stored due time. The operator's payload has
  * THREE answer sites rather than two, and one case each: the
  * argument a write was handed, the payload that write answered, and
  * the payload a read handed out. The three legs are DISJOINT,
@@ -139,6 +417,28 @@
  * then holds one lie against itself and passes. Measured — two of the
  * four term copy cases were green under the leg until their
  * expectations stopped naming the seeded record.
+ *
+ * A SOURCE CARRIES TWO `jsonb` DOCUMENTS AND A PLANTED DOCUMENT
+ * CARRIES A `Date`, which is where this claim lands on the sources
+ * half. `parserConfig` and `contract` take a JSON round trip rather
+ * than a spread, because neither column carries a `$type` and so
+ * there is no declared depth a spread could be written to; one case
+ * mutates a nested member of each on the way in, at BOTH call sites
+ * in one body, because the patch copies them separately and a case
+ * naming one is green against a store that shares the other
+ * (measured: aimed at `parserConfig` alone, the leg that stops
+ * copying `contract` reddened nothing). The seam copies each
+ * `capturedAt` on the way in and the queue copies it on the way out,
+ * and the seam rebuilds the LIST as well, so pushing onto what was
+ * planted does not plant a further row.
+ *
+ * THE STAMPS ON A SOURCE ARE THE ONE COPY NO CASE HERE REACHES, and
+ * it is a measured hole rather than a claim. `lastSuccessAt` and
+ * `lastFailureAt` are pipeline-owned: no port method writes either
+ * and neither seam plants one, so every stored source carries null
+ * under both and the non-null branch of the copy has no subject. One
+ * case pins the nulls, the record's own type pins the branch, and
+ * the live seam is where a stamped row can exist at all.
  *
  * THAT A DOMAIN DELETE IS NOT REFUSED BY THE GUARD THAT REFUSES A
  * CATEGORY DELETE. `categories.parent_id` is `NO ACTION`, so
@@ -156,15 +456,32 @@
  * of its own: only CHILDREN refuse it, and a store reusing that
  * guard over its terms refuses a delete Postgres takes.
  *
- * THAT A DOMAIN TAKES ITS PERSONAS AND NOTHING ELSE DOES.
- * `personas.domain_id` cascades like every other foreign key onto
- * `domains.id`, so one delete reaches the personas and both levels
- * of taxonomy together; and because nothing in schema v2 points at
- * `personas`, a persona delete has neither a guard nor a cascade
- * and cannot be refused at all. The two claims are adjacent cases
- * because they are the same fact read from either end, and the
- * second carries the category delete beside it as its control —
- * refused for holding children under the very same domain.
+ * THAT A DOMAIN TAKES ITS PERSONAS AND ITS TOPICS, AND NOTHING ELSE
+ * DOES. `personas.domain_id` and `topics.domain_id` cascade like
+ * every other foreign key onto `domains.id`, so one delete reaches
+ * both of them and both levels of taxonomy together; and because
+ * nothing in schema v2 points at either table, a persona delete and
+ * a topic delete each have neither a guard nor a cascade and cannot
+ * be refused at all. Each half states those two claims as adjacent
+ * cases because they are the same fact read from either end, and
+ * each second case carries the category delete beside it as its
+ * control — refused for holding children under the very same
+ * domain.
+ *
+ * THAT A DOMAIN TAKES ITS SOURCES TOO, AND TAKES ONES THEIR OWN
+ * DELETE WOULD REFUSE. That is the `ON DELETE no action` trap read
+ * from the cascade's side, and it is the sharpest thing the sources
+ * half asks: the domain columns on `documents` and on
+ * `finding_sightings` cascade as well, so one statement removes the
+ * sources and the rows that were holding them, and the
+ * end-of-statement check finds nothing left citing a source that is
+ * gone. A store reusing its own guarded delete inside the cascade
+ * refuses a delete Postgres takes, and does it only for the domains
+ * whose feeds have captured anything — which is why the case drives
+ * the refusal FIRST and then the domain delete, in one body. A
+ * second case reads the other half: the plants go with the sources,
+ * so no dependent count and no queue survives for a source that no
+ * longer exists.
  *
  * Several cases carry a positive control in the same body rather
  * than in a sibling case, because each is asking a question a broken
@@ -175,7 +492,7 @@
  * write from a position the rule allows, the delete-refused case
  * removes the childless row with the very same call, and the term
  * foreign-key case writes the same row into a category that exists.
- * The three containment readings over a serialised error count
+ * The containment readings over a serialised error count
  * occurrences rather than asserting absence, with the same count
  * taken over a planted message: a search that would find nothing
  * anywhere reports a clean refusal and a leaking one alike.
@@ -185,6 +502,404 @@
  * rather than as a count. Every figure below moves again when a
  * later task adds a case to this file, so re-derive the whole grid
  * rather than appending legs for the new rows.
+ *
+ * THE SUBSCRIPTIONS HALF FOLLOWED THE FILE'S SUBSTITUTE AS WELL, and
+ * it is the last half this file will get, so read the case totals
+ * below as SNAPSHOTS taken at each half's landing rather than as
+ * claims about today — the 328 the connectors paragraph states was
+ * true when written, which is also why the paragraph above says every
+ * figure moves again when a later task adds a case.
+ *
+ * The file holds 390 cases, of which 62 are this half's. What was run
+ * is this half's OWN twenty-six legs plus the EIGHT recorded ones a
+ * new half can reach — the same eight the sources and connectors
+ * halves re-ran. The rest are closed by the same reasoning: every old
+ * case is untouched and every non-subscription path in the store is
+ * byte-identical but for the one added line in `deleteDomain`. The
+ * liveness control held on all eight — each recorded leg's red set
+ * OUTSIDE the subscriptions describes came back at exactly its
+ * recorded figure (95, 7, 59, 33, 49, 8, 6 and 4, the fifth being the
+ * connectors half's 48 plus the one case it added), which is what
+ * says these are the legs the prose names and not eight new ones that
+ * happen to redden something.
+ *
+ * THE SUBSCRIPTIONS HALF MOVED EXACTLY TWO OF THOSE EIGHT, by one
+ * case each, and both are legs its fixture plants INTO rather than
+ * legs about its own rules — the shape the sources and connectors
+ * halves both measured. Refusing a null parent as a missing one went
+ * 95 to 96 through the case that deletes a category to show the
+ * cascade is not what removed the subscriptions, and refusing every
+ * topic insert as a duplicate went 49 to 50 through the case that
+ * seeds a topic to delete a domain over. The other six are identical
+ * member for member: no subscriptions case writes a term, a persona
+ * or a source, reads a domain's dates or touches the operator's row.
+ *
+ * Twenty-six subscription legs redden between 0 and 56, and every red
+ * one lands wholly inside the subscriptions describes but ONE —
+ * having the cascade take the connectors as well reddens the
+ * connectors half's `leaves every connector standing`, which is a
+ * widening leg reaching another half's claim rather than a leak.
+ * Refusing every subscription insert is this half's whole-half
+ * control and reddens 56 of the 62; the six survivors are exactly the
+ * cases that write no subscription at all (the two empty-collection
+ * list reads and the four unknown-id answers off the read, the patch,
+ * the schedule write and the delete).
+ *
+ * The key's legs split by WRITE and then by what they widen. Skipping
+ * it on the INSERT reddens 4 and on the UPDATE 2, disjoint. Refusing
+ * a row in conflict with ITSELF reddens 7, which is what says the
+ * ordinary patch cases exercise the rule rather than passing over it,
+ * since a patch naming neither third still resolves to the stored
+ * pair. Making the key global rather than per domain reddens 3. And
+ * the two legs that key on a PAIR are BLUNT rather than thorough,
+ * which is the honest reading and not a hole: 55 and 54, because the
+ * fixture cannot be seeded at all when a pair is treated as the key
+ * — two of its three rows share each pair by construction. Score
+ * them as the fixture reporting, exactly as the sources half scores
+ * its own domain-scope leg.
+ *
+ * The CHECK and the two foreign keys redden DISJOINT sets and the
+ * arithmetic is per write, not per mechanism: skipping the format
+ * CHECK reddens 2 on the insert and 1 on the patch; narrowing the
+ * guard to four literals rather than the runtime tuple reddens 2,
+ * which is the direction the refusal cases cannot reach and which
+ * narrowing the TUPLE itself could not report either, since the
+ * acceptance case LOOPS that tuple. Skipping the domain foreign key
+ * reddens 2 and the connector one 3 on each write. Taking the id
+ * after the four checks reddens exactly the 3 id cases.
+ *
+ * The read legs are four singletons rather than nests. Ordering by
+ * insertion reddens 3 and ordering by format ALONE reddens 3, and
+ * the second of those is the leg the fixture had to be reordered for
+ * — it reddened ZERO until `archive` was written ahead of
+ * `digest`. Ignoring the window reddens 2 and ignoring the domain
+ * scope 4.
+ *
+ * The copy legs NEST, which is the term half's shape rather than the
+ * category half's and for the term half's reason:
+ * `listSubscriptions` maps through the copy helper instead of
+ * building an object of its own. Answering the stored row by
+ * reference reddens 7 and answering only its `Date` by reference
+ * reddens 4, inside it. Storing the `Date` the schedule write was
+ * handed reddens 1, and so does having that write also flip
+ * `enabled` — the containment case's own row is already enabled,
+ * so it is the SECOND fixture row, planted disabled, that reports it.
+ *
+ * The cascade legs are 3 and 3: leaving the subscriptions standing,
+ * and taking the connectors as well. Refusing every delete reddens 4.
+ *
+ * And writing on a subscription patch that names no member reddens
+ * NOTHING, the SEVENTH honest zero in this file and the same one the
+ * category, term, topic, source and connector legs measure, for the
+ * same reason: the early return exists because drizzle throws on an
+ * empty update list, and this store has no such throw to observe. It
+ * keeps the WEAKER pinning of those five rather than the persona one
+ * — `src/subscriptions/db-store.ts` and a live case patching a
+ * subscription with an empty patch are both later tasks, so today the
+ * branch is pinned by `src/subscriptions/store.ts`'s TSDoc and by
+ * nothing else.
+ *
+ * THE CONNECTORS HALF FOLLOWED THE FILE'S SUBSTITUTE TOO, and the
+ * argument that closes it is stronger here than for either half
+ * above. Read the case totals below as SNAPSHOTS taken at each
+ * half's landing rather than as claims about today: the 294 the
+ * sources paragraph states and the 228 the topics one states were
+ * each true when written, which is also why the paragraph above says
+ * every figure moves again when a later task adds a case.
+ *
+ * The file holds 328 cases, of which 34 are this half's. What was
+ * run is this half's OWN twenty-three legs plus the EIGHT
+ * recorded ones a new half can reach — the same eight the sources
+ * half re-ran. The rest are closed by the same reasoning: every old
+ * case is untouched and every non-connector path in the store is
+ * byte-identical, with not even the one added line in `deleteDomain`
+ * the topics and sources halves each needed, since `connectors`
+ * hangs off no domain and the cascade was left exactly as it was.
+ * The liveness control held on all eight — each recorded leg's red
+ * set OUTSIDE the connectors describes came back at exactly its
+ * recorded figure (95, 7, 59, 33, 48, 8, 6 and 4), which is what
+ * says these are the legs the prose names and not eight new ones
+ * that happen to redden something.
+ *
+ * THE CONNECTORS HALF MOVED EXACTLY ONE OF THOSE EIGHT, by one case,
+ * and that is the narrowest a half has moved this file — narrower
+ * than the settings half's three, and for the same structural reason
+ * read from the other end. `connectors` hangs off nothing, so only a
+ * connectors case that writes elsewhere ON PURPOSE can reach another
+ * half's rules at all, and there is exactly one: the cascade case,
+ * which plants a source and a topic so that the domain delete it
+ * drives has something to be seen taking. Refusing every topic
+ * insert as a duplicate went 48 to 49 through it. The other seven
+ * are identical member for member — no connectors case plants a
+ * category, a term or a persona, reads a domain's dates or touches
+ * the operator's row.
+ *
+ * Twenty-three connector legs redden between 0 and 32, and EVERY red
+ * one of them lands wholly inside the connectors describes — the
+ * mirror of the paragraph above. Refusing every connector insert is
+ * this half's whole-half control and reddens 32 of the 34; the two
+ * survivors are exactly the cases that write no connector at all
+ * (the CHECK refusal, which needs no stored row to be refused, and
+ * the delete answering false for an id nothing carries).
+ *
+ * The two write mechanisms redden DISJOINT sets, which is the
+ * sources half's split arriving at different writes: skipping the
+ * key on the INSERT reddens 5, and ALL FIVE are `refusalFrom`
+ * throwing rather than an assertion failing — the id-burn case
+ * included, which would otherwise have read the wrong id and passed
+ * for nobody's reason. Skipping it on the UPDATE reddens 1, the
+ * rename the kind already holds. Skipping the CHECK reddens 2, one
+ * of them in the id describe, because the burn is pinned once per
+ * mechanism; taking the id after both checks reddens exactly those 2
+ * id cases and nothing else.
+ *
+ * The two WIDENING legs are what the acceptance cases exist for and
+ * they are disjoint from the narrowing ones. Refusing a connector in
+ * conflict with ITSELF reddens 3 — the case named for it plus two
+ * ordinary patch cases, which is what says those cases exercise the
+ * rule rather than passing over it, since a patch naming no name
+ * still resolves to the stored one. Making the key global rather
+ * than per kind reddens 3 across two describes, both sibling-kind
+ * acceptance cases and the tuple loop. Narrowing the tuple to three
+ * of its four members reddens exactly 1, that loop, which no
+ * refusal case in this half can reach.
+ *
+ * The three delete legs redden 2, 1 and 1 and NEST rather than
+ * standing apart: accepting the delete while subscriptions name the
+ * row reddens 2, naming another table's key on the refusal reddens
+ * 1 inside it, and answering a planted count as zero reddens the
+ * count case alone, which is the one the guard's `409` is read
+ * through.
+ *
+ * The four read legs over the list are two NESTED pairs. Ordering by
+ * insertion reddens 4 and ordering by name alone reddens 2 inside it
+ * — the fixture is written so that both are wrong in different
+ * places — and the fourth red of the first is a config case, since
+ * the copy leg reads the first row of a filtered page. Ignoring the
+ * filter on the page reddens 2 and ignoring it on the COUNT reddens
+ * 3, overlapping in 2: the third is the key case that counts one
+ * kind after writing into another, which is what says the count is
+ * a claim of its own rather than the page's length. Ignoring the
+ * window reddens 1, the one case that pages.
+ *
+ * The copy legs are one per ANSWER SITE and they NEST, which is the
+ * term half's shape rather than the category half's and for the term
+ * half's reason: `listConnectors` maps through the copy helper
+ * instead of building an object of its own. Answering the stored
+ * connector by reference reddens 3 — the read, the list and the
+ * fresh-object case — and answering it by reference from the READ
+ * alone reddens 2, inside it. Storing the object an insert was
+ * handed and storing the one a patch was handed redden ONE CASE EACH
+ * and are disjoint, which is the split the sources half could not
+ * make with two documents on one write. Merging the config rather
+ * than replacing it reddens 2. Clearing every connector on a domain
+ * delete reddens 1, the widening leg the cascade case exists for.
+ *
+ * And writing on a connector patch that names no member reddens
+ * NOTHING, the SIXTH honest zero in this file and the same one the
+ * category, term, topic and source legs measure, for the same
+ * reason: the early return exists because drizzle throws on an empty
+ * update list, and this store has no such throw to observe. It keeps
+ * the WEAKER pinning of those four rather than the persona one —
+ * `src/connectors/db-store.ts` and a live case patching a connector
+ * with an empty patch are both later tasks, so today the branch is
+ * pinned by `src/connectors/store.ts`'s TSDoc and by nothing else.
+ *
+ * THE SOURCES HALF DID NOT FOLLOW IT EITHER, and it followed the
+ * TOPICS half's substitute instead — which the paragraph below sets
+ * out and which is now the file's practice rather than one task's
+ * exception. The file holds 294 cases, of which 66 are the sources
+ * half's. What was run is that half's OWN twenty-six legs plus EIGHT
+ * of the recorded ones, chosen by reading what the new cases CALL
+ * rather than guessed: the four whole-half controls the topics half
+ * re-ran, the topics control itself, and the two domains legs. The
+ * argument closing the rest is unchanged — every old case is
+ * untouched and every non-source path in the store is byte-identical
+ * except for one added line in `deleteDomain` — so only a DELTA over
+ * the 66 new cases was ever in question. The liveness control is the
+ * same reading and it held on all eight: each recorded leg's red set
+ * OUTSIDE the sources describes came back at exactly its recorded
+ * figure (93, 7, 58, 33, 47, 8, 6 and 4), which is what says these
+ * are the legs the prose names and not eight new ones that happen to
+ * redden something.
+ *
+ * THE SOURCES HALF MOVED EXACTLY THREE OF THOSE EIGHT, by four cases
+ * in total, and all four sit in ONE case pair inside `the domain
+ * cascade over its sources`. Refusing a null parent as a missing one
+ * went 93 to 95 — the two sources cases that plant a category —
+ * while refusing every term insert as a duplicate went 58 to 59 and
+ * refusing every topic insert as a duplicate 47 to 48, both through
+ * the single case that seeds a lexicon and a topic to delete a
+ * domain over. The five that did NOT move are the category-delete
+ * control, the personas control, the settings control and the two
+ * domains legs, all unchanged member for member: no sources case
+ * writes a persona, reads a domain's dates or touches the operator's
+ * row.
+ *
+ * Twenty-six source legs redden between 0 and 60, and EVERY red one
+ * of them lands wholly inside the sources describes — the mirror of
+ * the paragraph above. Refusing every source insert is this half's
+ * whole-half control and reddens 60 of the 66; the six survivors are
+ * exactly the cases that write no source at all (the foreign-key
+ * containment case, which needs no stored row to be refused, the two
+ * list reads that plant none, and the three unknown-id answers off
+ * the read, the patch and the delete).
+ *
+ * The two write mechanisms redden DISJOINT sets, which is a split no
+ * other half here can make: skipping the kind CHECK on the insert
+ * reddens 2 and on the PATCH 1, because the CHECK sits on both
+ * writes where every other half's second mechanism sits on one.
+ * Skipping the domain foreign key reddens 4. One case of each of
+ * those two lands in the id describe rather than its own, because
+ * the burn is pinned once per mechanism — and taking the id after
+ * the checks reddens exactly those 2 id cases.
+ *
+ * The two read legs over the list are DISJOINT and one of them
+ * reaches two other describes: ordering by id descending reddens 7,
+ * only 3 of them in the list describe, since three aggregate cases
+ * and one queue case read the first row of a page; ignoring the
+ * window reddens 2, both in the list describe. The two aggregate
+ * legs NEST rather than standing apart — accumulating the record
+ * instead of seeding it from `DOCUMENT_PARSE_STATUSES` reddens 6 and
+ * counting every source's documents at once reddens 1, inside it and
+ * exactly the case named for it.
+ *
+ * The queue's four legs are two singletons, an IDENTICAL pair and a
+ * three. Dropping the `failed` filter reddens 3; ignoring the window
+ * reddens 1; and dropping the id tiebreak and ordering oldest-first
+ * redden the SAME single case, told apart only by the assertion that
+ * fails inside it — one ordering case standing for two claims, which
+ * is the honest reading of a three-row fixture rather than two cases
+ * pretending to be independent.
+ *
+ * The copy legs are one per ANSWER SITE and the sites do not line up
+ * with the helpers, which is the reading worth having. Answering the
+ * stored source by reference reddens 3 — the read, the patch and the
+ * insert's own answer — and NOT the list, because
+ * `listSourcesWithParseStats` builds a fresh object with its own
+ * spread whatever the copy helper does; that is the category half's
+ * shape rather than the term half's, and for the category half's
+ * reason. Storing the object an insert was handed reddens 1. Storing
+ * the object a PATCH was handed reddens 1 from either of its two
+ * call sites, the SAME case both times, which is why that case
+ * mutates both documents in one body. Merging a `jsonb` document
+ * rather than replacing it reddens 2. And the planted `Date` has one
+ * leg per direction, DISJOINT at 2 apiece: the seam keeping the
+ * array and its instants, and the queue handing its own `Date` out.
+ *
+ * The delete legs are DISJOINT at 3 and 3 — accepting the delete
+ * while documents cite it, and while sightings do — which is what
+ * says the two keys are two claims rather than one rule read twice.
+ * Naming one key for both reddens 1, the case that reads the
+ * constraint off the refusal. The two cascade legs NEST: leaving the
+ * sources standing reddens 4 and leaving the PLANTS standing reddens
+ * 1, inside it.
+ *
+ * And writing on a source patch that names no member reddens
+ * NOTHING, the FIFTH honest zero in this file and the same one the
+ * category, term and topic legs measure, for the same reason: the
+ * early return exists because drizzle throws on an empty update
+ * list, and this store has no such throw to observe. It keeps the
+ * WEAKER pinning of those three rather than the persona one —
+ * `src/sources/db-store.ts` and a live case patching a source with an
+ * empty patch are both later tasks, so today the branch is pinned by
+ * `src/sources/store.ts`'s TSDoc and by nothing else.
+ *
+ * THE TOPICS HALF IS THE ONE PLACE THAT RULE WAS NOT FOLLOWED
+ * WHOLE, and what stands in for it is stated rather than left to be
+ * inferred. The file holds 228 cases now, of which 54 are the
+ * topics half's, and re-deriving all 76 recorded legs would mean
+ * reconstructing each from the prose that describes it. What was
+ * run instead is the topics half's OWN seventeen legs plus SEVEN of
+ * the recorded ones — the four whole-half controls and the three
+ * other legs a topics case could reach, chosen by reading what the
+ * new cases call rather than guessed. The argument that closes the
+ * rest is that the old cases are unchanged and the store's
+ * behaviour on every non-topic path is byte-identical except for
+ * one added line in `deleteDomain`, which no old case can see: so
+ * every recorded red set still holds over the old 174, and only a
+ * DELTA over the 54 new cases was ever in question. Those seven
+ * runs carry their own liveness control, and it is the reading that
+ * makes the argument checkable rather than merely plausible: each
+ * one's red set OUTSIDE the topics describes came back at exactly
+ * the recorded figure (6, 4, 90, 6, 57, 32 and 8), which is what
+ * says these are the same legs the prose names and not seven new
+ * ones that happen to redden something.
+ *
+ * THE TOPICS HALF MOVED EXACTLY FOUR OF THOSE SEVEN, by six cases
+ * in total, and every one of the six is a topics case that plants
+ * in another half on purpose. Refusing a null parent as a missing
+ * one went 90 to 93 — the three topics cases that plant a category,
+ * matching the three the personas half moved that same leg by, and
+ * for the same structural reason. Accepting
+ * the delete of a category holding children went 6 to 7, through
+ * the topic-delete case that carries the category delete as its
+ * control. Refusing every term insert as a duplicate went 57 to 58
+ * and refusing every persona insert as a duplicate 32 to 33,
+ * through the ONE case that deletes a domain carrying a lexicon, a
+ * persona and a topic at once. The three that did NOT move are the
+ * two domains legs and the settings whole-half control, all three
+ * unchanged member for member: no topics case reads a domain's
+ * dates or its settings payload, and nothing here writes the
+ * operator's row.
+ *
+ * Eighteen topic legs redden between 0 and 47, and EVERY red one of
+ * them lands wholly inside the topics describes — the mirror of the
+ * paragraph above, and what says the two directions are not the
+ * same claim. Refusing every topic insert as a duplicate is this
+ * half's whole-half control and reddens 47 of the 54; the seven
+ * survivors are exactly the cases that write no topic at all (the
+ * foreign-key containment case, which needs no stored row to be
+ * refused, the two list reads that plant none, and the four
+ * unknown-id answers off the read, the patch, the schedule write
+ * and the delete). Accepting the duplicate name reddens 5 on the
+ * insert and 1 on the update, the split `personas` cannot make
+ * because its own key case set is differently shaped; skipping the
+ * foreign key reddens 4, one of them in the id describe, because
+ * the burn is measured once per mechanism.
+ *
+ * The patch's two legs are one narrowing and one widening and they
+ * are DISJOINT, which is the personas half's shape. Skipping the
+ * resulting-name check reddens 1, the rename the domain already
+ * carries; refusing a topic in conflict with ITSELF reddens 7 — the
+ * case named for it plus six ordinary patch and search-term cases,
+ * which is what says those cases exercise the rule rather than
+ * passing over it, since a patch naming no name still resolves to
+ * the stored one. Making the name key global rather than per domain
+ * reddens 4 across three describes, which is the widening leg the
+ * two sibling-domain acceptance cases exist for.
+ *
+ * Both pairs of read legs OVERLAP rather than nesting or standing
+ * apart, which is a shape neither of the other halves has: theirs
+ * are disjoint on one side and nested on the other. Ordering by
+ * insertion reddens 5 and ignoring the window reddens 2, sharing
+ * the one case that asks for a page of three. Answering the stored
+ * topic by reference reddens 4 — the three read paths and the
+ * fresh-Date case — and handing the stored due time out of every
+ * copy reddens 4 as well, overlapping in 2: one helper stands
+ * behind both faults, and only the assertion that fails inside each
+ * case tells them apart. Taking the id after the checks reddens
+ * exactly the 2 id cases.
+ *
+ * The four remaining copy legs redden ONE CASE EACH and are
+ * disjoint, which is one leg per ANSWER SITE exactly as the
+ * settings half measures: storing the array an insert was handed,
+ * storing the array a patch was handed, storing the `Date` a
+ * schedule write was handed, and handing the stored array out.
+ * Conflating an absent bound with a null one reddens 1, the leg
+ * that says a nullable member distinguishes three requests and not
+ * two.
+ *
+ * And writing on a topic patch that names no member reddens
+ * NOTHING, the fourth honest zero in this file and the same one the
+ * category, term and persona legs measure, for the same reason: the
+ * early return exists because drizzle throws on an empty update
+ * list, and this store has no such throw to observe. It keeps the
+ * WEAKER pinning of the category and term zeros rather than the
+ * persona one — `src/topics/db-store.ts` and a live case that
+ * patches a topic with an empty patch are both later tasks, so
+ * today the branch is pinned by `src/topics/store.ts`'s TSDoc and
+ * by nothing else.
  *
  * THE SETTINGS HALF MOVED EXACTLY THREE OF THE SIXTY-SEVEN LEGS
  * THAT STOOD BEFORE IT, and all three gained the SAME single case:
@@ -431,7 +1146,14 @@
  * well as off the write. No re-aiming of this leg reaches it from
  * here.
  */
-import type { MemoryResearchStore } from './memory-research-store.js';
+import type {
+  MemoryResearchStore,
+  MemorySourceDocument,
+} from './memory-research-store.js';
+import type {
+  ConnectorRecord,
+  InsertConnectorInput,
+} from '../../src/connectors/store.js';
 import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type { OperatorSettings } from '../../src/db/schema/settings.js';
 import type {
@@ -440,13 +1162,35 @@ import type {
 } from '../../src/domains/store.js';
 import type { PersonaRecord } from '../../src/personas/store.js';
 import type {
+  InsertSourceInput,
+  SourceFailureRecord,
+  SourcePatch,
+  SourceRecord,
+} from '../../src/sources/store.js';
+import type {
+  InsertSubscriptionInput,
+  SubscriptionPatch,
+  SubscriptionRecord,
+} from '../../src/subscriptions/store.js';
+import type {
   CategoryRecord,
   TermRecord,
   TermValues,
 } from '../../src/taxonomy/store.js';
+import type {
+  InsertTopicInput,
+  TopicPatch,
+  TopicRecord,
+} from '../../src/topics/store.js';
 
 import { describe, expect, it } from 'vitest';
 
+import {
+  CONNECTOR_KINDS,
+  DOCUMENT_PARSE_STATUSES,
+  EXPORT_FORMATS,
+  SOURCE_KINDS,
+} from '../../src/db/schema/values.js';
 import { StoreRefusal } from '../../src/db/store-errors.js';
 
 import { createMemoryResearchStore } from './memory-research-store.js';
@@ -459,6 +1203,16 @@ const TRANSIT = 'example-urban-transit';
 
 /** A window wide enough to read every row any case here writes. */
 const WHOLE_COLLECTION = { limit: 50, offset: 0 };
+
+/**
+ * The connector filter that narrows nothing.
+ *
+ * `{}` rather than an omitted argument, because `ConnectorFilter` is
+ * REQUIRED on both methods that take it and only its member is
+ * optional: an optional parameter would make an omitted argument mean
+ * something an implementation had to decide.
+ */
+const EVERY_KIND = {};
 
 /** Three taxonomy keys, in the same neutral register as the slugs. */
 const PLATFORMS = 'platforms';
@@ -830,6 +1584,624 @@ async function readPersona(
   }
 
   return row;
+}
+
+/** Three topic subjects, in the same register as the taxonomy keys. */
+const EDGE_INFERENCE = 'edge inference';
+const RUNTIME_SECURITY = 'runtime security';
+const WASM_TOOLCHAINS = 'wasm toolchains';
+
+/**
+ * An hour in seconds: the cadence every topic here runs at unless a
+ * case is about the cadence.
+ */
+const HOURLY = 3600;
+
+/** What {@link addTopic} defaults when a case is not about it. */
+type TopicDefaults = Partial<Omit<InsertTopicInput, 'domainId' | 'name'>>;
+
+/**
+ * Inserts a topic, defaulting the members a case is not about.
+ *
+ * Every member of `InsertTopicInput` is required on the port — a
+ * default is a decision, and the port takes none — so the defaults
+ * live here, where a case that cares about one can see itself
+ * overriding it.
+ *
+ * @param store - The store to write to.
+ * @param domainId - The domain whose research it is part of.
+ * @param name - Its subject, within that domain.
+ * @param values - The five members a case may care about. The bounds
+ *   default to null rather than to a number, because null is what a
+ *   topic with no floor and no ceiling carries and a default bound
+ *   would make every case that clears one start from the wrong
+ *   state.
+ * @returns The stored row.
+ */
+async function addTopic(
+  store: MemoryResearchStore,
+  domainId: number,
+  name: string,
+  values: TopicDefaults = {},
+): Promise<TopicRecord> {
+  return store.insertTopic({
+    domainId,
+    name,
+    searchTerms: values.searchTerms ?? [],
+    intervalSeconds: values.intervalSeconds ?? HOURLY,
+    enabled: values.enabled ?? true,
+    minIntervalSeconds: values.minIntervalSeconds ?? null,
+    maxIntervalSeconds: values.maxIntervalSeconds ?? null,
+  });
+}
+
+/**
+ * A domain carrying two topics.
+ *
+ * Two rather than one because every claim about the key needs a
+ * second row to collide with, and every claim about the collection
+ * needs an order to read.
+ *
+ * @param store - The store to write to.
+ * @param slug - The domain to build them under.
+ * @returns The domain and its two topics.
+ */
+async function seedTopics(
+  store: MemoryResearchStore,
+  slug: string,
+): Promise<{
+  domain: DomainRecord;
+  security: TopicRecord;
+  edge: TopicRecord;
+}> {
+  const domain = await store.insertDomain(domainInput(slug));
+
+  // Inserted out of name order, so a read answering them sorted is
+  // answering a sort rather than an insertion order.
+  const security = await addTopic(store, domain.id, RUNTIME_SECURITY);
+  const edge = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+  return { domain, security, edge };
+}
+
+/**
+ * Reads a topic that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no row carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readTopic(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<TopicRecord> {
+  const row = await store.findTopicById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored topic under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * The due time a topic must carry, ready to be read as a number.
+ *
+ * @param row - The row to reach into.
+ * @returns Its `nextRunAt` in milliseconds — a primitive, which is
+ *   what the copy cases compare against so that a store handing its
+ *   own `Date` out cannot hold one lie against itself and pass.
+ * @throws When the topic is unscheduled, so a case about a due time
+ *   cannot quietly assert over a null.
+ */
+function dueAt(row: TopicRecord): number {
+  if (row.nextRunAt === null) {
+    throw new Error('expected the topic to carry a due time');
+  }
+
+  return row.nextRunAt.getTime();
+}
+
+/**
+ * The search terms of a topic, ready to be written into.
+ *
+ * @param row - The row to reach into.
+ * @returns Its `searchTerms`, cast writable — which is exactly the
+ *   promise a shared reference would break behind the type system's
+ *   back, since the port declares the array `readonly` as well as
+ *   the member.
+ */
+function termsIn(row: TopicRecord): string[] {
+  return row.searchTerms as string[];
+}
+
+/**
+ * Two source endpoints, in the same neutral register as the slugs and
+ * under the `.invalid` TLD nothing can resolve — the register
+ * `src/sources/config-proposer.test.ts` already uses.
+ *
+ * `sources` carries NO unique key, so nothing here rests on the two
+ * being different: a case wanting two rows on one endpoint is
+ * ordinary rather than a refusal to be caught.
+ */
+const FEED_ENDPOINT = 'https://example.invalid/radar/feed.xml';
+const ITEMS_ENDPOINT = 'https://example.invalid/radar/items';
+
+/** What {@link addSource} defaults when a case is not about it. */
+type SourceDefaults = Partial<
+  Omit<InsertSourceInput, 'domainId' | 'endpoint'>
+>;
+
+/**
+ * Inserts a source, defaulting the members a case is not about.
+ *
+ * Every member of `InsertSourceInput` is required on the port — a
+ * default is a decision, and the port takes none — so the defaults
+ * live here, where a case that cares about one can see itself
+ * overriding it.
+ *
+ * @param store - The store to write to.
+ * @param domainId - The domain whose research it supplies.
+ * @param endpoint - Where the payload is. Never unique.
+ * @param values - The four members a case may care about. `kind`
+ *   defaults to a member of `SOURCE_KINDS`, since a case about the
+ *   CHECK submits its own and every other case would otherwise have
+ *   to name one.
+ * @returns The stored row.
+ */
+async function addSource(
+  store: MemoryResearchStore,
+  domainId: number,
+  endpoint: string,
+  values: SourceDefaults = {},
+): Promise<SourceRecord> {
+  return store.insertSource({
+    domainId,
+    kind: values.kind ?? 'rss',
+    endpoint,
+    parserConfig: values.parserConfig ?? {},
+    contract: values.contract ?? {},
+    enabled: values.enabled ?? true,
+  });
+}
+
+/**
+ * A domain carrying two sources.
+ *
+ * Two rather than one because every claim about the collection needs
+ * an order to read and a second row for a delete to leave standing.
+ * They differ in `kind` as well as in endpoint, so a case about the
+ * CHECK has a stored row that is not the one it is refusing.
+ *
+ * @param store - The store to write to.
+ * @param slug - The domain to build them under.
+ * @returns The domain and its two sources.
+ */
+async function seedSources(
+  store: MemoryResearchStore,
+  slug: string,
+): Promise<{
+  domain: DomainRecord;
+  feed: SourceRecord;
+  items: SourceRecord;
+}> {
+  const domain = await store.insertDomain(domainInput(slug));
+  const feed = await addSource(store, domain.id, FEED_ENDPOINT);
+  const items = await addSource(store, domain.id, ITEMS_ENDPOINT, {
+    kind: 'api',
+  });
+
+  return { domain, feed, items };
+}
+
+/**
+ * Reads a source that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no row carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readSource(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<SourceRecord> {
+  const row = await store.findSourceById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored source under ${id}`);
+  }
+
+  return row;
+}
+
+/** The instant every planted document is captured at by default. */
+const CAPTURED = '2026-02-01T12:00:00.000Z';
+
+/** What {@link planted} defaults when a case is not about it. */
+type DocumentDefaults = Partial<Omit<MemorySourceDocument, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setSourceDocuments}.
+ *
+ * A function rather than a constant, for the reason
+ * {@link domainInput} is one: the copy cases WRITE into the
+ * `capturedAt` they planted, which is the whole point of them, and a
+ * shared row would carry that write into every case after it.
+ *
+ * @param id - The document id, which is also the queue's tiebreak.
+ * @param values - The five members a case may care about.
+ *   `parseStatus` defaults to `ok`, so a case wanting a failure says
+ *   so and the aggregate cases start from the side that is not the
+ *   queue's.
+ * @returns The row to plant.
+ */
+function planted(
+  id: number,
+  values: DocumentDefaults = {},
+): MemorySourceDocument {
+  return {
+    id,
+    url: values.url ?? null,
+    body: values.body ?? `Body of document ${id}`,
+    parseError: values.parseError ?? null,
+    capturedAt: values.capturedAt ?? new Date(CAPTURED),
+    parseStatus: values.parseStatus ?? 'ok',
+  };
+}
+
+/**
+ * The capture instant of a queued failure, ready to be read as a
+ * number.
+ *
+ * @param row - The row to reach into.
+ * @returns Its `capturedAt` in milliseconds — a primitive, which is
+ *   what the copy cases compare against so that a store handing its
+ *   own `Date` out cannot hold one lie against itself and pass.
+ */
+function capturedAt(row: SourceFailureRecord): number {
+  return row.capturedAt.getTime();
+}
+
+/**
+ * Reads the one queued failure a case planted.
+ *
+ * @param store - The store to read.
+ * @param sourceId - The source whose queue to read.
+ * @returns The single row on its first page.
+ * @throws When the queue is empty or holds more than one, so a case
+ *   about one row cannot quietly assert over a page it did not mean.
+ */
+async function onlyFailure(
+  store: MemoryResearchStore,
+  sourceId: number,
+): Promise<SourceFailureRecord> {
+  const page = await store.listSourceFailures(sourceId, WHOLE_COLLECTION);
+  const [row] = page;
+
+  if (page.length !== 1 || row === undefined) {
+    throw new Error(`expected one queued failure, and ${page.length} arrived`);
+  }
+
+  return row;
+}
+
+/**
+ * Three connector names, in the same neutral register as the slugs.
+ *
+ * The two under one kind sort in the order they are written; the
+ * third sorts BEFORE both by name and AFTER both by kind, which is
+ * what lets one fixture tell an ordering by the pair from an
+ * ordering by either column alone.
+ */
+const MODEL_HOST = 'example-model-host';
+const SPARE_MODEL = 'example-spare-model';
+const ARCHIVE_NOTEBOOK = 'example-archive-notebook';
+
+/** Where a connector's client would reach, on the unresolvable TLD. */
+const MODEL_ENDPOINT = 'https://example.invalid/v1/chat';
+
+/**
+ * A stand-in credential, and the needle the containment case counts.
+ *
+ * `connectors.config` is the one column reached in this file the
+ * schema DECLARES one to be held in — `src/db/schema/sources.ts`
+ * says whatever authenticates the call is held there. The store
+ * answers it AS STORED, masking being `src/connectors/service.ts`'s,
+ * so what a case here can ask is narrower than what the sentinel
+ * capture asks of the assembled service: that a REFUSAL built over a
+ * config carrying this does not carry it onward.
+ */
+const SECRET_TOKEN = 'example-secret-token-value';
+
+/**
+ * A connector config with something one level down to write through.
+ *
+ * A function rather than a constant, for the reason
+ * {@link domainInput} is one: the copy cases WRITE into the config
+ * they submitted, which is the whole point of them, and a shared
+ * object would carry that write into every case after it.
+ *
+ * @param token - What to store as the credential.
+ * @returns A config naming an endpoint and a nested secret.
+ */
+function connectorConfig(
+  token: string = SECRET_TOKEN,
+): Record<string, unknown> {
+  return { endpoint: MODEL_ENDPOINT, credentials: { apiKey: token } };
+}
+
+/** What {@link addConnector} defaults when a case is not about it. */
+type ConnectorDefaults = Partial<
+  Omit<InsertConnectorInput, 'kind' | 'name'>
+>;
+
+/**
+ * Inserts a connector, defaulting the member a case is not about.
+ *
+ * `config` is required on the port — a default is a decision, and
+ * the port takes none — so the default lives here, where a case that
+ * cares about it can see itself overriding it. Empty is what the
+ * column defaults to and what `src/connectors/service.ts` supplies,
+ * so it is the right default rather than a convenient one.
+ *
+ * @param store - The store to write to.
+ * @param kind - The family the row fronts, and half its natural key.
+ * @param name - Which instance of that family, and the other half.
+ * @param values - The one member a case may care about.
+ * @returns The stored row.
+ */
+async function addConnector(
+  store: MemoryResearchStore,
+  kind: string,
+  name: string,
+  values: ConnectorDefaults = {},
+): Promise<ConnectorRecord> {
+  return store.insertConnector({
+    kind,
+    name,
+    config: values.config ?? {},
+  });
+}
+
+/**
+ * A deployment carrying three connectors across two kinds.
+ *
+ * WRITTEN IN AN ORDER NO READ ANSWERS: the notebook goes in first
+ * and holds id 1, so a page reading in insertion order is
+ * distinguishable from one reading by the pair. Two rows share a
+ * kind, which is what a per-kind claim needs, and the third gives
+ * the filter something to leave out and the delete something to
+ * leave standing.
+ *
+ * NO DOMAIN, which is this fixture's one structural difference from
+ * every sibling above: `connectors` hangs off nothing, so there is
+ * nothing to insert one under.
+ *
+ * @param store - The store to write to.
+ * @returns The three rows, named for what each fronts.
+ */
+async function seedConnectors(
+  store: MemoryResearchStore,
+): Promise<{
+  notebook: ConnectorRecord;
+  spare: ConnectorRecord;
+  model: ConnectorRecord;
+}> {
+  const notebook = await addConnector(
+    store,
+    'notebook',
+    ARCHIVE_NOTEBOOK,
+  );
+  const spare = await addConnector(store, 'llm', SPARE_MODEL);
+  const model = await addConnector(store, 'llm', MODEL_HOST, {
+    config: connectorConfig(),
+  });
+
+  return { notebook, spare, model };
+}
+
+/**
+ * Reads a connector that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no row carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readConnector(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<ConnectorRecord> {
+  const row = await store.findConnectorById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored connector under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * The credential record a stored config must carry, ready to be
+ * written into.
+ *
+ * @param config - The config to reach into.
+ * @returns Its `credentials`, cast writable — which is exactly the
+ *   promise a shared reference would break behind the type system's
+ *   back.
+ * @throws When the config carries none, so a copy case cannot
+ *   quietly mutate nothing and pass for nobody's reason.
+ */
+function credentialsOf(config: unknown): Record<string, unknown> {
+  const held = (config as { credentials?: unknown }).credentials;
+
+  if (held === undefined || held === null) {
+    throw new Error('expected the config to carry credentials');
+  }
+
+  return held as Record<string, unknown>;
+}
+
+/**
+ * Two export formats, both members of `EXPORT_FORMATS`.
+ *
+ * `OBSIDIAN` sorts BEFORE `RSS`, which is what lets one page tell an
+ * ordering by the pair from an ordering by the connector alone.
+ */
+const OBSIDIAN = 'obsidian_md';
+const RSS = 'rss';
+
+/** A daily cadence, in seconds: what a digest is delivered at. */
+const DAILY = 86400;
+
+/**
+ * What {@link addSubscription} defaults when a case is not about it.
+ */
+type SubscriptionDefaults = Partial<
+  Omit<InsertSubscriptionInput, 'domainId' | 'format' | 'connectorId'>
+>;
+
+/**
+ * Inserts a subscription, defaulting the members a case is not about.
+ *
+ * Every member of `InsertSubscriptionInput` is required on the port
+ * — a default is a decision, and the port takes none — so the
+ * defaults live here, where a case that cares about one can see
+ * itself overriding it. The bounds default to null rather than to a
+ * number, because null is what a subscription with no floor and no
+ * ceiling carries.
+ *
+ * @param store - The store to write to.
+ * @param domainId - The domain whose material is exported.
+ * @param format - What to render, and the second third of the key.
+ * @param connectorId - Where it is delivered, and the last third.
+ * @param values - The four members a case may care about.
+ * @returns The stored row.
+ */
+async function addSubscription(
+  store: MemoryResearchStore,
+  domainId: number,
+  format: string,
+  connectorId: number,
+  values: SubscriptionDefaults = {},
+): Promise<SubscriptionRecord> {
+  return store.insertSubscription({
+    domainId,
+    format,
+    connectorId,
+    intervalSeconds: values.intervalSeconds ?? DAILY,
+    enabled: values.enabled ?? true,
+    minIntervalSeconds: values.minIntervalSeconds ?? null,
+    maxIntervalSeconds: values.maxIntervalSeconds ?? null,
+  });
+}
+
+/**
+ * A domain subscribing to two formats across two connectors, over
+ * the deployment {@link seedConnectors} builds.
+ *
+ * THREE ROWS AND NO PAIR OF THEM SHARES A TRIPLE, which is what a key
+ * over three columns needs before any claim about it can be made:
+ * `digest` and `feed` share a connector and differ by format,
+ * `digest` and `archive` share a format and differ by connector. A
+ * store keying on either pair refuses one of the two.
+ *
+ * WRITTEN IN AN ORDER NO READ ANSWERS, AND THE SECOND HALF OF THAT IS
+ * ARITHMETIC RATHER THAN TASTE. `feed` goes in first and holds the
+ * lowest id while its format sorts LAST, so a page reading in
+ * insertion order is distinguishable from one reading by the pair.
+ * `archive` then goes in BEFORE `digest` though its connector sorts
+ * after: the two share a format, so the connector is the only thing
+ * separating them, and a store dropping that tie-break answers them
+ * in the order they were written. Seeded the other way round the two
+ * orders agree and the tie-break is pinned by nothing — measured,
+ * the leg that drops it reddened zero cases.
+ *
+ * @param store - The store to write to.
+ * @param slug - The domain to build them under.
+ * @returns The domain, the three connectors, and the three rows.
+ */
+async function seedSubscriptions(
+  store: MemoryResearchStore,
+  slug: string,
+): Promise<{
+  domain: DomainRecord;
+  model: ConnectorRecord;
+  notebook: ConnectorRecord;
+  digest: SubscriptionRecord;
+  feed: SubscriptionRecord;
+  archive: SubscriptionRecord;
+}> {
+  const domain = await store.insertDomain(domainInput(slug));
+  const { model, notebook } = await seedConnectors(store);
+  const feed = await addSubscription(store, domain.id, RSS, notebook.id);
+  const archive = await addSubscription(store, domain.id, OBSIDIAN, model.id);
+  const digest = await addSubscription(
+    store,
+    domain.id,
+    OBSIDIAN,
+    notebook.id,
+  );
+
+  return { domain, model, notebook, digest, feed, archive };
+}
+
+/**
+ * Reads a subscription that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no row carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readSubscription(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<SubscriptionRecord> {
+  const row = await store.findSubscriptionById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored subscription under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * The due time a subscription must carry, ready to be read as a
+ * number.
+ *
+ * @param row - The row to reach into.
+ * @returns Its `nextRunAt` in milliseconds — a primitive, which is
+ *   what the copy cases compare against so that a store handing its
+ *   own `Date` out cannot hold one lie against itself and pass.
+ * @throws When the subscription is unscheduled, so a case about a due
+ *   time cannot quietly assert over a null.
+ */
+function dueFor(row: SubscriptionRecord): number {
+  if (row.nextRunAt === null) {
+    throw new Error('expected the subscription to carry a due time');
+  }
+
+  return row.nextRunAt.getTime();
+}
+
+/**
+ * The natural key of a subscription, as one string.
+ *
+ * @param row - The row to read.
+ * @returns Its format and connector joined, which is what the pair
+ *   ordering is asserted over: two single-column lists would leave
+ *   the pairing itself unasserted.
+ */
+function tripleOf(row: SubscriptionRecord): string {
+  return `${row.format}/${row.connectorId}`;
 }
 
 /**
@@ -3381,6 +4753,3709 @@ describe('the persona delete', () => {
       .toBe('foreign-key-violation');
   });
 });
+
+// ---------------------------------------------------------------------------
+// The one key the topics half can refuse on
+// ---------------------------------------------------------------------------
+
+describe('the topics_domain_id_name_unique key', () => {
+  it('refuses a second topic on a name the domain holds', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addTopic(store, domain.id, EDGE_INFERENCE),
+    );
+
+    expect(refusal).toBeInstanceOf(StoreRefusal);
+
+    // The positive control, in this body rather than in a sibling
+    // case: a store refusing every write passes the assertion above.
+    const accepted = await addTopic(store, domain.id, WASM_TOOLCHAINS);
+
+    expect(accepted.name).toBe(WASM_TOOLCHAINS);
+    expect(await store.countTopics(domain.id)).toBe(3);
+  });
+
+  it('names the mechanism and the constraint that refused', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addTopic(store, domain.id, EDGE_INFERENCE),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe('topics_domain_id_name_unique');
+  });
+
+  it('takes the same name in a second domain', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedTopics(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+
+    // The key is `(domain_id, name)` and not `name`, so this is the
+    // widening control: a store holding names globally unique
+    // refuses a write the database takes. Two domains are free to
+    // research subjects of the same name, which is what
+    // `src/db/schema/scheduling.ts` says the pair is for.
+    const accepted = await addTopic(store, transit.id, EDGE_INFERENCE);
+
+    expect(accepted.domainId).toBe(transit.id);
+    expect(await store.countTopics(radar.domain.id)).toBe(2);
+    expect(await store.countTopics(transit.id)).toBe(1);
+  });
+
+  it('leaves the standing topic exactly as it was', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge } = await seedTopics(store, RADAR);
+
+    await refusalFrom(() => addTopic(store, domain.id, EDGE_INFERENCE, {
+      searchTerms: ['rewritten by a refused insert'],
+      intervalSeconds: 60,
+      enabled: false,
+    }));
+
+    expect(await readTopic(store, edge.id)).toStrictEqual(edge);
+    expect(await store.countTopics(domain.id)).toBe(2);
+  });
+
+  it('puts the refused name in nothing a logger can reach', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addTopic(store, domain.id, EDGE_INFERENCE),
+    );
+    const serialised = JSON.stringify({
+      ...refusal,
+      message: refusal.message,
+      stack: refusal.stack,
+    });
+
+    expect(countOccurrences(serialised, EDGE_INFERENCE)).toBe(0);
+
+    // The same search over a message that DOES carry the name, so
+    // the zero above is a reading rather than a search finding
+    // nothing anywhere.
+    const planted = JSON.stringify({
+      ...refusal,
+      message: `duplicate key ${EDGE_INFERENCE}`,
+    });
+
+    expect(countOccurrences(planted, EDGE_INFERENCE)).toBe(1);
+  });
+
+  it('refuses a rename onto a name the domain holds', async () => {
+    const store = createMemoryResearchStore();
+    const { edge, security } = await seedTopics(store, RADAR);
+
+    // The same mechanism on an UPDATE, which `topics` reaches and
+    // `terms` does not: `name` is patchable, so both writes open on
+    // the key.
+    const refusal = await refusalFrom(
+      () => store.updateTopic(security.id, { name: EDGE_INFERENCE }),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe('topics_domain_id_name_unique');
+    expect(await readTopic(store, security.id)).toStrictEqual(security);
+    expect(await readTopic(store, edge.id)).toStrictEqual(edge);
+  });
+
+  it('takes a rename onto a name a SECOND domain holds', async () => {
+    const store = createMemoryResearchStore();
+    const { security } = await seedTopics(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+
+    await addTopic(store, transit.id, WASM_TOOLCHAINS);
+
+    // The resulting pair is checked within the STORED domain, since
+    // `domainId` is not patchable: a name another domain carries is
+    // not a conflict, which is the same widening control the insert
+    // case makes and the patch has to make for itself.
+    const patched = await store.updateTopic(security.id, {
+      name: WASM_TOOLCHAINS,
+    });
+
+    expect(patched?.name).toBe(WASM_TOOLCHAINS);
+  });
+
+  it('takes a patch writing a name back over itself', async () => {
+    const store = createMemoryResearchStore();
+    const { security } = await seedTopics(store, RADAR);
+
+    // A row is not in conflict with itself. A store looking the pair
+    // up without excluding the row being written refuses this.
+    const patched = await store.updateTopic(security.id, {
+      name: RUNTIME_SECURITY,
+      intervalSeconds: 900,
+    });
+
+    expect(patched?.name).toBe(RUNTIME_SECURITY);
+    expect(patched?.intervalSeconds).toBe(900);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sequence behind topics.id, and the key it burns
+// ---------------------------------------------------------------------------
+
+describe('the topic id sequence', () => {
+  it('hands the first topic id 1', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const inserted = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    // Its own counter, and none of the other four: the domain above
+    // holds id 1 as well.
+    expect(inserted.id).toBe(1);
+    expect(domain.id).toBe(1);
+  });
+
+  it('burns an id on a refused insert, as the sequence does', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    await refusalFrom(() => addTopic(store, domain.id, EDGE_INFERENCE));
+
+    const next = await addTopic(store, domain.id, WASM_TOOLCHAINS);
+
+    // 4 rather than 3: the two seeded topics took 1 and 2, and the
+    // refusal took the third. No measurement on `topics` of its own
+    // — the reasoning is `personas`', where two refused inserts
+    // between two accepted ones left a gap of two against the live
+    // server, over the same pair of mechanisms on the same column.
+    expect(next.id).toBe(4);
+  });
+
+  it('burns one on a foreign-key refusal as well', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    await refusalFrom(() => addTopic(store, 404, EDGE_INFERENCE));
+
+    const next = await addTopic(store, domain.id, WASM_TOOLCHAINS);
+
+    // The counter advances ahead of EVERY check rather than ahead of
+    // the key check alone, which is the half of the personas
+    // measurement a key-only burn would satisfy anyway.
+    expect(next.id).toBe(4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The other mechanism, and the cascade that is not one
+// ---------------------------------------------------------------------------
+
+describe('the topic domain foreign key', () => {
+  it('refuses an insert naming no stored domain', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    const refusal = await refusalFrom(
+      () => addTopic(store, domain.id + 1, EDGE_INFERENCE),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe('topics_domain_id_domains_id_fk');
+
+    // The positive control: the same row into the domain that IS
+    // there, so the refusal above is about the id rather than about
+    // the write.
+    const accepted = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    expect(accepted.domainId).toBe(domain.id);
+  });
+
+  it('refuses an insert into a domain just deleted', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    await store.deleteDomain(domain.id);
+
+    // The id was good a moment ago, which is the shape a service
+    // meets: `findDomainBySlug` resolved the domain and the row went
+    // in between. `src/topics/store.ts` names that as the one way
+    // this refusal is reachable at all.
+    const refusal = await refusalFrom(
+      () => addTopic(store, domain.id, WASM_TOOLCHAINS),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe('topics_domain_id_domains_id_fk');
+  });
+
+  it('puts the refused id in nothing a logger can reach', async () => {
+    const store = createMemoryResearchStore();
+
+    const refusal = await refusalFrom(
+      () => addTopic(store, 4004, EDGE_INFERENCE),
+    );
+    const serialised = JSON.stringify({
+      ...refusal,
+      message: refusal.message,
+      stack: refusal.stack,
+    });
+
+    expect(countOccurrences(serialised, '4004')).toBe(0);
+
+    // The same search over a message that DOES carry the id.
+    const planted = JSON.stringify({
+      ...refusal,
+      message: 'domain 4004 is not there',
+    });
+
+    expect(countOccurrences(planted, '4004')).toBe(1);
+  });
+});
+
+describe('the domain cascade over its topics', () => {
+  it('takes the topics of the domain it removes', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge, security } = await seedTopics(store, RADAR);
+
+    // `topics.domain_id` is `ON DELETE CASCADE`, and nothing in
+    // schema v2 points at `topics`, so there is no guard below this
+    // one to refuse it the way `categories.parent_id` refuses a
+    // category delete.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findTopicById(edge.id)).toBeNull();
+    expect(await store.findTopicById(security.id)).toBeNull();
+    expect(await store.countTopics(domain.id)).toBe(0);
+    expect(await store.listTopics(domain.id, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+  });
+
+  it('leaves a second domain topics standing', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedTopics(store, RADAR);
+    const transit = await seedTopics(store, TRANSIT);
+
+    await store.deleteDomain(radar.domain.id);
+
+    expect(await store.countTopics(transit.domain.id)).toBe(2);
+    expect(await readTopic(store, transit.edge.id))
+      .toStrictEqual(transit.edge);
+  });
+
+  it('takes the topics, the personas and the taxonomy together', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, platforms, kube } = await seedLexicon(store, RADAR);
+    const drafter = await addPersona(store, domain.id, DRAFTER);
+    const topic = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    // Every foreign key onto `domains.id` cascades, so one delete
+    // reaches the topics, the personas and two levels of taxonomy in
+    // the same statement.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findTopicById(topic.id)).toBeNull();
+    expect(await store.findPersonaById(drafter.id)).toBeNull();
+    expect(await store.findTermById(kube.id)).toBeNull();
+    expect(await store.findCategoryById(platforms.id)).toBeNull();
+  });
+
+  it('is the only thing that removes a topic in bulk', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge } = await seedTopics(store, RADAR);
+
+    // The other half of the cascade claim: a topic goes when its
+    // domain goes and at no other time, so deleting the taxonomy
+    // under a domain leaves every topic of it standing.
+    const category = await addCategory(store, domain.id, PLATFORMS);
+
+    expect(await store.deleteCategory(category.id)).toBe(true);
+    expect(await readTopic(store, edge.id)).toStrictEqual(edge);
+    expect(await store.countTopics(domain.id)).toBe(2);
+  });
+
+  it('frees the names the deleted domain held', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    await store.deleteDomain(domain.id);
+
+    const rebuilt = await store.insertDomain(domainInput(RADAR));
+    const accepted = await addTopic(store, rebuilt.id, EDGE_INFERENCE);
+
+    expect(accepted.name).toBe(EDGE_INFERENCE);
+    expect(await store.countTopics(rebuilt.id)).toBe(1);
+  });
+
+  it('leaves the planted dependent counts to the seam', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    // The one place this file knowingly answers something a
+    // deployment would not, pinned rather than left to be
+    // discovered: `countDomainDependents` reads what
+    // `setDomainDependents` planted and never the rows this half
+    // writes, so two stored topics answer a counted zero.
+    // `src/domains/db-store.ts` counts the rows instead, and
+    // `MemoryResearchStore.setDomainDependents` carries why the two
+    // are not reconciled here.
+    expect(await store.countTopics(domain.id)).toBe(2);
+    expect((await store.countDomainDependents(domain.id)).topics).toBe(0);
+
+    store.setDomainDependents(domain.id, { topics: 2 });
+
+    expect((await store.countDomainDependents(domain.id)).topics).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The two mutable members crossing the boundary
+// ---------------------------------------------------------------------------
+
+describe('the topic due time crossing the boundary', () => {
+  it('lands an unscheduled topic, which is not an absent one', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    const inserted = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    // `InsertTopicInput` declares no member that could set it, so
+    // the null is the type's doing rather than a default. Read back
+    // as well as answered, since a store echoing its argument would
+    // answer null having stored anything at all.
+    expect(inserted.nextRunAt).toBeNull();
+    expect((await readTopic(store, inserted.id)).nextRunAt).toBeNull();
+  });
+
+  it('does not store the Date object it was handed', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+    const due = new Date('2026-03-01T00:00:00.000Z');
+
+    await store.updateTopicSchedule(edge.id, due);
+
+    // The copy on the way IN. A store holding this instance lets the
+    // caller that scheduled the topic go on moving its due time
+    // afterwards, through a member the port declares `readonly`.
+    due.setTime(Date.parse('2030-06-01T00:00:00.000Z'));
+
+    expect(dueAt(await readTopic(store, edge.id)))
+      .toBe(Date.parse('2026-03-01T00:00:00.000Z'));
+  });
+
+  it('answers a due time the write cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    const written = await store.updateTopicSchedule(
+      edge.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    if (written === null) {
+      throw new Error('expected the schedule write to answer a row');
+    }
+
+    const scheduledAt = dueAt(written);
+
+    written.nextRunAt?.setTime(0);
+
+    // Against the primitive captured BEFORE the mutation: a store
+    // handing its own `Date` out has aliased the two, and comparing
+    // against `written.nextRunAt` would hold one lie against itself.
+    expect(dueAt(await readTopic(store, edge.id))).toBe(scheduledAt);
+  });
+
+  it('answers a due time the read cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    await store.updateTopicSchedule(
+      edge.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    const read = await readTopic(store, edge.id);
+    const scheduledAt = dueAt(read);
+
+    read.nextRunAt?.setTime(0);
+
+    expect(dueAt(await readTopic(store, edge.id))).toBe(scheduledAt);
+  });
+
+  it('answers a due time the list cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge } = await seedTopics(store, RADAR);
+
+    await store.updateTopicSchedule(
+      edge.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    const [listed] = await store.listTopics(domain.id, WHOLE_COLLECTION);
+
+    if (listed === undefined) {
+      throw new Error('expected the list to answer a row');
+    }
+
+    const scheduledAt = dueAt(listed);
+
+    listed.nextRunAt?.setTime(0);
+
+    expect(dueAt(await readTopic(store, edge.id))).toBe(scheduledAt);
+  });
+
+  it('answers a fresh Date on every read', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    await store.updateTopicSchedule(
+      edge.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    const first = await readTopic(store, edge.id);
+    const second = await readTopic(store, edge.id);
+
+    expect(first.nextRunAt).not.toBe(second.nextRunAt);
+    expect(dueAt(first)).toBe(dueAt(second));
+  });
+});
+
+describe('the topic search terms crossing the boundary', () => {
+  it('does not store the array an insert was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const submitted = ['npu', 'accelerator'];
+
+    const inserted = await addTopic(store, domain.id, EDGE_INFERENCE, {
+      searchTerms: submitted,
+    });
+
+    submitted.push('written through the insert');
+
+    expect((await readTopic(store, inserted.id)).searchTerms)
+      .toStrictEqual(['npu', 'accelerator']);
+  });
+
+  it('does not store the array a patch was handed', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+    const submitted = ['npu'];
+
+    await store.updateTopic(edge.id, { searchTerms: submitted });
+
+    submitted.push('written through the patch');
+
+    expect((await readTopic(store, edge.id)).searchTerms)
+      .toStrictEqual(['npu']);
+  });
+
+  it('answers a list a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const inserted = await addTopic(store, domain.id, EDGE_INFERENCE, {
+      searchTerms: ['npu'],
+    });
+
+    termsIn(inserted).push('written through the answer');
+    termsIn(await readTopic(store, inserted.id)).push('and through a read');
+
+    // Against a constant rather than against the record the insert
+    // answered, for the reason the due-time cases give.
+    expect((await readTopic(store, inserted.id)).searchTerms)
+      .toStrictEqual(['npu']);
+  });
+
+  it('replaces the list whole rather than merging into it', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    await store.updateTopic(edge.id, { searchTerms: ['npu', 'accelerator'] });
+
+    // A caller sends the list it wants to exist, which is the only
+    // shape under which removing a term is expressible at all. Under
+    // a merge the read answers two members here and three below.
+    const patched = await store.updateTopic(edge.id, { searchTerms: ['npu'] });
+
+    expect(patched?.searchTerms).toStrictEqual(['npu']);
+    expect((await readTopic(store, edge.id)).searchTerms)
+      .toStrictEqual(['npu']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The topic reads
+// ---------------------------------------------------------------------------
+
+describe('the topic list', () => {
+  it('orders by name ascending rather than by insertion', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    await addTopic(store, domain.id, WASM_TOOLCHAINS);
+
+    const listed = await store.listTopics(domain.id, WHOLE_COLLECTION);
+
+    expect(listed.map((row) => row.name))
+      .toStrictEqual([EDGE_INFERENCE, RUNTIME_SECURITY, WASM_TOOLCHAINS]);
+  });
+
+  it('reads only the window it was given', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    await addTopic(store, domain.id, WASM_TOOLCHAINS);
+
+    const page = await store.listTopics(domain.id, { limit: 1, offset: 1 });
+
+    expect(page.map((row) => row.name)).toStrictEqual([RUNTIME_SECURITY]);
+    expect(await store.countTopics(domain.id)).toBe(3);
+  });
+
+  it('answers an empty window past the end', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    expect(await store.listTopics(domain.id, { limit: 50, offset: 50 }))
+      .toStrictEqual([]);
+  });
+
+  it('lists only the topics of the domain asked about', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedTopics(store, RADAR);
+    const transit = await seedTopics(store, TRANSIT);
+
+    const listed = await store.listTopics(radar.domain.id, WHOLE_COLLECTION);
+
+    expect(listed.map((row) => row.id))
+      .toStrictEqual([radar.edge.id, radar.security.id]);
+    expect(await store.countTopics(transit.domain.id)).toBe(2);
+  });
+
+  it('answers an empty list for a domain holding none', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    expect(await store.listTopics(domain.id, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+    expect(await store.countTopics(domain.id)).toBe(0);
+  });
+
+  it('answers zero for an id no domain carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.countTopics(404)).toBe(0);
+    expect(await store.listTopics(404, WHOLE_COLLECTION)).toStrictEqual([]);
+  });
+
+  it('answers rows a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedTopics(store, RADAR);
+
+    const [listed] = await store.listTopics(domain.id, WHOLE_COLLECTION);
+
+    if (listed === undefined) {
+      throw new Error('expected the list to answer a row');
+    }
+
+    (listed as { name: string }).name = 'written through the list';
+
+    // Against the constants rather than against the records the
+    // writes answered: a store handing its own objects out has
+    // ALIASED the two, and the comparison then holds one lie against
+    // itself and passes.
+    const reread = await store.listTopics(domain.id, WHOLE_COLLECTION);
+
+    expect(reread.map((row) => row.name))
+      .toStrictEqual([EDGE_INFERENCE, RUNTIME_SECURITY]);
+  });
+});
+
+describe('the single topic read', () => {
+  it('answers null for an id no topic carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.findTopicById(404)).toBeNull();
+  });
+
+  it('answers a row a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+    const interval = edge.intervalSeconds;
+
+    const read = await readTopic(store, edge.id);
+
+    (read as { intervalSeconds: number }).intervalSeconds = 1;
+
+    // Against a primitive read BEFORE the mutation: comparing
+    // against `edge.intervalSeconds` would compare one lie against
+    // itself, since a store handing its own objects out aliased the
+    // two.
+    expect((await readTopic(store, edge.id)).intervalSeconds)
+      .toBe(interval);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The three topic writes that are not the insert
+// ---------------------------------------------------------------------------
+
+describe('the topic patch', () => {
+  it('rewrites the members it names and leaves the rest', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    const patched = await store.updateTopic(edge.id, {
+      intervalSeconds: 900,
+      enabled: false,
+    });
+
+    expect(patched?.intervalSeconds).toBe(900);
+    expect(patched?.enabled).toBe(false);
+    expect(patched?.name).toBe(EDGE_INFERENCE);
+    expect(patched?.searchTerms).toStrictEqual([]);
+  });
+
+  it('clears a bound with a null and leaves it alone when absent', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const topic = await addTopic(store, domain.id, EDGE_INFERENCE, {
+      minIntervalSeconds: 300,
+      maxIntervalSeconds: 86400,
+    });
+
+    // The three requests a nullable member distinguishes: absent
+    // leaves the ceiling alone, an explicit null clears the floor. A
+    // store reaching for `??` collapses the two and makes removing a
+    // floor unexpressible.
+    const patched = await store.updateTopic(topic.id, {
+      minIntervalSeconds: null,
+    });
+
+    expect(patched?.minIntervalSeconds).toBeNull();
+    expect(patched?.maxIntervalSeconds).toBe(86400);
+
+    const raised = await store.updateTopic(topic.id, {
+      maxIntervalSeconds: 43200,
+    });
+
+    expect(raised?.maxIntervalSeconds).toBe(43200);
+    expect(raised?.minIntervalSeconds).toBeNull();
+  });
+
+  it('writes a false enabled rather than ignoring it', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    // `enabled` is NOT NULL and defaults true, so `false` is a value
+    // being written rather than a member being left alone. This is
+    // the column for retiring a topic; deleting it is a different
+    // operation and pausing it is neither.
+    await store.updateTopic(edge.id, { enabled: false });
+
+    expect((await readTopic(store, edge.id)).enabled).toBe(false);
+  });
+
+  it('answers the stored row for a patch naming no member', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    // `topics` carries no `updated_at`, so an empty patch has
+    // literally nothing to set and drizzle throws `No values to set`
+    // on an empty update list. The port decides the answer rather
+    // than leaving its two implementations to disagree.
+    expect(await store.updateTopic(edge.id, {})).toStrictEqual(edge);
+  });
+
+  it('cannot reach the due time whatever it is handed', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    // `TopicPatch` declares no `nextRunAt`, so the containment is
+    // the type's; the cast is what lets a case ask what happens when
+    // one arrives anyway, which is the reading a route's `.strict()`
+    // schema cannot give from inside `src/`.
+    const patched = await store.updateTopic(
+      edge.id,
+      { nextRunAt: new Date('2026-03-01T00:00:00.000Z') } as TopicPatch,
+    );
+
+    expect(patched?.nextRunAt).toBeNull();
+    expect((await readTopic(store, edge.id)).nextRunAt).toBeNull();
+  });
+
+  it('answers null from a patch naming no stored topic', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.updateTopic(404, { enabled: false })).toBeNull();
+  });
+
+  it('answers a row a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    const patched = await store.updateTopic(edge.id, { intervalSeconds: 900 });
+
+    if (patched === null) {
+      throw new Error('expected the patch to answer a row');
+    }
+
+    (patched as { intervalSeconds: number }).intervalSeconds = 1;
+
+    expect((await readTopic(store, edge.id)).intervalSeconds).toBe(900);
+  });
+});
+
+describe('the topic schedule write', () => {
+  it('writes the instant it is handed and nothing else', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+    const due = new Date('2026-03-01T00:00:00.000Z');
+
+    const written = await store.updateTopicSchedule(edge.id, due);
+
+    // The whole record against the row before the call, with only
+    // the due time permitted to differ: the port says this method
+    // writes one column, and asserting the column alone would pass
+    // against a store that also cleared the search terms.
+    expect(written).toStrictEqual({ ...edge, nextRunAt: due });
+  });
+
+  it('takes no view of the instant it is handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const topic = await addTopic(store, domain.id, EDGE_INFERENCE, {
+      enabled: false,
+      minIntervalSeconds: 300,
+      maxIntervalSeconds: 900,
+    });
+    const past = new Date('2020-01-01T00:00:00.000Z');
+
+    // A time in the past on a DISABLED row: no clamp, no clock and
+    // no reading of `enabled`. All three are decisions
+    // `src/topics/service.ts` takes, and a store taking them would
+    // move a rule into the half that needs a database.
+    const written = await store.updateTopicSchedule(topic.id, past);
+
+    expect(written?.nextRunAt?.toISOString())
+      .toBe('2020-01-01T00:00:00.000Z');
+    expect(written?.enabled).toBe(false);
+  });
+
+  it('moves a due time that is already set', async () => {
+    const store = createMemoryResearchStore();
+    const { edge } = await seedTopics(store, RADAR);
+
+    await store.updateTopicSchedule(
+      edge.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+    await store.updateTopicSchedule(
+      edge.id,
+      new Date('2026-03-08T00:00:00.000Z'),
+    );
+
+    expect((await readTopic(store, edge.id)).nextRunAt?.toISOString())
+      .toBe('2026-03-08T00:00:00.000Z');
+  });
+
+  it('answers null for an id no topic carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.updateTopicSchedule(404, new Date())).toBeNull();
+  });
+});
+
+describe('the topic delete', () => {
+  it('removes one topic and leaves its domain standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge, security } = await seedTopics(store, RADAR);
+
+    expect(await store.deleteTopic(edge.id)).toBe(true);
+    expect(await store.findTopicById(edge.id)).toBeNull();
+    expect(await readTopic(store, security.id)).toStrictEqual(security);
+    expect(await readDomain(store, RADAR)).toStrictEqual(domain);
+  });
+
+  it('answers false for an id no topic carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.deleteTopic(404)).toBe(false);
+  });
+
+  it('frees the name the deleted topic held', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge } = await seedTopics(store, RADAR);
+
+    await store.deleteTopic(edge.id);
+
+    const accepted = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    expect(accepted.id).not.toBe(edge.id);
+    expect(await store.countTopics(domain.id)).toBe(2);
+  });
+
+  it('cannot be refused, unlike the category delete', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, edge } = await seedTopics(store, RADAR);
+    const { root } = await seedOneLevel(store, TRANSIT);
+
+    // Nothing in schema v2 points at `topics`, so there is no guard
+    // to run into and no state a topic can be in that holds its
+    // delete. The category beside it IS refused, under the very
+    // rule this one has no counterpart of — which is what says the
+    // acceptance above is a fact about the table rather than a store
+    // that refuses nothing.
+    expect(await store.deleteTopic(edge.id)).toBe(true);
+    expect(await store.countTopics(domain.id)).toBe(1);
+
+    const refusal = await refusalFrom(() => store.deleteCategory(root.id));
+
+    expect(refusal.constraint).toBe('categories_parent_id_categories_id_fk');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The first CHECK any half here imitates
+// ---------------------------------------------------------------------------
+
+describe('the sources_kind_check', () => {
+  it('refuses an insert whose kind is outside the tuple', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    const refusal = await refusalFrom(
+      () => addSource(store, domain.id, FEED_ENDPOINT, { kind: 'carrier' }),
+    );
+
+    expect(refusal.reason).toBe('check-violation');
+    expect(refusal.constraint).toBe('sources_kind_check');
+
+    // The positive control: the same row under a kind the tuple
+    // holds, so the refusal above is about the value rather than
+    // about the write.
+    const accepted = await addSource(store, domain.id, FEED_ENDPOINT);
+
+    expect(accepted.kind).toBe('rss');
+  });
+
+  it('refuses a patch whose kind is outside the tuple', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    // `kind` is patchable per `SourcePatch`, which is what puts this
+    // CHECK on the update as well as on the insert. It is also the
+    // whole of this method's refusal surface: `domainId` is not
+    // patchable and the table has no key.
+    const refusal = await refusalFrom(
+      () => store.updateSource(feed.id, { kind: 'carrier' }),
+    );
+
+    expect(refusal.reason).toBe('check-violation');
+    expect(refusal.constraint).toBe('sources_kind_check');
+    expect((await readSource(store, feed.id)).kind).toBe('rss');
+
+    // The positive control, in this body rather than a sibling case:
+    // a store refusing every patch passes the assertions above.
+    const patched = await store.updateSource(feed.id, { kind: 'push' });
+
+    expect(patched?.kind).toBe('push');
+  });
+
+  it('accepts every member of SOURCE_KINDS', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const stored: string[] = [];
+
+    for (const kind of SOURCE_KINDS) {
+      const row = await addSource(store, domain.id, FEED_ENDPOINT, { kind });
+
+      stored.push(row.kind);
+    }
+
+    // Derived from the tuple rather than listed, so a member added to
+    // `SOURCE_KINDS` is covered here with no edit — and four rows on
+    // ONE endpoint is the other half of the case, since `sources`
+    // carries no unique key to refuse the repeat.
+    expect(stored).toStrictEqual([...SOURCE_KINDS]);
+    expect(await store.countSources(domain.id)).toBe(SOURCE_KINDS.length);
+  });
+
+  it('takes a second source on an endpoint one already holds', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSources(store, RADAR);
+
+    // The shape a reader coming from the topics or personas half
+    // expects and does not find: `sources` carries no unique key at
+    // all, so an insert always inserts and there is no `409` for a
+    // duplicate endpoint to raise. Two rows fetching one feed are a
+    // configuration somebody meant.
+    const second = await addSource(store, domain.id, FEED_ENDPOINT);
+
+    expect(second.id).not.toBe(feed.id);
+    expect(second.endpoint).toBe(feed.endpoint);
+    expect(await store.countSources(domain.id)).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The other write mechanism, which the patch cannot reach
+// ---------------------------------------------------------------------------
+
+describe('the source domain foreign key', () => {
+  it('refuses an insert naming no stored domain', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    const refusal = await refusalFrom(
+      () => addSource(store, domain.id + 1, FEED_ENDPOINT),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe('sources_domain_id_domains_id_fk');
+
+    // The positive control: the same row into the domain that IS
+    // there, so the refusal above is about the id rather than about
+    // the write.
+    const accepted = await addSource(store, domain.id, FEED_ENDPOINT);
+
+    expect(accepted.domainId).toBe(domain.id);
+  });
+
+  it('refuses an insert into a domain just deleted', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedSources(store, RADAR);
+
+    await store.deleteDomain(domain.id);
+
+    // The id was good a moment ago, which is the shape a service
+    // meets: `findDomainBySlug` resolved the domain and the row went
+    // in between. `src/sources/store.ts` names that as the one way
+    // this refusal is reachable at all.
+    const refusal = await refusalFrom(
+      () => addSource(store, domain.id, ITEMS_ENDPOINT),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe('sources_domain_id_domains_id_fk');
+  });
+
+  it('cannot be reached by a patch whatever it is handed', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSources(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+
+    // `SourcePatch` declares no `domainId`, so a source cannot be
+    // moved between domains and no update reaches this key: the
+    // corpus it produced carries the OLD domain on every row, and a
+    // move would leave the feed in one domain and its documents in
+    // another. The cast is what lets a case ask what happens when one
+    // arrives anyway.
+    const patched = await store.updateSource(
+      feed.id,
+      { domainId: transit.id } as SourcePatch,
+    );
+
+    expect(patched?.domainId).toBe(domain.id);
+    expect(await store.countSources(transit.id)).toBe(0);
+  });
+
+  it('puts the refused id in nothing a logger can reach', async () => {
+    const store = createMemoryResearchStore();
+
+    const refusal = await refusalFrom(
+      () => addSource(store, 4004, FEED_ENDPOINT),
+    );
+    const serialised = JSON.stringify({
+      ...refusal,
+      message: refusal.message,
+      stack: refusal.stack,
+    });
+
+    expect(countOccurrences(serialised, '4004')).toBe(0);
+
+    // The same search over a message that DOES carry the id.
+    const plantedMessage = JSON.stringify({
+      ...refusal,
+      message: 'domain 4004 is not there',
+    });
+
+    expect(countOccurrences(plantedMessage, '4004')).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sixth counter, which no duplicate can burn
+// ---------------------------------------------------------------------------
+
+describe('the source id sequence', () => {
+  it('starts at 1 and rises', async () => {
+    const store = createMemoryResearchStore();
+    const { feed, items } = await seedSources(store, RADAR);
+
+    expect(feed.id).toBe(1);
+    expect(items.id).toBe(2);
+  });
+
+  it('burns an id on an insert the CHECK refused', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    await addSource(store, domain.id, FEED_ENDPOINT);
+    await refusalFrom(
+      () => addSource(store, domain.id, ITEMS_ENDPOINT, { kind: 'carrier' }),
+    );
+
+    // The sequence is read while the row is formed and does not roll
+    // back, so the refused row leaves the id it took unused. The
+    // measurement behind this is `personas`'; `sources` has no
+    // duplicate to burn one, which is what leaves the two refusals
+    // below as the whole of this table's evidence.
+    const third = await addSource(store, domain.id, ITEMS_ENDPOINT);
+
+    expect(third.id).toBe(3);
+  });
+
+  it('burns an id on an insert the foreign key refused', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    await addSource(store, domain.id, FEED_ENDPOINT);
+    await refusalFrom(() => addSource(store, domain.id + 99, ITEMS_ENDPOINT));
+
+    const third = await addSource(store, domain.id, ITEMS_ENDPOINT);
+
+    expect(third.id).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The delete refused from outside the row
+// ---------------------------------------------------------------------------
+
+describe('the documents that hold a source delete', () => {
+  it('refuses while the corpus holds a capture of it', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed, items } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [planted(1)]);
+
+    // `documents.source_id` is `ON DELETE no action`, and
+    // `src/db/schema/documents.ts` argues it at the column: a source
+    // does not own the corpus it produced, so removing the feed
+    // cannot take it.
+    const refusal = await refusalFrom(() => store.deleteSource(feed.id));
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe('documents_source_id_sources_id_fk');
+    expect(await readSource(store, feed.id)).toStrictEqual(feed);
+
+    // The positive control, in this body rather than a sibling case:
+    // the SAME call over the sibling source, which has captured
+    // nothing. A store refusing every delete passes the assertions
+    // above.
+    expect(await store.deleteSource(items.id)).toBe(true);
+    expect(await store.countSources(domain.id)).toBe(1);
+  });
+
+  it('counts what the delete would have taken', async () => {
+    const store = createMemoryResearchStore();
+    const { feed, items } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [planted(1), planted(2), planted(3)]);
+
+    // The guard reads a count and takes no view of it; the `409` is
+    // `src/sources/service.ts`'s, and carries these numbers so a
+    // caller learns what the delete would have taken rather than only
+    // that it was refused.
+    expect(await store.countSourceDependents(feed.id)).toStrictEqual({
+      documents: 3,
+      findingSightings: 0,
+    });
+    expect(await store.countSourceDependents(items.id)).toStrictEqual({
+      documents: 0,
+      findingSightings: 0,
+    });
+  });
+
+  it('stops refusing once the corpus is taken back', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [planted(1)]);
+    await refusalFrom(() => store.deleteSource(feed.id));
+
+    // A whole-unit plant: the second call REPLACES the first rather
+    // than appending to it, which is the only shape under which a
+    // source going back to none is expressible at all.
+    store.setSourceDocuments(feed.id, []);
+
+    expect(await store.deleteSource(feed.id)).toBe(true);
+  });
+
+  it('leaves the retiring patch reachable while it refuses', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [planted(1)]);
+    await refusalFrom(() => store.deleteSource(feed.id));
+
+    // `SourcePatch.enabled` set to false is what the refusal names as
+    // the operation that was wanted: it keeps the endpoint, the
+    // arrangement and the corpus, and stops the pipeline reading.
+    const retired = await store.updateSource(feed.id, { enabled: false });
+
+    expect(retired?.enabled).toBe(false);
+    expect((await store.countSourceDependents(feed.id)).documents).toBe(1);
+  });
+
+  it('answers false for an id no source carries', async () => {
+    const store = createMemoryResearchStore();
+
+    // Two zeros rather than a refusal for an id nothing points at,
+    // which is correct rather than a special case — and the delete
+    // that follows removes nothing without throwing.
+    expect(await store.countSourceDependents(404)).toStrictEqual({
+      documents: 0,
+      findingSightings: 0,
+    });
+    expect(await store.deleteSource(404)).toBe(false);
+  });
+});
+
+describe('the sightings that hold a source delete', () => {
+  it('refuses while a sighting cites it', async () => {
+    const store = createMemoryResearchStore();
+    const { feed, items } = await seedSources(store, RADAR);
+
+    store.setSourceSightings(feed.id, 2);
+
+    // A SECOND key with a sharper reason than the first:
+    // `src/db/schema/findings.ts` states the sightings table IS the
+    // provenance record, so a cascade would drop syndication evidence
+    // a feed at a time and every count taken afterwards would be
+    // lower with nothing saying why.
+    const refusal = await refusalFrom(() => store.deleteSource(feed.id));
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint)
+      .toBe('finding_sightings_source_id_sources_id_fk');
+    expect((await store.countSourceDependents(feed.id)).findingSightings)
+      .toBe(2);
+
+    // The positive control: the same call over the sibling nothing
+    // cites.
+    expect(await store.deleteSource(items.id)).toBe(true);
+  });
+
+  it('refuses a source carrying no document at all', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    store.setSourceSightings(feed.id, 1);
+
+    // The two keys are separate claims rather than one rule read
+    // twice: this source's corpus is empty, so a guard reading only
+    // the documents would take a delete the database refuses.
+    expect((await store.countSourceDependents(feed.id)).documents).toBe(0);
+    expect((await refusalFrom(() => store.deleteSource(feed.id))).constraint)
+      .toBe('finding_sightings_source_id_sources_id_fk');
+  });
+
+  it('stops refusing once the sightings are taken back', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    store.setSourceSightings(feed.id, 3);
+    await refusalFrom(() => store.deleteSource(feed.id));
+
+    store.setSourceSightings(feed.id, 0);
+
+    expect(await store.deleteSource(feed.id)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The cascade that runs into neither of them
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its sources', () => {
+  it('takes the sources of the domain it removes', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed, items } = await seedSources(store, RADAR);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findSourceById(feed.id)).toBeNull();
+    expect(await store.findSourceById(items.id)).toBeNull();
+    expect(await store.countSources(domain.id)).toBe(0);
+    expect(
+      await store.listSourcesWithParseStats(domain.id, WHOLE_COLLECTION),
+    ).toStrictEqual([]);
+  });
+
+  it('takes a source whose own delete is refused', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [planted(1)]);
+    store.setSourceSightings(feed.id, 1);
+
+    // The trap `ON DELETE no action` sets for a fake, and the reason
+    // the cascade does not reuse `deleteSource`: the domain columns
+    // on `documents` and on `finding_sightings` cascade too, so one
+    // statement removes the sources and the rows that were holding
+    // them, and the end-of-statement check finds nothing left citing
+    // a source that is gone.
+    await refusalFrom(() => store.deleteSource(feed.id));
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findSourceById(feed.id)).toBeNull();
+  });
+
+  it('takes what was planted under them', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [planted(1, { parseStatus: 'failed' })]);
+    store.setSourceSightings(feed.id, 4);
+
+    await store.deleteDomain(domain.id);
+
+    // A plant left standing would answer a dependent count and a
+    // queue for a source that no longer exists, which is the state
+    // `documents.domain_id` cascading rules out.
+    expect(await store.countSourceDependents(feed.id)).toStrictEqual({
+      documents: 0,
+      findingSightings: 0,
+    });
+    expect(await store.countSourceFailures(feed.id)).toBe(0);
+    expect(await store.listSourceFailures(feed.id, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+  });
+
+  it('leaves a second domain sources standing', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedSources(store, RADAR);
+    const transit = await seedSources(store, TRANSIT);
+
+    store.setSourceDocuments(transit.feed.id, [planted(1)]);
+    await store.deleteDomain(radar.domain.id);
+
+    expect(await store.countSources(transit.domain.id)).toBe(2);
+    expect(await readSource(store, transit.feed.id))
+      .toStrictEqual(transit.feed);
+    expect((await store.countSourceDependents(transit.feed.id)).documents)
+      .toBe(1);
+  });
+
+  it('takes the sources, the topics and the taxonomy together', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, platforms, kube } = await seedLexicon(store, RADAR);
+    const topic = await addTopic(store, domain.id, EDGE_INFERENCE);
+    const source = await addSource(store, domain.id, FEED_ENDPOINT);
+
+    // Every foreign key onto `domains.id` cascades, so one delete
+    // reaches the sources, the topics and two levels of taxonomy in
+    // the same statement.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findSourceById(source.id)).toBeNull();
+    expect(await store.findTopicById(topic.id)).toBeNull();
+    expect(await store.findTermById(kube.id)).toBeNull();
+    expect(await store.findCategoryById(platforms.id)).toBeNull();
+  });
+
+  it('is the only thing that removes a source in bulk', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSources(store, RADAR);
+
+    // The other half of the cascade claim: a source goes when its
+    // domain goes and at no other time, so deleting the taxonomy
+    // under a domain leaves every source of it standing.
+    const category = await addCategory(store, domain.id, PLATFORMS);
+
+    expect(await store.deleteCategory(category.id)).toBe(true);
+    expect(await readSource(store, feed.id)).toStrictEqual(feed);
+    expect(await store.countSources(domain.id)).toBe(2);
+  });
+
+  it('leaves the planted dependent counts to the seam', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedSources(store, RADAR);
+
+    // The one place this file knowingly answers something a
+    // deployment would not, pinned rather than left to be discovered,
+    // and the second table it now applies to: `countDomainDependents`
+    // reads what `setDomainDependents` planted and never the rows
+    // this half writes, so two stored sources answer a counted zero.
+    // `src/domains/db-store.ts` counts the rows instead.
+    expect(await store.countSources(domain.id)).toBe(2);
+    expect((await store.countDomainDependents(domain.id)).sources).toBe(0);
+
+    store.setDomainDependents(domain.id, { sources: 2 });
+
+    expect((await store.countDomainDependents(domain.id)).sources).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The aggregate counted over the rows no port can write
+// ---------------------------------------------------------------------------
+
+describe('the parse-status aggregate', () => {
+  it('counts a zero per member for a source holding none', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedSources(store, RADAR);
+
+    const listed = await store.listSourcesWithParseStats(
+      domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    // The trap `ParseStatusCounts` names: a status with no rows
+    // contributes no group to a grouped read, so an implementation
+    // has to fill the missing groups in. Under an accumulate-as-you
+    // -walk aggregate both sources answer `{}` here, and `0` and
+    // never-counted become one value — which is exactly what a
+    // caller reading `parseStats.failed` cannot afford.
+    expect(listed.map((row) => row.parseStats))
+      .toStrictEqual([{ ok: 0, failed: 0 }, { ok: 0, failed: 0 }]);
+  });
+
+  it('answers a counted zero for the member with no rows', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [
+      planted(1, { parseStatus: 'failed' }),
+      planted(2, { parseStatus: 'failed' }),
+    ]);
+
+    const [listed] = await store.listSourcesWithParseStats(
+      domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    // The same claim from the other end, and the one a source that
+    // has captured NOTHING cannot make: rows exist, one status has
+    // none of them, and the absent group is still a counted zero.
+    expect(listed?.parseStats).toStrictEqual({ ok: 0, failed: 2 });
+  });
+
+  it('keys the record on DOCUMENT_PARSE_STATUSES', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [planted(1)]);
+
+    const [listed] = await store.listSourcesWithParseStats(
+      domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    // Derived from the tuple rather than listed, so a member added to
+    // `DOCUMENT_PARSE_STATUSES` reddens here rather than leaving a
+    // status the aggregate silently drops. Sorted on both sides,
+    // since the record's key order is nobody's promise.
+    expect(Object.keys(listed?.parseStats ?? {}).sort())
+      .toStrictEqual([...DOCUMENT_PARSE_STATUSES].sort());
+  });
+
+  it('counts each source rather than the page', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed, items } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [
+      planted(1),
+      planted(2, { parseStatus: 'failed' }),
+    ]);
+    store.setSourceDocuments(items.id, [planted(3, { parseStatus: 'failed' })]);
+
+    const listed = await store.listSourcesWithParseStats(
+      domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    // A grouped read that lost its `source_id` answers the page's
+    // totals on every row, which every single-source fixture is
+    // green against.
+    expect(listed.map((row) => row.parseStats))
+      .toStrictEqual([{ ok: 1, failed: 1 }, { ok: 0, failed: 1 }]);
+  });
+
+  it('carries the row whole beside the counts', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [planted(1)]);
+
+    const [listed] = await store.listSourcesWithParseStats(
+      domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    // `SourceWithParseStats` EXTENDS the record rather than nesting
+    // it, so a caller reads `enabled` off a list row and off a patch
+    // response at the same path. Compared whole, since asserting the
+    // members a case is about would pass against a projection that
+    // dropped the rest.
+    expect(listed).toStrictEqual({ ...feed, parseStats: { ok: 1, failed: 0 } });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The read-only queue over those same rows
+// ---------------------------------------------------------------------------
+
+describe('the source failures queue', () => {
+  it('answers the failed captures and no others', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [
+      planted(1),
+      planted(2, { parseStatus: 'failed' }),
+      planted(3),
+    ]);
+
+    // `failed` is the whole of the filter and there is no status
+    // parameter, so the queue cannot be asked for the corpus and this
+    // port cannot become a way to page it.
+    const page = await store.listSourceFailures(feed.id, WHOLE_COLLECTION);
+
+    expect(page.map((row) => row.id)).toStrictEqual([2]);
+    expect(await store.countSourceFailures(feed.id)).toBe(1);
+  });
+
+  it('orders newest first with the id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+    const older = new Date('2026-01-01T00:00:00.000Z');
+
+    store.setSourceDocuments(feed.id, [
+      planted(1, { parseStatus: 'failed', capturedAt: older }),
+      planted(2, { parseStatus: 'failed' }),
+      planted(3, { parseStatus: 'failed' }),
+    ]);
+
+    // The tiebreak is not optional: a batch capture writes many rows
+    // inside one statement and `defaultNow()` gives them one
+    // timestamp, so a tie spanning a page boundary would let two
+    // pages disagree about which row they hold — one row shown twice
+    // and another shown never. Rows 2 and 3 share an instant here,
+    // and 3 comes first.
+    const page = await store.listSourceFailures(feed.id, WHOLE_COLLECTION);
+
+    expect(page.map((row) => row.id)).toStrictEqual([3, 2, 1]);
+  });
+
+  it('reads only the window it was given', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [
+      planted(1, { parseStatus: 'failed' }),
+      planted(2, { parseStatus: 'failed' }),
+      planted(3, { parseStatus: 'failed' }),
+    ]);
+
+    const page = await store.listSourceFailures(feed.id, {
+      limit: 1,
+      offset: 1,
+    });
+
+    expect(page.map((row) => row.id)).toStrictEqual([2]);
+    expect(await store.countSourceFailures(feed.id)).toBe(3);
+  });
+
+  it('answers an empty page where nothing failed', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [planted(1), planted(2)]);
+
+    // Three absences that are one answer: a source whose captures all
+    // parsed, a window past the end, and an id no source carries.
+    // None of the three is a failure to read.
+    expect(await store.listSourceFailures(feed.id, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+    expect(await store.listSourceFailures(feed.id, { limit: 50, offset: 50 }))
+      .toStrictEqual([]);
+    expect(await store.listSourceFailures(404, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+    expect(await store.countSourceFailures(404)).toBe(0);
+  });
+
+  it('agrees with the aggregate it is asked for differently', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [
+      planted(1),
+      planted(2, { parseStatus: 'failed' }),
+      planted(3, { parseStatus: 'failed' }),
+    ]);
+
+    const [listed] = await store.listSourcesWithParseStats(
+      domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    // The same rows counted by two methods, which is one dataset
+    // behind both rather than a coincidence two implementations
+    // could disagree about.
+    expect(await store.countSourceFailures(feed.id))
+      .toBe(listed?.parseStats.failed);
+  });
+
+  it('answers the body as stored, unmasked and uncut', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+    const body = `before${String.fromCharCode(0)}after`;
+
+    store.setSourceDocuments(feed.id, [
+      planted(1, { parseStatus: 'failed', body, parseError: 'no title' }),
+    ]);
+
+    // The masking belongs to `src/sources/failures-service.ts`, and
+    // keeping it out of the port is what lets it be tested against a
+    // planted control byte with no database. A store masking here
+    // would leave that service with nothing to do and would answer a
+    // body no column holds.
+    const row = await onlyFailure(store, feed.id);
+
+    expect(row.body).toBe(body);
+    expect(row.parseError).toBe('no title');
+  });
+
+  it('answers a null parse error rather than papering over it', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [
+      planted(1, { parseStatus: 'failed', parseError: null }),
+    ]);
+
+    // Nothing in the database ties the error to the status, so a
+    // `failed` row with no message is storable — and it is the
+    // shape that costs the most, since the operator is shown a
+    // failure nobody can act on. A store inventing a message would
+    // hide it.
+    expect((await onlyFailure(store, feed.id)).parseError).toBeNull();
+  });
+
+  it('carries the five members and not the status', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+    const at = new Date(CAPTURED);
+
+    store.setSourceDocuments(feed.id, [
+      planted(7, {
+        parseStatus: 'failed',
+        url: 'https://example.invalid/radar/items/7',
+        body: 'a payload that did not parse',
+        parseError: 'missing required field',
+        capturedAt: at,
+      }),
+    ]);
+
+    // Column-scoped, and the scoping is the point: `parseStatus` is
+    // absent because every row here is `failed` by construction, and
+    // `sourceId` because the source is the path. Compared as a WHOLE
+    // record, so a projection that grew a member reddens.
+    expect(await onlyFailure(store, feed.id)).toStrictEqual({
+      id: 7,
+      url: 'https://example.invalid/radar/items/7',
+      body: 'a payload that did not parse',
+      parseError: 'missing required field',
+      capturedAt: at,
+    });
+  });
+
+  it('writes nothing the aggregate can see', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [
+      planted(1),
+      planted(2, { parseStatus: 'failed' }),
+    ]);
+
+    const before = await store.listSourcesWithParseStats(
+      domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    await store.listSourceFailures(feed.id, WHOLE_COLLECTION);
+    await store.countSourceFailures(feed.id);
+
+    // `SourceStore` declares no method that writes a `documents`
+    // row, so the queue is read-only structurally rather than by
+    // convention. The counts before and after are what says a read
+    // did not quietly clear a status.
+    expect(await store.listSourcesWithParseStats(domain.id, WHOLE_COLLECTION))
+      .toStrictEqual(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The source reads
+// ---------------------------------------------------------------------------
+
+describe('the source list', () => {
+  it('orders by id ascending rather than by endpoint', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedSources(store, RADAR);
+
+    // `sources` has no natural key to sort on, so the port orders by
+    // the surrogate — which puts the list in the order the feeds were
+    // configured in, and is the one order here needing no collation
+    // caveat. The third endpoint sorts FIRST lexically and last by
+    // id, which is what makes the two readings tell each other apart.
+    await addSource(store, domain.id, 'https://example.invalid/a-feed');
+
+    const listed = await store.listSourcesWithParseStats(
+      domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    expect(listed.map((row) => row.id)).toStrictEqual([1, 2, 3]);
+  });
+
+  it('reads only the window it was given', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, items } = await seedSources(store, RADAR);
+
+    await addSource(store, domain.id, FEED_ENDPOINT);
+
+    const page = await store.listSourcesWithParseStats(domain.id, {
+      limit: 1,
+      offset: 1,
+    });
+
+    expect(page.map((row) => row.id)).toStrictEqual([items.id]);
+    expect(await store.countSources(domain.id)).toBe(3);
+  });
+
+  it('answers an empty window past the end', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedSources(store, RADAR);
+
+    expect(
+      await store.listSourcesWithParseStats(domain.id, {
+        limit: 50,
+        offset: 50,
+      }),
+    ).toStrictEqual([]);
+  });
+
+  it('lists only the sources of the domain asked about', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedSources(store, RADAR);
+    const transit = await seedSources(store, TRANSIT);
+
+    const listed = await store.listSourcesWithParseStats(
+      radar.domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    expect(listed.map((row) => row.id))
+      .toStrictEqual([radar.feed.id, radar.items.id]);
+    expect(await store.countSources(transit.domain.id)).toBe(2);
+  });
+
+  it('answers an empty list for a domain holding none', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    expect(
+      await store.listSourcesWithParseStats(domain.id, WHOLE_COLLECTION),
+    ).toStrictEqual([]);
+    expect(await store.countSources(domain.id)).toBe(0);
+  });
+
+  it('answers zero for an id no domain carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.countSources(404)).toBe(0);
+    expect(await store.listSourcesWithParseStats(404, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+  });
+
+  it('answers rows a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedSources(store, RADAR);
+
+    const [listed] = await store.listSourcesWithParseStats(
+      domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    if (listed === undefined) {
+      throw new Error('expected the list to answer a row');
+    }
+
+    (listed as { endpoint: string }).endpoint = 'written through the list';
+
+    // Against the constants rather than against the records the
+    // writes answered: a store handing its own objects out has
+    // ALIASED the two, and the comparison then holds one lie against
+    // itself and passes.
+    const reread = await store.listSourcesWithParseStats(
+      domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    expect(reread.map((row) => row.endpoint))
+      .toStrictEqual([FEED_ENDPOINT, ITEMS_ENDPOINT]);
+  });
+});
+
+describe('the single source read', () => {
+  it('answers null for an id no source carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.findSourceById(404)).toBeNull();
+  });
+
+  it('answers the row without its aggregate', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [planted(1)]);
+
+    // Deliberately not `SourceWithParseStats`: none of the three
+    // callers naming `/sources/:id` needs the counts, and counting on
+    // every lookup would put a document scan behind a patch.
+    expect(await readSource(store, feed.id)).toStrictEqual(feed);
+  });
+
+  it('answers a row a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+    const endpoint = feed.endpoint;
+
+    const read = await readSource(store, feed.id);
+
+    (read as { endpoint: string }).endpoint = 'written through the read';
+
+    // Against a primitive read BEFORE the mutation: comparing against
+    // `feed.endpoint` would compare one lie against itself, since a
+    // store handing its own objects out aliased the two.
+    expect((await readSource(store, feed.id)).endpoint).toBe(endpoint);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The source write that is not the insert
+// ---------------------------------------------------------------------------
+
+describe('the source patch', () => {
+  it('rewrites the members it names and leaves the rest', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    const patched = await store.updateSource(feed.id, {
+      endpoint: ITEMS_ENDPOINT,
+      enabled: false,
+    });
+
+    expect(patched)
+      .toStrictEqual({ ...feed, endpoint: ITEMS_ENDPOINT, enabled: false });
+  });
+
+  it('replaces a jsonb document whole rather than merging', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const source = await addSource(store, domain.id, FEED_ENDPOINT, {
+      parserConfig: { itemPath: 'entries', titlePath: 'title' },
+    });
+
+    // A caller sends the config it wants to exist, which is the only
+    // shape under which removing a selector is expressible at all.
+    // Under a merge the read answers two members here.
+    const patched = await store.updateSource(source.id, {
+      parserConfig: { itemPath: 'items' },
+    });
+
+    expect(patched?.parserConfig).toStrictEqual({ itemPath: 'items' });
+    expect((await readSource(store, source.id)).parserConfig)
+      .toStrictEqual({ itemPath: 'items' });
+  });
+
+  it('clears a jsonb document with an empty object', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const source = await addSource(store, domain.id, FEED_ENDPOINT, {
+      contract: { required: ['title'] },
+    });
+
+    // Every column on this table is NOT NULL, so a patch member
+    // distinguishes TWO requests and not three — absent leaves the
+    // document alone, present writes it — and empty is what
+    // "cleared" means at these two columns rather than a workaround.
+    const patched = await store.updateSource(source.id, { contract: {} });
+
+    expect(patched?.contract).toStrictEqual({});
+    expect(patched?.parserConfig).toStrictEqual({});
+  });
+
+  it('writes a false enabled rather than ignoring it', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    // `enabled` is NOT NULL and defaults true, so `false` is a value
+    // being written rather than a member being left alone. This is
+    // the column for retiring a feed; deleting it is a different
+    // operation and one the corpus can refuse.
+    await store.updateSource(feed.id, { enabled: false });
+
+    expect((await readSource(store, feed.id)).enabled).toBe(false);
+  });
+
+  it('answers the stored row for a patch naming no member', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    // `sources` carries no `updated_at`, so an empty patch has
+    // literally nothing to set and drizzle throws `No values to set`
+    // on an empty update list. The port decides the answer rather
+    // than leaving its two implementations to disagree.
+    expect(await store.updateSource(feed.id, {})).toStrictEqual(feed);
+  });
+
+  it('cannot reach a pipeline-owned column whatever it is handed', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    // `SourcePatch` declares none of the five, so the containment
+    // is the type's; the cast is what lets a case ask what happens
+    // when they arrive anyway, which is the reading a route's
+    // `.strict()` schema cannot give from inside `src/`. `flagged`
+    // is the one worth the case: it is the adapter-rot detector's
+    // output, and a clearable flag would be a button that hides
+    // that nothing was fixed.
+    const patched = await store.updateSource(feed.id, {
+      flagged: false,
+      cursor: 'rewound',
+      consecutiveFailures: 0,
+      lastSuccessAt: new Date(CAPTURED),
+      lastFailureAt: new Date(CAPTURED),
+    } as SourcePatch);
+
+    expect(patched).toStrictEqual(feed);
+    expect(await readSource(store, feed.id)).toStrictEqual(feed);
+  });
+
+  it('answers null from a patch naming no stored source', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.updateSource(404, { enabled: false })).toBeNull();
+  });
+
+  it('answers a row a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    const patched = await store.updateSource(feed.id, {
+      endpoint: ITEMS_ENDPOINT,
+    });
+
+    if (patched === null) {
+      throw new Error('expected the patch to answer a row');
+    }
+
+    (patched as { endpoint: string }).endpoint = 'written through the patch';
+
+    expect((await readSource(store, feed.id)).endpoint).toBe(ITEMS_ENDPOINT);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The mutable members crossing the sources boundary
+// ---------------------------------------------------------------------------
+
+describe('the source jsonb documents crossing the boundary', () => {
+  it('lands the pipeline columns unfetched', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    const inserted = await addSource(store, domain.id, FEED_ENDPOINT);
+
+    // `InsertSourceInput` declares no member that could set one, so a
+    // source is INSERTED NEVER FETCHED and there is no way to create
+    // one claiming a history it does not have. The two stamps land
+    // null, which is also why no case below can exercise the copy
+    // their non-null branch carries: nothing on this port or in the
+    // seams writes either, so the branch is pinned by the record's
+    // own type and by nothing here.
+    expect(inserted.cursor).toBeNull();
+    expect(inserted.consecutiveFailures).toBe(0);
+    expect(inserted.lastSuccessAt).toBeNull();
+    expect(inserted.lastFailureAt).toBeNull();
+    expect(inserted.flagged).toBe(false);
+  });
+
+  it('does not store the object an insert was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const submitted = { selectors: { item: 'entry' } };
+
+    const inserted = await addSource(store, domain.id, FEED_ENDPOINT, {
+      parserConfig: submitted,
+    });
+
+    // One level down, which is what makes the round trip the right
+    // copy rather than a spread: a spread would leave the caller
+    // holding the selectors.
+    submitted.selectors.item = 'written through the insert';
+
+    expect((await readSource(store, inserted.id)).parserConfig)
+      .toStrictEqual({ selectors: { item: 'entry' } });
+  });
+
+  it('does not store either object a patch was handed', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+    const config = { selectors: { item: 'entry' } };
+    const contract = { required: { title: true } };
+
+    await store.updateSource(feed.id, { parserConfig: config, contract });
+
+    // BOTH members in one case, because the patch copies them at two
+    // separate call sites and a case naming one is green against a
+    // store that shares the other. Measured: aimed at `parserConfig`
+    // alone, the leg that stops copying `contract` reddens nothing.
+    config.selectors.item = 'written through the patch';
+    contract.required.title = false;
+
+    const stored = await readSource(store, feed.id);
+
+    expect(stored.parserConfig)
+      .toStrictEqual({ selectors: { item: 'entry' } });
+    expect(stored.contract).toStrictEqual({ required: { title: true } });
+  });
+
+  it('answers a document a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const inserted = await addSource(store, domain.id, FEED_ENDPOINT, {
+      parserConfig: { itemPath: 'entries' },
+    });
+
+    (inserted.parserConfig as { itemPath: string }).itemPath = 'through answer';
+    const read = await readSource(store, inserted.id);
+
+    (read.parserConfig as { itemPath: string }).itemPath = 'through a read';
+
+    // Against a constant rather than against the record the insert
+    // answered, for the reason the topic due-time cases give.
+    expect((await readSource(store, inserted.id)).parserConfig)
+      .toStrictEqual({ itemPath: 'entries' });
+  });
+});
+
+describe('the planted capture instant crossing the boundary', () => {
+  it('does not store the Date the seam was handed', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+    const at = new Date(CAPTURED);
+
+    store.setSourceDocuments(feed.id, [
+      planted(1, { parseStatus: 'failed', capturedAt: at }),
+    ]);
+
+    // The copy on the way IN. A seam holding this instance lets the
+    // case that planted the row go on moving its capture time
+    // afterwards, through a member the port declares `readonly`.
+    at.setTime(Date.parse('2030-06-01T00:00:00.000Z'));
+
+    expect(capturedAt(await onlyFailure(store, feed.id)))
+      .toBe(Date.parse(CAPTURED));
+  });
+
+  it('does not store the array the seam was handed', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+    const submitted = [planted(1, { parseStatus: 'failed' })];
+
+    store.setSourceDocuments(feed.id, submitted);
+
+    submitted.push(planted(2, { parseStatus: 'failed' }));
+
+    expect(await store.countSourceFailures(feed.id)).toBe(1);
+  });
+
+  it('answers a capture instant the queue cannot write through', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [
+      planted(1, { parseStatus: 'failed' }),
+    ]);
+
+    const row = await onlyFailure(store, feed.id);
+    const at = capturedAt(row);
+
+    row.capturedAt.setTime(0);
+
+    // Against the primitive captured BEFORE the mutation: a store
+    // handing its own `Date` out has aliased the two, and comparing
+    // against `row.capturedAt` would hold one lie against itself.
+    expect(capturedAt(await onlyFailure(store, feed.id))).toBe(at);
+  });
+
+  it('answers a fresh Date on every read', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSources(store, RADAR);
+
+    store.setSourceDocuments(feed.id, [planted(1, { parseStatus: 'failed' })]);
+
+    const first = await onlyFailure(store, feed.id);
+    const second = await onlyFailure(store, feed.id);
+
+    expect(first.capturedAt).not.toBe(second.capturedAt);
+    expect(capturedAt(first)).toBe(capturedAt(second));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The key this half refuses on, and the CHECK that sits beside it
+// ---------------------------------------------------------------------------
+
+describe('the connectors_kind_name_unique key', () => {
+  it('refuses a second connector on a pair already held', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    const refusal = await refusalFrom(
+      () => addConnector(store, 'llm', MODEL_HOST),
+    );
+
+    expect(refusal).toBeInstanceOf(StoreRefusal);
+
+    // The positive control, in this body rather than in a sibling
+    // case: a store refusing every write passes the assertion above.
+    const accepted = await addConnector(store, 'llm', 'example-third');
+
+    expect(accepted.name).toBe('example-third');
+    expect(await store.countConnectors(EVERY_KIND)).toBe(4);
+  });
+
+  it('names the mechanism and the constraint that refused', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    const refusal = await refusalFrom(
+      () => addConnector(store, 'llm', MODEL_HOST),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe('connectors_kind_name_unique');
+  });
+
+  it('takes the same name under a second kind', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    // The key is `(kind, name)` and not `name`, so this is the
+    // widening control: a store holding names globally unique refuses
+    // a write the database takes. One name under two kinds is
+    // ordinary, which is what `src/connectors/store.ts` says the pair
+    // is for.
+    const accepted = await addConnector(store, 'search', MODEL_HOST);
+
+    expect(accepted.kind).toBe('search');
+    expect(accepted.name).toBe(MODEL_HOST);
+    expect(await store.countConnectors({ kind: 'llm' })).toBe(2);
+  });
+
+  it('leaves the standing connector exactly as it was', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    await refusalFrom(() => addConnector(store, 'llm', MODEL_HOST, {
+      config: { endpoint: 'https://example.invalid/rewritten' },
+    }));
+
+    expect(await readConnector(store, model.id)).toStrictEqual(model);
+    expect(await store.countConnectors(EVERY_KIND)).toBe(3);
+  });
+
+  it('puts neither the name nor the secret in what it threw', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    const refusal = await refusalFrom(
+      () => addConnector(store, 'llm', MODEL_HOST, {
+        config: connectorConfig(),
+      }),
+    );
+    const serialised = JSON.stringify({
+      ...refusal,
+      message: refusal.message,
+      stack: refusal.stack,
+    });
+
+    // The name is what every sibling half counts; the CREDENTIAL is
+    // what only this one can. A refusal built over a config is the
+    // first thing on this surface that could carry one onward.
+    expect(countOccurrences(serialised, MODEL_HOST)).toBe(0);
+    expect(countOccurrences(serialised, SECRET_TOKEN)).toBe(0);
+
+    // The same searches over a message that DOES carry both, so the
+    // two zeros are readings rather than searches finding nothing
+    // anywhere.
+    const planted = JSON.stringify({
+      ...refusal,
+      message: `duplicate key ${MODEL_HOST} ${SECRET_TOKEN}`,
+    });
+
+    expect(countOccurrences(planted, MODEL_HOST)).toBe(1);
+    expect(countOccurrences(planted, SECRET_TOKEN)).toBe(1);
+  });
+
+  it('refuses a rename onto a name the kind already holds', async () => {
+    const store = createMemoryResearchStore();
+    const { model, spare } = await seedConnectors(store);
+
+    // The same mechanism on an UPDATE, which this table reaches
+    // because `name` is patchable: both writes open on the key.
+    const refusal = await refusalFrom(
+      () => store.updateConnector(spare.id, { name: MODEL_HOST }),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe('connectors_kind_name_unique');
+    expect(await readConnector(store, spare.id)).toStrictEqual(spare);
+    expect(await readConnector(store, model.id)).toStrictEqual(model);
+  });
+
+  it('takes a rename onto a name a SECOND kind holds', async () => {
+    const store = createMemoryResearchStore();
+    const { spare, notebook } = await seedConnectors(store);
+
+    // The resulting pair is checked within the STORED kind, since
+    // `kind` is not patchable: a name another kind carries is not a
+    // conflict, which is the same widening control the insert case
+    // makes and the patch has to make for itself.
+    const patched = await store.updateConnector(spare.id, {
+      name: ARCHIVE_NOTEBOOK,
+    });
+
+    expect(patched?.name).toBe(ARCHIVE_NOTEBOOK);
+    expect(patched?.kind).toBe('llm');
+    expect(await readConnector(store, notebook.id)).toStrictEqual(notebook);
+  });
+
+  it('takes a patch writing a name back over itself', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    // A row is not in conflict with itself. A store looking the pair
+    // up without excluding the row being written refuses this.
+    const patched = await store.updateConnector(model.id, {
+      name: MODEL_HOST,
+      config: { endpoint: MODEL_ENDPOINT },
+    });
+
+    expect(patched?.name).toBe(MODEL_HOST);
+    expect(patched?.config).toStrictEqual({ endpoint: MODEL_ENDPOINT });
+  });
+});
+
+describe('the connectors_kind_check', () => {
+  it('refuses an insert whose kind is outside the tuple', async () => {
+    const store = createMemoryResearchStore();
+
+    const refusal = await refusalFrom(
+      () => addConnector(store, 'telepathy', MODEL_HOST),
+    );
+
+    expect(refusal.reason).toBe('check-violation');
+    expect(refusal.constraint).toBe('connectors_kind_check');
+    expect(await store.countConnectors(EVERY_KIND)).toBe(0);
+  });
+
+  it('takes every member of the tuple it is held to', async () => {
+    const store = createMemoryResearchStore();
+
+    // The acceptance control, looped over the RUNTIME tuple rather
+    // than a list written out here: a member added to
+    // `CONNECTOR_KINDS` reaches this case, and a store narrowing the
+    // guard to some of them fails it. Without this, a store refusing
+    // every kind passes the case above.
+    for (const kind of CONNECTOR_KINDS) {
+      const accepted = await addConnector(store, kind, MODEL_HOST);
+
+      expect(accepted.kind).toBe(kind);
+    }
+
+    expect(await store.countConnectors(EVERY_KIND))
+      .toBe(CONNECTOR_KINDS.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sequence behind connectors.id, and the refusals that burn it
+// ---------------------------------------------------------------------------
+
+describe('the connector id sequence', () => {
+  it('hands the first connector id 1', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const inserted = await addConnector(store, 'llm', MODEL_HOST);
+
+    // Its own counter, and none of the other six: the domain above
+    // holds id 1 as well.
+    expect(inserted.id).toBe(1);
+    expect(domain.id).toBe(1);
+  });
+
+  it('burns an id on a refused insert, as the sequence does', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+    await refusalFrom(() => addConnector(store, 'llm', MODEL_HOST));
+
+    const next = await addConnector(store, 'llm', 'example-fourth');
+
+    // 5 rather than 4: the three seeded connectors took 1, 2 and 3,
+    // and the refusal took the fourth. No measurement on `connectors`
+    // of its own — the reasoning is `personas`', where two refused
+    // inserts between two accepted ones left a gap of two against the
+    // live server.
+    expect(next.id).toBe(5);
+  });
+
+  it('burns one on a CHECK refusal as well', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+    await refusalFrom(() => addConnector(store, 'telepathy', MODEL_HOST));
+
+    const next = await addConnector(store, 'llm', 'example-fourth');
+
+    // The counter advances ahead of EVERY check rather than ahead of
+    // the key check alone, which is the half of the personas
+    // measurement a key-only burn would satisfy anyway.
+    expect(next.id).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The delete refused from outside the row, by the one key there is
+// ---------------------------------------------------------------------------
+
+describe('the subscriptions that hold a connector delete', () => {
+  it('refuses while an export subscription names it', async () => {
+    const store = createMemoryResearchStore();
+    const { model, spare } = await seedConnectors(store);
+
+    store.setConnectorSubscriptions(model.id, 2);
+
+    // `export_subscriptions.connector_id` is `ON DELETE no action`,
+    // and `src/db/schema/scheduling.ts` argues it at the column: a
+    // connector is shared, so retiring one service should not quietly
+    // cancel deliveries in every domain that named it.
+    const refusal = await refusalFrom(() => store.deleteConnector(model.id));
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+    expect(await readConnector(store, model.id)).toStrictEqual(model);
+
+    // The positive control, in this body rather than a sibling case:
+    // the SAME call over the sibling nothing names. A store refusing
+    // every delete passes the assertions above.
+    expect(await store.deleteConnector(spare.id)).toBe(true);
+    expect(await store.countConnectors(EVERY_KIND)).toBe(2);
+  });
+
+  it('counts what the delete would have taken', async () => {
+    const store = createMemoryResearchStore();
+    const { model, spare } = await seedConnectors(store);
+
+    store.setConnectorSubscriptions(model.id, 3);
+
+    // The guard reads a count and takes no view of it; the `409` is
+    // `src/connectors/service.ts`'s, and carries this number so a
+    // caller learns what stands in the way rather than only that
+    // something did.
+    expect(await store.countConnectorDependents(model.id))
+      .toStrictEqual({ exportSubscriptions: 3 });
+    expect(await store.countConnectorDependents(spare.id))
+      .toStrictEqual({ exportSubscriptions: 0 });
+  });
+
+  it('stops refusing once the subscriptions are taken back', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    store.setConnectorSubscriptions(model.id, 1);
+    await refusalFrom(() => store.deleteConnector(model.id));
+
+    // A whole-unit plant: the second call REPLACES the first rather
+    // than adding to it, and zero is how a case takes a plant back.
+    store.setConnectorSubscriptions(model.id, 0);
+
+    expect(await store.deleteConnector(model.id)).toBe(true);
+    expect(await store.findConnectorById(model.id)).toBeNull();
+  });
+
+  it('answers false for an id no connector carries', async () => {
+    const store = createMemoryResearchStore();
+
+    // A counted zero rather than a refusal for an id nothing points
+    // at, which is correct rather than a special case — and the
+    // delete that follows removes nothing without throwing.
+    expect(await store.countConnectorDependents(404))
+      .toStrictEqual({ exportSubscriptions: 0 });
+    expect(await store.deleteConnector(404)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The cascade that never arrives
+// ---------------------------------------------------------------------------
+
+describe('the domain delete a connector outlives', () => {
+  it('leaves every connector standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSources(store, RADAR);
+    const { model, notebook } = await seedConnectors(store);
+
+    await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // The control that says the delete reached anything at all: the
+    // domain's own sources and topics are gone in the same call.
+    expect(await store.findSourceById(feed.id)).toBeNull();
+    expect(await store.countTopics(domain.id)).toBe(0);
+
+    // `connectors` carries no `domain_id`, so nothing here is the
+    // cascade's to take. A connector outlives every domain that named
+    // it — which is what an `export_subscriptions` row records and a
+    // column on this table would have got wrong.
+    expect(await store.countConnectors(EVERY_KIND)).toBe(3);
+    expect(await readConnector(store, model.id)).toStrictEqual(model);
+    expect(await readConnector(store, notebook.id)).toStrictEqual(notebook);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a page of connectors answers, and what narrows it
+// ---------------------------------------------------------------------------
+
+describe('the connector list', () => {
+  it('orders by kind, then by name within it', async () => {
+    const store = createMemoryResearchStore();
+    const { model, spare, notebook } = await seedConnectors(store);
+
+    const page = await store.listConnectors(EVERY_KIND, WHOLE_COLLECTION);
+
+    // Neither insertion order (the notebook went in first) nor name
+    // order (its name sorts before both of the others): one fixture
+    // tells the pair from either column alone.
+    expect(page.map((row) => row.id))
+      .toStrictEqual([model.id, spare.id, notebook.id]);
+  });
+
+  it('answers one window of it', async () => {
+    const store = createMemoryResearchStore();
+    const { spare, notebook } = await seedConnectors(store);
+
+    const second = await store.listConnectors(EVERY_KIND, {
+      limit: 2,
+      offset: 1,
+    });
+
+    expect(second.map((row) => row.id)).toStrictEqual([spare.id, notebook.id]);
+    expect(await store.countConnectors(EVERY_KIND)).toBe(3);
+  });
+
+  it('narrows to one kind, and counts the same way', async () => {
+    const store = createMemoryResearchStore();
+    const { model, spare } = await seedConnectors(store);
+
+    const page = await store.listConnectors({ kind: 'llm' }, WHOLE_COLLECTION);
+
+    // The count reads through the same predicate the page did, which
+    // is the whole of what keeps a page's `meta.total` from
+    // describing a different collection than the page.
+    expect(page.map((row) => row.id)).toStrictEqual([model.id, spare.id]);
+    expect(await store.countConnectors({ kind: 'llm' })).toBe(2);
+    expect(await store.countConnectors({ kind: 'notebook' })).toBe(1);
+  });
+
+  it('answers an empty page for a kind no row carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    // Neither an error nor a refusal: nothing failed to read. The
+    // whole-collection read beside it is what says the store held
+    // rows to leave out.
+    expect(await store.listConnectors({ kind: 'search' }, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+    expect(await store.countConnectors({ kind: 'search' })).toBe(0);
+    expect(await store.countConnectors(EVERY_KIND)).toBe(3);
+  });
+});
+
+describe('the single connector read', () => {
+  it('answers the stored row by its id', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    expect(await store.findConnectorById(model.id)).toStrictEqual({
+      id: model.id,
+      kind: 'llm',
+      name: MODEL_HOST,
+      config: connectorConfig(),
+    });
+  });
+
+  it('answers null for an id no connector carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    expect(await store.findConnectorById(404)).toBeNull();
+  });
+});
+
+describe('the connector patch', () => {
+  it('writes nothing for a patch naming no member', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    // `connectors` carries no `updated_at`, so an empty patch has
+    // literally nothing to set and drizzle throws `No values to set`
+    // on an empty update list. The stored row is answered instead —
+    // a decision `src/connectors/store.ts` takes for both
+    // implementations rather than leaving them to disagree.
+    expect(await store.updateConnector(model.id, {})).toStrictEqual(model);
+    expect(await readConnector(store, model.id)).toStrictEqual(model);
+  });
+
+  it('renames without touching the config', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    const patched = await store.updateConnector(model.id, {
+      name: 'example-renamed-host',
+    });
+
+    expect(patched?.name).toBe('example-renamed-host');
+    expect(patched?.config).toStrictEqual(connectorConfig());
+  });
+
+  it('replaces the config whole rather than merging into it', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    await store.updateConnector(model.id, {
+      config: { endpoint: MODEL_ENDPOINT },
+    });
+
+    // A caller sends the object it wants to exist, which is the only
+    // shape under which removing a member is expressible at all — and
+    // on this table that means a patch omitting a secret's key has
+    // CLEARED that secret. Under a merge the credentials survive.
+    expect((await readConnector(store, model.id)).config)
+      .toStrictEqual({ endpoint: MODEL_ENDPOINT });
+  });
+
+  it('answers null for an id no connector carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    expect(await store.updateConnector(404, { name: MODEL_HOST })).toBeNull();
+    expect(await store.countConnectors(EVERY_KIND)).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The one copied document here that is a live credential
+// ---------------------------------------------------------------------------
+
+describe('the connector config crossing the boundary', () => {
+  it('does not store the object an insert was handed', async () => {
+    const store = createMemoryResearchStore();
+    const submitted = connectorConfig();
+
+    const inserted = await addConnector(store, 'llm', MODEL_HOST, {
+      config: submitted,
+    });
+
+    // One level down, which is what makes the round trip the right
+    // copy rather than a spread: a spread would leave the caller
+    // holding the credentials.
+    credentialsOf(submitted).apiKey = 'written through the insert';
+
+    expect((await readConnector(store, inserted.id)).config)
+      .toStrictEqual(connectorConfig());
+  });
+
+  it('does not store the object a patch was handed', async () => {
+    const store = createMemoryResearchStore();
+    const { spare } = await seedConnectors(store);
+    const submitted = connectorConfig();
+
+    await store.updateConnector(spare.id, { config: submitted });
+
+    credentialsOf(submitted).apiKey = 'written through the patch';
+
+    expect((await readConnector(store, spare.id)).config)
+      .toStrictEqual(connectorConfig());
+  });
+
+  it('answers a config a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    credentialsOf(model.config).apiKey = 'written through the insert answer';
+
+    const read = await readConnector(store, model.id);
+
+    credentialsOf(read.config).apiKey = 'written through a read';
+
+    // Against the fixture function rather than against the record the
+    // insert answered: a store handing out its own object has aliased
+    // the two, and the comparison would then hold one lie against
+    // itself and pass.
+    expect((await readConnector(store, model.id)).config)
+      .toStrictEqual(connectorConfig());
+  });
+
+  it('answers a config the list cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedConnectors(store);
+
+    const [listed] = await store.listConnectors(
+      { kind: 'llm' },
+      WHOLE_COLLECTION,
+    );
+
+    if (listed === undefined) {
+      throw new Error('expected the llm page to carry a row');
+    }
+
+    credentialsOf(listed.config).apiKey = 'written through the list';
+
+    expect((await readConnector(store, listed.id)).config)
+      .toStrictEqual(connectorConfig());
+  });
+
+  it('answers a fresh config on every read', async () => {
+    const store = createMemoryResearchStore();
+    const { model } = await seedConnectors(store);
+
+    const first = await readConnector(store, model.id);
+    const second = await readConnector(store, model.id);
+
+    expect(first.config).not.toBe(second.config);
+    expect(first.config).toStrictEqual(second.config);
+  });
+
+  it('stores an empty config as a value rather than a default', async () => {
+    const store = createMemoryResearchStore();
+    const { spare } = await seedConnectors(store);
+
+    // Empty is a complete value and the column's default, and for a
+    // connector it means there is nowhere to reach — the row names a
+    // service the pipeline cannot call rather than one it calls with
+    // defaults. So a config nobody filled in reads back as `{}`
+    // rather than as anything this store invented.
+    expect(spare.config).toStrictEqual({});
+    expect((await readConnector(store, spare.id)).config).toStrictEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The widest key in this file, and the only one over three columns
+// ---------------------------------------------------------------------------
+
+describe('the triple that keys a subscription', () => {
+  it('refuses a second row on a triple already held', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addSubscription(store, domain.id, RSS, notebook.id),
+    );
+
+    expect(refusal).toBeInstanceOf(StoreRefusal);
+
+    // The positive control, in this body rather than in a sibling
+    // case: a store refusing every write passes the assertion above.
+    const accepted = await addSubscription(
+      store,
+      domain.id,
+      'pdf',
+      notebook.id,
+    );
+
+    expect(accepted.format).toBe('pdf');
+    expect(await store.countSubscriptions(domain.id)).toBe(4);
+  });
+
+  it('names the mechanism and the constraint that refused', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addSubscription(store, domain.id, RSS, notebook.id),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_domain_id_format_connector_id_unique');
+  });
+
+  it('takes a second format at one connector', async () => {
+    const store = createMemoryResearchStore();
+    const planted = await seedSubscriptions(store, RADAR);
+    const { domain, notebook, digest } = planted;
+
+    // The first of the three widening controls a triple needs, and
+    // the fixture already carries it: `digest` and `feed` differ by
+    // format alone. A store keying on `(domain, connector)` refuses
+    // the write that produced it.
+    expect(digest.connectorId).toBe(notebook.id);
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+
+  it('takes a second connector for one format', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model, archive } = await seedSubscriptions(store, RADAR);
+
+    // The second: `digest` and `archive` differ by connector alone,
+    // which a store keying on `(domain, format)` refuses. One domain
+    // wanting one digest delivered to two destinations is ordinary.
+    expect(archive.format).toBe(OBSIDIAN);
+    expect(archive.connectorId).toBe(model.id);
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+
+  it('takes the same pair under a second domain', async () => {
+    const store = createMemoryResearchStore();
+    const { notebook } = await seedSubscriptions(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+
+    // The third: the key is scoped by the domain, so a second domain
+    // subscribing to the same format at the same connector is not a
+    // conflict at all. A store keying on `(format, connector)`
+    // refuses this.
+    const accepted = await addSubscription(
+      store,
+      transit.id,
+      RSS,
+      notebook.id,
+    );
+
+    expect(accepted.domainId).toBe(transit.id);
+    expect(await store.countSubscriptions(transit.id)).toBe(1);
+  });
+
+  it('leaves the standing subscription exactly as it was', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook, feed } = await seedSubscriptions(store, RADAR);
+
+    await refusalFrom(() => addSubscription(
+      store,
+      domain.id,
+      RSS,
+      notebook.id,
+      { intervalSeconds: 60, enabled: false },
+    ));
+
+    expect(await readSubscription(store, feed.id)).toStrictEqual(feed);
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+
+  it('refuses a re-point onto a triple already held', async () => {
+    const store = createMemoryResearchStore();
+    const { model, digest, archive } = await seedSubscriptions(store, RADAR);
+
+    // The same mechanism on an UPDATE, which this table reaches
+    // through TWO of the three key columns: `connectorId` here.
+    const refusal = await refusalFrom(
+      () => store.updateSubscription(digest.id, { connectorId: model.id }),
+    );
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_domain_id_format_connector_id_unique');
+    expect(await readSubscription(store, digest.id)).toStrictEqual(digest);
+    expect(await readSubscription(store, archive.id)).toStrictEqual(archive);
+  });
+
+  it('refuses a reformat onto a triple already held', async () => {
+    const store = createMemoryResearchStore();
+    const { digest, feed } = await seedSubscriptions(store, RADAR);
+
+    // And `format` here: the other patchable third of the key. Two
+    // cases rather than one, because a store checking only the
+    // member it was handed passes whichever of the two it checked.
+    const refusal = await refusalFrom(
+      () => store.updateSubscription(digest.id, { format: RSS }),
+    );
+
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_domain_id_format_connector_id_unique');
+    expect(await readSubscription(store, feed.id)).toStrictEqual(feed);
+  });
+
+  it('takes a re-point onto a triple nothing holds', async () => {
+    const store = createMemoryResearchStore();
+    const { model, feed } = await seedSubscriptions(store, RADAR);
+
+    // The re-pointing `src/db/schema/scheduling.ts` says the
+    // connector delete's refusal exists to make explicit, and the
+    // acceptance control the two refusals above need.
+    const patched = await store.updateSubscription(feed.id, {
+      connectorId: model.id,
+    });
+
+    expect(patched?.connectorId).toBe(model.id);
+    expect(patched?.format).toBe(RSS);
+  });
+
+  it('takes a patch writing the triple back over itself', async () => {
+    const store = createMemoryResearchStore();
+    const { notebook, digest } = await seedSubscriptions(store, RADAR);
+
+    // A row is not in conflict with itself. A store looking the
+    // triple up without excluding the row being written refuses this.
+    const patched = await store.updateSubscription(digest.id, {
+      format: OBSIDIAN,
+      connectorId: notebook.id,
+      intervalSeconds: 900,
+    });
+
+    expect(patched?.intervalSeconds).toBe(900);
+    expect(patched?.format).toBe(OBSIDIAN);
+  });
+
+  it('frees the triple a deleted subscription held', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook, feed } = await seedSubscriptions(store, RADAR);
+
+    await store.deleteSubscription(feed.id);
+
+    const accepted = await addSubscription(
+      store,
+      domain.id,
+      RSS,
+      notebook.id,
+    );
+
+    expect(accepted.id).not.toBe(feed.id);
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+});
+
+describe('the export_subscriptions_format_check', () => {
+  it('refuses an insert whose format is outside the tuple', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addSubscription(store, domain.id, 'telegram', notebook.id),
+    );
+
+    expect(refusal.reason).toBe('check-violation');
+    expect(refusal.constraint).toBe('export_subscriptions_format_check');
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+
+  it('refuses a PATCH whose format is outside the tuple', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSubscriptions(store, RADAR);
+
+    // BOTH writes reach this CHECK, which is `sources_kind_check`'s
+    // shape rather than `connectors_kind_check`'s: `format` is
+    // patchable, because it selects the renderer that runs for THIS
+    // row and nothing outside the row reads it.
+    const refusal = await refusalFrom(
+      () => store.updateSubscription(feed.id, { format: 'telegram' }),
+    );
+
+    expect(refusal.reason).toBe('check-violation');
+    expect(refusal.constraint).toBe('export_subscriptions_format_check');
+    expect(await readSubscription(store, feed.id)).toStrictEqual(feed);
+  });
+
+  it('takes every member of the tuple it is held to', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const connector = await addConnector(store, 'notebook', ARCHIVE_NOTEBOOK);
+
+    // The acceptance control, looped over the RUNTIME tuple rather
+    // than a list written out here: a member added to
+    // `EXPORT_FORMATS` reaches this case, and a store narrowing the
+    // guard to some of them fails it. Without this, a store refusing
+    // every format passes the two cases above. Every format at ONE
+    // connector, so the loop is the key's second widening control as
+    // well: a store keying on `(domain, connector)` refuses its
+    // second turn.
+    for (const format of EXPORT_FORMATS) {
+      const accepted = await addSubscription(
+        store,
+        domain.id,
+        format,
+        connector.id,
+      );
+
+      expect(accepted.format).toBe(format);
+    }
+
+    expect(await store.countSubscriptions(domain.id))
+      .toBe(EXPORT_FORMATS.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The two foreign keys, one per end of the row
+// ---------------------------------------------------------------------------
+
+describe('the subscription domain foreign key', () => {
+  it('refuses an insert naming no stored domain', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addSubscription(store, 404, OBSIDIAN, notebook.id),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_domain_id_domains_id_fk');
+
+    // The positive control: the SAME write into a domain that exists.
+    const accepted = await addSubscription(
+      store,
+      domain.id,
+      'pdf',
+      notebook.id,
+    );
+
+    expect(accepted.domainId).toBe(domain.id);
+  });
+
+  it('is unreachable from the patch, which names no domain', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    // `SubscriptionPatch` declares no `domainId`, so the containment
+    // is the type's; the cast is what lets a case ask what happens
+    // when one arrives anyway, which is the reading a route's
+    // `.strict()` schema cannot give from inside `src/`.
+    const patched = await store.updateSubscription(
+      digest.id,
+      { domainId: 404 } as SubscriptionPatch,
+    );
+
+    expect(patched?.domainId).toBe(digest.domainId);
+    expect((await readSubscription(store, digest.id)).domainId)
+      .toBe(digest.domainId);
+  });
+});
+
+describe('the subscription connector foreign key', () => {
+  it('refuses an insert naming no stored connector', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model } = await seedSubscriptions(store, RADAR);
+
+    const refusal = await refusalFrom(
+      () => addSubscription(store, domain.id, 'pdf', 404),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+
+    // The positive control: the SAME write at a connector that is
+    // there. A store refusing every insert passes the assertions
+    // above.
+    const accepted = await addSubscription(store, domain.id, 'pdf', model.id);
+
+    expect(accepted.connectorId).toBe(model.id);
+  });
+
+  it('refuses a re-point onto no stored connector', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSubscriptions(store, RADAR);
+
+    // BOTH writes reach it, `connectorId` being patchable — the
+    // re-pointing the connector delete's own refusal exists to make
+    // explicit, which is exactly the operation that can name a row
+    // somebody has just retired.
+    const refusal = await refusalFrom(
+      () => store.updateSubscription(feed.id, { connectorId: 404 }),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+    expect(await readSubscription(store, feed.id)).toStrictEqual(feed);
+  });
+
+  it('refuses a re-point onto a connector just deleted', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedSubscriptions(store, RADAR);
+    const retired = await addConnector(store, 'search', 'example-retired');
+
+    // The race `src/subscriptions/store.ts` describes, reached
+    // directly rather than argued: the service resolves the connector
+    // before writing, so what is left is the row going away in
+    // between. This store's connector guard reads a planted count, so
+    // nothing holds the delete and the window is openable by hand.
+    expect(await store.deleteConnector(retired.id)).toBe(true);
+
+    const refusal = await refusalFrom(
+      () => store.updateSubscription(feed.id, { connectorId: retired.id }),
+    );
+
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+  });
+
+  it('names the constraint the connector guard names', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model } = await seedSubscriptions(store, RADAR);
+
+    store.setConnectorSubscriptions(model.id, 1);
+
+    // ONE CONSTRAINT READ FROM BOTH ENDS, which no other mechanism in
+    // this file is. The connector guard refuses a DELETE and this
+    // half refuses a WRITE, and both name the same key — so a
+    // rename on either side that missed the other would show up here
+    // rather than in a deployment.
+    const held = await refusalFrom(() => store.deleteConnector(model.id));
+    const written = await refusalFrom(
+      () => addSubscription(store, domain.id, 'email_draft', 404),
+    );
+
+    expect(written.constraint).toBe(held.constraint);
+    expect(held.reason).toBe(written.reason);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sequence behind export_subscriptions.id, and the four refusals
+// that burn it
+// ---------------------------------------------------------------------------
+
+describe('the subscription id sequence', () => {
+  it('hands the first subscription id 1', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const connector = await addConnector(store, 'notebook', ARCHIVE_NOTEBOOK);
+    const inserted = await addSubscription(
+      store,
+      domain.id,
+      OBSIDIAN,
+      connector.id,
+    );
+
+    // Its own counter, and none of the other seven: the domain and
+    // the connector above each hold id 1 as well.
+    expect(inserted.id).toBe(1);
+    expect(domain.id).toBe(1);
+    expect(connector.id).toBe(1);
+  });
+
+  it('burns an id on a refused insert, as the sequence does', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    await refusalFrom(
+      () => addSubscription(store, domain.id, RSS, notebook.id),
+    );
+
+    const next = await addSubscription(store, domain.id, 'pdf', notebook.id);
+
+    // 5 rather than 4: the three seeded rows took 1, 2 and 3, and the
+    // refusal took the fourth. No measurement on this table of its
+    // own — the reasoning is `personas`', where two refused inserts
+    // between two accepted ones left a gap of two against the live
+    // server.
+    expect(next.id).toBe(5);
+  });
+
+  it('burns one on a CHECK refusal as well', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    await refusalFrom(
+      () => addSubscription(store, domain.id, 'telegram', notebook.id),
+    );
+
+    const next = await addSubscription(store, domain.id, 'pdf', notebook.id);
+
+    expect(next.id).toBe(5);
+  });
+
+  it('burns one on each foreign key too', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    // The counter advances ahead of EVERY check rather than ahead of
+    // the key check alone, and this table has four to say it over.
+    await refusalFrom(
+      () => addSubscription(store, 404, OBSIDIAN, notebook.id),
+    );
+    await refusalFrom(() => addSubscription(store, domain.id, 'pdf', 404));
+
+    const next = await addSubscription(store, domain.id, 'pdf', notebook.id);
+
+    expect(next.id).toBe(6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The cascade that arrives, and the one it deliberately stops short of
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its subscriptions', () => {
+  it('takes the subscriptions of the domain it removes', async () => {
+    const store = createMemoryResearchStore();
+    const planted = await seedSubscriptions(store, RADAR);
+    const { domain, digest, feed, archive } = planted;
+
+    // `export_subscriptions.domain_id` is `ON DELETE CASCADE`, and
+    // nothing in schema v2 points at `export_subscriptions`, so there
+    // is no guard below this one to refuse it the way
+    // `categories.parent_id` refuses a category delete.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findSubscriptionById(digest.id)).toBeNull();
+    expect(await store.findSubscriptionById(feed.id)).toBeNull();
+    expect(await store.findSubscriptionById(archive.id)).toBeNull();
+    expect(await store.countSubscriptions(domain.id)).toBe(0);
+    expect(await store.listSubscriptions(domain.id, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+  });
+
+  it('leaves the connectors those rows named standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model, notebook } = await seedSubscriptions(store, RADAR);
+
+    await store.deleteDomain(domain.id);
+
+    // The cascade stops exactly where the schema stops it. The
+    // `ON DELETE cascade` is on `domain_id`; `connector_id` carries
+    // `ON DELETE no action` and points the other way, so a domain
+    // delete clears subscriptions OUT of a connector's way rather
+    // than taking the connector with them.
+    expect(await store.countSubscriptions(domain.id)).toBe(0);
+    expect(await store.countConnectors(EVERY_KIND)).toBe(3);
+    expect(await readConnector(store, model.id)).toStrictEqual(model);
+    expect(await readConnector(store, notebook.id)).toStrictEqual(notebook);
+  });
+
+  it('leaves a second domain subscriptions standing', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedSubscriptions(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+    const kept = await addSubscription(
+      store,
+      transit.id,
+      RSS,
+      radar.notebook.id,
+    );
+
+    await store.deleteDomain(radar.domain.id);
+
+    expect(await store.countSubscriptions(transit.id)).toBe(1);
+    expect(await readSubscription(store, kept.id)).toStrictEqual(kept);
+  });
+
+  it('takes the subscriptions and the topics together', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, digest } = await seedSubscriptions(store, RADAR);
+    const topic = await addTopic(store, domain.id, EDGE_INFERENCE);
+
+    // Every foreign key onto `domains.id` cascades, so one delete
+    // reaches the subscriptions and the topics in the same statement.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findSubscriptionById(digest.id)).toBeNull();
+    expect(await store.findTopicById(topic.id)).toBeNull();
+  });
+
+  it('is the only thing that removes one in bulk', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, digest } = await seedSubscriptions(store, RADAR);
+
+    // The other half of the cascade claim: a subscription goes when
+    // its domain goes and at no other time, so deleting the taxonomy
+    // under a domain leaves every subscription of it standing.
+    const category = await addCategory(store, domain.id, PLATFORMS);
+
+    expect(await store.deleteCategory(category.id)).toBe(true);
+    expect(await readSubscription(store, digest.id)).toStrictEqual(digest);
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+
+  it('frees the triples the deleted domain held', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, notebook } = await seedSubscriptions(store, RADAR);
+
+    await store.deleteDomain(domain.id);
+
+    const rebuilt = await store.insertDomain(domainInput(RADAR));
+    const accepted = await addSubscription(
+      store,
+      rebuilt.id,
+      RSS,
+      notebook.id,
+    );
+
+    expect(accepted.format).toBe(RSS);
+    expect(await store.countSubscriptions(rebuilt.id)).toBe(1);
+  });
+});
+
+describe('the connector delete a stored subscription does not hold', () => {
+  it('leaves the planted dependent count to the seam', async () => {
+    const store = createMemoryResearchStore();
+    const { model, archive } = await seedSubscriptions(store, RADAR);
+
+    // The SECOND place this file knowingly answers something a
+    // deployment would not, pinned rather than left to be discovered:
+    // `countConnectorDependents` reads what
+    // `setConnectorSubscriptions` planted and never the rows this
+    // half writes, so a stored subscription answers a counted zero
+    // and its connector's delete lands.
+    // `src/connectors/db-store.ts` counts the rows instead, and
+    // `MemoryResearchStore.setConnectorSubscriptions` carries why the
+    // two are not reconciled here.
+    expect(archive.connectorId).toBe(model.id);
+    expect(await store.countConnectorDependents(model.id))
+      .toStrictEqual({ exportSubscriptions: 0 });
+    expect(await store.deleteConnector(model.id)).toBe(true);
+
+    // And the plant is what a case wanting the guard reaches for,
+    // whether or not a subscription is stored. Without this the
+    // assertions above would equally describe a guard that had
+    // stopped reading the seam at all.
+    const guarded = await addConnector(store, 'search', 'example-guarded');
+
+    store.setConnectorSubscriptions(guarded.id, 1);
+
+    const refusal = await refusalFrom(
+      () => store.deleteConnector(guarded.id),
+    );
+
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+  });
+
+  it('leaves the subscription behind a deleted connector', async () => {
+    const store = createMemoryResearchStore();
+    const { model, archive } = await seedSubscriptions(store, RADAR);
+
+    await store.deleteConnector(model.id);
+
+    // The other face of the same divergence, and the reason it is
+    // worth a case rather than a sentence: the row survives naming an
+    // id nothing carries, which is a state a deployment's
+    // `ON DELETE no action` makes unreachable. A later write to it
+    // still meets the foreign-key guard, so the store is inconsistent
+    // in exactly one direction and says so.
+    expect(await readSubscription(store, archive.id)).toStrictEqual(archive);
+
+    const refusal = await refusalFrom(
+      () => store.updateSubscription(archive.id, { connectorId: model.id }),
+    );
+
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The one mutable member a subscription record carries
+// ---------------------------------------------------------------------------
+
+describe('the subscription due time crossing the boundary', () => {
+  it('lands an unscheduled row, which is not an absent one', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    // `InsertSubscriptionInput` declares no member that could set it,
+    // so the null is the type's doing rather than a default. Read
+    // back as well as answered, since a store echoing its argument
+    // would answer null having stored anything at all.
+    expect(digest.nextRunAt).toBeNull();
+    expect((await readSubscription(store, digest.id)).nextRunAt).toBeNull();
+  });
+
+  it('does not store the Date object it was handed', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+    const due = new Date('2026-03-01T00:00:00.000Z');
+
+    await store.updateSubscriptionSchedule(digest.id, due);
+
+    // The copy on the way IN. A store holding this instance lets the
+    // run-now that scheduled the subscription go on moving its due
+    // time afterwards, through a member the port declares `readonly`.
+    due.setTime(Date.parse('2030-06-01T00:00:00.000Z'));
+
+    expect(dueFor(await readSubscription(store, digest.id)))
+      .toBe(Date.parse('2026-03-01T00:00:00.000Z'));
+  });
+
+  it('answers a due time the write cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    const written = await store.updateSubscriptionSchedule(
+      digest.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    if (written === null) {
+      throw new Error('expected the schedule write to answer a row');
+    }
+
+    const scheduledAt = dueFor(written);
+
+    written.nextRunAt?.setTime(0);
+
+    // Against the primitive captured BEFORE the mutation: a store
+    // handing its own `Date` out has aliased the two, and comparing
+    // against `written.nextRunAt` would hold one lie against itself.
+    expect(dueFor(await readSubscription(store, digest.id)))
+      .toBe(scheduledAt);
+  });
+
+  it('answers a due time the read cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    await store.updateSubscriptionSchedule(
+      digest.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    const read = await readSubscription(store, digest.id);
+    const scheduledAt = dueFor(read);
+
+    read.nextRunAt?.setTime(0);
+
+    expect(dueFor(await readSubscription(store, digest.id)))
+      .toBe(scheduledAt);
+  });
+
+  it('answers a due time the list cannot be written through', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, digest } = await seedSubscriptions(store, RADAR);
+
+    await store.updateSubscriptionSchedule(
+      digest.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    const page = await store.listSubscriptions(domain.id, WHOLE_COLLECTION);
+    const [listed] = page.filter((row) => row.id === digest.id);
+
+    if (listed === undefined) {
+      throw new Error('expected the list to answer the scheduled row');
+    }
+
+    const scheduledAt = dueFor(listed);
+
+    listed.nextRunAt?.setTime(0);
+
+    expect(dueFor(await readSubscription(store, digest.id)))
+      .toBe(scheduledAt);
+  });
+
+  it('answers a fresh Date on every read', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    await store.updateSubscriptionSchedule(
+      digest.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+
+    const first = await readSubscription(store, digest.id);
+    const second = await readSubscription(store, digest.id);
+
+    expect(first.nextRunAt).not.toBe(second.nextRunAt);
+    expect(dueFor(first)).toBe(dueFor(second));
+  });
+
+  it('keeps a null a null across every answer', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedSubscriptions(store, RADAR);
+
+    // The branch the copy needs and the three answer sites it has to
+    // survive: a subscription nobody has run now is unscheduled, and
+    // a copy reaching for the instant unconditionally would throw
+    // here rather than answer.
+    const patched = await store.updateSubscription(feed.id, {
+      intervalSeconds: 900,
+    });
+    const page = await store.listSubscriptions(domain.id, WHOLE_COLLECTION);
+
+    expect(patched?.nextRunAt).toBeNull();
+    expect((await readSubscription(store, feed.id)).nextRunAt).toBeNull();
+    expect(page.filter((row) => row.nextRunAt !== null)).toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a page of subscriptions answers, and what scopes it
+// ---------------------------------------------------------------------------
+
+describe('the subscription list', () => {
+  it('orders by format, then by connector within it', async () => {
+    const store = createMemoryResearchStore();
+    const planted = await seedSubscriptions(store, RADAR);
+    const { domain, model, notebook } = planted;
+
+    const page = await store.listSubscriptions(domain.id, WHOLE_COLLECTION);
+
+    // The natural key per row rather than two single-column lists,
+    // which would leave the pairing itself unasserted. The fixture is
+    // written so the right order is wrong under every single-column
+    // reading: `feed` goes in first and sorts LAST, and the two
+    // `obsidian_md` rows are separated by the connector alone.
+    expect(page.map(tripleOf)).toStrictEqual([
+      `${OBSIDIAN}/${notebook.id}`,
+      `${OBSIDIAN}/${model.id}`,
+      `${RSS}/${notebook.id}`,
+    ]);
+    expect(page.map((row) => row.id))
+      .toStrictEqual([planted.digest.id, planted.archive.id, planted.feed.id]);
+  });
+
+  it('reads only the window it was given', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model } = await seedSubscriptions(store, RADAR);
+
+    const page = await store.listSubscriptions(domain.id, {
+      limit: 1,
+      offset: 1,
+    });
+
+    expect(page.map(tripleOf)).toStrictEqual([`${OBSIDIAN}/${model.id}`]);
+    expect(await store.countSubscriptions(domain.id)).toBe(3);
+  });
+
+  it('answers an empty window past the end', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedSubscriptions(store, RADAR);
+
+    expect(await store.listSubscriptions(domain.id, { limit: 50, offset: 50 }))
+      .toStrictEqual([]);
+  });
+
+  it('lists only the subscriptions of the domain asked about', async () => {
+    const store = createMemoryResearchStore();
+    const radar = await seedSubscriptions(store, RADAR);
+    const transit = await store.insertDomain(domainInput(TRANSIT));
+
+    await addSubscription(store, transit.id, RSS, radar.model.id);
+
+    const page = await store.listSubscriptions(
+      radar.domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    expect(page.map((row) => row.id))
+      .toStrictEqual([radar.digest.id, radar.archive.id, radar.feed.id]);
+    expect(await store.countSubscriptions(transit.id)).toBe(1);
+  });
+
+  it('answers an empty list for a domain subscribing to none', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    expect(await store.listSubscriptions(domain.id, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+    expect(await store.countSubscriptions(domain.id)).toBe(0);
+  });
+
+  it('answers zero for an id no domain carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.countSubscriptions(404)).toBe(0);
+    expect(await store.listSubscriptions(404, WHOLE_COLLECTION))
+      .toStrictEqual([]);
+  });
+
+  it('answers rows a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedSubscriptions(store, RADAR);
+
+    const [listed] = await store.listSubscriptions(domain.id, WHOLE_COLLECTION);
+
+    if (listed === undefined) {
+      throw new Error('expected the list to answer a row');
+    }
+
+    (listed as { format: string }).format = 'written through the list';
+
+    // Against the constants rather than against the records the
+    // writes answered: a store handing its own objects out has
+    // ALIASED the two, and the comparison then holds one lie against
+    // itself and passes.
+    const reread = await store.listSubscriptions(domain.id, WHOLE_COLLECTION);
+
+    expect(reread.map((row) => row.format))
+      .toStrictEqual([OBSIDIAN, OBSIDIAN, RSS]);
+  });
+});
+
+describe('the single subscription read', () => {
+  it('answers null for an id no subscription carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.findSubscriptionById(404)).toBeNull();
+  });
+
+  it('answers a row a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+    const interval = digest.intervalSeconds;
+
+    const read = await readSubscription(store, digest.id);
+
+    (read as { intervalSeconds: number }).intervalSeconds = 1;
+
+    // Against a primitive read BEFORE the mutation: comparing
+    // against `digest.intervalSeconds` would compare one lie against
+    // itself, since a store handing its own objects out aliased the
+    // two.
+    expect((await readSubscription(store, digest.id)).intervalSeconds)
+      .toBe(interval);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The three subscription writes that are not the insert
+// ---------------------------------------------------------------------------
+
+describe('the subscription patch', () => {
+  it('rewrites the members it names and leaves the rest', async () => {
+    const store = createMemoryResearchStore();
+    const { notebook, digest } = await seedSubscriptions(store, RADAR);
+
+    const patched = await store.updateSubscription(digest.id, {
+      intervalSeconds: 900,
+      enabled: false,
+    });
+
+    expect(patched?.intervalSeconds).toBe(900);
+    expect(patched?.enabled).toBe(false);
+    expect(patched?.format).toBe(OBSIDIAN);
+    expect(patched?.connectorId).toBe(notebook.id);
+  });
+
+  it('clears a bound with a null and leaves it alone when absent', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model } = await seedSubscriptions(store, RADAR);
+    const bounded = await addSubscription(store, domain.id, 'pdf', model.id, {
+      minIntervalSeconds: 300,
+      maxIntervalSeconds: 86400,
+    });
+
+    // The three requests a nullable member distinguishes: absent
+    // leaves the ceiling alone, an explicit null clears the floor. A
+    // store reaching for `??` collapses the two and makes removing a
+    // floor unexpressible.
+    const patched = await store.updateSubscription(bounded.id, {
+      minIntervalSeconds: null,
+    });
+
+    expect(patched?.minIntervalSeconds).toBeNull();
+    expect(patched?.maxIntervalSeconds).toBe(86400);
+
+    const lowered = await store.updateSubscription(bounded.id, {
+      maxIntervalSeconds: 43200,
+    });
+
+    expect(lowered?.maxIntervalSeconds).toBe(43200);
+    expect(lowered?.minIntervalSeconds).toBeNull();
+  });
+
+  it('writes a false enabled rather than ignoring it', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    // `enabled` is NOT NULL and defaults true, so `false` is a value
+    // being written rather than a member being left alone. This is
+    // the column for suspending a delivery; cancelling it is the
+    // delete, and a run-now is neither.
+    await store.updateSubscription(digest.id, { enabled: false });
+
+    expect((await readSubscription(store, digest.id)).enabled).toBe(false);
+  });
+
+  it('answers the stored row for a patch naming no member', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    // `export_subscriptions` carries no `updated_at`, so an empty
+    // patch has literally nothing to set and drizzle throws `No
+    // values to set` on an empty update list. The port decides the
+    // answer rather than leaving its two implementations to disagree.
+    expect(await store.updateSubscription(digest.id, {}))
+      .toStrictEqual(digest);
+  });
+
+  it('cannot reach the due time whatever it is handed', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    // `SubscriptionPatch` declares no `nextRunAt`, so the containment
+    // is the type's; the cast is what lets a case ask what happens
+    // when one arrives anyway, which is the reading a route's
+    // `.strict()` schema cannot give from inside `src/`.
+    const patched = await store.updateSubscription(
+      digest.id,
+      { nextRunAt: new Date('2026-03-01T00:00:00.000Z') } as SubscriptionPatch,
+    );
+
+    expect(patched?.nextRunAt).toBeNull();
+    expect((await readSubscription(store, digest.id)).nextRunAt).toBeNull();
+  });
+
+  it('answers null from a patch naming no stored row', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.updateSubscription(404, { enabled: false })).toBeNull();
+  });
+
+  it('answers a row a caller cannot write into', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    const patched = await store.updateSubscription(digest.id, {
+      intervalSeconds: 900,
+    });
+
+    if (patched === null) {
+      throw new Error('expected the patch to answer a row');
+    }
+
+    (patched as { intervalSeconds: number }).intervalSeconds = 1;
+
+    expect((await readSubscription(store, digest.id)).intervalSeconds)
+      .toBe(900);
+  });
+});
+
+describe('the subscription schedule write', () => {
+  it('writes the instant it is handed and nothing else', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+    const due = new Date('2026-03-01T00:00:00.000Z');
+
+    const written = await store.updateSubscriptionSchedule(digest.id, due);
+
+    // The whole record against the row before the call, with only
+    // the due time permitted to differ: the port says this method
+    // writes one column, and asserting the column alone would pass
+    // against a store that also re-pointed the connector.
+    expect(written).toStrictEqual({ ...digest, nextRunAt: due });
+  });
+
+  it('takes no view of the instant it is handed', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model } = await seedSubscriptions(store, RADAR);
+    const row = await addSubscription(store, domain.id, 'pdf', model.id, {
+      enabled: false,
+      minIntervalSeconds: 300,
+      maxIntervalSeconds: 900,
+    });
+    const past = new Date('2020-01-01T00:00:00.000Z');
+
+    // A time in the past on a DISABLED row: no clamp, no clock and
+    // no reading of `enabled`. All three are decisions
+    // `src/subscriptions/service.ts` takes, and a store taking them
+    // would move a rule into the half that needs a database.
+    const written = await store.updateSubscriptionSchedule(row.id, past);
+
+    expect(written?.nextRunAt?.toISOString())
+      .toBe('2020-01-01T00:00:00.000Z');
+    expect(written?.enabled).toBe(false);
+  });
+
+  it('moves a due time that is already set', async () => {
+    const store = createMemoryResearchStore();
+    const { digest } = await seedSubscriptions(store, RADAR);
+
+    await store.updateSubscriptionSchedule(
+      digest.id,
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+    await store.updateSubscriptionSchedule(
+      digest.id,
+      new Date('2026-03-08T00:00:00.000Z'),
+    );
+
+    expect((await readSubscription(store, digest.id)).nextRunAt?.toISOString())
+      .toBe('2026-03-08T00:00:00.000Z');
+  });
+
+  it('answers null for an id no subscription carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.updateSubscriptionSchedule(404, new Date()))
+      .toBeNull();
+  });
+});
+
+describe('the subscription delete', () => {
+  it('removes one and leaves its domain standing', async () => {
+    const store = createMemoryResearchStore();
+    const planted = await seedSubscriptions(store, RADAR);
+    const { domain, digest, feed } = planted;
+
+    expect(await store.deleteSubscription(digest.id)).toBe(true);
+    expect(await store.findSubscriptionById(digest.id)).toBeNull();
+    expect(await readSubscription(store, feed.id)).toStrictEqual(feed);
+    expect(await readDomain(store, RADAR)).toStrictEqual(domain);
+  });
+
+  it('answers false for an id no subscription carries', async () => {
+    const store = createMemoryResearchStore();
+
+    expect(await store.deleteSubscription(404)).toBe(false);
+  });
+
+  it('cannot be refused, unlike the connector delete', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, model, digest } = await seedSubscriptions(store, RADAR);
+
+    store.setConnectorSubscriptions(model.id, 1);
+
+    // Nothing in schema v2 points at `export_subscriptions`, so there
+    // is no guard to run into and no state a subscription can be in
+    // that holds its delete. The connector beside it IS refused,
+    // under the very rule this one has no counterpart of — which is
+    // what says the acceptance above is a fact about the table rather
+    // than a store that refuses nothing.
+    expect(await store.deleteSubscription(digest.id)).toBe(true);
+    expect(await store.countSubscriptions(domain.id)).toBe(2);
+
+    const refusal = await refusalFrom(() => store.deleteConnector(model.id));
+
+    expect(refusal.constraint)
+      .toBe('export_subscriptions_connector_id_connectors_id_fk');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // The one row the database pins, before it exists and after
 // ---------------------------------------------------------------------------

@@ -22,6 +22,16 @@
  *   and no mount prefix has to be carried in the reader's head. See
  *   `src/domains/`, `src/taxonomy/`, `src/personas/`, `src/settings/` and
  *   `docs/architecture/08-http-api.md`.
+ * - The wave-2 HTTP surface — topics, sources with their read-only
+ *   failures queue, connectors and export subscriptions, as five more
+ *   routers mounted the same way. Two of the four groups do not sit in a
+ *   directory named for the path they answer under: `src/sources/` also
+ *   holds the source ADAPTER contract, and the export subscriptions
+ *   answer under `/exports` from `src/subscriptions/` because
+ *   `src/exports/` is the renderer registry. Two of those five routers
+ *   take a clock beside the store, for the schedule verbs that write
+ *   `next_run_at`. See `src/topics/`, `src/sources/`, `src/connectors/`,
+ *   `src/subscriptions/` and the same doc.
  */
 import type { AuthDeps } from './auth/index.js';
 import type { ServiceConfig } from '../lib/express/index.js';
@@ -36,6 +46,8 @@ import {
   createDbSessionVerifier,
 } from './auth/index.js';
 import { config } from './config.js';
+import { createDbConnectorStore } from './connectors/db-store.js';
+import { buildConnectorsRouter } from './connectors/routes.js';
 import { createCronDependency } from './cron/index.js';
 import { createDbDependency } from './db/index.js';
 import { listUsers } from './db/users.js';
@@ -51,9 +63,16 @@ import { createRedisDependency } from './redis/index.js';
 import { exampleRouter } from './routes/example.js';
 import { createDbSettingsStore } from './settings/db-store.js';
 import { buildSettingsRouter } from './settings/routes.js';
+import { createDbSourceStore } from './sources/db-store.js';
+import { buildSourceFailuresRouter } from './sources/failures-routes.js';
+import { buildSourcesRouter } from './sources/routes.js';
+import { createDbSubscriptionStore } from './subscriptions/db-store.js';
+import { buildSubscriptionsRouter } from './subscriptions/routes.js';
 import { buildCategoriesRouter } from './taxonomy/categories-routes.js';
 import { createDbTaxonomyStore } from './taxonomy/db-store.js';
 import { buildTermsRouter } from './taxonomy/terms-routes.js';
+import { createDbTopicStore } from './topics/db-store.js';
+import { buildTopicsRouter } from './topics/routes.js';
 
 const logger = createLogger('template-service-express');
 
@@ -98,51 +117,86 @@ const cronDep = createCronDependency(
 const authStore = createDbAuthStore(() => dbDep.client);
 
 /**
- * The four wave-1 stores, over the same thunk and for the same reason the
+ * The resource stores, over the same thunk and for the same reason the
  * auth store above takes one.
  *
  * `() => dbDep.client` rather than a resolved client: every
  * `createDb*Store` here opens nothing at construction and resolves the
- * client per call, so all five stores are legal to build before the
- * Postgres dependency has started. What this wiring owes is only that no
- * CALLER arrives first, and every route gets that from `register` running
- * after the dependency array.
+ * client per call, so every store on this page is legal to build before
+ * the Postgres dependency has started. What this wiring owes is only that
+ * no CALLER arrives first, and every route gets that from `register`
+ * running after the dependency array.
  *
- * Four constructors rather than one because the four resource groups are
- * four PORTS over one database — see `src/domains/store.ts` and its three
- * siblings. None of them holds state, so building them separately costs
- * nothing.
+ * One constructor per resource group rather than one for all of them,
+ * because each group is its own PORT over one database — see
+ * `src/domains/store.ts` and its siblings. None of them holds state, so
+ * building them separately costs nothing.
+ *
+ * The wave-2 four sit below the wave-1 four, in the order their routers
+ * mount. There is no ninth: `createDbSourceStore` serves BOTH source
+ * routers, the failures queue being a `Pick` of that same port rather
+ * than a port of its own.
  */
 const domainStore = createDbDomainStore(() => dbDep.client);
 const taxonomyStore = createDbTaxonomyStore(() => dbDep.client);
 const personaStore = createDbPersonaStore(() => dbDep.client);
 const settingsStore = createDbSettingsStore(() => dbDep.client);
+const topicStore = createDbTopicStore(() => dbDep.client);
+const sourceStore = createDbSourceStore(() => dbDep.client);
+const connectorStore = createDbConnectorStore(() => dbDep.client);
+const subscriptionStore = createDbSubscriptionStore(() => dbDep.client);
 
 /**
- * The four ports as one object, which is what three of the five routers
- * below need.
+ * The eight ports as one object, which is what most of the routers below
+ * need.
  *
- * `CategoryServiceStore`, `PersonaServiceStore` and `SettingsServiceStore`
- * each intersect a `Pick` of `DomainStore` with a `Pick` of their own port,
- * because a route addressed by `:slug` resolves the domain before it does
- * anything else. So a router spanning two ports needs one object carrying
- * both, and a spread is what builds it: the four ports declare 27 methods
- * under 27 distinct names, so no member of one shadows a member of another.
+ * `CategoryServiceStore`, `PersonaServiceStore`, `SettingsServiceStore`,
+ * `TopicServiceStore` and `SourceServiceStore` each intersect a `Pick` of
+ * `DomainStore` with a `Pick` of their own port, because a route addressed
+ * by `:slug` resolves the domain before it does anything else — and
+ * `SubscriptionServiceStore` intersects THREE, a subscription naming a
+ * connector as well as a domain. So a router spanning more than one port
+ * needs one object carrying them all, and a spread is what builds it: no
+ * two of the eight ports declare a method under the same name, so no
+ * member of one shadows a member of another.
  *
- * ONE composition rather than three, handed to all five routers including
- * the two that reach a single port. Each router's own `store` type is what
+ * ONE composition rather than six, handed to every router including the
+ * four that reach a single port. Each router's own `store` type is what
  * narrows it to the methods that router may reach, and a type is a stronger
  * statement than the shape of the argument — it is checked rather than
  * conventional. `tests/helpers/memory-research-store.ts` is the same shape
- * from the other side: one implementation behind all four ports, which is
- * what lets the suite drive these routers with no database up.
+ * from the other side: one implementation behind all eight ports, which is
+ * what lets the suite drive every router here with no database up.
  */
 const researchStore = {
   ...domainStore,
   ...taxonomyStore,
   ...personaStore,
   ...settingsStore,
+  ...topicStore,
+  ...sourceStore,
+  ...connectorStore,
+  ...subscriptionStore,
 };
+
+/**
+ * The present, for the two routers below whose schedule verbs write
+ * `next_run_at`.
+ *
+ * A thunk and not an instant: a router is built once, at boot, and then
+ * answers for the life of the process, so a captured `Date` would freeze
+ * every due time it ever writes at the moment of wiring. The session clock
+ * below is a thunk for the same reason.
+ *
+ * ONE const rather than an inline `() => new Date()` at each of the two
+ * mounts, because the two verbs answer the same present and a reader
+ * should not have to compare two expressions to know it. It is not a
+ * default being supplied: `TopicsRouterOptions.clock` and
+ * `SubscriptionsRouterOptions.clock` are both REQUIRED, which is those
+ * types refusing to let a caller mount a schedule verb without saying
+ * which present it answers against. This is that call site.
+ */
+const clock = () => new Date();
 
 /**
  * The clock and the TTL every session decision below is made against.
@@ -289,15 +343,42 @@ await createService({
     // every request that REACHES it and not only for the ones its router
     // matches. Measured against a service carrying an auth block: from
     // here, `/example`, `/auth/*`, `/users` and `/me` answer exactly as
-    // they did, because all four are mounted above; a credentialled request
-    // to the fifth router runs the guard five times, once per mount it
-    // falls through; and an unmatched path answers `401` rather than `404`
-    // to a caller with no credential, which is the one answer on this
-    // service the wave changes outside its own five prefixes.
+    // they did, because all four are mounted above; a credentialled
+    // request runs the guard once per mount it falls through, so the
+    // LAST router below runs it once for every router above it too; and
+    // an unmatched path answers `401` rather than `404` to a caller with
+    // no credential, which is the one answer on this service these
+    // mounts change outside their own prefixes.
     app.use(ctx.requireAuth, buildDomainsRouter({ store: researchStore }));
     app.use(ctx.requireAuth, buildCategoriesRouter({ store: researchStore }));
     app.use(ctx.requireAuth, buildTermsRouter({ store: researchStore }));
     app.use(ctx.requireAuth, buildPersonasRouter({ store: researchStore }));
     app.use(ctx.requireAuth, buildSettingsRouter({ store: researchStore }));
+
+    // The wave-2 HTTP surface, below the wave-1 mounts and guarded the
+    // same way. Order among the five is presentational only: every path
+    // these routers declare is distinct, and `/sources/:id/failures` is
+    // a longer pattern than anything the sources router registers, so no
+    // mount can shadow another whichever way round they sit.
+    //
+    // Two take a clock as well as the store. That is the whole of what
+    // separates them here: `POST /topics/:id/run-now`, `/topics/:id/pause`
+    // and `POST /exports/:id/run-now` are the only routes on this service
+    // that write a due time, and the instant they write is read from the
+    // thunk above rather than from a `Date` this file captured at boot.
+    app.use(ctx.requireAuth, buildTopicsRouter({
+      store: researchStore,
+      clock,
+    }));
+    app.use(ctx.requireAuth, buildSourcesRouter({ store: researchStore }));
+    app.use(
+      ctx.requireAuth,
+      buildSourceFailuresRouter({ store: researchStore }),
+    );
+    app.use(ctx.requireAuth, buildConnectorsRouter({ store: researchStore }));
+    app.use(ctx.requireAuth, buildSubscriptionsRouter({
+      store: researchStore,
+      clock,
+    }));
   },
 });

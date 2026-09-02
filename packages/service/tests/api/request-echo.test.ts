@@ -1,112 +1,148 @@
 /**
- * One sentinel string is submitted through every wave-1 WRITE route
- * — as a field value, as an unrecognized key, as a key inside an
- * open record and as a query parameter — and counted in what came
- * back and in everything the process wrote while answering. One
- * more request, to a route planted to echo, is what says the
+ * One sentinel string is submitted through every WRITE route this
+ * service mounts — as a field value, as an unrecognized key, as a key
+ * inside an open record and as a query parameter — and counted in
+ * what came back and in everything the process wrote while answering.
+ * One more request, to a route planted to echo, is what says the
  * counting works.
  *
  * WHAT THIS FILE PROVES THAT ITS SIBLINGS DO NOT is containment
  * across the WHOLE surface in one reading. Each resource group's
  * `*-routes.test.ts` carries a containment row of its own, but each
- * is scoped to its own router and each builds a bare `express()`
- * app with no `pino-http` in it, so none of them can see a log line
- * at all. The rule is that no request body content reaches a
- * response body or a log line through a validation detail, and
- * `docs/architecture/01-invariants.md` registers it, with this
- * file named as the artifact that fails when it stops holding.
+ * is scoped to its own router and each builds a bare `express()` app
+ * with no `pino-http` in it, so none of them can see a log line at
+ * all. The rule is that no request body content reaches a response
+ * body or a log line through a validation detail, and
+ * `docs/architecture/01-invariants.md` registers it, with this file
+ * named as the artifact that fails when it stops holding.
  *
- * THE FOUR CHANNELS, and where each has a subject. A FIELD VALUE
- * goes at a declared member: on seven of the nine body-bearing
+ * THE FOUR CHANNELS, and where each has a subject. A FIELD VALUE goes
+ * at a declared member: on fifteen of the eighteen body-bearing write
  * routes the schema refuses it outright (a slug that is not
  * slug-shaped, a string where a number or an enum is declared) and
- * the refusal is a detail naming the field; on the two personas
- * routes no member refuses a string at all, so the value is
- * ACCEPTED by the schema and the request dies at its address
- * instead — which is the shape where the sentinel travelled
- * FURTHEST into the handler. An UNRECOGNIZED KEY is the sentinel
- * spelled as an undeclared member of a `.strict()` object, which is
- * the one zod issue whose own message quotes what was submitted.
- * An OPEN-RECORD KEY is the sentinel as an operator-chosen key
- * below one of the three declared open paths, where the leak would
- * be the PATH rather than a message. A QUERY PARAMETER is the
- * sentinel as both the key and the value of a query string, on
- * every write route including the four `DELETE`s, which carry no
- * body and would otherwise have no row here.
+ * the refusal is a detail naming the field; on the other three — the
+ * two personas routes and a connector patch, whose bodies declare
+ * free text and nothing that can refuse a string — the value is
+ * ACCEPTED by the schema and the request dies at its address instead,
+ * which is the shape where the sentinel travelled FURTHEST into the
+ * handler. An UNRECOGNIZED KEY is the sentinel spelled as an
+ * undeclared member of a `.strict()` object, which is the one zod
+ * issue whose own message quotes what was submitted. An OPEN-RECORD
+ * KEY is the sentinel as an operator-chosen key below one of the six
+ * declared open paths, where the leak would be the PATH rather than a
+ * message. A QUERY PARAMETER is the sentinel as both the key and the
+ * value of a query string, on every write route including the ten
+ * that read no body and would otherwise have no row here.
+ *
+ * THE OPEN-RECORD CHANNEL HAS TWO SHAPES AND EVERY ROW DECLARES
+ * WHICH, because the six open paths do not answer alike and a single
+ * loop over them would have had to weaken its assertion to hold both.
+ * Three CONSTRAIN their values — `settings.scoringWeights` is a
+ * record of numbers and `settings.fieldContract` a record of
+ * `.strict()` objects — so a bad entry raises at a path CARRYING the
+ * operator key, and the collapse in `src/http/validation.ts` is the
+ * only thing between that key and the wire. The other three are each
+ * `z.record(z.string(), z.unknown())`: the value schema refuses
+ * nothing and a JSON key is always a string, so no issue is reachable
+ * strictly below the prefix at all. Their keys are ACCEPTED, carried
+ * into a service's own input, and refused at the address instead — no
+ * detail, a `404`, and the deepest a submitted KEY travels on this
+ * surface. {@link EchoProbe.masksAPath} is where each row says which
+ * it is and the table guard asserts both groups are populated, so a
+ * record narrowed or widened later reddens the row it changed rather
+ * than sliding into the other group's assertions. Both shapes read
+ * their answer through `detailFieldsOf`, and the planted window below
+ * is where that reader is shown finding a field at all.
  *
  * TWO OF THE THREE WINDOWS ASSERT A ZERO, AND THE SPLIT BETWEEN THEM
  * IS THE FILE'S ONE REAL FINDING. The body channels and the query
  * channel are captured under separate boots because their answers
  * about the process output DIFFER, and a single window would have had
  * to weaken the body claim to accommodate the query one. Over the
- * twenty-one body rows the capture holds the sentinel ZERO times.
- * Over the fourteen query rows it holds it FIFTY-FOUR, and none of
- * those is a handler's doing: `applyMiddleware` builds `pino-http`
- * with no `redact` option, and its request serialiser records the raw
- * `url` AND the parsed `query` object, so every occurrence in a
- * request URL lands in the capture exactly twice. The query channel's
- * containment claim is therefore about the RESPONSE BODY alone, and
- * the log half of it is a measurement about the transport that this
- * file states rather than a zero it asserts. Nothing on the wave-1
- * surface takes a secret in a query string — `?page`, `?perPage`,
- * `?cascade` and `?format` are the whole vocabulary — so the
- * finding is a boundary on the claim rather than a defect in it.
+ * forty-two body rows the capture holds the sentinel ZERO times. Over
+ * the twenty-nine query rows it holds it ONE HUNDRED AND FOURTEEN,
+ * and none of those is a handler's doing: `applyMiddleware` builds
+ * `pino-http` with no `redact` option, and its request serialiser
+ * records the raw `url` AND the parsed `query` object, so every
+ * occurrence in a request URL lands in the capture exactly twice. The
+ * query channel's containment claim is therefore about the RESPONSE
+ * BODY alone, and the log half of it is a measurement about the
+ * transport that this file states rather than a zero it asserts.
+ * Nothing on this surface takes a secret in a query string — `?page`,
+ * `?perPage`, `?cascade`, `?format` and `?kind` are the whole
+ * vocabulary — so the finding is a boundary on the claim rather than
+ * a defect in it.
  *
- * THE TWO ZEROS ARE ABOUT DIFFERENT CHANNELS, which is worth
- * stating because they read as one claim written twice.
- * `errorHandler` in `lib/errors/handler.ts` logs an `AppError` as
- * `{ code, cause }` plus its `message` and does NOT log `details`,
- * so a leak in a validation detail reaches the response body and
- * never the log. The capture's zero covers the other half — the
- * message a service constructed, the `cause` it attached, and every
- * request header `pino-http` writes out — and only the body's zero
- * covers the detail. A file asserting one of them has said nothing
- * about the other.
+ * THE TWO ZEROS ARE ABOUT DIFFERENT CHANNELS, which is worth stating
+ * because they read as one claim written twice. `errorHandler` in
+ * `lib/errors/handler.ts` logs an `AppError` as `{ code, cause }`
+ * plus its `message` and does NOT log `details`, so a leak in a
+ * validation detail reaches the response body and never the log. The
+ * capture's zero covers the other half — the message a service
+ * constructed, the `cause` it attached, and every request header
+ * `pino-http` writes out — and only the body's zero covers the
+ * detail. A file asserting one of them has said nothing about the
+ * other.
  *
- * THE THIRD WINDOW IS A PLANTED LEAK, AND IT IS WHAT MAKES BOTH
- * ZEROS READINGS. A zero-hit scan is satisfied by a needle that
- * stopped matching, by a capture that stopped reading and by a
- * window that never opened, and none of those is distinguishable
- * from a surface that leaks nothing. So a third boot is assembled
- * by the SAME function over the SAME five mounts with one route
- * added — {@link plantLeakingRoute}, mounted where a sixth wave-1
- * router would go — and that route does on purpose everything the
- * surface is forbidden to do. It writes the submitted body to the
- * console, to stderr, into the message of the error it throws and
- * into that error's one detail, and each of those is then counted
- * with the same {@link countSentinel} both zeros are counted with.
+ * THE THIRD WINDOW IS A PLANTED LEAK, AND IT IS WHAT MAKES BOTH ZEROS
+ * READINGS. A zero-hit scan is satisfied by a needle that stopped
+ * matching, by a capture that stopped reading and by a window that
+ * never opened, and none of those is distinguishable from a surface
+ * that leaks nothing. So a third boot is assembled by the SAME
+ * function over the SAME ten mounts with one route added —
+ * {@link plantLeakingRoute}, mounted where an eleventh router would
+ * go — and that route does on purpose everything the surface is
+ * forbidden to do. It writes the submitted body to the console, to
+ * stderr, into the message of the error it throws and into that
+ * error's first detail, and it leaks the operator's own key as an
+ * UNCOLLAPSED field path through the request logger and a second
+ * detail. Each of those is then counted with the same
+ * {@link countSentinel} both zeros are counted with.
  *
- * FOUR CHANNELS RATHER THAN ONE PLANT, because this file makes
- * four claims and one leak would prove one of them.
- * {@link PLANTED_LEAKS} declares where each is expected to land
- * and the cases read it row by row. Two of the four exist because
- * nothing else in the package can reach them: no module under
- * `src/` writes to the console, and the framework writes to stderr
- * on no healthy boot, so those two patches had no live control at
- * all before this window and their mutation legs were measured
- * zeros. The other two are the channel split above made
- * checkable — the thrown MESSAGE lands in both texts and the
- * DETAIL lands in the response alone, because
+ * FIVE CHANNELS RATHER THAN ONE PLANT, because this file makes five
+ * claims and one leak would prove one of them. {@link PLANTED_LEAKS}
+ * declares where each is expected to land and the cases read it row
+ * by row. Two of the five exist because nothing else in the package
+ * can reach them: no module under `src/` writes to the console, and
+ * the framework writes to stderr on no healthy boot, so those two
+ * patches had no live control at all before this window and their
+ * mutation legs were measured zeros. Two more are the channel split
+ * above made checkable — the thrown MESSAGE lands in both texts and
+ * the DETAIL lands in the response alone, because
  * `lib/errors/handler.ts` logs the one and not the other.
  *
- * WHAT THE PLANTED WINDOW DOES NOT DO is assert a containment
- * claim of its own, and it reaches no store: its route reads the
- * body, writes it out four times and throws. It is also invisible
- * to every mutation of `src/http/validation.ts` by construction,
- * which is the point rather than a limit — a control that moved
- * with the subject would be a second measurement of the subject
- * instead of evidence that the instrument works.
+ * THE FIFTH IS THE ONE WAVE 2 MADE NECESSARY, and it is the only
+ * channel here whose leaked text is a field PATH. The open-record
+ * rows assert that a masking answer carries `<prefix>.*` and that an
+ * inert one carries no detail at all, and both of those are satisfied
+ * by a `detailFieldsOf` that had stopped finding fields — so the
+ * plant answers {@link PLANTED_OPEN_PATH} through that same reader
+ * and logs it through the per-request `pino-http` child. Its body is
+ * the shape the three inert rows submit, and the path it leaks is
+ * BUILT from the key that body carried rather than spelled, which is
+ * what a leg answering a constant reddens.
+ *
+ * WHAT THE PLANTED WINDOW DOES NOT DO is assert a containment claim
+ * of its own, and it reaches no store: its route reads the body,
+ * leaks it through five channels and throws. It is also invisible to
+ * every mutation of `src/http/validation.ts` by construction, which
+ * is the point rather than a limit — a control that moved with the
+ * subject would be a second measurement of the subject instead of
+ * evidence that the instrument works. Measured: dropping the
+ * open-path collapse reddens three cases and not one of them is
+ * planted, even now that a planted row answers an open path of its
+ * own.
  *
  * HOW THE CAPTURE WORKS is `tests/auth/secret-logging.test.ts`'s
  * mechanism, unchanged and for its reasons. pino picks its
- * destination once, at logger construction, and a stream that has
- * not been replaced gets a `SonicBoom` writing straight to file
+ * destination once, at logger construction, and a stream that has not
+ * been replaced gets a `SonicBoom` writing straight to file
  * descriptor 1 — which no later patch of `process.stdout.write` can
  * see. So the patch goes in FIRST and every logger on the path is
  * constructed under it: `createService`'s own and the separate
- * instance `applyMiddleware` builds for `pino-http`. The five
- * console methods are patched alongside the two streams, because
- * vitest replaces the console with its own reporting channel and a
+ * instance `applyMiddleware` builds for `pino-http`. The five console
+ * methods are patched alongside the two streams, because vitest
+ * replaces the console with its own reporting channel and a
  * `console.log` under the runner therefore reaches no patch of
  * `process.stdout.write` at all. And the streams are put back by
  * restoring the own property DESCRIPTOR rather than by assigning a
@@ -117,151 +153,238 @@
  *
  * THE IN-BAND CONTROLS, because a capture that read nothing and a
  * service that leaked nothing look identical, and so do a request
- * that carried the sentinel and one that never did. Every row
- * asserts the sentinel is present in the bytes it actually SENT —
- * the serialised body for a body row, the request URL for a query
- * row — so a zero is always about a request that carried one.
- * Every row asserts its answer is JSON carrying a `code`, which is
- * the failure envelope and says the wave-1 surface answered rather
- * than Express's own page. Each window asserts the capture holds
- * the framework's `listening` line and a `request completed` record
- * for one of its own rows, which is what says the window was open
- * across both the boot and the requests. And the search itself has
- * TWO live positive controls rather than none: the planted window
- * above, which is the direct one, and the query window's
- * fifty-four, which is the same counter over the same kind of
- * capture returning a known non-zero in the same run as the body
- * window's zero.
+ * that carried the sentinel and one that never did. Every row asserts
+ * the sentinel is present in the bytes it actually SENT — the
+ * serialised body for a body row, the request URL for a query row —
+ * so a zero is always about a request that carried one. Every row
+ * asserts its answer is JSON carrying a `code`, which is the failure
+ * envelope and says this surface answered rather than Express's own
+ * page. Each window asserts the capture holds the framework's
+ * `listening` line and a `request completed` record for one of its
+ * own rows, which is what says the window was open across both the
+ * boot and the requests. And the search itself has TWO live positive
+ * controls rather than none: the planted window above, which is the
+ * direct one, and the query window's hundred and fourteen, which is
+ * the same counter over the same kind of capture returning a known
+ * non-zero in the same run as the body window's zero. The open-record
+ * rows' other reader, `detailFieldsOf`, has the planted window as its
+ * ONE live control and nothing else.
  *
- * TWENTY MUTATIONS WERE RUN AGAINST THESE FIFTY-ONE CASES, twice
- * each with no red set moving between the runs, and NONE of them
- * is a measured zero. The two this file used to carry were both
- * discharged by the planted window, which is the clearest single
- * statement of what that window bought.
+ * ONE BOOT PER WINDOW IS BOUNDED BY THE SHIPPED RATE LIMITER, and the
+ * headroom is worth reading in the run that spends it. `lib/express`
+ * mounts its limiter app-wide at a hundred requests a minute, and
+ * each window is its own `createService`, so the three spend
+ * forty-two, twenty-nine and one request against three separate
+ * budgets — the lowest `ratelimit-remaining` any row here saw was
+ * fifty-eight. A wave large enough to overrun one budget would
+ * present as a `429` on whichever rows ran last, which reads as a
+ * flaky containment claim rather than as a limit, and the repair is a
+ * boot per channel rather than a wider window.
+ *
+ * TWENTY-FOUR MUTATIONS NOW COVER THESE NINETY CASES, and the BOUNDED
+ * shape of the latest run is part of the reading. The twenty recorded
+ * below were each run twice against the eighty-eight cases the wave-2
+ * rows left, and NONE of them is a measured zero. The fifth planted
+ * channel added FOUR legs of its own and could reach only EIGHT of
+ * the twenty, so those eight were re-run twice each and the other
+ * twelve stand on that earlier measurement — which is the honest half
+ * to say out loud, because a leg not re-run is not a leg that held.
+ *
+ * WHAT MOVED WHEN THE FIFTH CHANNEL WAS ARMED is three of the eight,
+ * and each moved by exactly the cases the new row answers. Not
+ * mounting the planted route went SIX to EIGHT. A sink that records
+ * nothing went FIVE to SIX, the extra red being the open-record row —
+ * its log half goes through `req.log` and therefore through the
+ * STREAM patch, while the planted CONSOLE row stays green, which is
+ * the two-mechanism reading that leg has always carried with a third
+ * subject under it. And logging `details` beside `{ code, cause }` in
+ * `lib/errors/handler.ts` went TWO to THREE, the second detail's
+ * marker joining the first in a capture that should hold neither.
+ *
+ * THE OTHER FIVE CAME BACK UNMOVED, which is the reading that says
+ * the recorded figures are still live rather than a re-derivation
+ * into neighbours. Dropping the console write, dropping the stderr
+ * write and leaking a constant BODY each answered TWO again; the two
+ * module legs re-run as controls answered NINETEEN and THREE. Those
+ * two cannot reach the plant at all — it builds its own
+ * `ValidationError` and never enters `src/http/validation.ts` — so a
+ * run moving them and the plant together would have measured
+ * something else. One caution measured on the way: the
+ * details-logging leg spelled as `err.toJSON()` rather than as
+ * `err.details` reddens FOUR, not three, because it re-logs the
+ * message as well. That is the neighbour, not the leg.
+ *
+ * THE RUN-EACH-LEG-TWICE RULE EARNED ITS KEEP AGAIN. One of the
+ * twenty-four pairs disagreed — the sink leg, at NINETY against SIX —
+ * which is the macOS supertest port-steal flake landing in
+ * `beforeAll` and failing the whole FILE, a presentation that reads
+ * exactly like the broadest leg in the grid. Three further runs
+ * agreed at six, member for member, and that is the set recorded
+ * above.
  *
  * SIX LAND ON A MODULE. Adding `issue.keys` to a detail's message
- * reddens TEN — the nine unrecognized-key rows and, less
- * obviously, the query row for `DELETE /domains/:slug`, which is
- * the only write route that parses a query at all and whose strict
- * schema raises the same issue about the sentinel KEY. So one
- * query row is on the sanitiser's subject and not only on the
- * transport. Copying `issue.message` verbatim reddens the
- * IDENTICAL ten: two legs, one reading. Dropping the open-path
+ * reddens NINETEEN — the eighteen unrecognized-key rows and, less
+ * obviously, the query row for `DELETE /domains/:slug`, which is the
+ * only write route that parses a query at all and whose strict schema
+ * raises the same issue about the sentinel KEY. So one query row is
+ * on the sanitiser's subject and not only on the transport. Copying
+ * `issue.message` verbatim reddens the IDENTICAL nineteen: two legs,
+ * one reading. Both were ten before, and both moved by exactly the
+ * nine unrecognized-key rows wave 2 added. Dropping the open-path
  * collapse and ignoring `options.openPaths` each redden the same
- * THREE open-record cases, likewise one reading in two spellings.
- * A domains handler rethrowing its refusal with `req.body`
- * interpolated into the message — same status, code, `details` and
- * `cause`, so the leg carries one claim rather than two — reddens
- * FIVE: all three `POST /domains` body rows, the body window's
- * capture case, and the planted window's head-to-head. And logging
- * `details` beside `{ code, cause }` in `lib/errors/handler.ts`
- * reddens TWO, both of them planted cases. That leg WAS the first
- * measured zero: no wave-1 detail carries the sentinel, so
- * widening what is logged reached nothing until a planted detail
- * gave it a subject.
+ * THREE open-record cases, likewise one reading in two spellings —
+ * and both stayed at three, because only a row whose record can
+ * refuse below its prefix has a path to collapse and all three rows
+ * wave 2 added to that channel are the inert shape. A domains handler
+ * rethrowing its refusal with `req.body` interpolated into the
+ * message — same status, code, `details` and `cause`, so the leg
+ * carries one claim rather than two — reddens FIVE: all three
+ * `POST /domains` body rows, the body window's capture case, and the
+ * planted window's head-to-head. And logging `details` beside
+ * `{ code, cause }` in `lib/errors/handler.ts` reddens THREE, all of
+ * them planted cases. That leg WAS the first measured zero: no detail
+ * this surface answers carries the sentinel, so widening what is
+ * logged reached nothing until a planted detail gave it a subject,
+ * and it gained its third red when a second planted detail landed
+ * beside the first.
  *
- * THE OTHER FOURTEEN ARE FIXTURE LEGS, and four of them report
- * something a reader would otherwise get wrong. Dropping the
- * console patch reddens TWO, and it was the second measured zero
- * for the same reason: no module under `src/` writes to the
- * console, so that patch had no live control until the planted
- * route wrote one line through it. Restoring a stream with a bound
- * copy reddens the streams guard alone — but the leg has to be
- * aimed at the DELETE branch of {@link redirectStream}, because
- * `write` is INHERITED on both streams here, so
- * `getOwnPropertyDescriptor` answers undefined and the
- * `defineProperty` line is never reached in this file at all.
- * Dropping one query row from the table reddens the CHANNEL guard
- * and not the route-set one: that route survives through its body
- * rows, so a route-set comparison cannot see a channel go missing,
- * which is why both guards are here. And a query row that submits
- * no sentinel reddens the sent-bytes guard ALONE — its thirteen
- * response zeros stay green and so does the transport count, which
- * is derived from the same URLs, so thirteen rows go vacuous at
- * once and one guard is the whole of what reports it.
+ * THE OTHER EIGHTEEN ARE FIXTURE LEGS, and four of them report
+ * something a reader would otherwise get wrong. Dropping the console
+ * patch reddens TWO, and it was the second measured zero for the same
+ * reason: no module under `src/` writes to the console, so that patch
+ * had no live control until the planted route wrote one line through
+ * it. Restoring a stream with a bound copy reddens the streams guard
+ * alone — but the leg has to be aimed at the DELETE branch of
+ * {@link redirectStream}, because `write` is INHERITED on both
+ * streams here, so `getOwnPropertyDescriptor` answers undefined and
+ * the `defineProperty` line is never reached in this file at all.
+ * Dropping one query row from the table reddens the CHANNEL guard and
+ * not the route-set one: that route survives through its body rows,
+ * so a route-set comparison cannot see a channel go missing, which is
+ * why both guards are here. And a query row that submits no sentinel
+ * reddens the sent-bytes guard ALONE — its twenty-eight response
+ * zeros stay green and so does the transport count, which is derived
+ * from the same URLs, so twenty-eight rows go vacuous at once and one
+ * guard is the whole of what reports it.
  *
- * KEYING A WINDOW BY LABEL ALONE REDDENS ONE, and the figure is
- * worth stating because it is the opposite of what the collapse
- * looks like it should cost. `keyOf` answering {@link labelOf}
- * collapses each route's three body rows onto one entry and leaves
- * two cases reading a sibling channel's answer — but every answer
- * on this surface is equally JSON, equally a failure envelope and
- * equally sentinel-free, so no row's own assertions can tell that
- * it read somebody else's. The uniqueness guard is the whole of
- * what reports it. Measured at 1 for that spelling AND for
- * {@link routeLabelOf}, which drops the note as well; a figure of
- * thirty-six recorded by this file's predecessor reproduces at
- * neither, and the general shape is that planting a collision in a
- * table whose rows all answer alike is invisible to every row.
+ * KEYING A WINDOW BY LABEL ALONE REDDENS ONE, and the figure is worth
+ * stating because it is the opposite of what the collapse looks like
+ * it should cost. {@link keyOf} answering {@link labelOf} collapses
+ * each route's body rows onto one entry and leaves cases reading a
+ * sibling channel's answer — but every answer on this surface is
+ * equally JSON, equally a failure envelope and equally sentinel-free,
+ * so no row's own assertions can tell that it read somebody else's.
+ * The uniqueness guard is the whole of what reports it. Measured at 1
+ * for that spelling AND for {@link routeLabelOf}, which drops the
+ * note as well, and the figure did not move when the table nearly
+ * doubled — which is the same reading one row larger: planting a
+ * collision in a table whose rows all answer alike is invisible to
+ * every row.
  *
- * THE REMAINING FIXTURE LEGS: a fabricated route reddens three, a
- * substitution that answers its argument unchanged reddens two,
- * reading the transport count as one site rather than two reddens
- * the query capture case, two open-record rows sharing a path
+ * THE REMAINING FIXTURE LEGS: a fabricated route reddens three,
+ * reading the transport count as one site rather than two reddens the
+ * query capture case, two open-record rows sharing a masked path
  * redden the distinct-path case, and a sink that records nothing
- * reddens FIVE — both capture cases through their `listening` and
- * `request completed` controls, plus three planted ones. The
- * planted CONSOLE row stays green under that last leg, which is
- * the reading in it: the console patch and the stream sink are two
- * mechanisms, and only a leg per mechanism says so.
+ * reddens SIX — both capture cases through their `listening` and
+ * `request completed` controls, plus four planted ones. The planted
+ * CONSOLE row stays green under that last leg, which is the reading
+ * in it: the console patch and the stream sink are two mechanisms,
+ * and only a leg per mechanism says so. The THIRD leg to move is here
+ * — a substitution that answers its argument unchanged went from two
+ * to FIVE, because a raw `:id` or `:slug` template is refused at the
+ * ADDRESS with a detail naming the segment, which is exactly what the
+ * three inert open-record rows assert against: their empty detail
+ * list and their `404` both report where a masking row's single `.*`
+ * assertion reports once.
  *
- * FOUR LEGS AIM AT THE PLANT ITSELF, since a control nothing can
- * break is not one. Not mounting the planted route reddens SIX —
+ * EIGHT LEGS AIM AT THE PLANT ITSELF, since a control nothing can
+ * break is not one. Not mounting the planted route reddens EIGHT —
  * every planted case except the table guard, which reads only the
- * table and is the survivor that says the other six reach the
- * window at all. Dropping the console write reddens TWO and
- * dropping the stderr write another TWO, each its own channel row
- * plus the head-to-head. And making the planted route leak a
- * constant instead of the submitted body reddens TWO: the markers
- * still land where the table says, so the per-channel rows stay
- * green and only the two counts that tie a marker to a sentinel
- * report it — which is what those two totals are for.
+ * table and is the survivor that says the other eight reach the
+ * window at all. Dropping the console write reddens TWO and dropping
+ * the stderr write another TWO, each its own channel row plus the
+ * head-to-head. And making the planted route leak a constant instead
+ * of the submitted body reddens TWO: the markers still land where the
+ * table says, so the per-channel rows stay green and only the two
+ * counts that tie a marker to a sentinel report it — which is what
+ * those two totals are for.
  *
- * THE HEAD-TO-HEAD CASE IS IN EIGHT OF THE TWENTY RED SETS, more
- * than any other case in the file. That is what a control looks
- * like when it is load-bearing: every leg that touches what the
- * process writes is reported by it — the module leak, the leg
- * widening what is logged, the leg dropping the console patch, the
- * sink, and all four plant legs.
+ * THE FOUR NEWEST AIM AT THE FIFTH CHANNEL, and no two of them redden
+ * the same set. Dropping its LOG write reddens TWO, its own channel
+ * row and the head-to-head, exactly as the console and stderr legs
+ * do. Dropping its DETAIL reddens THREE — the channel row, the
+ * field-path case and the answered total — which is the asymmetry the
+ * row exists for: one write per text, read by two different
+ * instruments. Leaking a CONSTANT key rather than the submitted one
+ * reddens THREE, and so does answering the path COLLAPSED as
+ * `<prefix>.*`. That last one is the fault this channel models: a
+ * route masking what it leaks is indistinguishable from one leaking
+ * nothing at every reading except the field-path case, which is why
+ * that case reads the ANSWER's fields rather than the constant it
+ * compares them to.
+ *
+ * THE HEAD-TO-HEAD CASE IS IN ELEVEN OF THE TWENTY-FOUR RED SETS,
+ * more than any other case in the file. It held at eight across the
+ * wave-2 rows and moved to eleven with the fifth planted channel,
+ * which is what a control looks like when it is load-bearing: every
+ * leg that touches what the process writes is reported by it — the
+ * module leak, the leg widening what is logged, the leg dropping the
+ * console patch, the sink, and seven of the eight plant legs. The one
+ * plant leg it does NOT report is the open-record DETAIL, whose write
+ * never reaches the capture at all.
  *
  * WHICH ROWS HAVE A LIVE SUBJECT AND WHICH REST ON THE CONTROLS.
- * Twelve of the twenty-one body rows are reddened by a module leg
- * above — the nine unrecognized-key rows and the three
- * open-record ones — and a thirteenth, `POST /domains` in the
- * field-value channel, reddens under the echoing handler. The
- * other EIGHT field-value rows are reddened by no module leg at
- * all, and that is structural rather than a gap in the grid: zod
+ * Twenty-two of the forty-two body rows are reddened by a module leg
+ * above: the eighteen unrecognized-key rows, the three open-record
+ * rows whose record can refuse, and `POST /domains` in the
+ * field-value channel under the echoing handler. The other TWENTY are
+ * reddened by no module leg at all, and that is structural rather
+ * than a gap in the grid. Seventeen are field-value rows, where zod
  * puts a submitted VALUE in no issue path and no issue message, so
- * those rows pin a channel closed UPSTREAM of the sanitiser and
- * their green says nothing about it. What they rest on is the
- * per-row sent-bytes control and the planted window — which is
- * exactly the difference between a zero nobody can read and a zero
- * measured with an instrument shown working in the same run.
+ * they pin a channel closed UPSTREAM of the sanitiser and their green
+ * says nothing about it. Three are the inert open-record rows, which
+ * raise no issue whatever, so there is no detail for a sanitiser
+ * change to reach — a second shape of the same absence rather than a
+ * second omission. What all twenty rest on is the per-row sent-bytes
+ * control and the planted window, which is exactly the difference
+ * between a zero nobody can read and a zero measured with an
+ * instrument shown working in the same run. For those last three the
+ * instrument is `detailFieldsOf` rather than {@link countSentinel},
+ * since what they assert is an EMPTY list, and the fifth planted
+ * channel is the run in which that reader answers a non-empty one.
  *
  * WHAT IS OUT OF REACH HERE is the driver channel, and it is out of
  * reach by construction rather than by omission. A `ConflictError`
- * built with `{ cause: <driver error> }` puts the pg `detail`
- * (`Key (slug)=(<the submitted value>) already exists.`) one
- * property read from `errorHandler`'s log line — but reaching it
- * needs a stored row to collide with, and the store here is empty
- * on purpose. `tests/live/api.live.test.ts` is where a real driver
- * error exists at all.
+ * built with `{ cause: <driver error> }` puts the pg `detail` (
+ * `Key (slug)=(<the submitted value>) already exists.`) one property
+ * read from `errorHandler`'s log line — but reaching it needs a
+ * stored row to collide with, and the store here is empty on purpose.
+ * `tests/live/api.live.test.ts` and
+ * `tests/live/api-wave2.live.test.ts` are where a real driver error
+ * exists at all.
  *
  * NOTHING IS WRITTEN, which is what lets one boot serve a whole
  * window. Every `:slug` and every `:id` names a row that does not
- * exist and every body is one the schema refuses or one whose
- * address does not resolve, so each window's requests answer `422`
- * or `404` and leave the dataset the boot built. The planted route
- * is the same: it reaches no store at all. The last case reads all
- * three stores directly rather than trusting any of that.
+ * exist and every body is one the schema refuses or one whose address
+ * does not resolve, so each window's requests answer `422` or `404`
+ * and leave the dataset the boot built. The planted route is the
+ * same: it reaches no store at all. The last case reads all three
+ * stores directly rather than trusting any of that, and reads each of
+ * them three ways — no domain, no settings row and no connector. The
+ * third is the one wave 2 made necessary: `connectors` is the only
+ * table on this surface hanging off no address, so a create the
+ * schema accepted would leave a row nothing else here could see,
+ * which is also why the open-record row for a connector `config` is a
+ * `PATCH` rather than the `POST` that would have had nothing left to
+ * refuse it.
  *
- * NO AUTH BLOCK IS CONFIGURED, and the five mounts still spell
+ * NO AUTH BLOCK IS CONFIGURED, and the ten mounts still spell
  * `app.use(ctx.requireAuth, router)` exactly as `src/index.ts` does.
  * With no block `createService` resolves `requireAuth` to
- * `passthroughMiddleware`, so every request here REACHES its
- * handler, which is what this file needs and what a local boot
- * does. Whether the guard is real and on the mount is
- * `tests/api/wiring.test.ts`'s subject and is asserted there.
+ * `passthroughMiddleware`, so every request here REACHES its handler,
+ * which is what this file needs and what a local boot does. Whether
+ * the guard is real and on the mount is `tests/api/wiring.test.ts`'s
+ * subject and is asserted there.
  */
 import type { ServiceHandle } from '../../lib/express/index.js';
 import type {
@@ -277,13 +400,24 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { ValidationError } from '../../lib/errors/index.js';
 import { createService } from '../../lib/express/index.js';
+import {
+  buildConnectorsRouter,
+} from '../../src/connectors/routes.js';
 import { buildDomainsRouter } from '../../src/domains/index.js';
 import { buildPersonasRouter } from '../../src/personas/routes.js';
 import { buildSettingsRouter } from '../../src/settings/routes.js';
 import {
+  buildSourceFailuresRouter,
+} from '../../src/sources/failures-routes.js';
+import { buildSourcesRouter } from '../../src/sources/routes.js';
+import {
+  buildSubscriptionsRouter,
+} from '../../src/subscriptions/routes.js';
+import {
   buildCategoriesRouter,
 } from '../../src/taxonomy/categories-routes.js';
 import { buildTermsRouter } from '../../src/taxonomy/terms-routes.js';
+import { buildTopicsRouter } from '../../src/topics/routes.js';
 import {
   createMemoryResearchStore,
 } from '../helpers/memory-research-store.js';
@@ -300,8 +434,8 @@ process.env.NODE_ENV = 'test';
  * is declared as anything but free text: the dots and the capitals
  * put it outside `slugParamSchema`'s pattern, it is a member of no
  * enum, and it is not a number. That is what lets ONE constant
- * serve the field-value channel across nine routes rather than a
- * different refusable value per schema.
+ * serve the field-value channel across every body-bearing route
+ * rather than a different refusable value per schema.
  *
  * Also shaped so it survives a URL unencoded — letters, digits,
  * dots and hyphens are all unreserved — because the query rows
@@ -331,6 +465,19 @@ const UNSTORED_SLUG = 'example-tech-radar';
  * make a body row a test of the address instead.
  */
 const UNSTORED_ID = '1';
+
+/**
+ * The present the two schedule-verb routers answer against.
+ *
+ * A thunk rather than an instant, and named after the const
+ * `src/index.ts` hands the same two routers, because that is what
+ * is being mirrored: `TopicsRouterOptions.clock` and
+ * `SubscriptionsRouterOptions.clock` are both REQUIRED, so neither
+ * can be mounted here without saying which present its verbs write
+ * against. No row below reads a due time — every `:id` names no
+ * row — so what this has to be is present, not fixed.
+ */
+const clock = (): Date => new Date();
 
 /**
  * How many times one occurrence in a request URL lands in the
@@ -457,9 +604,9 @@ const ECHO_CHANNELS = [
 type EchoChannel = (typeof ECHO_CHANNELS)[number];
 
 /**
- * The verbs a wave-1 WRITE route can carry.
+ * The verbs a WRITE route on this surface can carry.
  *
- * Read against what the five routers registered rather than
+ * Read against what the mounted routers registered rather than
  * transcribed: {@link registeredWriteLabels} filters their own
  * stacks by this list, so a route added under a verb absent here
  * would leave the surface and this file's table disagreeing.
@@ -491,24 +638,37 @@ interface EchoProbe {
   readonly query?: string;
   /** The JSON body, for a row that submits one. */
   readonly body?: Readonly<Record<string, unknown>>;
+  /**
+   * For an open-record row: whether the record's own value schema
+   * can refuse BELOW the operator-chosen key.
+   *
+   * True where those values are constrained — a number, a
+   * `.strict()` object — so a bad entry raises AT a path carrying
+   * the key and the mask is the only thing between it and the
+   * wire. False where the value schema is `z.unknown()`, which
+   * refuses nothing at all, so no issue is reachable below the
+   * prefix, the key is ACCEPTED, and the request is refused at its
+   * address instead. Required on every open-record row and absent
+   * on every other, both of which the table guard asserts.
+   */
+  readonly masksAPath?: boolean;
 }
 
 /**
  * Every row whose sentinel travels in a request BODY.
  *
- * Three channels over the nine body-bearing write routes. The
+ * Three channels over the eighteen body-bearing write routes. The
  * FIELD-VALUE rows put the sentinel where a member is declared:
- * seven of them at a member no string can satisfy (a slug pattern,
- * a number, an enum, an object), and the two personas rows at free
- * text the schema accepts, so those two reach the address check
- * with the value intact. The UNRECOGNIZED-KEY rows submit the
- * sentinel as the sole key of an object every one of these schemas
- * declares `.strict()`. The OPEN-RECORD rows cover all three
- * declared open paths — `settings.scoringWeights` and
- * `settings.fieldContract` from `src/domains/service.ts`, and
- * `notificationChannels` from `src/settings/service.ts` — each with
- * a value the record's own schema refuses, so the parse fails at a
- * path whose operator-chosen segment is the sentinel itself.
+ * fifteen of them at a member no string can satisfy (a slug
+ * pattern, a number, an enum, an object), and three at free text
+ * the schema accepts, so those three reach the address check with
+ * the value intact. The UNRECOGNIZED-KEY rows submit the sentinel
+ * as the sole key of an object every one of these schemas declares
+ * `.strict()`. The OPEN-RECORD rows cover all six declared open
+ * paths, in the two shapes the header separates: the three that
+ * refuse below their own prefix answer a masked path, and the
+ * three whose values are `z.unknown()` accept the key and are
+ * refused at their address instead.
  */
 const BODY_PROBES = [
   // `slug` is the one member of this body that refuses a string,
@@ -558,11 +718,11 @@ const BODY_PROBES = [
     path: '/terms/:id',
     body: { polarity: SENTINEL },
   },
-  // The two rows where the SCHEMA accepts the sentinel: `role` and
-  // `systemText` are free text with no pattern, so the parse
-  // succeeds and the request is refused at its address instead.
-  // That is the deepest a submitted value gets on this surface
-  // without a row existing for it to collide with.
+  // Two of the three rows where the SCHEMA accepts the sentinel:
+  // `role` and `systemText` are free text with no pattern, so the
+  // parse succeeds and the request is refused at its address
+  // instead. That is the deepest a submitted value gets on this
+  // surface without a row existing for it to collide with.
   {
     channel: 'field value',
     method: 'post',
@@ -580,6 +740,76 @@ const BODY_PROBES = [
     method: 'put',
     path: '/settings',
     body: { digestFormat: SENTINEL },
+  },
+
+  // Wave 2. `intervalSeconds` is declared a number on both topic
+  // bodies, so a string is refused at that member and the detail
+  // names it without saying what was in it.
+  {
+    channel: 'field value',
+    method: 'post',
+    path: '/domains/:slug/topics',
+    body: { name: 'Echo probe', intervalSeconds: SENTINEL },
+  },
+  {
+    channel: 'field value',
+    method: 'patch',
+    path: '/topics/:id',
+    body: { intervalSeconds: SENTINEL },
+  },
+  // The shortest body on the surface: `cycles` is its one member
+  // and a number, so there is nothing else to supply valid for the
+  // answer to be one detail.
+  {
+    channel: 'field value',
+    method: 'post',
+    path: '/topics/:id/pause',
+    body: { cycles: SENTINEL },
+  },
+  // `kind` is an enum on both source bodies. `endpoint` is supplied
+  // valid on the create so that `kind` is the only member refused.
+  {
+    channel: 'field value',
+    method: 'post',
+    path: '/domains/:slug/sources',
+    body: { kind: SENTINEL, endpoint: 'https://echo.example/feed' },
+  },
+  {
+    channel: 'field value',
+    method: 'patch',
+    path: '/sources/:id',
+    body: { kind: SENTINEL },
+  },
+  {
+    channel: 'field value',
+    method: 'post',
+    path: '/connectors',
+    body: { kind: SENTINEL, name: 'Echo probe' },
+  },
+  // The third row where the SCHEMA accepts the sentinel, and the
+  // only one wave 2 adds: a connector patch declares `name` and
+  // `config` and nothing else, and `name` is free text with no
+  // pattern. So this row reaches the address check with the value
+  // intact, exactly as the two personas rows above do.
+  {
+    channel: 'field value',
+    method: 'patch',
+    path: '/connectors/:id',
+    body: { name: SENTINEL },
+  },
+  // `format` is an enum; the other two required members are
+  // supplied valid so that `format` is the only one refused.
+  {
+    channel: 'field value',
+    method: 'post',
+    path: '/domains/:slug/exports',
+    body: { format: SENTINEL, connectorId: 1, intervalSeconds: 3600 },
+  },
+  {
+    channel: 'field value',
+    method: 'patch',
+    path: '/exports/:id',
+    body: { format: SENTINEL },
   },
 
   // The sentinel as the sole undeclared key. zod raises ONE
@@ -644,6 +874,66 @@ const BODY_PROBES = [
     body: { [SENTINEL]: 1 },
   },
 
+  // Wave 2, one row per body-bearing write route it adds. Several
+  // answer more than one detail — a body that names no declared
+  // member is also a body missing every required one — which is
+  // the ordinary shape of this channel rather than anything about
+  // these routes.
+  {
+    channel: 'unrecognized key',
+    method: 'post',
+    path: '/domains/:slug/topics',
+    body: { [SENTINEL]: 1 },
+  },
+  {
+    channel: 'unrecognized key',
+    method: 'patch',
+    path: '/topics/:id',
+    body: { [SENTINEL]: 1 },
+  },
+  {
+    channel: 'unrecognized key',
+    method: 'post',
+    path: '/topics/:id/pause',
+    body: { [SENTINEL]: 1 },
+  },
+  {
+    channel: 'unrecognized key',
+    method: 'post',
+    path: '/domains/:slug/sources',
+    body: { [SENTINEL]: 1 },
+  },
+  {
+    channel: 'unrecognized key',
+    method: 'patch',
+    path: '/sources/:id',
+    body: { [SENTINEL]: 1 },
+  },
+  {
+    channel: 'unrecognized key',
+    method: 'post',
+    path: '/connectors',
+    body: { [SENTINEL]: 1 },
+  },
+  {
+    channel: 'unrecognized key',
+    method: 'patch',
+    path: '/connectors/:id',
+    body: { [SENTINEL]: 1 },
+  },
+  {
+    channel: 'unrecognized key',
+    method: 'post',
+    path: '/domains/:slug/exports',
+    body: { [SENTINEL]: 1 },
+  },
+  {
+    channel: 'unrecognized key',
+    method: 'patch',
+    path: '/exports/:id',
+    body: { [SENTINEL]: 1 },
+  },
+
   // `settings.scoringWeights` is a record of numbers, so a string
   // entry fails at `settings.scoringWeights.<the sentinel>` and the
   // mask is the only thing between that path and the wire.
@@ -651,6 +941,7 @@ const BODY_PROBES = [
     channel: 'open-record key',
     method: 'post',
     path: '/domains',
+    masksAPath: true,
     body: {
       slug: 'echo-probe-domain',
       name: 'Echo probe',
@@ -665,6 +956,7 @@ const BODY_PROBES = [
     channel: 'open-record key',
     method: 'patch',
     path: '/domains/:slug',
+    masksAPath: true,
     body: {
       settings: { fieldContract: { [SENTINEL]: { type: 'not a type' } } },
     },
@@ -673,17 +965,62 @@ const BODY_PROBES = [
     channel: 'open-record key',
     method: 'put',
     path: '/settings',
+    masksAPath: true,
     body: { notificationChannels: { [SENTINEL]: 'not a boolean' } },
+  },
+
+  // Wave 2 declares three more open paths and every one of them is
+  // the OTHER shape: `parserConfig` and `contract` in
+  // `src/sources/service.ts` and `config` in
+  // `src/connectors/service.ts` are each
+  // `z.record(z.string(), z.unknown())`, whose value schema refuses
+  // nothing and whose keys are strings by construction. So no issue
+  // is reachable strictly below the prefix, the operator key is
+  // ACCEPTED, and each row is refused at its address with no detail
+  // at all — which is deeper into the handler than any masking
+  // row of this channel reaches. `masksAPath` is where each row
+  // says which of the two it is.
+  {
+    channel: 'open-record key',
+    method: 'post',
+    path: '/domains/:slug/sources',
+    masksAPath: false,
+    body: {
+      kind: 'url',
+      endpoint: 'https://echo.example/feed',
+      parserConfig: { [SENTINEL]: 'echo' },
+    },
+  },
+  {
+    channel: 'open-record key',
+    method: 'patch',
+    path: '/sources/:id',
+    masksAPath: false,
+    body: { contract: { [SENTINEL]: 'echo' } },
+  },
+  // A connector `config` is the one open record on the surface
+  // whose column actually stores a secret, which is why it is here
+  // at all. `PATCH` rather than `POST /connectors`, and the reason
+  // is this file's own: a connector hangs off no address, so a
+  // create carrying an accepted config has nothing left to refuse
+  // it and would leave a row behind.
+  {
+    channel: 'open-record key',
+    method: 'patch',
+    path: '/connectors/:id',
+    masksAPath: false,
+    body: { config: { [SENTINEL]: 'echo' } },
   },
 ] as const satisfies readonly EchoProbe[];
 
 /**
  * Every row whose sentinel travels in a QUERY STRING.
  *
- * One row per write route, the four `DELETE`s included — they carry
- * no body, so this is the only channel that reaches them at all.
- * The sentinel is both the key and the value, which covers the two
- * positions a strict query schema can refuse in one request.
+ * One row per write route, the ten that read no body included —
+ * the eight `DELETE`s and the two `run-now` verbs, for which this
+ * is the only channel that reaches them at all. The sentinel is
+ * both the key and the value, which covers the two positions a
+ * strict query schema can refuse in one request.
  *
  * `DELETE /domains/:slug` carries a second row because it is the
  * ONLY write route on the surface that parses a query at all
@@ -728,6 +1065,41 @@ const QUERY_PROBES = [
   { channel: 'query parameter', method: 'patch', path: '/personas/:id' },
   { channel: 'query parameter', method: 'delete', path: '/personas/:id' },
   { channel: 'query parameter', method: 'put', path: '/settings' },
+
+  // Wave 2, one row per write route it adds — including the three
+  // `DELETE`s and the two `run-now` verbs, which read no body and
+  // for which this is the only channel with a subject at all.
+  {
+    channel: 'query parameter',
+    method: 'post',
+    path: '/domains/:slug/topics',
+  },
+  { channel: 'query parameter', method: 'patch', path: '/topics/:id' },
+  { channel: 'query parameter', method: 'delete', path: '/topics/:id' },
+  { channel: 'query parameter', method: 'post', path: '/topics/:id/run-now' },
+  { channel: 'query parameter', method: 'post', path: '/topics/:id/pause' },
+  {
+    channel: 'query parameter',
+    method: 'post',
+    path: '/domains/:slug/sources',
+  },
+  { channel: 'query parameter', method: 'patch', path: '/sources/:id' },
+  { channel: 'query parameter', method: 'delete', path: '/sources/:id' },
+  { channel: 'query parameter', method: 'post', path: '/connectors' },
+  { channel: 'query parameter', method: 'patch', path: '/connectors/:id' },
+  { channel: 'query parameter', method: 'delete', path: '/connectors/:id' },
+  {
+    channel: 'query parameter',
+    method: 'post',
+    path: '/domains/:slug/exports',
+  },
+  { channel: 'query parameter', method: 'patch', path: '/exports/:id' },
+  { channel: 'query parameter', method: 'delete', path: '/exports/:id' },
+  {
+    channel: 'query parameter',
+    method: 'post',
+    path: '/exports/:id/run-now',
+  },
 ] as const satisfies readonly EchoProbe[];
 
 /** Every row in the file, for the guards that read the whole table. */
@@ -745,12 +1117,35 @@ const DEFAULT_SENTINEL_QUERY = `${SENTINEL}=${SENTINEL}`;
 /**
  * The path the planted-leak control mounts its route at.
  *
- * Outside every wave-1 path shape on purpose: no router registers
- * it, so the request below reaches the planted route through the
- * same five `/` mounts every other row falls through, and the
- * route-set guard above never sees it.
+ * Outside every path shape on the surface on purpose: no router
+ * registers it, so the request below reaches the planted route
+ * through the same ten `/` mounts every other row falls through,
+ * and the route-set guard above never sees it.
  */
 const PLANTED_PATH = '/planted-leak-control';
+
+/**
+ * The open-record prefix the planted body puts its sentinel below.
+ *
+ * `parserConfig` is one of the three open paths wave 2 declared, so
+ * the planted body is the shape those rows submit rather than a
+ * body invented for the plant — which is what makes the leak below
+ * a control on THEIR channel and not a fifth write that happens to
+ * carry the needle.
+ */
+const PLANTED_OPEN_PREFIX = 'parserConfig';
+
+/**
+ * The field path a leaking handler would name, uncollapsed.
+ *
+ * What `openPaths` in `src/http/validation.ts` turns into
+ * `parserConfig.*` before a detail reaches the wire, and therefore
+ * exactly what the six open-record rows assert never arrives. The
+ * planted route answers it whole and logs it — which is the one
+ * channel the plant was missing after wave 2 declared three more
+ * open paths.
+ */
+const PLANTED_OPEN_PATH = `${PLANTED_OPEN_PREFIX}.${SENTINEL}`;
 
 /** One deliberate leak the planted route writes. */
 interface PlantedLeak {
@@ -777,9 +1172,10 @@ interface PlantedLeak {
  * measured with the same {@link countSentinel} every zero above is
  * measured with. A counter that had stopped matching, a capture
  * that had stopped reading and a window that never opened all
- * answer zero over the wave-1 rows and are each caught here.
+ * answer zero over the surface's own rows and are each caught
+ * here.
  *
- * The four rows are not interchangeable — they are the four
+ * The five rows are not interchangeable — they are the five
  * channels the file makes a claim about. CONSOLE is the only live
  * control the console patch has at all: no module under `src/`
  * writes to the console today, so without this row that patch's
@@ -792,6 +1188,17 @@ interface PlantedLeak {
  * and does NOT log `details`, so the header's claim that the two
  * zeros cover different channels is measured here rather than
  * argued.
+ *
+ * OPEN PATH is the row wave 2 made necessary, and it is the only
+ * one whose leaked text is a field PATH. The six open-record rows
+ * assert two things this file could not otherwise read: that a
+ * masked answer carries `<prefix>.*` and that an inert one carries
+ * no detail at all — and both of those are satisfied by a
+ * `detailFieldsOf` that had stopped finding fields. This row
+ * answers {@link PLANTED_OPEN_PATH} through that same reader and
+ * logs it through the per-request `pino-http` child, so the
+ * channel's two claims each have an instrument shown working in
+ * the same run.
  */
 const PLANTED_LEAKS = [
   {
@@ -820,6 +1227,16 @@ const PLANTED_LEAKS = [
     captured: 0,
     answered: 2,
   },
+  {
+    // Once in each text, and through two different mechanisms: the
+    // per-request `pino-http` child for the capture, a second
+    // detail's `field` for the answer. The only row whose leaked
+    // text is a PATH rather than a body.
+    channel: 'an open-record path it answers and logs',
+    marker: 'planted-open-path-leak',
+    captured: 1,
+    answered: 1,
+  },
 ] as const satisfies readonly PlantedLeak[];
 
 /** What {@link countSentinel} must answer over the planted capture. */
@@ -831,22 +1248,47 @@ const PLANTED_ANSWERED_TOTAL = PLANTED_LEAKS
   .reduce((total, leak) => total + leak.answered, 0);
 
 /**
+ * The detail field the open-record leak answers.
+ *
+ * Its marker written immediately ahead of the path, exactly as
+ * every other planted write is spelled, so one string carries one
+ * marker and one sentinel and the two totals above stay
+ * comparable. Read back through {@link detailFieldsOf} rather than
+ * counted, which is what makes it a control on the reader the six
+ * open-record rows share.
+ */
+const PLANTED_OPEN_FIELD = `${PLANTED_LEAKS[4].marker} ${PLANTED_OPEN_PATH}`;
+
+/**
  * The one row the planted window submits.
  *
  * An {@link EchoProbe} so it travels the same `captureProbes` path
  * every other row does — the same URL builder, the same sent-bytes
- * control and the same response map. Its channel is `field value`
- * because that is where its sentinel sits in the body it sends; it
- * is deliberately absent from {@link ALL_PROBES}, so no coverage
- * guard reads it and the route set stays exactly the wave-1
- * surface.
+ * control and the same response map. It is deliberately absent
+ * from {@link ALL_PROBES}, so no coverage guard reads it and the
+ * route set stays exactly the mounted surface.
+ *
+ * Its channel is `open-record key`, and the body is the shape the
+ * three inert wave-2 rows submit: the sentinel as the operator's
+ * own key below a declared open prefix. That is what lets the
+ * route below leak a PATH built from what was submitted rather
+ * than one built from a constant. It carries the sentinel exactly
+ * ONCE, which is the property the two planted totals rest on —
+ * every leak writes one marker ahead of one occurrence, so a
+ * marker count and a sentinel count are comparable.
+ *
+ * {@link EchoProbe.masksAPath} is absent rather than false: that
+ * member says whether a SCHEMA can refuse below its own prefix,
+ * and the planted route parses nothing at all. The table guard
+ * that would ask reads {@link ALL_PROBES}, which this row is not
+ * in.
  */
 const PLANTED_PROBE = {
-  channel: 'field value',
+  channel: 'open-record key',
   method: 'post',
   path: PLANTED_PATH,
   note: 'planted leak',
-  body: { plantedValue: SENTINEL },
+  body: { [PLANTED_OPEN_PREFIX]: { [SENTINEL]: 'echo' } },
 } as const satisfies EchoProbe;
 
 /**
@@ -879,9 +1321,9 @@ function routeLabelOf(probe: EchoProbe): string {
  * The name a row's case carries.
  *
  * Unique within a describe rather than across the file: the three
- * body channels each carry a row for the same nine routes, and the
- * channel is the describe those cases sit in. {@link keyOf} is what
- * has to be unique file-wide.
+ * body channels each carry a row for the same body-bearing routes,
+ * and the channel is the describe those cases sit in.
+ * {@link keyOf} is what has to be unique file-wide.
  *
  * @param probe - The row.
  * @returns Its route label, plus its note when it has one.
@@ -896,8 +1338,8 @@ function labelOf(probe: EchoProbe): string {
  * The one identity of a row across the whole file.
  *
  * The channel is in it because the three body channels submit to
- * the same nine routes: without it a window's response map would
- * key three rows to one entry, keep the last, and leave two cases
+ * the same routes: without it a window's response map would key
+ * three rows to one entry, keep the last, and leave two cases
  * silently reading somebody else's answer.
  *
  * @param probe - The row.
@@ -1007,13 +1449,40 @@ function isWriteMethod(method: string): boolean {
 }
 
 /**
- * The labels of every WRITE route the five wave-1 routers register.
+ * Whether a write route reads a request body at all.
+ *
+ * What the coverage guard branches on, and it reads the ROUTE
+ * rather than the verb because two different shapes answer no.
+ * Every `DELETE` on this surface carries no body. And the two
+ * `run-now` verbs take no argument — `runTopicNow` and
+ * `runSubscriptionNow` are handed a store, a clock and an id, so a
+ * request that sent a body is answered exactly as one that did
+ * not. Neither shape has a field-value or an unrecognized-key
+ * channel with a subject in it, because neither parses an object
+ * for a member or a stray key to sit in, and a row claiming either
+ * would be a name for something that never happened.
+ *
+ * @param label - A route label, as {@link labelFor} spells it.
+ * @returns True when the route parses a request body.
+ */
+function parsesABody(label: string): boolean {
+  return !label.startsWith('DELETE ') && !label.endsWith('/run-now');
+}
+
+/**
+ * The labels of every WRITE route the ten mounted routers register.
  *
  * Built over a store of its own rather than a booted service's: a
  * router factory registers its routes at construction and reads
  * nothing, so this answers the routers' own declaration.
  *
- * @returns Every registered write label, across all five routers.
+ * The same ten `src/index.ts` mounts and in its order, the source
+ * failures router included even though it declares a `get` and
+ * nothing else: leaving it out would make this list a hand-picked
+ * subset rather than a mirror, and its contributing no write label
+ * is the read-only DLQ showing up here as an absence.
+ *
+ * @returns Every registered write label, across all ten routers.
  */
 function registeredWriteLabels(): string[] {
   const store = createMemoryResearchStore();
@@ -1024,6 +1493,11 @@ function registeredWriteLabels(): string[] {
     buildTermsRouter({ store }),
     buildPersonasRouter({ store }),
     buildSettingsRouter({ store }),
+    buildTopicsRouter({ store, clock }),
+    buildSourcesRouter({ store }),
+    buildSourceFailuresRouter({ store }),
+    buildConnectorsRouter({ store }),
+    buildSubscriptionsRouter({ store, clock }),
   ]
     .flatMap(routesOf)
     .filter((route) => isWriteMethod(route.method))
@@ -1034,25 +1508,38 @@ function registeredWriteLabels(): string[] {
  * Mounts the route that deliberately leaks, on the app a window
  * was built over.
  *
- * Everything the wave-1 handlers are forbidden to do, done on
+ * Everything the mounted handlers are forbidden to do, done on
  * purpose and in one place. The submitted body is serialised once
  * and written out four times: to the console, to stderr, into the
  * message of the error this route throws and into that error's
- * one detail. `createService` registers `errorHandler` LAST, so
- * the throw reaches the same handler every wave-1 refusal reaches
- * and is answered in the same envelope — which is what makes the
+ * first detail. A fifth write leaks the operator's own key as an
+ * uncollapsed field PATH, into the request logger and into a
+ * second detail. `createService` registers `errorHandler` LAST, so
+ * the throw reaches the same handler every refusal on the surface
+ * reaches and is answered in the same envelope — which is what makes
  * planted response a control on the readers the real rows use and
  * not only on the counter.
  *
- * Mounted AFTER the five routers, exactly where a sixth wave-1
- * router would go. No router matches {@link PLANTED_PATH}, so the
- * request falls through all five `/` mounts to reach it.
+ * Mounted AFTER the ten routers, exactly where an eleventh would
+ * go. No router matches {@link PLANTED_PATH}, so the request falls
+ * through all ten `/` mounts to reach it.
  *
  * @param app - The application a window's `register` was handed.
  */
 function plantLeakingRoute(app: Application): void {
   app.post(PLANTED_PATH, async (req) => {
     const submitted = JSON.stringify(req.body);
+
+    // The operator-chosen key, read back out of the body the way a
+    // handler building a field path would reach it — derived
+    // rather than spelled, so a leg leaking a constant is reported
+    // here as well as by the two totals.
+    const record = (req.body as Record<string, unknown>)[
+      PLANTED_OPEN_PREFIX
+    ] ?? {};
+    const openPath = Object.keys(record as Record<string, unknown>)
+      .map((key) => `${PLANTED_OPEN_PREFIX}.${key}`)
+      .join(' ');
 
     // Reaches the capture only through the five console patches:
     // under vitest the console does NOT route through
@@ -1063,6 +1550,13 @@ function plantLeakingRoute(app: Application): void {
     // The second stream, which nothing on a healthy boot writes
     // to — so it is the one live control the stderr redirect has.
     process.stderr.write(`${PLANTED_LEAKS[1].marker} ${submitted}\n`);
+
+    // The log half of the open-record channel. `req.log` is the
+    // per-request child `pino-http` attaches, so this record goes
+    // to the destination the framework's own records go to and is
+    // captured by the stdout patch — which is the channel a
+    // handler that logged a field path would actually use.
+    req.log.warn(`${PLANTED_LEAKS[4].marker} ${openPath}`);
 
     await Promise.resolve();
 
@@ -1075,6 +1569,15 @@ function plantLeakingRoute(app: Application): void {
         field: `${PLANTED_LEAKS[3].marker} ${submitted}`,
         message: `${PLANTED_LEAKS[3].marker} ${submitted}`,
       },
+      {
+        // The answer half of the open-record channel, and the
+        // shape the collapse exists to prevent: the operator key
+        // whole, where every masked row answers `<prefix>.*`. Its
+        // message carries no sentinel, so this detail contributes
+        // one marker and one occurrence like every other write.
+        field: `${PLANTED_LEAKS[4].marker} ${openPath}`,
+        message: 'an open-record path, answered uncollapsed',
+      },
     ]);
   });
 }
@@ -1085,7 +1588,7 @@ interface EchoWindow {
   readonly text: string;
   /** Each row's answer, by {@link labelOf}. */
   readonly responses: ReadonlyMap<string, Response>;
-  /** The store all five routers were built over. */
+  /** The store all ten routers were built over. */
   readonly store: MemoryResearchStore;
 }
 
@@ -1147,7 +1650,7 @@ async function captureProbes(
     const handle: ServiceHandle = await createService({
       serviceId: 'api-request-echo-probe',
       register(app, ctx) {
-        // The five mounts of `src/index.ts`, in its order and with
+        // The ten mounts of `src/index.ts`, in its order and with
         // its guard. No `auth` block is configured, so
         // `ctx.requireAuth` is the passthrough and every request
         // below reaches its handler.
@@ -1156,9 +1659,17 @@ async function captureProbes(
         app.use(ctx.requireAuth, buildTermsRouter({ store }));
         app.use(ctx.requireAuth, buildPersonasRouter({ store }));
         app.use(ctx.requireAuth, buildSettingsRouter({ store }));
+        app.use(ctx.requireAuth, buildTopicsRouter({ store, clock }));
+        app.use(ctx.requireAuth, buildSourcesRouter({ store }));
+        app.use(ctx.requireAuth, buildSourceFailuresRouter({ store }));
+        app.use(ctx.requireAuth, buildConnectorsRouter({ store }));
+        app.use(
+          ctx.requireAuth,
+          buildSubscriptionsRouter({ store, clock }),
+        );
 
-        // Where a sixth wave-1 router would be mounted. Absent
-        // for both windows that assert a zero.
+        // Where an eleventh router would be mounted. Absent for
+        // both windows that assert a zero.
         if (plant !== undefined) plant(app);
       },
     });
@@ -1199,7 +1710,7 @@ let queryWindow: EchoWindow | undefined;
 /**
  * The planted window, or undefined before `beforeAll` has run.
  *
- * Assembled by the same function over the same five mounts, with
+ * Assembled by the same function over the same ten mounts, with
  * one route added that echoes what it was sent. It asserts no zero
  * — it is what says the two zeros above were read by a counter
  * that still matches and a capture that was still open.
@@ -1250,9 +1761,9 @@ function answerTo(window: EchoWindow, probe: EchoProbe): Response {
 /**
  * Whether a response carries the framework's failure envelope.
  *
- * The control that says the wave-1 surface answered rather than
+ * The control that says this surface answered rather than
  * Express's own page: every row here is refused, and every refusal
- * on this surface is `AppError.toJSON()`, whose `code` is a string.
+ * on it is `AppError.toJSON()`, whose `code` is a string.
  *
  * @param response - The response to classify.
  * @returns True when the body carries a string `code`.
@@ -1297,6 +1808,14 @@ const UNRECOGNIZED_KEY_PROBES: readonly EchoProbe[] = BODY_PROBES
 const OPEN_RECORD_PROBES: readonly EchoProbe[] = BODY_PROBES
   .filter((probe) => probe.channel === 'open-record key');
 
+/** Those whose record can refuse below the operator key. */
+const MASKING_OPEN_RECORD_PROBES: readonly EchoProbe[] = OPEN_RECORD_PROBES
+  .filter((probe) => probe.masksAPath === true);
+
+/** Those whose record cannot, so the key is accepted instead. */
+const INERT_OPEN_RECORD_PROBES: readonly EchoProbe[] = OPEN_RECORD_PROBES
+  .filter((probe) => probe.masksAPath === false);
+
 beforeAll(async () => {
   // Two windows, one after the other rather than one around both:
   // their answers about the process output differ, and the query
@@ -1316,41 +1835,42 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe('the request-echo table', () => {
-  it('names every wave-1 write route', () => {
+  it('names every write route the surface mounts', () => {
     const declared = [...new Set(ALL_PROBES.map(routeLabelOf))];
     const registered = [...new Set(registeredWriteLabels())];
 
     // Both directions, and both matter. A write route added to any
-    // of the five routers and not to the table is a route whose
+    // of the ten routers and not to the table is a route whose
     // refusals nothing here reads; a row naming a route no router
     // registered asks for a path Express never matches, where the
     // zero is about a `404` page rather than about containment.
     expect([...declared].sort()).toStrictEqual([...registered].sort());
     // The anti-vacuity leg for the comparison itself: two empty
-    // lists are equal, and five routers that registered nothing
+    // lists are equal, and ten routers that registered nothing
     // would make the whole file pass with no route in it.
     expect(registered.length).toBeGreaterThan(0);
   });
 
   it('covers all four channels across those routes', () => {
     const channels = [...new Set(ALL_PROBES.map((probe) => probe.channel))];
+    const labels = [...new Set(ALL_PROBES.map(routeLabelOf))];
 
     expect(channels.sort()).toStrictEqual([...ECHO_CHANNELS].sort());
 
-    // Which channels reach which route is decided by the VERB
-    // rather than by anything a reader has to hold in their head.
-    // The four `DELETE`s carry no body on this surface, so the
-    // query channel is the only one with a subject there; every
-    // other write route owes a row in each of the three channels a
-    // body can carry. The open-record channel is deliberately not
-    // in this rule — three routes declare an open path and the
-    // rest have none, which the open-record cases assert directly.
-    for (const label of new Set(ALL_PROBES.map(routeLabelOf))) {
+    // Which channels reach which route is decided by whether the
+    // route reads a body, and by nothing a reader has to hold in
+    // their head. A route that reads none has the query channel as
+    // its only subject; every other write route owes a row in each
+    // of the three channels a body can carry. The open-record
+    // channel is deliberately not in this rule — six routes
+    // declare an open path and the rest have none, which the
+    // open-record cases assert directly.
+    for (const label of labels) {
       const covering = ALL_PROBES
         .filter((probe) => routeLabelOf(probe) === label)
         .map((probe) => probe.channel);
 
-      if (label.startsWith('DELETE ')) {
+      if (!parsesABody(label)) {
         expect([...new Set(covering)]).toStrictEqual(['query parameter']);
         continue;
       }
@@ -1359,6 +1879,33 @@ describe('the request-echo table', () => {
       expect(covering).toContain('unrecognized key');
       expect(covering).toContain('query parameter');
     }
+
+    // Both branches above have a subject, so neither rule is a
+    // clause that never ran. A table holding only body-bearing
+    // routes would satisfy every assertion in the loop.
+    expect(labels.filter(parsesABody).length).toBeGreaterThan(0);
+    expect(labels.filter((label) => !parsesABody(label)).length)
+      .toBeGreaterThan(0);
+  });
+
+  it('says which shape each open-record row has', () => {
+    // Declared per row rather than inferred from the answer, so a
+    // record whose value schema is narrowed later — or widened to
+    // `z.unknown()` — reddens the row it changed instead of
+    // quietly moving into the other group's assertions.
+    for (const probe of ALL_PROBES) {
+      if (probe.channel === 'open-record key') {
+        expect(typeof probe.masksAPath).toBe('boolean');
+        continue;
+      }
+
+      expect(probe.masksAPath).toBeUndefined();
+    }
+
+    // And both shapes are present, which is what makes the split a
+    // reading rather than a member every row happens to share.
+    expect(MASKING_OPEN_RECORD_PROBES.length).toBeGreaterThan(0);
+    expect(INERT_OPEN_RECORD_PROBES.length).toBeGreaterThan(0);
   });
 
   it('sends the sentinel in every row it declares', () => {
@@ -1462,7 +2009,7 @@ describe('a sentinel submitted as an unrecognized key', () => {
 // ---------------------------------------------------------------------------
 
 describe('a sentinel submitted as an open-record key', () => {
-  for (const probe of OPEN_RECORD_PROBES) {
+  for (const probe of MASKING_OPEN_RECORD_PROBES) {
     it(`${labelOf(probe)} answers a masked path`, () => {
       const response = answerTo(openedWindow(bodyWindow), probe);
       const fields = detailFieldsOf(response);
@@ -1484,21 +2031,47 @@ describe('a sentinel submitted as an open-record key', () => {
     });
   }
 
-  it('reaches a different open path in every row', () => {
-    const fields = OPEN_RECORD_PROBES
+  it('reaches a different open path in every masked row', () => {
+    const fields = MASKING_OPEN_RECORD_PROBES
       .flatMap((probe) => detailFieldsOf(answerTo(
         openedWindow(bodyWindow),
         probe,
       )));
 
     // One detail per row, and no two rows landing on the same
-    // masked path — which is what says the three rows cover the
-    // three declared open paths rather than one of them three
-    // times. Derived from the answers, so a row copied and left
-    // unedited fails here rather than reading as coverage.
-    expect(fields.length).toBe(OPEN_RECORD_PROBES.length);
+    // masked path — which is what says these rows cover the
+    // declared open paths that can refuse rather than one of them
+    // several times. Derived from the answers, so a row copied and
+    // left unedited fails here rather than reading as coverage.
+    expect(fields.length).toBe(MASKING_OPEN_RECORD_PROBES.length);
     expect(new Set(fields).size).toBe(fields.length);
   });
+
+  for (const probe of INERT_OPEN_RECORD_PROBES) {
+    it(`${labelOf(probe)} takes the key and echoes none`, () => {
+      const response = answerTo(openedWindow(bodyWindow), probe);
+
+      expect(response.type).toBe('application/json');
+      expect(isFailureEnvelope(response)).toBe(true);
+
+      // The other shape, and the pair of assertions that says so
+      // rather than describing it. NO detail at all: the value
+      // schema is `z.unknown()` and a JSON key is always a string,
+      // so nothing strictly below the prefix can raise an issue
+      // and the mask has nothing to mask. And a `404`: the parse
+      // ACCEPTED the operator key, carried it into the service,
+      // and the address is what refused. A record narrowed later
+      // reddens both.
+      expect(detailFieldsOf(response)).toStrictEqual([]);
+      expect(response.status).toBe(404);
+
+      // Which makes this the deepest a submitted KEY travels on
+      // the surface — past the boundary parser, into a service's
+      // own input — and the zero is therefore about a value the
+      // handler held rather than one the schema turned away.
+      expect(countSentinel(response.text)).toBe(0);
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -1563,8 +2136,8 @@ describe('the capture over the query rows', () => {
     // `redact` option, and its request serialiser writes the raw
     // `url` and the parsed `query` object, so a query parameter is
     // recorded verbatim by the transport before any handler runs.
-    // Nothing on the wave-1 surface takes a secret in a query
-    // string, so this bounds the claim rather than breaking it.
+    // Nothing on this surface takes a secret in a query string, so
+    // this bounds the claim rather than breaking it.
     //
     // Derived from the rows rather than transcribed, and it doubles
     // as this file's one live control on the search: the same
@@ -1580,11 +2153,11 @@ describe('the capture over the query rows', () => {
 // ---------------------------------------------------------------------------
 
 describe('the planted-leak control', () => {
-  it('answers the sentinel where every wave-1 row answers none', () => {
+  it('answers the sentinel where every other row answers none', () => {
     const window = openedWindow(plantedWindow);
     const response = answerTo(window, PLANTED_PROBE);
 
-    // Read through the SAME two classifiers the forty-four rows
+    // Read through the SAME two classifiers the seventy-one rows
     // are read through, so a control that answered Express's own
     // page would not pass for a route that echoed.
     expect(response.type).toBe('application/json');
@@ -1621,7 +2194,7 @@ describe('the planted-leak control', () => {
 
     // The claim, and its head-to-head: the same counter over the
     // same kind of capture, produced by the same function over the
-    // same five mounts, answers a known non-zero here and zero
+    // same ten mounts, answers a known non-zero here and zero
     // there. A patch that had stopped capturing, or a counter that
     // had stopped matching, would answer zero in both.
     expect(PLANTED_CAPTURED_TOTAL).toBeGreaterThan(0);
@@ -1648,6 +2221,35 @@ describe('the planted-leak control', () => {
       expect(countMarker(response.text, leak.marker)).toBe(leak.answered);
     });
   }
+
+  it('answers the open-record path a masked row would collapse', () => {
+    const window = openedWindow(plantedWindow);
+    const response = answerTo(window, PLANTED_PROBE);
+    const fields = detailFieldsOf(response);
+
+    // Read through the SAME reader the six open-record rows are
+    // read through. Their two assertions — a masked row's `.*` and
+    // an inert row's empty list — are each satisfied by a
+    // `detailFieldsOf` that had stopped finding fields at all, and
+    // this is the run in which it is shown finding one.
+    expect(fields).toContain(PLANTED_OPEN_FIELD);
+
+    // And the shape the collapse in `src/http/validation.ts`
+    // exists to prevent: the operator key whole, where every
+    // masking row on the surface answers `<prefix>.*` instead. Read
+    // off the ANSWER rather than off the constant, so a route that
+    // masked what it leaked reddens here.
+    expect(fields.filter((field) => field.includes('.*')))
+      .toStrictEqual([]);
+    expect(fields.filter((field) => countSentinel(field) > 0).length)
+      .toBeGreaterThan(0);
+
+    // The key it names is the one the request sent, which is what
+    // separates a leak of submitted content from a leak of a
+    // constant this file happens to also spell.
+    expect(countSentinel(sentBytesOf(PLANTED_PROBE))).toBeGreaterThan(0);
+    expect(PLANTED_OPEN_FIELD).toContain(SENTINEL);
+  });
 
   it('plants a distinct channel in each row it declares', () => {
     const markers = PLANTED_LEAKS.map((leak) => leak.marker);
@@ -1696,13 +2298,20 @@ describe('the stores behind the three windows', () => {
       // each case saw is the one the boot built and the cases are
       // independent of the order vitest ran them in.
       //
-      // Two readings cover the whole surface: every other wave-1
-      // table hangs off `domains.id`, so a store holding no domain
-      // can hold no category, term or persona either, and the
-      // settings row is the one piece of state no address hides
-      // behind.
+      // Three readings cover the whole surface, and which three is
+      // decided by what hangs off what. Every other table here
+      // hangs off `domains.id` — categories, terms, personas,
+      // topics, sources and export subscriptions alike — so a
+      // store holding no domain can hold none of them. The
+      // settings row is one piece of state no address hides
+      // behind. `connectors` is the other and the one wave 2
+      // added: it is deployment-level, so a create that had been
+      // accepted would leave a row this file could not otherwise
+      // see, which is exactly why the open-record row for a
+      // connector config is a `PATCH`.
       expect(await window.store.countDomains()).toBe(0);
       expect(await window.store.readSettings()).toBeNull();
+      expect(await window.store.countConnectors({})).toBe(0);
     }
   });
 });
