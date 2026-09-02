@@ -333,7 +333,7 @@ side of that string records what the library is for.
 
 | Library | The workflow area it serves |
 | --- | --- |
-| `schedule.ts` | `ar-dispatch`: the interval clamp and the batch cap it applies to what it has claimed. |
+| `schedule.ts` | The clamp a proposed gap goes through and the batch cap a tick is bounded by. `ar-dispatch` applies both to what it has claimed, expressing the clamp as SQL inside each claim. `ar-research` splices the same library into the node that proposes when its claimed topic should come round next, which is the agent mode and the one caller that reaches `clampIntervalSeconds` from a canvas at all. |
 | `parse-csv.ts` | Delimited text a source answers with, on the pull path and the capture path alike. |
 | `parse-eml.ts` | Message-format bodies — a file handed to `ar-capture`, and any `multipart/` an ingest source answers with. |
 | `yaml-lite.ts` | Configuration somebody edits by hand, wherever a later phase reads one. |
