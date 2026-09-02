@@ -1,15 +1,19 @@
 /**
- * Cases for the contract in `./index.ts`, which has no runtime half at
- * all: every export there is a type, so what this file pins is a shape
- * rather than a behaviour.
+ * Cases for `./index.ts`, which is two things: the contract every
+ * renderer satisfies, and the registry that selects one of them.
+ *
+ * THE TWO HALVES READ DIFFERENTLY. The contract has no runtime form —
+ * every export in it is a type — so what this file pins there is a
+ * shape rather than a behaviour. The registry is ordinary values, so
+ * its cases are readings of what an edit to that literal did.
  *
  * TWO GATES OWN TWO HALVES OF IT, and only one of them is vitest's. A
  * package `test` run transpiles each file and type-checks nothing, so
  * every `satisfies` and every `const X: SomePin = true` below is read
  * by `bun run check-types` and by nothing else — green here is no
  * evidence about them. The cases are what vitest owns: the key
- * rosters, the fixture's own discriminating values, and the one
- * behaviour a conforming renderer has.
+ * rosters, the fixture's own discriminating values, the one behaviour
+ * a conforming renderer has, and the registry's own selection.
  *
  * THE DOUBLES ARE THE PIN. Each fixture below is an object literal
  * declared with `satisfies`, which closes the drift in both
@@ -42,6 +46,8 @@ import type {
   ExportBriefingRow,
   ExportDomainRow,
   ExportFindingRow,
+  ExportFormatRefusal,
+  ExportRegistryEntry,
   ExportRenderInput,
   ExportRenderer,
   ExportSubscriptionRow,
@@ -54,7 +60,16 @@ import type { DigestFinding } from '../lib/digest-assemble.js';
 
 import { describe, expect, it } from 'vitest';
 
+import { EXPORT_FORMATS } from '../db/schema/values.js';
 import { orderFindings } from '../lib/digest-assemble.js';
+
+import {
+  EXPORT_RENDERERS,
+  PDF_REFUSAL,
+  isExportRenderer,
+  refusalFor,
+  rendererFor,
+} from './index.js';
 
 // ---------------------------------------------------------------------------
 // The type-level pins
@@ -206,6 +221,17 @@ const ARTIFACT_KEYS = [
   'path',
 ] as const satisfies readonly (keyof ExportArtifact)[];
 
+/**
+ * The two members a declared refusal has. A third that rendered would
+ * land here first, which is why this roster is asserted rather than
+ * the arity — a refusal is the entry a format has INSTEAD of a
+ * renderer, so anything callable growing on one undoes the split.
+ */
+const REFUSAL_KEYS = [
+  'format',
+  'reason',
+] as const satisfies readonly (keyof ExportFormatRefusal)[];
+
 /** Every list above, held against the type it describes. */
 type EveryKeyListed =
   CoversEveryKey<ExportDomainRow, typeof DOMAIN_KEYS>
@@ -214,12 +240,13 @@ type EveryKeyListed =
   & CoversEveryKey<ExportSubscriptionRow, typeof SUBSCRIPTION_KEYS>
   & CoversEveryKey<ExportRenderInput, typeof INPUT_KEYS>
   & CoversEveryKey<ExportRenderer, typeof RENDERER_KEYS>
-  & CoversEveryKey<ExportArtifact, typeof ARTIFACT_KEYS>;
+  & CoversEveryKey<ExportArtifact, typeof ARTIFACT_KEYS>
+  & CoversEveryKey<ExportFormatRefusal, typeof REFUSAL_KEYS>;
 
 /**
  * The half of the drift guard `check-types` owns.
  *
- * A member added to any of the seven interfaces and to none of the
+ * A member added to any of the eight interfaces and to none of the
  * lists above turns {@link EveryKeyListed} into `never`, and this
  * initializer is then a TS2322 at this line — before any case can
  * compare a fixture against a set that has quietly stopped describing
@@ -259,8 +286,11 @@ const RENDERER_KEY_SET: readonly string[] = [...RENDERER_KEYS].sort();
 /** {@link ARTIFACT_KEYS}, sorted. */
 const ARTIFACT_KEY_SET: readonly string[] = [...ARTIFACT_KEYS].sort();
 
+/** {@link REFUSAL_KEYS}, sorted. */
+const REFUSAL_KEY_SET: readonly string[] = [...REFUSAL_KEYS].sort();
+
 /**
- * A member none of the seven interfaces declares, as a key.
+ * A member none of the eight interfaces declares, as a key.
  *
  * Assembled from parts so that a member genuinely named this would
  * still not be spelled anywhere in this file, and asserted absent from
@@ -394,6 +424,79 @@ const MINIMAL_RENDERER = {
 } satisfies ExportRenderer;
 
 // ---------------------------------------------------------------------------
+// The registry, as it ships
+// ---------------------------------------------------------------------------
+/**
+ * A format no member of `EXPORT_FORMATS` names, and one the registry
+ * therefore holds no entry for.
+ *
+ * Assembled from parts for {@link ABSENT_KEY}'s reason, and asserted
+ * outside both `EXPORT_FORMATS` and the registry keys in the case that
+ * uses it: a lookup answering null for everything satisfies a case
+ * over an unknown format exactly as one that discriminates does, and
+ * only a value known to be outside the declared set says otherwise.
+ */
+const ABSENT_FORMAT = ['fold', 'ed', '-paper'].join('');
+
+/**
+ * The formats that resolve to a renderer, written out rather than
+ * read off the registry.
+ *
+ * A case computing this from the same literal it checks would agree
+ * with any edit to that literal, and this is the one reading that
+ * notices a format being registered — or a renderer quietly replaced
+ * by a refusal, which the type cannot see because both satisfy
+ * `ExportRegistryEntry`.
+ */
+const RENDERED_FORMATS: readonly string[] = [
+  'email_draft',
+  'notion_md',
+  'obsidian_md',
+  'rss',
+];
+
+/**
+ * The formats that resolve to a refusal, written out for the same
+ * reason. `pdf` is the only one, and the two lists together are what
+ * the registry's key set is checked against.
+ */
+const REFUSED_FORMATS: readonly string[] = ['pdf'];
+
+/**
+ * `EXPORT_FORMATS` as a plain sorted list of strings.
+ *
+ * The tuple is `readonly ['obsidian_md', ...]`, so comparing it
+ * against registry keys needs the literal types widened first —
+ * otherwise the comparison is between a tuple type and `string[]` and
+ * says nothing about either.
+ */
+const STORABLE_FORMATS: readonly string[] = [...EXPORT_FORMATS].sort();
+
+/** Every key the shipped registry holds, sorted. */
+const REGISTERED_FORMATS: readonly string[] =
+  Object.keys(EXPORT_RENDERERS).sort();
+
+/**
+ * The entry the registry holds under a format, read the way a caller
+ * handed a stored `format` reads it.
+ *
+ * Indexed through a widened binding rather than through
+ * `EXPORT_RENDERERS` itself, whose key type is `ExportFormat`: a case
+ * driving the registry from a list of strings cannot index the tight
+ * form, and casting at every site would be the same assertion written
+ * five times.
+ *
+ * @param format - The format to read.
+ * @returns The entry, or undefined when the registry holds none.
+ */
+function entryFor(format: string): ExportRegistryEntry | undefined {
+  const registry: Readonly<Record<string, ExportRegistryEntry>> =
+    EXPORT_RENDERERS;
+
+  return registry[format];
+}
+
+// ---------------------------------------------------------------------------
 // The cases
 // ---------------------------------------------------------------------------
 
@@ -494,6 +597,168 @@ describe('a renderer conforming to the contract', () => {
   });
 });
 
+describe('the registry, and how one renderer is reached', () => {
+  // Both directions, over the tuple the `export_subscriptions.format`
+  // CHECK is generated from. A format the column accepts and this
+  // registry omits would leave a stored row reaching nothing, and a
+  // key here no column value can carry would be an entry no row can
+  // ever select — so each direction is a different mistake and the
+  // equality is the pair of them.
+  //
+  // The sorted equality would say both at once; the two loops are
+  // here because they fail NAMING the member, which a diff between
+  // two five-element lists does less well.
+  it('covers every format a stored row can carry, and no other', () => {
+    for (const format of STORABLE_FORMATS) {
+      expect(REGISTERED_FORMATS).toContain(format);
+    }
+
+    for (const format of REGISTERED_FORMATS) {
+      expect(STORABLE_FORMATS).toContain(format);
+    }
+
+    expect(REGISTERED_FORMATS).toStrictEqual(STORABLE_FORMATS);
+
+    // Anti-vacuity: two empty lists satisfy every line above.
+    expect(REGISTERED_FORMATS.length).toBeGreaterThan(1);
+    expect(STORABLE_FORMATS).not.toContain(ABSENT_FORMAT);
+  });
+
+  // Which of the two an entry is, which is the half the type cannot
+  // reach: a refusal satisfies `ExportRegistryEntry` exactly as a
+  // renderer does, so a renderer never written — or deleted — leaves
+  // the record still exhaustive and still green under `check-types`.
+  it('splits into the four it renders and the one it refuses', () => {
+    const rendered = REGISTERED_FORMATS.filter((format) => {
+      const entry = entryFor(format);
+
+      return entry !== undefined && isExportRenderer(entry);
+    });
+    const refused = REGISTERED_FORMATS.filter((format) => {
+      const entry = entryFor(format);
+
+      return entry !== undefined && !isExportRenderer(entry);
+    });
+
+    expect(rendered).toStrictEqual(RENDERED_FORMATS);
+    expect(refused).toStrictEqual(REFUSED_FORMATS);
+    expect([...RENDERED_FORMATS, ...REFUSED_FORMATS].sort())
+      .toStrictEqual(STORABLE_FORMATS);
+  });
+
+  // The one fault a well-typed registry can still carry: a renderer
+  // filed under a key that is not the format it declares. The record
+  // type checks that every format has an entry and says nothing about
+  // WHICH entry, so this is the reading that catches a copy-paste in
+  // the literal.
+  it('files every entry under the format the entry names', () => {
+    const misfiled = REGISTERED_FORMATS.filter(
+      (format) => entryFor(format)?.format !== format,
+    );
+
+    expect(misfiled).toStrictEqual([]);
+    // The control: the same comparison over a pairing built to be
+    // wrong, so the walk above is shown to report rather than to have
+    // found nothing to look at.
+    expect(PDF_REFUSAL.format).not.toBe(RENDERED_FORMATS[0]);
+  });
+
+  // The selector over each registered renderer, by identity rather
+  // than by structure: a lookup that rebuilt what it returned would
+  // satisfy a structural comparison while handing back something the
+  // registry does not hold.
+  it('answers the entry the registry holds for a rendered format', () => {
+    for (const format of RENDERED_FORMATS) {
+      expect(rendererFor(format)).toBe(entryFor(format));
+      expect(rendererFor(format)?.format).toBe(format);
+      expect(refusalFor(format)).toBeNull();
+    }
+
+    expect(RENDERED_FORMATS.length).toBeGreaterThan(0);
+  });
+
+  // `pdf`, which the column accepts and nothing renders. The refusal
+  // names its own format and carries a reason, and the selector says
+  // nothing for it — which is what makes the second reading below the
+  // one a caller acts on.
+  it('refuses pdf by name, carrying the reason it was refused', () => {
+    expect(PDF_REFUSAL.format).toBe('pdf');
+    expect(Object.keys(PDF_REFUSAL).sort()).toStrictEqual(REFUSAL_KEY_SET);
+    expect(PDF_REFUSAL.reason.length).toBeGreaterThan(0);
+
+    // The format is one a row can genuinely be stored with, so the
+    // refusal is over reachable data rather than over a value the
+    // database would never accept.
+    expect(STORABLE_FORMATS).toContain('pdf');
+
+    expect(rendererFor('pdf')).toBeNull();
+    expect(refusalFor('pdf')).toBe(PDF_REFUSAL);
+  });
+
+  // A format nobody declared resolves to nothing at all, and the pair
+  // with the line above is the whole reading: null from the selector
+  // means the same for `pdf` and for this, and only the refusal
+  // lookup tells a caller which of the two they have.
+  it('resolves a format nothing declares to nothing at all', () => {
+    expect(REGISTERED_FORMATS).not.toContain(ABSENT_FORMAT);
+    expect(entryFor(ABSENT_FORMAT)).toBeUndefined();
+
+    expect(rendererFor(ABSENT_FORMAT)).toBeNull();
+    expect(refusalFor(ABSENT_FORMAT)).toBeNull();
+
+    // The discrimination. Without it both selectors answering null
+    // for everything would satisfy every expectation above.
+    expect(refusalFor('pdf')).not.toBeNull();
+    expect(rendererFor(RENDERED_FORMATS[0] ?? '')).not.toBeNull();
+  });
+
+  // The prototype keys, live rather than hypothetical: `in` answers
+  // true for every one of them over the very object the selectors
+  // read, so a lookup reading the key instead of asking whether it was
+  // an own key would hand back a function off `Object.prototype` to be
+  // narrowed as an entry.
+  //
+  // The `in` assertions are the control. Without them a green run is
+  // equally satisfied by a registry that had stopped being a plain
+  // object, where there would be nothing to inherit.
+  //
+  // Only ONE of the two selectors rests on the own-key guard, which
+  // is measured rather than assumed: removing it from `refusalFor`
+  // reddens this case, and removing it from `rendererFor` reddens
+  // nothing, because no member of `Object.prototype` carries a
+  // callable `render` for that narrowing to accept. Both halves are
+  // asserted here all the same — the claim is about the answers, not
+  // about which line inside produced them.
+  it('answers nothing for a name inherited from the prototype', () => {
+    const inherited = [
+      'toString', 'valueOf', 'constructor', 'hasOwnProperty',
+    ];
+
+    expect(inherited.map((name) => rendererFor(name)))
+      .toStrictEqual(inherited.map(() => null));
+    expect(inherited.map((name) => refusalFor(name)))
+      .toStrictEqual(inherited.map(() => null));
+    expect(inherited.map((name) => name in EXPORT_RENDERERS))
+      .toStrictEqual(inherited.map(() => true));
+  });
+
+  // The narrowing itself, on the member rather than on the key. A
+  // refusal that had grown a `render` member of some other type would
+  // pass a key check and fail at the call, which is why the predicate
+  // asks whether it is callable.
+  it('narrows on a callable member and not on a key', () => {
+    const renderer = entryFor('obsidian_md');
+    const notCallable = {
+      ...PDF_REFUSAL,
+      render: 'a string, which no caller can invoke',
+    } as unknown as ExportRegistryEntry;
+
+    expect(renderer !== undefined && isExportRenderer(renderer)).toBe(true);
+    expect(isExportRenderer(PDF_REFUSAL)).toBe(false);
+    expect(isExportRenderer(notCallable)).toBe(false);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // The guards: what a later edit to this file has to keep true
 // ---------------------------------------------------------------------------
@@ -503,7 +768,7 @@ describe('the tables this file asserts against', () => {
     // Reading the pins is what keeps them symbols this file USES.
     // Their values are never in doubt — the claim is that
     // `check-types` could not have produced any other ones, since a
-    // member added to any of the seven interfaces and to none of the
+    // member added to any of the eight interfaces and to none of the
     // rosters turns the type into `never` and reddens the
     // initializer rather than this line.
     expect(EVERY_KEY_LISTED).toBe(true);
@@ -520,6 +785,7 @@ describe('the tables this file asserts against', () => {
       DOMAIN_KEY_SET,
       FINDING_KEY_SET,
       INPUT_KEY_SET,
+      REFUSAL_KEY_SET,
       RENDERER_KEY_SET,
       SUBSCRIPTION_KEY_SET,
     ];
@@ -532,7 +798,7 @@ describe('the tables this file asserts against', () => {
       expect(roster).not.toContain(ABSENT_KEY);
     }
 
-    expect(rosters).toHaveLength(7);
+    expect(rosters).toHaveLength(8);
   });
 
   it('names the two members a renderer is allowed', () => {

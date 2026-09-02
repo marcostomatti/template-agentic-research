@@ -836,7 +836,7 @@ describe('the body below the subject line', () => {
 // The guards: what a later edit has to keep true
 // ---------------------------------------------------------------------------
 
-describe('the renderer the registry will name', () => {
+describe('the renderer the registry names', () => {
   it('serves the format a stored row can carry', () => {
     const formats: readonly string[] = EXPORT_FORMATS;
 

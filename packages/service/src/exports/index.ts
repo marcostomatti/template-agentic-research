@@ -2,9 +2,15 @@
  * @packageDocumentation
  * Export renderers — the contract every module in this directory satisfies.
  *
- * Type-only still: the renderers land beside this file through phase 6,
- * and until they do it pins the shape they conform to and nothing else.
- * What phase 6 changed here is what the contract is written AGAINST —
+ * BOTH HALVES BELONG HERE, the way `src/sources/index.ts` keeps its
+ * own pair: the contract says what a renderer IS, and
+ * {@link EXPORT_RENDERERS} is the list of the ones this service will
+ * actually run, which the `format` on a stored `export_subscriptions`
+ * row reaches one of. This file was type-only for as long as the
+ * renderers beside it were being written, and the registry is what
+ * ended that.
+ *
+ * What phase 6 changed in the contract is what it is written AGAINST —
  * the four members of {@link ExportRenderInput} are stored rows now,
  * not the open records this file carried while schema v2 was unsettled.
  * A renderer turns one domain's stored digest into artifacts and stops
@@ -24,6 +30,11 @@
  */
 
 import type { DomainSettings } from '../db/schema/domains.js';
+
+import { EMAIL_DRAFT_RENDERER } from './email-draft.js';
+import { NOTION_MD_RENDERER } from './notion-md.js';
+import { OBSIDIAN_MD_RENDERER } from './obsidian-md.js';
+import { RSS_RENDERER } from './rss.js';
 
 /**
  * The export formats a subscription can be rendered into.
@@ -398,4 +409,233 @@ export interface ExportRenderer {
    * from inside this call.
    */
   render(input: ExportRenderInput): ExportArtifact[];
+}
+
+/**
+ * Why a format is declared here and yet has no renderer.
+ *
+ * The registry covers {@link ExportFormat} exhaustively, which is what
+ * keeps a stored `export_subscriptions.format` from ever reaching an
+ * entry that is not there. A format nothing renders is therefore
+ * REFUSED BY NAME rather than left out: the entry says which format
+ * and why, so a caller handed one can report the reason instead of
+ * answering an empty artifact list a surface would render as a period
+ * that came to nothing.
+ *
+ * Two members and no third. A refusal is a value a caller prints, so
+ * it holds no code and nothing to call — a member that could be
+ * invoked would make this a renderer that refuses at run time, which
+ * is the shape being avoided.
+ */
+export interface ExportFormatRefusal {
+  /** The format being refused. Its own key in the registry. */
+  readonly format: ExportFormat;
+
+  /**
+   * Why nothing renders it, in a sentence a caller can log. Fixed
+   * text: no value from a stored row is quoted into it, so the
+   * sentence is the same one whatever subscription reached it.
+   */
+  readonly reason: string;
+}
+
+/**
+ * What the registry holds under one format: a renderer, or a declared
+ * refusal standing in for the renderer that is not there.
+ *
+ * A union rather than a nullable renderer, because null cannot say
+ * WHY — and the two states this union separates are exactly the two a
+ * caller has to tell apart. {@link isExportRenderer} is the narrowing
+ * every reader goes through.
+ */
+export type ExportRegistryEntry = ExportRenderer | ExportFormatRefusal;
+
+/**
+ * The registry's shape when it is read by a format that came out of a
+ * row: entries by a plain string key.
+ *
+ * `string` rather than {@link ExportFormat}, for the reason
+ * {@link ExportSubscriptionRow.format} is a string — a SELECT answers
+ * text, and the narrowing happens at the selector. The shipped
+ * literal is typed more tightly than this, so exhaustiveness is
+ * checked where the entries are written and the lookup stays honest
+ * about what it is handed.
+ */
+export type ExportRendererRegistry = Readonly<
+  Record<string, ExportRegistryEntry>
+>;
+
+/**
+ * The `pdf` entry: a refusal, not a renderer, and the one format this
+ * service declares and does not produce.
+ *
+ * A pdf body is BYTES rather than text — {@link ExportArtifact.body}
+ * already carries that distinction, and pdf is the member it was
+ * widened for — and producing those bytes needs a document library
+ * this phase does not add. Everything else here composes text with no
+ * dependency at all, so the gap is a dependency decision rather than
+ * an oversight, and it is written down as one.
+ *
+ * `export_subscriptions.format` accepts the value regardless: the
+ * CHECK is over `EXPORT_FORMATS` in `src/db/schema/values.ts`, so a
+ * subscription naming `pdf` stores fine and reaches selection. This
+ * const is what it reaches. Replacing it with a renderer is the whole
+ * of what landing pdf later costs on this side.
+ */
+export const PDF_REFUSAL: ExportFormatRefusal = {
+  format: 'pdf',
+  reason:
+    'a pdf body is bytes rather than text, and rendering one needs a '
+    + 'document dependency this service does not carry. No renderer is '
+    + 'registered for this format.',
+};
+
+/**
+ * Every format this service can be asked for, under the key a stored
+ * row names it by. Four resolve to a renderer; `pdf` resolves to
+ * {@link PDF_REFUSAL}.
+ *
+ * REGISTERED STATICALLY, never by reading the directory, on the rule
+ * `SOURCE_ADAPTERS` in `src/sources/index.ts` states for its own
+ * literal: a registry assembled from a directory listing turns "a file
+ * was added" into "the service will now run it". Renderers are pure
+ * and reach nothing, so the hazard is milder here than it is there —
+ * but the reason the naming is an edit somebody reviews is the same,
+ * and one registry in this repo built each way would be a shape a
+ * reader has to check rather than know.
+ *
+ * WHAT REGISTERING ONE COSTS is a line in this literal, an import
+ * above it, and the two cases in `./index.test.ts` that read this
+ * split. Nothing else has to be remembered, and that is deliberate:
+ * the key set is held against `EXPORT_FORMATS` in
+ * `src/db/schema/values.ts` in both directions, so a format the
+ * column accepts and this literal omits fails naming itself, and a key
+ * here that no column value can carry fails the same way. The type
+ * closes the first direction ahead of any case — the record is keyed
+ * by {@link ExportFormat}, so a member added to that union with no
+ * entry is a `check-types` error rather than a green run.
+ *
+ * What the cases add that the type cannot is WHICH of the two an
+ * entry is. A refusal satisfies {@link ExportRegistryEntry} exactly as
+ * a renderer does, so a renderer replaced by a refusal — or never
+ * written — type-checks; the rendered-and-refused rosters written out
+ * in `./index.test.ts` are what notice it.
+ */
+export const EXPORT_RENDERERS: Readonly<
+  Record<ExportFormat, ExportRegistryEntry>
+> = {
+  obsidian_md: OBSIDIAN_MD_RENDERER,
+  notion_md: NOTION_MD_RENDERER,
+  rss: RSS_RENDERER,
+  pdf: PDF_REFUSAL,
+  email_draft: EMAIL_DRAFT_RENDERER,
+};
+
+/**
+ * The registry read by a plain string key, which is what a stored
+ * `format` is.
+ *
+ * The literal above is typed by {@link ExportFormat} so that its
+ * entries are checked for exhaustiveness where they are written; the
+ * selectors below index THIS binding instead, so nothing in them has
+ * to assert about a value that came out of a row.
+ */
+const REGISTRY: ExportRendererRegistry = EXPORT_RENDERERS;
+
+/**
+ * Whether a registry entry is a renderer rather than a refusal.
+ *
+ * Keyed on `render` being callable, which is the member a renderer has
+ * and a refusal cannot grow: {@link ExportFormatRefusal} holds two
+ * strings, so no refusal answers true here by accident. A key check
+ * alone would not do — a refusal carrying a `render` member of some
+ * other type would pass one and fail at the call.
+ *
+ * @param entry - The entry to classify.
+ * @returns True when `entry` renders, narrowing it for the caller.
+ */
+export function isExportRenderer(
+  entry: ExportRegistryEntry,
+): entry is ExportRenderer {
+  return typeof (entry as Partial<ExportRenderer>).render === 'function';
+}
+
+/**
+ * The renderer registered for a format, or null when none is.
+ *
+ * NULL COVERS TWO STATES and they are told apart by
+ * {@link refusalFor}, not by this answer: a format the registry
+ * refuses, and a format it has never heard of. Both leave a caller
+ * with nothing to render, which is why one return type serves both —
+ * what differs is what a caller can SAY about it, and that is the
+ * other selector's job.
+ *
+ * Null rather than a throw, on the reading `getSourceAdapter` in
+ * `src/sources/index.ts` states: the argument came out of an
+ * `export_subscriptions` row, so an unrenderable format is a datum
+ * about stored data and not a programming error.
+ *
+ * The lookup goes through `Object.hasOwn` because `toString`,
+ * `valueOf` and `constructor` all answer something off
+ * `Object.prototype` — but on THIS selector that guard is symmetry
+ * with {@link refusalFor} rather than the thing that refuses them.
+ * {@link isExportRenderer} below it independently does: no member of
+ * `Object.prototype` carries a callable `render`, so every inherited
+ * name fails the narrowing whether or not the guard ran, measured by
+ * removing it. The guard is load-bearing on the other selector, whose
+ * narrowing runs the other way, and both are written the same way so
+ * that a reader comparing them finds one shape and not two.
+ *
+ * @param format - The format to select for, as a stored row spells it.
+ * @returns The renderer, or null when the format has none.
+ */
+export function rendererFor(format: string): ExportRenderer | null {
+  if (!Object.hasOwn(REGISTRY, format)) {
+    return null;
+  }
+
+  const entry = REGISTRY[format];
+
+  if (entry === undefined || !isExportRenderer(entry)) {
+    return null;
+  }
+
+  return entry;
+}
+
+/**
+ * The declared refusal for a format, or null when the format has a
+ * renderer or is not registered at all.
+ *
+ * This is the half that makes a refusal loud. {@link rendererFor}
+ * answers null for `pdf` exactly as it does for a format nobody has
+ * ever declared, and the difference between those two matters to
+ * whoever has to act: one is a decision written down here with its
+ * reason, the other is a row naming something this service does not
+ * know. A caller that got null from the selector asks this and reports
+ * whichever it has.
+ *
+ * `Object.hasOwn` IS load-bearing here, and this is the selector it is
+ * load-bearing for. The narrowing below it refuses renderers, so an
+ * inherited `toString` — a function, but not one carrying a callable
+ * `render` — falls through it and would be answered as a refusal with
+ * no `format` and no `reason` on it at all. Measured: removing the
+ * guard reddens the prototype case on this function and on nothing
+ * else.
+ *
+ * @param format - The format to look up, as a stored row spells it.
+ * @returns The refusal, or null when there is none to report.
+ */
+export function refusalFor(format: string): ExportFormatRefusal | null {
+  if (!Object.hasOwn(REGISTRY, format)) {
+    return null;
+  }
+
+  const entry = REGISTRY[format];
+
+  if (entry === undefined || isExportRenderer(entry)) {
+    return null;
+  }
+
+  return entry;
 }
