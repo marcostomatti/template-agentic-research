@@ -1,37 +1,42 @@
 /**
- * The wave-2 topics store driven against a real Postgres, through
- * the real migrations: a domain written, topics hung off it, the one
- * key that table can refuse a write with, a window taken out of the
- * collection, a patch, the schedule column written through its
- * single door, and the cascade that takes the whole lot away with
- * the domain. Self-skips when AR_LIVE_DATABASE_URL is unset — run
- * via:
+ * The wave-2 topics and sources stores driven against a real
+ * Postgres, through the real migrations. The topics half: a domain
+ * written, topics hung off it, the one key that table can refuse a
+ * write with, a window taken out of the collection, a patch, the
+ * schedule column written through its single door, and the cascade
+ * that takes the whole lot away with the domain. The sources half: a
+ * corpus hung off a page of feeds, the parse-status aggregate folded
+ * over it, the two foreign keys that refuse a source delete, and the
+ * failures queue paged newest first over a tie the server itself
+ * made. Self-skips when AR_LIVE_DATABASE_URL is unset — run via:
  *
  *   bun run stress:start && bun run test:live && bun run stress:stop
  *
  * WHAT ONLY A SERVER CAN ANSWER is why this file is worth its
- * container, and it is not the rules. Every decision the topics
- * surface takes — the 404 for an unknown slug, the 409 for a name
- * the domain already carries, the 409 for a run-now against a
- * disabled row, the instant a pause of N cycles lands on — is a
+ * container, and it is not the rules. Every decision either surface
+ * takes — the 404 for an unknown slug, the 409 for a name the domain
+ * already carries, the 409 for a run-now against a disabled row, the
+ * 409 carrying the counts a source delete would have taken — is a
  * decision about rows, and `tests/helpers/memory-research-store.ts`
  * supplies rows with no database, so all of it is already pinned by
- * `src/topics/service.test.ts` and `src/topics/routes.test.ts`. What
- * is left is the half those suites structurally cannot reach: every
- * operation below is SQL, and a statement that is valid drizzle and
- * invalid SQL passes `lint`, `check-types` and the entire isolated
- * suite. A projection naming a column the migration never created,
- * an `ORDER BY` on the wrong column, a `WHERE` that stopped
- * narrowing, a `RETURNING` list drifted from the `SELECT` beside it
- * — each is reported here and nowhere else.
+ * the service and routes suites under `src/topics/` and
+ * `src/sources/`. What is left is the half those suites structurally
+ * cannot reach: every operation below is SQL, and a statement that
+ * is valid drizzle and invalid SQL passes `lint`, `check-types` and
+ * the entire isolated suite. A projection naming a column the
+ * migration never created, an `ORDER BY` on the wrong column, a
+ * `WHERE` that stopped narrowing, a `GROUP BY` folded onto the wrong
+ * row, a `RETURNING` list drifted from the `SELECT` beside it — each
+ * is reported here and nowhere else.
  *
- * SIX READINGS BELOW ARE THINGS AN IN-MEMORY MAP CANNOT DO, which is
- * the same argument put sharply enough to be checkable. The seven
- * capitalised paragraphs that follow are those six — the window and
- * the scope are one reading written from two sides — and the two
- * after them are the other kind: one names a reading this table
- * cannot give, and the last is a `check-types` leg rather than a
- * live one.
+ * ELEVEN READINGS BELOW ARE THINGS AN IN-MEMORY MAP CANNOT DO, which
+ * is the same argument put sharply enough to be checkable. Twelve
+ * capitalised paragraphs carry those eleven: six are the topics
+ * half's, written across seven paragraphs because the window and the
+ * scope are one reading taken from two sides, and five are the
+ * sources half's. The two paragraphs after them are the other kind —
+ * one names a reading these tables cannot give, and the last is a
+ * `check-types` leg rather than a live one.
  *
  * THE IDENTITY IS THE DATABASE'S, AND A REFUSED INSERT SPENDS ONE.
  * `topics.id` is a `bigserial` mapped in `number` mode, so it
@@ -100,6 +105,62 @@
  * stored row, so the drizzle half reads instead of writing, and the
  * leg deleting that early return reddens nothing at all over there.
  *
+ * THE AGGREGATE IS ONE `GROUP BY` AND ITS FILTER IS A THREE-VALUED
+ * ONE. The parse-status counts for a whole page come out of a single
+ * `GROUP BY (source_id, parse_status)` narrowed by an `IN` list of
+ * that page's own ids, and `NULL IN (...)` is UNKNOWN in SQL rather
+ * than false — so a capture that came through no feed at all cannot
+ * form a group, however many of them the corpus holds. A map
+ * filtering by membership answers true or false and has no third
+ * value to be wrong about, so the row this file plants with a null
+ * `source_id` is a control only a server can be held to.
+ *
+ * THE TWO ABSENCE SHAPES OF A ZERO-FILLED FOLD EXERCISE DIFFERENT
+ * LINES, and a fixture carrying one of them leaves half the fold
+ * unproven while every assertion still reads like a complete claim.
+ * A source whose captures ALL parsed contributes a group under one
+ * status and none under the other, so the missing member comes from
+ * the record the fold was initialised with; a source that has
+ * captured nothing contributes no group at all, so the lookup misses
+ * and every member is the fallback. Both are planted, and the two
+ * legs aimed at them redden one case each and different assertions
+ * inside it.
+ *
+ * POSTGRES REFUSES ON WHICHEVER KEY IT CHECKED FIRST, which is why
+ * each delete case gets a subject holding ONE kind of dependent. A
+ * source carrying a document AND a sighting answers
+ * `documents_source_id_sources_id_fk` for both, so the second case
+ * would pin the first key while reading as two. The sighting-only
+ * subject is arranged the way the schema permits: it holds no
+ * document of its own, and the sighting citing it hangs off a
+ * finding over the OTHER source's capture. No in-memory
+ * implementation has that ordering to be wrong about — a fake
+ * refuses whichever guard its own code reaches first, and that order
+ * is a line somebody wrote rather than a property of the row.
+ *
+ * THE QUEUE'S TIE IS ONE THE DATABASE PRODUCES. `captured_at`
+ * defaults to `now()`, and `now()` is the TRANSACTION's instant
+ * rather than the row's, so two documents written inside ONE
+ * statement take a single value between them — the batch capture the
+ * port names as its reason for putting `id` descending beside the
+ * sort. This file plants that tie twice: once as a literal, so the
+ * answered page is deterministic, and once through the column's own
+ * default, which is the shape a deployment meets and which no map
+ * can be made to produce. Every capture instant here is in the PAST
+ * for that second half to work, and the case asserts the batched
+ * stamp is the newer rather than assuming it.
+ *
+ * THE READ WROTE NOTHING IS A CLAIM ABOUT THE TABLE. `SourceStore`
+ * declares two reads over `documents` and no write whatever, so the
+ * review queue is read-only structurally rather than by convention —
+ * but that is a statement about an interface, and an interface has
+ * no runtime form. The census bracketing the queue's reads is taken
+ * straight off `documents` rather than through the port, so a
+ * statement that marked a row as seen, or moved one off `failed` as
+ * it was worked, is a member that no longer matches. An in-memory
+ * store cannot host that reading at all: its table IS the object
+ * graph its reads answer from.
+ *
  * THE JSONB ARRAY IS NOT THE KEY-ORDER READING, AND SAYING SO IS
  * PART OF THE READING. `tests/live/api.live.test.ts` proves its
  * stores read the STORED row rather than echoing their argument by
@@ -111,71 +172,112 @@
  * went in, so a patch answering two members where three were stored
  * is a replacement rather than a reordering.
  *
- * THE KEY-SET PIN IS A `check-types` LEG rather than a red case, and
- * it is load-bearing on this table rather than tidy: `topics` does
- * not declare its schedulable columns, it spreads
+ * THE KEY-SET PINS ARE `check-types` LEGS rather than red cases, and
+ * they are load-bearing on these tables rather than tidy. `topics`
+ * does not declare its schedulable columns, it spreads
  * `schedulableColumns()` from `src/db/schema/scheduling.ts`, which
- * `export_subscriptions` spreads as well. A column added to that ONE
- * helper for a scheduling mode nobody in `src/topics/` is thinking
- * about lands on this table with no file in that directory edited at
- * all, and no assertion naming a member notices a member arriving.
+ * `export_subscriptions` spreads as well — so a column added to that
+ * ONE helper for a scheduling mode nobody in `src/topics/` is
+ * thinking about lands on this table with no file in that directory
+ * edited at all. The sources side needs three of them because that
+ * surface answers three shapes: the row, the row plus its
+ * parse-status aggregate, and the queue's own column-scoped record.
+ * No assertion naming a member notices a member ARRIVING, which is
+ * what the four are for.
  *
- * FOURTEEN MUTATIONS WERE RUN AGAINST THESE EIGHT CASES, each leg
- * twice, with every red set identical across the two passes and
- * every leg collecting all eight cases. A fifteenth is a
- * `check-types` leg rather than a red one. Exactly one vitest leg
- * reddened nothing and it is recorded below as a scope boundary
- * rather than repaired. The figures are a measurement over this case
- * list and nothing else, so a task adding a case here re-derives the
- * whole grid rather than inheriting any of it.
+ * THIRTY-TWO MUTATIONS WERE RUN AGAINST THESE THIRTEEN CASES, each
+ * leg twice, with every red set identical across the two passes and
+ * every leg collecting all thirteen. Four more are `check-types`
+ * legs rather than red ones. Exactly one vitest leg reddened nothing
+ * and it is recorded below as a scope boundary rather than repaired.
+ * The figures are a measurement over this case list and nothing
+ * else, so a task adding a case here re-derives the whole grid
+ * rather than inheriting any of it — which is what the sources half
+ * did, re-running the topics half's fourteen whole instead of
+ * quoting them.
  *
- * THE THREE REFUSAL-TRANSLATION LEGS REDDEN ONE CASE BETWEEN THEM,
- * and what separates them is which assertion fails rather than which
- * case does. Rethrowing the driver error raw instead of classifying
- * it, and leaving 23505 out of the map in `src/db/store-errors.ts`,
- * both reach the case as an untranslated `DrizzleQueryError` — so
- * the failure is the helper's rethrow, and the message it arrives
- * with is `Failed query: insert into "topics" ...` plus the bound
- * parameters, which is the request-content leak
- * `src/topics/db-store.ts` gives as its reason for wrapping every
- * write. Dropping the constraint name from every refusal instead
- * reaches the `constraint` assertion with the reason still right.
- * All three leave the raw SQLSTATE on the `cause` untouched, which
- * is what says that reading is a claim of its own.
+ * ELEVEN OF THE TWELVE TOPICS LEGS CARRYING A RECORDED FIGURE CAME
+ * BACK AT EXACTLY THAT FIGURE OUTSIDE THE FIVE CASES THE SOURCES
+ * HALF ADDED, with their red SETS matching member for member and not
+ * only their sizes, which is the reading that says they were rebuilt
+ * rather than re-derived into neighbours. The twelfth is the
+ * file-wide one: removing the reset from the `beforeEach` went from
+ * seven of eight to twelve of thirteen, by exactly those five cases
+ * and with the same survivor — the key-list case, which reads no
+ * database at all. Exactly ONE recorded leg gained reds INSIDE the
+ * new cases, and it is the one whose subject the two halves share:
+ * dropping the constraint name from every refusal reaches both
+ * delete cases as well as the duplicate-name one, at three rather
+ * than one. The remaining two of the fourteen carry no recorded
+ * figure and are measured here for the first time — deleting the
+ * empty-patch early return reddens one, and storing a literal in
+ * place of the insert's own `name` argument reddens four.
  *
- * THE PAGE'S ROWS AND THE COLLECTION'S TOTAL ARE TWO CLAIMS, and two
- * legs are what say so. Dropping the `WHERE` from `listTopics`
- * reddens the window case and the cascade case; dropping it from
- * `countTopics` reddens those two AND the duplicate-name case, the
- * last two through their controls rather than through their
- * subjects, neither being about a count. Ordering by id, ignoring
- * the window and dropping the list's `WHERE` are three legs landing
- * on the one window case, told apart by which of its assertions
- * fails — which is what the id control, the two-list comparison and
- * the second domain are each there for.
+ * EVERY ONE OF THE EIGHTEEN SOURCES LEGS LANDS WHOLLY INSIDE THE
+ * FIVE NEW CASES, which is the shape a half added to an existing
+ * grid predicts and is worth recording because it is what says the
+ * two halves do not overlap. Eight reach the aggregate case and
+ * eight reach the queue, at one red each where the fault is visible
+ * in one place and two where a second case reads the same statement.
+ * Most are told apart by the ASSERTION each fails, exactly as the
+ * three refusal-translation legs above are; three groups of them
+ * share one assertion and are separated by what it ANSWERED instead.
+ * The two fold legs are that shape and they are the two absence
+ * shapes: both land on the same whole-page comparison and differ by
+ * which ROW of it is wrong — a source whose captures all parsed
+ * missing a member, against a source that captured nothing carrying
+ * no record at all — and neither is reachable from the other.
  *
- * THE TWO SCHEDULE LEGS SHARE THEIR TWO CASES AND ARE OPPOSITES.
- * Writing nothing where the due time should go fails the assertions
- * that the instant moved, and writing a second column beside it
- * fails the member-for-member comparison; neither is reachable from
- * the other, and a containment case with no control that the
- * permitted column DID move would be satisfied by the first.
- * Dropping `next_run_at` from the projection reddens three, the
- * insert case through the key set rather than through any field
- * read.
+ * THE QUEUE'S ORDER IS THE ASSERTION FOUR LEGS SHARE, AND THE
+ * TIEBREAK IS THE ONE WORTH QUOTING. Dropping `id` descending from
+ * the `ORDER BY` answered the tied pair the other way round —
+ * measured, twice, rather than inferred — while reversing the sort
+ * answered the whole page backwards, dropping the status filter
+ * answered six rows where four were asked for, and having the read
+ * UPDATE its own rows off `failed` answered none at all. What a lost
+ * tiebreak costs a deployment is still not what that leg shows: the
+ * order Postgres gives a tie it was not asked to break is one it
+ * never promised, so this case pins the order the PAIR sort produces
+ * and the port carries the argument about two pages disagreeing.
  *
- * THE CASCADE ITSELF HAS NO LEG, AND THE ONE AIMED AT THE RESET HAS
- * NO EFFECT. `ON DELETE cascade` is DDL, so the only edit that could
- * break it is one to a migration, which would fail `applyMigrations`
- * and take the whole file down rather than reddening a case; what
- * the two `WHERE` legs reach in the cascade case is its
- * second-domain control. The same absorption caught a leg aimed at
- * the roster: `resetTables` truncates with `CASCADE`, so removing
+ * THE CENSUS HAS EXACTLY ONE INSTRUMENT AND SAYING SO IS THE POINT.
+ * `SourceStore` declares no method that writes a document, so no leg
+ * over this port can move a `parse_status`, and the only edit
+ * reaching the census equality is a synthetic write planted inside
+ * the read itself. Two were run and they are not equivalent. Having
+ * the queue UPDATE its own rows off `failed` is ABSORBED: it reddens
+ * the in-band control that the reads answered at all, several
+ * assertions before the census is compared, so the census pins
+ * nothing under it. Having the queue INSERT one `ok` document
+ * reaches the equality itself, which is the leg that says that
+ * assertion is live — its two other reds are that insert failing its
+ * own foreign key rather than a claim about the read.
+ *
+ * THE FOUR `check-types` PINS ARE FOUR DIRECTIONS AND NOT ONE. A
+ * column added to `topics`, or to the `schedulableColumns()` spread
+ * it shares with `export_subscriptions`, reddens the topics pin; a
+ * column added to `SourceRecord` reddens BOTH source pins, the
+ * record's and the list row's, the second being derived from the
+ * first; and a column added to the queue's own projection reddens
+ * the third alone. Measured by planting an optional member on each
+ * record in turn: two diagnostics in this file for the source
+ * record, one for the failure record, each a TS2322 at its own pin.
+ * The runtime read beside them is what stops a member dropped from a
+ * list being a diagnostic no case here would ever mention.
+ *
+ * THE ONE VITEST ZERO IS AN ABSORPTION, AND THE DDL CLAIMS HAVE NO
+ * LEG AT ALL. `resetTables` truncates with `CASCADE`, so removing
  * `topics` from the `TABLES` list in `./live-postgres.ts` reddens
- * ZERO — every table referencing `domains` is truncated whether the
- * roster names it or not. Removing the reset itself reddens seven of
- * the eight, the survivor being the key-list case, which reads no
- * database at all.
+ * nothing — every table referencing `domains` goes whether the
+ * roster names it or not, which is equally true of `sources` and of
+ * `documents`. Separate from that zero, an `ON DELETE cascade`, a
+ * `NOT NULL`, a CHECK and the two refusing foreign keys are all
+ * declared in a migration, so the only edit that could break one
+ * fails `applyMigrations` and takes the whole file down rather than
+ * reddening a case. What the delete cases reach instead is the
+ * store's own translation of what the server raised: rethrowing the
+ * driver error raw, and swapping the two labels the dependent union
+ * is read by, redden both of them at two apiece.
  *
  * THE SCHEMA COMES FROM THE MIGRATIONS. `applyMigrations` in the
  * `beforeAll` below runs the real `drizzle/*.sql` rather than
@@ -197,14 +299,27 @@
  * its own rather than leaving it to a comment.
  *
  * WHAT IS NOT HERE YET IS NAMED RATHER THAN LEFT TO BE NOTICED. This
- * file is the topics half of the wave-2 live seam and nothing else.
- * The sources legs — the parse-status aggregate, the two foreign
- * keys that refuse a source delete, and the failures page — and the
- * connectors and subscriptions legs after them land in the two tasks
- * that follow this one, into this same container. Until they do, the
- * `describe` name reads wider than the cases under it, which is the
- * shape a file assembled over three commits has and is stated here
- * so it is not read as coverage that went missing.
+ * file is the topics and sources halves of the wave-2 live seam and
+ * nothing else. The connectors and subscriptions legs — the two
+ * unique keys, the format CHECK, a config column holding a secret
+ * verbatim while the service answers it masked, and the jsonb
+ * key-order reading this pair of tables cannot give — land in the
+ * task that follows this one, into this same container. Until they
+ * do, the `describe` name reads wider than the cases under it, which
+ * is the shape a file assembled over three commits has and is stated
+ * here so it is not read as coverage that went missing.
+ *
+ * ONE REFUSAL THE SOURCES PORT DECLARES IS NOT DRIVEN HERE, and its
+ * absence is a scope line rather than an oversight.
+ * `SourceStore.deleteSource` names THREE foreign keys and the two
+ * counted ones are the two below;
+ * `source_config_proposals_source_id_sources_id_fk` is the third,
+ * the one the guard cannot count and the one that therefore arrives
+ * at a caller unannounced. Reaching it needs a proposal row, which
+ * is `src/sources/config-proposer.ts`'s subject rather than this
+ * surface's, so what stands behind it here is the port's own
+ * contract that both counted zeros are not a promise the delete will
+ * land.
  *
  * EVERY ERROR THIS FILE CONSTRUCTS CARRIES `[wave2-live]`, so a
  * failure raised by a helper names the suite that raised it rather
@@ -214,16 +329,31 @@
  * and actual as the diff that says what differed, and the rule the
  * case stands for is in its name.
  */
+import type { DocumentParseStatus } from '../../src/db/schema/values.js';
 import type { DomainStore } from '../../src/domains/index.js';
 import type { DomainRecord } from '../../src/domains/store.js';
 import type { StoreWindow } from '../../src/http/schemas.js';
+import type {
+  SourceFailureRecord,
+  SourceRecord,
+  SourceStore,
+  SourceWithParseStats,
+} from '../../src/sources/store.js';
 import type { TopicRecord, TopicStore } from '../../src/topics/store.js';
 import type { Pool } from 'pg';
 
+import { asc, count } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 
+import { DOCUMENT_PARSE_STATUSES } from '../../src/db/schema/values.js';
+import {
+  documents,
+  findingSightings,
+  findings,
+} from '../../src/db/schema.js';
 import { StoreRefusal } from '../../src/db/store-errors.js';
 import { createDbDomainStore } from '../../src/domains/index.js';
+import { createDbSourceStore } from '../../src/sources/db-store.js';
 import { createDbTopicStore } from '../../src/topics/db-store.js';
 
 import {
@@ -570,6 +700,391 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 /**
+ * The endpoint of the source every aggregate and every queue
+ * reading below is taken over.
+ *
+ * `example.test` is the register the sibling source suites plant in
+ * — a reserved name that resolves nowhere, so a fixture endpoint
+ * cannot be mistaken for an address somebody polls. Nothing here
+ * fetches it: this port reads and writes rows about feeds and never
+ * opens a socket to one.
+ */
+const FEED_ENDPOINT = 'https://example.test/radar/feed.xml';
+
+/**
+ * The endpoint of the source whose captures ALL parsed.
+ *
+ * One of the two absence shapes the aggregate has to answer, and
+ * the one a fixture usually leaves out: this source contributes a
+ * group to the `GROUP BY` under `ok` and NONE under `failed`, so
+ * the missing member has to come from the record the fold was
+ * initialised with rather than from the read.
+ */
+const QUIET_ENDPOINT = 'https://example.test/radar/releases.atom';
+
+/**
+ * The endpoint of the source that has captured NOTHING.
+ *
+ * The other absence shape, and it exercises a different line: this
+ * source contributes no group at all, so the map lookup misses
+ * entirely and every member of its record is a counted zero the
+ * fallback supplied. A fixture carrying only one of the two shapes
+ * leaves half the fold unproven while looking complete.
+ */
+const FRESH_ENDPOINT = 'https://example.test/radar/digest.json';
+
+/** The endpoint of the second domain's only source. */
+const TRANSIT_ENDPOINT = 'https://example.test/transit/feed.xml';
+
+/** The endpoint of the source holding documents and no sightings.
+ */
+const HELD_ENDPOINT = 'https://example.test/radar/archive.json';
+
+/** The endpoint of the source a sighting cites and nothing else.
+ */
+const CITED_ENDPOINT = 'https://example.test/radar/items';
+
+/** The endpoint of the source nothing whatever points at. */
+const FREE_ENDPOINT = 'https://example.test/radar/spare.xml';
+
+/**
+ * The transports the planted sources are configured under.
+ *
+ * Three different members of `SOURCE_KINDS` across one page, so
+ * `kind` is not a constant down the answered column and a
+ * projection reading the wrong one has somewhere to show it.
+ */
+const FEED_KIND = 'rss';
+
+/** {@link QUIET_ENDPOINT}'s transport. */
+const QUIET_KIND = 'api';
+
+/** {@link FRESH_ENDPOINT}'s transport. */
+const FRESH_KIND = 'url';
+
+/**
+ * How many of {@link FEED_ENDPOINT}'s captures parsed.
+ *
+ * Different from {@link FEED_FAILED} on purpose: a record built
+ * with the two statuses swapped counts correctly whenever the two
+ * members carry one number, so the aggregate assertion would be
+ * green against a fold that had them the wrong way round.
+ */
+const FEED_OK = 2;
+
+/** How many of them did not, and what the queue below pages. */
+const FEED_FAILED = 4;
+
+/** How many captures {@link QUIET_ENDPOINT} holds, all of them ok.
+ */
+const QUIET_OK = 1;
+
+/** How many the second domain's source holds, every one failed. */
+const TRANSIT_FAILED = 1;
+
+/**
+ * How many source-less captures the first domain holds.
+ *
+ * `documents.source_id` is NULLABLE — a file handed to the ingest
+ * tray and a body an operator pasted in came through no feed — and
+ * this row is the control on the grouped read's `IN` filter.
+ * `NULL IN (...)` is UNKNOWN in SQL rather than true, so Postgres
+ * cannot answer a group whose source is absent, and a filter that
+ * had stopped narrowing would fold this row onto a page row instead
+ * of failing loudly.
+ */
+const ORPHAN_FAILED = 1;
+
+/** Every capture the corpus holds at `ok` once the plant is done.
+ */
+const CORPUS_OK = FEED_OK + QUIET_OK;
+
+/** Every capture it holds at `failed`. */
+const CORPUS_FAILED = FEED_FAILED + TRANSIT_FAILED + ORPHAN_FAILED;
+
+/**
+ * The instant the newest planted failed capture was taken at.
+ *
+ * EVERY CAPTURE INSTANT BELOW IS IN THE PAST, and that is load
+ * bearing rather than flavour: the batched pair at the end of the
+ * queue case takes the column's own `defaultNow()`, so `now()` has
+ * to be newer than everything planted for those two rows to land
+ * where that reading reads them. A literal in the FUTURE makes the
+ * case pass until the day it is reached and then reverse itself,
+ * with the clock as the only thing that changed. A past literal
+ * stays past, so the ordering is the fixture's for good. The
+ * scheduling constants above are the opposite for the opposite
+ * reason: a due time is something a row is waiting for.
+ *
+ * Every instant below carries a non-zero millisecond component, for
+ * the reason {@link DUE_AT} gives one column over: `captured_at` is
+ * a `timestamptz`, and a column at second resolution answers these
+ * with that component gone while the ORDER they come back in stays
+ * exactly right.
+ */
+const NEWEST_AT = new Date('2025-11-19T09:30:11.735Z');
+
+/**
+ * The instant TWO failed captures share.
+ *
+ * A tie in the sort column is what the queue's second `ORDER BY`
+ * term exists for, and this file plants one twice over: once as
+ * this literal, so the answered page is deterministic, and once
+ * through the column's own `defaultNow()` in a single statement
+ * writing two rows — which is the shape the port names, and a
+ * reading only a server can give.
+ */
+const TIED_AT = new Date('2025-11-19T08:00:00.500Z');
+
+/** The instant the oldest failed capture was taken at. */
+const OLDEST_AT = new Date('2025-11-18T22:41:03.219Z');
+
+/** The instant the captures that PARSED were taken at. */
+const PARSED_AT = new Date('2025-11-19T07:05:44.126Z');
+
+/**
+ * The foreign key that refuses a delete while the corpus holds the
+ * source's documents.
+ *
+ * Spelled in `src/db/schema/documents.ts` as a reference with no
+ * `onDelete`, so it emits `ON DELETE no action` and Postgres
+ * refuses rather than cascading.
+ */
+const DOCUMENT_SOURCE_KEY = 'documents_source_id_sources_id_fk';
+
+/**
+ * The foreign key that refuses one while sightings cite it.
+ *
+ * Spelled in `src/db/schema/findings.ts`, which argues the refusal
+ * more sharply than its neighbour: that table IS the provenance
+ * record, so a cascade would drop syndication evidence a feed at a
+ * time and every count taken afterwards would be lower with nothing
+ * saying why.
+ */
+const SIGHTING_SOURCE_KEY = 'finding_sightings_source_id_sources_id_fk';
+
+/**
+ * The SQLSTATE a `foreign_key_violation` arrives with.
+ *
+ * Read off the driver error the refusal kept on `cause`, on the
+ * same terms {@link UNIQUE_VIOLATION} is: the reason is what
+ * `classifyPgError` DECIDED and this is what the server raised.
+ */
+const FOREIGN_KEY_VIOLATION = '23503';
+
+/**
+ * Every member `SOURCE_COLUMNS` in `src/sources/db-store.ts`
+ * projects, which on this table is every column it has.
+ *
+ * Five of the twelve are the pipeline-owned columns no input type
+ * carries, so this list is also where the read half of that
+ * asymmetry is asserted: a projection that stopped answering
+ * `cursor` or `flagged` is a source the surface can no longer
+ * report the health of, and no assertion naming a member notices a
+ * member going missing.
+ */
+const SOURCE_KEYS = [
+  'consecutiveFailures',
+  'contract',
+  'cursor',
+  'domainId',
+  'enabled',
+  'endpoint',
+  'flagged',
+  'id',
+  'kind',
+  'lastFailureAt',
+  'lastSuccessAt',
+  'parserConfig',
+] as const satisfies readonly (keyof SourceRecord)[];
+
+/**
+ * What a LIST row carries on top of those twelve.
+ *
+ * Derived from the record's own list rather than written out again,
+ * so the aggregate is the only difference the two shapes are
+ * allowed to have.
+ */
+const LISTED_KEYS = [...SOURCE_KEYS, 'parseStats'] as const;
+
+/**
+ * Every member `FAILURE_COLUMNS` in `src/sources/db-store.ts`
+ * projects: five of the fifteen `documents` carries.
+ *
+ * The narrowing is the record's subject rather than a trim for
+ * size, so this list is the one place a column ARRIVING on the
+ * queue would be reported — `raw`, `features` and `embedding` are
+ * a stored payload and two derived vectors a review surface has no
+ * use for, and `parse_status` is absent because it is the filter.
+ */
+const FAILURE_KEYS = [
+  'body',
+  'capturedAt',
+  'id',
+  'parseError',
+  'url',
+] as const satisfies readonly (keyof SourceFailureRecord)[];
+
+/** {@link SOURCE_KEYS}, held against the record it describes. */
+type EverySourceKeyListed =
+  CoversEveryKey<SourceRecord, typeof SOURCE_KEYS>;
+
+/** {@link LISTED_KEYS}, held against the row a list answers. */
+type EveryListedKeyListed =
+  CoversEveryKey<SourceWithParseStats, typeof LISTED_KEYS>;
+
+/** {@link FAILURE_KEYS}, held against the queue's own record. */
+type EveryFailureKeyListed =
+  CoversEveryKey<SourceFailureRecord, typeof FAILURE_KEYS>;
+
+/**
+ * The half of the sources drift guard `check-types` owns.
+ *
+ * The same pair {@link EVERY_KEY_LISTED} is one table over, and
+ * three of them rather than one because the sources surface answers
+ * three shapes: the row, the row plus its aggregate, and the
+ * queue's own column-scoped record. A column added to `sources`
+ * turns the first two `false` and a column added to the queue's
+ * projection turns the third, each as a TS2322 at its own line
+ * before a case can compare an answer against a set that has
+ * quietly stopped describing it.
+ */
+const EVERY_SOURCE_KEY_LISTED: EverySourceKeyListed = true;
+
+/** {@link LISTED_KEYS}'s half of the same guard. */
+const EVERY_LISTED_KEY_LISTED: EveryListedKeyListed = true;
+
+/** {@link FAILURE_KEYS}'s half of the same guard. */
+const EVERY_FAILURE_KEY_LISTED: EveryFailureKeyListed = true;
+
+/** {@link SOURCE_KEYS}, sorted at use rather than by hand. */
+const SOURCE_KEY_SET: readonly string[] = [...SOURCE_KEYS].sort();
+
+/** {@link LISTED_KEYS}, sorted at use. */
+const LISTED_KEY_SET: readonly string[] = [...LISTED_KEYS].sort();
+
+/** {@link FAILURE_KEYS}, sorted at use. */
+const FAILURE_KEY_SET: readonly string[] = [...FAILURE_KEYS].sort();
+
+/**
+ * The status the review queue reads, annotated rather than left
+ * bare so the literal is checked against
+ * `DOCUMENT_PARSE_STATUSES` at compile time.
+ */
+const PARSE_FAILED: DocumentParseStatus = 'failed';
+
+/** The status a capture that parsed stands at. */
+const PARSE_OK: DocumentParseStatus = 'ok';
+
+/**
+ * What every planted capture's `hash` is built from.
+ *
+ * `documents_hash_unique` is over the whole corpus rather than per
+ * source, so a planting helper reusing one hash would have its
+ * second write refused — and every case below would then read a
+ * corpus one row short of the one it planted.
+ */
+const HASH_PREFIX = 'wave2-live-capture-';
+
+/** What every planted capture's `url` is built from. */
+const CAPTURE_URL_PREFIX = 'https://example.test/radar/item/';
+
+/** What every planted capture's `body` is built from. */
+const BODY_PREFIX = 'captured body of ';
+
+/** What a planted FAILED capture records as its `parse_error`. */
+const PARSE_ERROR_PREFIX = 'contract rejected ';
+
+/**
+ * The values one planted capture is written from.
+ *
+ * Mutable rather than `readonly` because drizzle's `values()` takes
+ * the insert shape it derived from the table, and a readonly member
+ * is not assignable to it.
+ */
+interface CaptureValues {
+  /** `documents.domain_id`, whose corpus this belongs to. */
+  domainId: number;
+
+  /** `documents.source_id`, the feed it came through. */
+  sourceId: number;
+
+  /** `documents.hash`, unique across the whole corpus. */
+  hash: string;
+
+  /** `documents.url`, where it can be read at its source. */
+  url: string;
+
+  /** `documents.body`, the text as captured. */
+  body: string;
+
+  /** `documents.parse_status`, the queue's filter. */
+  parseStatus: DocumentParseStatus;
+
+  /** `documents.parse_error`, what the writer recorded. */
+  parseError: string;
+}
+
+/**
+ * One failed capture's values, WITHOUT a `captured_at`.
+ *
+ * The omission is the point: the column's own `defaultNow()` is
+ * what fills it, and two rows written inside ONE statement take one
+ * value between them. That is the tie {@link TIED_AT} imitates with
+ * a literal, produced by the server instead of typed.
+ *
+ * @param domainId - The corpus this capture belongs to.
+ * @param sourceId - The feed it came through.
+ * @param label - What distinguishes it from its neighbour, and what
+ *   its hash, url, body and error are each built from.
+ * @returns The insert values, ready for a batched `values()`.
+ */
+function batchedCapture(
+  domainId: number,
+  sourceId: number,
+  label: string,
+): CaptureValues {
+  return {
+    domainId,
+    sourceId,
+    hash: `${HASH_PREFIX}${label}`,
+    url: `${CAPTURE_URL_PREFIX}${label}`,
+    body: `${BODY_PREFIX}${label}`,
+    parseStatus: PARSE_FAILED,
+    parseError: `${PARSE_ERROR_PREFIX}${label}`,
+  };
+}
+
+/**
+ * The row of an answered page carrying one endpoint.
+ *
+ * Looked up by endpoint rather than by index, so a case naming a
+ * source names the source rather than a position in a list whose
+ * order another assertion is separately about.
+ *
+ * @param page - Whatever the list read answered.
+ * @param endpoint - The {@link SourceRecord.endpoint} to find.
+ * @returns That row.
+ * @throws Error When the page carries no such row, which breaks the
+ *   case in its setup rather than a few assertions later.
+ */
+function rowFor(
+  page: readonly SourceWithParseStats[],
+  endpoint: string,
+): SourceWithParseStats {
+  const found = page.find((row) => row.endpoint === endpoint);
+
+  if (found === undefined) {
+    throw new Error(
+      `[wave2-live] the answered page carries no row at ${endpoint}, `
+      + 'so every assertion below it would be about nothing.',
+    );
+  }
+
+  return found;
+}
+
+/**
  * The two domains and the four topics the page cases plant.
  *
  * Named members rather than an array, so a case reads a planted row
@@ -596,6 +1111,95 @@ interface PlantedPage {
   readonly lightRail: TopicRecord;
 }
 
+/**
+ * One row of the parse-status census: a status the corpus holds,
+ * and how many documents stand at it.
+ *
+ * Read straight off `documents` rather than through the port,
+ * because the claim it serves is about the TABLE. A census taken
+ * through {@link SourceStore} would be two readings of the same
+ * statements the queue is made of, and a read that had written
+ * would move both of them together.
+ */
+interface ParseCensusRow {
+  /** `documents.parse_status`, as stored. */
+  readonly parseStatus: string;
+
+  /** How many rows stand at it, across every source. */
+  readonly total: number;
+}
+
+/**
+ * The domains, sources and captures the aggregate and the queue
+ * cases plant.
+ *
+ * Named members rather than an array, on the same terms
+ * {@link PlantedPage} states: a case reads a planted row by what it
+ * is rather than by an index `noUncheckedIndexedAccess` would make
+ * optional anyway.
+ */
+interface PlantedCorpus {
+  /** The domain the three listed sources hang off. */
+  readonly domain: DomainRecord;
+
+  /** The domain whose one source proves the list is scoped. */
+  readonly other: DomainRecord;
+
+  /** Captures under two statuses, in different numbers. */
+  readonly feed: SourceRecord;
+
+  /** Captures under one status only: the partial-group shape. */
+  readonly quiet: SourceRecord;
+
+  /** No captures at all: the absent-group shape. */
+  readonly fresh: SourceRecord;
+
+  /** The second domain's only source. */
+  readonly transitFeed: SourceRecord;
+
+  /** The newest failed capture, and the queue's first row. */
+  readonly newest: number;
+
+  /** The tied capture written FIRST, so its id is the lower. */
+  readonly tiedEarly: number;
+
+  /** The tied capture written SECOND, and answered before it. */
+  readonly tiedLate: number;
+
+  /** The oldest failed capture, and the queue's last row. */
+  readonly oldest: number;
+
+  /** The source-less capture the grouped read must not see. */
+  readonly orphan: number;
+}
+
+/**
+ * The three sources the delete guards are read over, each holding
+ * ONE kind of dependent.
+ *
+ * A subject holding two dependents cannot isolate either key:
+ * Postgres refuses on whichever it checked first, so both cases
+ * would pin one key while reading as two. Each source below holds
+ * exactly the dependent its own case is about, and the third holds
+ * none at all so the refusals sit beside a delete that lands.
+ */
+interface PlantedDependents {
+  /** The domain all three hang off. */
+  readonly domain: DomainRecord;
+
+  /** Holds a document, cited by no sighting. */
+  readonly held: SourceRecord;
+
+  /** Cited by a sighting, holding no document. */
+  readonly cited: SourceRecord;
+
+  /** Nothing points at it, and its delete is the control. */
+  readonly free: SourceRecord;
+
+  /** The one capture {@link PlantedDependents.held} holds. */
+  readonly capture: number;
+}
+
 describeLivePg('wave-2 stores (live Postgres)', () => {
   let pool: Pool;
   let db: ReturnType<typeof createLiveDb>;
@@ -614,6 +1218,7 @@ describeLivePg('wave-2 stores (live Postgres)', () => {
   // barrel, so its constructor is a deep import.
   const domainStore: DomainStore = createDbDomainStore(() => db);
   const topicStore: TopicStore = createDbTopicStore(() => db);
+  const sourceStore: SourceStore = createDbSourceStore(() => db);
 
   beforeAll(async () => {
     pool = createLivePool();
@@ -694,6 +1299,271 @@ describeLivePg('wave-2 stores (live Postgres)', () => {
     return { domain, other, transformers, edge, retrieval, lightRail };
   }
 
+  /**
+   * Writes one source, with the empty arrangement and the enabled
+   * state every case below shares.
+   *
+   * @param domainId - The domain whose research it supplies.
+   * @param kind - Its transport family, a `SOURCE_KINDS` member.
+   * @param endpoint - Where its payload is. Never unique: this
+   *   table carries no unique key at all, so two rows may name one
+   *   address and the port says so.
+   * @returns The stored row, as the database answered it.
+   */
+  async function plantSource(
+    domainId: number,
+    kind: string,
+    endpoint: string,
+  ): Promise<SourceRecord> {
+    return await sourceStore.insertSource({
+      domainId,
+      kind,
+      endpoint,
+      parserConfig: {},
+      contract: {},
+      enabled: true,
+    });
+  }
+
+  /**
+   * Writes one document, straight through drizzle.
+   *
+   * NOT THROUGH THE PORT, BECAUSE THE PORT CANNOT. `SourceStore`
+   * declares two reads over `documents` and no write whatever, which
+   * is the read-only queue expressed structurally — so a fixture
+   * standing one up has to reach the table itself, and that is the
+   * plainest demonstration of the containment there is.
+   *
+   * @param domainId - The corpus this capture belongs to.
+   * @param sourceId - The feed it came through, or null for one that
+   *   came through none: a file handed to the ingest tray, a body an
+   *   operator pasted in.
+   * @param status - Which side of the queue's filter it falls on.
+   * @param label - What its hash, url, body and error are built
+   *   from, and what a refusal quotes back.
+   * @param capturedAt - When, written explicitly so an ordering is
+   *   the fixture's rather than the clock's.
+   * @returns Its `documents.id`.
+   * @throws Error When the insert returned no row.
+   */
+  async function plantCapture(
+    domainId: number,
+    sourceId: number | null,
+    status: DocumentParseStatus,
+    label: string,
+    capturedAt: Date,
+  ): Promise<number> {
+    const [row] = await db.insert(documents)
+      .values({
+        domainId,
+        sourceId,
+        hash: `${HASH_PREFIX}${label}`,
+        url: `${CAPTURE_URL_PREFIX}${label}`,
+        body: `${BODY_PREFIX}${label}`,
+        parseStatus: status,
+        parseError: status === PARSE_FAILED
+          ? `${PARSE_ERROR_PREFIX}${label}`
+          : null,
+        capturedAt,
+      })
+      .returning({ id: documents.id });
+
+    if (row === undefined) {
+      throw new Error(
+        `[wave2-live] planting the ${label} capture returned no row, `
+        + 'so every assertion below it would be about nothing.',
+      );
+    }
+
+    return row.id;
+  }
+
+  /**
+   * The corpus census, read straight off `documents`.
+   *
+   * @returns One row per status the corpus holds, in status order,
+   *   across every source and including the captures that came
+   *   through none.
+   */
+  async function census(): Promise<readonly ParseCensusRow[]> {
+    return await db.select({
+      parseStatus: documents.parseStatus,
+      total: count(),
+    })
+      .from(documents)
+      .groupBy(documents.parseStatus)
+      .orderBy(asc(documents.parseStatus));
+  }
+
+  /**
+   * Writes two domains, four sources and nine captures.
+   *
+   * THE THREE LISTED SOURCES CARRY THE THREE SHAPES THE AGGREGATE
+   * HAS TO ANSWER: groups under both statuses in different numbers,
+   * a group under one status only, and no group at all. The fourth
+   * source is the second domain's, and the ninth capture came
+   * through no source, so a `WHERE` and an `IN` that had each
+   * stopped narrowing have somewhere to show it.
+   *
+   * The four FAILED captures under the first source go in an order
+   * that is neither their answered order nor its reverse, and two of
+   * them share an instant, so the queue's `ORDER BY` is read against
+   * a table whose insertion order, id order and answered order are
+   * three different lists.
+   *
+   * @returns Every planted row a case below names.
+   */
+  async function plantCorpus(): Promise<PlantedCorpus> {
+    const domain = await plantDomain(RADAR, RADAR_NAME);
+    const other = await plantDomain(TRANSIT, TRANSIT_NAME);
+    const feed = await plantSource(domain.id, FEED_KIND, FEED_ENDPOINT);
+    const quiet = await plantSource(
+      domain.id,
+      QUIET_KIND,
+      QUIET_ENDPOINT,
+    );
+    const fresh = await plantSource(
+      domain.id,
+      FRESH_KIND,
+      FRESH_ENDPOINT,
+    );
+    const transitFeed = await plantSource(
+      other.id,
+      FEED_KIND,
+      TRANSIT_ENDPOINT,
+    );
+
+    for (let taken = 0; taken < FEED_OK; taken += 1) {
+      await plantCapture(
+        domain.id,
+        feed.id,
+        PARSE_OK,
+        `feed-ok-${taken}`,
+        PARSED_AT,
+      );
+    }
+
+    const tiedEarly = await plantCapture(
+      domain.id,
+      feed.id,
+      PARSE_FAILED,
+      'feed-tied-early',
+      TIED_AT,
+    );
+    const oldest = await plantCapture(
+      domain.id,
+      feed.id,
+      PARSE_FAILED,
+      'feed-oldest',
+      OLDEST_AT,
+    );
+    const newest = await plantCapture(
+      domain.id,
+      feed.id,
+      PARSE_FAILED,
+      'feed-newest',
+      NEWEST_AT,
+    );
+    const tiedLate = await plantCapture(
+      domain.id,
+      feed.id,
+      PARSE_FAILED,
+      'feed-tied-late',
+      TIED_AT,
+    );
+
+    await plantCapture(
+      domain.id,
+      quiet.id,
+      PARSE_OK,
+      'quiet-ok',
+      PARSED_AT,
+    );
+    await plantCapture(
+      other.id,
+      transitFeed.id,
+      PARSE_FAILED,
+      'transit-failed',
+      NEWEST_AT,
+    );
+
+    const orphan = await plantCapture(
+      domain.id,
+      null,
+      PARSE_FAILED,
+      'orphan',
+      NEWEST_AT,
+    );
+
+    return {
+      domain,
+      other,
+      feed,
+      quiet,
+      fresh,
+      transitFeed,
+      newest,
+      tiedEarly,
+      tiedLate,
+      oldest,
+      orphan,
+    };
+  }
+
+  /**
+   * Writes three sources, each holding ONE kind of dependent.
+   *
+   * The sighting cites {@link PlantedDependents.cited} while the
+   * finding under it hangs off a capture that came through
+   * {@link PlantedDependents.held} — which the schema permits, a
+   * sighting being the claim that a finding was SEEN at a feed
+   * rather than a statement about where its document came from.
+   * That is what leaves the cited source holding no document of its
+   * own, and it is the whole reason the two refusals below can be
+   * told apart: Postgres refuses on whichever key it checked first,
+   * so a source carrying both dependents answers one name for both
+   * cases while reading as two.
+   *
+   * @returns Every planted row the two delete cases name.
+   * @throws Error When either write returned no row.
+   */
+  async function plantDependents(): Promise<PlantedDependents> {
+    const domain = await plantDomain(RADAR, RADAR_NAME);
+    const held = await plantSource(domain.id, FEED_KIND, HELD_ENDPOINT);
+    const cited = await plantSource(
+      domain.id,
+      QUIET_KIND,
+      CITED_ENDPOINT,
+    );
+    const free = await plantSource(
+      domain.id,
+      FRESH_KIND,
+      FREE_ENDPOINT,
+    );
+    const capture = await plantCapture(
+      domain.id,
+      held.id,
+      PARSE_FAILED,
+      'held',
+      OLDEST_AT,
+    );
+    const [finding] = await db.insert(findings)
+      .values({ domainId: domain.id, documentId: capture })
+      .returning({ id: findings.id });
+
+    if (finding === undefined) {
+      throw new Error(
+        '[wave2-live] planting the finding returned no row, so the '
+        + 'sighting below it would have nothing to hang off.',
+      );
+    }
+
+    await db.insert(findingSightings)
+      .values({ findingId: finding.id, sourceId: cited.id });
+
+    return { domain, held, cited, free, capture };
+  }
+
   it('meets an empty database in every case', async () => {
     // The precondition every case below rests on, taken as a
     // reading rather than left to a comment: each of them plants
@@ -713,6 +1583,21 @@ describeLivePg('wave-2 stores (live Postgres)', () => {
     expect(await topicStore.listTopics(FIRST_ID, WHOLE)).toStrictEqual([]);
     expect(await topicStore.findTopicById(FIRST_ID)).toBeNull();
     expect(await topicStore.deleteTopic(FIRST_ID)).toBe(false);
+
+    // The sources half of the same precondition, read through its
+    // own store for the same reason. Both of its reads over
+    // `documents` are here too, so the empty corpus is a reading of
+    // the queue's projections as well as of the tables.
+    expect(await sourceStore.countSources(FIRST_ID)).toBe(0);
+    expect(await sourceStore.listSourcesWithParseStats(FIRST_ID, WHOLE))
+      .toStrictEqual([]);
+    expect(await sourceStore.findSourceById(FIRST_ID)).toBeNull();
+    expect(await sourceStore.deleteSource(FIRST_ID)).toBe(false);
+    expect(await sourceStore.countSourceDependents(FIRST_ID))
+      .toStrictEqual({ documents: 0, findingSightings: 0 });
+    expect(await sourceStore.listSourceFailures(FIRST_ID, WHOLE))
+      .toStrictEqual([]);
+    expect(await sourceStore.countSourceFailures(FIRST_ID)).toBe(0);
   });
 
   it('holds the key list against the record it describes', () => {
@@ -721,6 +1606,22 @@ describeLivePg('wave-2 stores (live Postgres)', () => {
     // error, so the two obligations are discharged by one line.
     expect(EVERY_KEY_LISTED).toBe(true);
     expect(TOPIC_KEY_SET).toHaveLength(TOPIC_KEYS.length);
+
+    // THREE OF THEM ON THE SOURCES SIDE, BECAUSE THAT SURFACE
+    // ANSWERS THREE SHAPES: the row, the row plus its aggregate,
+    // and the queue's own column-scoped record. Each is a separate
+    // direction — a column added to `sources` turns the first two
+    // false and one added to the queue's projection turns the
+    // third — and the runtime read here is what stops a member
+    // dropped from a list being a `check-types` diagnostic no case
+    // in this file would ever mention.
+    expect(EVERY_SOURCE_KEY_LISTED).toBe(true);
+    expect(EVERY_LISTED_KEY_LISTED).toBe(true);
+    expect(EVERY_FAILURE_KEY_LISTED).toBe(true);
+    expect(SOURCE_KEY_SET).toHaveLength(SOURCE_KEYS.length);
+    expect(LISTED_KEY_SET).toHaveLength(SOURCE_KEYS.length + 1);
+    expect(LISTED_KEY_SET).toContain('parseStats');
+    expect(FAILURE_KEY_SET).toHaveLength(FAILURE_KEYS.length);
   });
 
   it('writes an unscheduled topic the database numbers', async () => {
@@ -1093,5 +1994,486 @@ describeLivePg('wave-2 stores (live Postgres)', () => {
     expect(await topicStore.countTopics(planted.other.id)).toBe(1);
     expect(await topicStore.listTopics(planted.other.id, WHOLE))
       .toStrictEqual([planted.lightRail]);
+  });
+
+  it('counts every parse status over a page of sources', async () => {
+    const planted = await plantCorpus();
+    const page = await sourceStore.listSourcesWithParseStats(
+      planted.domain.id,
+      WHOLE,
+    );
+
+    // Ordered by id ascending, which the port makes part of the
+    // contract because a window over an unordered read is not a
+    // page: Postgres promises nothing about row order without an
+    // `ORDER BY`, so two requests for consecutive pages can repeat
+    // one row and skip another while every count on the wire still
+    // adds up. `id` rather than a natural key because this table
+    // has none — `sources` carries no unique constraint at all.
+    expect(page.map((row) => row.id)).toStrictEqual([
+      planted.feed.id,
+      planted.quiet.id,
+      planted.fresh.id,
+    ]);
+    expect(page.map((row) => row.endpoint)).toStrictEqual([
+      FEED_ENDPOINT,
+      QUIET_ENDPOINT,
+      FRESH_ENDPOINT,
+    ]);
+    expect(page.map(keysOf)).toStrictEqual([
+      LISTED_KEY_SET,
+      LISTED_KEY_SET,
+      LISTED_KEY_SET,
+    ]);
+
+    // THE COUNTS, SPELLED AS LITERALS. A record built with the two
+    // statuses swapped counts correctly whenever both members carry
+    // one number, so the first source's two differ — and reading
+    // the members by name is what says WHICH status went missing
+    // where the whole-record comparisons above only say that one
+    // did.
+    const stats = page.map((row) => row.parseStats);
+
+    expect(stats).toStrictEqual([
+      { ok: FEED_OK, failed: FEED_FAILED },
+      { ok: QUIET_OK, failed: 0 },
+      { ok: 0, failed: 0 },
+    ]);
+    expect(FEED_OK).not.toBe(FEED_FAILED);
+
+    // Every member of the tuple, present on every row. Read from
+    // `DOCUMENT_PARSE_STATUSES` as well as from the literals above,
+    // with the length guard that stops a tuple somebody emptied
+    // satisfying a derived expectation.
+    expect(DOCUMENT_PARSE_STATUSES.length).toBeGreaterThan(1);
+    expect(page.map((row) => keysOf(row.parseStats))).toStrictEqual(
+      page.map(() => [...DOCUMENT_PARSE_STATUSES].sort()),
+    );
+
+    // THE TWO ABSENCE SHAPES EXERCISE DIFFERENT LINES, and a
+    // fixture carrying one of them leaves half the fold unproven.
+    // `quiet` contributes a group under `ok` and none under
+    // `failed`, so the map lookup HITS and the missing member comes
+    // from the record the fold was initialised with; `fresh`
+    // contributes no group at all, so the lookup MISSES and every
+    // member of its record is that fallback.
+    const quiet = rowFor(page, QUIET_ENDPOINT);
+    const fresh = rowFor(page, FRESH_ENDPOINT);
+
+    expect(quiet.parseStats.ok).toBe(QUIET_OK);
+    expect(quiet.parseStats.failed).toBe(0);
+    expect(fresh.parseStats.ok).toBe(0);
+    expect(fresh.parseStats.failed).toBe(0);
+
+    // A SOURCE IS INSERTED NEVER FETCHED, which the five
+    // pipeline-owned columns are what say: `InsertSourceInput`
+    // carries no member that could set one, so there is no way to
+    // create a source claiming a history it does not have. Read off
+    // the row that has captured nothing, where a stamp would be
+    // least explicable.
+    expect(fresh.cursor).toBeNull();
+    expect(fresh.consecutiveFailures).toBe(0);
+    expect(fresh.lastSuccessAt).toBeNull();
+    expect(fresh.lastFailureAt).toBeNull();
+    expect(fresh.flagged).toBe(false);
+    expect(fresh.enabled).toBe(true);
+    expect(fresh.kind).toBe(FRESH_KIND);
+    expect(fresh.parserConfig).toStrictEqual({});
+    expect(fresh.contract).toStrictEqual({});
+    expect(fresh.domainId).toBe(planted.domain.id);
+
+    // THE SOURCE-LESS CAPTURE IS ON NO ROW OF THIS PAGE.
+    // `documents.source_id` is nullable — a file handed to the
+    // ingest tray came through no feed — and the grouped read is
+    // filtered by an `IN` list of the page's own ids, where
+    // `NULL IN (...)` is UNKNOWN in SQL rather than true. So
+    // Postgres cannot answer a group whose source is absent, and
+    // that row's `failed` has nowhere on this page to land.
+    const failedOnPage = stats.reduce(
+      (total, row) => total + row.failed,
+      0,
+    );
+
+    expect(planted.orphan).toBeGreaterThan(0);
+    expect(failedOnPage).toBe(FEED_FAILED);
+    expect(failedOnPage).toBeLessThan(CORPUS_FAILED);
+
+    // AND THE SECOND DOMAIN IS WHY THIS IS A SCOPE READING TOO. Its
+    // source carries a failed capture of its own, so a `WHERE` that
+    // had stopped narrowing answers a fourth row here and moves
+    // every total above.
+    expect(await sourceStore.countSources(planted.domain.id)).toBe(3);
+    expect(await sourceStore.countSources(planted.other.id)).toBe(1);
+
+    const elsewhere = await sourceStore.listSourcesWithParseStats(
+      planted.other.id,
+      WHOLE,
+    );
+
+    expect(elsewhere.map((row) => row.endpoint))
+      .toStrictEqual([TRANSIT_ENDPOINT]);
+    expect(rowFor(elsewhere, TRANSIT_ENDPOINT).parseStats)
+      .toStrictEqual({ ok: 0, failed: TRANSIT_FAILED });
+
+    // ONE ROW OUT OF THE MIDDLE, whose aggregate is counted for the
+    // page it is on and not for the collection: a `LIMIT` that
+    // stopped limiting answers three rows here and an `OFFSET` that
+    // stopped offsetting answers the first source's.
+    const middle = await sourceStore.listSourcesWithParseStats(
+      planted.domain.id,
+      MIDDLE,
+    );
+
+    expect(middle.map((row) => row.endpoint))
+      .toStrictEqual([QUIET_ENDPOINT]);
+    expect(rowFor(middle, QUIET_ENDPOINT).parseStats)
+      .toStrictEqual({ ok: QUIET_OK, failed: 0 });
+
+    // A window past the end, and a domain no row points at, are the
+    // empty list rather than a refusal — and neither issues the
+    // grouped statement at all, an `IN` list of no ids being a read
+    // asked to describe nothing.
+    const past = await sourceStore.listSourcesWithParseStats(
+      planted.domain.id,
+      PAST_END,
+    );
+    const nowhere = await sourceStore.listSourcesWithParseStats(
+      ABSENT_ID,
+      WHOLE,
+    );
+
+    expect(past).toStrictEqual([]);
+    expect(nowhere).toStrictEqual([]);
+    expect(await sourceStore.countSources(ABSENT_ID)).toBe(0);
+  });
+
+  it('refuses a delete the corpus still points at', async () => {
+    const planted = await plantDependents();
+
+    // ONE KIND OF DEPENDENT, WHICH IS WHAT MAKES THE CONSTRAINT
+    // NAME A CLAIM. Postgres refuses on whichever key it checked
+    // first, so a source carrying a document AND a sighting answers
+    // this same name for both delete cases and the second silently
+    // duplicates the first. The counted zero beside the one is what
+    // says this subject holds only the dependent it is named for.
+    expect(await sourceStore.countSourceDependents(planted.held.id))
+      .toStrictEqual({ documents: 1, findingSightings: 0 });
+
+    const refusal = await refusalFrom(
+      () => sourceStore.deleteSource(planted.held.id),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe(DOCUMENT_SOURCE_KEY);
+
+    // The SQLSTATE beside the reason, on the terms the duplicate
+    // name case above states: the reason is what `classifyPgError`
+    // DECIDED and this is what the server raised.
+    const cause = refusal.cause as { code?: unknown };
+
+    expect(cause.code).toBe(FOREIGN_KEY_VIOLATION);
+
+    // NO CASCADE ANYWHERE, which is the opposite of what
+    // `DomainStore.deleteDomain` does and is the schema's decision
+    // rather than this method's. Every key onto `sources.id` emits
+    // `ON DELETE no action`, so the refusal took nothing with it:
+    // the source stands and so does its capture.
+    expect(present(
+      await sourceStore.findSourceById(planted.held.id),
+      'findSourceById after the refused delete',
+    )).toStrictEqual(planted.held);
+    expect(await sourceStore.countSourceDependents(planted.held.id))
+      .toStrictEqual({ documents: 1, findingSightings: 0 });
+    expect(await sourceStore.countSourceFailures(planted.held.id))
+      .toBe(1);
+
+    // THE POSITIVE CONTROL, IN THE SAME RUN. Without a delete that
+    // lands, every assertion above is equally green against a store
+    // refusing every delete there is — and this source differs from
+    // the one refused along exactly the axis under test, holding no
+    // dependent rather than one.
+    expect(await sourceStore.countSourceDependents(planted.free.id))
+      .toStrictEqual({ documents: 0, findingSightings: 0 });
+    expect(await sourceStore.deleteSource(planted.free.id)).toBe(true);
+    expect(await sourceStore.findSourceById(planted.free.id)).toBeNull();
+
+    // An id no source carries is `false` rather than a throw, and
+    // its dependents are two counted zeros rather than a failure:
+    // nothing points at a row that is not there.
+    expect(await sourceStore.deleteSource(ABSENT_ID)).toBe(false);
+    expect(await sourceStore.countSourceDependents(ABSENT_ID))
+      .toStrictEqual({ documents: 0, findingSightings: 0 });
+  });
+
+  it('refuses a delete a sighting still cites', async () => {
+    const planted = await plantDependents();
+
+    // THE ISOLATING FIXTURE, AND THE COUNTED ZERO IS THE ISOLATION.
+    // This source holds no document at all; the sighting citing it
+    // hangs off a finding over the OTHER source's capture, which
+    // the schema permits because a sighting is the claim that a
+    // finding was SEEN at a feed rather than a statement about
+    // where its document came from. Without that arrangement the
+    // documents key fires first and this case pins that one while
+    // reading as this one.
+    expect(await sourceStore.countSourceDependents(planted.cited.id))
+      .toStrictEqual({ documents: 0, findingSightings: 1 });
+
+    const refusal = await refusalFrom(
+      () => sourceStore.deleteSource(planted.cited.id),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe(SIGHTING_SOURCE_KEY);
+    expect(SIGHTING_SOURCE_KEY).not.toBe(DOCUMENT_SOURCE_KEY);
+
+    const cause = refusal.cause as { code?: unknown };
+
+    expect(cause.code).toBe(FOREIGN_KEY_VIOLATION);
+
+    // `ON DELETE SET NULL` IS NOT THE ESCAPE IT LOOKS LIKE HERE,
+    // which is why this key refuses outright where a reader can act
+    // on it. `finding_sightings.source_id` is NOT NULL, so Postgres
+    // would accept that declaration and defer the failure to the
+    // delete, then report a not-null violation on the column
+    // instead of the reference it was really about. What the
+    // refusal names as the operation that was wanted is this patch:
+    // it keeps the endpoint, the arrangement and the provenance and
+    // stops the pipeline reading.
+    const retired = present(
+      await sourceStore.updateSource(planted.cited.id, { enabled: false }),
+      'updateSource retiring the cited source',
+    );
+
+    expect(retired.enabled).toBe(false);
+    expect(retired.id).toBe(planted.cited.id);
+    expect(keysOf(retired)).toStrictEqual(SOURCE_KEY_SET);
+    expect({ ...retired, enabled: true }).toStrictEqual(planted.cited);
+
+    // The sighting is still there afterwards, which is what says
+    // retiring a feed keeps what it once carried rather than
+    // trading the corpus for the delete.
+    expect(await sourceStore.countSourceDependents(planted.cited.id))
+      .toStrictEqual({ documents: 0, findingSightings: 1 });
+
+    // The positive control, in the same run and along the same
+    // axis: nothing cites this one, so the same statement lands.
+    expect(await sourceStore.deleteSource(planted.free.id)).toBe(true);
+    expect(await sourceStore.findSourceById(planted.free.id)).toBeNull();
+  });
+
+  it('pages the failed captures newest first', async () => {
+    const planted = await plantCorpus();
+    const queue = await sourceStore.listSourceFailures(
+      planted.feed.id,
+      WHOLE,
+    );
+
+    // NEWEST FIRST, BECAUSE THE QUEUE IS WORKED FROM THE TOP: what
+    // broke most recently is what an operator is deciding about,
+    // and an ascending order would put the oldest failure of a
+    // long-broken feed on page one forever. These four ids are
+    // wrong under every other reading of this fixture — insertion
+    // order answers the tied pair the other way round, and id
+    // descending answers the whole list in a different order again.
+    expect(queue.map((row) => row.id)).toStrictEqual([
+      planted.newest,
+      planted.tiedLate,
+      planted.tiedEarly,
+      planted.oldest,
+    ]);
+    expect(queue.map((row) => row.capturedAt.toISOString()))
+      .toStrictEqual([
+        NEWEST_AT.toISOString(),
+        TIED_AT.toISOString(),
+        TIED_AT.toISOString(),
+        OLDEST_AT.toISOString(),
+      ]);
+
+    // THE TIEBREAK IS NOT OPTIONAL AND IT READS DESCENDING. The two
+    // rows above sharing an instant are not ordered by
+    // `captured_at` at all, so what puts them in this order is
+    // `id` — and the row answered SECOND was written second, so its
+    // id is the higher of the pair and insertion order would put it
+    // last. What a lost tiebreak costs is not a wrong row but two
+    // PAGES that disagree about which row they hold, one shown
+    // twice and another never, with nothing in either response
+    // saying so; that is invisible to a single read, so this
+    // ordering is the claim and the port carries the argument.
+    expect(planted.tiedEarly).toBeLessThan(planted.tiedLate);
+    expect(planted.newest).toBeLessThan(planted.tiedLate);
+    expect(planted.oldest).toBeLessThan(planted.newest);
+
+    // COLUMN-SCOPED, AND THE ONLY RECORD ON THIS PORT THAT IS.
+    // `documents` carries fifteen columns and this record is five
+    // of them: `raw`, `features` and `embedding` are a stored
+    // payload and two derived vectors a review surface has no use
+    // for, and `parse_status` is absent because it IS the filter.
+    // So the key set is where a column ARRIVING on the queue would
+    // be reported, there being no field read that could notice one.
+    for (const row of queue) {
+      expect(keysOf(row)).toStrictEqual(FAILURE_KEY_SET);
+      expect(row.parseError).not.toBeNull();
+      expect(row.url).not.toBeNull();
+      expect(row.body).toContain(BODY_PREFIX);
+    }
+
+    // FAILED ROWS ONLY, and the filter is the store's rather than a
+    // caller's: there is no status parameter anywhere on this port,
+    // so the queue cannot become a way to page the corpus. The
+    // captures this source took that PARSED are what say so — the
+    // aggregate counts them and the queue does not.
+    expect(queue).toHaveLength(FEED_FAILED);
+    expect(FEED_OK).toBeGreaterThan(0);
+    expect(await sourceStore.countSourceFailures(planted.feed.id))
+      .toBe(FEED_FAILED);
+
+    // Scoped to the one source, which the corpus census is what
+    // makes readable: the second domain's capture and the
+    // source-less one are both `failed`, and a `WHERE` that had
+    // stopped narrowing answers six rows rather than four.
+    expect(queue.map((row) => row.id)).not.toContain(planted.orphan);
+    expect(await sourceStore.countSourceFailures(planted.transitFeed.id))
+      .toBe(TRANSIT_FAILED);
+    expect(CORPUS_FAILED).toBeGreaterThan(FEED_FAILED);
+
+    // ONE ROW OUT OF THE MIDDLE: a `LIMIT` that stopped limiting
+    // answers four rows here and an `OFFSET` that stopped
+    // offsetting answers the newest.
+    const page = await sourceStore.listSourceFailures(
+      planted.feed.id,
+      MIDDLE,
+    );
+
+    expect(page.map((row) => row.id)).toStrictEqual([planted.tiedLate]);
+
+    // A window past the end, a source whose captures all parsed,
+    // and an id no source carries are each an empty list rather
+    // than an error: none of the three is a failure to read.
+    const past = await sourceStore.listSourceFailures(
+      planted.feed.id,
+      PAST_END,
+    );
+    const clean = await sourceStore.listSourceFailures(
+      planted.quiet.id,
+      WHOLE,
+    );
+    const nowhere = await sourceStore.listSourceFailures(
+      ABSENT_ID,
+      WHOLE,
+    );
+
+    expect(past).toStrictEqual([]);
+    expect(clean).toStrictEqual([]);
+    expect(nowhere).toStrictEqual([]);
+    expect(await sourceStore.countSourceFailures(ABSENT_ID)).toBe(0);
+
+    // AND THE TIE THE PORT NAMES IS ONE THE DATABASE PRODUCES,
+    // which only a server can show. `captured_at` defaults to
+    // `now()`, and `now()` is the TRANSACTION's instant rather than
+    // the row's, so two documents written inside ONE statement take
+    // one value between them — the batch capture the port describes
+    // and the reason the tiebreak exists at all. Neither row names
+    // a timestamp here; the column supplies it.
+    const batched = await db.insert(documents)
+      .values([
+        batchedCapture(planted.domain.id, planted.feed.id, 'batch-a'),
+        batchedCapture(planted.domain.id, planted.feed.id, 'batch-b'),
+      ])
+      .returning({ id: documents.id, capturedAt: documents.capturedAt });
+    const stamps = batched.map((row) => row.capturedAt.toISOString());
+    const written = batched.map((row) => row.id);
+
+    expect(batched).toHaveLength(2);
+    expect(new Set(stamps).size).toBe(1);
+    expect(written).toStrictEqual([...written].sort((a, b) => a - b));
+
+    // What puts the pair at the HEAD is that `now()` is newer than
+    // every planted instant, which is a property of this fixture
+    // rather than of the clock: every capture instant here is in the
+    // past and a past instant stays past. Asserted rather than
+    // assumed, because a future literal would make the reading below
+    // reverse itself on a date nobody would think to look at.
+    const batchedAt = present(stamps.at(0) ?? null, 'the batched stamp');
+
+    expect(new Date(batchedAt).getTime())
+      .toBeGreaterThan(NEWEST_AT.getTime());
+
+    // They are newer than everything planted, so the queue answers
+    // them at its head — in id DESCENDING, which reverses the order
+    // they were written in and is the tiebreak doing the whole of
+    // the work: nothing separates these two rows but their ids.
+    const reread = await sourceStore.listSourceFailures(
+      planted.feed.id,
+      WHOLE,
+    );
+
+    expect(reread.slice(0, 2).map((row) => row.id))
+      .toStrictEqual([...written].reverse());
+    expect(reread).toHaveLength(FEED_FAILED + 2);
+  });
+
+  it('reads the failures queue without writing to it', async () => {
+    const planted = await plantCorpus();
+    const before = await census();
+
+    // THE CENSUS IS NOT A ZERO READ AGAINST ITSELF. Two empty
+    // censuses compare equal exactly as this pair does, so what
+    // makes the equality below a reading is that this one has
+    // content, that its two members carry DIFFERENT numbers, and
+    // that both are non-zero. It is taken straight off `documents`
+    // rather than through the port, because the claim is about the
+    // TABLE: a census read through the same statements the queue is
+    // made of would move with them.
+    expect(before).toStrictEqual([
+      { parseStatus: PARSE_FAILED, total: CORPUS_FAILED },
+      { parseStatus: PARSE_OK, total: CORPUS_OK },
+    ]);
+    expect(CORPUS_FAILED).not.toBe(CORPUS_OK);
+    expect(CORPUS_OK).toBeGreaterThan(0);
+
+    // Every read this port has over `documents`, driven in one
+    // sitting: the queue, a window of it, its total, and the
+    // aggregate the list route folds out of the same table.
+    const queue = await sourceStore.listSourceFailures(
+      planted.feed.id,
+      WHOLE,
+    );
+    const page = await sourceStore.listSourceFailures(
+      planted.feed.id,
+      MIDDLE,
+    );
+    const total = await sourceStore.countSourceFailures(planted.feed.id);
+    const listed = await sourceStore.listSourcesWithParseStats(
+      planted.domain.id,
+      WHOLE,
+    );
+
+    // The in-band control that the census pair brackets work rather
+    // than nothing: each of the four answered, so the equality
+    // below is about statements that ran.
+    expect(queue).toHaveLength(FEED_FAILED);
+    expect(page).toHaveLength(1);
+    expect(total).toBe(FEED_FAILED);
+    expect(listed).toHaveLength(3);
+
+    // THE QUEUE IS READ-ONLY STRUCTURALLY RATHER THAN BY
+    // CONVENTION: `SourceStore` declares two reads over `documents`
+    // and no write whatever, so there is no statement on this port
+    // that could move a `parse_status`. This is that claim taken
+    // against the table instead of against the interface — a read
+    // that marked a row as seen, or moved one off `failed` as it
+    // was worked, is a member that no longer matches.
+    expect(await census()).toStrictEqual(before);
+
+    // And the same claim from the surface's side, which is the half
+    // a caller could observe: the aggregate the list route answered
+    // is the one it answers after every read above.
+    const reread = await sourceStore.listSourcesWithParseStats(
+      planted.domain.id,
+      WHOLE,
+    );
+
+    expect(reread).toStrictEqual(listed);
   });
 });
