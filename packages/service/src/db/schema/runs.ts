@@ -22,6 +22,8 @@
  * one against each claimed row a tick goes on to dispatch, and phase 5
  * made it one opener of three: `ar-capture` and `ar-score` each insert
  * a row of their own, already closed, for a pass no tick scheduled.
+ * `ar-research` is the fourth, from phase 6, in that same already
+ * closed shape, for a pass its caller invoked rather than a tick.
  * Nothing has run any of them: those phases ship workflow sources, and
  * the stack that would import them arrives in phase 7.
  *
@@ -267,6 +269,17 @@ export const runs = pgTable('runs', {
    * one of those rows has the mode that workflow reschedules in
    * rather than the mode that set the time the pass fired against.
    *
+   * `ar-research` answers what the dispatcher's rows cannot. It
+   * inserts a row of its own, already closed, and reads the
+   * literal off the write rather than off the intent: `agent`
+   * where its clamped proposal actually moved a `topics` row, and
+   * `interval` where it moved none and the increment the claim
+   * already made stands. So the dispatcher's row and the research
+   * pass's are a pair, and reading the two together is what says
+   * which mode set that topic's next due time: `interval` on both
+   * is the increment standing, and `agent` on the second is the
+   * proposal having landed.
+   *
    * The other cost of the finer row is an absence. A tick claiming
    * nothing opens none at all, so this table records what a
    * dispatcher dispatched and never that one ran, and a stopped
@@ -344,8 +357,9 @@ export const runs = pgTable('runs', {
  * pairing is carried here is phase 6's to settle.
  *
  * `ar-ingest` writes these rows, from phase 5, one per call its model
- * node made; `ar-research` and `ar-digest` join it in phase 6. Nothing
- * has run any of them, for the reason the `runs` header above gives.
+ * node made, and `ar-research` joins it on the same terms from phase
+ * 6; `ar-digest` is the third and has still to land. Nothing has run
+ * any of them, for the reason the `runs` header above gives.
  */
 export const llmCalls = pgTable('llm_calls', {
   /** Surrogate key; see `domains.id` for why `number` mode. */

@@ -97,15 +97,22 @@ writes the time and how it was worked out, never in what is stored.
 | Mode | The write | Performed by |
 | --- | --- | --- |
 | Strict periodic | The row's `interval_seconds` added to now, clamped by its bounds. | `ar-dispatch`, inside the claim. |
-| Agent-driven | A gap the research agent proposes, clamped by the same bounds. | `ar-research`, phase 6. |
+| Agent-driven | A gap the research agent proposes, clamped by the same bounds. | `ar-research`, in the statement that closes its pass. |
 | Extraordinary run | `next_run_at = now()`, so the next tick claims the row whatever its interval says. | An operator, through `POST /topics/:id/run-now` or `POST /exports/:id/run-now`, or by UPDATE. |
 | Pause for N cycles | `next_run_at` pushed out by N intervals. | An operator, through `POST /topics/:id/pause`, or by UPDATE. |
 
-### Three of the four are performed by something here today
+### All four are performed by something here today
 
 `workflows/src/ar-dispatch.json` writes the periodic increment, inside
-the claim it takes. The agent path is the one still to arrive, with
-`ar-research` in phase 6.
+the claim it takes, and `workflows/src/ar-research.json` writes the
+agent proposal, in the statement that closes its own pass. The two
+differ in which side of the boundary the clamp sits on rather than in
+what lands on the column: the dispatcher clamps in SQL inside the
+statement holding the row's lock, and the research pass puts its
+proposed gap through `clampIntervalSeconds` in a node above the write,
+a proposal being decided before any lock is taken. A pass that
+proposes nothing writes no `topics` row at all, and the increment the
+claim already made stands.
 
 Both operator modes are now reachable over HTTP, on both schedulable
 tables. `runTopicNow` and `pauseTopic` in `src/topics/service.ts` are
@@ -531,21 +538,25 @@ property, and it stopped holding with no case failing.
 
 Phase 5 is where it stopped, and it took the second convention rather
 than the column. `ar-capture` and `ar-score` each insert a `runs` row
-of their own, so the table has three writers where it had one, and no
-migration in that phase added a column naming any of them. What tells
-them apart is partial and worth stating as such. `scheduled_by` parts
-the dispatcher from the other two and not those two from each other:
-it reads `interval` on every row the dispatcher opens and `operator`
-on every row the pipeline pair writes, which is `RUN_SCHEDULERS`
-having no member that is true of a pass no schedule fired. The shape
-of the write parts them again the same way — the dispatcher opens a
-row `running` and closes it from a second node, while the pair insert
-one already closed, so their rows carry a start and a finish from one
-transaction and read as instantaneous. Below that the naming stops:
-`domain_id` says which domain a pass ran for and all three run for the
-same ones, and `counts` and `errors` refuse nothing, so the keys a
-writer puts in `counts` are one writer's habit rather than a column a
-reader can query.
+of their own, so the table had three writers where it had one, and no
+migration in that phase added a column naming any of them. Phase 6
+added the fourth, `ar-research`, which inserts a row for its own pass.
+What tells them apart is partial, and the fourth writer made it weaker
+rather than wider. `scheduled_by` no longer parts the dispatcher from
+anything: it reads `interval` on every row the dispatcher opens,
+`operator` on every row the capture and scoring pair writes, which is
+`RUN_SCHEDULERS` having no member that is true of a pass no schedule
+fired, and `agent` or `interval` on a research row according to
+whether that pass's proposal moved a topic. So `interval` names two
+writers now, and only the other two members name one apiece. The shape
+of the write parts the dispatcher and nothing else — it opens a row
+`running` and closes it from a second node, while the other three
+insert one already closed, so their rows carry a start and a finish
+from one transaction and read as instantaneous. Below that the naming
+stops: `domain_id` says which domain a pass ran for and all four run
+for the same ones, and `counts` and `errors` refuse nothing, so the
+keys a writer puts in `counts` are one writer's habit rather than a
+column a reader can query.
 
 ### A run opened against a target that is not there closes as failed
 

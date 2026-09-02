@@ -28,11 +28,11 @@
  * being a matter of the writer not having landed. `ar-ingest` writes
  * a finding with no `entity_id` at all, so attribution is work its
  * model node was not asked to do rather than work still to arrive,
- * and what accumulates against a subject is `ar-research`'s (phase
- * 6). `entity_research` below is what one run found out about a
- * subject, and `research_pool` after it is the gate deciding which
- * subjects are researched at all — the queue that run drains rather
- * than a decision it makes for itself.
+ * and what accumulates against a subject is `ar-research`'s, landed
+ * in phase 6. `entity_research` below is what one run found out
+ * about a subject, and `research_pool` after it is the gate deciding
+ * which subjects are researched at all — the queue that run drains
+ * rather than a decision it makes for itself.
  */
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
@@ -209,7 +209,10 @@ export const entities = pgTable('entities', {
  * researched_at DESC LIMIT 1` rather than a select, and a reader that
  * forgets gets every pass at once rather than an error.
  *
- * Nothing writes these rows yet; `ar-research` is phase 6.
+ * `ar-research` writes these rows, from phase 6, in the same
+ * statement that stamps the `research_pool` row the candidate was
+ * drained from: one row per candidate whose answer it recorded, and
+ * none at all for one it refused.
  */
 export const entityResearch = pgTable('entity_research', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
@@ -382,10 +385,13 @@ export const entityResearch = pgTable('entity_research', {
  * question rather than this table's.
  *
  * `ar-ingest` and `ar-score` raise these rows, both landed in phase
- * 5, and `ar-research` drains them in phase 6. The operator surface
- * between the two is `scripts/approve.ts`, the interim CLI that
- * stands in until the API and the UI take approvals over — a client
- * of the gate rather than the gate itself.
+ * 5, and `ar-research` drains them, landed in phase 6: it takes the
+ * approved rows nothing has stamped `researched_at` on, oldest first
+ * and bounded, and closes the ones whose answers it recorded in the
+ * same statement that records them. The operator surface between the
+ * two is `scripts/approve.ts`, the interim CLI that stands in until
+ * the API and the UI take approvals over — a client of the gate
+ * rather than the gate itself.
  */
 export const researchPool = pgTable('research_pool', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
