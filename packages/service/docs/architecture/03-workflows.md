@@ -32,7 +32,7 @@ landed already.
 | `ar-ingest` | 5 — landed | Pull adapters, dedupe, gate, and document to finding. |
 | `ar-capture` | 5 — landed | A generic push webhook: capture clients POST against a documented capture contract. |
 | `ar-score` | 5 — landed | Scores findings against the domain's criteria. |
-| `ar-research` | 6 | Entity research, carrying the `validateEntityName` capability gate. |
+| `ar-research` | 6 — landed | Entity research, carrying the `validateEntityName` capability gate. |
 | `ar-digest` | 6 | Digests, and the export subscriptions the dispatcher schedules. |
 
 ### A workflow is a row here before it is a file

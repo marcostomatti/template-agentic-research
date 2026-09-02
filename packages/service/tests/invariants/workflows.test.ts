@@ -107,12 +107,13 @@ const BUILT_WORKFLOWS = loadBuiltWorkflows();
  * source arrives, and an id joins this list in the same commit as
  * the source it names, so an entry a phase has still to deliver is
  * missing here for exactly as long as its source is. Phase 5 read
- * that way from inside, its entries arriving one source at a time;
- * what phase 6 has still to deliver — `ar-research` and `ar-digest`
- * — reads that way now. What that buys is the equality below staying
- * a claim about the tree: a roster written ahead of the sources
- * would report a phase's own unfinished middle as a build that lost
- * an artifact.
+ * that way from inside, its entries arriving one source at a time,
+ * and phase 6 reads the same way: `ar-research` joins this list in
+ * the commit that lands its source, and `ar-digest` is missing here
+ * because its source is. What that buys is the equality below
+ * staying a claim about the tree: a roster written ahead of the
+ * sources would report a phase's own unfinished middle as a build
+ * that lost an artifact.
  *
  * By id and never by file name. That README's 1:1 rule is that a
  * workflow is one file called `<workflow-id>.json`, and the build
@@ -130,6 +131,7 @@ const PHASE_3_AND_5_WORKFLOW_IDS = [
   'ar-capture',
   'ar-dispatch',
   'ar-ingest',
+  'ar-research',
   'ar-score',
 ] as const;
 

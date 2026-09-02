@@ -39,7 +39,7 @@ The 1:1 rule is what the surrounding tooling assumes:
 | `ar-ingest` | phase 5 — landed | Pull adapters → dedupe → gate → document to finding. |
 | `ar-capture` | phase 5 — landed | Generic push webhook: external capture clients POST against a documented capture contract. |
 | `ar-score` | phase 5 — landed | Scores findings against the domain's criteria. |
-| `ar-research` | phase 6 | Entity research; carries the `validateEntityName` capability gate. |
+| `ar-research` | phase 6 — landed | Entity research; carries the `validateEntityName` capability gate. |
 | `ar-digest` | phase 6 | Digests plus the export subscriptions the dispatcher schedules. |
 
 Two invariants constrain the set as a whole, not any single file:

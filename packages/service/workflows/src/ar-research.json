@@ -1,0 +1,73 @@
+{
+  "id": "ar-research",
+  "name": "AR Research",
+  "active": false,
+  "versionId": "00000000-0000-4000-8000-00000000ae01",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "execute-workflow-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "load-domain-context",
+      "name": "Load Domain Context",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH handover AS (\n  SELECT nullif($1::jsonb, 'null'::jsonb) AS item\n),\nclaim AS (\n  SELECT\n    CASE\n      WHEN h.item ->> 'run_id' ~ '^[0-9]{1,18}$'\n      THEN (h.item ->> 'run_id')::bigint\n    END AS run_id\n  FROM handover h\n),\nrun AS (\n  SELECT r.domain_id\n  FROM runs r\n  WHERE r.id = (SELECT run_id FROM claim)\n)\n-- The first node after the trigger, and the shape the parent design fixes for every\n-- workflow in this set (.specs/2026-08-19-research-pipeline-port.md, section 4): the\n-- domain's personas and taxonomy, read as ONE query answering exactly one row. Both\n-- halves are argued in full on ar-ingest's Load Domain Context, which asks the same\n-- question of the same tables and is not repeated here. What is written out below is\n-- the half that differs, which is how this canvas gets a domain at all.\n\n-- It gets one off a RUN, and off no member of the hand-over item. The caller opened\n-- nothing: the runs row this reads is the one ar-dispatch opened for the claimed\n-- topic and ar-ingest is accounting for, and its id is what travels. A domain named\n-- on the item as well would be a second statement of something that row already\n-- carries, and two statements of one fact can disagree with nothing reporting it.\n-- What a research pass records is charged to a run, so the domain it is filed under\n-- is the run's.\n\n-- The whole hand-over item binds as ONE jsonb parameter rather than one parameter per\n-- member. An item reaching this trigger by hand may be anything at all,\n-- JSON.stringify makes every one of those a valid jsonb literal, and the members are\n-- then read where a comment can say what each one is instead of inside an expression\n-- no gate reads. The nullif is the other half of that: JSON.stringify(null) binds the\n-- JSON null literal rather than SQL NULL, so an invocation carrying no item at all\n-- would otherwise arrive here as a value.\n\n-- ->> answers NULL for every jsonb that is not an object, so an item that is not one\n-- needs no guard in front of the read: the pattern test is handed NULL, the CASE\n-- answers NULL, and nothing raises over a shape somebody else chose. It renders a\n-- number as text as readily as a string, which is what lets one read cover both\n-- spellings an id can arrive in.\n\n-- The digit bound is {1,18} rather than +, and the difference between them is a\n-- raise. A longer run of digits matches + and then overflows the bigint cast, which\n-- is an error this node could not survive: eighteen digits sits inside bigint's\n-- nineteen, and no runs id is going to reach it.\n\n-- Three readings come out of this row and they are not two. A null run_id means the\n-- item named no run this statement could read. A run_id with a null domain_id means\n-- it named one that matches no runs row. A domain row means the pass resolved, and\n-- an empty list beside it is a domain that states no personas, no categories, no\n-- terms or no criteria. Read them in that order: a length says nothing until both\n-- have been read.\n\n-- Nothing here refuses. Every intention this pass is asked to drain is a row\n-- somebody else already raised and an operator already ruled on, so a refusal at the\n-- top of this workflow leaves those rows unstamped with nothing recording why. What\n-- this answers instead is a row saying what it could and could not resolve.\n\n-- run_id travels as the parameter rather than as a column read back, so it survives\n-- a run id that resolves to nothing. It has to travel because this node's answer\n-- REPLACES the item the trigger was handed: the rest of the hand-over is the claimed\n-- topic, its id and the two interval bounds a proposed gap is clamped against, and\n-- whatever node below needs those reaches all of it at\n-- $('Execute Workflow Trigger').first().json, which is the handle every node here\n-- has on the invocation. Reading that is the proposing group's rather than this\n-- node's.\n\n-- Every list is ordered, which nothing downstream requires and every reader benefits\n-- from: two passes over one unchanged domain hand the nodes below the same lists in\n-- the same order, so a diff between two runs is about the candidates rather than\n-- about the order a planner happened to return rows in.\nSELECT\n  (SELECT run_id FROM claim) AS run_id,\n  (SELECT domain_id FROM run) AS domain_id,\n  -- The domain row, cut to the members a research pass reads, and shorter than the\n  -- one ar-ingest and ar-score fetch. Those two carry feature_version and\n  -- embedding_model because a feature vector is composed on those canvases, and\n  -- nothing here composes one: a projection copied whole would be two columns\n  -- travelling to no reader, and a reader added later would be reading a pin nobody\n  -- here maintains. What is left is the identity an operator reads a pass by and the\n  -- settings a display vocabulary comes out of. NULL rather than an empty object\n  -- when the item named no run this statement could resolve, which is the second of\n  -- the three readings above.\n  (SELECT jsonb_build_object(\n     'id', d.id,\n     'slug', d.slug,\n     'name', d.name,\n     'settings', d.settings)\n     FROM domains d\n    WHERE d.id = (SELECT domain_id FROM run)) AS domain,\n\n  -- The personas. system_text is operator-owned prose and is the trusted half of\n  -- what prompt-frame.ts composes around an untrusted chunk, and the whole list\n  -- travels rather than the one row a step needs: which role a step is framed\n  -- against is that step's to decide, and picking a row out of a list already here\n  -- is a read rather than a second query per role. A persona is a row and is never\n  -- written into a file, and no node below may put a candidate's own text where one\n  -- belongs.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'id', p.id,\n       'role', p.role,\n       'system_text', p.system_text)\n       ORDER BY p.role, p.id)\n       FROM personas p\n      WHERE p.domain_id = (SELECT domain_id FROM run)),\n    '[]'::jsonb) AS personas,\n\n  -- The categories, which are the buckets the terms below are filed under. key\n  -- rather than id is what a reader downstream matches on: a library reading a\n  -- category reads its key, so the surrogate id travels for an operator's benefit\n  -- and the key is what the code matches.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'id', c.id,\n       'key', c.key,\n       'name', c.name,\n       'parent_id', c.parent_id)\n       ORDER BY c.key, c.id)\n       FROM categories c\n      WHERE c.domain_id = (SELECT domain_id FROM run)),\n    '[]'::jsonb) AS categories,\n\n  -- The terms, joined to their category's key rather than carrying category_id.\n  -- Four members and this exact spelling, because the libraries reading this one\n  -- list each read a different subset of it: feature-version.ts takes all four,\n  -- features.ts takes pattern and category, and static-gate.ts takes pattern, weight\n  -- and polarity. A term list selected without the join satisfies one reader and\n  -- starves the others, with nothing failing.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'category', c.key,\n       'pattern', t.pattern,\n       'weight', t.weight,\n       'polarity', t.polarity)\n       ORDER BY c.key, t.pattern, t.id)\n       FROM terms t\n       JOIN categories c ON c.id = t.category_id\n      WHERE c.domain_id = (SELECT domain_id FROM run)),\n    '[]'::jsonb) AS terms,\n\n  -- The criteria, joined to their category the same way. Nothing in a research pass\n  -- scores anything: criteria are ar-score's subject, and a pass here is about what\n  -- is known of one candidate rather than about how a finding measures up against a\n  -- position the domain stated. They are selected because the design fixes the\n  -- taxonomy as what this node fetches, and the taxonomy is these three tables, so a\n  -- node group added below reads them without a second lookup and without a second\n  -- branch to reason about.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'id', k.id,\n       'category', c.key,\n       'value', k.value,\n       'kind', k.kind)\n       ORDER BY c.key, k.kind, k.id)\n       FROM criteria k\n       JOIN categories c ON c.id = k.category_id\n      WHERE k.domain_id = (SELECT domain_id FROM run)),\n    '[]'::jsonb) AS criteria",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json ?? null) }}"
+        }
+      }
+    },
+    {
+      "id": "one-caller-no-clock",
+      "name": "One Caller No Clock",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        -160
+      ],
+      "parameters": {
+        "width": 400,
+        "height": 1080,
+        "content": "## One Caller, No Clock\n\nThis workflow is invoked, and by `ar-ingest` rather than by the dispatcher. A pull pass reaches it through an Execute Workflow node once it has written and scored what it found, and the Execute Workflow Trigger on this canvas is the whole of what makes that possible.\n\n`ar-dispatch` does not invoke it, and could not be made to without a table that does not exist. The only two schedulable tables are `topics` and `export_subscriptions`, and a research unit is neither of them. A pass here also needs a claimed topic in hand: the gap it may propose is clamped against that topic's own `min_interval_seconds` and `max_interval_seconds`, and the topic is what the dispatcher already claimed and handed on. So the invocation sits where the topic still is.\n\nIt holds no clock and may not acquire one: `ar-dispatch` carries the only Schedule Trigger in the system, and `tests/invariants/workflows.test.ts` counts them across every built workflow and names the one file allowed to hold one. The Execute Workflow Trigger here registers nothing when a workflow is activated, so `scripts/activate-workflows.sh` reports this file manual-only and leaves it inactive. That is the outcome rather than a gap: what starts this workflow is a caller, and a caller needs no registration.\n\n### What arrives\n\nOne item. `run_id` is the run the calling pass is accounting for, which is the row `ar-dispatch` opened for the claimed topic rather than one this workflow or its caller opened. The claim travels beside it: the topic's id and its two interval bounds, which are what a proposed gap is later clamped against.\n\n`Load Domain Context` reads the first of those and no more, and reads the domain back off the run rather than off a member of the item. The rest stays where it arrived, reachable at `$('Execute Workflow Trigger').first().json`, because this node's answer REPLACES the item the trigger was handed. Which node reads the claim is the group that proposes a gap, and reading it is that group's rather than this node's.\n\nThe trigger is typeVersion 1, which passes the caller's item through as it stands. Nothing here declares an input schema, so what the caller sends is what the first node reads, and adding a schema later is a change to both ends rather than to this node alone.\n\n### Started by hand\n\nA run started from this canvas rather than by a caller carries no `run_id`, and nothing pretends otherwise. `Load Domain Context` answers a null `run_id`, a null `domain_id`, a null domain row and four empty lists, which is a shape a node below can refuse by name. It is not an error worth suppressing: a pass with no run to charge has nowhere to write what it did, and a pass with no domain has no approved intention to drain, so it drains nothing rather than researching a candidate nobody asked about."
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Domain Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
