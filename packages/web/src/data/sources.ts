@@ -406,12 +406,13 @@ export function getSource(id: number): Source {
  *   a bug for as long as it takes somebody to check.
  * - `pending` counts sources nothing has fetched, which is a STAND-IN.
  *   A pending config is a proposed `parser_config` and `contract`
- *   waiting on an operator's approval; `./types.ts` narrows both
- *   columns out, and schema v2 has no table for the proposal itself —
- *   the `sources` docblock in `packages/service/src/db/schema` says
- *   the propose step is not built yet. So this is the closest reading
- *   the stored columns support, and q15 needs a schema decision before
- *   an endpoint can answer the card as labelled.
+ *   waiting on an operator's approval, and `./types.ts` narrows both
+ *   columns out of {@link Source}. The proposals themselves are a
+ *   table of their own — `source_config_proposals`, which
+ *   `./proposals.ts` now redeclares and carries rows for — so the
+ *   stand-in is this FIGURE rather than the data behind it: nothing
+ *   here counts those rows, and a card reading the queue as labelled
+ *   is a different count over a different table.
  *
  * @param domainId - The `domains.id` whose sources are wanted.
  * @returns A count per status, zeros included; all zeros for a domain

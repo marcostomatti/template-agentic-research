@@ -433,9 +433,10 @@ export const SOURCE_STAT_CARDS: readonly SourceStatCard[] = [
   {
     status: 'pending',
     title: 'Pending configs',
-    // A stand-in: nothing in schema v2 records a proposed config
-    // awaiting approval, so this counts the closest thing the stored
-    // columns support.
+    // A stand-in: this counts sources nothing has fetched rather
+    // than the pending `source_config_proposals` rows
+    // `../../data/proposals.ts` carries, which this page does not
+    // read yet.
     caption: 'Configured, never fetched',
   },
 ];
