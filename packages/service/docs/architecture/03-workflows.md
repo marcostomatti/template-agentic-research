@@ -345,7 +345,7 @@ side of that string records what the library is for.
 | `schedule.ts` | The clamp a proposed gap goes through and the batch cap a tick is bounded by. `ar-dispatch` applies both to what it has claimed, expressing the clamp as SQL inside each claim. `ar-research` splices the same library into the node that proposes when its claimed topic should come round next, which is the agent mode and the one caller that reaches `clampIntervalSeconds` from a canvas at all. |
 | `parse-csv.ts` | Delimited text a source answers with, on the pull path and the capture path alike. |
 | `parse-eml.ts` | Message-format bodies — a file handed to `ar-capture`, and any `multipart/` an ingest source answers with. |
-| `yaml-lite.ts` | Configuration somebody edits by hand, wherever a later phase reads one. |
+| `yaml-lite.ts` | Configuration somebody edits by hand. No source names it, and not because a workflow is still coming: what an operator types reaches a canvas through `domains.settings`, read per-domain at run time, which is the same move that retired `__INLINE_YAML:`. |
 | `shingle.ts` | `ar-ingest`'s dedupe: the sketch two bodies are held against each other by. |
 | `static-gate.ts` | The free decision that runs before anything is spent on a document: `ar-ingest`'s gate. Its `scoreText` is also what a feature node reads a document with, in `ar-ingest` and `ar-score` alike, so a vector's category counts are hits taken off the body rather than a block of zeros. |
 | `chunk.ts` | The prepared chunk a model node is fed, in `ar-ingest`, in `ar-research` and in `ar-digest`. |
@@ -353,7 +353,7 @@ side of that string records what the library is for.
 | `aggregate-score.ts` | `ar-score`: the one total a digest orders findings by. |
 | `validate-entity-name.ts` | `ar-research`: the capability gate in front of the one step that gets tools bound. |
 | `sanitize-md.ts` | Untrusted text on its way into anything that renders it — a digest, a note, a research brief. `ar-research` is the first canvas to carry the marker: its record node splices this beside `research-brief.ts` and reduces the accepted summary after the judgement rather than before it, so the column holds the text that was judged. The structured half is carried unread, no contract declaring its keys. |
-| `audit-log.ts` | The on-disk half of a run's ledger, for whatever workflow writes one. |
+| `audit-log.ts` | The on-disk half of a run's ledger. No source names it, and no workflow in the set writes one — a workflow's own account of a pass is the `runs` row it closes. The kind roster and the output directory are both arguments here, so what calls this is a deployment that mounted a directory rather than a canvas carrying one. |
 | `parser-config.ts` | The extraction a `sources.parser_config` row directs and the `contract` check that judges the reading: `ar-ingest` on the pull path, `ar-capture` on the push one. Its markup step is an injected parameter, because a library cannot import a sibling. |
 | `markup-select.ts` | The markup step that engine takes, wherever a source answers with markup: the fragments a `selector` field names, for `ar-ingest` and `ar-capture` alike. A Code node carries both markers and wires the two together in its own body, which is the only place they can meet. |
 | `source-health.ts` | The flag half of fail-flag-keep, for `ar-ingest` and `ar-capture`: what one fetch outcome makes of a source's counter, its two stamps and `sources.flagged`. It sets the flag and never clears it, because clearing it is an operator's act. |
@@ -363,16 +363,17 @@ side of that string records what the library is for.
 | `digest-assemble.ts` | `ar-digest`: the structured half of a briefing, assembled from the findings a pass selected. The ordering a digest shows them in — score first with an absent score behind every score there is, then the creation stamp, then the id — the sectioning by the domain's own category keys with one section for the findings under none, the heading vocabulary taken from `DomainSettings.findingsDisplayName`, the per-section counts where a section that was read and held nothing is `0` and a section nothing was read for is `null`, and the previous run's `errors` carried into a banner rather than dropped. The prose half is a model call the canvas makes; this decides everything about a period that is a function of the rows. A Code node carries this marker beside `sanitize-md.ts`'s, which is where the untrusted text is reduced. |
 | `research-brief.ts` | `ar-research`: the shape a research answer has to have before anything about it is recorded. A validator answering one sentence per fault that names the member and the rule and never the value — an answer that is not an object, one carrying no summary, one whose citations name a document the pass never offered — and a composer turning an accepted answer into the `entity_research.summary` and `payload` pair. A refused answer leaves the `research_pool` row unstamped rather than raising, so the intention comes round again; nothing here approves anything, which is `research_pool_approval_check`. It judges and never edits: a summary spelling the data fence is refused rather than cut, and the stem it tests for is a second copy of `prompt-frame.ts`'s that only a case holds equal. A Code node carries this marker beside `sanitize-md.ts`'s, which is where the accepted text is reduced. |
 
-Rows of that table divide by whether a source already names the
-library. Some are named by a marker in `workflows/src/` today; the
-rest are written down here ahead of the workflow that will name one,
-on the same reading the set at the top of this document is listed
-under. The phase that lands a workflow is the phase that writes its
-markers, so which side of that line a row sits on moves with the set
-rather than with the library, and the markers are where it is read
-rather than here. A library waiting for one is not waiting to be
-exercised — the default
-suite imports it, and a build reads it.
+Rows of that table divide by whether a source names the library, and
+the markers are where that is read rather than here. Which side a row
+sits on used to move with the set: the phase that landed a workflow
+wrote its markers, so a library could sit unnamed because the workflow
+it was written for had not arrived. That reading has outlived its
+state the way the one at the top of this document has. The set is
+complete, so a row is on the unnamed side because no source names the
+library rather than because a source is still coming, and it changes
+sides only when a workflow already in the set gains a node that names
+one. A library no marker names is not one nothing exercises — the
+default suite imports it, and a build reads it.
 
 `tests/build/lib-splice.test.ts` is where that roster lives, and the
 first thing the file does is hold it set-equal against what `src/lib/`
