@@ -40,7 +40,8 @@ async function preserveProgress(): Promise<void> {
     `* If the reference is not present on the plan check if the branch name (${branch}) carries one (e.g. feat/42-slug).`,
     '* Use the plan title as the PR title, include the issue reference if you found it, e.g. "Implement user authentication (#42)".',
     '* Create a concise yet descriptive PR description that summarizes the overall work done based on the completed plan and progress notes.',
-    '* Commit these changes, push and create a PR for review.',
+    `* Commit these changes and push them to the CURRENT branch (${branch}). Never create a branch here: the work under review is this branch's, and a second branch splits one plan across two reviews.`,
+    '* This step is IDEMPOTENT because a plan\'s own close-out may already have opened the PR. Read the state first with `gh pr list --head <branch> --state open --json number`: when it names a PR, push to it and update its body with `gh pr edit` so the description covers the promotions this session just committed; only create one with `gh pr create` when that list is empty. A `gh pr create` failure saying the PR already exists is the expected shape of that race, never a reason to open a second PR from a new branch.',
     '* Do not include Claude attribution in the commit or PR message.',
   ].join('\n');
 
@@ -48,7 +49,7 @@ async function preserveProgress(): Promise<void> {
   if (exitCode !== 0) {
     console.error(`\n❌ Failed to preserve progress (exit ${exitCode}). Please try again.`);
   } else {
-    console.log('\n✅ Progress preserved and PR created!');
+    console.log('\n✅ Progress preserved; PR opened or updated on this branch.');
   }
 }
 
