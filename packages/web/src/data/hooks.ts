@@ -51,6 +51,15 @@
  * stays `string[]` end to end; a number would hash the same and read
  * as a second key shape nobody declared.
  *
+ * {@link useTerms} borrows that same three-segment shape without
+ * being a row read, and it is the only one that does: its last
+ * segment is the CATEGORY the terms hang off rather than a term's own
+ * id, so `[slug, 'terms']` is every category's vocabulary and the
+ * segment below it is one category's. What the builder owns is the
+ * one-segment extension, not the meaning of the segment — and the
+ * prefix pays here too, {@link useSaveCategoryTerms} naming no
+ * category and so invalidating all of them at once.
+ *
  * {@link DEPLOYMENT_SCOPE} carries an `@`, which no domain slug does
  * (slugs are lowercase-kebab natural keys), so the two key spaces
  * cannot collide however either grows. A bare `['connectors']` would
@@ -146,9 +155,10 @@
  *   as the overlay's one real narrowing; the re-read is therefore
  *   correct and currently answers the same card. The key belongs to
  *   the WRITE, not to the overlay, which is what stops this list
- *   needing a revisit on swap day. A term LIST has no accessor at all
- *   yet — `./api.ts` records that ordering from the write's side —
- *   and its key joins this one with the read that needs it.
+ *   needing a revisit on swap day. Its SECOND key is the term list,
+ *   which arrived with {@link useTerms} exactly as this bullet used
+ *   to say it would — and as the two-segment PREFIX, the save naming
+ *   no category to key one on.
  * - {@link useApproveSourceConfig} invalidates NOTHING, which is the
  *   same ordering seen from its other end: the proposals read is not
  *   written yet, so there is no key a ruling can change. That is a
@@ -246,6 +256,7 @@ import {
   fetchSourceStatusCounts,
   fetchSources,
   fetchSpendSummary,
+  fetchTerms,
   fetchVerdicts,
   resolveSourceFailure,
   saveCategoryTerms,
@@ -317,6 +328,7 @@ export type DomainResource =
   | 'personas'
   | 'source-status-counts'
   | 'sources'
+  | 'terms'
   | 'verdicts';
 
 /**
@@ -862,6 +874,44 @@ export function useConnector(id: number): CachedRead<Connector> {
 }
 
 /**
+ * One category's vocabulary — what the lexicon's term editor lists.
+ *
+ * Filed under the SAME three-segment shape the single-row hooks use,
+ * and it is the one place that shape's last segment is not the
+ * answered row's id: a term list is keyed by the CATEGORY it hangs
+ * off, so `[slug, 'terms', '<categoryId>']` is one category's
+ * vocabulary and `[slug, 'terms']` is every category's. Built through
+ * {@link domainRowQueryKey} anyway rather than as a literal, because
+ * what that builder actually owns is the one-segment extension of a
+ * list key — and it is exactly the prefix relationship
+ * {@link useSaveCategoryTerms} invalidates on, a save naming no
+ * category and so having to reach all of them.
+ *
+ * The slug segment is what stops a term list outliving a domain
+ * switch. Category ids are unique across domains in the schema, so
+ * the id alone would be a correct-looking key that survives one — and
+ * `./api.ts` refuses a category of another domain, so the entry that
+ * survived would be one the read behind it now rejects.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @param categoryId - The `:entityId` route param, as a number.
+ * @returns Its terms in seed order, or the error state for an id this
+ * domain has no category for.
+ */
+export function useTerms(
+  domainSlug: string | null | undefined,
+  categoryId: number,
+): CachedRead<readonly Term[]> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useCache(
+    domainRowQueryKey(slug, 'terms', categoryId),
+    () => fetchTerms(slug, categoryId),
+    READ_OPTIONS,
+  );
+}
+
+/**
  * One cache key, as this module's two builders hand one over.
  *
  * Named so {@link useInvalidatingMutation} can take a LIST of keys
@@ -935,17 +985,28 @@ function useInvalidatingMutation<TVariables>(
 /**
  * Save one category's terms — what the lexicon editor's save does.
  *
- * Invalidates the category SUMMARIES: the lexicon grid renders a
- * counted card per category and its polarity split is a reading of the
- * very terms this saved, so that card is what a term save changes.
+ * TWO keys, which is the number its own docblock promised while the
+ * second one had no read behind it. The category SUMMARIES because
+ * the lexicon grid renders a counted card per category and its
+ * polarity split is a reading of the very terms this saved; and the
+ * TERM LIST itself, since {@link useTerms} is what the editor loaded
+ * through and reopening it must not show the value this save
+ * replaced.
  *
- * Two qualifications, both stated so a silent card is read as the
- * narrowing it is rather than as a broken invalidation. The re-read
- * answers the SAME card today, because `./api.ts` composes no draft
- * into `fetchCategorySummaries` and says why — the key names what this
- * write changes, which is a property of the write and not of the
- * fixture overlay. And the term LIST is not a key yet, so this is one
- * key today and two on the day that read lands.
+ * That second key is the LIST prefix `[slug, 'terms']` rather than
+ * one category's `[slug, 'terms', '<id>']`, and the write is why:
+ * `saveCategoryTerms` takes no category argument — every term names
+ * its own — so there is no single category this could name. Prefix
+ * matching turns that into the right behaviour rather than a
+ * compromise: every category's list is re-read, and only the one open
+ * has a reader to notice.
+ *
+ * One qualification stays, stated so a silent card is read as the
+ * narrowing it is rather than as a broken invalidation. The summaries
+ * re-read answers the SAME card today, because `./api.ts` composes no
+ * draft into `fetchCategorySummaries` and says why — the key names
+ * what this write changes, which is a property of the write and not
+ * of the fixture overlay.
  *
  * @param domainSlug - The `:domainSlug` route param.
  * @returns The mutation; `mutate` takes the category's whole term
@@ -958,7 +1019,10 @@ export function useSaveCategoryTerms(
 
   return useInvalidatingMutation<readonly Term[]>(
     (terms) => saveCategoryTerms(slug, terms),
-    [domainQueryKey(slug, 'category-summaries')],
+    [
+      domainQueryKey(slug, 'category-summaries'),
+      domainQueryKey(slug, 'terms'),
+    ],
   );
 }
 

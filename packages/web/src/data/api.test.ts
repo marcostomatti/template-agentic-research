@@ -1,6 +1,7 @@
 import type { ExportSubscriptionSummary } from './connectors';
 import type { DraftScope, DraftableRow } from './drafts';
 import type {
+  Category,
   Connector,
   Document,
   Domain,
@@ -37,7 +38,12 @@ import {
   recordDraft,
   resetDrafts,
 } from './drafts';
-import { listCategories, listTerms, summarizeCategories } from './lexicon';
+import {
+  TERMS,
+  listCategories,
+  listTerms,
+  summarizeCategories,
+} from './lexicon';
 import { listPersonas } from './personas';
 import { SETTINGS } from './settings';
 import { NOTIFICATIONS, OPERATOR, SEARCH_SUGGESTIONS } from './shell';
@@ -241,6 +247,21 @@ const SINGLE_ROW_NAMES: readonly string[] = [
 ];
 
 /**
+ * The names of the reads that answer a LIST hanging off one ROW.
+ *
+ * A literal for the reason {@link WRITE_NAMES} and
+ * {@link SINGLE_ROW_NAMES} are, and it buys the same thing against a
+ * shape neither of them describes: {@link api.fetchTerms} takes a
+ * slug and a CATEGORY id and answers that category's terms, so it
+ * refuses like a single-row read and answers like a list one. Handed
+ * a slug and nothing else — which is how the whole-surface blocks
+ * below call an accessor — it would reject over a category id of
+ * `undefined`, and the blocks would read that refusal as the
+ * unknown-slug one they were asking about.
+ */
+const CHILD_LIST_NAMES: readonly string[] = ['fetchTerms'];
+
+/**
  * Every READ export of `./api.ts`, resolved from the module itself.
  *
  * The read blocks are written over this rather than over the two
@@ -251,15 +272,17 @@ const SINGLE_ROW_NAMES: readonly string[] = [
  * is caught only there.
  *
  * The cast is from `unknown` and reaches exactly the members
- * {@link WRITE_NAMES} and {@link SINGLE_ROW_NAMES} did not claim, so
- * it asserts one thing: that every remaining export is callable with a
- * slug and nothing else. That claim is not free-floating — the arity
+ * {@link WRITE_NAMES}, {@link SINGLE_ROW_NAMES} and
+ * {@link CHILD_LIST_NAMES} did not claim, so it asserts one thing:
+ * that every remaining export is callable with a slug and nothing
+ * else. That claim is not free-floating — the arity
  * tests below are what make it, and they run over these same values.
  */
 const EXPORTED: readonly (readonly [string, BarrelAccessor])[] =
   EXPORTED_ENTRIES
     .filter(([name]) => !WRITE_NAMES.includes(name))
     .filter(([name]) => !SINGLE_ROW_NAMES.includes(name))
+    .filter(([name]) => !CHILD_LIST_NAMES.includes(name))
     .map(([name, accessor]) => [name, accessor as BarrelAccessor] as const);
 
 /**
@@ -352,9 +375,9 @@ beforeEach(() => {
 });
 
 describe('the barrel export surface', () => {
-  it('exports nothing beyond the four case tables below', () => {
+  it('exports nothing beyond the five case tables below', () => {
     // The guard the whole file rests on: every claim here is made
-    // over one of the three tables, so an accessor added to
+    // over one of the five populations, so an accessor added to
     // `./api.ts` and to none of them would be covered by nothing and
     // reported by nothing. Sorted on both sides because it is a set
     // claim.
@@ -363,6 +386,7 @@ describe('the barrel export surface', () => {
       ...DOMAIN_SCOPED.map((scoped) => scoped.name),
       ...UNSCOPED.map((unscoped) => unscoped.name),
       ...SINGLE_ROW_NAMES,
+      ...CHILD_LIST_NAMES,
       ...WRITE_NAMES,
     ].sort();
 
@@ -377,7 +401,7 @@ describe('the barrel export surface', () => {
     // The near-miss the set comparison above cannot catch on its own:
     // two table rows sharing a name would still produce the right set
     // while covering one accessor twice and another not at all. Over
-    // all three tables, so a write sharing a read's name — which
+    // all five populations, so a write sharing a read's name — which
     // would put one function under two sets of rules — is reported
     // here too.
     // Arrange
@@ -385,6 +409,7 @@ describe('the barrel export surface', () => {
       ...DOMAIN_SCOPED.map((scoped) => scoped.name),
       ...UNSCOPED.map((unscoped) => unscoped.name),
       ...SINGLE_ROW_NAMES,
+      ...CHILD_LIST_NAMES,
       ...WRITE_NAMES,
     ];
 
@@ -397,16 +422,17 @@ describe('the barrel export surface', () => {
     expect(duplicated).toEqual([]);
   });
 
-  it('reads through twenty-two accessors and writes through nine', () => {
+  it('reads through twenty-three accessors and writes through nine', () => {
     // Counted against literals so that moving an accessor from one
     // table to another is a failure here rather than a silent
     // re-reading of the rule. WHICH reads cannot be scoped is the
     // arity test further down; WHICH writes are is the write table's
-    // own. Twenty-two is ten list reads plus seven that take no
-    // domain plus the five that take a row id, and `./api.ts`'s own
-    // docblock spells the same figure from the other direction —
-    // EIGHT of those twenty-two take no slug, the eighth being
-    // `fetchConnector`, which lives in the single-row table.
+    // own. Twenty-three is ten list reads plus seven that take no
+    // domain plus the five that take a row id plus the one that takes
+    // a PARENT id, and `./api.ts`'s own docblock spells one figure
+    // inside it from the other direction — EIGHT of the
+    // twenty-three take no slug, the eighth being `fetchConnector`,
+    // which lives in the single-row table.
     // Arrange / Act
     const reads = Object.keys(api).filter((name) => name.startsWith('fetch'));
 
@@ -414,22 +440,27 @@ describe('the barrel export surface', () => {
     expect(DOMAIN_SCOPED).toHaveLength(10);
     expect(UNSCOPED).toHaveLength(7);
     expect(SINGLE_ROW_NAMES).toHaveLength(5);
+    expect(CHILD_LIST_NAMES).toHaveLength(1);
     expect(WRITE_NAMES).toHaveLength(9);
-    expect(reads).toHaveLength(22);
+    expect(reads).toHaveLength(23);
   });
 
-  it('splits the module three ways with nothing left over', () => {
+  it('splits the module four ways with nothing left over', () => {
     // What licenses every `EXPORTED`-driven block below to say
     // "every export": those blocks walk the SLUG-ONLY read half, so a
-    // write or a single-row read that failed to be recognised as one
-    // would fall into that set and be called with a slug and nothing
-    // else. Every side is resolved from the module — the two name
-    // lists are the only literals — so a name in either matching no
-    // export is reported rather than quietly narrowing the read set
-    // by nothing.
+    // write, a single-row read or a child-list read that failed to be
+    // recognised as one would fall into that set and be called with a
+    // slug and nothing else. Every side is resolved from the module —
+    // the three name lists are the only literals — so a name in any
+    // of them matching no export is reported rather than quietly
+    // narrowing the read set by nothing.
     // Arrange
     const exported = Object.keys(api);
-    const claimed = [...WRITE_NAMES, ...SINGLE_ROW_NAMES];
+    const claimed = [
+      ...WRITE_NAMES,
+      ...SINGLE_ROW_NAMES,
+      ...CHILD_LIST_NAMES,
+    ];
 
     // Act
     const missing = claimed.filter((name) => !exported.includes(name));
@@ -1052,14 +1083,15 @@ function draftOf(
 }
 
 describe('the draft overlay', () => {
-  it('partitions the barrel six ways with nothing left over', () => {
+  it('partitions the barrel seven ways with nothing left over', () => {
     // The guard the rest of this file's overlay claims rest on. Every
     // case below is made over `ROW_OVERLAID`, so an accessor that was
     // given an overlay and no case — or lost one and kept its case —
-    // would be covered by nothing and reported by nothing. The five
-    // populations are literals, so moving an accessor between them is
-    // a failure here rather than a silent re-reading of the rule. The
-    // writes are one of the five rather than excluded from the claim:
+    // would be covered by nothing and reported by nothing. The six
+    // name populations are literals, so moving an accessor between
+    // them is a failure here rather than a silent re-reading of the
+    // rule. The writes are one of them rather than excluded from the
+    // claim:
     // a write is not overlaid — it is what puts something there to
     // overlay — and leaving them out would make this a partition of
     // part of the module.
@@ -1069,6 +1101,7 @@ describe('the draft overlay', () => {
       ...DERIVED_OVERLAID,
       ...SINGLETON_OVERLAID,
       ...SINGLE_ROW_NAMES,
+      ...CHILD_LIST_NAMES,
       ...NOT_OVERLAID,
       ...WRITE_NAMES,
     ].sort();
@@ -1082,6 +1115,7 @@ describe('the draft overlay', () => {
     expect(DERIVED_OVERLAID).toHaveLength(1);
     expect(SINGLETON_OVERLAID).toHaveLength(1);
     expect(SINGLE_ROW_NAMES).toHaveLength(5);
+    expect(CHILD_LIST_NAMES).toHaveLength(1);
     expect(NOT_OVERLAID).toHaveLength(9);
   });
 
@@ -1873,6 +1907,336 @@ describe('the single-row reads', () => {
     // Assert
     expect(single).toEqual(draft);
     expect(rowAt(listed, 0)).toBe(single);
+  });
+});
+
+/**
+ * The seeded domain's taxonomy, read fresh each call.
+ *
+ * Resolved through `listCategories` rather than written as ids, for
+ * the reason every other case here reads its rows off the fixture: a
+ * taxonomy reordered or reseeded silently turns a hardcoded id into
+ * somebody else's category, and the cases would go on passing against
+ * a list nobody meant.
+ *
+ * @returns Its categories, in seed order.
+ */
+function seededCategories(): readonly Category[] {
+  return listCategories(getDomain(DEFAULT_DOMAIN_SLUG).id);
+}
+
+/**
+ * A term of the seeded domain's first category, and the field an
+ * editor really writes.
+ *
+ * `weight` rather than `pattern`, because a term editor's commonest
+ * edit is a magnitude and because no fixture row carries this value —
+ * which is the vacuity guard the overlay cases below rest on, asserted
+ * in a case of its own rather than assumed.
+ */
+const TERM_MARK = 41;
+
+describe('fetchTerms', () => {
+  it('takes the slug first and the category id second', () => {
+    // The structural pin, and the reason this read has a population of
+    // its own: it is neither of the two shapes the surface blocks
+    // partition the barrel into. A slug-only accessor would be called
+    // with one argument by every whole-surface block above, and a
+    // single-row read answers a row rather than a list.
+    // Arrange / Act / Assert
+    expect(api.fetchTerms.length).toBe(2);
+    expect(CHILD_LIST_NAMES).toEqual(['fetchTerms']);
+    expect(Object.keys(api)).toContain('fetchTerms');
+  });
+
+  it('rejects a category id no fixture carries', async () => {
+    // The refusal a stale bookmark actually produces, and it comes
+    // first because it is the one the editor has to render. The
+    // second assertion is what makes it a claim about the CATEGORY
+    // rather than about the terms: `listTerms` answers `[]` for this
+    // id quite happily, so an accessor that simply wrapped it would
+    // resolve here — with an empty editor over a category that does
+    // not exist, which reads as vocabulary somebody deleted.
+    // Arrange
+    const absent = absentIdFor(seededCategories());
+
+    const call = (): void => {
+      void api.fetchTerms(DEFAULT_DOMAIN_SLUG, absent).catch(() => undefined);
+    };
+
+    // Act / Assert
+    expect(listTerms(absent)).toEqual([]);
+    expect(call).not.toThrow();
+    await expect(api.fetchTerms(DEFAULT_DOMAIN_SLUG, absent)).rejects.toThrow(
+      `Unknown category id: ${absent}`,
+    );
+  });
+
+  it('rejects a category belonging to another domain', async () => {
+    // The refusal `./api.ts` adds on top of the fixture accessor, and
+    // the leak it exists to stop: `terms` is keyed by `category_id`
+    // alone, so this id answers the seeded domain's vocabulary
+    // whatever slug stood in the URL. The middle assertion is the
+    // vacuity guard — a category whose term list was empty would make
+    // this case pass against an accessor that leaked nothing to leak.
+    // Compared against the MISSING-category outcome in the same case,
+    // because the two being indistinguishable is itself the claim.
+    // Arrange
+    const category = rowAt(seededCategories(), 0);
+    const absent = absentIdFor(seededCategories());
+
+    // Act
+    const foreign = await outcomeOf(
+      (slug) => api.fetchTerms(slug, category.id),
+      SPARSE_DOMAIN_SLUG,
+    );
+    const missing = await outcomeOf(
+      (slug) => api.fetchTerms(slug, absent),
+      SPARSE_DOMAIN_SLUG,
+    );
+
+    // Assert
+    expect(listTerms(category.id)).not.toHaveLength(0);
+    expect(foreign).toBe(`rejected: Unknown category id: ${category.id}`);
+    expect(foreign.replace(String(category.id), String(absent))).toBe(missing);
+  });
+
+  it('rejects an unknown domain slug', async () => {
+    // With a real category id, so this must fail on the DOMAIN and
+    // cannot be the refusal above wearing a different message.
+    // Arrange
+    const category = rowAt(seededCategories(), 0);
+
+    // Act
+    const outcome = await outcomeOf(
+      (slug) => api.fetchTerms(slug, category.id),
+      UNKNOWN_SLUG,
+    );
+
+    // Assert
+    expect(outcome).toBe(REFUSAL);
+  });
+
+  it('refuses the domain before the category', async () => {
+    // The ORDER of the two refusals, which neither one alone can
+    // show. Both arguments are wrong here and the domain is what has
+    // to answer — a seam that looked the category up first would
+    // report a missing category for a domain that does not exist,
+    // which is a 404 about the wrong thing.
+    // Arrange
+    const absent = absentIdFor(seededCategories());
+
+    // Act
+    const outcome = await outcomeOf(
+      (slug) => api.fetchTerms(slug, absent),
+      UNKNOWN_SLUG,
+    );
+
+    // Assert
+    expect(outcome).toBe(REFUSAL);
+  });
+
+  it('answers nothing for a category that carries no terms', async () => {
+    // The empty state a term editor opens on, and NOT the refusal
+    // above: a category that exists and has no vocabulary is an
+    // ordinary answer. It is also the one case here whose subject the
+    // fixture does not carry — `./lexicon.ts` ships a seed in which
+    // every bucket has vocabulary and says why — so the claim is made
+    // in the two halves that are reachable. The loop covers every
+    // empty category there is, and the last assertion is what keeps
+    // its running zero times a documented property of the fixture
+    // rather than a case nobody noticed was vacuous: the day a
+    // category ships empty, that assertion reddens and this loop
+    // covers it with no edit. The composition case below is what
+    // carries the claim in the meantime.
+    // Arrange
+    const categories = seededCategories();
+    const empty = categories.filter(
+      (category) => listTerms(category.id).length === 0,
+    );
+
+    // Act
+    const answers = await Promise.all(empty.map(async (category) => ({
+      id: category.id,
+      answered: await api.fetchTerms(DEFAULT_DOMAIN_SLUG, category.id),
+    })));
+
+    // Assert
+    expect(categories).not.toHaveLength(0);
+    expect(answers.filter((entry) => entry.answered.length > 0)).toEqual([]);
+    expect(empty).toEqual([]);
+  });
+
+  it('answers exactly what the fixture lists, category by category', async () => {
+    // The composition claim, and what makes the empty answer above
+    // follow rather than needing a fixture nobody has: this accessor
+    // is `listTerms` behind an ownership check and an overlay, so
+    // whatever `listTerms` answers for a category is what this
+    // answers — including the `[]` it gives a category with no rows,
+    // which `./lexicon.test.ts` pins directly.
+    //
+    // Identity rather than equality on the rows, which is strictly
+    // more: `applyDrafts` hands undrafted rows back as the very
+    // objects it was given, so an accessor that rebuilt a plausible
+    // twin satisfies `toEqual` and fails here.
+    // Arrange
+    const categories = seededCategories();
+
+    // Act
+    const answers = await Promise.all(categories.map(async (category) => ({
+      id: category.id,
+      answered: await api.fetchTerms(DEFAULT_DOMAIN_SLUG, category.id),
+      stored: listTerms(category.id),
+    })));
+
+    // Assert
+    expect(answers).toHaveLength(categories.length);
+    answers.forEach((entry) => {
+      expect(entry.answered).toEqual(entry.stored);
+      expect(entry.answered.map((term, index) => term === entry.stored[index]))
+        .toEqual(entry.stored.map(() => true));
+    });
+    expect(answers.filter((entry) => entry.stored.length === 0)).toEqual([]);
+  });
+
+  it('answers one category\'s terms and no other category\'s', async () => {
+    // The near-miss the equality above cannot catch on its own: an
+    // accessor that ignored its id and answered the whole domain's
+    // vocabulary would disagree with `listTerms` per category — but
+    // one that answered the FIRST category every time would agree
+    // with `listTerms(first)` and be wrong for the rest. So the claim
+    // is made on the rows themselves, which each name the category
+    // they hang off.
+    // Arrange
+    const categories = seededCategories();
+
+    // Act
+    const answers = await Promise.all(categories.map(async (category) => ({
+      id: category.id,
+      strays: (await api.fetchTerms(DEFAULT_DOMAIN_SLUG, category.id))
+        .filter((term) => term.categoryId !== category.id),
+    })));
+
+    // Assert
+    expect(categories.length).toBeGreaterThan(1);
+    expect(answers.filter((entry) => entry.strays.length > 0)).toEqual([]);
+  });
+
+  it('edits a weight to a value no fixture term holds', () => {
+    // The vacuity guard for the three overlay cases below. A mark the
+    // stored row already carried would round-trip through the store
+    // perfectly and leave all three passing while proving nothing.
+    // Arrange / Act
+    const holders = TERMS.filter((term) => term.weight === TERM_MARK);
+
+    // Assert
+    expect(holders).toEqual([]);
+    expect(Object.keys(rowAt(TERMS, 0))).toContain('weight');
+  });
+
+  it('answers the drafted term', async () => {
+    // What this read landing closes: `saveCategoryTerms` has been
+    // recording under `terms` since it landed, with no read to show
+    // it. A term editor that reopened on the value its own save had
+    // just replaced is the failure the shared scope prevents.
+    // Arrange
+    const category = rowAt(seededCategories(), 0);
+    const stored = listTerms(category.id);
+    const target = rowAt(stored, 0);
+    const draft = { ...target, weight: TERM_MARK };
+
+    recordDraft(domainDraftScope(DEFAULT_DOMAIN_SLUG, 'terms'), draft);
+
+    // Act
+    const answered = await api.fetchTerms(DEFAULT_DOMAIN_SLUG, category.id);
+
+    // Assert
+    expect(answered.filter((term) => term.id === target.id)).toEqual([draft]);
+    expect(rowAt(answered, 0).weight).toBe(TERM_MARK);
+  });
+
+  it('leaves every unedited term identical to the fixture', async () => {
+    // Membership and order are the fixture's, and exactly one row is
+    // not the fixture's own object — the never-grows, never-reorders
+    // half of `applyDrafts`' guarantee, read through the accessor.
+    // Arrange
+    const category = rowAt(seededCategories(), 0);
+    const stored = listTerms(category.id);
+    const target = rowAt(stored, 0);
+
+    recordDraft(
+      domainDraftScope(DEFAULT_DOMAIN_SLUG, 'terms'),
+      { ...target, weight: TERM_MARK },
+    );
+
+    // Act
+    const answered = await api.fetchTerms(DEFAULT_DOMAIN_SLUG, category.id);
+    const compared = answered.map((term, index) => ({
+      id: term.id,
+      identical: term === stored[index],
+    }));
+
+    // Assert
+    expect(stored.length).toBeGreaterThan(1);
+    expect(answered.map((term) => term.id)).toEqual(stored.map((t) => t.id));
+    expect(compared.filter((entry) => !entry.identical)).toEqual([
+      { id: target.id, identical: false },
+    ]);
+  });
+
+  it('ignores a draft filed under another domain', async () => {
+    // The cross-domain guard, made from the side that can still make
+    // it. Reading a seeded category under the sparse slug is refused
+    // outright by the ownership check above, so the leak left to ask
+    // about is the other direction: an edit recorded under the SPARSE
+    // domain's scope for this very term must not reach the seeded
+    // read.
+    //
+    // Its LIMIT, which the file records elsewhere and which holds
+    // here: only one fixture domain carries rows, so a scope
+    // hardcoded to the SEEDED slug stays green through this. Closing
+    // that leg needs a second populated domain, not another
+    // assertion — and the write side, where the store files whatever
+    // scope it is handed, is where the claim is fully testable.
+    // Arrange
+    const category = rowAt(seededCategories(), 0);
+    const stored = listTerms(category.id);
+    const target = rowAt(stored, 0);
+
+    recordDraft(
+      domainDraftScope(SPARSE_DOMAIN_SLUG, 'terms'),
+      { ...target, weight: TERM_MARK },
+    );
+
+    // Act
+    const answered = await api.fetchTerms(DEFAULT_DOMAIN_SLUG, category.id);
+
+    // Assert
+    expect(answered).toEqual(stored);
+    expect(rowAt(answered, 0)).toBe(target);
+  });
+
+  it('shows what the matching write recorded', async () => {
+    // The two halves of the seam over one resource, end to end and
+    // through the barrel rather than through the store: a save an
+    // editor believes it made is visible to the read that would
+    // display it, on the very next call. Driven through
+    // `saveCategoryTerms` so a write filing under the wrong resource
+    // is reported here rather than by a store test that files it
+    // itself.
+    // Arrange
+    const category = rowAt(seededCategories(), 0);
+    const stored = listTerms(category.id);
+    const edited = stored.map((term) => ({ ...term, weight: TERM_MARK }));
+
+    // Act
+    await api.saveCategoryTerms(DEFAULT_DOMAIN_SLUG, edited);
+    const answered = await api.fetchTerms(DEFAULT_DOMAIN_SLUG, category.id);
+
+    // Assert
+    expect(answered).toEqual(edited);
+    expect(answered.map((term) => term.weight))
+      .toEqual(stored.map(() => TERM_MARK));
   });
 });
 

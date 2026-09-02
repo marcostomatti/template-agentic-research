@@ -100,6 +100,10 @@
  * {@link fetchPersonas} and {@link fetchConnectors} answer the drafted
  * rows themselves, through {@link deliverDomainRows} or — for the one
  * deployment-scoped resource — {@link CONNECTOR_DRAFTS}.
+ * {@link fetchTerms} answers them too and is the one member of that
+ * shape which builds its scope itself: its rows hang off a CATEGORY,
+ * so the ownership refusal has to run before there is a list to
+ * overlay at all.
  * {@link fetchSourceStatusCounts} COUNTS them, and composes
  * `countSourceStatuses` over the overlaid list rather than calling
  * `summarizeSources`; that is not a second policy but the very
@@ -141,33 +145,34 @@
  * delete a term; its polarity split can, once a term editor records
  * one, and that is what the narrowing costs.
  *
- * Two resources `./drafts.ts` declares have a WRITE here and no read
- * yet: `terms`, which {@link saveCategoryTerms} records, and
- * `source-proposals`, which {@link approveSourceConfig} does. That is
- * the one place this module knowingly stands against its own rule
- * about a save no read shows, and it is an ORDERING rather than a
- * decision — `fetchTerms` and `fetchSourceProposals` are the next two
- * accessors this file gains, and each arrives with the overlay its
- * write already files a draft for. Until then those two saves record
- * and nothing renders them, which is worth knowing before reading a
- * silent editor as a broken write.
+ * ONE resource `./drafts.ts` declares still has a WRITE here and no
+ * read: `source-proposals`, which {@link approveSourceConfig} records.
+ * That is the one place this module knowingly stands against its own
+ * rule about a save no read shows, and it is an ORDERING rather than
+ * a decision — `fetchSourceProposals` is the next accessor this file
+ * gains, and it arrives with the overlay its write already files a
+ * draft for. Until then that save records and nothing renders it,
+ * which is worth knowing before reading a silent editor as a broken
+ * write.
  *
- * What this barrel deliberately does NOT answer, so the next author
- * reads an omission rather than a gap: nothing lists a category's
- * terms, which is the same ordering the paragraph above records from
- * the write's side. It is one function and one test on the day a
- * surface needs it — and the fixture accessor it would wrap already
- * exists.
+ * `terms` was the other one and no longer is: {@link fetchTerms} is
+ * the read {@link saveCategoryTerms} had been recording ahead of, and
+ * the two now compose the same scope. What that closes is the whole
+ * of the gap — an edited term is visible to the editor that saved it,
+ * to a reopen of that editor, and to nothing else, `./lexicon.ts`'s
+ * summaries being the one narrowing this module states below.
  *
- * Two such days have arrived. {@link fetchEntities} was the first:
+ * Three such days have arrived. {@link fetchEntities} was the first:
  * the digest page joins its findings to their subjects, so the read
  * it needs is here rather than in the page. The five SINGLE-ROW reads
  * are the second, and they land AHEAD of their callers rather than
  * behind them: every modal sub-route still renders a placeholder over
  * its route parameter, which needs no read at all, while the editors
  * replacing those placeholders need exactly this. That ordering is
- * the same one the two unread writes above are recorded under, taken
- * the other way round.
+ * the same one the remaining unread write above is recorded under,
+ * taken the other way round. {@link fetchTerms} is the third and is
+ * both at once — a read landing ahead of its editor, and the one that
+ * a write here had been waiting for.
  *
  * The `fetch` prefix is not decoration either. The fixture layer's
  * verbs are `list`/`get`/`find`/`summarize`; changing the verb at the
@@ -205,6 +210,17 @@
  * row that is not there and 404 for a row that is not yours, since a
  * message telling them apart would report which ids exist under a
  * domain the caller was just refused.
+ *
+ * ## The read that is scoped twice
+ *
+ * {@link fetchTerms} is neither of the two shapes above, and it is
+ * named here rather than left to be met further down: it takes a slug
+ * AND a category id, and answers a LIST. The id is a PARENT's rather
+ * than the answered rows' own, which is the one place a reader
+ * counting `(slug, id)` accessors would file it in the wrong half —
+ * it refuses like a single-row read and answers like a list one. Its
+ * own docblock carries why the category is resolved before its terms
+ * are listed.
  *
  * ## The write half
  *
@@ -306,7 +322,7 @@ import {
   recordDraft,
   recordSingletonDraft,
 } from './drafts';
-import { findCategory, summarizeCategories } from './lexicon';
+import { findCategory, listTerms, summarizeCategories } from './lexicon';
 import { findPersona, listPersonas } from './personas';
 import { getSettings } from './settings';
 import { getOperator, listNotifications, listSearchSuggestions } from './shell';
@@ -1003,6 +1019,63 @@ export function fetchCategory(slug: string, id: number): Promise<Category> {
     slug,
     (domain) => ownedRow(domain, id, 'category', findCategory(id)),
   );
+}
+
+/**
+ * One category's vocabulary — what the lexicon's term editor lists.
+ *
+ * The one read here scoped by a domain AND by a row of it: terms hang
+ * off a category, so the pair the URL carries is the pair this takes.
+ * That makes it neither a domain list nor a single row, which is a
+ * shape worth naming rather than leaving to be inferred — the tests
+ * next door partition the barrel by exactly those two.
+ *
+ * The category is RESOLVED before its terms are listed, through the
+ * same {@link ownedRow} the single-row reads refuse with, and for the
+ * same reason one step removed. `terms` is keyed by `category_id`
+ * alone, so `listTerms(1)` answers the seeded domain's vocabulary
+ * whatever slug stood in the URL; a read that skipped the check would
+ * hand another domain's lexicon over and then lay THIS domain's
+ * drafts on top of it. Refusing with the category's own message
+ * rather than one about terms is what keeps this indistinguishable
+ * from {@link fetchCategory}'s refusal on the same id — the editor
+ * holds both reads on one route, and two different answers to one
+ * question is a modal rendering an error beside an empty list.
+ *
+ * A category that exists and carries no vocabulary is NOT that
+ * refusal: it answers `[]`, the ordinary empty state a term editor
+ * opens on. No fixture category is one, and `./lexicon.ts` says why
+ * the seed ships none — so that branch is reached from the tests
+ * beside this module and never from the running demo.
+ *
+ * Overlaid under `terms`, the resource {@link saveCategoryTerms} has
+ * been recording into since it landed. The two together close the gap
+ * this module's header recorded from the write's side: a save whose
+ * read did not exist yet.
+ *
+ * @param slug - A resolved domain slug, off `:domainSlug`.
+ * @param categoryId - The `categories.id` off `:entityId` — the
+ * category whose terms are wanted, never a term's own id.
+ * @returns Its terms in seed order, this tab's edits applied; rejects
+ * on a slug no domain carries, and on an id this domain has no
+ * category for.
+ */
+export function fetchTerms(
+  slug: string,
+  categoryId: number,
+): Promise<readonly Term[]> {
+  const scope = domainDraftScope(slug, 'terms');
+
+  return deliverForDomain(slug, (domain) => {
+    const category = ownedRow(
+      domain,
+      categoryId,
+      'category',
+      findCategory(categoryId),
+    );
+
+    return applyDrafts(scope, listTerms(category.id));
+  });
 }
 
 /**

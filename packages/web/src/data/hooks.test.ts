@@ -128,6 +128,7 @@ const DOMAIN_RESOURCE_GUARD: Readonly<Record<DomainResource, true>> = {
   personas: true,
   'source-status-counts': true,
   sources: true,
+  terms: true,
   verdicts: true,
 };
 
@@ -388,8 +389,14 @@ const WRITE_HOOKS: readonly WriteHookCase[] = [
     writes: 'saveCategoryTerms',
     hook: hooks.useSaveCategoryTerms,
     scoped: true,
-    // The category CARDS, not the terms: a term list has no read yet.
-    invalidates: (slug) => [[slug, 'category-summaries']],
+    // The category CARDS and the term LISTS. The second key is the
+    // two-segment PREFIX rather than one category's three: this write
+    // takes no category argument, so there is no single list it could
+    // name, and prefix matching re-reads every category's.
+    invalidates: (slug) => [
+      [slug, 'category-summaries'],
+      [slug, 'terms'],
+    ],
     variables: (probe) => [probe],
     readBack: (slug, probe) => applyDrafts(
       domainDraftScope(slug, 'terms'),
@@ -728,6 +735,52 @@ const SCOPED_SINGLE_ROW_HOOKS = SINGLE_ROW_HOOKS.filter(
 );
 
 /**
+ * One CHILD-LIST hook: a slug and a parent id in, a list out.
+ *
+ * A table of its own rather than a row of either neighbour, because
+ * neither describes it — {@link DomainHookCase} calls its hook with a
+ * slug alone, and {@link SingleRowHookCase}'s `resource` is asserted
+ * to be one a row is loaded out of, which is not what
+ * {@link hooks.useTerms} does with `terms`. One member today, and a
+ * table anyway so the surface partition below is a set claim over
+ * populations that add up to the module.
+ */
+interface ChildListHookCase {
+  /** Its exported name, for the completeness check and the titles. */
+  readonly name: string;
+  /** The second key segment, which its parent id sits under. */
+  readonly resource: DomainResource;
+  /** The hook under test. */
+  readonly hook: (domainSlug: string | null | undefined, id: number) => unknown;
+  /** The accessor its fetcher must call. */
+  readonly reads: (slug: string, id: number) => Promise<unknown>;
+  /** The key it must file under. */
+  readonly key: (slug: string, id: number) => string[];
+  /** A real parent row's id. */
+  readonly parent: number;
+  /** An id no parent row carries. */
+  readonly absent: number;
+  /** The singular noun a missing-parent refusal names. */
+  readonly label: string;
+}
+
+const CHILD_LIST_HOOKS: readonly ChildListHookCase[] = [
+  {
+    name: 'useTerms',
+    resource: 'terms',
+    hook: (domainSlug, id) => hooks.useTerms(domainSlug, id),
+    reads: (slug, id) => api.fetchTerms(slug, id),
+    key: (slug, id) => domainRowQueryKey(slug, 'terms', id),
+    parent: firstIdOf(listCategories(SEEDED_DOMAIN_ID), 'category'),
+    absent: absentIdOf(listCategories(SEEDED_DOMAIN_ID), 'category'),
+    // The CATEGORY's noun, not a term's: `./api.ts` refuses the parent
+    // and never reaches the list, so a refusal naming terms would be
+    // this file describing a message the module does not produce.
+    label: 'category',
+  },
+];
+
+/**
  * An id for the KEY cases, which do not need a row to exist.
  *
  * Deliberately not a fixture id: a key is a string list and nothing
@@ -1041,23 +1094,24 @@ describe('the hook surface', () => {
 
     // Assert
     expect(kept).toEqual([]);
-    expect(reads).toHaveLength(22);
+    expect(reads).toHaveLength(23);
     expect(writes).toHaveLength(9);
   });
 
   it('exports nothing beyond the hooks and the key layer', () => {
     // The guard the case tables rest on, in the shape `api.test.ts`
-    // uses: anything exported here and named in neither table is
-    // covered by nothing and reported by nothing. FOUR populations
-    // now — the write hooks and the single-row reads are each a
-    // differently shaped export and get their own table rather than an
-    // exemption, so a hook added to the module and to no table fails
-    // here.
+    // uses: anything exported here and named in no table is covered by
+    // nothing and reported by nothing. FIVE populations now — the
+    // write hooks, the single-row reads and the child-list read are
+    // each a differently shaped export and get their own table rather
+    // than an exemption, so a hook added to the module and to no table
+    // fails here.
     // Arrange
     const covered = [
       ...DOMAIN_HOOKS.map((scoped) => scoped.name),
       ...DEPLOYMENT_HOOKS.map((unscoped) => unscoped.name),
       ...SINGLE_ROW_HOOKS.map((single) => single.name),
+      ...CHILD_LIST_HOOKS.map((child) => child.name),
       ...WRITE_HOOKS.map((write) => write.name),
       ...KEY_LAYER,
     ].sort();
@@ -1072,13 +1126,15 @@ describe('the hook surface', () => {
   it('names each hook once', () => {
     // The near-miss the set comparison cannot catch: two rows sharing
     // a name still produce the right set while covering one hook twice
-    // and another not at all. Across all three tables, since a write
-    // hook colliding with a read hook's name is the same failure.
+    // and another not at all. Across all four hook tables, since a
+    // write hook colliding with a read hook's name is the same
+    // failure.
     // Arrange / Act
     const named = [
       ...DOMAIN_HOOKS.map((scoped) => scoped.name),
       ...DEPLOYMENT_HOOKS.map((unscoped) => unscoped.name),
       ...SINGLE_ROW_HOOKS.map((single) => single.name),
+      ...CHILD_LIST_HOOKS.map((child) => child.name),
       ...WRITE_HOOKS.map((write) => write.name),
     ];
 
@@ -1112,11 +1168,13 @@ describe('the hook surface', () => {
     const scoped = DOMAIN_HOOKS.map((entry) => entry.resource).sort();
     const unscoped = DEPLOYMENT_HOOKS.map((entry) => entry.resource).sort();
     const rows = SINGLE_ROW_HOOKS.map((entry) => entry.resource).sort();
+    const children = CHILD_LIST_HOOKS.map((entry) => entry.resource).sort();
 
     // Assert
     expect(repeated(scoped)).toEqual([]);
     expect(repeated(unscoped)).toEqual([]);
     expect(repeated(rows)).toEqual([]);
+    expect(repeated(children)).toEqual([]);
     expect(unscoped).toEqual([...DEPLOYMENT_RESOURCES].sort());
   });
 
@@ -1134,14 +1192,17 @@ describe('the hook surface', () => {
     const rows = SINGLE_ROW_HOOKS
       .filter((entry) => entry.scoped)
       .map((entry) => entry.resource);
+    const children = CHILD_LIST_HOOKS.map((entry) => entry.resource);
 
     // Act
-    const claimed = [...new Set([...listed, ...rows])].sort();
+    const claimed = [...new Set([...listed, ...rows, ...children])].sort();
     const shared = rows.filter((resource) => listed.includes(resource)).sort();
 
     // Assert
     expect(claimed).toEqual([...DOMAIN_RESOURCES].sort());
     expect(shared).toEqual(['findings', 'personas', 'sources']);
+    expect(children.filter((resource) => listed.includes(resource)
+      || rows.includes(resource))).toEqual([]);
   });
 
   it('scopes ten hooks by domain and leaves seven unscoped', () => {
@@ -1155,6 +1216,7 @@ describe('the hook surface', () => {
     expect(DOMAIN_HOOKS).toHaveLength(10);
     expect(DEPLOYMENT_HOOKS).toHaveLength(7);
     expect(SINGLE_ROW_HOOKS).toHaveLength(5);
+    expect(CHILD_LIST_HOOKS).toHaveLength(1);
     expect(SCOPED_SINGLE_ROW_HOOKS).toHaveLength(4);
     expect(SINGLE_ROW_HOOKS.filter((single) => !single.scoped)
       .map((single) => single.name)).toEqual(['useConnector']);
@@ -1377,6 +1439,138 @@ describe('what each hook files and reads', () => {
     });
   });
 
+  CHILD_LIST_HOOKS.forEach((child) => {
+    it(`rejects a parent id no fixture carries: ${child.name}`, async () => {
+      // Negative first, and it is the refusal a stale bookmark
+      // actually produces: the lexicon edit route matches any digits,
+      // so the id reaching this hook is a number nobody promised. The
+      // read behind it refuses the PARENT — a term list is not empty
+      // for a category that does not exist, it is unanswerable.
+      // Arrange
+      const read = recorded(child.hook(DEFAULT_DOMAIN_SLUG, child.absent));
+
+      // Act / Assert
+      await expect(read.fetcher()).rejects.toThrow(
+        `Unknown ${child.label} id: ${child.absent}`,
+      );
+    });
+
+    it(`rejects an unknown domain slug: ${child.name}`, async () => {
+      // With a real parent id, so this must fail on the DOMAIN and
+      // cannot be the refusal above under another message.
+      // Arrange
+      const read = recorded(child.hook('no-such-domain', child.parent));
+
+      // Act / Assert
+      await expect(read.fetcher()).rejects.toThrow(
+        'Unknown domain slug: no-such-domain',
+      );
+    });
+
+    it(`refuses another domain's parent: ${child.name}`, async () => {
+      // Every fixture row belongs to the seeded domain, so opening the
+      // editor on the sparse domain with a seeded category's id is the
+      // mismatched pair a stale bookmark produces. It must not
+      // resolve: the draft scope this read overlays comes off the
+      // SLUG, so a resolved answer would be one domain's edits laid
+      // over another domain's vocabulary.
+      // Arrange
+      const read = recorded(child.hook(SPARSE_DOMAIN_SLUG, child.parent));
+
+      // Act / Assert
+      await expect(read.fetcher()).rejects.toThrow(
+        `Unknown ${child.label} id: ${child.parent}`,
+      );
+    });
+
+    it(`files under its own parent key: ${child.name}`, () => {
+      // Both domains, because a hook that ignored its slug and
+      // hardcoded the default agrees on one of them — which is the
+      // whole of what stops a term list outliving a domain switch.
+      // Arrange
+      const expected = SLUGS.map((slug) => child.key(slug, child.parent));
+
+      // Act
+      const filed = SLUGS.map(
+        (slug) => recorded(child.hook(slug, child.parent)).key,
+      );
+
+      // Assert
+      expect(filed).toEqual(expected);
+      expect(filed[0]).not.toEqual(filed[1]);
+    });
+
+    it(`files a different entry per parent: ${child.name}`, () => {
+      // The cache failure that shows as wrong CONTENT rather than as a
+      // missing render: a hook that dropped the id from its key would
+      // file every category's vocabulary under one entry, and the
+      // second editor opened would render the first one's terms.
+      // Arrange / Act
+      const first = recorded(child.hook(DEFAULT_DOMAIN_SLUG, child.parent));
+      const other = recorded(child.hook(DEFAULT_DOMAIN_SLUG, child.absent));
+
+      // Assert
+      expect(first.key).not.toEqual(other.key);
+      expect(child.parent).not.toBe(child.absent);
+    });
+
+    it(`sits under the prefix its save invalidates: ${child.name}`, () => {
+      // The relationship `useSaveCategoryTerms` rests on. That write
+      // names no category, so it invalidates the two-segment key and
+      // relies on react-query's PREFIX matching to reach every
+      // category's list. Asserted as a real prefix rather than as two
+      // literals agreeing, so a key shape that stopped extending the
+      // list key is reported here.
+      // Arrange
+      const listKey = domainQueryKey(DEFAULT_DOMAIN_SLUG, child.resource);
+
+      // Act
+      const filed = recorded(child.hook(DEFAULT_DOMAIN_SLUG, child.parent)).key;
+
+      // Assert
+      expect(filed.slice(0, listKey.length)).toEqual(listKey);
+      expect(filed.length).toBe(listKey.length + 1);
+      expect(filed).toEqual([...listKey, String(child.parent)]);
+    });
+
+    it(`resolves an absent route param: ${child.name}`, async () => {
+      // What the editor gets to rely on: it hands over
+      // `useParams().domainSlug` raw, and the single-domain base's
+      // `undefined` still reaches the default domain. Both halves,
+      // because a hook resolving for the key and not for the fetcher
+      // would be filed under the right entry and fill it by asking
+      // `./api.ts` about a domain nothing carries.
+      // Arrange / Act
+      const absent = recorded(child.hook(undefined, child.parent));
+
+      // Assert
+      expect(absent.key)
+        .toEqual(child.key(DEFAULT_DOMAIN_SLUG, child.parent));
+      await expect(absent.fetcher()).resolves.toEqual(
+        await child.reads(DEFAULT_DOMAIN_SLUG, child.parent),
+      );
+    });
+
+    it(`reads through ./api.ts: ${child.name}`, async () => {
+      // The other half of the wiring. A hook filed under the right key
+      // but calling the wrong accessor renders someone else's list,
+      // and no key assertion can see it. By value rather than by
+      // identity, since every call of a list read builds a fresh
+      // array — the rows inside it are the fixture's own objects, and
+      // `api.test.ts` is where that is pinned.
+      // Arrange
+      const read = recorded(child.hook(DEFAULT_DOMAIN_SLUG, child.parent));
+
+      // Act
+      const answered = await read.fetcher();
+
+      // Assert
+      expect(answered)
+        .toEqual(await child.reads(DEFAULT_DOMAIN_SLUG, child.parent));
+      expect(answered as readonly unknown[]).not.toHaveLength(0);
+    });
+  });
+
   it('passes the shared read options to every hook', () => {
     // Identity, not equality: the point of one frozen object is that
     // there is a single place to read what this app's reads do. A hook
@@ -1396,6 +1590,12 @@ describe('what each hook files and reads', () => {
         name: single.name,
         options: recorded(single.hook(DEFAULT_DOMAIN_SLUG, single.row)).options,
       })),
+      ...CHILD_LIST_HOOKS.map((child) => ({
+        name: child.name,
+        options: recorded(
+          child.hook(DEFAULT_DOMAIN_SLUG, child.parent),
+        ).options,
+      })),
     ];
 
     // Act
@@ -1403,7 +1603,7 @@ describe('what each hook files and reads', () => {
 
     // Assert
     expect(borrowed).toEqual([]);
-    expect(reads).toHaveLength(22);
+    expect(reads).toHaveLength(23);
   });
 });
 
