@@ -116,7 +116,8 @@
  * and an id invented here would be one the service never issued.
  * Whether there is anything to save belongs to
  * `../../components/editorDraft.ts`, and what the JSON fallback
- * validates against belongs to that branch.
+ * validates against belongs to `./schema.ts`, which mirrors the same
+ * four members this module reads off a pasted line.
  */
 
 import type { PolarityFacet } from './cards';
