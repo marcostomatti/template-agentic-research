@@ -103,12 +103,13 @@ one costs something today to buy it.
   place the two meet — therefore the single place an unknown domain is
   refused.
 
-Seven of the seventeen accessors take NO slug at all, and any rule
+Eight of the twenty-two reads take NO slug at all, and any rule
 written over "every accessor" has to name them or it asserts something
-false about 40% of the barrel: `fetchDomains` (a domain list cannot be
-scoped to a domain), `fetchConnectors` (`connectors` carries no
-`domain_id` — a connector is a fact about the installation), and
-`fetchSettings`, `fetchSpendSummary`, `fetchSearchSuggestions`,
+false about a third of the read half: `fetchDomains` (a domain list
+cannot be scoped to a domain), `fetchConnectors` and `fetchConnector`
+(`connectors` carries no `domain_id` — a connector is a fact about
+the installation, so neither the list nor one row of it is scoped),
+and `fetchSettings`, `fetchSpendSummary`, `fetchSearchSuggestions`,
 `fetchNotifications`, `fetchOperator` (deployment-level, mirroring no
 table). Shell-visible: a domain switch leaves the whole topbar, the
 sidebar's spend figure, the tools surface's connector cards and the

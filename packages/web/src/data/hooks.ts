@@ -31,15 +31,25 @@
  * entry answering with the previous domain's rows until something
  * invalidates it.
  *
- * The seven reads that take no domain are filed under
+ * The eight reads that take no domain are filed under
  * {@link DEPLOYMENT_SCOPE} instead, and that asymmetry is the point
- * rather than an oversight. `./api.ts` names all seven and says why
+ * rather than an oversight. `./api.ts` names all eight and says why
  * each one is deployment-level; the cache consequence is that
  * prefixing them with the active slug would evict and re-read the
  * whole topbar, the sidebar's spend figure, the tools surface's
  * connector cards and the entire settings surface on every switch —
  * work whose answer cannot have changed, and a visible flash of
  * loading state in chrome that the spec says stays put.
+ *
+ * A SINGLE-ROW read files under its list's own two segments with the
+ * row's id appended — what {@link domainRowQueryKey} and
+ * {@link deploymentRowQueryKey} build. Sharing the list's prefix is
+ * the design and not a coincidence, and the invalidation section
+ * below is where it pays: a write that invalidates a list re-reads
+ * every row loaded out of that list too, so no mutation here had to
+ * grow a key when these five landed. The id is stringified so a key
+ * stays `string[]` end to end; a number would hash the same and read
+ * as a second key shape nobody declared.
  *
  * {@link DEPLOYMENT_SCOPE} carries an `@`, which no domain slug does
  * (slugs are lowercase-kebab natural keys), so the two key spaces
@@ -76,13 +86,16 @@
  * nothing measurable and hide exactly the staleness a real endpoint
  * would expose.
  *
- * ## Two omissions, so they read as decisions
+ * ## One omission, so it reads as a decision
  *
- * No hook loads a single row by id, because `./api.ts` exposes no
- * accessor that does — every modal sub-route in this plan renders a
- * placeholder carrying its route parameter. And nothing here is
- * `enabled`-gated: every read is unconditional, since a hook whose
- * accessor cannot fail to have an argument has nothing to wait for.
+ * Nothing here is `enabled`-gated: every read is unconditional, since
+ * a hook whose accessor cannot fail to have an argument has nothing
+ * to wait for. That covers the five SINGLE-ROW hooks too, which is
+ * the case it looks least true of: a modal sub-route renders only
+ * once its `:entityId` has matched a segment, so there is no interval
+ * in which the id is absent and the read has to be held back. A hook
+ * gated on an argument it always has would be a loading state that
+ * never resolves for the one reason nothing reports.
  *
  * ## A write invalidates keys; it does not write to the cache
  *
@@ -146,10 +159,12 @@
  *   expensive one.
  *
  * Keys match by PREFIX, which is load-bearing rather than incidental.
- * A two-segment key names one entry today because nothing files
- * anything longer; the single-row reads the editor modals want will
- * file under the same two segments, so these lists already cover them
- * and do not have to grow when they land.
+ * The single-row reads file under a list's own two segments with an
+ * id appended, so every list named in these key lists already covers
+ * whichever rows an editor has loaded out of it, and none of them had
+ * to grow when those reads landed. {@link useSaveSource} invalidating
+ * `[slug, 'sources']` re-reads the table AND the source a modal is
+ * holding open above it.
  *
  * The invalidation is AWAITED — `onSuccess` hands its promise back —
  * so a mutation stays pending until the reads it invalidated have
@@ -187,6 +202,7 @@ import type { ExportSubscriptionSummary } from './connectors';
 import type { CategorySummary } from './lexicon';
 import type { SourceStatusCounts } from './sources';
 import type {
+  Category,
   Connector,
   Document,
   Domain,
@@ -209,19 +225,24 @@ import { useCache, useMutation, useQueryClient } from '@ar/ui/cache';
 
 import {
   approveSourceConfig,
+  fetchCategory,
   fetchCategorySummaries,
+  fetchConnector,
   fetchConnectors,
   fetchDocuments,
   fetchDomain,
   fetchDomains,
   fetchEntities,
   fetchExportSubscriptions,
+  fetchFinding,
   fetchFindings,
   fetchNotifications,
   fetchOperator,
+  fetchPersona,
   fetchPersonas,
   fetchSearchSuggestions,
   fetchSettings,
+  fetchSource,
   fetchSourceStatusCounts,
   fetchSources,
   fetchSpendSummary,
@@ -279,9 +300,14 @@ export type RecordedWrite<TVariables> = ReturnType<
  *
  * Closed so a key cannot be built from a typo: `'finding'` for
  * `'findings'` would be a cache entry nothing else ever reads, which
- * is a refetch on every render and no error anywhere.
+ * is a refetch on every render and no error anywhere. `categories`
+ * and `category-summaries` are the one pair here that reads as such a
+ * typo and is not: the lexicon grid renders COUNTED summaries and the
+ * term editor loads the category row itself, so they are two shapes
+ * that would answer each other's readers if they shared a key.
  */
 export type DomainResource =
+  | 'categories'
   | 'category-summaries'
   | 'documents'
   | 'domain'
@@ -326,7 +352,7 @@ export const DEPLOYMENT_SCOPE = '@deployment';
  * no focus behaviour to pin, and what it does declare — which keys it
  * invalidates — is per hook rather than shared.
  *
- * One shared frozen object rather than a literal repeated seventeen
+ * One shared frozen object rather than a literal repeated twenty-two
  * times, so "what this app's reads do" is one line to read and one
  * line to change. Frozen because it is handed to every call: an
  * options object a caller could write through would change the
@@ -371,6 +397,50 @@ export function domainQueryKey(
  */
 export function deploymentQueryKey(resource: DeploymentResource): string[] {
   return [DEPLOYMENT_SCOPE, resource];
+}
+
+/**
+ * The cache key for ONE row of a domain's copy of a resource.
+ *
+ * Built ON TOP of {@link domainQueryKey} rather than beside it, which
+ * is what makes the prefix relationship this module's header rests on
+ * a property of the code instead of two literals agreeing: a row's key
+ * IS its list's key with one segment appended, so a change to the list
+ * key shape carries here without an edit.
+ *
+ * @param domainSlug - The `:domainSlug` route param; `undefined`,
+ * `null` or empty off the domain-scoped routes.
+ * @param resource - Which read this key is for.
+ * @param id - The row's own id, off `:entityId`.
+ * @returns A fresh three-segment key, the resolved slug first and the
+ * id stringified last.
+ */
+export function domainRowQueryKey(
+  domainSlug: string | null | undefined,
+  resource: DomainResource,
+  id: number,
+): string[] {
+  return [...domainQueryKey(domainSlug, resource), String(id)];
+}
+
+/**
+ * The cache key for ONE row of a resource the deployment owns.
+ *
+ * The same one-segment extension {@link domainRowQueryKey} performs,
+ * over the other half of the key space. One member today — a
+ * connector — and written as a builder anyway, because the alternative
+ * is a literal at the one call site, which is exactly how the two key
+ * spaces would start to drift apart.
+ *
+ * @param resource - Which read this key is for.
+ * @param id - The row's own id, off `:entityId`.
+ * @returns A fresh three-segment key under {@link DEPLOYMENT_SCOPE}.
+ */
+export function deploymentRowQueryKey(
+  resource: DeploymentResource,
+  id: number,
+): string[] {
+  return [...deploymentQueryKey(resource), String(id)];
 }
 
 /**
@@ -670,6 +740,123 @@ export function useOperator(): CachedRead<ProfileMenuUser> {
   return useCache(
     deploymentQueryKey('operator'),
     fetchOperator,
+    READ_OPTIONS,
+  );
+}
+
+/**
+ * One finding — what the digest's detail modal renders.
+ *
+ * The slug stays FIRST and the id is required, which is why these five
+ * spell their first parameter out rather than defaulting it: an
+ * optional parameter cannot precede a required one, and the id is not
+ * optional — a modal sub-route matched a segment to get here.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @param id - The `:entityId` route param, as a number.
+ * @returns The finding, or the error state for an id this domain has
+ * no finding for.
+ */
+export function useFinding(
+  domainSlug: string | null | undefined,
+  id: number,
+): CachedRead<Finding> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useCache(
+    domainRowQueryKey(slug, 'findings', id),
+    () => fetchFinding(slug, id),
+    READ_OPTIONS,
+  );
+}
+
+/**
+ * One source — what the sources surface's editor loads.
+ *
+ * Read by three of that surface's sub-routes, since the config
+ * approval and the failures list both name a source they do not edit.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @param id - The `:entityId` route param, as a number.
+ * @returns The source, or the error state for an id this domain has
+ * no source for.
+ */
+export function useSource(
+  domainSlug: string | null | undefined,
+  id: number,
+): CachedRead<Source> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useCache(
+    domainRowQueryKey(slug, 'sources', id),
+    () => fetchSource(slug, id),
+    READ_OPTIONS,
+  );
+}
+
+/**
+ * One persona — what the agents surface's editor loads.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @param id - The `:entityId` route param, as a number.
+ * @returns The persona, or the error state for an id this domain has
+ * no persona for.
+ */
+export function usePersona(
+  domainSlug: string | null | undefined,
+  id: number,
+): CachedRead<Persona> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useCache(
+    domainRowQueryKey(slug, 'personas', id),
+    () => fetchPersona(slug, id),
+    READ_OPTIONS,
+  );
+}
+
+/**
+ * One lexicon category — what the term editor is opened on.
+ *
+ * Filed under `categories` rather than under `category-summaries`,
+ * which the union's own docblock argues is the one confusable pair
+ * here: the grid reads counted summaries and this reads the row, and
+ * sharing a key would have each answering the other's reader.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @param id - The `:entityId` route param, as a number.
+ * @returns The category, or the error state for an id this domain has
+ * no category for.
+ */
+export function useCategory(
+  domainSlug: string | null | undefined,
+  id: number,
+): CachedRead<Category> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useCache(
+    domainRowQueryKey(slug, 'categories', id),
+    () => fetchCategory(slug, id),
+    READ_OPTIONS,
+  );
+}
+
+/**
+ * One connector — what the tools surface's editor loads.
+ *
+ * The one single-row hook that takes no slug, exactly as
+ * {@link useConnectors} takes none: `connectors` carries no
+ * `domain_id`, so the entry survives a domain switch and the editor
+ * above it does not reload.
+ *
+ * @param id - The `:entityId` route param, as a number.
+ * @returns The connector, or the error state for an id nothing
+ * carries.
+ */
+export function useConnector(id: number): CachedRead<Connector> {
+  return useCache(
+    deploymentRowQueryKey('connectors', id),
+    () => fetchConnector(id),
     READ_OPTIONS,
   );
 }

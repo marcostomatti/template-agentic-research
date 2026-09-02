@@ -6,7 +6,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { repeated } from '../test-support/repeated';
 
 import * as api from './api';
-import { DEFAULT_DOMAIN_SLUG, DOMAINS, SPARSE_DOMAIN_SLUG } from './domains';
+import { listConnectors } from './connectors';
+import { listFindings } from './digest';
+import {
+  DEFAULT_DOMAIN_SLUG,
+  DOMAINS,
+  SPARSE_DOMAIN_SLUG,
+  getDomain,
+} from './domains';
 import {
   applyDrafts,
   applySingletonDraft,
@@ -15,6 +22,9 @@ import {
   resetDrafts,
 } from './drafts';
 import * as hooks from './hooks';
+import { listCategories } from './lexicon';
+import { listPersonas } from './personas';
+import { listSources } from './sources';
 
 // All three of `@ar/ui/cache`'s hooks are replaced by recorders rather
 // than exercised, and that is what lets this file assert what the
@@ -74,7 +84,9 @@ const {
   DEPLOYMENT_SCOPE,
   READ_OPTIONS,
   deploymentQueryKey,
+  deploymentRowQueryKey,
   domainQueryKey,
+  domainRowQueryKey,
 } = hooks;
 
 /** What the recorder above hands back in place of a cache read. */
@@ -106,6 +118,7 @@ function recorded(value: unknown): RecordedRead {
  * would keep passing over a resource nothing files anything under.
  */
 const DOMAIN_RESOURCE_GUARD: Readonly<Record<DomainResource, true>> = {
+  categories: true,
   'category-summaries': true,
   documents: true,
   domain: true,
@@ -563,12 +576,174 @@ async function everyInvalidatedKey(): Promise<readonly (readonly string[])[]> {
   return filed;
 }
 
+/**
+ * The seeded domain's id, which is the only domain any fixture row
+ * belongs to.
+ */
+const SEEDED_DOMAIN_ID = getDomain(DEFAULT_DOMAIN_SLUG).id;
+
+/**
+ * The first row id of a fixture list, or a failure naming the list
+ * that came up empty.
+ *
+ * Read off the fixture rather than written down, for the reason
+ * `api.test.ts` gives: a reseeded table silently turns a hardcoded id
+ * into somebody else's row, and the case goes on passing.
+ *
+ * @param rows - The list to read.
+ * @param what - What it is, for the failure.
+ * @returns Its first row's id.
+ * @throws If the list is empty, which is the non-emptiness guard every
+ * fetcher case below rests on.
+ */
+function firstIdOf(
+  rows: readonly { readonly id: number }[],
+  what: string,
+): number {
+  const [row] = rows;
+
+  if (row === undefined) {
+    throw new Error(`No ${what} rows to read an id off.`);
+  }
+
+  return row.id;
+}
+
+/**
+ * An id no fixture row of a list carries, derived rather than written.
+ *
+ * @param rows - The rows the id must avoid.
+ * @param what - What they are, for the failure.
+ * @returns One greater than the largest.
+ */
+function absentIdOf(
+  rows: readonly { readonly id: number }[],
+  what: string,
+): number {
+  return firstIdOf(rows, what) === 0
+    ? 1
+    : Math.max(...rows.map((row) => row.id)) + 1;
+}
+
+/**
+ * One SINGLE-ROW hook, with everything a case needs to drive it.
+ *
+ * `hook` and `reads` are normalising WRAPPERS rather than the exports,
+ * because the five do not share a signature: {@link hooks.useConnector}
+ * takes an id alone, and handing it a slug would file the connector
+ * under a key built from the wrong argument. `key` is per case for the
+ * same reason — four rows sit under a domain and one under the
+ * deployment.
+ *
+ * `row` and `absent` are read off the fixtures rather than written, so
+ * the fetcher cases resolve against a real row and refuse against an
+ * id nothing can grow into.
+ */
+interface SingleRowHookCase {
+  /** Its exported name, for the completeness check and the titles. */
+  readonly name: string;
+  /** The key segment it shares with the list read beside it. */
+  readonly resource: string;
+  /** Whether it takes a domain slug at all. */
+  readonly scoped: boolean;
+  /** The hook under test, called uniformly. */
+  readonly hook: (domainSlug: string | null | undefined, id: number) => unknown;
+  /** The accessor its fetcher must call, called uniformly. */
+  readonly reads: (slug: string, id: number) => Promise<unknown>;
+  /** The key it must file under. */
+  readonly key: (slug: string, id: number) => string[];
+  /** A real fixture row's id. */
+  readonly row: number;
+  /** An id no fixture row carries. */
+  readonly absent: number;
+  /** The singular noun a missing-row refusal names. */
+  readonly label: string;
+}
+
+const SINGLE_ROW_HOOKS: readonly SingleRowHookCase[] = [
+  {
+    name: 'useFinding',
+    resource: 'findings',
+    scoped: true,
+    hook: (domainSlug, id) => hooks.useFinding(domainSlug, id),
+    reads: (slug, id) => api.fetchFinding(slug, id),
+    key: (slug, id) => domainRowQueryKey(slug, 'findings', id),
+    row: firstIdOf(listFindings(SEEDED_DOMAIN_ID), 'finding'),
+    absent: absentIdOf(listFindings(SEEDED_DOMAIN_ID), 'finding'),
+    label: 'finding',
+  },
+  {
+    name: 'useSource',
+    resource: 'sources',
+    scoped: true,
+    hook: (domainSlug, id) => hooks.useSource(domainSlug, id),
+    reads: (slug, id) => api.fetchSource(slug, id),
+    key: (slug, id) => domainRowQueryKey(slug, 'sources', id),
+    row: firstIdOf(listSources(SEEDED_DOMAIN_ID), 'source'),
+    absent: absentIdOf(listSources(SEEDED_DOMAIN_ID), 'source'),
+    label: 'source',
+  },
+  {
+    name: 'usePersona',
+    resource: 'personas',
+    scoped: true,
+    hook: (domainSlug, id) => hooks.usePersona(domainSlug, id),
+    reads: (slug, id) => api.fetchPersona(slug, id),
+    key: (slug, id) => domainRowQueryKey(slug, 'personas', id),
+    row: firstIdOf(listPersonas(SEEDED_DOMAIN_ID), 'persona'),
+    absent: absentIdOf(listPersonas(SEEDED_DOMAIN_ID), 'persona'),
+    label: 'persona',
+  },
+  {
+    name: 'useCategory',
+    resource: 'categories',
+    scoped: true,
+    hook: (domainSlug, id) => hooks.useCategory(domainSlug, id),
+    reads: (slug, id) => api.fetchCategory(slug, id),
+    key: (slug, id) => domainRowQueryKey(slug, 'categories', id),
+    row: firstIdOf(listCategories(SEEDED_DOMAIN_ID), 'category'),
+    absent: absentIdOf(listCategories(SEEDED_DOMAIN_ID), 'category'),
+    label: 'category',
+  },
+  {
+    // The one that takes no slug, so both wrappers drop it. The `_`
+    // prefix is what `noUnusedParameters` wants; eslint's own rule
+    // never asked for it, a parameter before a used one being invisible
+    // to `args: after-used`.
+    name: 'useConnector',
+    resource: 'connectors',
+    scoped: false,
+    hook: (_domainSlug, id) => hooks.useConnector(id),
+    reads: (_slug, id) => api.fetchConnector(id),
+    key: (_slug, id) => deploymentRowQueryKey('connectors', id),
+    row: firstIdOf(listConnectors(), 'connector'),
+    absent: absentIdOf(listConnectors(), 'connector'),
+    label: 'connector',
+  },
+];
+
+/** The single-row hooks a domain slug can be refused by. */
+const SCOPED_SINGLE_ROW_HOOKS = SINGLE_ROW_HOOKS.filter(
+  (single) => single.scoped,
+);
+
+/**
+ * An id for the KEY cases, which do not need a row to exist.
+ *
+ * Deliberately not a fixture id: a key is a string list and nothing
+ * about building one reads the store, so pinning these cases to a real
+ * row would suggest a dependency that is not there.
+ */
+const KEY_PROBE_ID = 4242;
+
 /** Everything this module exports that is not a hook. */
 const KEY_LAYER = [
   'DEPLOYMENT_SCOPE',
   'READ_OPTIONS',
   'deploymentQueryKey',
+  'deploymentRowQueryKey',
   'domainQueryKey',
+  'domainRowQueryKey',
 ];
 
 describe('the key builders', () => {
@@ -741,10 +916,79 @@ describe('the key builders', () => {
     // Arrange / Act
     const scoped = domainQueryKey(DEFAULT_DOMAIN_SLUG, 'findings');
     const unscoped = deploymentQueryKey('operator');
+    const row = domainRowQueryKey(DEFAULT_DOMAIN_SLUG, 'findings', 1);
+    const deploymentRow = deploymentRowQueryKey('connectors', 1);
 
     // Assert
     expect(domainQueryKey(DEFAULT_DOMAIN_SLUG, 'findings')).not.toBe(scoped);
     expect(deploymentQueryKey('operator')).not.toBe(unscoped);
+    expect(domainRowQueryKey(DEFAULT_DOMAIN_SLUG, 'findings', 1))
+      .not.toBe(row);
+    expect(deploymentRowQueryKey('connectors', 1)).not.toBe(deploymentRow);
+  });
+
+  it('files a row under its own list key with the id appended', () => {
+    // The prefix relationship this module's header rests on, asserted
+    // over BOTH halves of the key space and over every resource rather
+    // than at one example: `invalidateQueries` matches by prefix, so a
+    // row key that stopped extending its list's key would stop being
+    // re-read by the write that changed the list, and nothing else
+    // here would report it.
+    // Arrange
+    const scoped = SLUGS.flatMap(
+      (slug) => DOMAIN_RESOURCES.map((resource) => ({
+        row: domainRowQueryKey(slug, resource, KEY_PROBE_ID),
+        list: domainQueryKey(slug, resource),
+      })),
+    );
+    const unscoped = DEPLOYMENT_RESOURCES.map((resource) => ({
+      row: deploymentRowQueryKey(resource, KEY_PROBE_ID),
+      list: deploymentQueryKey(resource),
+    }));
+
+    // Act
+    const wrong = [...scoped, ...unscoped].filter(
+      (pair) => JSON.stringify(pair.row)
+        !== JSON.stringify([...pair.list, String(KEY_PROBE_ID)]),
+    );
+
+    // Assert
+    expect(wrong).toEqual([]);
+    expect(scoped).not.toHaveLength(0);
+    expect(unscoped).not.toHaveLength(0);
+  });
+
+  it('stringifies the row id', () => {
+    // A key of mixed types would hash the same under react-query and
+    // read as a second key shape nobody declared — and this module
+    // types both builders as `string[]`, which TypeScript would have
+    // no way to check if the id were spread in raw.
+    // Arrange / Act
+    const scoped = domainRowQueryKey(DEFAULT_DOMAIN_SLUG, 'sources', 12);
+    const unscoped = deploymentRowQueryKey('connectors', 12);
+
+    // Assert
+    expect(scoped).toEqual([DEFAULT_DOMAIN_SLUG, 'sources', '12']);
+    expect(unscoped).toEqual([DEPLOYMENT_SCOPE, 'connectors', '12']);
+    expect(scoped.filter((segment) => typeof segment !== 'string'))
+      .toEqual([]);
+  });
+
+  it('answers a different key per row', () => {
+    // The near-miss the shape checks above cannot catch: a builder
+    // that dropped the id entirely still produces a plausible key,
+    // and every row of a resource would then share one cache entry
+    // and answer with whichever row was read first.
+    // Arrange / Act
+    const first = domainRowQueryKey(DEFAULT_DOMAIN_SLUG, 'sources', 1);
+    const second = domainRowQueryKey(DEFAULT_DOMAIN_SLUG, 'sources', 2);
+    const list = domainQueryKey(DEFAULT_DOMAIN_SLUG, 'sources');
+
+    // Assert
+    expect(first).not.toEqual(second);
+    expect(first).not.toEqual(list);
+    expect(deploymentRowQueryKey('connectors', 1))
+      .not.toEqual(deploymentRowQueryKey('connectors', 2));
   });
 });
 
@@ -797,21 +1041,23 @@ describe('the hook surface', () => {
 
     // Assert
     expect(kept).toEqual([]);
-    expect(reads).toHaveLength(17);
+    expect(reads).toHaveLength(22);
     expect(writes).toHaveLength(9);
   });
 
   it('exports nothing beyond the hooks and the key layer', () => {
     // The guard the case tables rest on, in the shape `api.test.ts`
     // uses: anything exported here and named in neither table is
-    // covered by nothing and reported by nothing. THREE populations
-    // now, not two — the write hooks are a differently shaped export
-    // and get their own table rather than an exemption, so a mutation
-    // hook added to the module and to no table fails here.
+    // covered by nothing and reported by nothing. FOUR populations
+    // now — the write hooks and the single-row reads are each a
+    // differently shaped export and get their own table rather than an
+    // exemption, so a hook added to the module and to no table fails
+    // here.
     // Arrange
     const covered = [
       ...DOMAIN_HOOKS.map((scoped) => scoped.name),
       ...DEPLOYMENT_HOOKS.map((unscoped) => unscoped.name),
+      ...SINGLE_ROW_HOOKS.map((single) => single.name),
       ...WRITE_HOOKS.map((write) => write.name),
       ...KEY_LAYER,
     ].sort();
@@ -832,6 +1078,7 @@ describe('the hook surface', () => {
     const named = [
       ...DOMAIN_HOOKS.map((scoped) => scoped.name),
       ...DEPLOYMENT_HOOKS.map((unscoped) => unscoped.name),
+      ...SINGLE_ROW_HOOKS.map((single) => single.name),
       ...WRITE_HOOKS.map((write) => write.name),
     ];
 
@@ -854,27 +1101,63 @@ describe('the hook surface', () => {
       .toEqual(['saveConnector', 'saveSettings']);
   });
 
-  it('claims each resource exactly once', () => {
-    // Two hooks filing under one resource would share a cache entry
-    // and answer each other's data. Compared as sets against the union
-    // guards, so a resource no hook uses fails here too — that is a
-    // key space with a hole in it rather than a collision.
+  it('claims each resource exactly once per shape', () => {
+    // Two LIST hooks filing under one resource would share a cache
+    // entry and answer each other's data, and so would two row hooks.
+    // A list and a row hook sharing one is the opposite — the
+    // designed prefix relationship, which is why the claim is made per
+    // shape and the overlap is then pinned as a literal below rather
+    // than forbidden here.
     // Arrange / Act
     const scoped = DOMAIN_HOOKS.map((entry) => entry.resource).sort();
     const unscoped = DEPLOYMENT_HOOKS.map((entry) => entry.resource).sort();
+    const rows = SINGLE_ROW_HOOKS.map((entry) => entry.resource).sort();
 
     // Assert
-    expect(scoped).toEqual([...DOMAIN_RESOURCES].sort());
+    expect(repeated(scoped)).toEqual([]);
+    expect(repeated(unscoped)).toEqual([]);
+    expect(repeated(rows)).toEqual([]);
     expect(unscoped).toEqual([...DEPLOYMENT_RESOURCES].sort());
+  });
+
+  it('leaves no domain resource unclaimed and no row hook astray', () => {
+    // The hole-in-the-key-space claim, which the per-shape check above
+    // deliberately no longer makes: `categories` is named by a row
+    // hook and by no list hook, so the completeness question is about
+    // the UNION of the two tables. The overlap is a literal in the same
+    // case, so a row hook filed under `entities` — a resource nothing
+    // loads one row of — is reported rather than absorbed.
+    // Arrange
+    const listed: readonly string[] = DOMAIN_HOOKS.map(
+      (entry) => entry.resource,
+    );
+    const rows = SINGLE_ROW_HOOKS
+      .filter((entry) => entry.scoped)
+      .map((entry) => entry.resource);
+
+    // Act
+    const claimed = [...new Set([...listed, ...rows])].sort();
+    const shared = rows.filter((resource) => listed.includes(resource)).sort();
+
+    // Assert
+    expect(claimed).toEqual([...DOMAIN_RESOURCES].sort());
+    expect(shared).toEqual(['findings', 'personas', 'sources']);
   });
 
   it('scopes ten hooks by domain and leaves seven unscoped', () => {
     // The split `./api.ts` documents, asserted against literals so
     // that moving a read from one scope to the other is a failure here
-    // rather than a silent re-reading of the rule.
+    // rather than a silent re-reading of the rule. The single-row
+    // table's own split is the same claim for the shape that takes an
+    // id: four under a domain, and the connector under the deployment
+    // for the reason `useConnectors` is there too.
     // Arrange / Act / Assert
     expect(DOMAIN_HOOKS).toHaveLength(10);
     expect(DEPLOYMENT_HOOKS).toHaveLength(7);
+    expect(SINGLE_ROW_HOOKS).toHaveLength(5);
+    expect(SCOPED_SINGLE_ROW_HOOKS).toHaveLength(4);
+    expect(SINGLE_ROW_HOOKS.filter((single) => !single.scoped)
+      .map((single) => single.name)).toEqual(['useConnector']);
   });
 });
 
@@ -970,6 +1253,130 @@ describe('what each hook files and reads', () => {
     });
   });
 
+  SINGLE_ROW_HOOKS.forEach((single) => {
+    it(`defers a missing row to its fetcher: ${single.name}`, async () => {
+      // First, because it is the refusal a modal sub-route actually
+      // produces: the route matches any digits at all, so the id
+      // reaching the hook is a number nobody promised. The `typeof` is
+      // the half that can fail — a hook that called its accessor in
+      // its own body would fill this slot with an already-rejecting
+      // promise, and an unhandled rejection is not an error state a
+      // page can render.
+      // Arrange
+      const read = recorded(single.hook(DEFAULT_DOMAIN_SLUG, single.absent));
+
+      // Act / Assert
+      expect(typeof read.fetcher).toBe('function');
+      await expect(read.fetcher()).rejects.toThrow(
+        `Unknown ${single.label} id: ${single.absent}`,
+      );
+    });
+  });
+
+  SCOPED_SINGLE_ROW_HOOKS.forEach((single) => {
+    it(`defers an unknown domain to its fetcher: ${single.name}`, async () => {
+      // The other refusal, with a REAL row id so the two cannot be
+      // confused: this has to fail on the domain, which is what says
+      // the hook passed its slug through rather than resolving it to
+      // something the accessor was happy with.
+      // Arrange
+      const read = recorded(single.hook('no-such-domain', single.row));
+
+      // Act / Assert
+      expect(typeof read.fetcher).toBe('function');
+      await expect(read.fetcher()).rejects.toThrow(
+        'Unknown domain slug: no-such-domain',
+      );
+    });
+
+    it(`refuses another domain's row: ${single.name}`, async () => {
+      // The seam's ownership refusal, reached through the hook. Every
+      // fixture row belongs to the seeded domain, so opening a modal
+      // on the sparse domain with a seeded row's id is the mismatched
+      // pair a stale bookmark produces — and it must not resolve,
+      // because the draft scope this read overlays comes off the SLUG.
+      // Arrange
+      const read = recorded(single.hook(SPARSE_DOMAIN_SLUG, single.row));
+
+      // Act / Assert
+      await expect(read.fetcher()).rejects.toThrow(
+        `Unknown ${single.label} id: ${single.row}`,
+      );
+    });
+
+    it(`files under its own row key: ${single.name}`, () => {
+      // Both domains, because a hook that ignored its slug and
+      // hardcoded the default agrees on one of them. The expected side
+      // is built by this file's own destructured builder, so a hook
+      // that stopped extending its list's key fails here as well as in
+      // the prefix case above.
+      // Arrange
+      const expected = SLUGS.map((slug) => single.key(slug, single.row));
+
+      // Act
+      const filed = SLUGS.map(
+        (slug) => recorded(single.hook(slug, single.row)).key,
+      );
+
+      // Assert
+      expect(filed).toEqual(expected);
+    });
+
+    it(`resolves an absent route param: ${single.name}`, async () => {
+      // What the modals get to rely on: they hand over
+      // `useParams().domainSlug` raw, and the single-domain base's
+      // `undefined` still reaches the default domain. Asserted on BOTH
+      // halves, because a hook that resolved for the key and not for
+      // the fetcher would be filed under the right entry and fill it
+      // by asking `./api.ts` about a domain nothing carries.
+      // Arrange / Act
+      const absent = recorded(single.hook(undefined, single.row));
+
+      // Assert
+      expect(absent.key).toEqual(single.key(DEFAULT_DOMAIN_SLUG, single.row));
+      await expect(absent.fetcher()).resolves.toEqual(
+        await single.reads(DEFAULT_DOMAIN_SLUG, single.row),
+      );
+    });
+  });
+
+  SINGLE_ROW_HOOKS.forEach((single) => {
+    it(`files a different entry per row: ${single.name}`, () => {
+      // The cache failure that shows up as wrong CONTENT rather than
+      // as a missing render: a hook that dropped the id from its key
+      // would file every row of a resource under one entry, and the
+      // second modal opened would render the first one's record.
+      // Arrange / Act
+      const first = recorded(single.hook(DEFAULT_DOMAIN_SLUG, single.row)).key;
+      const other = recorded(
+        single.hook(DEFAULT_DOMAIN_SLUG, single.absent),
+      ).key;
+
+      // Assert
+      expect(first).not.toEqual(other);
+      expect(single.row).not.toBe(single.absent);
+    });
+
+    it(`reads through ./api.ts: ${single.name}`, async () => {
+      // The other half of the wiring. A hook filed under the right key
+      // but calling the wrong accessor renders someone else's record,
+      // and no key assertion can see it. Compared by IDENTITY, because
+      // an undrafted row comes back as the very object the fixture
+      // holds — two accessors happening to agree by value would still
+      // be two accessors.
+      // Arrange
+      const fetcher = recorded(
+        single.hook(DEFAULT_DOMAIN_SLUG, single.row),
+      ).fetcher;
+
+      // Act
+      const answered = await fetcher();
+
+      // Assert
+      expect(answered).toBe(await single.reads(DEFAULT_DOMAIN_SLUG, single.row));
+    });
+  });
+
   it('passes the shared read options to every hook', () => {
     // Identity, not equality: the point of one frozen object is that
     // there is a single place to read what this app's reads do. A hook
@@ -985,6 +1392,10 @@ describe('what each hook files and reads', () => {
         name: unscoped.name,
         options: recorded(unscoped.hook()).options,
       })),
+      ...SINGLE_ROW_HOOKS.map((single) => ({
+        name: single.name,
+        options: recorded(single.hook(DEFAULT_DOMAIN_SLUG, single.row)).options,
+      })),
     ];
 
     // Act
@@ -992,7 +1403,7 @@ describe('what each hook files and reads', () => {
 
     // Assert
     expect(borrowed).toEqual([]);
-    expect(reads).toHaveLength(17);
+    expect(reads).toHaveLength(22);
   });
 });
 

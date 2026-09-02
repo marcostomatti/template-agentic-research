@@ -222,6 +222,25 @@ const WRITE_NAMES: readonly string[] = [
 ];
 
 /**
+ * The names of the five SINGLE-ROW reads.
+ *
+ * A literal for the reason {@link WRITE_NAMES} is one, and it buys the
+ * same thing: these are reads, but they take an id as well as a slug,
+ * so the whole-surface blocks below — which call an accessor with a
+ * slug and nothing else — would hand one of them `undefined` for its
+ * row and read the resulting refusal as the wrong one entirely. A
+ * THIRD population rather than an exemption filter, so a read of this
+ * shape cannot hide among the ones that take a slug alone.
+ */
+const SINGLE_ROW_NAMES: readonly string[] = [
+  'fetchFinding',
+  'fetchSource',
+  'fetchPersona',
+  'fetchConnector',
+  'fetchCategory',
+];
+
+/**
  * Every READ export of `./api.ts`, resolved from the module itself.
  *
  * The read blocks are written over this rather than over the two
@@ -232,14 +251,15 @@ const WRITE_NAMES: readonly string[] = [
  * is caught only there.
  *
  * The cast is from `unknown` and reaches exactly the members
- * {@link WRITE_NAMES} did not claim, so it asserts one thing: that
- * every remaining export is callable with a slug and nothing else.
- * That claim is not free-floating — the arity tests below are what
- * make it, and they run over these same values.
+ * {@link WRITE_NAMES} and {@link SINGLE_ROW_NAMES} did not claim, so
+ * it asserts one thing: that every remaining export is callable with a
+ * slug and nothing else. That claim is not free-floating — the arity
+ * tests below are what make it, and they run over these same values.
  */
 const EXPORTED: readonly (readonly [string, BarrelAccessor])[] =
   EXPORTED_ENTRIES
     .filter(([name]) => !WRITE_NAMES.includes(name))
+    .filter(([name]) => !SINGLE_ROW_NAMES.includes(name))
     .map(([name, accessor]) => [name, accessor as BarrelAccessor] as const);
 
 /**
@@ -332,7 +352,7 @@ beforeEach(() => {
 });
 
 describe('the barrel export surface', () => {
-  it('exports nothing beyond the three case tables below', () => {
+  it('exports nothing beyond the four case tables below', () => {
     // The guard the whole file rests on: every claim here is made
     // over one of the three tables, so an accessor added to
     // `./api.ts` and to none of them would be covered by nothing and
@@ -342,6 +362,7 @@ describe('the barrel export surface', () => {
     const covered = [
       ...DOMAIN_SCOPED.map((scoped) => scoped.name),
       ...UNSCOPED.map((unscoped) => unscoped.name),
+      ...SINGLE_ROW_NAMES,
       ...WRITE_NAMES,
     ].sort();
 
@@ -363,6 +384,7 @@ describe('the barrel export surface', () => {
     const named = [
       ...DOMAIN_SCOPED.map((scoped) => scoped.name),
       ...UNSCOPED.map((unscoped) => unscoped.name),
+      ...SINGLE_ROW_NAMES,
       ...WRITE_NAMES,
     ];
 
@@ -375,37 +397,48 @@ describe('the barrel export surface', () => {
     expect(duplicated).toEqual([]);
   });
 
-  it('reads through seventeen accessors and writes through nine', () => {
+  it('reads through twenty-two accessors and writes through nine', () => {
     // Counted against literals so that moving an accessor from one
     // table to another is a failure here rather than a silent
-    // re-reading of the rule. WHICH seven reads cannot be scoped is
-    // the arity test further down; WHICH writes are is the write
-    // table's own.
-    // Arrange / Act / Assert
+    // re-reading of the rule. WHICH reads cannot be scoped is the
+    // arity test further down; WHICH writes are is the write table's
+    // own. Twenty-two is ten list reads plus seven that take no
+    // domain plus the five that take a row id, and `./api.ts`'s own
+    // docblock spells the same figure from the other direction —
+    // EIGHT of those twenty-two take no slug, the eighth being
+    // `fetchConnector`, which lives in the single-row table.
+    // Arrange / Act
+    const reads = Object.keys(api).filter((name) => name.startsWith('fetch'));
+
+    // Assert
     expect(DOMAIN_SCOPED).toHaveLength(10);
     expect(UNSCOPED).toHaveLength(7);
+    expect(SINGLE_ROW_NAMES).toHaveLength(5);
     expect(WRITE_NAMES).toHaveLength(9);
+    expect(reads).toHaveLength(22);
   });
 
-  it('splits the module into reads and writes with nothing left over', () => {
+  it('splits the module three ways with nothing left over', () => {
     // What licenses every `EXPORTED`-driven block below to say
-    // "every export": those blocks walk the READ half, so a write
-    // that failed to be recognised as one would fall into the read
-    // set and be called with a slug and no payload. Both halves are
-    // resolved from the module — `WRITE_NAMES` is the only literal —
-    // so a name in that list matching no export is reported rather
-    // than quietly narrowing the read set by nothing.
+    // "every export": those blocks walk the SLUG-ONLY read half, so a
+    // write or a single-row read that failed to be recognised as one
+    // would fall into that set and be called with a slug and nothing
+    // else. Every side is resolved from the module — the two name
+    // lists are the only literals — so a name in either matching no
+    // export is reported rather than quietly narrowing the read set
+    // by nothing.
     // Arrange
     const exported = Object.keys(api);
+    const claimed = [...WRITE_NAMES, ...SINGLE_ROW_NAMES];
 
     // Act
-    const missing = WRITE_NAMES.filter((name) => !exported.includes(name));
+    const missing = claimed.filter((name) => !exported.includes(name));
 
     // Assert
     expect(missing).toEqual([]);
-    expect(EXPORTED).toHaveLength(exported.length - WRITE_NAMES.length);
+    expect(EXPORTED).toHaveLength(exported.length - claimed.length);
     expect(EXPORTED.map(([name]) => name).filter(
-      (name) => WRITE_NAMES.includes(name),
+      (name) => claimed.includes(name),
     )).toEqual([]);
   });
 });
@@ -671,10 +704,12 @@ describe('the unknown-slug rule, over the module export surface', () => {
     // satisfy the lot at once. The counts are literals rather than a
     // comparison against the tables above, so moving an accessor from
     // one side of the rule to the other fails here instead of being
-    // tracked silently; the 7 is what `./api.ts`'s own docblock says
-    // about its unscoped READS, which is the sentence this pins. The
-    // writes obey the same rule and are exercised separately, because
-    // calling one of them takes a payload as well as a slug.
+    // tracked silently. The 7 is the SLUG-ONLY share of what
+    // `./api.ts`'s docblock counts as eight unscoped reads: its
+    // eighth is `fetchConnector`, which takes a row id instead and is
+    // exercised in the single-row block. The writes obey the same
+    // rule and are exercised separately too, because calling one of
+    // them takes a payload as well as a slug.
     // Arrange
     const exported = EXPORTED.map(([name]) => name);
 
@@ -1017,7 +1052,7 @@ function draftOf(
 }
 
 describe('the draft overlay', () => {
-  it('partitions the barrel into overlaid, derived, singleton, untouched and written', () => {
+  it('partitions the barrel six ways with nothing left over', () => {
     // The guard the rest of this file's overlay claims rest on. Every
     // case below is made over `ROW_OVERLAID`, so an accessor that was
     // given an overlay and no case — or lost one and kept its case —
@@ -1033,6 +1068,7 @@ describe('the draft overlay', () => {
       ...ROW_OVERLAID.map((overlaid) => overlaid.name),
       ...DERIVED_OVERLAID,
       ...SINGLETON_OVERLAID,
+      ...SINGLE_ROW_NAMES,
       ...NOT_OVERLAID,
       ...WRITE_NAMES,
     ].sort();
@@ -1045,6 +1081,7 @@ describe('the draft overlay', () => {
     expect(ROW_OVERLAID).toHaveLength(6);
     expect(DERIVED_OVERLAID).toHaveLength(1);
     expect(SINGLETON_OVERLAID).toHaveLength(1);
+    expect(SINGLE_ROW_NAMES).toHaveLength(5);
     expect(NOT_OVERLAID).toHaveLength(9);
   });
 
@@ -1372,6 +1409,470 @@ describe('the overlay behind the export join', () => {
 
     // Assert
     expect(outcome).toBe(`rejected: Unknown connector id: ${absent}`);
+  });
+});
+
+/**
+ * One SINGLE-ROW read, with everything a case needs to drive it
+ * without knowing which one it is holding.
+ *
+ * `read` is a normalising WRAPPER rather than the export, because the
+ * five do not share a signature — four take a slug and an id and
+ * {@link api.fetchConnector} takes the id alone. `accessor` holds the
+ * export ITSELF beside it, so `Function.length` still reports the real
+ * arity and the pin below is a claim about `./api.ts` rather than
+ * about this file's wrappers.
+ *
+ * `scopeFor` is `null` for the one read that is deliberately not
+ * overlaid, which is what turns that narrowing into a row of the table
+ * rather than an accessor quietly missing from it.
+ */
+interface SingleRowCase {
+  /** Its exported name, for the completeness check and the titles. */
+  readonly name: string;
+  /** The accessor, called uniformly. */
+  readonly read: (slug: string, id: number) => Promise<unknown>;
+  /** The export itself, for the arity pin. */
+  readonly accessor: (...args: never[]) => Promise<unknown>;
+  /** Whether it refuses a domain at all. */
+  readonly scoped: boolean;
+  /** The singular noun its refusal names. */
+  readonly label: string;
+  /** What the fixture layer stores for that domain, read directly. */
+  readonly storedRows: (slug: string) => readonly DraftableRow[];
+  /** Where a draft of one of those rows is filed, or null if none is. */
+  readonly scopeFor: ((slug: string) => DraftScope) | null;
+  /** A field the surface's editor really writes. */
+  readonly field: string;
+  /** What to write into it. Never a value the fixture already holds. */
+  readonly mark: unknown;
+}
+
+const SINGLE_ROW: readonly SingleRowCase[] = [
+  {
+    name: 'fetchFinding',
+    read: (slug, id) => api.fetchFinding(slug, id),
+    accessor: api.fetchFinding,
+    scoped: true,
+    label: 'finding',
+    storedRows: (slug) => listFindings(getDomain(slug).id),
+    scopeFor: (slug) => domainDraftScope(slug, 'findings'),
+    field: 'verdict',
+    mark: 'drafted-row-verdict',
+  },
+  {
+    name: 'fetchSource',
+    read: (slug, id) => api.fetchSource(slug, id),
+    accessor: api.fetchSource,
+    scoped: true,
+    label: 'source',
+    storedRows: (slug) => listSources(getDomain(slug).id),
+    scopeFor: (slug) => domainDraftScope(slug, 'sources'),
+    field: 'endpoint',
+    mark: 'https://drafted-row.example.test/feed',
+  },
+  {
+    name: 'fetchPersona',
+    read: (slug, id) => api.fetchPersona(slug, id),
+    accessor: api.fetchPersona,
+    scoped: true,
+    label: 'persona',
+    storedRows: (slug) => listPersonas(getDomain(slug).id),
+    scopeFor: (slug) => domainDraftScope(slug, 'personas'),
+    field: 'systemText',
+    mark: 'Drafted row system text.',
+  },
+  {
+    // The one that takes no slug, so the wrapper drops it. The `_`
+    // prefix is what `noUnusedParameters` wants and eslint never asked
+    // for — a parameter before a used one is invisible to the lint
+    // rule and reported by tsc whatever its position.
+    name: 'fetchConnector',
+    read: (_slug, id) => api.fetchConnector(id),
+    accessor: api.fetchConnector,
+    scoped: false,
+    label: 'connector',
+    storedRows: () => listConnectors(),
+    scopeFor: () => deploymentDraftScope('connectors'),
+    field: 'name',
+    mark: 'drafted-row-connector',
+  },
+  {
+    // The one that is NOT overlaid, and the narrowing `./api.ts`
+    // states: the lexicon editor saves a category's TERMS, so there is
+    // no edit to a category row for an overlay to apply.
+    name: 'fetchCategory',
+    read: (slug, id) => api.fetchCategory(slug, id),
+    accessor: api.fetchCategory,
+    scoped: true,
+    label: 'category',
+    storedRows: (slug) => listCategories(getDomain(slug).id),
+    scopeFor: null,
+    field: 'name',
+    mark: 'Drafted category name',
+  },
+];
+
+/** The single-row reads a domain slug can be refused by. */
+const SCOPED_SINGLE_ROW = SINGLE_ROW.filter((single) => single.scoped);
+
+/** The single-row reads whose answer this tab's edits reach. */
+const OVERLAID_SINGLE_ROW = SINGLE_ROW.filter(
+  (single) => single.scopeFor !== null,
+);
+
+/**
+ * Where one case's drafts are filed for a slug, past the null the
+ * un-overlaid case carries.
+ *
+ * @param single - The case, which must be an overlaid one.
+ * @param slug - Which domain's drafts.
+ * @returns Its scope.
+ * @throws If handed the un-overlaid case, which is a table wired
+ * wrongly rather than a state to render.
+ */
+function singleScope(single: SingleRowCase, slug: string): DraftScope {
+  if (single.scopeFor === null) {
+    throw new Error(`${single.name} declares no draft scope.`);
+  }
+
+  return single.scopeFor(slug);
+}
+
+/**
+ * The row a case reads, and the id it is asked for.
+ *
+ * Always the FIRST stored row rather than a written id, for the reason
+ * every other case here reads its rows off the fixture: a reseeded
+ * table silently turns a hardcoded id into somebody else's row.
+ *
+ * @param single - The case.
+ * @param slug - Which domain's rows.
+ * @returns Its first row.
+ * @throws Through {@link rowAt} if that domain has none, which is the
+ * non-emptiness guard the positive cases below rest on.
+ */
+function firstRowFor(single: SingleRowCase, slug: string): DraftableRow {
+  return rowAt(single.storedRows(slug), 0);
+}
+
+describe('the single-row reads', () => {
+  it('drives every single-row read the module exports', () => {
+    // The guard every claim below rests on. The cases are written over
+    // `SINGLE_ROW`, so a read of this shape added to `./api.ts` and to
+    // no case would be covered by nothing and reported by nothing —
+    // and the partition test above only knows the NAME list, which
+    // this holds the table against.
+    // Arrange
+    const cased = SINGLE_ROW.map((single) => single.name).sort();
+    const exported = Object.keys(api);
+
+    // Act
+    const stale = SINGLE_ROW_NAMES.filter((name) => !exported.includes(name));
+
+    // Assert
+    expect(cased).toEqual([...SINGLE_ROW_NAMES].sort());
+    expect(stale).toEqual([]);
+    expect(SINGLE_ROW).toHaveLength(5);
+  });
+
+  it('takes the slug first and the id second', () => {
+    // The structural pin, made against each accessor's OWN arity
+    // rather than against the wrappers this table calls them through.
+    // Four take a resolved slug and a row id; `fetchConnector` takes
+    // the id alone, exactly as `fetchConnectors` takes nothing — a
+    // slug appearing on it would be a deployment-level read quietly
+    // re-scoped, which is the same failure the list half pins.
+    // Arrange / Act
+    const arities = SINGLE_ROW.map((single) => ({
+      name: single.name,
+      arity: single.accessor.length,
+      expected: single.scoped
+        ? 2
+        : 1,
+    }));
+
+    // Assert
+    expect(arities.filter((entry) => entry.arity !== entry.expected))
+      .toEqual([]);
+    expect(SCOPED_SINGLE_ROW).toHaveLength(4);
+  });
+
+  it('overlays four of the five and names the fifth as the narrowing', () => {
+    // The narrowing on the record rather than as an absence. A case
+    // that lost its scope would drop out of every overlay claim below
+    // and nothing else would report it; here it moves this count.
+    // Arrange / Act
+    const unoverlaid = SINGLE_ROW.filter((single) => single.scopeFor === null);
+
+    // Assert
+    expect(OVERLAID_SINGLE_ROW).toHaveLength(4);
+    expect(unoverlaid.map((single) => single.name)).toEqual(['fetchCategory']);
+  });
+
+  it('reads a real row for every case', () => {
+    // The non-emptiness guard. Every positive case below reads the
+    // seeded domain's first row of a resource, so a fixture that lost
+    // its rows would make the lot of them pass over nothing at all.
+    // Arrange / Act
+    const sizes = SINGLE_ROW.map((single) => ({
+      name: single.name,
+      size: single.storedRows(DEFAULT_DOMAIN_SLUG).length,
+    }));
+
+    // Assert
+    expect(sizes.filter((entry) => entry.size === 0)).toEqual([]);
+  });
+
+  SINGLE_ROW.forEach((single) => {
+    it(`rejects an id no fixture carries: ${single.name}`, async () => {
+      // The refusal this shape exists to make, and it comes first
+      // because it is the one a stale bookmark actually produces: a
+      // modal sub-route matches any digits at all, so the id reaching
+      // the seam is a number nobody promised. Rejecting rather than
+      // throwing is the same property the list reads have — a cache
+      // hook renders a rejection, while a synchronous throw out of a
+      // query function reaches the render and takes the shell down.
+      // Arrange
+      const absent = absentIdFor(single.storedRows(DEFAULT_DOMAIN_SLUG));
+
+      const call = (): void => {
+        void single.read(DEFAULT_DOMAIN_SLUG, absent).catch(() => undefined);
+      };
+
+      // Act / Assert
+      expect(call).not.toThrow();
+      await expect(single.read(DEFAULT_DOMAIN_SLUG, absent)).rejects.toThrow(
+        `Unknown ${single.label} id: ${absent}`,
+      );
+    });
+  });
+
+  SCOPED_SINGLE_ROW.forEach((single) => {
+    it(`rejects an unknown domain slug: ${single.name}`, async () => {
+      // The other refusal, with a real id so the two cannot be
+      // confused: this must fail on the DOMAIN, and it does because
+      // `getDomain` runs inside `deliver`'s callback before the
+      // fixture is ever asked for a row.
+      // Arrange
+      const row = firstRowFor(single, DEFAULT_DOMAIN_SLUG);
+
+      // Act
+      const outcome = await outcomeOf(
+        (slug) => single.read(slug, row.id),
+        UNKNOWN_SLUG,
+      );
+
+      // Assert
+      expect(outcome).toBe(REFUSAL);
+    });
+
+    it(`refuses the domain before the row: ${single.name}`, async () => {
+      // The ORDER of the two refusals, which is not visible from
+      // either one alone. Both arguments are wrong here, and the
+      // domain is what has to answer — a seam that looked the row up
+      // first would report a missing row for a domain that does not
+      // exist, which is a 404 about the wrong thing.
+      // Arrange
+      const absent = absentIdFor(single.storedRows(DEFAULT_DOMAIN_SLUG));
+
+      // Act
+      const outcome = await outcomeOf(
+        (slug) => single.read(slug, absent),
+        UNKNOWN_SLUG,
+      );
+
+      // Assert
+      expect(outcome).toBe(REFUSAL);
+    });
+
+    it(`refuses another domain's row: ${single.name}`, async () => {
+      // The refusal `./api.ts` adds on top of the fixture accessor,
+      // and the reason it has to: the fixture tables are keyed by id
+      // alone, so this id answers a row whatever slug stood in the
+      // URL — and the draft scope is built from the SLUG, so an
+      // unchecked read would lay the sparse domain's edits over the
+      // seeded domain's row. Compared against the MISSING-row outcome
+      // in the same case, because the two being indistinguishable is
+      // itself the claim: a scoped endpoint answers 404 for both, and
+      // a message telling them apart reports which ids exist under a
+      // domain the caller was just refused.
+      // Arrange
+      const row = firstRowFor(single, DEFAULT_DOMAIN_SLUG);
+      const absent = absentIdFor(single.storedRows(DEFAULT_DOMAIN_SLUG));
+
+      // Act
+      const foreign = await outcomeOf(
+        (slug) => single.read(slug, row.id),
+        SPARSE_DOMAIN_SLUG,
+      );
+      const missing = await outcomeOf(
+        (slug) => single.read(slug, absent),
+        SPARSE_DOMAIN_SLUG,
+      );
+
+      // Assert
+      expect(foreign).toBe(`rejected: Unknown ${single.label} id: ${row.id}`);
+      expect(foreign.replace(String(row.id), String(absent))).toBe(missing);
+      expect(single.storedRows(SPARSE_DOMAIN_SLUG).map((r) => r.id))
+        .not.toContain(row.id);
+    });
+  });
+
+  SINGLE_ROW.forEach((single) => {
+    it(`answers the row the fixture carries: ${single.name}`, async () => {
+      // Pass-through fidelity, by IDENTITY rather than by value. An
+      // undrafted row comes back as the very object the fixture holds
+      // — that is `applyDrafts`' own guarantee, and asserting it here
+      // is what rules out a seam that rebuilt a plausible twin.
+      // Arrange
+      const row = firstRowFor(single, DEFAULT_DOMAIN_SLUG);
+
+      // Act
+      const answered = await single.read(DEFAULT_DOMAIN_SLUG, row.id);
+
+      // Assert
+      expect(answered).toBe(row);
+    });
+  });
+
+  OVERLAID_SINGLE_ROW.forEach((single) => {
+    it(`edits a real field to a value the fixture does not hold: ${single.name}`, () => {
+      // The vacuity guard for the two cases below. A `field` the row
+      // does not carry, or a `mark` the row already holds, would
+      // round-trip through the store and leave both of them passing
+      // while asserting nothing at all.
+      // Arrange
+      const row = firstRowFor(single, DEFAULT_DOMAIN_SLUG);
+
+      // Act
+      const before = fieldOf(row, single.field);
+
+      // Assert
+      expect(Object.keys(row)).toContain(single.field);
+      expect(before).not.toEqual(single.mark);
+    });
+
+    it(`answers the drafted row: ${single.name}`, async () => {
+      // What the single-row overlay is FOR: a modal loads through this
+      // read and saves through the matching write, so a read that
+      // skipped the overlay would reopen showing the value its own
+      // save had just replaced.
+      // Arrange
+      const row = firstRowFor(single, DEFAULT_DOMAIN_SLUG);
+      const draft = draftOf(row, single.field, single.mark);
+
+      recordDraft(singleScope(single, DEFAULT_DOMAIN_SLUG), draft);
+
+      // Act
+      const answered = await single.read(DEFAULT_DOMAIN_SLUG, row.id);
+
+      // Assert
+      expect(answered).toEqual(draft);
+      expect(fieldOf(answered as DraftableRow, single.field))
+        .toEqual(single.mark);
+    });
+
+    it(`leaves a row this tab has not edited alone: ${single.name}`, async () => {
+      // The other half, and the one a drafted-everything overlay would
+      // fail: an edit to ONE row is invisible to the read of another.
+      // Skipped where the resource has a single row, since there is no
+      // second row for the claim to be about — reported rather than
+      // silently passing, which is what the length check is for.
+      // Arrange
+      const rows = single.storedRows(DEFAULT_DOMAIN_SLUG);
+      const edited = rowAt(rows, 0);
+      const untouched = rows[1];
+
+      recordDraft(
+        singleScope(single, DEFAULT_DOMAIN_SLUG),
+        draftOf(edited, single.field, single.mark),
+      );
+
+      // Act
+      const answered = untouched === undefined
+        ? undefined
+        : await single.read(DEFAULT_DOMAIN_SLUG, untouched.id);
+
+      // Assert
+      expect(rows.length).toBeGreaterThan(1);
+      expect(answered).toBe(untouched);
+    });
+  });
+
+  OVERLAID_SINGLE_ROW.filter((single) => single.scoped).forEach((single) => {
+    it(`ignores a draft filed under another domain: ${single.name}`, async () => {
+      // The cross-domain claim, made from the side that can still make
+      // it. Reading the seeded row under the sparse slug is refused
+      // outright by the ownership check above, so the leak this can
+      // still ask about is the other direction: an edit recorded under
+      // the SPARSE domain's scope for this very id must not reach the
+      // seeded domain's read.
+      // Arrange
+      const row = firstRowFor(single, DEFAULT_DOMAIN_SLUG);
+
+      recordDraft(
+        singleScope(single, SPARSE_DOMAIN_SLUG),
+        draftOf(row, single.field, single.mark),
+      );
+
+      // Act
+      const answered = await single.read(DEFAULT_DOMAIN_SLUG, row.id);
+
+      // Assert
+      expect(answered).toBe(row);
+      expect(fieldOf(answered as DraftableRow, single.field))
+        .not.toEqual(single.mark);
+    });
+  });
+
+  it('answers the stored category whatever the store holds', async () => {
+    // The narrowing, driven rather than left as a gap in a table.
+    // `categories` is not a draft resource, so there is no scope an
+    // edit to a category row could be filed under — and the way to
+    // show that is to try every scope there IS. A draft is recorded
+    // under each of the seeded domain's row resources, keyed on the
+    // category's own id, and the read still answers the stored row by
+    // identity. An overlay wired to the wrong resource would answer
+    // one of these instead.
+    // Arrange
+    const domain = getDomain(DEFAULT_DOMAIN_SLUG);
+    const category = rowAt(listCategories(domain.id), 0);
+    const resources = ['documents', 'findings', 'personas', 'sources'] as const;
+
+    resources.forEach((resource) => recordDraft(
+      domainDraftScope(DEFAULT_DOMAIN_SLUG, resource),
+      { ...category, name: 'Drafted through the wrong resource' },
+    ));
+
+    // Act
+    const answered = await api.fetchCategory(DEFAULT_DOMAIN_SLUG, category.id);
+
+    // Assert
+    expect(answered).toBe(category);
+    expect(answered.name).not.toBe('Drafted through the wrong resource');
+  });
+
+  it('agrees with the list read it sits beneath', async () => {
+    // The single-row and list reads of one resource are two accessors
+    // over one row, and a modal disagreeing with the table behind it
+    // is the failure the shared overlay exists to prevent. Read
+    // through `fetchSources` rather than through the fixture, so a
+    // difference in how the two accessors compose the overlay shows
+    // up rather than cancelling out.
+    // Arrange
+    const stored = rowAt(listSources(getDomain(DEFAULT_DOMAIN_SLUG).id), 0);
+    const draft = { ...stored, endpoint: 'https://agreed.example.test/feed' };
+
+    recordDraft(domainDraftScope(DEFAULT_DOMAIN_SLUG, 'sources'), draft);
+
+    // Act
+    const listed = await api.fetchSources(DEFAULT_DOMAIN_SLUG);
+    const single = await api.fetchSource(DEFAULT_DOMAIN_SLUG, stored.id);
+
+    // Assert
+    expect(single).toEqual(draft);
+    expect(rowAt(listed, 0)).toBe(single);
   });
 });
 

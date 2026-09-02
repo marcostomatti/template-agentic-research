@@ -46,12 +46,13 @@
  * single-domain base into `DEFAULT_DOMAIN_SLUG` — never the raw route
  * param.
  *
- * Seven READS take no slug at all, and the rule has to name them or
- * it claims something false about nearly half the barrel:
+ * Eight READS take no slug at all, and the rule has to name them or
+ * it claims something false about a third of the read half:
  * {@link fetchDomains} (the switcher's own list — a domain list cannot
- * be scoped to a domain), {@link fetchConnectors} (`connectors` has no
- * `domain_id`; a connector is a fact about the installation),
- * {@link fetchSettings}, {@link fetchSpendSummary},
+ * be scoped to a domain), {@link fetchConnectors} and
+ * {@link fetchConnector} (`connectors` has no `domain_id`, so neither
+ * the installation's list of them nor one row out of it is a fact
+ * about any domain), {@link fetchSettings}, {@link fetchSpendSummary},
  * {@link fetchSearchSuggestions}, {@link fetchNotifications} and
  * {@link fetchOperator} (all four mirror no table at all — see their
  * fixture modules). Shell-visible: a domain switch leaves the whole
@@ -65,7 +66,7 @@
  * Two WRITES take no slug either, and for the same reasons their
  * reads do not: {@link saveConnector} edits an installation-level row,
  * and {@link saveSettings} edits a preference set that mirrors no
- * table. Counting the two halves together gives nine, which is not a
+ * table. Counting the two halves together gives ten, which is not a
  * fact about anything — the split is per resource, so each write
  * inherits its read's answer rather than reaching one of its own.
  *
@@ -93,7 +94,7 @@
  * server answers that question and `./drafts.ts` is deleted alongside
  * the fixture modules in one commit.
  *
- * FOUR shapes reach it, and the list is worth reading before adding a
+ * FIVE shapes reach it, and the list is worth reading before adding a
  * write: a save no read shows is worse than no save at all.
  * {@link fetchDocuments}, {@link fetchFindings}, {@link fetchSources},
  * {@link fetchPersonas} and {@link fetchConnectors} answer the drafted
@@ -114,13 +115,23 @@
  * rows at all, so it composes `./drafts.ts`'s SINGLETON slot instead
  * — one saved value replacing one stored one, by the same
  * pass-through-when-nothing-is-saved rule the row overlay keeps.
+ * The SINGLE-ROW reads are the fifth, and they compose the very same
+ * row overlay through a one-element list: {@link fetchFinding},
+ * {@link fetchSource} and {@link fetchPersona} through
+ * {@link deliverDomainRow}, {@link fetchConnector} through
+ * {@link CONNECTOR_DRAFTS}. That is the first shape's argument seen
+ * from the surface that RECORDS the edit rather than the one that
+ * lists it — a modal whose read skipped the overlay would reopen
+ * showing the value its own save had just replaced.
  *
  * Every other read is untouched for a stated reason rather than by
- * oversight. `domains` and `entities` name no draft resource at all —
- * nothing edits a domain or a subject — so {@link fetchDomains},
- * {@link fetchDomain}, {@link fetchVerdicts} and
- * {@link fetchEntities} pass fixture answers straight through, as do
- * the four shell and spend reads that mirror no table.
+ * oversight. `domains`, `entities` and `categories` name no draft
+ * resource at all — nothing edits a domain or a subject, and the
+ * lexicon editor saves a category's TERMS rather than the category —
+ * so {@link fetchDomains}, {@link fetchDomain}, {@link fetchVerdicts},
+ * {@link fetchEntities} and {@link fetchCategory} pass fixture answers
+ * straight through, as do the four shell and spend reads that mirror
+ * no table.
  * {@link fetchCategorySummaries} is the one real NARROWING:
  * `summarizeCategories` builds its per-category literal inside its own
  * body instead of out of two exported functions, so an overlay there
@@ -142,16 +153,21 @@
  * silent editor as a broken write.
  *
  * What this barrel deliberately does NOT answer, so the next author
- * reads an omission rather than a gap: nothing loads a single row by
- * id (`getFinding`, `getSource`, `getConnector` and friends stay
- * unwrapped), because every modal sub-route in this plan renders a
- * placeholder carrying its route parameter and no editor loads a
- * record yet; nothing lists a category's terms, for the same reason.
- * Each is one function and one test on the day a surface needs it —
- * and the fixture accessor it would wrap already exists.
- * {@link fetchEntities} is that day arriving for one of them: the
- * digest page joins its findings to their subjects, so the read it
- * needs is here rather than in the page.
+ * reads an omission rather than a gap: nothing lists a category's
+ * terms, which is the same ordering the paragraph above records from
+ * the write's side. It is one function and one test on the day a
+ * surface needs it — and the fixture accessor it would wrap already
+ * exists.
+ *
+ * Two such days have arrived. {@link fetchEntities} was the first:
+ * the digest page joins its findings to their subjects, so the read
+ * it needs is here rather than in the page. The five SINGLE-ROW reads
+ * are the second, and they land AHEAD of their callers rather than
+ * behind them: every modal sub-route still renders a placeholder over
+ * its route parameter, which needs no read at all, while the editors
+ * replacing those placeholders need exactly this. That ordering is
+ * the same one the two unread writes above are recorded under, taken
+ * the other way round.
  *
  * The `fetch` prefix is not decoration either. The fixture layer's
  * verbs are `list`/`get`/`find`/`summarize`; changing the verb at the
@@ -162,6 +178,33 @@
  * ACT for the two that rule on something rather than edit it
  * ({@link approveSourceConfig}, {@link resolveSourceFailure}) — see
  * the section below for why that distinction is not cosmetic.
+ *
+ * ## The single-row reads
+ *
+ * Five of the reads below answer ONE row rather than a list, and they
+ * are the shape the editor modals load through: a route carries
+ * `:domainSlug` and `:entityId`, and this is where that pair becomes
+ * a record. Four take the slug FIRST and the id second, in the order
+ * the URL spells them; {@link fetchConnector} takes the id alone, for
+ * the reason {@link fetchConnectors} takes nothing.
+ *
+ * Each wraps the fixture layer's `find` rather than its `get`, which
+ * is the accessor those modules' own docblocks point at this exact
+ * case: an id off a URL is a number a stale bookmark can carry, so a
+ * miss is an ordinary outcome a modal renders and not the broken
+ * fixture a `get` shouts about.
+ *
+ * A row belonging to ANOTHER domain is refused in the same breath and
+ * with the SAME message, and that is the one behaviour here which is
+ * not simply the fixture accessor's. The fixture tables are keyed by
+ * id alone, so `findSource(1)` answers a row whatever slug stood in
+ * the URL — and the overlay is what makes that unacceptable rather
+ * than merely lax, the draft scope being built from the SLUG and so
+ * laying one domain's edits over another domain's row. Refusing both
+ * causes identically is what a scoped endpoint does too: 404 for a
+ * row that is not there and 404 for a row that is not yours, since a
+ * message telling them apart would report which ids exist under a
+ * domain the caller was just refused.
  *
  * ## The write half
  *
@@ -223,6 +266,7 @@ import type {
 import type { CategorySummary } from './lexicon';
 import type { SourceStatusCounts } from './sources';
 import type {
+  Category,
   Connector,
   Document,
   Domain,
@@ -242,11 +286,17 @@ import type {
 } from '@ar/ui';
 
 import {
+  findConnector,
   getConnector,
   listConnectors,
   summarizeExportSubscriptions,
 } from './connectors';
-import { listDocuments, listEntities, listFindings } from './digest';
+import {
+  findFinding,
+  listDocuments,
+  listEntities,
+  listFindings,
+} from './digest';
 import { DOMAINS, getDomain, resolveVerdictVocabulary } from './domains';
 import {
   applyDrafts,
@@ -256,11 +306,11 @@ import {
   recordDraft,
   recordSingletonDraft,
 } from './drafts';
-import { summarizeCategories } from './lexicon';
-import { listPersonas } from './personas';
+import { findCategory, summarizeCategories } from './lexicon';
+import { findPersona, listPersonas } from './personas';
 import { getSettings } from './settings';
 import { getOperator, listNotifications, listSearchSuggestions } from './shell';
-import { countSourceStatuses, listSources } from './sources';
+import { countSourceStatuses, findSource, listSources } from './sources';
 import { getSpendSummary } from './spend';
 
 /**
@@ -437,6 +487,97 @@ function overlaySubscription(
   return drafted === summary.subscription
     ? summary
     : { subscription: drafted, connector: getConnector(drafted.connectorId) };
+}
+
+/**
+ * A row that names the domain it belongs to.
+ *
+ * Structural rather than a union of the four fixture types, for the
+ * reason `./drafts.ts` gives about {@link DraftableRow}: {@link
+ * ownedRow} reads one field, and a union would have to be widened by
+ * hand every time another single-row read landed.
+ */
+interface DomainOwnedRow extends DraftableRow {
+  /** Its `domain_id`, as every domain-scoped fixture row carries it. */
+  readonly domainId: number;
+}
+
+/**
+ * One row of a domain, or a throw — the single-row reads' whole
+ * refusal, both causes at once.
+ *
+ * A row the fixture layer does not carry and a row it carries for
+ * SOMEBODY ELSE'S domain leave here identically, which this module's
+ * header argues for at length. The short version: the fixture tables
+ * are keyed by id alone, the URL carries a domain, and the two can be
+ * paired wrongly by a stale bookmark as easily as by a typo.
+ *
+ * `id` is taken as an argument rather than read off `row`, because
+ * the missing case has no row to read it off.
+ *
+ * @typeParam T - The fixture row shape.
+ * @param domain - The domain the caller's slug resolved to.
+ * @param id - What was asked for, for the message.
+ * @param label - The singular noun the message names — `finding`,
+ * `source`, `persona`, `category`.
+ * @param row - What the fixture layer's `find` answered.
+ * @returns That row, once it is this domain's.
+ * @throws If no row carries the id, or the one that does belongs to
+ * another domain.
+ */
+function ownedRow<T extends DomainOwnedRow>(
+  domain: Domain,
+  id: number,
+  label: string,
+  row: T | undefined,
+): T {
+  if (row === undefined || row.domainId !== domain.id) {
+    throw new Error(`Unknown ${label} id: ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * The seam, scoped to one domain, answering ONE of its rows with this
+ * tab's edit to that row applied.
+ *
+ * {@link deliverDomainRows} for a single row, and deliberately the
+ * same composition rather than a second one: the row goes through
+ * `applyDrafts` as a one-element list, so an editor loading a record
+ * and the list behind it showing that record cannot come to disagree
+ * about what this tab has saved.
+ *
+ * The ownership check runs BEFORE the overlay, which is the ordering
+ * that matters. The scope is built from the slug, so overlaying first
+ * would let a mismatched pair lay one domain's edits over another
+ * domain's row and answer a record that exists nowhere.
+ *
+ * @typeParam T - The fixture row shape.
+ * @param slug - A resolved domain slug.
+ * @param resource - Which of that domain's resources the row is one of.
+ * @param label - The singular noun a refusal names.
+ * @param id - The row wanted, off the route.
+ * @param find - The fixture layer's own lookup, which answers
+ * `undefined` rather than throwing.
+ * @returns The row with this tab's edit applied; a rejection if no
+ * domain carries the slug, or if this domain carries no such row.
+ */
+function deliverDomainRow<T extends DomainOwnedRow>(
+  slug: string,
+  resource: DomainDraftResource,
+  label: string,
+  id: number,
+  find: (rowId: number) => T | undefined,
+): Promise<T> {
+  const scope = domainDraftScope(slug, resource);
+
+  return deliverForDomain(slug, (domain) => {
+    const stored = ownedRow(domain, id, label, find(id));
+    const [drafted = stored] = applyDrafts(scope, [stored]);
+
+    return drafted;
+  });
 }
 
 /**
@@ -756,6 +897,112 @@ export function fetchNotifications(): Promise<readonly NotificationItem[]> {
  */
 export function fetchOperator(): Promise<ProfileMenuUser> {
   return deliver(getOperator);
+}
+
+/**
+ * One finding by id — what the digest's detail modal renders.
+ *
+ * Overlaid, so the modal shows the verdict the row action just set
+ * rather than the stored one. `useSaveFinding` invalidates the
+ * FINDINGS key and this row is filed beneath it, so the re-read
+ * arrives without that mutation naming a key of its own.
+ *
+ * @param slug - A resolved domain slug, off `:domainSlug`.
+ * @param id - The `findings.id` off `:entityId`.
+ * @returns The finding, this tab's edit applied; rejects on a slug no
+ * domain carries, and on an id this domain has no finding for.
+ */
+export function fetchFinding(slug: string, id: number): Promise<Finding> {
+  return deliverDomainRow(slug, 'findings', 'finding', id, findFinding);
+}
+
+/**
+ * One source by id — what the sources surface's editor loads.
+ *
+ * The single row behind three of that surface's sub-routes: the
+ * editor, the config approval and the failures list all name a source
+ * in the URL, and only the first of them edits it.
+ *
+ * @param slug - A resolved domain slug, off `:domainSlug`.
+ * @param id - The `sources.id` off `:entityId`.
+ * @returns The source, this tab's edit applied; rejects on a slug no
+ * domain carries, and on an id this domain has no source for.
+ */
+export function fetchSource(slug: string, id: number): Promise<Source> {
+  return deliverDomainRow(slug, 'sources', 'source', id, findSource);
+}
+
+/**
+ * One persona by id — what the agents surface's editor loads.
+ *
+ * @param slug - A resolved domain slug, off `:domainSlug`.
+ * @param id - The `personas.id` off `:entityId`.
+ * @returns The persona, this tab's edit applied; rejects on a slug no
+ * domain carries, and on an id this domain has no persona for.
+ */
+export function fetchPersona(slug: string, id: number): Promise<Persona> {
+  return deliverDomainRow(slug, 'personas', 'persona', id, findPersona);
+}
+
+/**
+ * One connector by id — what the tools surface's editor loads.
+ *
+ * Takes no slug and there is nothing for {@link ownedRow} to check,
+ * exactly as {@link fetchConnectors} takes none: `connectors` carries
+ * no `domain_id`, so a connector is a fact about the installation and
+ * an id is the whole of what identifies one. Its draft is filed under
+ * {@link CONNECTOR_DRAFTS} for the same reason, which is why an
+ * operator who edits one and switches domain still sees the edit.
+ *
+ * Written out rather than routed through {@link deliverDomainRow},
+ * because every line of that helper is about a domain: the scope, the
+ * refusal and the resolution all come off a slug this accessor does
+ * not have.
+ *
+ * @param id - The `connectors.id` off `:entityId`.
+ * @returns The connector, this tab's edit applied; rejects on an id
+ * nothing carries. Cannot reject for a domain — there is no slug.
+ */
+export function fetchConnector(id: number): Promise<Connector> {
+  return deliver(() => {
+    const stored = findConnector(id);
+
+    if (stored === undefined) {
+      throw new Error(`Unknown connector id: ${id}`);
+    }
+
+    const [drafted = stored] = applyDrafts(CONNECTOR_DRAFTS, [stored]);
+
+    return drafted;
+  });
+}
+
+/**
+ * One lexicon category by id — what the term editor is opened on.
+ *
+ * The one single-row read that is NOT overlaid, and the reason is the
+ * same one this module's header gives for `categories` naming no
+ * draft resource: the lexicon editor saves a category's TERMS, so
+ * there is no edit to a category row for an overlay to apply. The day
+ * a surface renames one, `categories` becomes a draft resource in
+ * `./drafts.ts` and this accessor grows the same one-element overlay
+ * its four siblings already have.
+ *
+ * The ownership refusal is not narrowed with it. A category id off a
+ * URL is paired with a domain slug off the same URL whatever the
+ * store holds, so the mismatched pair is refused here exactly as it
+ * is for the other three.
+ *
+ * @param slug - A resolved domain slug, off `:domainSlug`.
+ * @param id - The `categories.id` off `:entityId`.
+ * @returns The category as the fixture carries it; rejects on a slug
+ * no domain carries, and on an id this domain has no category for.
+ */
+export function fetchCategory(slug: string, id: number): Promise<Category> {
+  return deliverForDomain(
+    slug,
+    (domain) => ownedRow(domain, id, 'category', findCategory(id)),
+  );
 }
 
 /**
