@@ -137,6 +137,20 @@ however either grows. The raw route param is resolved to a slug in
 exactly one place, inside the hooks, so `/` and
 `/d/example-tech-radar` never keep two entries holding the same rows.
 
+### One new domain-scoped accessor costs SIX edits
+
+Budget a new accessor on this layer as a task of its OWN rather than as a
+line inside a page task, because every suite here names one of the six:
+the fixture accessor and its tests; `api.ts` plus its `DOMAIN_SCOPED` case
+table and its length pins; and `hooks.ts` (the `DomainResource` union AND
+the hook itself) plus `hooks.test.ts`'s exhaustiveness record, its hook
+table and its read count.
+
+Sweep the count PROSE in the same commit. `api.ts` and `hooks.ts` both
+carry sentences quoting how many accessors take no slug, and no gate reads
+either — a derived figure in a module header goes stale exactly the way a
+doc count does.
+
 ### Fixtures mirror the service by REDECLARATION
 
 `@ar/web` has no dependency on `@ar/service` and must not take one —
@@ -459,3 +473,13 @@ gates are worth knowing before calling a change verified:
   files, so a subpath import whose JS is absent still type-checks
   clean. `bun run build` is the cheapest thing that proves an import
   actually resolves.
+- The bundle carries a KNOWN, deliberately unaddressed follow-up, so a
+  size reading here is not a regression to chase: the main chunk's size
+  and the ~1776 emitted glyph chunks are both `lucide-react/dynamic`'s
+  name-to-glyph map, which lands ~2035 `import(` call sites in the entry
+  chunk and trips rolldown's own 500 kB chunk warning. It clears this
+  app's page budget regardless. Whoever takes the lucide barrel on should
+  re-measure against HEAD's own build rather than any figure quoted in a
+  plan, and quote the BUILD's own gzip line rather than re-deriving it —
+  a bundler's printed gzip size is not reproducible by any gzip level, so
+  re-deriving it reports an improvement nobody made.

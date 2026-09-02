@@ -110,6 +110,19 @@ wanted in both places must be made in both repos.
   the reflow. The repairs that keep both the rule and the width are a
   `function` declaration (no `func-style` rule is configured anywhere here)
   or hoisting a nested callback's inner list to a module-scope const.
+- Two `@stylistic` rules put a hard ARITHMETIC ceiling on a vitest title and
+  on any supertest chain, and `lint:fix` repairs neither the way you want.
+  `function-paren-newline` refuses the two-line `it('long title',\n
+  async () => {` form, so `  it('` + title + `', async () => {` must fit the
+  file's own code width — 56 characters of title at two-space indent in a
+  78-column file. Compute it BEFORE writing the titles; the repair that
+  keeps the width is a shorter title, never a reformatted call. The same
+  rule refuses any call whose arguments span lines, where the repair is
+  hoisting the inner expression to a const on the line above. And
+  `newline-per-chained-call` counts `request(app).get(path).query({...})` as
+  THREE deep, so the one-line form is an error and every call goes on its
+  own line — which is why the shape only appears once a case adds a query,
+  the two-deep `request(app).get(path)` being legal.
 - The two unused-symbol gates disagree by POSITION, so a uniform-signature
   design is lint-green and `check-types` RED. The recommended
   `args: 'after-used'` on `@typescript-eslint/no-unused-vars` never reports
@@ -238,7 +251,16 @@ reading).
   absolute, so the intersection needs a `packages/service/` prefix. Without
   it the result is EMPTY and the manual half reads as owing every tracked
   file, a plausible-looking number nothing contradicts (measured 0 against
-  143). The two non-obvious members: `lib/**/__tests__/*.test.ts` ARE
+  143). It also takes a REQUIRED `packageRoot` argument, which the recipe
+  above omits: calling it bare throws `TypeError: The "paths[0]" property
+  must be of type string, got undefined` from inside a `join`, which reads
+  as a broken invariant helper rather than as a wrong call. Pass the
+  absolute package root (`collectScannedFiles(PKG)`) — it answered 256
+  package-relative paths at the q11 tip, so the 143-of-803 figure above is
+  a snapshot of the SURFACE and not of the helper. `findForbiddenMatches`
+  beside it takes CONTENT plus a path and needs no root at all, so a probe
+  calling both fails on exactly one of them and the traceback names the
+  wrong subject. The two non-obvious members: `lib/**/__tests__/*.test.ts` ARE
   scanned (they sit under the `lib` root, so "tests are out" is true only
   of `tests/`), and `scripts/README.md` IS scanned (a `.md` inside a scan
   root, so "READMEs are out" is true only of the package-root one).
@@ -255,6 +277,14 @@ reading).
   let their agreement be the result.
   `git grep -P` DOES support lookbehind here (the ugrep shim is on bare
   `grep`, not on `git grep`), so the guarded needle is runnable as-is.
+  The complementary half is sharper and bites every prose sweep: `git grep
+  -E` here is POSIX ERE, where `\b` is NOT a word boundary and matches
+  NOTHING, so the whole line-based half of a sweep returns a clean zero for
+  a needle that was never a needle (measured `-E '\brouters?\b'` exit 1
+  over a README carrying 5 hits, `-P` the same needle exit 0 at 5). Use
+  `-P` for EVERY sweep needle, and pair the two forms on one
+  known-present word as the selection pass's own liveness control. Same
+  class as the shimmed-`grep` trap and invisible in exactly the same way.
 - The needle set is SEVEN, not five: `packages/ui/eslint.config.mjs`
   assembles two further ones — the banned import scope and the
   design-extraction source repo — and its `no-restricted-imports` rule
@@ -442,7 +472,16 @@ red package never masks another and a single run gives the whole picture.
 - A green `lint:all` prints nothing from ESLint itself — the only positive
   output is one `@ar/<pkg> lint: Exited with code 0` line per package, and
   those three lines are what distinguish "all packages linted clean" from
-  "the filter matched nothing". Hold the three package NAMES set-equal
+  "the filter matched nothing". The two fast fan-outs list those package
+  lines in DIFFERENT ORDERS on one clean tree in one sitting (`@ar/ui`
+  first under `lint:all`, `@ar/service` first under `check-types:all`,
+  measured twelve seconds apart at the same sha), which turns the
+  read-it-as-a-SET rule from advice into a live control that costs
+  nothing: any POSITIONAL reading is wrong between two GREEN gates and not
+  only on the red run the `tail -2` warning below is written about, so
+  holding the two fan-outs against each other row by row, or naming "the
+  first package line", reports a difference that is the filter's
+  nondeterminism. Hold the three package NAMES set-equal
   against `packages/*` rather than counting to three — a count cannot say
   WHICH three. `check-types:all` is the identical shape rather than a longer
   one: both fan-outs are exactly five lines, and the root `tsc --noEmit`
@@ -594,6 +633,26 @@ red package never masks another and a single run gives the whole picture.
   classification whose `other` bucket is enumerable — measured 121 lines
   as 108 deliberate pino JSON, 4 summary, 2 `$` echoes, 1 banner, 4 blank
   and exactly the 2 pretest build lines.
+- That gap is CLOSABLE after all, for one flag: `--reporter=verbose` gives
+  vitest its OWN per-case pass glyph, so any variant run (`test:live`,
+  `test:parity`, a single-file run) whose zero FAILURE glyphs would
+  otherwise be uninformative in both directions buys its liveness control
+  there. Measured on a green `bun run test:live --reporter=verbose`: 72
+  per-case lines parse on one anchored regex (glyph, then path, then
+  ` > `) into a per-file pass/skip/fail table reconciling member-for-member
+  with both summary lines, the 68 pass glyphs equalling the pass total
+  exactly — so a capture read with the wrong codec, or a reporter that
+  dropped its per-case lines, is reportable rather than reading as a clean
+  sweep. Two equalities make the table a measurement rather than a
+  listing, both free in the same parse: matched line count == the `Tests`
+  line's parenthesised total (the table covers the whole run, not a
+  prefix), and ran-union-skipped == the `git ls-files` roster (a file that
+  was neither collected nor skipped is NAMED rather than merely absent).
+  Note `--reporter=verbose` also GROUPS failing cases by identical error
+  MESSAGE and prints one error block per group, so a probe counting
+  `AssertionError` occurrences reads nineteen reds as THREE; take the red
+  SET off the per-case glyph lines or the ` FAIL ` lines, which the
+  section header's own `Failed Tests N` cross-checks.
 - Two refinements to the figures above, both measured at a much larger
   suite. The pass-glyph 31 is the one number in this file that is NOT a
   snapshot: it held at 31 with the fan-out grown to 2709 vitest cases,
@@ -601,11 +660,28 @@ red package never masks another and a single run gives the whole picture.
   — 27 come from `@ar/web test:` (Playwright's per-test lines) and 2
   apiece from the `@ar/ui` and `@ar/web` pretest vite builds. Decompose it
   BY PREFIX rather than quoting the total, and do not "re-derive" a correct
-  31 as though it tracked suite size. And that package-scope `other` bucket
-  is INVARIANT at its nine lines however far the suite grows, so it is
+  31 as though it tracked suite size. It held again at 5783 cases, which
+  confirms it tracks the non-vitest members alone (27 Playwright + 2 + 2
+  vite) and not suite size. And that package-scope `other` bucket is
   assertable by MEMBERSHIP exactly as the fan-out's own unprefixed bucket
-  is: only the pino and summary buckets scale, measured 169+4+9 = 182 at
-  86 files / 1899 cases against the 108+4+9 = 121 recorded at 65.
+  is — but it is NOT invariant at nine, and the clause that only the pino
+  and summary buckets scale is false. It is N+8, where N is the workflow
+  SOURCE count `@ar/service`'s `pretest` builds: measured 12 at N=4 (150
+  files / 4973 cases) against 9 at N=1. What IS invariant is SIX — four
+  blank lines, one ` RUN  v...` banner and the `$ vitest run` echo — and
+  the pretest BLOCK is the scaling half at N+2 (its own
+  `$ bun scripts/build-workflows.ts` echo, one `built <abs path>` line per
+  source, and the `N built, stamped <sha>` line). So a task text quoting
+  `the two pretest build lines` has taken the FAN-OUT's figure, which is
+  right there and wrong at package scope on any tree holding more than one
+  workflow — a classifier asserting nine reports a green run as carrying
+  three unexplained lines, which is exactly the shape an unaccounted line
+  is supposed to have. Assert the six by MEMBERSHIP and derive the pretest
+  block from `git ls-files -- 'workflows/src'` minus its README. The
+  fan-out's ELEVEN is unaffected and still right: that bucket is the root
+  vitest run's own, and the root suite grows with nothing in `packages/`,
+  so a reader carrying the N+8 correction ACROSS scopes reports a green
+  fan-out as three lines short. Two laws, not one figure someone mistyped.
 - A package-scope `bun run test` capture also carries TWO file-level
   readings free in the run you already did. The summary's PARENTHESISED
   total is a third member of the `vitest list --filesOnly` set equality
@@ -645,6 +721,13 @@ red package never masks another and a single run gives the whole picture.
   the `split` reading reports a green fan-out as RED with nothing else in
   the capture disagreeing. `wc -l` agrees with `splitlines` and is the free
   cross-check; run it in the same command as the capture.
+  That +1 is on EVERY capture, and it does the most damage on the two FAST
+  fan-outs, where the LINE COUNT itself is the shape assertion: measured 6
+  under `split` against 5 under `splitlines`/`wc -l` for both `lint:all`
+  and `check-types:all`, so a reader confirming the documented five-line
+  shape with the naive split reports a sixth unexplained line in a fan-out
+  that is exactly right. The inflation lands precisely on the number being
+  asserted, same as it does on the eleven-line `other` bucket.
 - Derive the package-NAME denominator for any of these set equalities from
   `packages/*/package.json`'s `name` field and never from the directory
   names: the directories are `service`/`ui`/`web` while every fan-out line
@@ -706,7 +789,29 @@ red package never masks another and a single run gives the whole picture.
 - `@ar/service` reporting skipped tests is the expected steady state, and
   every gate under `tests/live/` is a source of it: the Postgres-gated files
   self-skipping without `AR_LIVE_DATABASE_URL`, the n8n-gated file without
-  `AR_N8N_URL`, and the proposer-gated file without `AR_OLLAMA_URL`. A run
+  `AR_N8N_URL`, and the proposer-gated file without `AR_OLLAMA_URL`. A
+  `bun run test:live` run therefore leaves TWO files skipped and not one,
+  so a plan or stage task predicting "the only skipped file is
+  `n8n-deploy.live.test.ts`" reports a correct run as a regression
+  (measured 7 passed | 2 skipped over a 9-file roster). Derive the skipped
+  set from a `grep -l` for `describeLiveOllama` and `describeLiveN8n` over
+  `tests/live/*.test.ts` and never from a count. Classifying each roster
+  file by WHICH gate helper it names is free and finer than any count: the
+  histogram (7
+  `describeLivePg` + 1 `describeLiveOllama` + 1 `describeLiveN8n`) predicts
+  the open run's own split exactly, so two captures already on disk
+  cross-check each other with no new run, and it says WHICH env var owns
+  which sub-roster. Pair it with a grep for a bare `describe.skip`/`it.skip`
+  across the same files, plus the helper ternaries themselves — that pair
+  is what separates "env-gated" from "quietly went `.skip`", which a set
+  equality against the roster alone cannot report.
+  At PACKAGE scope that roster is TWO populations and the membership rule
+  above names only the first: measured 23 skipped files in `@ar/service` =
+  8 `tests/live/*.test.ts` (the `describeLive*` gates) + 15
+  `tests/parity/*.test.ts`, which `tests/helpers/port-parity.ts` resolves
+  to `describe.skip` whenever the origin root is not exported. A reader
+  holding 23 against the live roster alone reports 15 phantom regressions.
+  Hold it against the UNION of both `git ls-files` rosters. A run
   with zero skipped means a live service leaked into the default suite, not
   that something improved. The count is not the check — it moves with every
   case added under `tests/live/`, so compare it against HEAD's own run
@@ -822,6 +927,15 @@ matching anything prints exactly the same five lines.
   the coverage proof. The pre-commit hook is NOT the same reading: its
   `--staged` mode reports the STAGED file count, which says the hook ran and
   nothing about repo-wide coverage.
+  `--staged` also has NO liveness control of its own in the vacuous shape:
+  `nothing staged to scan` at 0 staged is byte-identical to a `--staged`
+  mode that had stopped scanning, and the scanned-equals-staged rule reads
+  0 == 0 either way. One throwaway file closes it in about ten seconds —
+  write an ASCII `zz-tmp-*.md` at the repo root, `git add` it, re-run and
+  read `1 file(s) scanned`, then `git restore --staged` plus `rm` with
+  `git status --short --untracked-files=all` printing 0 BYTES as the whole
+  revert check. Same plant-and-revert discipline the repo already uses for
+  a tracked mutation leg, one gate over.
 - Deriving that delta needs no checkout, worktree or stash: `isScannable` is
   EXPORTED from `tools/control-byte-gate/control-byte-gate.ts` and that
   module imports only node builtins, so a /tmp `.mjs` importing it by
@@ -973,6 +1087,39 @@ therefore too late to write about. Expect the complementary-additions shape
 here: the recurring conflicts are `docs/architecture/` tables both sides
 appended rows to, which want both sides kept.
 
+That exit 0 is a ZERO-HIT reading, and every ready-made control for it in
+this repo is DEAD: each sibling remote head is already an ancestor of
+`origin/main`, so all three answer the same clean tree oid and prove
+nothing. The live control is SYNTHETIC and costs one command — two
+throwaway commits off HEAD adding the same path with different blobs,
+built with `GIT_INDEX_FILE=/tmp/x` plus `git read-tree` /
+`update-index --cacheinfo` / `write-tree` / `commit-tree`, which writes no
+ref, no index and no worktree byte (`git status --short -uall` at 0 bytes
+is the whole revert check, and the loose objects are unreferenced). It
+answers EXIT 1 with the tree oid on line 1, the conflict path list
+beneath it, a blank line, then the `Auto-merging` / `CONFLICT` narrative.
+Pair it with the STRUCTURAL reading, which is stronger than merge-tree's
+zero and one command: `git merge-base --is-ancestor origin/main HEAD`
+exiting 0 says the merge is a FAST-FORWARD, under which no conflict is
+possible at all.
+
+**Pick PR pre-flight controls by a number you have SEEN, never by a
+branch looking historical.** Two dead-control traps, both measured. A
+MERGED PR is not a valid control for the
+`git ls-remote origin 'refs/pull/N/*'` merge-ref reading: GitHub DROPS
+`refs/pull/N/merge` once a PR merges, so a merged control answers `head`
+ALONE — byte-identical to the CONFLICTING shape the check exists to
+detect. Only another OPEN PR can corroborate the positive. And the
+`gh pr list --head <h> --state all` pre-flight can answer `<none>` for a
+branch that is merely old, because it was merged by a direct push and
+never had a PR at all — so a broken filter and a genuine absence stay
+indistinguishable, which is the exact failure that control exists to rule
+out and whose cost is a duplicate PR. Two related states worth not
+misreading: `mergeable` is computed lazily and `UNKNOWN` beside a present
+merge ref is healthy, and `mergeStateStatus` reads `UNSTABLE` while a
+check is pending, settling to `CLEAN` — neither is `DIRTY`, which is the
+one that means a conflict.
+
 **A conflicting PR dispatches NO workflow at all**, so `no checks reported`
 on a fresh PR is a MERGE-STATE reading and not a trigger or changed-path
 bug to debug: GitHub cannot compute `refs/pull/N/merge` while
@@ -997,4 +1144,26 @@ disagree by exactly the multi-byte characters and a correct edit reads as
 never having published: measured on a body carrying em dashes, python's
 `len(str)` answered 17543 where `len(bytes)` answered 17603, a 60-byte gap
 that is entirely U+2014. Normalise CRLF and the trailing newline, compare
-the BYTES, and print both lengths beside the boolean.
+the BYTES, and print both lengths beside the boolean. Two readings make
+that comparison self-explaining rather than a bare boolean, and both are
+one line. Where the two lengths are EQUAL the body is pure ASCII and the
+em-dash gap is moot for that body, which is worth SHOWING rather than
+leaving a reader to wonder whether it was checked. And GitHub adds exactly
+one trailing byte — the raw remote body comes back one byte longer than
+the local file — which the CRLF normalisation plus an `rstrip` of the
+trailing newline absorbs; a comparison skipping it reports every correct
+publication as a mismatch.
+
+**A PR body's hosted-CI sentence is stale BY CONSTRUCTION**: it has to be
+written before the push, and the run it describes cannot exist until after
+`gh pr create` returns. Write it as of the moment it was written, then
+UPDATE it once the run resolves — and treat `gh pr edit --body-file` as a
+SECOND publication owing the whole outbound discipline again, the
+origin-needle sweep and the remote byte re-read included, since the edit is
+exactly where an unswept paragraph enters. Say which HALF of the tree the
+hosted green covers rather than letting a tick stand for the fan-out:
+`back.yml` runs `@ar/service`'s own suite and not `test:all`, cannot run
+`test:live` at all, and `front.yml` correctly does NOT dispatch on a
+service-only branch — so an absent Front job is a path-filter reading and
+not a missing check. Derive that per-workflow match count from the filters
+rather than asserting it; root `AGENTS.md` matches NEITHER.
