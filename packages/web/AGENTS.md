@@ -20,7 +20,7 @@ package.
 | `src/routes/` | `paths.ts` (the surface table and the two-base path arithmetic), `router.tsx` (the route tree as DATA plus a `createAppRouter` factory), `DomainGuard.tsx`, `useSearchParamState.ts`. |
 | `src/data/` | The fixture data layer and the q15 swap seam. See below. |
 | `src/pages/` | One directory per surface, plus `index.ts` — the surface-id to component registry the router reads. Each page keeps its pure helpers beside it as `.ts` (`rows.ts`, `cards.ts`, `fields.ts`), which is where colocated tests can reach them. |
-| `src/components/` | App-local stand-ins for `@ar/ui` components that do not exist yet, the shared list-page skeleton, the frame the editor modals are built in (`EditorModal.tsx`), and the pure `.ts` modules they share (`editorDraft.ts`). See below. |
+| `src/components/` | App-local stand-ins for `@ar/ui` components that do not exist yet, the shared list-page skeleton, the frame the editor modals are built in (`EditorModal.tsx`), and the pure `.ts` modules they share (`editorDraft.ts` for the draft a modal holds, `jsonDraft.ts` for the JSON fallback's parse, format and refusal sentences). See below. |
 | `src/test-support/` | Helpers shared by colocated tests only. No app module imports it and the vitest include collects no non-`*.test.ts` file, so it ships in no bundle. |
 | `src/styles.css` | Two imports: `tailwindcss` and `@ar/ui/styles.css`. The design tokens, the element defaults and the theme contract all belong to `@ar/ui`. |
 | `tests/e2e/` | The Playwright suite. `tests/README.md` states the two-runner split, and why that README is itself load-bearing. |
