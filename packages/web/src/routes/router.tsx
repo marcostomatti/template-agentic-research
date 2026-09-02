@@ -41,17 +41,28 @@
  *
  * ## The modal sub-routes
  *
- * Five of the six surfaces open one of their rows over the list they
- * sit on: the digest at `:entityId`, and the lexicon, sources, agents
- * and tools at `:entityId/edit`. Settings carries none — it is a single
- * form, not a list with rows to open.
+ * Five of the six surfaces open their rows over the list they sit on:
+ * the digest at `:entityId`, and the lexicon, sources, agents and tools
+ * at `:entityId/edit`. Settings carries none — it is a single form, not
+ * a list with rows to open.
+ *
+ * Each of those five declares a LIST of them rather than one, because a
+ * row can be openable in more than one WAY: editing a source, ruling on
+ * its proposed config and listing its failures would be three addresses
+ * over one list, none of them a child of either other. Every list holds
+ * exactly one entry today and all of them render the same placeholder,
+ * so the shape is currently capacity rather than use — but it is the
+ * capacity that keeps a second address a table row instead of a branch
+ * in {@link surfaceRoute}, and it is why an entry carries its ELEMENT
+ * beside its path: a surface's second sub-route is not the same modal
+ * as its first.
  *
  * Each is a CHILD of its list route rather than a sibling, which is the
  * whole point of the shape: the list stays matched and stays rendered,
- * and the modal arrives in the trailing `Outlet` the page stage puts at
- * the bottom of every list page. An operator deep-linking straight into
- * one therefore gets the list behind it for free, and closing the modal
- * is a navigation up to the parent rather than a re-entry.
+ * and the modal arrives in the trailing `Outlet` at the bottom of every
+ * list page. An operator deep-linking straight into one therefore gets
+ * the list behind it for free, and closing the modal is a navigation up
+ * to the parent rather than a re-entry.
  *
  * Digest's pattern is bare where the other four end in `/edit` because
  * the two do different things: a finding opens read-only, and the UI
@@ -130,41 +141,29 @@ const CATCH_ALL_PATTERN = '*';
 /**
  * The route parameter every modal sub-route names its row with.
  *
- * Spelled once for all five, because the pages read it back BY NAME
- * (`useParams<{ entityId: string }>()`): a second spelling here would
- * not fail to match, it would open a modal on `undefined`.
+ * Spelled once for the whole table below, because the pages read it
+ * back BY NAME (`useParams<{ entityId: string }>()`): a second spelling
+ * here would not fail to match, it would open a modal on `undefined`.
  */
 const ENTITY_PARAM = ':entityId';
 
 /**
- * The modal sub-route each list surface carries, keyed by surface id.
+ * One modal sub-route: the pattern it answers at, and what it renders.
  *
- * Patterns are relative to the surface route they hang under, so one
- * entry serves both bases. Settings is absent on purpose — see the
- * header on why, and on why the digest's pattern has no `/edit`.
+ * A pair rather than a bare pattern because a surface's sub-routes are
+ * not interchangeable — the address and the modal behind it belong
+ * together, so a second entry is a row in the table rather than a
+ * branch in {@link surfaceRoute}.
  */
-const MODAL_SUB_ROUTE_PATTERNS: Readonly<Record<string, string>> = {
-  digest: ENTITY_PARAM,
-  lexicon: `${ENTITY_PARAM}/edit`,
-  sources: `${ENTITY_PARAM}/edit`,
-  agents: `${ENTITY_PARAM}/edit`,
-  tools: `${ENTITY_PARAM}/edit`,
-};
+interface ModalSubRoute {
+  /** Pattern, relative to the surface route this hangs under. */
+  readonly path: string;
+  /** What that path renders, in its list page's trailing `Outlet`. */
+  readonly element: ReactNode;
+}
 
-/**
- * The same table, with every key proven to name a surface that exists.
- *
- * The round trip through `getSurface` is the guard, and it is the only
- * one available: a record lookup against a stale key simply answers
- * `undefined`, so the sub-route would vanish from both trees without a
- * word. Here it throws while this module loads.
- */
-const MODAL_SUB_ROUTES = new Map<string, string>(
-  Object.entries(MODAL_SUB_ROUTE_PATTERNS).map(([surfaceId, pattern]) => [
-    getSurface(surfaceId).id,
-    pattern,
-  ]),
-);
+/** Every list surface's sub-routes, keyed by surface id. */
+type ModalSubRouteTable = Readonly<Record<string, readonly ModalSubRoute[]>>;
 
 /**
  * The app's persistent chrome, filled with the concrete rail and band.
@@ -198,23 +197,65 @@ export const SURFACE_PLACEHOLDER = (
 /**
  * The stand-in every modal sub-route renders until its modal lands.
  *
- * ONE element for all five, for the same reason {@link
- * SURFACE_PLACEHOLDER} is one for all six: identity makes "is there
- * anything behind this route yet" a `toBe` a test can ask without
- * rendering. Held as an ELEMENT rather than as the component itself,
- * so that stays true across both trees — writing the tag at each
- * registration would build ten distinct objects.
+ * ONE element for every entry in the table below, for the same reason
+ * {@link SURFACE_PLACEHOLDER} is one for every surface: identity makes
+ * "is there anything behind this route yet" a `toBe` a test can ask
+ * without rendering. Held as an ELEMENT rather than as the component
+ * itself, so that stays true across both trees — writing the tag at
+ * each registration would build one object per registration per base.
  *
  * Unlike its neighbour above this one is a component rather than
  * markup, because the row it names and the list it closes to are both
  * read from the router — see `../components/PlaceholderModal`, which
  * lives over there for the reason `./DomainGuard.tsx` gives.
  *
- * It is unreachable in the meantime: the surface routes above still
- * render a placeholder rather than a list page, so there is no
- * `Outlet` for it to arrive in.
+ * It is reachable: every surface route above renders a real list page
+ * now, and `ListPage` puts the trailing `Outlet` this arrives in at the
+ * bottom of each one, so the row actions on those pages already open
+ * it.
  */
 export const MODAL_PLACEHOLDER = <PlaceholderModal />;
+
+/**
+ * The modal sub-routes each list surface carries, keyed by surface id.
+ *
+ * A LIST per surface, so a row openable in more than one way costs a
+ * row here rather than a shape change — see the header. Every list
+ * holds exactly one entry today and every entry renders {@link
+ * MODAL_PLACEHOLDER}; a surface whose list is empty and a surface with
+ * no key at all mean the same thing to {@link surfaceRoute}.
+ *
+ * Declared BELOW the placeholder rather than beside the other route
+ * constants at the top because it names that element: an entry holds
+ * what it renders, so the table cannot be evaluated before there is
+ * something to hold.
+ *
+ * Patterns are relative to the surface route they hang under, so one
+ * entry serves both bases. Settings is absent on purpose — see the
+ * header on why, and on why the digest's pattern has no `/edit`.
+ */
+const MODAL_SUB_ROUTE_TABLE: ModalSubRouteTable = {
+  digest: [{ path: ENTITY_PARAM, element: MODAL_PLACEHOLDER }],
+  lexicon: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
+  sources: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
+  agents: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
+  tools: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
+};
+
+/**
+ * The same table, with every key proven to name a surface that exists.
+ *
+ * The round trip through `getSurface` is the guard, and it is the only
+ * one available: a record lookup against a stale key simply answers
+ * `undefined`, so every sub-route under it would vanish from both trees
+ * without a word. Here it throws while this module loads.
+ */
+const MODAL_SUB_ROUTES = new Map<string, readonly ModalSubRoute[]>(
+  Object.entries(MODAL_SUB_ROUTE_TABLE).map(([surfaceId, subRoutes]) => [
+    getSurface(surfaceId).id,
+    subRoutes,
+  ]),
+);
 
 /**
  * What an unmatched path renders, inside the shell.
@@ -260,30 +301,40 @@ const surfaceElement = (surface: Surface): ReactNode => {
 };
 
 /**
- * One list surface, with its modal sub-route beneath it where it has
- * one.
+ * One list surface, with its modal sub-routes beneath it where it has
+ * any.
  *
  * Built per call rather than held as a constant, so each base gets its
- * own `children` array — `RouteObject.children` is mutable, and one
- * array shared by two parents is a single edit away from being two
- * trees that disagree.
+ * own `children` array AND its own route objects — `RouteObject` and
+ * its `children` are both mutable, and one array shared by two parents
+ * is a single edit away from being two trees that disagree.
+ *
+ * No `children` key at all where the surface declares nothing, rather
+ * than an empty array. The router matches identically either way, so
+ * this is not a behaviour — it is about the tree as DATA, which is how
+ * the tests read it: a settings route carrying an empty `children`
+ * would read as a surface that declares sub-routes and happens to have
+ * none, rather than as one that declares none.
  *
  * @param surface - Entry from `SURFACES`.
- * @returns The surface's route, with its modal child where the table
- * names one and no `children` key at all where it does not.
+ * @returns The surface's route, carrying one child per entry the table
+ * names for it.
  */
 const surfaceRoute = (surface: Surface): RouteObject => {
-  const modalPath = MODAL_SUB_ROUTES.get(surface.id);
+  const subRoutes = MODAL_SUB_ROUTES.get(surface.id) ?? [];
   const element = surfaceElement(surface);
 
-  if (modalPath === undefined) {
+  if (subRoutes.length === 0) {
     return { path: surface.segment, element };
   }
 
   return {
     path: surface.segment,
     element,
-    children: [{ path: modalPath, element: MODAL_PLACEHOLDER }],
+    children: subRoutes.map((subRoute) => ({
+      path: subRoute.path,
+      element: subRoute.element,
+    })),
   };
 };
 
@@ -292,8 +343,10 @@ const surfaceRoute = (surface: Surface): RouteObject => {
  * and the catch-all.
  *
  * Built fresh per call so the two trees own separate arrays — but from
- * one declaration, so a surface, and any modal sub-route under one, is
- * written once and appears under both bases.
+ * one declaration, so a surface, and every modal sub-route under one,
+ * is written once and appears under both bases. Still one factory with
+ * the table widened: a surface's second sub-route is a table row, and
+ * nothing about building a base changed to accept it.
  *
  * @returns The child routes of a layout route, in declaration order.
  */

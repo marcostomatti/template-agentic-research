@@ -5,14 +5,19 @@ import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
 import { SINGLE_DOMAIN_BASE, SURFACES, withBase } from './paths';
-import { NOT_FOUND, ROUTES } from './router';
+import { MODAL_PLACEHOLDER, NOT_FOUND, ROUTES } from './router';
 
 // `matchRoutes` resolves a path against the route objects with nothing
 // rendered and no browser present, which is the whole reason `./router.tsx`
-// exports its tree as data rather than as a router. It answers the three
-// questions this file asks — does every surface resolve, does a modal
-// sub-route keep its list surface matched, and does an unmatched path reach
-// the catch-all — and it answers them for both bases off one array.
+// exports its tree as data rather than as a router. It answers most of what
+// this file asks — does every surface resolve, does each declared modal
+// sub-route keep its list surface matched, what does the leaf render, and
+// does an unmatched path reach the catch-all — and it answers them for both
+// bases off one array.
+//
+// One question it cannot answer is completeness: a path has to be built
+// before it can be matched, so a registration nothing here names is never
+// driven. That one reads the tree's own children instead.
 //
 // What it cannot see is the index REDIRECT: `<Navigate>` only acts during a
 // render, so the index route's MATCH is assertable here and where it lands
@@ -34,6 +39,17 @@ const ENTITY_ID = '7';
 const UNMATCHED = 'nothing-answers-here';
 
 /**
+ * A segment BELOW a row id that no modal sub-route answers at.
+ *
+ * `UNMATCHED` above names a surface that does not exist; this one sits
+ * where a sub-route's own trailing segment would (`7/<this>`), which is
+ * the near miss saying a surface's sub-routes are matched whole and that
+ * its list route does not swallow whatever follows a row id. The guard
+ * below keeps it from colliding with a real one as the table grows.
+ */
+const FABRICATED_SEGMENT = 'not-a-sub-route';
+
+/**
  * The two bases, each with the route pattern it is declared at.
  *
  * `base` is what a link builder produces and `pattern` is what a match
@@ -51,24 +67,32 @@ const BASES = [
 ] as const;
 
 /**
- * The modal sub-route each surface declares, keyed by surface id, with
- * `null` for a surface that carries none.
+ * The modal sub-routes each surface declares, keyed by surface id, with
+ * an empty list for a surface that carries none.
+ *
+ * A LIST per surface because the route table is one: a surface may
+ * declare more than one address over its list, and a reader that could
+ * only hold the first would leave the second untested with every
+ * assertion below still green.
  *
  * Written out rather than read back off the route tree: a table derived
- * from the thing under test can only ever agree with it. The set-equality
- * test below is what keeps this honest as surfaces are added.
+ * from the thing under test can only ever agree with it. Two tests keep
+ * it honest — the set-equality one below as SURFACES are added, and
+ * `carries exactly the sub-routes this file states` as REGISTRATIONS
+ * are, which is the one that reports a sub-route added to `./router.tsx`
+ * and forgotten here.
  */
-const MODAL_ROUTE_PATTERNS: Readonly<Record<string, string | null>> = {
-  digest: ENTITY_PARAM,
-  lexicon: `${ENTITY_PARAM}/edit`,
-  sources: `${ENTITY_PARAM}/edit`,
-  agents: `${ENTITY_PARAM}/edit`,
-  tools: `${ENTITY_PARAM}/edit`,
-  settings: null,
+const MODAL_ROUTE_PATTERNS: Readonly<Record<string, readonly string[]>> = {
+  digest: [ENTITY_PARAM],
+  lexicon: [`${ENTITY_PARAM}/edit`],
+  sources: [`${ENTITY_PARAM}/edit`],
+  agents: [`${ENTITY_PARAM}/edit`],
+  tools: [`${ENTITY_PARAM}/edit`],
+  settings: [],
 };
 
 /**
- * The pattern a surface's modal sub-route is declared at, or `null`.
+ * The patterns a surface's modal sub-routes are declared at.
  *
  * Tolerant of a surface the table above does not mention, deliberately: a
  * throwing reader called while the module or a `describe` body is
@@ -76,29 +100,37 @@ const MODAL_ROUTE_PATTERNS: Readonly<Record<string, string | null>> = {
  * one test that would have reported the gap by name goes with it.
  *
  * @param surfaceId - Nav id of the surface.
- * @returns The relative route pattern, or `null` for no modal.
+ * @returns Its relative route patterns, empty for a surface with none.
  */
-function modalPatternOf(surfaceId: string): string | null {
-  return MODAL_ROUTE_PATTERNS[surfaceId] ?? null;
+function modalPatternsOf(surfaceId: string): readonly string[] {
+  return MODAL_ROUTE_PATTERNS[surfaceId] ?? [];
 }
 
 /**
- * Every surface declaring a modal sub-route, paired with its pattern.
+ * Every surface declaring at least one modal sub-route.
  *
  * Derived at module scope through the tolerant reader above, so a surface
  * the expectation table forgot drops out here rather than throwing at
  * collection time. The non-emptiness test below is what keeps that from
  * emptying the case tables silently.
  */
-const MODAL_SURFACES = SURFACES.flatMap((surface) => {
-  const pattern = modalPatternOf(surface.id);
+const MODAL_SURFACES = SURFACES.filter(
+  (surface) => modalPatternsOf(surface.id).length > 0,
+);
 
-  if (pattern === null) {
-    return [];
-  }
-
-  return [{ surface, pattern }];
-});
+/**
+ * Every declared sub-route as its own case: a surface and ONE pattern.
+ *
+ * The matching tests below drive this rather than `MODAL_SURFACES`, so a
+ * surface's second address is exercised as fully as its first instead of
+ * riding on its neighbour's pass.
+ */
+const MODAL_SUB_ROUTES = MODAL_SURFACES.flatMap(
+  (surface) => modalPatternsOf(surface.id).map((pattern) => ({
+    surface,
+    pattern,
+  })),
+);
 
 /**
  * Join a sub-path onto a base without doubling the separator.
@@ -159,6 +191,29 @@ function paramsOf(
   path: string,
 ): Readonly<Record<string, string | undefined>> {
   return matchRoutes(ROUTES, path)?.at(-1)?.params ?? {};
+}
+
+/**
+ * The sub-route patterns the ROUTE TREE declares under one surface.
+ *
+ * The one reader here that goes to the tree for an answer rather than
+ * driving it with a path. Every matching test below is built from the
+ * expectation table, so a registration the table forgot is simply never
+ * asked about; this is what the completeness test holds it against.
+ *
+ * @param basePattern - Pattern one of the two bases is declared at.
+ * @param segment - Path segment of the surface.
+ * @returns One label per declared child, empty where the surface carries
+ * no children at all.
+ */
+function declaredSubRoutesOf(
+  basePattern: string,
+  segment: string,
+): readonly string[] {
+  const base = ROUTES.find((route) => route.path === basePattern);
+  const surface = base?.children?.find((route) => route.path === segment);
+
+  return (surface?.children ?? []).map(routeLabel);
 }
 
 describe('the two route trees', () => {
@@ -236,10 +291,12 @@ describe('the surface routes', () => {
 });
 
 describe('the modal sub-routes', () => {
-  it('states a modal sub-route, or none, for every surface', () => {
+  it('states a sub-route list, possibly empty, for every surface', () => {
     // The expectation table is keyed by surface id, so a surface added
-    // without an entry would quietly drop out of every test below. This is
-    // the one that reports it by name.
+    // without an entry would quietly drop out of every test below — the
+    // tolerant reader answers `[]` for it, which is indistinguishable
+    // from a surface that genuinely declares none. This is the one that
+    // reports it by name.
     // Arrange / Act
     const stated = [...Object.keys(MODAL_ROUTE_PATTERNS)].sort();
 
@@ -248,10 +305,36 @@ describe('the modal sub-routes', () => {
   });
 
   it('has at least one surface carrying a modal sub-route', () => {
-    // Both case tables below are built off MODAL_SURFACES, so an empty one
-    // would leave them comparing two empty lists.
+    // Every case table below is built off one of these two, so an empty
+    // list would leave them comparing two empty lists. Both are asserted
+    // because they can empty independently: a table of surfaces that all
+    // declare `[]` leaves the first non-empty and the second not.
     // Arrange / Act / Assert
     expect(MODAL_SURFACES.length).toBeGreaterThan(0);
+    expect(MODAL_SUB_ROUTES.length).toBeGreaterThan(0);
+  });
+
+  it('carries exactly the sub-routes this file states, per base', () => {
+    // The completeness leg. Every other test here drives a path built
+    // from the expectation table, so a sub-route registered in
+    // `./router.tsx` and left out of the table is never asked about and
+    // every one of them stays green. This is the one that reads the tree
+    // and holds it to the table — and it reads BOTH bases, because a
+    // registration reaching only one of them is exactly what building
+    // both from one factory is supposed to make impossible.
+    // Arrange / Act
+    const declared = BASES.flatMap(({ label, pattern }) => SURFACES.map((surface) => ({
+      at: `${label}: ${surface.id}`,
+      patterns: declaredSubRoutesOf(pattern, surface.segment),
+    })));
+
+    // Assert
+    expect(declared).toEqual(
+      BASES.flatMap(({ label }) => SURFACES.map((surface) => ({
+        at: `${label}: ${surface.id}`,
+        patterns: [...modalPatternsOf(surface.id)],
+      }))),
+    );
   });
 
   it('keeps its list surface matched, under both bases', () => {
@@ -260,10 +343,14 @@ describe('the modal sub-routes', () => {
     // the whole chain rather than just that the deep path matched
     // something — a sibling route would match too, and would render the
     // modal with no list behind it.
+    //
+    // Driven per PAIR rather than per surface, so a surface's second
+    // declared address is matched on its own rather than inheriting its
+    // neighbour's pass.
     // Arrange
-    const cases = BASES.flatMap(({ label, base, pattern }) => MODAL_SURFACES
+    const cases = BASES.flatMap(({ label, base, pattern }) => MODAL_SUB_ROUTES
       .map(({ surface, pattern: modalPattern }) => ({
-        at: `${label}: ${surface.id}`,
+        at: `${label}: ${surface.id} at ${modalPattern}`,
         path: pathUnder(
           withBase(base, surface.id),
           modalPattern.replace(ENTITY_PARAM, ENTITY_ID),
@@ -278,15 +365,42 @@ describe('the modal sub-routes', () => {
     expect(matched).toEqual(cases.map(({ at, chain }) => ({ at, chain })));
   });
 
+  it('opens the shared placeholder at every one of them', () => {
+    // `toBe`, not a render: matching says nothing about what sits behind
+    // the address, and the placeholder is one shared element across every
+    // registration and both bases — which is what makes identity askable
+    // here at all.
+    //
+    // This is a LEDGER of what has no real modal yet, so it shrinks as
+    // the editors land; a registration pointing somewhere else is
+    // reported here by the path it was driven with.
+    // Arrange / Act
+    const opened = BASES.flatMap(({ label, base }) => MODAL_SUB_ROUTES
+      .map(({ surface, pattern }) => ({
+        at: `${label}: ${surface.id} at ${pattern}`,
+        element: leafElementOf(pathUnder(
+          withBase(base, surface.id),
+          pattern.replace(ENTITY_PARAM, ENTITY_ID),
+        )),
+      })));
+
+    // Assert
+    expect(opened.filter((row) => row.element !== MODAL_PLACEHOLDER))
+      .toEqual([]);
+  });
+
   it('names the row it was opened on in the params', () => {
     // Arrange / Act
-    const opened = MODAL_SURFACES.map(({ surface, pattern }) => {
+    const opened = MODAL_SUB_ROUTES.map(({ surface, pattern }) => {
       const path = pathUnder(
         withBase(SINGLE_DOMAIN_BASE, surface.id),
         pattern.replace(ENTITY_PARAM, ENTITY_ID),
       );
 
-      return { surface: surface.id, entityId: paramsOf(path).entityId };
+      return {
+        at: `${surface.id} at ${pattern}`,
+        entityId: paramsOf(path).entityId,
+      };
     });
 
     // Assert
@@ -341,10 +455,52 @@ describe('the catch-all', () => {
     expect(chainOf(`/digest/${ENTITY_ID}/edit`)).toEqual(['/', '*']);
   });
 
+  it('fabricates a segment no declared sub-route answers at', () => {
+    // The vacuity guard on the case below. FABRICATED_SEGMENT has to name
+    // nothing the table declares, and the table grows — so read the
+    // trailing segment of every declared pattern and assert the
+    // fabricated one is not among them. `edit` asserted PRESENT in the
+    // same case is the control: it says the tails were actually read,
+    // where a reader answering nothing would satisfy the `not` alone.
+    // Arrange / Act
+    const tails = MODAL_SUB_ROUTES.map(
+      ({ pattern }) => pattern.split('/').at(-1),
+    );
+
+    // Assert
+    expect(tails).toContain('edit');
+    expect(tails).not.toContain(FABRICATED_SEGMENT);
+  });
+
+  it('claims a fabricated segment below a row, under both bases', () => {
+    // One segment past every declared sub-route: `7/<fabricated>` is two
+    // deep under the digest's bare `:entityId` and a near miss on the
+    // other four's `:entityId/edit`. Both readings are the same claim —
+    // a sub-route pattern is matched WHOLE, and a list route does not
+    // swallow whatever trails a row id — and the catch-all is where the
+    // path lands when it holds.
+    // Arrange
+    const cases = BASES.flatMap(({ label, base, pattern }) => MODAL_SURFACES
+      .map((surface) => ({
+        at: `${label}: ${surface.id}`,
+        path: pathUnder(
+          withBase(base, surface.id),
+          `${ENTITY_ID}/${FABRICATED_SEGMENT}`,
+        ),
+        chain: [pattern, '*'],
+      })));
+
+    // Act
+    const matched = cases.map(({ at, path }) => ({ at, chain: chainOf(path) }));
+
+    // Assert
+    expect(matched).toEqual(cases.map(({ at, chain }) => ({ at, chain })));
+  });
+
   it('claims a modal path on a surface that declares none', () => {
     // Arrange
     const withoutModal = SURFACES.filter(
-      (surface) => modalPatternOf(surface.id) === null,
+      (surface) => modalPatternsOf(surface.id).length === 0,
     );
 
     // Act
