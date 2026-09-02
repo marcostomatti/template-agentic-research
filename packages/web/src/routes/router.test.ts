@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SINGLE_DOMAIN_BASE, SURFACES, withBase } from './paths';
 import {
+  DIGEST_DETAIL,
   LEXICON_EDITOR,
   MODAL_PLACEHOLDER,
   NOT_FOUND,
@@ -129,12 +130,13 @@ const MODAL_SURFACES = SURFACES.filter(
  * A LEDGER, written out rather than derived: it is the list of what
  * this wave has not built yet, and a roster read back off the route
  * tree could only ever agree with whatever the tree currently says.
- * It shrinks by one as each editor lands, and the partition test
+ * It shrinks by one as each real modal lands, and the partition test
  * below is what refuses a surface that leaves it without joining a
- * test that makes a claim about its element instead.
+ * test that makes a claim about its element instead. All three
+ * remaining are EDITORS — the digest's read-only detail has landed,
+ * so this roster no longer stands for two kinds of modal at once.
  */
 const PLACEHOLDER_SURFACES: readonly string[] = [
-  'digest',
   'sources',
   'agents',
   'tools',
@@ -446,13 +448,27 @@ describe('the modal sub-routes', () => {
     expect(opened).toHaveLength(BASES.length);
   });
 
-  it('leaves no declared sub-route out of both claims above', () => {
-    // Without this the two tests above are each satisfiable by a list
-    // that quietly stopped covering a surface: a registration in
-    // NEITHER roster is asserted about by nothing, and a registration
-    // in BOTH would make one of them wrong about the other's element.
+  it('opens the digest detail at its own sub-route', () => {
+    // The second real element, and the one that says the ledger is a
+    // PARTITION rather than a shrinking list: this modal is not an
+    // editor, so its registration could never have been satisfied by
+    // whatever the remaining three eventually open.
+    // Arrange / Act
+    const opened = openedElements(['digest']);
+
+    // Assert
+    expect(opened.filter((row) => row.element !== DIGEST_DETAIL))
+      .toEqual([]);
+    expect(opened).toHaveLength(BASES.length);
+  });
+
+  it('leaves no declared sub-route out of the claims above', () => {
+    // Without this the tests above are each satisfiable by a list that
+    // quietly stopped covering a surface: a registration in NO roster
+    // is asserted about by nothing, and one in TWO would make one of
+    // them wrong about the other's element.
     // Arrange
-    const claimed = [...PLACEHOLDER_SURFACES, 'lexicon'];
+    const claimed = [...PLACEHOLDER_SURFACES, 'lexicon', 'digest'];
     const declared = MODAL_SURFACES.map((surface) => surface.id);
 
     // Assert

@@ -56,12 +56,13 @@
  *
  * The other half is in use as of the lexicon's editor: an entry carries
  * its ELEMENT beside its path, and those elements have stopped being
- * one shared placeholder. Four surfaces still open
- * {@link MODAL_PLACEHOLDER} and the lexicon opens
- * {@link LEXICON_EDITOR}, which is what an entry holding its own
- * element was for — a surface's modal is not the same modal as its
- * neighbour's, any more than its second sub-route is the same as its
- * first.
+ * one shared placeholder. THREE surfaces still open
+ * {@link MODAL_PLACEHOLDER} — sources, agents and tools — while the
+ * lexicon opens {@link LEXICON_EDITOR} and the digest opens
+ * {@link DIGEST_DETAIL}. That is what an entry holding its own element
+ * was for: a surface's modal is not the same modal as its neighbour's,
+ * any more than its second sub-route is the same as its first, and the
+ * two that have landed are not even the same KIND of modal.
  *
  * Each is a CHILD of its list route rather than a sibling, which is the
  * whole point of the shape: the list stays matched and stays rendered,
@@ -73,8 +74,9 @@
  * Digest's pattern is bare where the other four end in `/edit` because
  * the two do different things: a finding opens read-only, and the UI
  * spec grows it into a full routed detail page later — at which point
- * this sub-route is already the path that page will answer at. The
- * other four open an editor over the row they name.
+ * this sub-route is already the path that page will answer at, so the
+ * growth is a change of element and not of URL. The other four open an
+ * editor over the row they name.
  *
  * The patterns are relative, so — like the index redirect above — one
  * declaration serves both bases. They are keyed by surface id and read
@@ -114,6 +116,7 @@ import { Sidebar } from '../app-shell/Sidebar';
 import { Topbar } from '../app-shell/Topbar';
 import { PlaceholderModal } from '../components/PlaceholderModal';
 import { findPage } from '../pages';
+import { DigestDetailModal } from '../pages/digest/DigestDetailModal';
 import { LexiconEditorModal } from '../pages/lexicon/LexiconEditorModal';
 
 import { DomainGuard } from './DomainGuard';
@@ -220,6 +223,10 @@ export const SURFACE_PLACEHOLDER = (
  * now, and `ListPage` puts the trailing `Outlet` this arrives in at the
  * bottom of each one, so the row actions on those pages already open
  * it.
+ *
+ * It stands at SIX of the ten registrations now — sources, agents and
+ * tools, across both bases — and the count shrinks by two with each
+ * editor that lands.
  */
 export const MODAL_PLACEHOLDER = <PlaceholderModal />;
 
@@ -239,26 +246,41 @@ export const MODAL_PLACEHOLDER = <PlaceholderModal />;
 export const LEXICON_EDITOR = <LexiconEditorModal />;
 
 /**
+ * The digest's read-only detail, at its bare `:entityId` sub-route.
+ *
+ * The second real element in the table below, and the one that makes
+ * that table's elements more than a shrinking ledger: it is not an
+ * editor. A finding opens to be READ — the record, the rail, and the
+ * one ruling an operator changes from there — which is exactly the
+ * claim `../components/PlaceholderModal` could not make while it stood
+ * for both kinds at once.
+ *
+ * Held as an ELEMENT for the reason its two neighbours are: one object
+ * across both trees, so identity stays askable.
+ */
+export const DIGEST_DETAIL = <DigestDetailModal />;
+
+/**
  * The modal sub-routes each list surface carries, keyed by surface id.
  *
  * A LIST per surface, so a row openable in more than one way costs a
  * row here rather than a shape change — see the header. Every list
- * holds exactly one entry today, and the lexicon's is the first to
- * name a real modal rather than {@link MODAL_PLACEHOLDER}; a surface
- * whose list is empty and a surface with no key at all mean the same
- * thing to {@link surfaceRoute}.
+ * holds exactly one entry today, and two of them now name a real modal
+ * rather than {@link MODAL_PLACEHOLDER}: the lexicon's editor and the
+ * digest's detail. A surface whose list is empty and a surface with no
+ * key at all mean the same thing to {@link surfaceRoute}.
  *
- * Declared BELOW the placeholder rather than beside the other route
- * constants at the top because it names that element: an entry holds
- * what it renders, so the table cannot be evaluated before there is
- * something to hold.
+ * Declared BELOW the elements rather than beside the other route
+ * constants at the top because it names them: an entry holds what it
+ * renders, so the table cannot be evaluated before there is something
+ * to hold.
  *
  * Patterns are relative to the surface route they hang under, so one
  * entry serves both bases. Settings is absent on purpose — see the
  * header on why, and on why the digest's pattern has no `/edit`.
  */
 const MODAL_SUB_ROUTE_TABLE: ModalSubRouteTable = {
-  digest: [{ path: ENTITY_PARAM, element: MODAL_PLACEHOLDER }],
+  digest: [{ path: ENTITY_PARAM, element: DIGEST_DETAIL }],
   lexicon: [{ path: `${ENTITY_PARAM}/edit`, element: LEXICON_EDITOR }],
   sources: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
   agents: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],

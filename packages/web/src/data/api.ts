@@ -1243,8 +1243,13 @@ export function saveCategoryTerms(
 }
 
 /**
- * Save one finding — the digest row action's verdict, and whatever
- * else its detail modal edits.
+ * Save one finding — every ruling the digest records, from either of
+ * the two controls that make one.
+ *
+ * The row menu and the detail modal both write a VERDICT through this,
+ * and the menu additionally writes the queue stamp its own module
+ * reserves on the payload. Nothing else on that surface writes at all,
+ * which is what keeps this a whole-row save with one caller shape.
  *
  * Eventually a PATCH rather than a PUT, and the difference is real
  * here: {@link Finding.verdict} is not a `findings` column at all but

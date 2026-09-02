@@ -7,10 +7,11 @@
  * no decision in it — opening a row is a route change, which the page
  * performs directly. These two are the other kind: each produces a NEW
  * finding for the seam to record, and each has a rule that is easy to
- * get subtly wrong. The column and the modal that offer them are not
- * built yet, so nothing imports this module today; it is written first
- * because a decision written into a `.tsx` is reachable by no test in
- * this package at all.
+ * get subtly wrong. Both controls now exist — the row menu in
+ * `./DigestPage.tsx` and the verdict control in
+ * `./DigestDetailModal.tsx` — and both read this module rather than
+ * holding a rule of their own, because a decision written into a
+ * `.tsx` is reachable by no test in this package at all.
  *
  * So both live here as pure functions: nothing below renders, imports
  * React or reads a clock. That is the arrangement `./rows.ts` and
@@ -72,9 +73,11 @@
  * a finding is `saveFinding`. So the intention is recorded on the
  * finding itself, under {@link RESEARCH_REQUEST_FIELD} — a key this
  * shell reserves, namespaced with a colon so it cannot be mistaken for
- * one of the domain's own contract fields, and read back by
- * {@link researchRequestedAt} and by nothing else. Nothing in
- * `./rows.ts` reads it, so it reaches no cell and no search.
+ * one of the domain's own contract fields, and read back by the two
+ * readers below it — {@link researchRequestedAt} for the stamp itself
+ * and {@link isShellField} for the convention that hides it — and by
+ * nothing else. Nothing in `./rows.ts` reads it, so it reaches no cell
+ * and no search.
  *
  * That is a narrowing worth stating rather than discovering: the key
  * is not a column, the domain never declared it, and it goes with the
@@ -138,6 +141,16 @@ export const NO_VERDICT_VALUE = 'ar:no-verdict';
  * and would have left the surface nothing to say about WHEN.
  */
 export const RESEARCH_REQUEST_FIELD = 'ar:researchRequestedAt';
+
+/**
+ * What marks a payload key as this shell's rather than the domain's.
+ *
+ * The colon {@link RESEARCH_REQUEST_FIELD} is namespaced with, held as
+ * a constant because {@link isShellField} is the second place that
+ * convention is applied and a second literal is how the two would
+ * drift apart.
+ */
+const SHELL_FIELD_MARK = ':';
 
 /**
  * What the send action says about a finding already in the queue.
@@ -310,6 +323,32 @@ export function researchRequestedAt(finding: Finding): IsoTimestamp | null {
   return typeof recorded === 'string'
     ? recorded
     : null;
+}
+
+/**
+ * Whether a payload key belongs to this shell rather than to the
+ * domain.
+ *
+ * The other read-back of the reservation {@link RESEARCH_REQUEST_FIELD}
+ * makes, and the general one: a `fieldContract` declares plain
+ * identifiers (`summary`, `firstSeenAt`, `isOpenSource`), so a key
+ * carrying the colon is one this shell wrote and no domain asked for.
+ * `./detail.ts` is what needs the general form — a detail view listing
+ * a payload is showing the DOMAIN what it recorded, and a stand-in
+ * this shell keeps on the row would read there as a field the domain
+ * has never heard of.
+ *
+ * Keyed on the convention rather than on the one member, so a second
+ * reserved key is hidden by the reservation itself rather than by
+ * remembering to extend a list. The colocated test pins the member
+ * that exists against the rule, which is what keeps the two halves
+ * from being separately true and jointly wrong.
+ *
+ * @param name - A key of a finding's `fields` payload.
+ * @returns Whether this shell reserved it.
+ */
+export function isShellField(name: string): boolean {
+  return name.includes(SHELL_FIELD_MARK);
 }
 
 /**

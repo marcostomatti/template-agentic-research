@@ -6,20 +6,23 @@
  * Five of the six surfaces open one of their rows over the list they
  * sit on — the digest at `:entityId`, the lexicon, sources, agents and
  * tools at `:entityId/edit` — and each is declared under both route
- * bases. EIGHT of those ten registrations render this component: the
- * lexicon's two now open `../pages/lexicon/LexiconEditorModal`, which
- * is the first of the five real editors to land and the reason the
- * count here is worth stating rather than implying.
+ * bases. SIX of those ten registrations render this component: the
+ * lexicon's two open `../pages/lexicon/LexiconEditorModal` and the
+ * digest's two open `../pages/digest/DigestDetailModal`, which is why
+ * the count here is worth stating rather than implying. It shrinks by
+ * two with each surface after them.
  *
- * That remaining set is the whole constraint on what this may say:
- * anything it claimed would have to be true of a finding opening
- * READ-ONLY and of three editors at once.
+ * That remaining set is the whole constraint on what this may say, and
+ * the set has narrowed to ONE KIND: sources, agents and tools all wait
+ * on an EDITOR. The digest's read-only detail has landed, so this no
+ * longer has to be true of a finding opening read-only as well.
  *
- * It is why there is no footer here. A disabled `Save` would state the
- * shape of the three editors still waiting and misstate the digest's,
- * whose bare `:entityId` is the read-only detail path the UI spec grows
- * into a full page later. The body says the one thing true of all four:
- * the address is live and nothing behind it is.
+ * There is still no footer here, and the reason has changed rather
+ * than gone. A disabled `Save` would now be honest about all three —
+ * but it would state the shape of an editor this component has no
+ * draft behind, which is a promise about behaviour rather than about
+ * an address. The body says the one thing that stays true: the address
+ * is live and nothing behind it is.
  *
  * ## Why `open` is a literal
  *
@@ -63,8 +66,8 @@
  * exactly as the topbar derives its heading — never from state, since
  * a back button and the domain switcher's base swap both change the
  * surface without passing through anything here. It is what
- * distinguishes the registrations that remain without there being one
- * element apiece.
+ * distinguishes the three registrations that remain without there
+ * being one element apiece.
  *
  * The title is passed for a second reason beyond naming the row:
  * `Modal` draws its header, and with it the close button and the

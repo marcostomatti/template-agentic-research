@@ -16,6 +16,7 @@ import {
   ALREADY_QUEUED_REASON,
   NO_VERDICT_VALUE,
   RESEARCH_REQUEST_FIELD,
+  isShellField,
   readVerdictChoice,
   researchRequestedAt,
   sendToResearch,
@@ -398,6 +399,53 @@ describe('researchRequestedAt', () => {
     // The vacuity guard: a domain declaring no contract would satisfy
     // the line above without saying anything about the namespace.
     expect(Object.keys(contract).length).toBeGreaterThan(0);
+  });
+});
+
+describe('isShellField', () => {
+  it('reads every key the seeded contracts declare as the domain\'s', () => {
+    // Negative first: the predicate's job is to hide keys, so a rule
+    // that answered true too readily would empty an operator's payload
+    // block. Driven off the real contracts of BOTH domains rather than
+    // off a spelling, which is what makes it a claim about this
+    // deployment.
+    // Arrange
+    const contracts = [DEFAULT_DOMAIN_SLUG, SPARSE_DOMAIN_SLUG]
+      .flatMap((slug) => Object.keys(
+        resolveFieldContract(getDomain(slug)),
+      ));
+
+    // Assert
+    expect(contracts.filter((name) => isShellField(name))).toEqual([]);
+    // The vacuity guard: a deployment declaring no contract at all
+    // would satisfy the line above without saying anything.
+    expect(contracts.length).toBeGreaterThan(0);
+  });
+
+  it('reads the key this module reserves as the shell\'s', () => {
+    // The rule and its one member, pinned against each other. Stated
+    // separately from the spelling of either, so a reservation that
+    // stopped carrying the mark is reported here rather than silently
+    // showing up in a payload block.
+    // Arrange / Act / Assert
+    expect(isShellField(RESEARCH_REQUEST_FIELD)).toBe(true);
+    expect(isShellField(NO_VERDICT_VALUE)).toBe(true);
+  });
+
+  it('reads a key a send actually wrote as the shell\'s', () => {
+    // The same claim through the action rather than through the
+    // constant: what a payload block must hide is whatever the queue
+    // gesture put there.
+    // Arrange
+    const queued = sentFinding(sendToResearch(findingWith({}), REQUESTED_AT));
+
+    // Act
+    const added = Object.keys(queued.fields)
+      .filter((name) => !Object.keys(findingWith({}).fields).includes(name));
+
+    // Assert
+    expect(added).not.toHaveLength(0);
+    expect(added.filter((name) => !isShellField(name))).toEqual([]);
   });
 });
 

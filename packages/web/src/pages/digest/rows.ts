@@ -53,8 +53,15 @@ import type {
 import type { QueryField } from '../filters';
 import type { BadgeProps } from '@ar/ui';
 
-/** The `fields` key the domain's contract requires of every finding. */
-const SUMMARY_FIELD = 'summary';
+/**
+ * The `fields` key the domain's contract requires of every finding.
+ *
+ * Exported because `./detail.ts` reads the same key for the modal that
+ * opens over a row: the table and the detail have to name a finding
+ * the same way, and two spellings of one key is exactly how two
+ * surfaces stop agreeing about which text is the finding's own.
+ */
+export const SUMMARY_FIELD = 'summary';
 
 /** The `fields` key carrying a finding's own labels. */
 const TAGS_FIELD = 'tags';
@@ -237,12 +244,21 @@ function resolveSubject(
  * not come back with this read. The kind rides along with the host
  * because a domain reads the same host over more than one protocol.
  *
+ * Exported as of the detail modal, which states the same reading in
+ * its stat rail. Two surfaces answering one question differently is
+ * the failure worth a shared function here — the modal opens over the
+ * very row whose cell an operator just read, so a second derivation
+ * would be visibly wrong the moment the two disagreed.
+ *
+ * Named for the READING rather than for the label, so a call site can
+ * bind its answer to a `sourceLabel` member without shadowing it.
+ *
  * @param document - The document a finding was read from, or undefined
  * where it did not arrive.
  * @param byId - Every source of the domain, keyed by id.
  * @returns The label, always a non-empty string.
  */
-function sourceLabel(
+export function readSourceLabel(
   document: Document | undefined,
   byId: ReadonlyMap<number, Source>,
 ): string {
@@ -375,7 +391,7 @@ export function buildDigestRows(reads: DigestSources): readonly DigestRow[] {
       categoryKey: subject === undefined
         ? null
         : readText(subject.attributes, CATEGORY_ATTRIBUTE),
-      sourceLabel: sourceLabel(document, sourcesById),
+      sourceLabel: readSourceLabel(document, sourcesById),
       parseFailed: document?.parseStatus === 'failed',
       createdAt: finding.createdAt,
     };
