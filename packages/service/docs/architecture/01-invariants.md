@@ -36,13 +36,13 @@ sentinel tests in both directions over a value the surface stores.
 | Invariant | Enforced by | Owning phase | Status |
 | --- | --- | --- | --- |
 | No workflow holds a send-capable node | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
-| A model node is fed a prepared chunk and nothing else | `tests/workflows/ar-ingest.test.ts`, driving the built body of the node that assembles a prompt and holding what it hands on to the framed halves, the four ids and the measurements — the half this row's phase and status are about; `tests/lib/chunk.test.ts`, landed in phase 4, for what a prepared chunk is before any workflow reaches for one | 5 | Implemented |
+| A model node is fed a prepared chunk and nothing else | `tests/workflows/ar-ingest.test.ts`, driving the built body of the node that assembles a prompt and holding what it hands on to the framed halves, the four ids and the measurements — the half this row's phase and status are about; `tests/workflows/ar-research.test.ts`, landed in phase 6, holding the second such node to the same shape, where what is left behind is the subject, the terms and the document bodies and the offered documents survive as the ids the answer will be judged against; `tests/lib/chunk.test.ts`, landed in phase 4, for what a prepared chunk is before any workflow reaches for one | 5 | Implemented |
 | A prepared chunk is capped at 6000 characters, and there is no raw-body fallback | `tests/lib/chunk.test.ts`, driving `buildChunk` over assemblies each of which would overrun the cap, and holding what it refuses to a closed roster of reasons in both directions | 4 | Implemented |
-| Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 5 | Implemented |
+| Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/`, holding every workflow that holds a model node to all three; `tests/workflows/ar-ingest.test.ts` and `tests/workflows/ar-research.test.ts`, driving each ceiling node against the bound its own body declares and holding it to emit nothing past that bound whatever arrived — which is the half a structural read of the source cannot ask about | 5 | Implemented |
 | Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
 | Building one tree twice writes byte-identical artifacts, and the git build stamp is the one value permitted to move with the checkout | `tests/build/build-workflows.test.ts`, spawning `scripts/build-workflows.ts` twice over a fixture source tree and holding the two output directories against each other | 3 | Implemented |
 | A library spliced into a Code node stands alone there — no value import, declaration-form exports only, no reliance on module scope | `scripts/build-workflows.ts`, refusing the first two through `assertSpliceable` in `scripts/workflow-markers.ts` and writing no artifact at all; `pretest` runs the build ahead of the default suite, and the third rule leaves nothing to refuse it on | 3 | Implemented |
-| Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
+| Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts`, with the opt-in `tests/live/research-approval.live.test.ts` watching a real database refuse the record for an intention nobody approved and leave both tables as it found them | 2 | Implemented |
 | No proposed configuration reaches a source row without a recorded approval | `source_config_proposals_approval_check`, the CHECK in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 5 | Implemented |
 | A category is a root or the child of a root, and nothing deeper | A trigger in the hand-written migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts`, with the opt-in `tests/live/schema.live.test.ts` watching a database refuse the write | 2 | Implemented |
 | Every document carries a hash, and no two carry the same one | The NOT NULL and UNIQUE pair on `documents.hash` in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
@@ -345,10 +345,14 @@ generated from it, and the static-SQL scan is a real tie between two
 tracked copies of one rule. A trigger is modelled nowhere, so it is
 hand-written, and that scan is then evidence about the file and about
 nothing else — a database the migration never reached reads exactly like
-one where the guard stands. That is why the depth row alone names a live
-file. Its `Implemented` still rests on the static scan, which the
-default suite runs; `tests/live/schema.live.test.ts` self-skips without
-`AR_LIVE_DATABASE_URL`, and the cell says opt-in for that reason.
+one where the guard stands. That is why the depth row names a live file
+where the hash row does not. Its `Implemented` still rests on the static
+scan, which the default suite runs; `tests/live/schema.live.test.ts`
+self-skips without `AR_LIVE_DATABASE_URL`, and the cell says opt-in for
+that reason. The approval row above names a live file for a reason of
+its own: its CHECK is generated, so the static scan is already a real
+tie, and what `tests/live/research-approval.live.test.ts` adds is a
+database refusing the record rather than a scan standing in for one.
 
 ### The three de-origination rows hold from the first commit
 
