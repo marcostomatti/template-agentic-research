@@ -268,6 +268,68 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * further away, on an instance, in a workflow nobody is watching.
    */
   AR_SCORE_WORKFLOW_ID: 'ar-score',
+
+  /**
+   * The workflow `ar-ingest` invokes to research the candidates a
+   * pass raised and an operator has since approved.
+   *
+   * Not one of the dispatcher's pair, and what keeps it out is
+   * structural rather than a preference between two shapes.
+   * `ar-dispatch` invokes what it CLAIMED, and there are two
+   * schedulable tables to claim from: `Plan Dispatch`'s
+   * `TARGET_BY_KIND` pairs the `topic` kind to
+   * `AR_TOPIC_WORKFLOW_ID` and the `export` kind to
+   * `AR_EXPORT_WORKFLOW_ID`, and there is no third kind for it to
+   * hold. A `research_pool` row carries no `next_run_at` and
+   * nothing claims it — it is raised by a pass and ruled on by an
+   * operator, which is a queue rather than a schedule.
+   *
+   * The invocation sits at the end of the topic path for a second
+   * reason, and it is the one that decides the shape: a pass that
+   * proposes when its subject should come round again needs the
+   * claimed topic's own `min_interval_seconds` and
+   * `max_interval_seconds`, or the gap it proposes has no bounds to
+   * be clamped against. The topic is exactly what the dispatcher
+   * claimed and handed on. So this entry sits beside
+   * `AR_SCORE_WORKFLOW_ID` rather than beside the pair: both are
+   * pipeline steps a pass hands its own work to, with no second
+   * answer to pick from, where those two are a routing choice made
+   * on the kind of a claimed row.
+   *
+   * `ar-research` is the id the roster in `workflows/src/README.md`
+   * names for the research path: drain what was approved, research
+   * each candidate against the documents behind it, record what
+   * came back, and propose when to look again. That is what an
+   * approved row is waiting for, which is why the id is the default
+   * here rather than something an operator supplies.
+   *
+   * An id in a setting rather than a literal on the canvas, on the
+   * terms the entries above set out. What an Execute Workflow node
+   * addresses is whatever the INSTANCE stores a workflow under, and
+   * that is the far side's to decide rather than this tree's:
+   * `scripts/deploy-external.ts` upserts on the display NAME and
+   * reads back whatever id the instance answered with. A value
+   * decided there cannot be written here as a literal, because a
+   * tracked artifact is one file standing in front of every
+   * deployment.
+   *
+   * So a deployment holding this workflow under another id changes
+   * one thing and it is not the upload: the upsert matches on the
+   * display name and finds the same workflow either way. What moves
+   * is the ADDRESS its callers were built with, and the repair is
+   * to resolve this name to that id and build again — one setting,
+   * in front of one table, leaving `ar-ingest.json` saying what the
+   * tree says. An id edited into that artifact instead would be
+   * repaired away by the next rebuild, and would be wrong for every
+   * other deployment while it lasted.
+   *
+   * A name nothing answers for is a BUILD failure and not a
+   * run-time one, on the terms `AR_SCORE_WORKFLOW_ID` above states.
+   * The converse is not a failure at all: resolution is driven by
+   * the markers a source carries, so an entry no marker has named
+   * yet is inert rather than a build waiting to go off.
+   */
+  AR_RESEARCH_WORKFLOW_ID: 'ar-research',
 };
 
 /**
