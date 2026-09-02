@@ -78,6 +78,128 @@
       }
     },
     {
+      "id": "select-model-connector",
+      "name": "Select Model Connector",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        880,
+        0
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH\n-- Where the address of the model this pass calls is read, and the only node in this\n-- group that can read one. A Code node opens no connection and a spliced library\n-- imports nothing, so the endpoint and the model name arrive here as data or the\n-- nodes below have nothing to call. ar-ingest carries a node of this name asking the\n-- same question of the same table and argues the whole of it, including why the\n-- oldest llm row wins and why neither member is validated anywhere before this\n-- projection. What is written out here is the half that differs.\n\n-- ONE READ FOR THE PASS, on that node's reasoning. executeOnce runs this against the\n-- first item it was handed and answers once, and which service this deployment calls\n-- is a fact about the deployment rather than about any one period.\n\n-- THE FIRST ITEM IS THE ASSEMBLED DIGEST, AND IT IS THE ONLY ITEM. That is what\n-- parts this node from both siblings, where the first item is one of a batch and\n-- which one arrived first is a property of an ordering. Assemble Digest answers\n-- exactly one item by construction, briefings taking one row per pass, so there is no\n-- question here about which item executeOnce read.\n\n-- EVERY PASS REACHES THIS NODE, which is the other difference and the larger one. At\n-- ingest and at research a pass with an empty queue never gets here at all, so the\n-- table is read only when there was something to spend on. Here the node above\n-- answers its one item whatever the period held, so this statement runs on a pass\n-- that resolved no domain and on a period that came to nothing alike, and what\n-- decides whether anything is spent is the node below rather than the arrival of an\n-- item.\n\n-- One parameter, the run, read off the item this node was handed. It travels for the\n-- reason it travels everywhere on this canvas: the ledger row below is charged to the\n-- run and not to a period.\nconnector AS (\n  -- The llm connector, by kind, oldest first and capped at one. connectors is not\n  -- domain scoped and nothing on a domain row names one, so there is nothing here to\n  -- narrow by. The sibling states what the cap decides and what reconfiguring rather\n  -- than adding a rival buys.\n  SELECT c.id, c.name, c.config\n  FROM connectors c\n  WHERE c.kind = 'llm'\n  ORDER BY c.id\n  LIMIT 1\n)\n\nSELECT\n-- Two members read out of the config object, each read as text only where it IS text\n-- and with the empty string taken for an absence. connectors.config carries no type\n-- annotation, its shape being the client's business, so nothing has validated either\n-- of these and this projection is where they are first read.\n\n-- A null endpoint means there is nowhere to reach, and the node below refuses on it\n-- by name rather than passing it on. The subscription's own connector_id is NOT what\n-- is read here and is not a rival reading of the same fact: that row names where a\n-- rendered artifact is delivered to, which is a question for a later phase and for\n-- something outside this canvas, where this names where the prose is drafted.\n\n-- A null model is an ordinary state and not a refusal. A gateway that routes, or a\n-- runtime serving whatever it was started with, takes no model name, and\n-- llm_calls.model is nullable for exactly that.\n\n-- connector_id and connector_name are carried for a reader rather than for a caller.\n-- Nothing below binds either one. They travel because the node that made a call and\n-- the row that named the service should be readable together on the canvas.\n  $1::bigint AS run_id,\n  (SELECT c.id FROM connector c) AS connector_id,\n  (SELECT c.name FROM connector c) AS connector_name,\n  (SELECT nullif(CASE WHEN jsonb_typeof(c.config -> 'endpoint') = 'string'\n                      THEN c.config ->> 'endpoint'\n                 END, '')\n     FROM connector c) AS endpoint,\n  (SELECT nullif(CASE WHEN jsonb_typeof(c.config -> 'model') = 'string'\n                      THEN c.config ->> 'model'\n                 END, '')\n     FROM connector c) AS model",
+        "options": {
+          "queryReplacement": "={{ $json.run_id }}"
+        }
+      }
+    },
+    {
+      "id": "apply-call-ceiling",
+      "name": "Apply Call Ceiling",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Where a digest pass decides how much it is going to spend, and the\n// first node on this canvas that decides anything about money.\n// Nothing above it opens a connection to a model and nothing below\n// it can reduce what this one lets through. The ceiling is applied\n// here, before a chunk is prepared, because preparing one is work\n// and the cheapest call is the one that was never staged.\n//\n// THE CEILING IS A DECLARED CONSTANT. MAX_DRAFT_CALLS_PER_RUN below\n// is an integer written into this source, which is what\n// docs/architecture/01-invariants.md means by an explicit per run\n// ceiling: a bound a reviewer finds by reading the declarations\n// rather than by following the arithmetic. It is deliberately not a\n// settings marker, on the reasoning ar-ingest gives at the node of\n// this name. ENV_DEFAULTS in scripts/workflow-markers.ts is where a\n// value an operator tunes per deployment lives, and moving this one\n// there is that edit plus its own entry in that table rather than\n// something to imply here.\n//\n// IT IS ONE, AND ONE IS THE WHOLE POINT OF DECLARING IT. A period\n// comes to one digest: the node above assembles a single value out\n// of every finding the window held, and the prose half of a briefing\n// is one body drafted from that value rather than one body per\n// section or per finding. So the slice below drops nothing today,\n// and saying that is not an argument against it. What it stops is\n// exactly the change that would go unnoticed otherwise -- a\n// selection or an assembly that started answering a row per section,\n// or per subscription, turning one drafting call per tick into as\n// many as the domain has buckets. The two siblings bound a batch\n// that is already plural; this bounds a batch that is meant to stay\n// singular, and the bound is where that intent is written down.\n//\n// IT IS NOT THE PERIOD'S OWN BOUND. Select Digest Material bounds\n// what a digest COVERS by the stamp on the newest stored briefing,\n// and that is a statement about which findings belong to this\n// period. This bounds what the pass may SPEND on saying what they\n// came to. The two never trade against each other: a window holding\n// four hundred findings and a window holding four are one call each.\n//\n// WHAT IS WORTH A CALL is read off the assembly and off nothing\n// else. total is the count digest-assemble.ts derived from the\n// sections it built, and its two absences are different facts about\n// the period: null is a pass that read no section at all, which is\n// the domain the run was opened for resolving to nothing, and 0 is a\n// pass that read every section and found each of them empty. Neither\n// gives a model anything to write about, so neither is staged, and\n// the difference between them is kept where it was made rather than\n// collapsed here.\n//\n// A PERIOD THAT CAME TO NOTHING IS NOT LOST BY NOT BEING DRAFTED.\n// The banner, the section headings and the counts are the assembly's\n// and are already decided; src/exports/markdown-body.ts lays out an\n// empty digest from them and every renderer under src/exports/\n// answers a briefing that came to nothing with its own preamble.\n// What a drafting call would add is a sentence saying what the\n// counts already say, once per tick, for as long as a domain stays\n// quiet.\n//\n// WHAT AN UNSTAGED PASS COSTS IS REAL AND IS NOT THIS NODE'S TO PAY.\n// A pass that stages nothing ends this chain here: no chunk is\n// prepared, no call is made, no ledger row is written, and every\n// node below runs on nothing. The group that stores the briefing and\n// the group that closes the runs row the dispatcher opened both have\n// to be reachable for such a pass, which is a wiring question for\n// those groups rather than something this node can answer by\n// emitting an item nobody could draft from. ar-ingest's Score\n// Findings names the mechanism this canvas already uses for the same\n// shape.\n//\n// THE CONNECTOR IS REFUSED RATHER THAN PASSED ON. A deployment with\n// no llm connector, or one whose config states no endpoint, has\n// nowhere to send a call, and this node stops the pass by name\n// instead of emitting nothing. Emitting nothing is indistinguishable\n// from a period that came to nothing, and a deployment in that state\n// would go on storing digests with no prose in them quietly for as\n// long as nobody looked.\n//\n// THAT IS NOT THE REFUSAL Assemble Digest DECLINED TO MAKE, and the\n// two are worth telling apart because they sit two nodes from each\n// other. That node answers an assembly saying nothing was read\n// rather than raising, because a domain that resolved to nothing is\n// a state a digest can report about itself. A missing endpoint is a\n// deployment somebody has not finished configuring, it is identical\n// on every pass until an operator acts, and no briefing this canvas\n// could write would say so. What the refusal costs is the run row\n// the group below would close, which is the same cost ar-ingest's\n// node of this name names.\n//\n// CARDINALITY. This node is handed one item, the connector, and\n// answers one for the period it stages or none at all. The assembly\n// is read back by name, for the reason everything on this canvas is:\n// the Postgres node in front of this one replaced the item that held\n// it.\n\n// One drafting call per pass. Written out rather than shared,\n// because a SQL statement can splice nothing and no marker declares\n// this number; the twenty five the rest of the set bounds its\n// batches with is a different bound over a different thing and is\n// not this one made smaller.\nconst MAX_DRAFT_CALLS_PER_RUN = 1;\n\n// How many findings the period came to, as the assembly counted\n// them, or null where it counted nothing. Read defensively for the\n// reason every reading of a jsonb value on this canvas is: the\n// payload crossed a Postgres node, and a member that is not a finite\n// number is one nothing measured rather than a zero.\nfunction findingTotal(payload) {\n  if (payload === null || typeof payload !== 'object') {\n    return null;\n  }\n\n  const total = payload.total;\n\n  return typeof total === 'number' && Number.isFinite(total)\n    ? total\n    : null;\n}\n\nconst connector = $input.first();\n\nif (connector === undefined) {\n  throw new Error(\n    '[ar-digest] Apply Call Ceiling was handed no connector item, '\n    + 'which Select Model Connector answers whatever the table holds',\n  );\n}\n\nconst endpoint = connector.json.endpoint;\n\nif (typeof endpoint !== 'string' || endpoint === '') {\n  throw new Error(\n    '[ar-digest] Apply Call Ceiling has no endpoint to spend '\n    + 'against: connectors holds no llm row whose config states one',\n  );\n}\n\n// Staged in the order the assembly answered, which is one item on\n// every pass this canvas can produce. Nothing here re-orders\n// anything, there being nothing to order.\nconst staged = [];\n\nfor (const item of $('Assemble Digest').all()) {\n  const row = item.json;\n  const total = findingTotal(row.briefing_payload);\n\n  if (total === null || total === 0) {\n    continue;\n  }\n\n  staged.push(row);\n}\n\n// Sliced rather than filtered, so the bound is the one declared\n// above and never a property of what happened to arrive. What is\n// carried forward is the run and the domain a row below is written\n// against and the assembled value the node below composes a chunk\n// out of, which is everything the item held: this node drops members\n// from no item, it drops whole items or none.\nreturn staged.slice(0, MAX_DRAFT_CALLS_PER_RUN).map((row) => ({\n  json: {\n    run_id: row.run_id,\n    domain_id: row.domain_id,\n    briefing_payload: row.briefing_payload,\n  },\n}));"
+      }
+    },
+    {
+      "id": "prepare-model-prompt",
+      "name": "Prepare Model Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "parameters": {
+        "jsCode": "__INLINE:chunk.ts__\n__INLINE:prompt-frame.ts__\n// Where an assembled period becomes the one payload a model may\n// receive. Both libraries above are spliced in whole and are wired\n// together here, which is the only place they can meet:\n// src/lib/chunk.ts reduces the material a digest is drafted from to\n// a bounded chunk and refuses one that is not worth a call, and\n// src/lib/prompt-frame.ts takes that chunk and fences it so that\n// everything inside the fence is read as data and never as\n// instructions. Nothing below states a reduction rule or a framing\n// rule of its own.\n//\n// AND NOTHING ELSE GOES FORWARD, which is the whole reason this\n// node exists as a separate one. The item it answers carries the two\n// framed halves, the run and the domain a row below is written\n// against, and the measurements of the prompt. The assembled value\n// does not survive it, nor any finding's text, nor a section\n// heading. So no expression below can reach for the stored material,\n// and the model node is fed a prepared chunk because there is\n// nothing else on the item to feed it.\n//\n// THE ASSEMBLY IS STILL THERE, one node reference away, and that is\n// deliberate rather than a leak. The group that stores the briefing\n// writes briefings.payload from $('Assemble Digest') and the prose\n// from the call this node prepares, so the structured half never\n// makes the round trip through a prompt and back, and what is stored\n// is what the assembly decided rather than what a model read of it.\n//\n// THE TRUSTED HALF AND THE UNTRUSTED HALF ARRIVE AS TWO MEMBERS,\n// which is the framing library's structural claim rather than a\n// convenience. A caller wiring a model node has to decide which\n// channel each half goes in, and two members make that decision\n// visible on this canvas: the node below puts system in the system\n// message and data in the prompt, and neither can be confused for\n// the other by an expression that reached for one string.\n//\n// THE PERSONA IS A ROW AND NEVER A LITERAL. It arrives from the\n// domain's personas, fetched by Load Domain Context at the top of\n// this pass, and personas in src/db/schema/domains.ts argues at\n// length why no prompt string is written into a workflow file at\n// all: one file serves every domain, the text is what an operator\n// tunes most, and a prompt fixed on a canvas is lost at the next\n// import. The role read is the drafter, which is the third of the\n// three the seed writes and the only one no other workflow frames\n// against -- ar-ingest and ar-research both read the researcher, and\n// ar-score makes no call at all. So this is the one role whose text\n// is spent here and nowhere else.\n//\n// THERE IS A HEADER, AND EVERY LINE IN IT IS A FACT ABOUT THE ASK.\n// buildChunk takes a roster of fields and the values already\n// resolved for them, and writes a header line per field so a model\n// does not have to guess what is known. Four are known before this\n// call and none of them is a guess about the answer: which period is\n// being written about, what this domain calls a finding, which\n// sections it declares and in what order, and how many findings the\n// period came to. The first is what makes a digest periodic, the\n// second is the vocabulary the prose has to use, and the last two\n// are what the structured half already says, offered so the prose\n// and the structure agree rather than disagreeing about the same\n// period.\n//\n// THE HEADER IS INSIDE THE FENCE, like every other part of a chunk,\n// and that is right rather than a compromise. The values in it came\n// from this deployment's own tables and are trusted, but a heading\n// an operator typed is still text somebody wrote, and neutralizing\n// it costs nothing that matters here: a period stamp, a count and a\n// list of headings have no active form to lose.\n//\n// THE PERIOD IS THE BOUNDARY AND NOT A RANGE. briefings carries no\n// period column, so what a stored digest covers is the span between\n// its own stamp and its predecessor's, and the only end of that span\n// this pass can state before writing its own row is the beginning.\n// A domain with nothing stored has no beginning either, and the\n// stand-in below says so rather than leaving the line off.\n//\n// THE ORDER THE BODY IS COMPOSED IN IS THE ASSEMBLY'S. Sections run\n// in the order the domain declared its categories with the section\n// under no category last, and the findings inside each run by score\n// with an absent score behind every score there is. Neither is\n// decided here. What that buys is more than tidiness once the\n// excerpt ceiling below bites: what survives a truncation is the\n// front of the digest, which is the sections a domain put first and\n// the findings that scored highest within them.\n//\n// THE EXCERPT CEILING IS THE LIBRARY'S, IT IS SHARED, AND HERE IT\n// BINDS HARDEST. MAX_EXCERPT_CHARS bounds the whole composed\n// excerpt, so a period's every section and every finding in them\n// share the bound one document has to itself at ingest. A domain\n// with a busy period is drafted from the front of its own digest and\n// not from all of it, and that is a real cost paid in prose\n// coverage. What it is never paid in is structure: the counts, the\n// sections and the findings a renderer lays out come from the stored\n// assembly, which this node does not touch and truncation cannot\n// reach.\n//\n// A DIGEST WITH NOTHING TO SAY IS NOT ASKED ABOUT. This node does\n// not set allowFieldsOnly, and the omission is the decision: a\n// header alone is a period stamp, a count and a list of headings,\n// and a call made from one would be a call answered out of the\n// model's own parameters and stored as this domain's account of a\n// period. The node above already declines to stage a period whose\n// findings came to none or to nothing read, so what a chunk refusal\n// catches here is the narrower case that survives that -- findings\n// whose fields hold no prose worth reading, or too little of it.\n//\n// TWO REFUSALS, and they are answered differently because they are\n// faults of different things. A chunk refusal is about this period:\n// the material behind it reduced to nothing, or to less than the\n// library's minimum. That period is not drafted and the pass carries\n// on with nothing on this output, which is the same shape the node\n// above describes for a period it declined to stage. A persona\n// refusal is about the operator's own text, is identical on every\n// pass until somebody edits a row, and would otherwise be a\n// deployment that quietly stored digests with no prose in them, so\n// it stops the pass by name. Which of the three the framing library\n// refused is what parts them, and CHUNK_EMPTY_REASON is the one that\n// belongs to the period.\n//\n// THAT PARTS THIS NODE FROM ar-research'S, where a chunk refusal\n// skips one candidate out of a batch and the pass goes on to the\n// next. There is no next here. A period is one item, so its refusal\n// is the pass's, which is why the reason is worth reading rather\n// than assuming: the two faults look identical from the far end of\n// an empty output.\n//\n// THE TEXT WAS ALREADY REDUCED AND IS REDUCED AGAIN. Assemble Digest\n// put every fields payload through sanitize-md.ts before the\n// assembly saw it, which is what bounds what the stored value can\n// DO, and promptFrame neutralizes the composed chunk again on its\n// way into the fence, which is what bounds what a model reads it as.\n// The two are different rules over the same text and neither stands\n// in for the other, so neither is skipped here on the strength of\n// the other having run.\n//\n// CARDINALITY. One item in, at most one out, and none whenever a\n// chunk was refused. Nothing below pairs against the node above this\n// one: the ledger below pairs against THIS node by position, which\n// on this canvas is a single position by construction.\n\n// The role whose system text this workflow speaks with.\n// personas.role is free text and carries no CHECK, the roles a\n// pipeline plays growing with the pipeline, so this is a lookup into\n// rows an operator wrote rather than a member of a closed set. The\n// seed writes three and this is the one nothing else reads.\nconst PERSONA_ROLE = 'drafter';\n\n// The header roster, in the order buildChunk writes it. No entry\n// carries an identifying flag, and the omission is deliberate: that\n// flag governs allowFieldsOnly alone, which this node never sets, so\n// writing one would be configuration nothing reads.\nconst DIGEST_FIELDS = [\n  {\n    key: 'period',\n    label: 'Period covered, from',\n    fallback: '(the first digest for this domain, covering everything)',\n  },\n  {\n    key: 'vocabulary',\n    label: 'What this domain calls a finding',\n    fallback: '(the assembly names no word)',\n  },\n  {\n    key: 'sections',\n    label: 'Sections, in order',\n    fallback: '(the assembly declares no sections)',\n  },\n  {\n    key: 'total',\n    label: 'Findings in this period',\n    fallback: '(the assembly counted none)',\n  },\n];\n\n// What separates the members of a list inside one header line.\n// buildChunk collapses every value to a single line, so this is\n// about what a reader and a model can both parse rather than about\n// layout.\nconst HEADING_JOIN = ', ';\n\n// What separates one composed block from the next in the body, and\n// what separates the lines inside one. collapseWhitespace keeps\n// paragraph structure and collapses nothing shorter, so both survive\n// the reduction as written.\nconst BLOCK_JOIN = '\\n\\n';\nconst ENTRY_JOIN = '\\n';\n\n// What stands between a field's own name and what it holds.\nconst FIELD_JOIN = ': ';\n\n// A stored value as one line of prose, or the empty string where\n// there is nothing to write. A string is taken as it stands and a\n// finite number is spelled out, because a fields payload legitimately\n// holds both and a count somebody stored is as much a fact about a\n// finding as its title. Anything else is dropped rather than coerced:\n// an object or a list rendered through String is a shape rather than\n// a sentence, and a model reading one learns nothing it could cite.\nfunction readValue(value) {\n  if (typeof value === 'string') {\n    return value.trim();\n  }\n\n  return typeof value === 'number' && Number.isFinite(value)\n    ? String(value)\n    : '';\n}\n\n// One finding's fields, as one line each, in the order the payload\n// holds them. Own keys only, so a payload spelling a prototype\n// member cannot put a function's text into a prompt, and a key whose\n// value reads as nothing takes no line at all rather than a labelled\n// blank.\nfunction fieldLines(fields) {\n  const lines = [];\n\n  if (fields === null || typeof fields !== 'object') {\n    return lines;\n  }\n\n  for (const key of Object.keys(fields)) {\n    const text = readValue(fields[key]);\n\n    if (text !== '') {\n      lines.push(key + FIELD_JOIN + text);\n    }\n  }\n\n  return lines;\n}\n\n// How one finding is introduced in the composed body. The marker is\n// trusted text this node writes and everything after it is somebody\n// else's, which is the same shape ar-research uses for a document.\n//\n// The score rides on the marker because it is what the ordering\n// around it was decided by, and it obeys the law it was stored\n// under: a measured score is written and an absent one says it is\n// absent, rather than a zero standing in for a reading nobody took.\nfunction findingBlock(finding) {\n  const scored = typeof finding.score === 'number'\n    && Number.isFinite(finding.score);\n  const said = scored\n    ? ', score ' + String(finding.score)\n    : ', unscored';\n  const marker = '[finding ' + String(finding.id) + said + ']';\n\n  return [marker, ...fieldLines(finding.fields)].join(ENTRY_JOIN);\n}\n\n// One section, as its heading and the findings under it. A section\n// holding nothing contributes nothing at all rather than a heading\n// over a blank: the counts are what say a bucket was read and empty,\n// and they are in the stored assembly rather than in this prompt.\n//\n// The heading is the assembly's, which is a category's own label, or\n// its key where the label reduced to nothing, or this domain's word\n// for a finding for the one section no domain declares. Nothing here\n// re-derives any of that.\nfunction sectionBlock(section) {\n  const findings = Array.isArray(section.findings)\n    ? section.findings\n    : [];\n\n  if (findings.length === 0) {\n    return '';\n  }\n\n  const heading = typeof section.heading === 'string'\n    ? section.heading\n    : '';\n  const blocks = findings\n    .filter((finding) => finding !== null && typeof finding === 'object')\n    .map(findingBlock);\n\n  return ['[section ' + heading + ']', ...blocks].join(BLOCK_JOIN);\n}\n\n// The sections of one assembly, in the order it fixed them.\nfunction sectionsOf(payload) {\n  if (payload === null || typeof payload !== 'object') {\n    return [];\n  }\n\n  return Array.isArray(payload.sections)\n    ? payload.sections.filter((s) => s !== null && typeof s === 'object')\n    : [];\n}\n\n// The system text of the persona holding a role, or the empty string\n// where there is none. Every member is typed on the way out, because\n// these entries came back through jsonb and nothing has validated\n// them: a row whose system_text is not text is a row an operator has\n// not finished, and it refuses below with the same sentence a\n// missing row does.\nfunction personaSystemText(entries, role) {\n  for (const entry of entries) {\n    if (entry !== null && typeof entry === 'object' && entry.role === role\n      && typeof entry.system_text === 'string') {\n      return entry.system_text;\n    }\n  }\n\n  return '';\n}\n\nconst context = $('Load Domain Context').first().json;\nconst personas = Array.isArray(context.personas)\n  ? context.personas\n  : [];\nconst persona = personaSystemText(personas, PERSONA_ROLE);\n\n// A pass with no drafter persona, or one whose text is not text.\n// Both are the same fault from here and both are pass wide, so this\n// refuses before a chunk is built rather than after.\nif (persona === '') {\n  throw new Error(\n    '[ar-digest] Prepare Model Prompt has no system text for the '\n    + PERSONA_ROLE + ' persona: the domain states none, or the row '\n    + 'it states holds no text',\n  );\n}\n\n// The boundary this digest covers from, read off the node that\n// selected the material rather than off the item: the assembly\n// replaced that row and the stamp is not one of the three members it\n// carried forward. A null stamp is a domain with nothing stored,\n// which the roster's stand-in states.\nconst selected = $('Select Digest Material').first().json;\nconst since = typeof selected.since === 'string'\n  ? selected.since\n  : '';\n\nconst items = [];\n\nfor (const item of $input.all()) {\n  const row = item.json;\n  const payload = row.briefing_payload;\n  const sections = sectionsOf(payload);\n  const headings = sections\n    .map((section) => (typeof section.heading === 'string'\n      ? section.heading\n      : ''))\n    .filter((heading) => heading !== '');\n  const total = payload !== null && typeof payload === 'object'\n    ? payload.total\n    : null;\n  const built = buildChunk({\n    fields: DIGEST_FIELDS,\n    values: {\n      period: since,\n      vocabulary: payload !== null && typeof payload === 'object'\n        ? payload.displayName\n        : '',\n      sections: headings.join(HEADING_JOIN),\n      total: typeof total === 'number' && Number.isFinite(total)\n        ? String(total)\n        : '',\n    },\n    body: sections\n      .map(sectionBlock)\n      .filter((block) => block !== '')\n      .join(BLOCK_JOIN),\n  });\n\n  if (!built.usable) {\n    continue;\n  }\n\n  const framed = promptFrame(persona, built.chunk);\n\n  if (!framed.usable) {\n    // A framing refusal that is not about the chunk is about the\n    // persona, and a persona fault repeats on every pass until\n    // somebody edits the row. Refusing by name here is what parts\n    // an operator text fault from a period with nothing readable\n    // behind it.\n    if (framed.reason !== CHUNK_EMPTY_REASON) {\n      throw new Error(\n        '[ar-digest] Prepare Model Prompt cannot frame the '\n        + PERSONA_ROLE + ' persona: ' + framed.reason,\n      );\n    }\n\n    continue;\n  }\n\n  const promptChars = framed.system.length + framed.data.length;\n\n  // What the model node is fed, and what the two nodes after it\n  // read. No section, no heading, no finding and no assembled value\n  // is here: the fenced form is the only spelling of any of them\n  // that leaves this node, and the assembly itself stays where it\n  // was decided.\n  items.push({\n    json: {\n      run_id: row.run_id,\n      domain_id: row.domain_id,\n      system: framed.system,\n      data: framed.data,\n      prompt_chars: promptChars,\n      est_tokens: estimateTokens(promptChars),\n      fence_cuts: framed.fenceCuts,\n      forms_defanged: framed.formsDefanged,\n    },\n  });\n}\n\nreturn items;"
+      }
+    },
+    {
+      "id": "draft-digest-prose",
+      "name": "Draft Digest Prose",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        1540,
+        0
+      ],
+      "retryOnFail": false,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.data }}",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "SystemMessagePromptTemplate",
+              "message": "={{ $json.system }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "model-endpoint",
+      "name": "Model Endpoint",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        220
+      ],
+      "retryOnFail": false,
+      "credentials": {
+        "openAiApi": {
+          "id": "ar-model",
+          "name": "AR Model"
+        }
+      },
+      "parameters": {
+        "model": "={{ $('Select Model Connector').first().json.model }}",
+        "options": {
+          "baseURL": "={{ $('Select Model Connector').first().json.endpoint }}",
+          "timeout": 60000,
+          "maxRetries": 0
+        }
+      }
+    },
+    {
+      "id": "ledger-model-call",
+      "name": "Ledger Model Call",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1760,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH\n-- Where a call is accounted for. One row per call, charged to the run that made it,\n-- and src/db/schema/runs.ts argues at length what that buys: the runs row accounts\n-- for a pass as a whole, and these rows account for the same work one call at a time,\n-- which is the granularity the question of what a call cost is asked at. ar-ingest\n-- carries a node of this name writing the same table, and the attribution argument,\n-- the no-conflict-target argument and the position-pairing argument are all made\n-- there rather than repeated here.\n\n-- THE CEILING AND THIS ROW ARE ONE PROPERTY read from two ends. Apply Call Ceiling\n-- states what a pass WILL spend and these rows are what it did, so a ceiling that\n-- quietly stopped being applied reads exactly like a pass whose period happened to be\n-- quiet. Neither half is enforced by anything in this schema, which is why the\n-- property is asserted over the built artifact instead.\n\n-- ONE ROW OUT PER CALL. The insert sits in a CTE and the outer SELECT names no FROM,\n-- so this node answers exactly one item for every item it was handed, and the group\n-- below stores a briefing whether or not the call came back with anything. An\n-- INSERT ... RETURNING on its own would emit nothing for a statement that wrote no\n-- row, and a digest pass whose drafting failed still has a period to store.\n\n-- THE PAIRING IS ONE POSITION HERE, which is what parts this from both siblings. They\n-- bound a plural batch and pair a call against the item it was made from by position;\n-- this canvas bounds its batch at one drafting call per pass, so the position bound\n-- below is zero on every pass that reaches this node. The shape is written the same\n-- way regardless, because what makes the pairing correct is the node above answering\n-- one item per item it ran on, and that is a property of that node rather than of the\n-- number of items it happened to have.\n\n-- WHAT BEING WRONG ABOUT IT WOULD COST is correspondingly smaller than at research,\n-- where a swap would file one candidate's answer under another's subject. Here there\n-- is nothing to swap with. What the reading is still load bearing for is the run: the\n-- measurements below come off the prepared item, so an item that was not the one this\n-- call was made from would charge a real call the wrong prompt size.\n\n-- THREE PARAMETERS, in declaration order: the run, the model name, and the prepared\n-- item this call was made from. The first two are read off Select Model Connector,\n-- which answered one row for the whole pass, so neither is a per call reading and\n-- neither needs pairing.\n\n-- BOUND AS ONE JSONB VALUE rather than as a member per column: fewer values for the\n-- comma splitter to get wrong, and the members are read out here where a comment can\n-- say what each one is.\nprepared AS (\n  SELECT $3::jsonb AS item\n),\n\n-- What the row says about the call, cast once. prompt_chars and est_tokens are in the\n-- signal class the schema calls out: null means nothing measured this call, and zero\n-- is a real reading rather than a stand in for one. Neither is COALESCEd to zero.\n\n-- The node name is a literal and is known by construction: the step that made the\n-- call is the node above this one, and its own name is the one fact it cannot fail to\n-- have. It is Draft Digest Prose rather than the endpoint hanging off it, because the\n-- endpoint is where the credential sits and the chain node is what a pass asked.\n\n-- The model is nullable and arrives so. A gateway that routes, or a runtime serving\n-- whatever it was started with, takes no model name, and what is stored is what was\n-- asked for rather than what served it.\ncall AS (\n  SELECT\n    nullif($2::text, '') AS model,\n    (p.item ->> 'prompt_chars')::integer AS prompt_chars,\n    (p.item ->> 'est_tokens')::integer AS est_tokens\n  FROM prepared p\n),\n\nwritten AS (\n  INSERT INTO llm_calls (run_id, node, model, prompt_chars, est_tokens)\n  SELECT\n    $1::bigint,\n    'Draft Digest Prose',\n    c.model,\n    c.prompt_chars,\n    c.est_tokens\n  FROM call c\n  RETURNING id\n)\n\nSELECT\n-- The item this node answers, and it is about the period rather than about the call.\n-- The run and the domain come back out of the prepared item, which is what the\n-- briefing row and the closing update are both charged to. Both were derived above\n-- this node, and passing them through here is a carry rather than a second\n-- derivation.\n\n-- The drafted prose is deliberately not among them: it is a model's own text, it is\n-- reachable off Draft Digest Prose by name, and routing it through a SQL parameter to\n-- get here would be a round trip that changes nothing about it. The assembled payload\n-- is absent for the same reason and one better -- it never entered the prompt either,\n-- so it has stayed exactly where Assemble Digest decided it.\n\n-- llm_call_id is the ledger row this call left behind. Nothing below reads it today.\n-- It travels because the row and the item it was written for are otherwise joined by\n-- nothing at all, this table carrying no reference to a briefing or a period.\n  $1::bigint AS run_id,\n  (SELECT (p.item ->> 'domain_id')::bigint FROM prepared p) AS domain_id,\n  (SELECT w.id FROM written w) AS llm_call_id",
+        "options": {
+          "queryReplacement": "={{ $('Select Model Connector').first().json.run_id }}, {{ $('Select Model Connector').first().json.model }}, {{ JSON.stringify($('Prepare Model Prompt').all()[$itemIndex].json) }}"
+        }
+      }
+    },
+    {
       "id": "dispatched-never-scheduled",
       "name": "Dispatched Never Scheduled",
       "type": "n8n-nodes-base.stickyNote",
@@ -137,6 +259,72 @@
           {
             "node": "Assemble Digest",
             "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Digest": {
+      "main": [
+        [
+          {
+            "node": "Select Model Connector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Model Connector": {
+      "main": [
+        [
+          {
+            "node": "Apply Call Ceiling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Call Ceiling": {
+      "main": [
+        [
+          {
+            "node": "Prepare Model Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Model Prompt": {
+      "main": [
+        [
+          {
+            "node": "Draft Digest Prose",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Digest Prose": {
+      "main": [
+        [
+          {
+            "node": "Ledger Model Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model Endpoint": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Draft Digest Prose",
+            "type": "ai_languageModel",
             "index": 0
           }
         ]
