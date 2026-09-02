@@ -109,6 +109,8 @@ export default async function start(args: string[]): Promise<void> {
 
     if (!taskInfo) {
       console.log('\n✅ All tasks completed!');
+      console.log('🧹 Wrap-up session starting: promote progress.txt findings, compact it, then commit, push and open the PR.');
+      console.log('   This is one full Claude session with no intermediate output — expect several quiet minutes. Interrupting it skips the push and PR; if that happens, run again to retry just this stage.');
       await preserveProgress();
       break;
     }
