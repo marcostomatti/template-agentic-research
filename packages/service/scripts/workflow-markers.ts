@@ -92,9 +92,11 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * schedule is acquired cheaply — one expression, in one field, on
    * one trigger — and then charged once per tick for as long as
    * nobody looks at it, which is the asymmetry this default is set
-   * against. Nothing a tick reaches today makes such a call; the
-   * targets arrive in phases 5 and 6. Choosing the cadence before
-   * the first bill rather than after it is the point.
+   * against. Both targets carry a model node now, so what a tick
+   * reaches is a real call rather than a projected one, and what is
+   * still ahead of it is the stack that imports them, in phase 7.
+   * Choosing the cadence before the first bill rather than after it
+   * is the point.
    *
    * A rate, not a ceiling. Ticking hourly bounds how often spending
    * can start and says nothing about what one pass costs:
@@ -141,8 +143,8 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    *
    * Only the second application survives such an edit, and it is
    * worth being exact about what that leaves. The Code node bounds
-   * what is INVOKED, which is what costs money once phase 6 puts
-   * model calls behind the dispatch. It cannot bound what was
+   * what is INVOKED, which is what costs money now that phase 6 has
+   * put model calls behind the dispatch. It cannot bound what was
    * claimed: a claim has already moved `next_run_at`, so rows a
    * vanished `LIMIT` let through would be rescheduled without ever
    * being run — skipped silently until they next come due. The
@@ -178,14 +180,17 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * is the work a topic coming due asks for, which is why the id is
    * the default here rather than something an operator supplies.
    *
-   * This id names a workflow that exists and the other does not. The
-   * roster delivered `ar-ingest` in phase 5 and reserves `ar-digest`
-   * for phase 6, so a claimed topic now resolves an id AND finds
-   * something behind it, where for two phases the dispatcher resolved
-   * a correct id and reached nothing. An absent target is still the
-   * expected state for `AR_EXPORT_WORKFLOW_ID` rather than a
-   * misconfiguration: the value is right and the target has not been
-   * built.
+   * Both ids name workflows that exist. The roster delivered
+   * `ar-ingest` in phase 5 and `ar-digest` in phase 6, so a claimed
+   * unit of either kind now resolves an id AND finds something behind
+   * it, where for two phases the dispatcher resolved a correct id and
+   * reached nothing. An absent target is no longer the expected state
+   * for either half of the pair. What still reaches the error branch
+   * is narrower and is not going away: a unit whose kind `Plan
+   * Dispatch` has no entry for carries a null where an id belongs, a
+   * deployment that never imported a target or renamed one resolves
+   * a correct id to nothing, and a target that runs and raises fails
+   * its invocation like anything else.
    *
    * A target that is not there is routed, not raised. The dispatcher
    * invokes through an Execute Workflow node, and that node carries a
@@ -193,8 +198,8 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * error branch, the node behind it closes that row's run as failed
    * naming the target it could not reach, and the tick carries on.
    * Both shapes either side of that are worse. Letting the failure
-   * propagate would take a whole pass down over a workflow nobody
-   * expected to be there yet; continuing on the REGULAR output would
+   * propagate would take a whole pass down over one unit whose target
+   * could not be reached; continuing on the REGULAR output would
    * close the run as a success, which is how a dispatch that never
    * happened comes to read like one that did.
    *
@@ -217,21 +222,22 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * target would make the dispatcher the thing that told them apart.
    *
    * `ar-digest` is the id the roster in `workflows/src/README.md`
-   * reserves for the export path: digests, plus the export
+   * delivers for the export path: digests, plus the export
    * subscriptions the dispatcher schedules. A subscription coming due
    * asks for its export to be rendered, which is that workflow's own
    * work.
    *
-   * Its target arrives a phase later than the other half's —
+   * Its target arrived a phase later than the other half's —
    * `ar-ingest` in phase 5, `ar-digest` in phase 6 — so the two ids
    * stopped naming absent workflows at different times, and phase 5
-   * opened the window where that shows: a claimed topic reaches a
-   * workflow that exists while a claimed subscription still reaches
-   * nothing, and one tick records successes and failures side by side
-   * for a reason that is nobody's mistake. The error branch described
-   * under `AR_TOPIC_WORKFLOW_ID` is what keeps those two outcomes
-   * readable apart on the `runs` rows rather than letting the second
-   * read as a fault in the first.
+   * opened a window where that showed: a claimed topic reached a
+   * workflow that existed while a claimed subscription reached
+   * nothing, and one tick recorded successes and failures side by
+   * side for a reason that was nobody's mistake. Phase 6 closed it.
+   * The error branch described under `AR_TOPIC_WORKFLOW_ID` is what
+   * kept those two outcomes readable apart on the `runs` rows rather
+   * than letting the second read as a fault in the first, and it is
+   * what still parts the narrower failures that outlived the window.
    */
   AR_EXPORT_WORKFLOW_ID: 'ar-digest',
 

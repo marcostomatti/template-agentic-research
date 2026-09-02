@@ -549,13 +549,14 @@ export function isScheduleTrigger(type: string): boolean {
  * the evidence rather than a note about a check something else
  * repeats.
  *
- * One built workflow holds a node under it. Phase 5 landed
- * `ar-ingest`, whose Model Endpoint is an `lmChatOpenAi` sub-node
- * the chain node above it calls through; `ar-research` and
- * `ar-digest` make model calls of their own in phase 6, and the
- * roster in `workflows/src/README.md` is what says so. Every
- * assertion standing on this constant ran across zero nodes for
- * two phases, failing empty in two different ways: the retry
+ * Every built workflow the roster in `workflows/src/README.md`
+ * marks as making a model call holds a node under it. Phase 5
+ * landed `ar-ingest`, whose Model Endpoint is an `lmChatOpenAi`
+ * sub-node the chain node above it calls through, and phase 6
+ * landed `ar-research` and `ar-digest` with a Model Endpoint
+ * apiece on the same terms. Every assertion standing on this
+ * constant ran across zero nodes for two phases, failing empty
+ * in two different ways: the retry
  * guard is a claim about every model node, so it held over none
  * of them, while the ledger-row and per-run-ceiling guards are
  * claims about every workflow HOLDING one, so their antecedent

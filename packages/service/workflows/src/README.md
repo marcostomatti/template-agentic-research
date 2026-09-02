@@ -2,9 +2,9 @@
 
 This directory holds the **editable source** for every n8n workflow in the
 research pipeline. Phase 1 landed the layout and the rules below, phase 3
-landed `ar-dispatch.json`, and phases 5 and 6 land the rest. Which of the
-six are here is the roster's delivered-in column below, not a count in
-this paragraph.
+landed `ar-dispatch.json`, and phases 5 and 6 landed the rest. Which of
+the six are here is the roster's delivered-in column below, not a count
+in this paragraph.
 
 The build landed with that first workflow, which is what makes the rules
 below a description of what runs rather than a plan:

@@ -13,7 +13,7 @@
  * `src/exports/` BESIDE IT IS THE RENDERER REGISTRY, which is what
  * that third name had to avoid. That file declares `ExportRenderer`
  * and `ExportArtifact` — what turns a domain's findings into bytes,
- * with the registry phase 6 fills — and a subscription is not a
+ * with the registry phase 6 filled — and a subscription is not a
  * renderer. A subscription is a standing request that a renderer be
  * run: this format, to that connector, this often. It NAMES a
  * renderer, the way a `sources` row names an adapter through its

@@ -353,13 +353,14 @@ export const runs = pgTable('runs', {
  * have written the row rather than against the rows. A ledger kept
  * only in a database has a second limit, that it is unreadable in
  * exactly the outage it would explain; the design this port draws
- * from answered that with a second copy on disk, and whether the
- * pairing is carried here is phase 6's to settle.
+ * from answered that with a second copy on disk, and phase 6 settled
+ * that the pairing is not carried: the three workflows that call a
+ * model write this row and nothing else, so that limit stands.
  *
  * `ar-ingest` writes these rows, from phase 5, one per call its model
- * node made, and `ar-research` joins it on the same terms from phase
- * 6; `ar-digest` is the third and has still to land. Nothing has run
- * any of them, for the reason the `runs` header above gives.
+ * node made, and `ar-research` and `ar-digest` joined it on the same
+ * terms from phase 6, one row per call apiece. Nothing has run any of
+ * them, for the reason the `runs` header above gives.
  */
 export const llmCalls = pgTable('llm_calls', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
@@ -668,8 +669,10 @@ export const benchmarkCases = pgTable('benchmark_cases', {
  * `./scheduling.ts`, and the two answer different questions — a
  * subscription is what a domain wants delivered and how often, this
  * is what was produced. Which of the two a renderer reads from, this
- * row or the findings underneath it, is `ar-digest`'s to settle in
- * phase 6.
+ * row or the findings underneath it, was settled in phase 6 as BOTH:
+ * `ExportRenderInput` in `src/exports/index.ts` is handed this row and
+ * the findings the pass selected, the briefing saying what the period
+ * came to and the findings being what a format lays out.
  *
  * The divergence from the design this port draws from is the whole
  * shape rather than a column, so reading that design's table first
@@ -679,8 +682,10 @@ export const benchmarkCases = pgTable('benchmark_cases', {
  * Here the text is the point, the audio is not carried, and what
  * goes with that key is idempotence; see `generated_at` below.
  *
- * Nothing writes these rows yet. `ar-digest` is the workflow that
- * will, phase 6.
+ * `ar-digest` writes these rows, from phase 6, one per pass over a
+ * domain's period, storing the drafted prose as `body` and the
+ * assembly as `payload` in one statement. Nothing has run it, for the
+ * reason the `runs` header above gives.
  */
 export const briefings = pgTable('briefings', {
   /** Surrogate key; see `domains.id` for why `number` mode. */

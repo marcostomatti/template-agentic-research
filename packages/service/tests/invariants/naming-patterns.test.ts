@@ -205,8 +205,8 @@ const FALSE_POSITIVE_CONTROLS: readonly FalsePositiveControl[] = [
     nearMiss: 'obsidian',
     line: '  | \'obsidian_md\'',
   },
-  // Not tracked yet: phase 6 adds the renderer for that format, and its
-  // module path carries the same name a second time.
+  // Tracked since phase 6, which landed the renderer for that format:
+  // its module path carries the same name a second time.
   {
     patternId: 'vault-uri',
     label: 'a module path named after that export format',

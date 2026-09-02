@@ -1564,8 +1564,8 @@ describe('workflow invariants — built tree', () => {
   // It ran across zero nodes for two phases.
   // `MODEL_NODE_TYPE_PREFIX` records why: phase 3 delivered
   // `ar-dispatch` alone, and the workflows that make model calls are
-  // `ar-ingest`, from phase 5, with `ar-research` and `ar-digest` to
-  // come in phase 6. Over that empty tree the half of the predicate
+  // `ar-ingest`, from phase 5, with `ar-research` and `ar-digest`
+  // landing in phase 6. Over that empty tree the half of the predicate
   // reading the retry setting was not merely unsatisfied, it never
   // ran at all — the matcher answered no for every node the tree
   // carried and the conjunction stopped there. Measured then:
