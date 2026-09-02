@@ -298,6 +298,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'held.set(key, [finding])',
     ],
   },
+  {
+    file: 'research-brief.ts',
+    ownText: [
+      'FENCE_STEM_RE.test(value)',
+      'id !== null && !offered.has(id)',
+      'id !== null && !citations.includes(id)',
+    ],
+  },
 ];
 
 /**
