@@ -2,6 +2,9 @@ import type { DraftScope } from './drafts';
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import * as api from './api';
+import { listConnectors, listExportSubscriptions } from './connectors';
+import { listDocuments, listFindings } from './digest';
 import { DEFAULT_DOMAIN_SLUG, SPARSE_DOMAIN_SLUG, getDomain } from './domains';
 import {
   DEPLOYMENT_DRAFT_SCOPE,
@@ -15,6 +18,10 @@ import {
   recordSingletonDraft,
   resetDrafts,
 } from './drafts';
+import { listCategories, listTerms } from './lexicon';
+import { listPersonas } from './personas';
+import { listSourceProposals } from './proposals';
+import { SETTINGS } from './settings';
 import { listSources } from './sources';
 
 /**
@@ -545,5 +552,526 @@ describe('DEPLOYMENT_DRAFT_SCOPE', () => {
     expect(DEPLOYMENT_DRAFT_SCOPE).toContain('@');
     expect(DEFAULT_DOMAIN_SLUG).not.toContain('@');
     expect(SPARSE_DOMAIN_SLUG).not.toContain('@');
+  });
+});
+
+/**
+ * The seeded domain's id, resolved once for the pair table below.
+ *
+ * Read off `./domains.ts` rather than written as a `1`, for the reason
+ * every derived constant in this file is derived: a reseeded table
+ * silently turns a hardcoded id into somebody else's domain and the
+ * cases go on passing against rows nobody meant.
+ */
+const SEEDED_DOMAIN_ID = getDomain(DEFAULT_DOMAIN_SLUG).id;
+
+/**
+ * The seeded domain's first taxonomy category, whose terms the lexicon
+ * pair reads and writes.
+ */
+const FIRST_CATEGORY_ID = rowAt(listCategories(SEEDED_DOMAIN_ID), 0).id;
+
+/**
+ * A seeded source whose captures include one that failed to parse.
+ *
+ * Derived through the same predicate `api.fetchSourceFailures` applies,
+ * so the pair below is asking about a queue the fixtures really carry.
+ * A document with no source at all is skipped rather than coerced:
+ * `Document.sourceId` is nullable, and a capture nothing captured for
+ * is not a source's failure.
+ *
+ * @returns Its id.
+ * @throws If no seeded capture failed against a source, which would
+ * make the failures pair vacuous rather than merely empty.
+ */
+function failingSourceId(): number {
+  const failed = listDocuments(SEEDED_DOMAIN_ID).find(
+    (document) => document.parseStatus === 'failed'
+      && document.sourceId !== null,
+  );
+
+  if (failed === undefined || failed.sourceId === null) {
+    throw new Error('No seeded capture failed against a source.');
+  }
+
+  return failed.sourceId;
+}
+
+/** The source whose failures the `resolveSourceFailure` pair rules on. */
+const FAILING_SOURCE_ID = failingSourceId();
+
+/** That source's failed captures, in the order the read answers them. */
+const FAILED_CAPTURES = listDocuments(SEEDED_DOMAIN_ID).filter(
+  (document) => document.parseStatus === 'failed'
+    && document.sourceId === FAILING_SOURCE_ID,
+);
+
+/** A term weight no seeded term carries. */
+const TERM_MARK = 91;
+
+/** A verdict no seeded finding carries. */
+const VERDICT_MARK = 'seam-verdict';
+
+/** An endpoint no seeded source carries. */
+const ENDPOINT_MARK = 'https://seam.example.test/feed';
+
+/** A proposal status no seeded proposal carries. */
+const PROPOSAL_MARK = 'skipped';
+
+/** A parse error no seeded capture carries. */
+const FAILURE_MARK = 'ruled on through the seam';
+
+/** A system text no seeded persona carries. */
+const PERSONA_MARK = 'Saved through the seam.';
+
+/** A name no configured connector carries. */
+const CONNECTOR_MARK = 'seam-connector';
+
+/** A delivery interval no seeded subscription carries. */
+const INTERVAL_MARK = 987_654;
+
+/**
+ * The prefix `./api.ts` gives every READ accessor and no write.
+ *
+ * What makes the coverage case below a derivation rather than a second
+ * hand-written list: the writes are whatever the barrel exports that
+ * does not begin with this, so a write added to `./api.ts` and to no
+ * pair is reported by the set comparison instead of being quietly
+ * uncovered. The partition claim beside it is what keeps the prefix
+ * itself under test.
+ */
+const READ_PREFIX = 'fetch';
+
+/** Every export of `./api.ts`, by name, with its value. */
+const ACCESSORS = new Map<string, unknown>(Object.entries(api));
+
+/** Every export of `./api.ts`, by name. */
+const ACCESSOR_NAMES: readonly string[] = [...ACCESSORS.keys()];
+
+/**
+ * How many parameters one barrel export declares.
+ *
+ * Read off the FUNCTION rather than off the pair's own closure, which
+ * would only ever report its own arity: the claim is about the
+ * accessor, and a write that lost or gained its slug is exactly what
+ * this has to be able to see.
+ *
+ * @param name - The export's name.
+ * @returns Its declared parameter count.
+ * @throws If the barrel exports no function by that name.
+ */
+function arityOf(name: string): number {
+  const accessor = ACCESSORS.get(name);
+
+  if (typeof accessor !== 'function') {
+    throw new Error(`No accessor named ${name}.`);
+  }
+
+  return accessor.length;
+}
+
+/**
+ * One write and the read that has to show it, as its case declares it.
+ *
+ * Generic in the READ's answer, which is the whole reason this shape
+ * exists: {@link SeamPairSpec.marksIn} is checked against whatever the
+ * accessor really resolves to, so a projector naming a member the row
+ * does not carry is a COMPILE error rather than a run of `undefined`s
+ * that every assertion below would happily compare. The pairs are
+ * heterogeneous — a list, a join, a singleton, two parent-scoped
+ * lists — and that is exactly what `./api.test.ts` says stopped it
+ * making this claim over its own write table uniformly.
+ *
+ * @typeParam T - What the pair's read resolves to.
+ */
+interface SeamPairSpec<T> {
+  /** The write accessor's exported name. */
+  readonly write: string;
+  /** The read accessor's exported name. */
+  readonly read: string;
+  /** Whether the write takes a resolved domain slug. */
+  readonly scoped: boolean;
+  /** The value the write puts where {@link marksIn} looks. */
+  readonly mark: unknown;
+  /** Save one edited SEEDED row, filed under this slug. */
+  readonly save: (slug: string) => Promise<void>;
+  /** What the matching read answers for this slug. */
+  readonly load: (slug: string) => Promise<T>;
+  /** That answer reduced to the field the mark was written into. */
+  readonly marksIn: (answered: T) => readonly unknown[];
+}
+
+/**
+ * One pair with its answer type erased, so the table can hold all
+ * nine.
+ */
+interface SeamPair {
+  /** The write accessor's exported name. */
+  readonly write: string;
+  /** The read accessor's exported name. */
+  readonly read: string;
+  /** Whether the write takes a resolved domain slug. */
+  readonly scoped: boolean;
+  /** The value the write puts where {@link marksIn} looks. */
+  readonly mark: unknown;
+  /** Save one edited SEEDED row, filed under this slug. */
+  readonly save: (slug: string) => Promise<void>;
+  /** What the matching read answers for this slug. */
+  readonly load: (slug: string) => Promise<unknown>;
+  /** That answer reduced to the field the mark was written into. */
+  readonly marksIn: (answered: unknown) => readonly unknown[];
+}
+
+/**
+ * Erase one pair's answer type, having checked its projector against
+ * it.
+ *
+ * The single cast in this section, and it is the boundary the generic
+ * exists to make safe: `load` and `marksIn` come from ONE spec, so the
+ * value handed to the projector is the value that spec's own read
+ * produced. Writing the table as {@link SeamPair} directly would have
+ * moved that cast into all nine cases and taken the checking with it.
+ *
+ * @typeParam T - What the pair's read resolves to.
+ * @param spec - The pair, fully checked.
+ * @returns It, with the answer widened to `unknown`.
+ */
+function seamPair<T>(spec: SeamPairSpec<T>): SeamPair {
+  return {
+    write: spec.write,
+    read: spec.read,
+    scoped: spec.scoped,
+    mark: spec.mark,
+    save: spec.save,
+    load: spec.load,
+    marksIn: (answered) => spec.marksIn(answered as T),
+  };
+}
+
+/**
+ * Every write `./api.ts` exports, beside the read that has to show it.
+ *
+ * Each `save` edits a SEEDED row and files it under whichever slug it
+ * is handed, which is what makes the cross-domain case below a real
+ * leak test rather than two domains passing each other in the dark:
+ * the row id exists on both sides, so only the scope can keep the edit
+ * where it belongs.
+ */
+const PAIRS: readonly SeamPair[] = [
+  seamPair({
+    write: 'saveCategoryTerms',
+    read: 'fetchTerms',
+    scoped: true,
+    mark: TERM_MARK,
+    save: (slug) => api.saveCategoryTerms(slug, [
+      { ...rowAt(listTerms(FIRST_CATEGORY_ID), 0), weight: TERM_MARK },
+    ]),
+    load: (slug) => api.fetchTerms(slug, FIRST_CATEGORY_ID),
+    marksIn: (terms) => terms.map((term) => term.weight),
+  }),
+  seamPair({
+    write: 'saveFinding',
+    read: 'fetchFindings',
+    scoped: true,
+    mark: VERDICT_MARK,
+    save: (slug) => api.saveFinding(slug, {
+      ...rowAt(listFindings(SEEDED_DOMAIN_ID), 0),
+      verdict: VERDICT_MARK,
+    }),
+    load: (slug) => api.fetchFindings(slug),
+    marksIn: (findings) => findings.map((finding) => finding.verdict),
+  }),
+  seamPair({
+    write: 'saveSource',
+    read: 'fetchSources',
+    scoped: true,
+    mark: ENDPOINT_MARK,
+    save: (slug) => api.saveSource(slug, {
+      ...rowAt(listSources(SEEDED_DOMAIN_ID), 0),
+      endpoint: ENDPOINT_MARK,
+    }),
+    load: (slug) => api.fetchSources(slug),
+    marksIn: (sources) => sources.map((source) => source.endpoint),
+  }),
+  seamPair({
+    write: 'approveSourceConfig',
+    read: 'fetchSourceProposals',
+    scoped: true,
+    mark: PROPOSAL_MARK,
+    save: (slug) => {
+      // A named value rather than a literal at the call site: the
+      // accessor's parameter is the store's structural `DraftableRow`,
+      // and a fresh literal would be excess-property-checked against
+      // it rather than against the proposal it is.
+      const ruled = {
+        ...rowAt(listSourceProposals(SEEDED_DOMAIN_ID), 0),
+        status: PROPOSAL_MARK,
+      };
+
+      return api.approveSourceConfig(slug, ruled);
+    },
+    load: (slug) => api.fetchSourceProposals(slug),
+    marksIn: (proposals) => proposals.map((proposal) => proposal.status),
+  }),
+  seamPair({
+    write: 'resolveSourceFailure',
+    read: 'fetchSourceFailures',
+    scoped: true,
+    mark: FAILURE_MARK,
+    // The parse STATUS is left alone deliberately. The read's
+    // predicate runs over the overlay, so a ruling that cleared the
+    // status would take the row out of the queue and there would be
+    // nothing left to find the mark on — a real behaviour, and the
+    // failures modal's to choose rather than this file's.
+    save: (slug) => api.resolveSourceFailure(slug, {
+      ...rowAt(FAILED_CAPTURES, 0),
+      parseError: FAILURE_MARK,
+    }),
+    load: (slug) => api.fetchSourceFailures(slug, FAILING_SOURCE_ID),
+    marksIn: (documents) => documents.map((document) => document.parseError),
+  }),
+  seamPair({
+    write: 'savePersona',
+    read: 'fetchPersonas',
+    scoped: true,
+    mark: PERSONA_MARK,
+    save: (slug) => api.savePersona(slug, {
+      ...rowAt(listPersonas(SEEDED_DOMAIN_ID), 0),
+      systemText: PERSONA_MARK,
+    }),
+    load: (slug) => api.fetchPersonas(slug),
+    marksIn: (personas) => personas.map((persona) => persona.systemText),
+  }),
+  seamPair({
+    write: 'saveConnector',
+    read: 'fetchConnectors',
+    scoped: false,
+    mark: CONNECTOR_MARK,
+    // Both halves ignore the slug, which is the claim rather than an
+    // oversight: `connectors` carries no `domain_id`, so this pair is
+    // the one the cross-domain block below cannot ask anything of.
+    save: () => api.saveConnector({
+      ...rowAt(listConnectors(), 0),
+      name: CONNECTOR_MARK,
+    }),
+    load: () => api.fetchConnectors(),
+    marksIn: (connectors) => connectors.map((connector) => connector.name),
+  }),
+  seamPair({
+    write: 'saveExportSubscriptions',
+    read: 'fetchExportSubscriptions',
+    scoped: true,
+    mark: INTERVAL_MARK,
+    save: (slug) => api.saveExportSubscriptions(slug, [
+      {
+        ...rowAt(listExportSubscriptions(SEEDED_DOMAIN_ID), 0),
+        intervalSeconds: INTERVAL_MARK,
+      },
+    ]),
+    load: (slug) => api.fetchExportSubscriptions(slug),
+    // The one projector that reaches THROUGH the read's own shape: the
+    // export list answers summaries, so the drafted row is a member of
+    // the answer rather than the answer itself.
+    marksIn: (summaries) => summaries.map(
+      (summary) => summary.subscription.intervalSeconds,
+    ),
+  }),
+  seamPair({
+    write: 'saveSettings',
+    read: 'fetchSettings',
+    scoped: false,
+    mark: SPARSE_DOMAIN_SLUG,
+    // The singleton pair. It has no row and no id, so it travels
+    // through the store's second map — and the cases below reach it
+    // without knowing that, which is the point of asking at the seam.
+    save: () => api.saveSettings({
+      ...SETTINGS,
+      defaultDomainSlug: SPARSE_DOMAIN_SLUG,
+    }),
+    load: () => api.fetchSettings(),
+    marksIn: (settings) => [settings.defaultDomainSlug],
+  }),
+];
+
+/** The pairs a second domain can be asked about. */
+const SCOPED_PAIRS = PAIRS.filter((pair) => pair.scoped);
+
+describe('the seam, end to end', () => {
+  // Everything above this block is about the store on its own: rows
+  // in, rows out, one scope invisible to another. These cases drive
+  // the WHOLE seam — `./api.ts`'s write, this store, and `./api.ts`'s
+  // matching read — because the two invariants an operator actually
+  // depends on span all three and neither module's own file can make
+  // them. `./api.test.ts` says why it makes its write claims at the
+  // SCOPE instead: its reads do not share a shape, so no one assertion
+  // covers its table. The projector per pair is what buys that here.
+
+  it('pairs every write the seam exports with the read that shows it', () => {
+    // The coverage guard every claim below rests on. Derived from the
+    // barrel rather than written out, so a write added to `./api.ts`
+    // and to no pair is reported here instead of being covered by
+    // nothing and named by nothing.
+    // Arrange
+    const paired = PAIRS.map((pair) => pair.write).sort();
+
+    // Act
+    const written = ACCESSOR_NAMES
+      .filter((name) => !name.startsWith(READ_PREFIX))
+      .sort();
+    const read = ACCESSOR_NAMES.filter((name) => name.startsWith(READ_PREFIX));
+
+    // Assert
+    expect(paired).toEqual(written);
+    // The prefix itself, under test: it has to split the barrel with
+    // nothing left over and neither half empty, or the derivation
+    // above is a filter that happens to answer the right names.
+    expect(written.length + read.length).toBe(ACCESSOR_NAMES.length);
+    expect(written.length).toBeGreaterThan(0);
+    expect(read.length).toBeGreaterThan(0);
+  });
+
+  it('names a real read once per pair', () => {
+    // Two near misses the set comparison above cannot catch: a pair
+    // pointed at a read the barrel does not export, and two pairs
+    // sharing one read — which would leave some other write's read
+    // unexercised while every count still agreed.
+    // Arrange
+    const named = PAIRS.map((pair) => pair.read);
+
+    // Act
+    const unexported = named.filter((name) => !ACCESSOR_NAMES.includes(name));
+    const duplicated = named.filter(
+      (name, index) => named.indexOf(name) !== index,
+    );
+
+    // Assert
+    expect(unexported).toEqual([]);
+    expect(duplicated).toEqual([]);
+  });
+
+  it('agrees with the accessors about which writes take a slug', () => {
+    // `scoped` decides which pairs the cross-domain block below runs
+    // over, so a flag that disagreed with the accessor would silently
+    // shrink that block. Read off the function's own arity rather than
+    // off a second literal list.
+    // Arrange
+    const declared = PAIRS.map((pair) => ({
+      write: pair.write,
+      scoped: pair.scoped,
+      arity: arityOf(pair.write),
+    }));
+
+    // Act
+    const disagreeing = declared.filter(
+      (entry) => entry.scoped !== (entry.arity === 2),
+    );
+
+    // Assert
+    expect(disagreeing).toEqual([]);
+    expect(declared.filter((entry) => !entry.scoped).map((e) => e.write))
+      .toEqual(['saveConnector', 'saveSettings']);
+    expect(SCOPED_PAIRS).toHaveLength(PAIRS.length - 2);
+  });
+
+  PAIRS.forEach((pair) => {
+    it(`marks a field the read really answers: ${pair.write}`, async () => {
+      // The vacuity guard the two invariants rest on, and it has three
+      // halves. A read answering nothing makes every `toContain` below
+      // unfalsifiable; a projector reading a member the row does not
+      // carry answers `undefined`s that would compare cleanly forever;
+      // and a mark the fixture already holds round-trips perfectly
+      // while proving nothing about the write.
+      // Arrange / Act
+      const marks = pair.marksIn(await pair.load(DEFAULT_DOMAIN_SLUG));
+
+      // Assert
+      expect(marks.length).toBeGreaterThan(0);
+      expect(marks).not.toContain(undefined);
+      expect(marks).not.toContain(pair.mark);
+    });
+
+    it(`shows a write through the matching read: ${pair.write}`, async () => {
+      // The first invariant, end to end. Not "the edit reached the
+      // store" — `./api.test.ts` asks that at the scope — but "the
+      // read a surface holds open beside the editor answers what the
+      // save just recorded", which is the whole reason the store
+      // exists.
+      // Arrange
+      const before = pair.marksIn(await pair.load(DEFAULT_DOMAIN_SLUG));
+
+      // Act
+      await pair.save(DEFAULT_DOMAIN_SLUG);
+
+      const after = pair.marksIn(await pair.load(DEFAULT_DOMAIN_SLUG));
+
+      // Assert
+      expect(after).toContain(pair.mark);
+      // The overlay replaces a row rather than adding one, so a save
+      // that grew the answer would be inventing a record no endpoint
+      // ever issued — and exactly one row may wear the mark, or the
+      // save landed on more of the list than it was handed.
+      expect(after).toHaveLength(before.length);
+      expect(after.filter((value) => value === pair.mark)).toHaveLength(1);
+    });
+
+    it(`forgets the write when the tab reloads: ${pair.write}`, async () => {
+      // What makes the case above evidence about the STORE rather than
+      // about a mutated fixture: a save that had written through to
+      // the fixture rows would satisfy it identically and survive
+      // this. `resetDrafts` is a reload at this layer — the module
+      // header says a reload is the app's own reset, and the
+      // Playwright specs lean on the same property.
+      // Arrange
+      const stored = pair.marksIn(await pair.load(DEFAULT_DOMAIN_SLUG));
+
+      await pair.save(DEFAULT_DOMAIN_SLUG);
+
+      const saved = pair.marksIn(await pair.load(DEFAULT_DOMAIN_SLUG));
+
+      // Act
+      resetDrafts();
+
+      const reloaded = pair.marksIn(await pair.load(DEFAULT_DOMAIN_SLUG));
+
+      // Assert — the save is asserted here rather than assumed, so a
+      // write that recorded nothing cannot pass this as a clean
+      // reload.
+      expect(saved).toContain(pair.mark);
+      expect(reloaded).not.toContain(pair.mark);
+      expect(reloaded).toEqual(stored);
+    });
+  });
+
+  SCOPED_PAIRS.forEach((pair) => {
+    it(`leaves a second domain byte-identical: ${pair.write}`, async () => {
+      // The second invariant, end to end and in the one direction this
+      // package can ask it. The SPARSE domain carries no rows, so a
+      // read of it overlays an empty list whatever scope it built and
+      // an accessor hardcoded to the seeded slug would pass; asked the
+      // other way round — save under the sparse slug, read the seeded
+      // domain — the same fault puts the edit straight into the answer
+      // and this fails. The row saved is the SEEDED one, so its id
+      // exists on both sides and only the scope keeps it out.
+      //
+      // The control is in this case and not beside it: a save the
+      // whole seam had quietly stopped performing would leave the
+      // second domain byte-identical too, and nothing else here would
+      // say so.
+      // Arrange
+      const before = JSON.stringify(await pair.load(DEFAULT_DOMAIN_SLUG));
+
+      // Act
+      await pair.save(SPARSE_DOMAIN_SLUG);
+
+      const across = JSON.stringify(await pair.load(DEFAULT_DOMAIN_SLUG));
+
+      await pair.save(DEFAULT_DOMAIN_SLUG);
+
+      const control = JSON.stringify(await pair.load(DEFAULT_DOMAIN_SLUG));
+
+      // Assert
+      expect(across).toBe(before);
+      expect(control).not.toBe(before);
+    });
   });
 });

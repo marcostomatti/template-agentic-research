@@ -3165,9 +3165,12 @@ describe('the write half', () => {
       // made at the SCOPE rather than through the matching read.
       // Every resource has a read now, but they do not share a
       // SHAPE — a list, a derived count, a join, a singleton and two
-      // parent-scoped lists — so no read-side assertion covers the
-      // table uniformly, and the thing that can go wrong is which
-      // scope the edit lands in, which is what this asks directly.
+      // parent-scoped lists — so no assertion written over THIS
+      // table can reach all nine reads, and the thing that can go
+      // wrong is which scope the edit lands in, which is what this
+      // asks directly. The read-side half is made in
+      // `./drafts.test.ts`, whose pairs carry a projector apiece and
+      // so can ask every write what its own read answers.
       // Arrange
       const stored = rowsFor(write, DEFAULT_DOMAIN_SLUG);
       const target = rowAt(stored, 0);
