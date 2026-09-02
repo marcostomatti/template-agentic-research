@@ -290,11 +290,14 @@ export const DigestPage = () => {
       width: MENU_WIDTH,
       align: 'end',
       cell: (row) => renderCellContent('context-menu', {
-        // One action, and it is the one that works: opening a row is a
-        // navigation to this surface's modal sub-route. Setting a
-        // verdict and sending to research are mutations, and this
-        // round has no seam to write through — a menu item that did
-        // nothing would be worse than one that is not there.
+        // One action, and it is the one this page can perform on its
+        // own: opening a row is a navigation to this surface's modal
+        // sub-route. Setting a verdict and sending to research are
+        // mutations. Their seam now exists — `./actions.ts` holds the
+        // two transitions and `../../data/hooks.ts` the write behind
+        // them — but the column that offers them is not built, and a
+        // menu item that did nothing would be worse than one that is
+        // not there.
         actions: [
           {
             icon: 'eye',
