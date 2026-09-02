@@ -209,7 +209,7 @@ describe('statusBadges', () => {
   });
 
   it('leaves the count out of the label it draws', () => {
-    // Unlike `statusOptions`, which had one string to put both in.
+    // Unlike the `Select` this replaced, which had one string for both.
     // A label carrying its figure would draw the count twice once the
     // row renders it as its own element.
     // Arrange / Act

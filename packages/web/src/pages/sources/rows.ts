@@ -61,7 +61,7 @@
  * than about the feed.
  */
 
-import type { SourceStatus, SourceStatusCounts } from '../../data/sources';
+import type { SourceStatus } from '../../data/sources';
 import type { Source, SourceKind } from '../../data/types';
 import type { QueryField } from '../filters';
 import type { CellStatusTone, SelectOption, TagProps } from '@ar/ui';
@@ -79,7 +79,7 @@ export const NO_CURSOR_LABEL = 'No cursor';
 export interface SourceStatusFacet {
   /** Which status this reads. */
   readonly status: SourceStatus;
-  /** What the status cell and the filter option call it. */
+  /** What the status cell and the filter badge call it. */
   readonly label: string;
   /**
    * The tone its dot is drawn in.
@@ -132,8 +132,11 @@ const STATUS_ORDER: readonly SourceStatus[] = [
 /**
  * The four readings, in surface order.
  *
- * What the status filter maps over, and what the status cell and the
- * stat cards look a single status up in through {@link statusFacet}.
+ * What the status filter maps over — `./badges.ts` builds one
+ * pressable badge per entry, which is why this module offers no
+ * option builder for that control the way {@link kindOptions} does
+ * for the kind one — and what the status cell and the stat cards
+ * look a single status up in through {@link statusFacet}.
  */
 export const SOURCE_STATUS_FACETS: readonly SourceStatusFacet[] = STATUS_ORDER
   .map((status) => ({ status, ...STATUS_FACET_BODIES[status] }));
@@ -369,33 +372,6 @@ export function kindOptions(): SelectOption[] {
   return withAllOption(
     'All kinds',
     SOURCE_KINDS.map((kind) => ({ value: kind, label: kind })),
-  );
-}
-
-/**
- * The status filter's options, each carrying how many rows it would
- * leave.
- *
- * The counts are the caller's to measure, and what they should be
- * measured over is the rows the OTHER controls have already left —
- * a count answering "how many if I choose this" is only true if
- * everything else stays where it is.
- *
- * The leading option carries no count of its own. It filters nothing,
- * so its figure would be the total the head chip already states, and
- * two places saying the same number is one place to get it wrong.
- *
- * @param counts - A count per status, as `countSourceStatuses` reports
- * it over the rows this control would narrow.
- * @returns Options ready for `Select`.
- */
-export function statusOptions(counts: SourceStatusCounts): SelectOption[] {
-  return withAllOption(
-    'All statuses',
-    SOURCE_STATUS_FACETS.map((facet) => ({
-      value: facet.status,
-      label: `${facet.label} (${counts[facet.status]})`,
-    })),
   );
 }
 

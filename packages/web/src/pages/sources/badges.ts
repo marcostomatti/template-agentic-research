@@ -18,14 +18,14 @@
  * unit suite is node-only and collects `.ts` alone, so a decision
  * written into a `.tsx` is reachable by no test in this package.
  *
- * ## Nothing imports this yet
+ * ## Who reads this
  *
- * `./SourcesPage.tsx` still binds `./rows.ts`'s `statusOptions` into
- * a `Select`, and the row that reads this module arrives with
- * `../../components/FilterBadgeRow.tsx`. The decision was written
- * first on purpose — the sentence above about `.tsx` files is why —
- * so the two coexist for exactly one task, and the select is the
- * control an operator has until then.
+ * `./SourcesPage.tsx` maps {@link statusBadges} straight into
+ * `../../components/FilterBadgeRow.tsx`, which is the app-local row
+ * that draws them — `@ar/ui` ships no `FilterBadge`, and that file
+ * carries why one is not being promoted this wave. The split is the
+ * `.tsx` sentence above: the component renders badges and reports a
+ * press, and every decision about what a badge SAYS is here.
  *
  * ## The counts are measured before this control narrows anything
  *
@@ -46,10 +46,10 @@
  * So the count is the caller's to measure and arrives here as an
  * argument — `countSourceStatuses` from `../../data/sources`, over
  * the rows the search box and the kind filter left. That is the same
- * reading `./rows.ts`'s `statusOptions` asks for and the same one the
- * page already takes for the select this replaces. Counting through
- * that module rather than here is deliberate: the stat band above the
- * table counts through it too, and a second reading of the four
+ * reading the count-carrying `Select` this row replaced already
+ * took, so the page still measures it exactly once. Counting through
+ * that module rather than here is deliberate: the stat band above
+ * the table counts through it too, and a second reading of the four
  * stored health columns is exactly what it exists to prevent.
  *
  * ## Four badges, always
@@ -120,10 +120,11 @@ export interface SourceStatusBadge {
    * What the badge is called.
    *
    * `SOURCE_STATUS_FACETS`' own label, unchanged, and WITHOUT the
-   * count folded into it — unlike `./rows.ts`'s `statusOptions`,
+   * count folded into it — unlike the `Select` this row replaced,
    * which had nowhere else to put the figure because a `SelectOption`
    * carries one string. A badge is markup, so the two stay separate
-   * members and the row draws the figure as its own element.
+   * members and the row draws the figure as its own element, at its
+   * own size.
    */
   readonly label: string;
   /**

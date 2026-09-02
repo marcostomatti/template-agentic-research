@@ -1,9 +1,9 @@
-import type { SourceStatus, SourceStatusCounts } from '../../data/sources';
+import type { SourceStatus } from '../../data/sources';
 import type { Source, SourceKind } from '../../data/types';
 
 import { describe, expect, it } from 'vitest';
 
-import { SOURCES, classifySource } from '../../data/sources';
+import { SOURCES } from '../../data/sources';
 import { repeated } from '../../test-support/repeated';
 import { ALL_FILTER_VALUE, filterByQuery } from '../filters';
 
@@ -20,7 +20,6 @@ import {
   sourceCountLabel,
   splitEndpoint,
   statusFacet,
-  statusOptions,
 } from './rows';
 
 /**
@@ -108,20 +107,6 @@ const searchIds = (query: string): readonly number[] => filterByQuery(
   query,
   SOURCE_QUERY_FIELDS,
 ).map((source) => source.id);
-
-/**
- * A count per status where no two members share a figure.
- *
- * Distinct on purpose: a select label built from the wrong key would
- * still be a number, and only figures that differ can say which key it
- * came from.
- */
-const DISTINCT_COUNTS: SourceStatusCounts = {
-  active: 4,
-  failing: 3,
-  pending: 2,
-  disabled: 1,
-};
 
 describe('SOURCE_STATUS_FACETS', () => {
   it('draws every status once, in surface order', () => {
@@ -421,65 +406,6 @@ describe('kindOptions', () => {
     // one component away from being edited in place.
     // Arrange / Act / Assert
     expect(kindOptions()).not.toBe(kindOptions());
-  });
-});
-
-describe('statusOptions', () => {
-  it('leads with an option carrying no count', () => {
-    // It filters nothing, so its figure would repeat the head chip.
-    // Arrange / Act
-    const [first] = statusOptions(DISTINCT_COUNTS);
-
-    // Assert
-    expect(first).toEqual({ value: ALL_FILTER_VALUE, label: 'All statuses' });
-  });
-
-  it('carries each status count in its own label', () => {
-    // The counts differ, so a label built from the wrong key reports
-    // another status figure rather than a plausible one.
-    // Arrange / Act
-    const offered = statusOptions(DISTINCT_COUNTS)
-      .filter((option) => option.value !== ALL_FILTER_VALUE);
-
-    // Assert
-    expect(offered).toEqual([
-      { value: 'active', label: 'Active (4)' },
-      { value: 'failing', label: 'Failing (3)' },
-      { value: 'pending', label: 'Pending (2)' },
-      { value: 'disabled', label: 'Disabled (1)' },
-    ]);
-  });
-
-  it('builds a fresh array for every caller', () => {
-    // Arrange / Act / Assert
-    expect(statusOptions(DISTINCT_COUNTS))
-      .not.toBe(statusOptions(DISTINCT_COUNTS));
-  });
-
-  it('counts the fixture domain the way the classifier reads it', () => {
-    // The join between the control and the table: an option promising
-    // three rows over a table showing two is the failure this pairs
-    // the two derivations to catch.
-    // Arrange
-    const counts: SourceStatusCounts = {
-      active: SOURCES.filter((s) => classifySource(s) === 'active').length,
-      failing: SOURCES.filter((s) => classifySource(s) === 'failing').length,
-      pending: SOURCES.filter((s) => classifySource(s) === 'pending').length,
-      disabled: SOURCES.filter((s) => classifySource(s) === 'disabled').length,
-    };
-
-    // Act
-    const labels = statusOptions(counts)
-      .filter((option) => option.value !== ALL_FILTER_VALUE)
-      .map((option) => option.label);
-
-    // Assert
-    expect(labels).toEqual(
-      SURFACE_ORDER.map(
-        (status) => `${statusFacet(status).label} (${counts[status]})`,
-      ),
-    );
-    expect(SOURCES.length).toBeGreaterThan(0);
   });
 });
 

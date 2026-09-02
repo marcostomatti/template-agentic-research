@@ -50,11 +50,20 @@
  * list is therefore a link, a reload keeps it, and the back button
  * undoes the last change.
  *
- * The status control carries a count per option, and those counts are
- * measured over the rows the OTHER two controls have already left: a
- * figure promising three rows is only true if everything else stays
- * where it is. The kind control carries none, because its options are
- * the closed schema union rather than a reading of the data.
+ * The status control is a row of pressable badges rather than a
+ * select, and what that buys is visibility: every status, the count
+ * under each of them, and which one is pressed, all readable without
+ * opening anything. `./badges.ts` carries the model — which badge is
+ * pressed and what a press writes — and
+ * `../../components/FilterBadgeRow.tsx` carries why the row is
+ * app-local rather than a `@ar/ui` component.
+ *
+ * The counts are measured over the rows the OTHER two controls have
+ * already left: a badge promising three rows is only true if
+ * everything else stays where it is. The kind control carries none
+ * and stays a select, because its options are the closed schema
+ * union rather than a reading of the data — four values that never
+ * move are a choice to make, not a reading to scan.
  *
  * ## No sort
  *
@@ -116,6 +125,7 @@ import {
 } from '@ar/ui';
 import { useNavigate, useParams } from 'react-router';
 
+import { FilterBadgeRow } from '../../components/FilterBadgeRow';
 import { ListPage } from '../../components/ListPage';
 import { useSourceStatusCounts, useSources } from '../../data/hooks';
 import { classifySource, countSourceStatuses } from '../../data/sources';
@@ -124,6 +134,7 @@ import { getSurface } from '../../routes/paths';
 import { useSearchParamState } from '../../routes/useSearchParamState';
 import { ALL_FILTER_VALUE, filterByQuery, filterBySelect } from '../filters';
 
+import { statusBadges } from './badges';
 import {
   SOURCE_QUERY_FIELDS,
   SOURCE_STAT_CARDS,
@@ -134,7 +145,6 @@ import {
   sourceCountLabel,
   splitEndpoint,
   statusFacet,
-  statusOptions,
 } from './rows';
 
 /** Which surface this is — the page title comes off the same table. */
@@ -174,7 +184,7 @@ const MENU_WIDTH = 52;
 /** The stat band's own tracks: stacked on a narrow viewport, three across. */
 const STAT_BAND_COLUMNS = 'md:grid-cols-3';
 
-/** Read the column each filter select narrows. */
+/** Read the column each filter narrows. */
 const readKind = (source: Source) => source.kind;
 const readStatus = (source: Source) => classifySource(source);
 
@@ -335,11 +345,12 @@ export const SourcesPage = () => {
               ariaLabel="Filter by kind"
             />
 
-            <Select
-              value={status.value}
-              options={statusOptions(statusCounts)}
-              onChange={status.setValue}
+            <ToolbarSep />
+
+            <FilterBadgeRow
               ariaLabel="Filter by status"
+              badges={statusBadges(statusCounts, status.value)}
+              onPress={status.setValue}
             />
           </>
         )}

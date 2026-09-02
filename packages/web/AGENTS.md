@@ -20,7 +20,7 @@ package.
 | `src/routes/` | `paths.ts` (the surface table and the two-base path arithmetic), `router.tsx` (the route tree as DATA plus a `createAppRouter` factory), `DomainGuard.tsx`, `useSearchParamState.ts`. |
 | `src/data/` | The fixture data layer and the q15 swap seam. See below. |
 | `src/pages/` | One directory per surface, plus `index.ts` — the surface-id to component registry the router reads. Each page keeps its pure helpers beside it as `.ts` (`rows.ts`, `cards.ts`, `fields.ts`), which is where colocated tests can reach them. |
-| `src/components/` | App-local stand-ins for `@ar/ui` components that do not exist yet, the shared list-page skeleton, the frame the editor modals are built in (`EditorModal.tsx`), the JSON fallback an editor offers for a shape no fixed template covers (`JsonEditor.tsx`), and the pure `.ts` modules they share (`editorDraft.ts` for the draft a modal holds, `jsonDraft.ts` for the JSON fallback's parse, format and refusal sentences). See below. |
+| `src/components/` | App-local stand-ins for `@ar/ui` components that do not exist yet, the shared list-page skeleton, the frame the editor modals are built in (`EditorModal.tsx`), the JSON fallback an editor offers for a shape no fixed template covers (`JsonEditor.tsx`), the pressable-badge filter row the sources toolbar uses in place of a count-carrying `Select` (`FilterBadgeRow.tsx`), and the pure `.ts` modules they share (`editorDraft.ts` for the draft a modal holds, `jsonDraft.ts` for the JSON fallback's parse, format and refusal sentences). See below. |
 | `src/test-support/` | Helpers shared by colocated tests only. No app module imports it and the vitest include collects no non-`*.test.ts` file, so it ships in no bundle. |
 | `src/styles.css` | Two imports: `tailwindcss` and `@ar/ui/styles.css`. The design tokens, the element defaults and the theme contract all belong to `@ar/ui`. |
 | `tests/e2e/` | The Playwright suite. `tests/README.md` states the two-runner split, and why that README is itself load-bearing. |
@@ -202,6 +202,16 @@ compose now that theirs has landed.
   — so the card surfaces are refitted onto it one at a time, and the
   ones that have not been reached yet still compose `Card` directly.
   The lexicon grid is the first.
+- `src/components/FilterBadgeRow.tsx` is app-local for the opposite
+  reason to `PageHead`: it is NOT waiting to be promoted. `@ar/ui`
+  ships no `FilterBadge` (measured — zero occurrences under
+  `packages/ui/src`; `FilterDropdown` hides its options behind a
+  trigger and `OptionCard` is panel-sized), and the spec names ONE
+  library deliverable for this wave. So it composes `Touchable`
+  around `Chip`, and its own docblock enumerates what a promotion
+  would have to take over — chiefly the unpressed treatment, which
+  is three of `Chip`'s base utilities overridden through `cn` at a
+  call site.
 - `src/components/ListPage.tsx` is NOT a stand-in and stays for good —
   it composes the router's `Outlet`, which no component library can
   take without taking a router with it. It sits beside `PageHead` and
