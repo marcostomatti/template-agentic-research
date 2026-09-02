@@ -49,13 +49,19 @@
  * Each of those five declares a LIST of them rather than one, because a
  * row can be openable in more than one WAY: editing a source, ruling on
  * its proposed config and listing its failures would be three addresses
- * over one list, none of them a child of either other. Every list holds
- * exactly one entry today and all of them render the same placeholder,
- * so the shape is currently capacity rather than use — but it is the
- * capacity that keeps a second address a table row instead of a branch
- * in {@link surfaceRoute}, and it is why an entry carries its ELEMENT
- * beside its path: a surface's second sub-route is not the same modal
- * as its first.
+ * over one list, none of them a child of either other. Every list still
+ * holds exactly one entry, so that half of the shape remains capacity
+ * rather than use — but it is the capacity that keeps a second address
+ * a table row instead of a branch in {@link surfaceRoute}.
+ *
+ * The other half is in use as of the lexicon's editor: an entry carries
+ * its ELEMENT beside its path, and those elements have stopped being
+ * one shared placeholder. Four surfaces still open
+ * {@link MODAL_PLACEHOLDER} and the lexicon opens
+ * {@link LEXICON_EDITOR}, which is what an entry holding its own
+ * element was for — a surface's modal is not the same modal as its
+ * neighbour's, any more than its second sub-route is the same as its
+ * first.
  *
  * Each is a CHILD of its list route rather than a sibling, which is the
  * whole point of the shape: the list stays matched and stays rendered,
@@ -108,6 +114,7 @@ import { Sidebar } from '../app-shell/Sidebar';
 import { Topbar } from '../app-shell/Topbar';
 import { PlaceholderModal } from '../components/PlaceholderModal';
 import { findPage } from '../pages';
+import { LexiconEditorModal } from '../pages/lexicon/LexiconEditorModal';
 
 import { DomainGuard } from './DomainGuard';
 import {
@@ -217,13 +224,29 @@ export const SURFACE_PLACEHOLDER = (
 export const MODAL_PLACEHOLDER = <PlaceholderModal />;
 
 /**
+ * The lexicon's term editor, at its own sub-route.
+ *
+ * The first registration in the table below to point at a REAL modal
+ * rather than at the placeholder above, which is what makes that
+ * table's elements worth carrying: a surface's modal is now its own,
+ * and the placeholder is a shrinking ledger of the ones still to come.
+ *
+ * Held as an ELEMENT for the reason its neighbour is — one object
+ * across both trees, so identity stays askable — and declared here
+ * rather than inline in the table so the table reads as a list of
+ * registrations and not of tags.
+ */
+export const LEXICON_EDITOR = <LexiconEditorModal />;
+
+/**
  * The modal sub-routes each list surface carries, keyed by surface id.
  *
  * A LIST per surface, so a row openable in more than one way costs a
  * row here rather than a shape change — see the header. Every list
- * holds exactly one entry today and every entry renders {@link
- * MODAL_PLACEHOLDER}; a surface whose list is empty and a surface with
- * no key at all mean the same thing to {@link surfaceRoute}.
+ * holds exactly one entry today, and the lexicon's is the first to
+ * name a real modal rather than {@link MODAL_PLACEHOLDER}; a surface
+ * whose list is empty and a surface with no key at all mean the same
+ * thing to {@link surfaceRoute}.
  *
  * Declared BELOW the placeholder rather than beside the other route
  * constants at the top because it names that element: an entry holds
@@ -236,7 +259,7 @@ export const MODAL_PLACEHOLDER = <PlaceholderModal />;
  */
 const MODAL_SUB_ROUTE_TABLE: ModalSubRouteTable = {
   digest: [{ path: ENTITY_PARAM, element: MODAL_PLACEHOLDER }],
-  lexicon: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
+  lexicon: [{ path: `${ENTITY_PARAM}/edit`, element: LEXICON_EDITOR }],
   sources: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
   agents: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
   tools: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],

@@ -209,10 +209,12 @@ compose now that theirs has landed.
   than restating the props it passes through: a restated list accepts
   a newly added prop and silently drops it on the way down, which
   type-checks on both sides.
-- `src/components/PlaceholderModal.tsx` is the element behind all ten
-  modal registrations (five surfaces across two bases), so it may only
-  claim what is true of a read-only detail view AND four editors at
-  once.
+- `src/components/PlaceholderModal.tsx` is the element behind EIGHT of
+  the ten modal registrations (five surfaces across two bases), so it
+  may only claim what is true of a read-only detail view AND three
+  editors at once. The lexicon's two now open
+  `src/pages/lexicon/LexiconEditorModal.tsx`, the first real editor to
+  land; the count shrinks by two with each one after it.
 
 ## `@ar/ui` constraints this app is built around
 

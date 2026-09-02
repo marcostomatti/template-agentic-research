@@ -6,16 +6,20 @@
  * Five of the six surfaces open one of their rows over the list they
  * sit on — the digest at `:entityId`, the lexicon, sources, agents and
  * tools at `:entityId/edit` — and each is declared under both route
- * bases, so ten registrations render this one component. That is the
- * whole constraint on what it may say: anything it claimed would have
- * to be true of a finding opening READ-ONLY and of four editors at
- * once.
+ * bases. EIGHT of those ten registrations render this component: the
+ * lexicon's two now open `../pages/lexicon/LexiconEditorModal`, which
+ * is the first of the five real editors to land and the reason the
+ * count here is worth stating rather than implying.
+ *
+ * That remaining set is the whole constraint on what this may say:
+ * anything it claimed would have to be true of a finding opening
+ * READ-ONLY and of three editors at once.
  *
  * It is why there is no footer here. A disabled `Save` would state the
- * shape of the four editors and misstate the digest's, whose bare
- * `:entityId` is the read-only detail path the UI spec grows into a
- * full page later. The body says the one thing true of all five: the
- * address is live and nothing behind it is.
+ * shape of the three editors still waiting and misstate the digest's,
+ * whose bare `:entityId` is the read-only detail path the UI spec grows
+ * into a full page later. The body says the one thing true of all four:
+ * the address is live and nothing behind it is.
  *
  * ## Why `open` is a literal
  *
@@ -35,8 +39,10 @@
  * Closing cannot flip a flag, so it navigates to the parent route.
  * That target is `..` rather than a built path, for the reason the
  * router's index redirect is relative too: one expression then serves
- * all ten registrations, and no caller has to resolve which base it is
- * rendering under.
+ * every registration this still renders, and no caller has to resolve
+ * which base it is rendering under. `../components/EditorModal.tsx`
+ * spells the same expression out separately, for the reason its own
+ * header gives about outliving this file.
  *
  * `relative: 'route'` is stated rather than inherited, because the
  * difference is load-bearing here rather than cosmetic. Route-relative
@@ -57,8 +63,8 @@
  * exactly as the topbar derives its heading — never from state, since
  * a back button and the domain switcher's base swap both change the
  * surface without passing through anything here. It is what
- * distinguishes the five registrations without there being five
- * elements.
+ * distinguishes the registrations that remain without there being one
+ * element apiece.
  *
  * The title is passed for a second reason beyond naming the row:
  * `Modal` draws its header, and with it the close button and the

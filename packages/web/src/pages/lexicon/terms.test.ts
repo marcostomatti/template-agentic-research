@@ -7,8 +7,12 @@ import { repeated } from '../../test-support/repeated';
 
 import {
   parseTermBlock,
+  readTermPolarity,
+  readTermWeight,
   splitTermBuckets,
+  termPolarityOptions,
   withTermPolarity,
+  withTermWeight,
 } from './terms';
 
 /**
@@ -517,5 +521,225 @@ describe('parseTermBlock', () => {
 
     expect(reading.sentences).toEqual([]);
     expect(reading.candidates).toHaveLength(1);
+  });
+});
+
+describe('termPolarityOptions', () => {
+  it('offers every bucket a term can be dragged into', () => {
+    // The equivalence SC 2.5.7 asks for, as a set: a polarity the drag
+    // can reach and the control cannot is the gap the criterion is
+    // about, and it is invisible from either side alone.
+    // Arrange
+    const dragTargets = splitTermBuckets([]).map((bucket) => bucket.polarity);
+
+    // Act
+    const offered = termPolarityOptions().map((option) => option.value);
+
+    // Assert
+    expect(offered).toEqual(dragTargets);
+    expect(offered).toEqual(BUCKET_ORDER);
+  });
+
+  it('labels each option the way the bucket beside it is labelled', () => {
+    // Arrange
+    const buckets = splitTermBuckets([]);
+
+    // Act
+    const labels = termPolarityOptions().map((option) => option.label);
+
+    // Assert
+    expect(labels).toEqual(buckets.map((bucket) => bucket.label));
+    // The vacuity guard: equal empty lists would satisfy the line above.
+    expect(labels.filter((label) => label !== '')).toHaveLength(3);
+  });
+
+  it('builds a fresh list per call, owned by nobody', () => {
+    // The one-line form of the array-ownership stance the header states.
+    // Arrange
+    const first = termPolarityOptions();
+
+    // Act
+    first.push({ value: 'positive', label: 'planted' });
+
+    // Assert
+    expect(termPolarityOptions()).toHaveLength(3);
+  });
+});
+
+describe('readTermPolarity', () => {
+  it('answers nothing for a value no option carries', () => {
+    // A default here would be this module choosing a bucket for the
+    // operator, which is the one thing a narrowing must not do.
+    expect(readTermPolarity('POSITIVE')).toBeUndefined();
+    expect(readTermPolarity('')).toBeUndefined();
+    expect(readTermPolarity('constructor')).toBeUndefined();
+    expect(readTermPolarity('__proto__')).toBeUndefined();
+  });
+
+  it('answers every value the control offers', () => {
+    // Driven off the option list rather than a literal, so a polarity
+    // added upstream is covered here without this file being touched.
+    // Arrange
+    const offered = termPolarityOptions();
+
+    // Act
+    const read = offered.map((option) => readTermPolarity(option.value));
+
+    // Assert
+    expect(read).toEqual(offered.map((option) => option.value));
+    expect(read).toHaveLength(3);
+  });
+});
+
+describe('readTermWeight', () => {
+  it('refuses a field left empty rather than reading it as zero', () => {
+    // `Number('')` is `0`, so the emptiness check is what keeps a
+    // weightless row out of the draft wearing a real magnitude.
+    expect(readTermWeight('')).toEqual({
+      ok: false,
+      sentence: 'Weight is required.',
+    });
+    expect(readTermWeight('   ')).toEqual({
+      ok: false,
+      sentence: 'Weight is required.',
+    });
+  });
+
+  it('refuses text that is not a number, infinities included', () => {
+    // `Number('Infinity')` is a number and is not a weight, which is
+    // why the guard is `Number.isFinite` and never `!Number.isNaN`.
+    const unreadable = 'Weight has to be a number.';
+
+    expect(readTermWeight('heavy'))
+      .toEqual({ ok: false, sentence: unreadable });
+    expect(readTermWeight('Infinity')).toEqual({
+      ok: false,
+      sentence: unreadable,
+    });
+    expect(readTermWeight('-Infinity')).toEqual({
+      ok: false,
+      sentence: unreadable,
+    });
+    expect(readTermWeight('2 kg'))
+      .toEqual({ ok: false, sentence: unreadable });
+  });
+
+  it('refuses a negative weight, weight being a magnitude', () => {
+    expect(readTermWeight('-2')).toEqual({
+      ok: false,
+      sentence: 'Weight is a magnitude; the polarity carries the direction.',
+    });
+  });
+
+  it('quotes nothing an operator typed', () => {
+    // The no-echo rule the header states, re-read off the OUTPUT
+    // rather than trusted from the builder: a sentence goes into the
+    // DOM and out again in whatever gets copied from a support thread.
+    // Arrange
+    const planted = 'SNTNL9';
+
+    // Act
+    const sentences = [planted, `${planted}0`, `-${planted}`]
+      .map((text) => readTermWeight(text))
+      .map((reading) => (reading.ok
+        ? ''
+        : reading.sentence));
+
+    // Assert
+    expect(sentences.filter((sentence) => sentence.includes(planted)))
+      .toEqual([]);
+    // The control: the sweep is only a reading if it had sentences.
+    expect(sentences.filter((sentence) => sentence !== '')).toHaveLength(3);
+  });
+
+  it('agrees with a pasted line about every one of the three rules', () => {
+    // The claim that makes ONE predicate worth having: a field and a
+    // line refuse the same weights, so the surface cannot give two
+    // answers to one question. Read as a PAIR per weight rather than
+    // as two totals, which a run where both halves broke would pass.
+    // Arrange
+    const weights = ['', '   ', 'heavy', 'Infinity', '-2', '0', '2', '2.5'];
+
+    // Act
+    const compared = weights.map((weight) => ({
+      weight,
+      field: readTermWeight(weight).ok,
+      line: parseTermBlock(`p | ${weight} | positive`, [])
+        .sentences.length === 0,
+    }));
+
+    // Assert
+    expect(compared.filter((row) => row.field !== row.line)).toEqual([]);
+    // The controls: neither half may be uniformly true or uniformly
+    // false, which is what a broken pair would look like above.
+    expect(compared.filter((row) => row.field)).toHaveLength(3);
+    expect(compared.filter((row) => !row.field)).toHaveLength(5);
+  });
+
+  it('takes a weight of zero, which is a magnitude', () => {
+    expect(readTermWeight('0')).toEqual({ ok: true, weight: 0 });
+    expect(readTermWeight(' 2.5 ')).toEqual({ ok: true, weight: 2.5 });
+  });
+});
+
+describe('withTermWeight', () => {
+  it('answers a list reading the same for an id it does not carry', () => {
+    // Arrange
+    const terms = [term(1, 'alpha', 'positive'), term(2, 'beta', 'negative')];
+
+    // Act
+    const next = withTermWeight(terms, 99, 5);
+
+    // Assert
+    expect(next).toEqual(terms);
+    expect(next).not.toBe(terms);
+  });
+
+  it('rewrites one row and leaves the rest by identity', () => {
+    // Arrange
+    const alpha = term(1, 'alpha', 'positive', 1);
+    const beta = term(2, 'beta', 'negative', 3);
+
+    // Act
+    const next = withTermWeight([alpha, beta], 1, 4);
+
+    // Assert
+    expect(next[0]).toEqual({ ...alpha, weight: 4 });
+    expect(next[0]).not.toBe(alpha);
+    expect(next[1]).toBe(beta);
+  });
+
+  it('moves no term between buckets', () => {
+    // The contrast that says what the bucket rule means: weight is the
+    // column `splitTermBuckets` does not read.
+    // Arrange
+    const terms = [term(1, 'alpha', 'positive'), term(2, 'beta', 'ignore')];
+    const before = splitTermBuckets(terms);
+
+    // Act
+    const after = splitTermBuckets(withTermWeight(terms, 1, 9));
+
+    // Assert
+    expect(after.map((bucket) => bucket.terms.map((row) => row.id)))
+      .toEqual(before.map((bucket) => bucket.terms.map((row) => row.id)));
+    // The control: the write did land, so the equality above is about
+    // the buckets and not about a no-op.
+    expect(after[0]?.terms[0]?.weight).toBe(9);
+  });
+
+  it('leaves the polarity where the other mover put it', () => {
+    // Arrange
+    const terms = [term(1, 'alpha', 'positive')];
+
+    // Act
+    const moved = withTermPolarity(terms, 1, 'ignore');
+    const weighed = withTermWeight(moved, 1, 6);
+
+    // Assert
+    expect(weighed[0]).toEqual({
+      ...terms[0],
+      polarity: 'ignore',
+      weight: 6,
+    });
   });
 });

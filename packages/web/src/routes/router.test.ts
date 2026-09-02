@@ -5,7 +5,12 @@ import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
 import { SINGLE_DOMAIN_BASE, SURFACES, withBase } from './paths';
-import { MODAL_PLACEHOLDER, NOT_FOUND, ROUTES } from './router';
+import {
+  LEXICON_EDITOR,
+  MODAL_PLACEHOLDER,
+  NOT_FOUND,
+  ROUTES,
+} from './router';
 
 // `matchRoutes` resolves a path against the route objects with nothing
 // rendered and no browser present, which is the whole reason `./router.tsx`
@@ -117,6 +122,49 @@ function modalPatternsOf(surfaceId: string): readonly string[] {
 const MODAL_SURFACES = SURFACES.filter(
   (surface) => modalPatternsOf(surface.id).length > 0,
 );
+
+/**
+ * The surfaces whose modal sub-routes still render the placeholder.
+ *
+ * A LEDGER, written out rather than derived: it is the list of what
+ * this wave has not built yet, and a roster read back off the route
+ * tree could only ever agree with whatever the tree currently says.
+ * It shrinks by one as each editor lands, and the partition test
+ * below is what refuses a surface that leaves it without joining a
+ * test that makes a claim about its element instead.
+ */
+const PLACEHOLDER_SURFACES: readonly string[] = [
+  'digest',
+  'sources',
+  'agents',
+  'tools',
+];
+
+/**
+ * What each named surface's sub-routes render, under both bases.
+ *
+ * Shared by the two element tests so they drive the tree identically
+ * and differ only in which surfaces they ask about — the whole point
+ * of splitting the ledger being that the CLAIM differs, not the
+ * reading.
+ *
+ * @param surfaceIds - The surfaces to open.
+ * @returns One row per surface, pattern and base, naming the leaf
+ * element the path resolved to.
+ */
+function openedElements(
+  surfaceIds: readonly string[],
+): { at: string; element: ReactNode }[] {
+  return BASES.flatMap(({ label, base }) => MODAL_SUB_ROUTES
+    .filter(({ surface }) => surfaceIds.includes(surface.id))
+    .map(({ surface, pattern }) => ({
+      at: `${label}: ${surface.id} at ${pattern}`,
+      element: leafElementOf(pathUnder(
+        withBase(base, surface.id),
+        pattern.replace(ENTITY_PARAM, ENTITY_ID),
+      )),
+    })));
+}
 
 /**
  * Every declared sub-route as its own case: a surface and ONE pattern.
@@ -365,7 +413,7 @@ describe('the modal sub-routes', () => {
     expect(matched).toEqual(cases.map(({ at, chain }) => ({ at, chain })));
   });
 
-  it('opens the shared placeholder at every one of them', () => {
+  it('opens the shared placeholder at every address still owed one', () => {
     // `toBe`, not a render: matching says nothing about what sits behind
     // the address, and the placeholder is one shared element across every
     // registration and both bases — which is what makes identity askable
@@ -373,20 +421,43 @@ describe('the modal sub-routes', () => {
     //
     // This is a LEDGER of what has no real modal yet, so it shrinks as
     // the editors land; a registration pointing somewhere else is
-    // reported here by the path it was driven with.
+    // reported here by the path it was driven with. The partition test
+    // below is what stops a surface leaving this list without joining
+    // one that makes a claim about it.
     // Arrange / Act
-    const opened = BASES.flatMap(({ label, base }) => MODAL_SUB_ROUTES
-      .map(({ surface, pattern }) => ({
-        at: `${label}: ${surface.id} at ${pattern}`,
-        element: leafElementOf(pathUnder(
-          withBase(base, surface.id),
-          pattern.replace(ENTITY_PARAM, ENTITY_ID),
-        )),
-      })));
+    const opened = openedElements(PLACEHOLDER_SURFACES);
 
     // Assert
     expect(opened.filter((row) => row.element !== MODAL_PLACEHOLDER))
       .toEqual([]);
+    expect(opened).toHaveLength(PLACEHOLDER_SURFACES.length * BASES.length);
+  });
+
+  it('opens the lexicon term editor at its own sub-route', () => {
+    // The other side of the ledger, and the reason the route table
+    // carries an ELEMENT per entry rather than one shared placeholder
+    // for all of them: a surface's modal is its own.
+    // Arrange / Act
+    const opened = openedElements(['lexicon']);
+
+    // Assert
+    expect(opened.filter((row) => row.element !== LEXICON_EDITOR))
+      .toEqual([]);
+    expect(opened).toHaveLength(BASES.length);
+  });
+
+  it('leaves no declared sub-route out of both claims above', () => {
+    // Without this the two tests above are each satisfiable by a list
+    // that quietly stopped covering a surface: a registration in
+    // NEITHER roster is asserted about by nothing, and a registration
+    // in BOTH would make one of them wrong about the other's element.
+    // Arrange
+    const claimed = [...PLACEHOLDER_SURFACES, 'lexicon'];
+    const declared = MODAL_SURFACES.map((surface) => surface.id);
+
+    // Assert
+    expect([...claimed].sort()).toEqual([...declared].sort());
+    expect(new Set(claimed).size).toBe(claimed.length);
   });
 
   it('names the row it was opened on in the params', () => {

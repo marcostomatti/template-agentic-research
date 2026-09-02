@@ -18,13 +18,26 @@
  * is drawn in is that column's value read back.
  *
  * That is the whole reason {@link withTermPolarity} is the only mover
- * here. Dragging a row from one list into another and choosing a
- * polarity from that row's own control are the same operation
- * expressed twice — both rewrite one column on one row, and both
- * are served by the one function. The drag is an enhancement over the
- * control rather than a second mechanism, which is what answers WCAG
- * 2.2 SC 2.5.7 (Dragging Movements) without a keyboard-only path that
- * could drift away from the pointer one.
+ * BETWEEN buckets. Dragging a row from one list into another and
+ * choosing a polarity from that row's own control are the same
+ * operation expressed twice — both rewrite one column on one row,
+ * and both are served by the one function. The drag is an enhancement
+ * over the control rather than a second mechanism, which is what
+ * answers WCAG 2.2 SC 2.5.7 (Dragging Movements) without a
+ * keyboard-only path that could drift away from the pointer one.
+ *
+ * {@link termPolarityOptions} is that control's vocabulary and is
+ * TOTAL over the union for the same reason: a polarity a term can be
+ * dragged to and not chosen is the equivalence broken in the one
+ * direction no gate here would report.
+ *
+ * {@link withTermWeight} is the other column the editor writes, and
+ * the contrast is what the bucket rule means — weight is not read
+ * by {@link splitTermBuckets}, so writing it moves nothing. Its text
+ * is read by {@link readTermWeight}, which refuses through the same
+ * predicate a pasted line does; the header's no-quoting rule covers
+ * both, and the two spellings of each refusal are deliberate, a
+ * pasted block naming a LINE where a field names itself.
  *
  * {@link splitTermBuckets} therefore DERIVES and never stores. There
  * is no bucket membership to keep in step with a polarity: the lists
@@ -183,6 +196,28 @@ export interface TermCandidate {
   readonly notes: string | null;
 }
 
+/**
+ * One option the per-term polarity control offers.
+ *
+ * Declared here rather than imported from `@ar/ui`, so this module
+ * stays a pure `.ts` the unit runner can reach with no component
+ * library behind it. Structurally a `SelectOption` — a `value` and a
+ * `label` — with the value NARROWED to the union, which is what makes
+ * an option naming a polarity that does not exist a `check-types`
+ * error rather than a control offering it.
+ */
+export interface TermPolarityOption {
+  /** The polarity this option files a term under. */
+  readonly value: TermPolarity;
+  /** What it is called, in the surface's own words. */
+  readonly label: string;
+}
+
+/** What reading a per-term weight field produced. */
+export type TermWeightReading =
+  | { readonly ok: true; readonly weight: number }
+  | { readonly ok: false; readonly sentence: string };
+
 /** What reading a pasted block produced. */
 export interface TermBlockReading {
   /** The lines that were accepted, in the order they were pasted. */
@@ -217,6 +252,48 @@ function listNames(names: readonly string[]): string {
 
 /** The polarities a `polarity` field may take, as one phrase. */
 const POLARITY_PHRASE = listNames(POLARITY_NAMES);
+
+/**
+ * Which rule a weight breaks, independent of how it was written.
+ *
+ * Private, and deliberately not a string an operator ever sees: the
+ * two tables below turn it into the sentence each FORMAT wants, which
+ * is what lets the rule be shared while the phrasing is not.
+ */
+type WeightFault = 'missing' | 'unreadable' | 'negative';
+
+/**
+ * How each weight fault reads on a pasted LINE.
+ *
+ * Phrases rather than sentences, with no location and no full stop:
+ * {@link describeLine} supplies both, so every refusal a block
+ * produces reads the same way whichever field was at fault.
+ */
+const LINE_WEIGHT_PHRASES: Readonly<Record<WeightFault, string>> = {
+  missing: 'states no weight',
+  unreadable: 'states a weight that is not a number',
+  negative: 'states a negative weight, where weight is a magnitude and '
+    + 'the polarity carries the direction',
+};
+
+/**
+ * How each weight fault reads under the editor's per-term FIELD.
+ *
+ * Whole sentences, because a field's error slot has no line number to
+ * hang off and the control it sits under is the location. The rules
+ * are the same three and the wording is not, which is the deliberate
+ * half of the difference — a pasted block names a line, and a field
+ * names itself.
+ *
+ * Nothing here quotes what was typed, for the reason the header
+ * gives about the block: a refusal goes into the DOM and out of it
+ * again in whatever an operator copies.
+ */
+const FIELD_WEIGHT_SENTENCES: Readonly<Record<WeightFault, string>> = {
+  missing: 'Weight is required.',
+  unreadable: 'Weight has to be a number.',
+  negative: 'Weight is a magnitude; the polarity carries the direction.',
+};
 
 /**
  * Whether a field spells a polarity.
@@ -268,6 +345,44 @@ function describeFieldCount(count: number): string {
 }
 
 /**
+ * What is wrong with a weight, whatever format it was written in.
+ *
+ * The one predicate behind both spellings of the rule, and the reason
+ * it exists rather than each caller reading the text itself: a pasted
+ * line and the per-term field in the editor are two ways of stating
+ * the same column, and a surface that refused one and took the other
+ * would be giving two answers to one question.
+ *
+ * Every branch is a rule the endpoint keeps.
+ * `../../data/types.ts` declares {@link Term.weight} a MAGNITUDE whose
+ * sign is never consulted, which is what makes a negative one a fault
+ * rather than a value with a direction in it. The emptiness check is
+ * separate from the readability one on purpose: `Number('')` is `0`,
+ * so a field left blank would otherwise be stored as a weightless term
+ * carrying a real zero, and nothing downstream could tell the two
+ * apart. `Number.isFinite` and not `!Number.isNaN` for the mirror
+ * reason, since `Number('Infinity')` is a number and not a weight.
+ *
+ * @param text - The weight as written, already trimmed.
+ * @returns Which rule it breaks, or `undefined` where it is a weight.
+ */
+function findWeightFault(text: string): WeightFault | undefined {
+  if (text === '') {
+    return 'missing';
+  }
+
+  const weight = Number(text);
+
+  if (!Number.isFinite(weight)) {
+    return 'unreadable';
+  }
+
+  return weight < 0
+    ? 'negative'
+    : undefined;
+}
+
+/**
  * What is wrong with a line's pattern or weight, if anything.
  *
  * Polarity is not read here on purpose: the check that refuses a
@@ -287,22 +402,11 @@ function describePatternOrWeight(
     return 'names no pattern';
   }
 
-  if (weightText === '') {
-    return 'states no weight';
-  }
+  const fault = findWeightFault(weightText);
 
-  const weight = Number(weightText);
-
-  if (!Number.isFinite(weight)) {
-    return 'states a weight that is not a number';
-  }
-
-  if (weight < 0) {
-    return 'states a negative weight, where weight is a magnitude and '
-      + 'the polarity carries the direction';
-  }
-
-  return undefined;
+  return fault === undefined
+    ? undefined
+    : LINE_WEIGHT_PHRASES[fault];
 }
 
 /**
@@ -421,6 +525,34 @@ export function splitTermBuckets(terms: readonly Term[]): TermBucket[] {
 }
 
 /**
+ * The term list after one row's members are rewritten.
+ *
+ * The one place a row is replaced, so the two public movers above
+ * cannot come to disagree about what replacing one means. A FRESH
+ * list every time with the moved row rebuilt rather than written
+ * through: the list is a draft the modal holds in state, and a row
+ * mutated in place is a new value that compares equal to the old one
+ * and renders nothing.
+ *
+ * A change that changes nothing answers a copy reading exactly as the
+ * original, which the draft holder absorbs by value.
+ *
+ * @param terms - The list as it stands.
+ * @param termId - The `terms.id` being rewritten.
+ * @param changes - The columns the caller's control owns.
+ * @returns The new list, in the same order.
+ */
+function withTermValues(
+  terms: readonly Term[],
+  termId: number,
+  changes: Partial<Term>,
+): Term[] {
+  return terms.map((term) => (term.id === termId
+    ? { ...term, ...changes }
+    : term));
+}
+
+/**
  * The term list after one row changes bucket.
  *
  * The whole of what a cross-bucket drag does, and the whole of what
@@ -445,13 +577,119 @@ export function withTermPolarity(
   termId: number,
   polarity: TermPolarity,
 ): Term[] {
-  return terms.map((term) => {
-    if (term.id !== termId) {
-      return term;
-    }
+  return withTermValues(terms, termId, { polarity });
+}
 
-    return { ...term, polarity };
-  });
+/**
+ * The term list after one row's weight is rewritten.
+ *
+ * {@link withTermPolarity}'s sibling and its equal: the editor draws
+ * two controls per row and each writes one column, so each has one
+ * mover. Weight is the column the buckets do NOT read, which is the
+ * whole difference between them — a weight change leaves every row
+ * exactly where it is drawn.
+ *
+ * The weight is a number and not the text a field holds, because
+ * {@link readTermWeight} is what turns one into the other and refuses
+ * the readings that are not weights. A caller that skipped it would
+ * be storing `Number('')`, which is `0` and is not a blank.
+ *
+ * @param terms - The list as it stands.
+ * @param termId - The `terms.id` whose weight moved.
+ * @param weight - Its new magnitude, already read.
+ * @returns The new list, in the same order.
+ */
+export function withTermWeight(
+  terms: readonly Term[],
+  termId: number,
+  weight: number,
+): Term[] {
+  return withTermValues(terms, termId, { weight });
+}
+
+/**
+ * What the per-term polarity control offers, in the surface's order.
+ *
+ * The control that answers WCAG 2.2 SC 2.5.7 for the cross-bucket
+ * drag — see the header on why the two are one operation — so its
+ * options are TOTAL over `TermPolarity` and come off
+ * {@link POLARITY_FACETS} like everything else the surface draws. A
+ * list that omitted a polarity would be a bucket a term could be
+ * dragged into and not chosen into, which is exactly the equivalence
+ * the criterion asks for and would be the one gap nothing reports.
+ *
+ * Totality is also what makes the control safe against `Select`,
+ * which resolves a value none of its options carry to the FIRST
+ * option: a term could otherwise be drawn as holding somebody else's
+ * polarity. Here every stored value is offered, so the resolution
+ * never happens.
+ *
+ * Labels are the facet's own, so the option an operator picks is
+ * spelled the way the card beside it and the bucket header above it
+ * spell the same reading.
+ *
+ * Built fresh per call and owned by nobody — see the header on which
+ * array stance this module is in, and note that `Select` declares its
+ * `options` mutable.
+ *
+ * @returns One option per polarity, in surface order.
+ */
+export function termPolarityOptions(): TermPolarityOption[] {
+  return POLARITY_FACETS.map((facet) => ({
+    value: facet.polarity,
+    label: facet.label,
+  }));
+}
+
+/**
+ * The polarity an option value names, or `undefined`.
+ *
+ * The narrowing the control needs and cannot do itself: `Select`
+ * hands its `onChange` a `string`, and the draft it writes into holds
+ * the union. Answering `undefined` rather than a default is what
+ * keeps a value nothing offered from moving a term at all — a
+ * fallback here would be this module choosing a bucket on the
+ * operator's behalf.
+ *
+ * The membership test runs against a WIDENED copy of the names, so
+ * nothing here tells the compiler something the runtime has not
+ * checked.
+ *
+ * @param value - Whatever the control reported.
+ * @returns The polarity it names, or `undefined` for anything else.
+ */
+export function readTermPolarity(value: string): TermPolarity | undefined {
+  return isTermPolarity(value)
+    ? value
+    : undefined;
+}
+
+/**
+ * What the per-term weight field's text reads as.
+ *
+ * Never throws and never coerces. The three refusals are the three
+ * {@link findWeightFault} names, which is what makes this field and a
+ * pasted line agree about the column — the header on that predicate
+ * carries why each one is a rule rather than a preference.
+ *
+ * Coercing would be the wrong repair in a control that SHOWS what was
+ * typed: a field reading `-2` and a draft holding `2` would be the
+ * surface disagreeing with itself, and the operator would find out at
+ * the next read.
+ *
+ * The text is trimmed first, so a field an operator left as spaces is
+ * the same fault as one they left empty rather than a different one.
+ *
+ * @param text - The field's contents, as typed.
+ * @returns The weight, or the sentence the field states instead.
+ */
+export function readTermWeight(text: string): TermWeightReading {
+  const trimmed = text.trim();
+  const fault = findWeightFault(trimmed);
+
+  return fault === undefined
+    ? { ok: true, weight: Number(trimmed) }
+    : { ok: false, sentence: FIELD_WEIGHT_SENTENCES[fault] };
 }
 
 /**
