@@ -106,31 +106,88 @@
  * Loading, empty and rejected each get their own body. Empty is a
  * category that exists and carries no vocabulary — not a refusal, and
  * not three empty buckets either, since a bucket an operator can drag
- * nothing into is a picture of a list rather than a way into one.
+ * nothing into is a picture of a list rather than a way into one. The
+ * paste panel below is the way in that state offers instead, and it
+ * stays under the buckets once there are terms to put in them.
+ *
+ * ## The bulk-paste panel
+ *
+ * A collapsed disclosure under the buckets, holding a box that takes
+ * the seed's own format one term per line. Its button reads the block
+ * through {@link parseTermBlock}, states what the parse did through
+ * {@link describeTermBlockReading}, lists whatever was refused a line
+ * at a time, and merges the accepted candidates through
+ * {@link mergeTermCandidates}.
+ *
+ * None of that writes anything. The merge appends rows to the SAME
+ * draft the per-term controls edit, so a paste is unsaved work like
+ * every other edit here and the footer counts it as one — which is
+ * also why the draft is a list rather than a set of controls.
+ * `./terms.ts` mints each appended row a negative id, and
+ * {@link isDraftTerm} reads it back, which is what puts a badge on a
+ * row nothing has stored.
+ *
+ * ## What a merged row does not survive
+ *
+ * `../../data/drafts.ts` records edits to rows that EXIST and never
+ * inserts one, so `saveCategoryTerms` records nothing for a merged
+ * candidate and reopening this editor does not show it. That is the
+ * fixture seam's limit rather than the endpoint's, and it is
+ * deliberately not hidden: the rows carry a badge, and the sentence
+ * under the box calls them unsaved rows rather than terms.
+ *
+ * ## Two things the library decides about the panel's markup
+ *
+ * `AccordionItem` renders its children inside a `<p>`, so everything
+ * inside the disclosure is PHRASING content — a label, the box, a
+ * hint and the button, laid out with spans. That is why the field is
+ * not wrapped in FormKit's `FormField`, which renders a `div`. The
+ * result region is a `div` too, so it sits OUTSIDE the disclosure,
+ * which is also what leaves it readable once the panel is collapsed.
+ *
+ * Radix unmounts a closed item's children, so the box does not exist
+ * while the panel is shut. The typed block lives in the panel
+ * component, which stays mounted either way, so collapsing it keeps
+ * what was typed.
+ *
+ * ## Pressing the button twice
+ *
+ * A parse reads the block against the terms the draft holds NOW,
+ * which includes whatever the last press merged. So a second press
+ * over an unchanged block refuses every line it took the first time
+ * as a duplicate — the service's (category, pattern) uniqueness
+ * arriving one edit early, which is exactly the rule `./terms.ts`
+ * says a duplicate is. Editing the box retires the previous result
+ * instead of leaving it: a sentence names a LINE NUMBER, and a
+ * keystroke can move the line it points at.
  *
  * ## What is not here yet
  *
- * The bulk-paste panel over {@link parseTermBlock} and the JSON
- * fallback over `./schema.ts` are the two branches this editor grows
- * next; both write the same draft, which is why the draft is a list
- * and not a set of controls. Nothing in this file is reachable from
- * the unit suite, which is node-only and collects `.ts` alone — its
- * decisions are next door, its bindings are proven by a
- * `check-types` mutation grid, and what it renders falls to the
- * Playwright specs.
+ * The JSON fallback over `./schema.ts` is the branch this editor
+ * grows next, and it writes the same draft both of the above do.
+ * Nothing in this file is reachable from the unit suite, which is
+ * node-only and collects `.ts` alone — its decisions are next door,
+ * its bindings are proven by a `check-types` mutation grid, and what
+ * it renders falls to the Playwright specs.
  */
 
-import type { TermBucket } from './terms';
+import type { TermBlockReading, TermBucket, TermCandidate } from './terms';
 import type { EditorDraft } from '../../components/editorDraft';
 import type { Term, TermPolarity } from '../../data/types';
 
 import {
+  Accordion,
+  AccordionItem,
+  Badge,
+  Banner,
+  Button,
   EmptyState,
   Select,
   Skeleton,
   Sortable,
   SortableRow,
   TextInput,
+  Textarea,
   cn,
 } from '@ar/ui';
 import { useId, useState } from 'react';
@@ -149,6 +206,10 @@ import {
 } from '../../data/hooks';
 
 import {
+  describeTermBlockReading,
+  isDraftTerm,
+  mergeTermCandidates,
+  parseTermBlock,
   readTermPolarity,
   readTermWeight,
   splitTermBuckets,
@@ -171,6 +232,46 @@ const POLARITY_PANEL_WIDTH = 160;
 
 /** What the header says while the category's own read is in flight. */
 const PENDING_TITLE = 'Category terms';
+
+/** Which `AccordionItem` the paste panel's disclosure opens. */
+const PASTE_ITEM_VALUE = 'paste';
+
+/** What the disclosure is called while it is shut. */
+const PASTE_PANEL_TITLE = 'Paste terms';
+
+/** What the box itself is called. */
+const PASTE_FIELD_LABEL = 'Seed lines';
+
+/**
+ * The format, spelled out under the box.
+ *
+ * `./terms.ts` is what enforces every clause of this, and its header
+ * is where the reasoning lives. Restated here because an operator
+ * about to paste forty rows cannot read a docblock.
+ */
+const PASTE_FORMAT_HINT = 'One term per line, as pattern, weight, '
+  + 'polarity and an optional note, separated by a pipe or a tab.';
+
+/** An example line, shown in the empty box. */
+const PASTE_PLACEHOLDER = 'message queue | 3 | positive | Worth watching.';
+
+/** What the button that reads the block says. */
+const PASTE_ACTION_LABEL = 'Add these terms';
+
+/** How tall the box opens; `Textarea` carries `resize-y` over it. */
+const PASTE_ROWS = 6;
+
+/**
+ * What the banner over the refused lines is titled.
+ *
+ * Neither 'some' nor 'all': the banner lists exactly the lines that
+ * were not taken, and both readings have to be true of the same
+ * sentence.
+ */
+const PASTE_REFUSED_TITLE = 'These lines were not added';
+
+/** What marks a row this editor minted and no save will keep. */
+const DRAFT_ROW_LABEL = 'Unsaved';
 
 /**
  * A category's vocabulary, as the draft holder carries it.
@@ -263,6 +364,18 @@ export const LexiconEditorModal = () => {
     writeTerms(withTermWeight(edited, termId, reading.weight));
   };
 
+  // The merge is a draft write like the other two, which is the whole
+  // of what the paste panel does to the editor: nothing here reaches
+  // `../../data/`, and the footer counts the appended rows as
+  // unsaved work exactly as it counts a moved polarity.
+  const handleCandidates = (candidates: readonly TermCandidate[]) => {
+    if (edited === undefined || candidates.length === 0) {
+      return;
+    }
+
+    writeTerms(mergeTermCandidates(edited, candidates, categoryId));
+  };
+
   return (
     <EditorModal
       size="lg"
@@ -288,6 +401,7 @@ export const LexiconEditorModal = () => {
         weightTexts={weightTexts}
         onPolarityChange={handlePolarityChange}
         onWeightTextChange={handleWeightTextChange}
+        onAddCandidates={handleCandidates}
       />
     </EditorModal>
   );
@@ -308,19 +422,27 @@ interface LexiconEditorBodyProps {
   ) => void;
   /** Report a weight field's text moving. */
   readonly onWeightTextChange: (termId: number, text: string) => void;
+  /** Report the candidates a pasted block was read into. */
+  readonly onAddCandidates: (candidates: readonly TermCandidate[]) => void;
 }
 
 /**
- * The editor's body: the three buckets, or the reason there are not
- * three buckets.
+ * The editor's body: the buckets and the paste panel, or the reason
+ * there are no buckets.
  *
  * Split out of the modal rather than written as nested ternaries
  * inside its JSX — the states are exclusive and each has something to
  * say, which reads as a sequence of early returns and very little
  * else.
  *
+ * The two states that mean the category was READ share the panel: a
+ * category with no vocabulary is the one that most needs a bulk
+ * gesture, so the empty state stands where the buckets would and the
+ * panel sits under either.
+ *
  * @param props - Which state the read is in, and what to render with.
- * @returns The buckets, an empty state, or the loading stand-in.
+ * @returns The buckets and the panel, the empty state and the panel,
+ * or whichever read state is standing.
  */
 const LexiconEditorBody = ({
   failed,
@@ -328,6 +450,7 @@ const LexiconEditorBody = ({
   weightTexts,
   onPolarityChange,
   onWeightTextChange,
+  onAddCandidates,
 }: LexiconEditorBodyProps) => {
   if (failed) {
     return (
@@ -345,27 +468,167 @@ const LexiconEditorBody = ({
     return <Skeleton className="h-64 w-full rounded-xl" />;
   }
 
-  if (terms.length === 0) {
-    return (
-      <EmptyState
-        title="No terms yet"
-        description="This category carries no vocabulary. A term is what the pipeline matches on, and its polarity is what the match is worth."
-      />
-    );
-  }
+  return (
+    <div className="flex flex-col gap-5">
+      {terms.length === 0
+        ? (
+          <EmptyState
+            title="No terms yet"
+            description="This category carries no vocabulary. A term is what the pipeline matches on, and its polarity is what the match is worth. Paste a block below to start one."
+          />
+        )
+        : (
+          <div className="flex flex-col gap-4">
+            {splitTermBuckets(terms).map((bucket) => (
+              <BucketList
+                key={bucket.polarity}
+                bucket={bucket}
+                weightTexts={weightTexts}
+                onPolarityChange={onPolarityChange}
+                onWeightTextChange={onWeightTextChange}
+              />
+            ))}
+          </div>
+        )}
+
+      <TermPastePanel terms={terms} onAdd={onAddCandidates} />
+    </div>
+  );
+};
+
+/** What the bulk-paste panel is given. */
+interface TermPastePanelProps {
+  /**
+   * The vocabulary as the draft holds it.
+   *
+   * What a pasted pattern has to be new against, which includes the
+   * rows an earlier press of this panel's own button appended — see
+   * the header on what a second press therefore does.
+   */
+  readonly terms: readonly Term[];
+  /** Report the candidates a block was read into, in paste order. */
+  readonly onAdd: (candidates: readonly TermCandidate[]) => void;
+}
+
+/**
+ * The bulk-paste panel: a block in, candidates and sentences out.
+ *
+ * It holds the typed block and the last reading, and decides nothing
+ * else — `./terms.ts` reads the lines, phrases the refusals, counts
+ * what happened and mints the rows. What is left here is when to
+ * parse, when to retire a result, and where the two halves are drawn.
+ *
+ * The block lives HERE rather than in the modal because it is not a
+ * draft: nothing about it is unsaved work, and the footer would have
+ * to learn to ignore it. Radix unmounts a closed disclosure's
+ * children, so holding it here is also what survives collapsing the
+ * panel.
+ *
+ * @param props - The terms a pattern must be new against, and where
+ * to report the candidates.
+ * @returns The disclosure, and the result of the last parse under it.
+ */
+const TermPastePanel = ({ terms, onAdd }: TermPastePanelProps) => {
+  const fieldId = useId();
+  const hintId = `${fieldId}-hint`;
+  const resultId = `${fieldId}-result`;
+
+  const [block, setBlock] = useState('');
+  const [reading, setReading] = useState<TermBlockReading | undefined>(
+    undefined,
+  );
 
   return (
-    <div className="flex flex-col gap-4">
-      {splitTermBuckets(terms).map((bucket) => (
-        <BucketList
-          key={bucket.polarity}
-          bucket={bucket}
-          weightTexts={weightTexts}
-          onPolarityChange={onPolarityChange}
-          onWeightTextChange={onWeightTextChange}
-        />
-      ))}
-    </div>
+    <section className="flex flex-col">
+      <Accordion mode="single">
+        <AccordionItem value={PASTE_ITEM_VALUE} title={PASTE_PANEL_TITLE}>
+          {/* Everything in here is PHRASING content: `AccordionItem`
+              renders its children inside a `<p>`, so a `div` — and
+              with it FormKit's `FormField` — would be markup no
+              parser accepts. The header carries the measurement. */}
+          <span className="flex flex-col items-start gap-2">
+            <label
+              htmlFor={fieldId}
+              className="text-[13px] font-semibold text-fg1"
+            >
+              {PASTE_FIELD_LABEL}
+            </label>
+
+            <Textarea
+              id={fieldId}
+              value={block}
+              rows={PASTE_ROWS}
+              placeholder={PASTE_PLACEHOLDER}
+              spellCheck={false}
+              aria-describedby={`${hintId} ${resultId}`}
+              className="font-mono text-[13px]"
+              onChange={(next) => {
+                setBlock(next);
+
+                // A sentence names a LINE NUMBER, so a keystroke can
+                // move the line one points at. The whole result is
+                // retired rather than left addressing a block that
+                // has since changed under it.
+                setReading(undefined);
+              }}
+            />
+
+            <span id={hintId} className="text-[11.5px] text-fg3">
+              {PASTE_FORMAT_HINT}
+            </span>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                // Read against the draft's CURRENT terms, which is
+                // what makes the duplicate rule cover rows an earlier
+                // press appended as well as stored ones.
+                const next = parseTermBlock(block, terms);
+
+                setReading(next);
+                onAdd(next.candidates);
+              }}
+            >
+              {PASTE_ACTION_LABEL}
+            </Button>
+          </span>
+        </AccordionItem>
+      </Accordion>
+
+      {/*
+        Outside the disclosure on two counts: `Banner` is a `div` and
+        could not live in that `<p>`, and a result an operator can
+        still read after collapsing the panel is the more useful one.
+        Rendered from mount rather than arriving with its first
+        sentence — assistive technology watches regions that already
+        exist, and one inserted with its content is routinely missed.
+      */}
+      <div id={resultId} role="status">
+        {reading !== undefined && (
+          <p className="m-0 mt-3 text-[12.5px] text-fg2">
+            {describeTermBlockReading(reading)}
+          </p>
+        )}
+
+        {reading !== undefined && reading.sentences.length > 0 && (
+          <Banner
+            className="mt-2"
+            tone="warning"
+            title={PASTE_REFUSED_TITLE}
+          >
+            <ul className="m-0 flex list-none flex-col gap-1 p-0">
+              {reading.sentences.map((sentence, index) => (
+                // Keyed by position: the list is rebuilt whole on
+                // every parse and never reordered, and two lines are
+                // free to break the same rule.
+                <li key={index}>{sentence}</li>
+              ))}
+            </ul>
+          </Banner>
+        )}
+      </div>
+    </section>
   );
 };
 
@@ -471,6 +734,11 @@ interface TermRowProps {
  * dragging this row into another list, and it is the same call — see
  * the header on why that is what SC 2.5.7 asks for.
  *
+ * A row the paste panel appended carries a badge, read straight off
+ * its id by {@link isDraftTerm}. It is not decoration: the fixture
+ * seam cannot insert a row, so a save keeps this one for exactly as
+ * long as the modal is open, and the header says so at length.
+ *
  * @param props - The term, its typed weight, and the two gestures it
  * reports.
  * @returns The row.
@@ -541,8 +809,16 @@ const TermRow = ({
         </div>
       )}
     >
-      <span className="block truncate font-mono text-[12.5px] text-fg1">
-        {term.pattern}
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="min-w-0 truncate font-mono text-[12.5px] text-fg1">
+          {term.pattern}
+        </span>
+
+        {isDraftTerm(term) && (
+          <Badge tone="warning" size="sm" className="shrink-0">
+            {DRAFT_ROW_LABEL}
+          </Badge>
+        )}
       </span>
     </SortableRow>
   );

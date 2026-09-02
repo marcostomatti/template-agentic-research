@@ -1,3 +1,4 @@
+import type { TermCandidate } from './terms';
 import type { Term, TermPolarity } from '../../data/types';
 
 import { describe, expect, it } from 'vitest';
@@ -6,6 +7,9 @@ import { TERMS } from '../../data/lexicon';
 import { repeated } from '../../test-support/repeated';
 
 import {
+  describeTermBlockReading,
+  isDraftTerm,
+  mergeTermCandidates,
   parseTermBlock,
   readTermPolarity,
   readTermWeight,
@@ -741,5 +745,304 @@ describe('withTermWeight', () => {
       polarity: 'ignore',
       weight: 6,
     });
+  });
+});
+
+/**
+ * One candidate, spelled out.
+ *
+ * The `term` helper's counterpart for the shape a parse answers: the
+ * same four members minus the two a row has and a candidate does not.
+ *
+ * @param pattern - What the row would look for.
+ * @param polarity - Which bucket it would join.
+ * @param weight - Its magnitude.
+ * @returns The candidate.
+ */
+function candidate(
+  pattern: string,
+  polarity: TermPolarity,
+  weight = 1,
+): TermCandidate {
+  return { pattern, weight, polarity, notes: null };
+}
+
+describe('mergeTermCandidates', () => {
+  it('answers a fresh list reading the same when nothing was taken', () => {
+    // Act
+    const next = mergeTermCandidates(MIXED, [], CATEGORY_ID);
+
+    // Assert
+    expect(next).toEqual(MIXED);
+    expect(next).not.toBe(MIXED);
+  });
+
+  it('appends one row per candidate, in the order they were read', () => {
+    // Arrange
+    const candidates = [
+      candidate('service mesh', 'positive', 2),
+      candidate('edge runtime', 'negative', 3),
+    ];
+
+    // Act
+    const next = mergeTermCandidates(MIXED, candidates, CATEGORY_ID);
+
+    // Assert
+    expect(next).toHaveLength(MIXED.length + 2);
+    expect(next.slice(MIXED.length).map((row) => row.pattern)).toEqual([
+      'service mesh',
+      'edge runtime',
+    ]);
+  });
+
+  it('carries every member a candidate named onto the row', () => {
+    // Arrange
+    const noted: TermCandidate = {
+      pattern: 'service mesh',
+      weight: 2.5,
+      polarity: 'negative',
+      notes: 'Worth watching.',
+    };
+
+    // Act
+    const [row] = mergeTermCandidates([], [noted], CATEGORY_ID);
+
+    // Assert
+    expect(row).toEqual({
+      id: -1,
+      categoryId: CATEGORY_ID,
+      pattern: 'service mesh',
+      weight: 2.5,
+      polarity: 'negative',
+      notes: 'Worth watching.',
+    });
+  });
+
+  it('mints ids below every id the list already carries', () => {
+    // The claim that keeps a minted row addressable: the two movers
+    // find a row by id, so an id the list already used would move two
+    // rows at once.
+    // Arrange
+    const candidates = [candidate('service mesh', 'positive')];
+
+    // Act
+    const next = mergeTermCandidates(MIXED, candidates, CATEGORY_ID);
+    const minted = next.slice(MIXED.length).map((row) => row.id);
+
+    // Assert
+    expect(minted).toEqual([-1]);
+    expect(repeated(next.map((row) => row.id))).toEqual([]);
+  });
+
+  it('mints below the LOWEST id, so a second merge reuses none', () => {
+    // Arrange
+    const candidates = [
+      candidate('service mesh', 'positive'),
+      candidate('edge runtime', 'negative'),
+    ];
+
+    // Act
+    const once = mergeTermCandidates(MIXED, candidates, CATEGORY_ID);
+    const twice = mergeTermCandidates(
+      once,
+      [candidate('data mesh', 'ignore')],
+      CATEGORY_ID,
+    );
+
+    // Assert
+    expect(once.slice(MIXED.length).map((row) => row.id)).toEqual([-1, -2]);
+    expect(twice[twice.length - 1]?.id).toBe(-3);
+    expect(repeated(twice.map((row) => row.id))).toEqual([]);
+  });
+
+  it('mints from the ceiling for a category carrying nothing', () => {
+    // The empty category is the panel's first subject rather than an
+    // edge case: a bulk paste is how one stops being empty.
+    // Act
+    const next = mergeTermCandidates(
+      [],
+      [
+        candidate('service mesh', 'positive'),
+        candidate('data mesh', 'ignore'),
+      ],
+      CATEGORY_ID,
+    );
+
+    // Assert
+    expect(next.map((row) => row.id)).toEqual([-1, -2]);
+  });
+
+  it('hangs every minted row off the category it was handed', () => {
+    // Handed a DIFFERENT id from the one every row in `MIXED` carries,
+    // so the assertion cannot pass by reading a neighbour's column.
+    // Arrange
+    const other = CATEGORY_ID + 1;
+
+    // Act
+    const next = mergeTermCandidates(
+      MIXED,
+      [candidate('service mesh', 'positive')],
+      other,
+    );
+
+    // Assert
+    expect(next[next.length - 1]?.categoryId).toBe(other);
+    expect(next[0]?.categoryId).toBe(CATEGORY_ID);
+  });
+
+  it('leaves every row it was given by identity', () => {
+    // Act
+    const next = mergeTermCandidates(
+      MIXED,
+      [candidate('service mesh', 'positive')],
+      CATEGORY_ID,
+    );
+
+    // Assert
+    expect(next.slice(0, MIXED.length)).toEqual([...MIXED]);
+    MIXED.forEach((row, index) => {
+      expect(next[index]).toBe(row);
+    });
+  });
+
+  it('files a merged candidate last in the bucket its polarity names', () => {
+    // The composition claim: nothing here files a row into a bucket,
+    // because `splitTermBuckets` reads the column and the list order.
+    // Arrange
+    const candidates = [candidate('service mesh', 'positive')];
+
+    // Act
+    const buckets = splitTermBuckets(
+      mergeTermCandidates(MIXED, candidates, CATEGORY_ID),
+    );
+
+    // Assert
+    expect(buckets[0]?.polarity).toBe('positive');
+    expect(buckets[0]?.terms.map((row) => row.pattern)).toEqual([
+      'message queue',
+      'graph database',
+      'service mesh',
+    ]);
+  });
+
+  it('answers a list the caller owns outright', () => {
+    // Arrange
+    const candidates = [candidate('service mesh', 'positive')];
+
+    // Act
+    const next = mergeTermCandidates(MIXED, candidates, CATEGORY_ID);
+    next.push(term(99, 'planted', 'ignore'));
+
+    // Assert
+    expect(mergeTermCandidates(MIXED, candidates, CATEGORY_ID))
+      .toHaveLength(MIXED.length + 1);
+  });
+});
+
+describe('isDraftTerm', () => {
+  it('reads a stored row as one the service issued', () => {
+    // `terms.id` is a positive serial, so every fixture row is one.
+    expect(TERMS.every((row) => !isDraftTerm(row))).toBe(true);
+    expect(isDraftTerm(term(1, 'alpha', 'positive'))).toBe(false);
+  });
+
+  it('reads back exactly what the merge minted', () => {
+    // Arrange
+    const candidates = [candidate('service mesh', 'positive')];
+
+    // Act
+    const next = mergeTermCandidates(MIXED, candidates, CATEGORY_ID);
+
+    // Assert
+    expect(next.filter((row) => isDraftTerm(row)).map((row) => row.pattern))
+      .toEqual(['service mesh']);
+  });
+
+  it('reads the ceiling itself as neither minted nor issued', () => {
+    // The boundary stated rather than left to a reader: minting counts
+    // DOWN from zero, so zero is below no id this module produced.
+    expect(isDraftTerm(term(0, 'alpha', 'positive'))).toBe(false);
+    expect(isDraftTerm(term(-1, 'alpha', 'positive'))).toBe(true);
+  });
+});
+
+describe('describeTermBlockReading', () => {
+  it('says a block held nothing when neither list has a member', () => {
+    expect(describeTermBlockReading({ candidates: [], sentences: [] }))
+      .toBe('That block held nothing to read.');
+  });
+
+  it('states the accepted count alone when nothing was refused', () => {
+    expect(describeTermBlockReading({
+      candidates: [candidate('service mesh', 'positive')],
+      sentences: [],
+    })).toBe('Added 1 term as an unsaved row.');
+    expect(describeTermBlockReading({
+      candidates: [
+        candidate('service mesh', 'positive'),
+        candidate('edge runtime', 'negative'),
+      ],
+      sentences: [],
+    })).toBe('Added 2 terms as unsaved rows.');
+  });
+
+  it('says it added nothing when every line was refused', () => {
+    expect(describeTermBlockReading({
+      candidates: [],
+      sentences: ['Line 1 names no pattern.'],
+    })).toBe('Added nothing and refused 1 line.');
+  });
+
+  it('states both counts when a block was partly taken', () => {
+    expect(describeTermBlockReading({
+      candidates: [candidate('service mesh', 'positive')],
+      sentences: ['Line 2 names no pattern.', 'Line 4 names no pattern.'],
+    })).toBe('Added 1 term as an unsaved row and refused 2 lines.');
+  });
+
+  it('counts what a real parse answered, over a real block', () => {
+    // Driven through the producer rather than a hand-built reading, so
+    // the two halves of the panel's report cannot come to disagree
+    // about how many lines a block held.
+    // Arrange
+    const block = [
+      'service mesh | 2 | positive',
+      '| 1 | negative',
+      'edge runtime | 3 | negative',
+      'framework | 1 | ignore',
+      'data mesh | 1 | ignore',
+    ].join('\n');
+
+    // Act
+    const reading = parseTermBlock(block, MIXED);
+
+    // Assert
+    expect(describeTermBlockReading(reading))
+      .toBe('Added 3 terms as unsaved rows and refused 2 lines.');
+  });
+
+  it('quotes nothing an operator pasted', () => {
+    // The no-echo rule, re-read off the OUTPUT: this sentence carries
+    // two counts and this module's own words, and the only way to
+    // know is to look. The block plants a token in every field of an
+    // ACCEPTED line as well as a refused one, so a builder reaching
+    // for either list's contents would be caught.
+    // Arrange
+    const planted = 'sntnl';
+    const block = [
+      `${planted}pattern | 2 | positive | ${planted}notes`,
+      `| 1 | ${planted}polarity`,
+    ].join('\n');
+
+    // Act
+    const reading = parseTermBlock(block, MIXED);
+    const sentence = describeTermBlockReading(reading);
+
+    // Assert
+    expect(sentence.match(/sntnl[a-z]*/gu)).toBeNull();
+    // The control: the sweep read a sentence about a block that had
+    // both a candidate and a refusal in it, not an empty one.
+    expect(sentence)
+      .toBe('Added 1 term as an unsaved row and refused 1 line.');
   });
 });

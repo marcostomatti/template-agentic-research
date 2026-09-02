@@ -109,9 +109,11 @@
  * milder than a connector's token, and the rule is cheaper to keep
  * everywhere than to re-decide per surface.
  *
- * The one payload-derived thing a sentence carries is a COUNT of
+ * The one payload-derived thing a REFUSAL carries is a COUNT of
  * fields, which is the same exception `describeSchemaIssues` makes for
- * a count of unrecognised keys.
+ * a count of unrecognised keys. The section below covers the other
+ * sentence this module builds, which carries counts of LINES on the
+ * same terms.
  *
  * ## Which array stance this module is in
  *
@@ -122,11 +124,34 @@
  * in state, so a `readonly` return would protect nothing and cost
  * every call site a copy.
  *
+ * ## A candidate becomes a row only in a DRAFT, and its id says so
+ *
+ * {@link parseTermBlock} answers CANDIDATES, which carry no `id`
+ * because reading a line is not the same as making a row.
+ * {@link mergeTermCandidates} is what makes them rows, and every id it
+ * mints is NEGATIVE: it descends from below the lowest the list
+ * already carries, so two merges cannot collide, and `terms.id` being
+ * a positive serial means no minted id can ever equal one the service
+ * issued. {@link isDraftTerm} reads that back, which is what lets a
+ * surface mark a row nothing has stored without a second flag to keep
+ * in step.
+ *
+ * The minting sits here rather than in the modal for the reason
+ * everything else here does: a decision written into a `.tsx` is
+ * reachable by no test in this package. What it produces is a row in
+ * the editor's own working copy and NOWHERE else. `../../data/
+ * drafts.ts` states that its store edits rows and never inserts one,
+ * so a merged candidate lives exactly as long as the modal does and a
+ * save records nothing for it. That is a property of the fixture seam
+ * rather than of this module, and the panel is where it is stated to
+ * whoever is looking at the screen.
+ *
+ * {@link describeTermBlockReading} is the reading of what a parse did,
+ * and it obeys the quoting rule above: two counts and this module's
+ * own words, with nothing off the block in it.
+ *
  * ## What this deliberately does not answer
  *
- * A candidate carries no `id`, because it is not a row yet: minting the
- * unsaved draft rows a merge appends to a bucket is the panel's job,
- * and an id invented here would be one the service never issued.
  * Whether there is anything to save belongs to
  * `../../components/editorDraft.ts`, and what the JSON fallback
  * validates against belongs to `./schema.ts`, which mirrors the same
@@ -153,6 +178,19 @@ const MIN_FIELDS = 3;
 
 /** The most: those three, plus notes. */
 const MAX_FIELDS = 4;
+
+/**
+ * The id at which minting starts counting DOWN.
+ *
+ * `terms.id` is a positive serial, so every id below zero is one the
+ * service cannot have issued — which is what makes
+ * {@link isDraftTerm} a reading of the id itself rather than a flag
+ * some other module has to keep in step with it.
+ */
+const DRAFT_ID_CEILING = 0;
+
+/** What {@link describeTermBlockReading} says about an empty block. */
+const EMPTY_BLOCK_SENTENCE = 'That block held nothing to read.';
 
 /**
  * The polarities a line may name, in the order the surface draws them.
@@ -499,6 +537,29 @@ function describeDuplicate(
 }
 
 /**
+ * How many of something, as a phrase.
+ *
+ * Both counts {@link describeTermBlockReading} states go through
+ * here, so the two cannot come to pluralise differently.
+ *
+ * @param count - How many there are.
+ * @param singular - What exactly one of them is called.
+ * @param plural - What any other number of them is called.
+ * @returns The count and the word, e.g. `1 line` or `3 lines`.
+ */
+function countPhrase(
+  count: number,
+  singular: string,
+  plural: string,
+): string {
+  const noun = count === 1
+    ? singular
+    : plural;
+
+  return `${String(count)} ${noun}`;
+}
+
+/**
  * A category's vocabulary, divided into the three buckets the editor
  * draws.
  *
@@ -746,4 +807,128 @@ export function parseTermBlock(
   });
 
   return { candidates, sentences };
+}
+
+/**
+ * The term list with a block's accepted candidates appended to it.
+ *
+ * The other half of {@link parseTermBlock}: that one reads lines and
+ * this one makes rows of them. Split in two because they answer
+ * different questions — whether a line is admissible, and what a row
+ * built from it looks like — and because a panel that parsed without
+ * merging (a preview, a second press over a corrected block) is a
+ * shape the first half already serves on its own.
+ *
+ * Candidates land at the END of the list, so each one falls last in
+ * the bucket its polarity names. That is the same rule every other
+ * bucket member obeys: {@link splitTermBuckets} keeps the order the
+ * list gave it, so newest-last here is newest-last on screen.
+ *
+ * ## The minted ids, and what they are honest about
+ *
+ * Ids descend from BELOW the lowest the list already carries, so a
+ * second merge cannot reuse the first one's ids, and `terms.id` being
+ * a positive serial means none of them can collide with a stored row.
+ * {@link isDraftTerm} is how a surface reads one back.
+ *
+ * A minted row is a row in the EDITOR's working copy and in nothing
+ * else. `../../data/drafts.ts` records edits to rows that exist and
+ * never inserts one, so a save records nothing for a merged candidate
+ * and a reload does not show it. That is the fixture seam's limit
+ * rather than this function's, and the panel states it where an
+ * operator can read it.
+ *
+ * @param terms - The list as it stands, stored rows and earlier
+ * merges alike.
+ * @param candidates - What a parse accepted, in the order it read
+ * them.
+ * @param categoryId - The `categories.id` this editor is open on,
+ * which is where every minted row hangs. Passed rather than read off
+ * a member of `terms`, which would leave an empty category with
+ * nowhere to get it.
+ * @returns The new list: the old one, then a row per candidate.
+ */
+export function mergeTermCandidates(
+  terms: readonly Term[],
+  candidates: readonly TermCandidate[],
+  categoryId: number,
+): Term[] {
+  const lowest = terms.reduce(
+    (low, term) => Math.min(low, term.id),
+    DRAFT_ID_CEILING,
+  );
+
+  return [
+    ...terms,
+    // The four members spelled out rather than spread, so a candidate
+    // that stopped carrying one of them is a `check-types` error here
+    // instead of a row quietly missing a column.
+    ...candidates.map((candidate, index) => ({
+      id: lowest - index - 1,
+      categoryId,
+      pattern: candidate.pattern,
+      weight: candidate.weight,
+      polarity: candidate.polarity,
+      notes: candidate.notes,
+    })),
+  ];
+}
+
+/**
+ * Whether this row was minted here rather than issued by the service.
+ *
+ * A reading of the id and of nothing else — see
+ * {@link mergeTermCandidates} on why every minted id is negative and
+ * every stored one is not. A surface uses it to mark a row a save
+ * will not keep; nothing here changes behaviour on it.
+ *
+ * @param term - The row, as the draft holds it.
+ * @returns Whether nothing has stored it.
+ */
+export function isDraftTerm(term: Term): boolean {
+  return term.id < DRAFT_ID_CEILING;
+}
+
+/**
+ * What a parse did, in one sentence.
+ *
+ * The count of lines taken and the count refused, which is the
+ * reading a bulk gesture owes: the sentences under it name the
+ * refused lines one by one, and nothing at all names the accepted
+ * ones. An operator who pasted forty rows needs to know that
+ * thirty-eight arrived before they go looking for them.
+ *
+ * Both numbers come off the reading's two lists rather than off the
+ * block, which is what keeps the module's no-quoting rule: one line
+ * per sentence is exactly what {@link parseTermBlock} guarantees, so
+ * the sentence count IS the refused-line count.
+ *
+ * A block with nothing in it gets its own sentence rather than two
+ * zeroes. It is the answer to pressing the button over an empty box,
+ * and 'added nothing and refused nothing' would read as a fault.
+ *
+ * @param reading - What {@link parseTermBlock} answered.
+ * @returns The sentence, with a full stop.
+ */
+export function describeTermBlockReading(
+  reading: TermBlockReading,
+): string {
+  const added = reading.candidates.length;
+  const refused = reading.sentences.length;
+
+  if (added === 0 && refused === 0) {
+    return EMPTY_BLOCK_SENTENCE;
+  }
+
+  const rows = added === 1
+    ? 'an unsaved row'
+    : 'unsaved rows';
+  const addedPhrase = added === 0
+    ? 'Added nothing'
+    : `Added ${countPhrase(added, 'term', 'terms')} as ${rows}`;
+  const refusedPhrase = countPhrase(refused, 'line', 'lines');
+
+  return refused === 0
+    ? `${addedPhrase}.`
+    : `${addedPhrase} and refused ${refusedPhrase}.`;
 }
