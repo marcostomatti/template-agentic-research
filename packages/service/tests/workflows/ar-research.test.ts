@@ -70,6 +70,17 @@
  * travels is a claim about code the library cases cannot reach, and
  * it is made here over every refused candidate at once.
  *
+ * ## The clamp table reaches this node through its bounds alone
+ *
+ * `tests/lib/schedule-cases.ts` is driven here as it is next door,
+ * and what it can say about this position is narrower. Its rows pair
+ * a PROPOSAL with the bounds to judge it against, and this node
+ * proposes a constant of its own, so the bounds are the whole of what
+ * arrives. That leaves those rows asking about a ceiling that bites
+ * exactly never, which is why the section below carries bound pairs
+ * of its own chosen against the constant, and a coverage case that
+ * fails naming the outcome nothing reached.
+ *
  * ## The vacuity guard
  *
  * `DRIVEN` records every node name this file actually ran and the
@@ -84,6 +95,7 @@
  * is the shared corpus subject and no domain of ours.
  */
 import type { CodeNodeContext, CodeNodeItem } from './code-node.js';
+import type { IntervalBounds } from '../../src/lib/schedule.js';
 
 import { describe, expect, it } from 'vitest';
 
@@ -99,6 +111,7 @@ import {
   MAX_ENTITY_NAME_LENGTH,
 } from '../../src/lib/validate-entity-name.js';
 import { INJECTION_CANDIDATES } from '../lib/injection-fixtures.js';
+import { CLAMP_CASES } from '../lib/schedule-cases.js';
 
 import { codeNodes } from './code-node.js';
 
@@ -1301,6 +1314,318 @@ describe('ar-research — Propose Next Run proposes a clamped gap', () => {
   it('carries the run and the domain off the record it read', () => {
     expect(proposed['run_id']).toBe(RUN_ID);
     expect(proposed['domain_id']).toBe(DOMAIN_ID);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Propose Next Run, over the shared clamp table
+// ---------------------------------------------------------------------------
+
+/**
+ * The bounds a claim states, and what the pair stands for.
+ *
+ * `tests/lib/schedule-cases.ts` writes a PROPOSAL beside every pair
+ * of bounds and the answer the rule owes the two together. This node
+ * has no proposal axis to hand that column to: what it proposes is a
+ * constant it declares itself, and what it decides is whether to
+ * propose at all. So the bounds are the whole of what a row of that
+ * table can reach here, and a row of this one is a bounds pair with
+ * no proposal column left beside it to be read as an input.
+ */
+interface ProposalBoundCase {
+  /**
+   * Stable id, and what a row is paired by. Never re-used and never
+   * re-pointed at a different pair.
+   */
+  readonly id: string;
+
+  /**
+   * What the pair stands for, so a failure names the property that
+   * broke rather than two numbers.
+   */
+  readonly standsFor: string;
+
+  /** The floor and ceiling the claim states, a null side absent. */
+  readonly bounds: IntervalBounds;
+}
+
+/**
+ * The shared table's rows, as the bounds pairs they reach here as.
+ *
+ * Ids carried across unchanged, which is what lets a row added to
+ * that table join this section with no edit in this file — and what
+ * makes a failure name the row in the spelling its own table uses.
+ */
+const SHARED_BOUND_CASES: readonly ProposalBoundCase[] = CLAMP_CASES.map(
+  (row) => ({ id: row.id, standsFor: row.standsFor, bounds: row.bounds }),
+);
+
+/**
+ * The bound pairs the shared table does not reach at this node.
+ *
+ * Measured over that table as it stands: of its sixteen rows,
+ * fourteen leave this node's declared proposal exactly where it was,
+ * and the two that move it are both crossed pairs that RAISE it.
+ * Nothing there lowers it. That is no gap in the table — it was
+ * written for the library's axis, where the proposal varies per row
+ * and each pair of bounds was chosen against the proposal beside it
+ * — but driven at a node whose proposal is one constant, those rows
+ * ask about a ceiling that bites exactly never, and agreement over
+ * them alone is agreement a node carrying no clamp at all would
+ * reach for fourteen of the sixteen.
+ *
+ * So these five are chosen against THIS node's constant, and against
+ * both sides of it: a floor above it with nothing over that, a floor
+ * above it under a ceiling, a ceiling beneath it with nothing under
+ * that, a ceiling beneath it over a floor, and a pair that crosses
+ * beneath it. The last one is the ORDER — applied floor first it
+ * answers the ceiling, applied ceiling first it answers the floor,
+ * and those are different numbers here — and it is also what says a
+ * crossed pair is a claim this node READS rather than one it turns
+ * away as unreadable.
+ *
+ * The coverage case below is what keeps the paragraph above honest:
+ * it fails naming the outcome nothing reaches, so a table that grew
+ * a lowering row or a local pair that stopped biting is reported
+ * rather than quietly making this list redundant.
+ */
+const BITING_BOUND_CASES: readonly ProposalBoundCase[] = [
+  {
+    id: 'node-floored-no-ceiling',
+    standsFor: 'a floor over the proposal, with nothing above it',
+    bounds: { minIntervalSeconds: 3600, maxIntervalSeconds: null },
+  },
+  {
+    id: 'node-floored-under-a-ceiling',
+    standsFor: 'a floor over the proposal, under a ceiling',
+    bounds: { minIntervalSeconds: 1800, maxIntervalSeconds: 7200 },
+  },
+  {
+    id: 'node-capped-no-floor',
+    standsFor: 'a ceiling under the proposal, with nothing below it',
+    bounds: { minIntervalSeconds: null, maxIntervalSeconds: 300 },
+  },
+  {
+    id: 'node-capped-over-a-floor',
+    standsFor: 'a ceiling under the proposal, over a floor',
+    bounds: { minIntervalSeconds: 60, maxIntervalSeconds: 300 },
+  },
+  {
+    id: 'node-crossed-under-the-proposal',
+    standsFor: 'bounds crossing beneath it, answering the ceiling',
+    bounds: { minIntervalSeconds: 3600, maxIntervalSeconds: 300 },
+  },
+];
+
+/** Every bounds pair this section drives the node over. */
+const PROPOSAL_BOUND_CASES: readonly ProposalBoundCase[] = [
+  ...SHARED_BOUND_CASES,
+  ...BITING_BOUND_CASES,
+];
+
+/**
+ * Proposes against one pair of bounds.
+ *
+ * One run per pair rather than one batch, which is this node's
+ * cardinality rather than a preference: it answers one item per
+ * PASS whatever its batch held, and the bounds arrive on the claim
+ * the caller invoked the pass with, so two pairs cannot travel
+ * through one run at all.
+ *
+ * @param row - The pair to state on the claim.
+ * @param records - What Record Research answered, defaulting to one
+ * candidate the pass left behind, which is the ground for proposing.
+ * @returns The one item the node answered.
+ */
+function proposeAgainst(
+  row: ProposalBoundCase,
+  records: readonly Record<string, unknown>[] = [UNRECORDED],
+): Record<string, unknown> {
+  const stated = {
+    min_interval_seconds: row.bounds.minIntervalSeconds,
+    max_interval_seconds: row.bounds.maxIntervalSeconds,
+  };
+
+  return jsonAt(propose(records, stated), 0);
+}
+
+/** What the clamp can do to this node's proposal, and all of it. */
+const PROPOSAL_OUTCOMES = ['left alone', 'lowered', 'raised'] as const;
+
+/**
+ * Which of {@link PROPOSAL_OUTCOMES} the clamp does to the constant.
+ *
+ * Read off the imported copy rather than off any column of the
+ * shared table, because the imported copy is what the claim below
+ * compares against and the table's own `expected` answers a
+ * different proposal. Total over every pair, so one the clamp leaves
+ * alone names its own shape rather than being absorbed into another.
+ *
+ * @param row - The pair to judge.
+ * @returns What the clamp does to this node's declared proposal.
+ */
+function proposalOutcome(row: ProposalBoundCase): string {
+  const answer = clampIntervalSeconds(PROPOSED_GAP_SECONDS, row.bounds);
+
+  if (answer > PROPOSED_GAP_SECONDS) {
+    return 'raised';
+  }
+
+  return answer < PROPOSED_GAP_SECONDS
+    ? 'lowered'
+    : 'left alone';
+}
+
+/** What the node answered per pair, with work left behind. */
+const PROPOSED_BY_ID = new Map<string, Record<string, unknown>>(
+  PROPOSAL_BOUND_CASES.map((row) => [row.id, proposeAgainst(row)]),
+);
+
+/** What it answered per pair with nothing left behind. */
+const WITHHELD_BY_ID = new Map<string, Record<string, unknown>>(
+  PROPOSAL_BOUND_CASES.map((row) => [
+    row.id,
+    proposeAgainst(row, [recorded()]),
+  ]),
+);
+
+describe('ar-research — Propose Next Run, over the clamp table', () => {
+  // The guard the agreement below rests on, and the reason this
+  // section carries pairs of its own. Two copies that both answered
+  // their first argument agree on every row of a table that clamps
+  // nothing, so agreement is a claim only where the copy agreed with
+  // does something — and what varies here is the bounds alone, the
+  // proposal being one number the node declares.
+  //
+  // Set equality against a declared roster rather than a count. The
+  // driven set carries far more pairs than there are outcomes, so
+  // one sitting wholly inside a single outcome would satisfy a count
+  // while leaving two thirds of the rule unexercised.
+  it('is driven over bounds that raise, lower and leave alone', () => {
+    const covered = [...new Set(PROPOSAL_BOUND_CASES.map(proposalOutcome))];
+
+    expect(covered.sort()).toEqual([...PROPOSAL_OUTCOMES].sort());
+  });
+
+  // The pairing key, and the one way this section could lose a pair
+  // without failing anywhere else: two tables feed it, so a local id
+  // spelling a shared one would overwrite that entry in the map and
+  // leave every claim below reading one pair fewer than it names.
+  it('pairs every row by an id no other row spells', () => {
+    const ids = PROPOSAL_BOUND_CASES.map((row) => row.id);
+
+    expect(PROPOSED_BY_ID.size).toBe(ids.length);
+    expect([...PROPOSED_BY_ID.keys()].sort()).toEqual([...ids].sort());
+  });
+
+  // THE CLAIM. Every pair's applied gap held against what the
+  // imported clamp answers for the same bounds and this node's own
+  // declared proposal. Compared as two whole maps in one expression,
+  // so a pair the node never answered for fails on the key rather
+  // than going unread.
+  //
+  // What a disagreement would mean is narrow and worth being exact
+  // about: the node runs a copy of this very library, spliced by the
+  // build, so the two cannot differ about the RULE. A pair they part
+  // on is this node reaching the clamp with something other than the
+  // bounds it was handed.
+  it('applies the gap the clamp answers for those bounds', () => {
+    const applied = Object.fromEntries(
+      [...PROPOSED_BY_ID].map(([id, row]) => [id, row['gap_seconds']]),
+    );
+    const owed = Object.fromEntries(PROPOSAL_BOUND_CASES.map((row) => [
+      row.id,
+      clampIntervalSeconds(PROPOSED_GAP_SECONDS, row.bounds),
+    ]));
+
+    expect(applied).toEqual(owed);
+  });
+
+  // What says each pair REACHED the node, rather than one claim
+  // being answered over and over: the two bound columns travel back
+  // on the item as they were READ, so a node that ignored the claim
+  // handed to it answers every pair with the same two numbers and
+  // fails here whatever the gaps agreed on.
+  it('carries back the two bounds the claim stated', () => {
+    const apart: string[] = [];
+
+    for (const row of PROPOSAL_BOUND_CASES) {
+      const item = PROPOSED_BY_ID.get(row.id) ?? {};
+      const stated = [row.bounds.minIntervalSeconds,
+        row.bounds.maxIntervalSeconds];
+      const carried = [item['min_interval_seconds'],
+        item['max_interval_seconds']];
+
+      if (String(carried) !== String(stated)) {
+        apart.push(`${row.id}: bounds`);
+      }
+    }
+
+    expect(apart).toEqual([]);
+  });
+
+  // The in-band control the whole section needs, taken off the
+  // node's own answers rather than off the imported copy: some of
+  // these pairs must move the gap off the declared constant, or
+  // every claim above holds equally for a body with no clamp in it.
+  // The coverage case reads what the LIBRARY would do; this reads
+  // what the NODE did.
+  it('proposes its declared gap, and moves it where a bound bites', () => {
+    const answers = [...PROPOSED_BY_ID.values()];
+    const gaps = answers.map((row) => row['gap_seconds']);
+    const proposals = answers.map((row) => row['proposed_seconds']);
+
+    expect([...new Set(proposals)]).toEqual([PROPOSED_GAP_SECONDS]);
+    expect(gaps).not.toContain(null);
+    expect(gaps.filter((gap) => gap !== PROPOSED_GAP_SECONDS).length)
+      .toBeGreaterThan(0);
+  });
+});
+
+describe('ar-research — a withheld pass proposes no gap at all', () => {
+  // THE SECOND CLAIM the plan names, and the one the clamp cannot
+  // make: a pass with nothing left behind proposes NOTHING, rather
+  // than the constant it would have proposed or the number those
+  // bounds would have clamped that constant to.
+  //
+  // Both columns are read and neither implies the other. A node that
+  // withheld the decision and clamped anyway answers a gap beside a
+  // null proposal; one that recorded the constant without clamping
+  // answers a proposal beside a null gap. Asserted as the SET of
+  // every value either column took over every pair, so a single pair
+  // leaking one of the two fails rather than being averaged away.
+  it('answers neither the declared gap nor a clamped one', () => {
+    const columns = [...WITHHELD_BY_ID.values()]
+      .flatMap((row) => [row['proposed_seconds'], row['gap_seconds']]);
+
+    expect(WITHHELD_BY_ID.size).toBe(PROPOSAL_BOUND_CASES.length);
+    expect([...new Set(columns)]).toEqual([null]);
+  });
+
+  // Which nothing it is. The bounds these pairs state include ones
+  // that cross and ones no operator would write, and the node has a
+  // withholding sentence for a bound it could not read — so a sweep
+  // over the two null columns alone would pass for a node refusing
+  // half of this table as unreadable. Every pair here is READ, and
+  // the reason is the one that has nothing to do with bounds.
+  it('names the same withholding sentence for every pair', () => {
+    const reasons = [...WITHHELD_BY_ID.values()]
+      .map((row) => row['proposal_withheld']);
+
+    expect([...new Set(reasons)])
+      .toEqual(['the pass recorded every candidate it drained']);
+  });
+
+  // The open half of the pair, and what stops the sweep above from
+  // passing for a node that proposes nothing ever. Same pairs, same
+  // bounds, one candidate left unrecorded: every one of them comes
+  // back carrying a gap, which the section above holds to the clamp.
+  it('is paired with the same bounds proposing a gap', () => {
+    const answers = [...PROPOSED_BY_ID.values()];
+    const gaps = answers.map((row) => row['gap_seconds']);
+
+    expect(gaps.filter((gap) => gap === null)).toEqual([]);
+    expect(gaps).toHaveLength(WITHHELD_BY_ID.size);
   });
 });
 
