@@ -7,7 +7,7 @@ import { repeated } from '../test-support/repeated';
 
 import * as api from './api';
 import { listConnectors } from './connectors';
-import { listFindings } from './digest';
+import { listDocuments, listFindings } from './digest';
 import {
   DEFAULT_DOMAIN_SLUG,
   DOMAINS,
@@ -126,6 +126,8 @@ const DOMAIN_RESOURCE_GUARD: Readonly<Record<DomainResource, true>> = {
   'export-subscriptions': true,
   findings: true,
   personas: true,
+  'source-failures': true,
+  'source-proposals': true,
   'source-status-counts': true,
   sources: true,
   terms: true,
@@ -222,6 +224,12 @@ const DOMAIN_HOOKS: readonly DomainHookCase[] = [
     resource: 'source-status-counts',
     hook: hooks.useSourceStatusCounts,
     reads: api.fetchSourceStatusCounts,
+  },
+  {
+    name: 'useSourceProposals',
+    resource: 'source-proposals',
+    hook: hooks.useSourceProposals,
+    reads: api.fetchSourceProposals,
   },
   {
     name: 'usePersonas',
@@ -436,8 +444,9 @@ const WRITE_HOOKS: readonly WriteHookCase[] = [
     writes: 'approveSourceConfig',
     hook: hooks.useApproveSourceConfig,
     scoped: true,
-    // Empty on purpose: the proposals read is not written yet.
-    invalidates: () => [],
+    // One key now. This row read `[]` for as long as there was no
+    // proposals read to key on, and `useSourceProposals` is it.
+    invalidates: (slug) => [[slug, 'source-proposals']],
     variables: (probe) => probe,
     readBack: (slug, probe) => applyDrafts(
       domainDraftScope(slug, 'source-proposals'),
@@ -449,7 +458,13 @@ const WRITE_HOOKS: readonly WriteHookCase[] = [
     writes: 'resolveSourceFailure',
     hook: hooks.useResolveSourceFailure,
     scoped: true,
-    invalidates: (slug) => [[slug, 'documents']],
+    // TWO keys over DISJOINT resources: the whole-domain document
+    // list, and the failures queue's two-segment PREFIX, which a
+    // ruling has to reach without naming a source.
+    invalidates: (slug) => [
+      [slug, 'documents'],
+      [slug, 'source-failures'],
+    ],
     variables: (probe) => probe,
     readBack: (slug, probe) => applyDrafts(
       domainDraftScope(slug, 'documents'),
@@ -633,6 +648,35 @@ function absentIdOf(
 }
 
 /**
+ * The seeded source that has failed a capture.
+ *
+ * Derived rather than written, and derived through a PREDICATE rather
+ * than by taking the first source: `documents.parse_status` is what
+ * makes a source's queue non-empty, and only one seeded source has a
+ * failed capture at all. The child-list fetcher case below asserts a
+ * non-empty answer, so taking `listSources(...)[0]` would have this
+ * table pointing at a healthy feed and reporting a correct module as
+ * broken.
+ *
+ * @returns Its id.
+ * @throws If no seeded source has failed anything, which would make
+ * that fetcher case unsatisfiable rather than merely red.
+ */
+function failingSourceId(): number {
+  const failed = listDocuments(SEEDED_DOMAIN_ID)
+    .filter((document) => document.parseStatus === 'failed')
+    .map((document) => document.sourceId);
+  const source = listSources(SEEDED_DOMAIN_ID)
+    .find((candidate) => failed.includes(candidate.id));
+
+  if (source === undefined) {
+    throw new Error('No seeded source carries a failed capture.');
+  }
+
+  return source.id;
+}
+
+/**
  * One SINGLE-ROW hook, with everything a case needs to drive it.
  *
  * `hook` and `reads` are normalising WRAPPERS rather than the exports,
@@ -741,9 +785,15 @@ const SCOPED_SINGLE_ROW_HOOKS = SINGLE_ROW_HOOKS.filter(
  * neither describes it — {@link DomainHookCase} calls its hook with a
  * slug alone, and {@link SingleRowHookCase}'s `resource` is asserted
  * to be one a row is loaded out of, which is not what
- * {@link hooks.useTerms} does with `terms`. One member today, and a
- * table anyway so the surface partition below is a set claim over
- * populations that add up to the module.
+ * {@link hooks.useTerms} does with `terms` nor what
+ * {@link hooks.useSourceFailures} does with `source-failures`.
+ *
+ * Both members claim a resource NO other table names, and the
+ * completeness case below asserts exactly that. It is a property of
+ * the key space rather than of these two hooks: the third segment of
+ * every other key here is the answered row's own id, so a resource
+ * shared with a list or a row hook would put a PARENT's id in that
+ * position and give one key shape two meanings.
  */
 interface ChildListHookCase {
   /** Its exported name, for the completeness check and the titles. */
@@ -765,6 +815,23 @@ interface ChildListHookCase {
 }
 
 const CHILD_LIST_HOOKS: readonly ChildListHookCase[] = [
+  {
+    name: 'useSourceFailures',
+    resource: 'source-failures',
+    hook: (domainSlug, id) => hooks.useSourceFailures(domainSlug, id),
+    reads: (slug, id) => api.fetchSourceFailures(slug, id),
+    key: (slug, id) => domainRowQueryKey(slug, 'source-failures', id),
+    // The source that has failed something, derived rather than
+    // written: the fetcher case below asserts a NON-EMPTY answer, and
+    // most seeded sources have parsed everything they captured.
+    parent: failingSourceId(),
+    absent: absentIdOf(listSources(SEEDED_DOMAIN_ID), 'source'),
+    // The SOURCE's noun, not a document's: `./api.ts` refuses the
+    // parent and never reaches the list, so a refusal naming
+    // documents would be this file describing a message the module
+    // does not produce.
+    label: 'source',
+  },
   {
     name: 'useTerms',
     resource: 'terms',
@@ -1094,7 +1161,7 @@ describe('the hook surface', () => {
 
     // Assert
     expect(kept).toEqual([]);
-    expect(reads).toHaveLength(23);
+    expect(reads).toHaveLength(25);
     expect(writes).toHaveLength(9);
   });
 
@@ -1205,7 +1272,7 @@ describe('the hook surface', () => {
       || rows.includes(resource))).toEqual([]);
   });
 
-  it('scopes ten hooks by domain and leaves seven unscoped', () => {
+  it('scopes eleven hooks by domain and leaves seven unscoped', () => {
     // The split `./api.ts` documents, asserted against literals so
     // that moving a read from one scope to the other is a failure here
     // rather than a silent re-reading of the rule. The single-row
@@ -1213,10 +1280,10 @@ describe('the hook surface', () => {
     // id: four under a domain, and the connector under the deployment
     // for the reason `useConnectors` is there too.
     // Arrange / Act / Assert
-    expect(DOMAIN_HOOKS).toHaveLength(10);
+    expect(DOMAIN_HOOKS).toHaveLength(11);
     expect(DEPLOYMENT_HOOKS).toHaveLength(7);
     expect(SINGLE_ROW_HOOKS).toHaveLength(5);
-    expect(CHILD_LIST_HOOKS).toHaveLength(1);
+    expect(CHILD_LIST_HOOKS).toHaveLength(2);
     expect(SCOPED_SINGLE_ROW_HOOKS).toHaveLength(4);
     expect(SINGLE_ROW_HOOKS.filter((single) => !single.scoped)
       .map((single) => single.name)).toEqual(['useConnector']);
@@ -1603,7 +1670,7 @@ describe('what each hook files and reads', () => {
 
     // Assert
     expect(borrowed).toEqual([]);
-    expect(reads).toHaveLength(23);
+    expect(reads).toHaveLength(25);
   });
 });
 
@@ -1698,11 +1765,13 @@ describe('what each write hook invalidates and records', () => {
     // narrowest write here would quietly become the widest. It cannot
     // happen while the keys come from the two builders — both answer
     // two segments — so what this guards is a later hand-built one.
-    // {@link hooks.useApproveSourceConfig} is what makes it worth
-    // asserting rather than assuming: it is the hook with nothing to
-    // invalidate, and an empty LIST is the shape that expresses that.
-    // Named here so the day it gains a key, this reads as the decision
-    // moving rather than as a test nobody looked at.
+    //
+    // The empty LIST is a separate shape from an empty KEY and stays
+    // legal: it is how a write with nothing to invalidate says so.
+    // `useApproveSourceConfig` was the one hook in that state and no
+    // longer is — `useSourceProposals` is the read it was waiting on
+    // — so the roster is empty, asserted as a SET rather than left
+    // implicit. A hook that quietly lost its keys lands in it.
     // Arrange
     const emptyNames = WRITE_HOOKS
       .filter((write) => write.invalidates(DEFAULT_DOMAIN_SLUG).length === 0)
@@ -1713,7 +1782,7 @@ describe('what each write hook invalidates and records', () => {
 
     // Assert
     expect(filed.filter((key) => key.length === 0)).toEqual([]);
-    expect(emptyNames).toEqual(['useApproveSourceConfig']);
+    expect(emptyNames).toEqual([]);
   });
 
   WRITE_HOOKS.forEach((write) => {

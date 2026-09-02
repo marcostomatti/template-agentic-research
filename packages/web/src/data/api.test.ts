@@ -1,5 +1,6 @@
 import type { ExportSubscriptionSummary } from './connectors';
 import type { DraftScope, DraftableRow } from './drafts';
+import type { SourceConfigProposal } from './proposals';
 import type {
   Category,
   Connector,
@@ -45,6 +46,7 @@ import {
   summarizeCategories,
 } from './lexicon';
 import { listPersonas } from './personas';
+import { SOURCE_CONFIG_PROPOSALS, listSourceProposals } from './proposals';
 import { SETTINGS } from './settings';
 import { NOTIFICATIONS, OPERATOR, SEARCH_SUGGESTIONS } from './shell';
 import {
@@ -132,6 +134,12 @@ const DOMAIN_SCOPED: readonly DomainScopedCase[] = [
     read: api.fetchSourceStatusCounts,
     expected: (domain) => summarizeSources(domain.id),
     listed: false,
+  },
+  {
+    name: 'fetchSourceProposals',
+    read: api.fetchSourceProposals,
+    expected: (domain) => listSourceProposals(domain.id),
+    listed: true,
   },
   {
     name: 'fetchPersonas',
@@ -252,14 +260,18 @@ const SINGLE_ROW_NAMES: readonly string[] = [
  * A literal for the reason {@link WRITE_NAMES} and
  * {@link SINGLE_ROW_NAMES} are, and it buys the same thing against a
  * shape neither of them describes: {@link api.fetchTerms} takes a
- * slug and a CATEGORY id and answers that category's terms, so it
- * refuses like a single-row read and answers like a list one. Handed
- * a slug and nothing else — which is how the whole-surface blocks
- * below call an accessor — it would reject over a category id of
- * `undefined`, and the blocks would read that refusal as the
+ * slug and a CATEGORY id, {@link api.fetchSourceFailures} takes a
+ * slug and a SOURCE id, and each answers that parent's children — so
+ * both refuse like a single-row read and answer like a list one.
+ * Handed a slug and nothing else — which is how the whole-surface
+ * blocks below call an accessor — either would reject over a parent
+ * id of `undefined`, and the blocks would read that refusal as the
  * unknown-slug one they were asking about.
  */
-const CHILD_LIST_NAMES: readonly string[] = ['fetchTerms'];
+const CHILD_LIST_NAMES: readonly string[] = [
+  'fetchTerms',
+  'fetchSourceFailures',
+];
 
 /**
  * Every READ export of `./api.ts`, resolved from the module itself.
@@ -422,27 +434,27 @@ describe('the barrel export surface', () => {
     expect(duplicated).toEqual([]);
   });
 
-  it('reads through twenty-three accessors and writes through nine', () => {
+  it('reads through twenty-five accessors and writes through nine', () => {
     // Counted against literals so that moving an accessor from one
     // table to another is a failure here rather than a silent
     // re-reading of the rule. WHICH reads cannot be scoped is the
     // arity test further down; WHICH writes are is the write table's
-    // own. Twenty-three is ten list reads plus seven that take no
-    // domain plus the five that take a row id plus the one that takes
+    // own. Twenty-five is eleven list reads plus seven that take no
+    // domain plus the five that take a row id plus the two that take
     // a PARENT id, and `./api.ts`'s own docblock spells one figure
-    // inside it from the other direction — EIGHT of the
-    // twenty-three take no slug, the eighth being `fetchConnector`,
-    // which lives in the single-row table.
+    // inside it from the other direction — EIGHT of the twenty-five
+    // take no slug, the eighth being `fetchConnector`, which lives in
+    // the single-row table.
     // Arrange / Act
     const reads = Object.keys(api).filter((name) => name.startsWith('fetch'));
 
     // Assert
-    expect(DOMAIN_SCOPED).toHaveLength(10);
+    expect(DOMAIN_SCOPED).toHaveLength(11);
     expect(UNSCOPED).toHaveLength(7);
     expect(SINGLE_ROW_NAMES).toHaveLength(5);
-    expect(CHILD_LIST_NAMES).toHaveLength(1);
+    expect(CHILD_LIST_NAMES).toHaveLength(2);
     expect(WRITE_NAMES).toHaveLength(9);
-    expect(reads).toHaveLength(23);
+    expect(reads).toHaveLength(25);
   });
 
   it('splits the module four ways with nothing left over', () => {
@@ -749,7 +761,7 @@ describe('the unknown-slug rule, over the module export surface', () => {
 
     // Assert
     expect(stale).toEqual([]);
-    expect(SCOPED_EXPORTS).toHaveLength(10);
+    expect(SCOPED_EXPORTS).toHaveLength(11);
     expect(EXEMPT_EXPORTS).toHaveLength(7);
   });
 
@@ -934,6 +946,21 @@ const ROW_OVERLAID: readonly OverlaidCase[] = [
     mark: 'Drafted system text.',
   },
   {
+    name: 'fetchSourceProposals',
+    resource: 'source-proposals',
+    scopeFor: (slug) => domainDraftScope(slug, 'source-proposals'),
+    storedRows: (slug) => listSourceProposals(getDomain(slug).id),
+    rowsIn: (answered) => answered as readonly SourceConfigProposal[],
+    read: api.fetchSourceProposals,
+    // The ruling itself, and the one member an approval or a
+    // rejection moves. `skipped` rather than `approved`, which the
+    // first fixture row already carries — the vacuity guard below is
+    // what would report that, and this is the case that has to avoid
+    // it.
+    field: 'status',
+    mark: 'skipped',
+  },
+  {
     name: 'fetchExportSubscriptions',
     resource: 'export-subscriptions',
     scopeFor: (slug) => domainDraftScope(slug, 'export-subscriptions'),
@@ -1111,11 +1138,11 @@ describe('the draft overlay', () => {
 
     // Assert
     expect(claimed).toEqual(exported);
-    expect(ROW_OVERLAID).toHaveLength(6);
+    expect(ROW_OVERLAID).toHaveLength(7);
     expect(DERIVED_OVERLAID).toHaveLength(1);
     expect(SINGLETON_OVERLAID).toHaveLength(1);
     expect(SINGLE_ROW_NAMES).toHaveLength(5);
-    expect(CHILD_LIST_NAMES).toHaveLength(1);
+    expect(CHILD_LIST_NAMES).toHaveLength(2);
     expect(NOT_OVERLAID).toHaveLength(9);
   });
 
@@ -1945,7 +1972,7 @@ describe('fetchTerms', () => {
     // single-row read answers a row rather than a list.
     // Arrange / Act / Assert
     expect(api.fetchTerms.length).toBe(2);
-    expect(CHILD_LIST_NAMES).toEqual(['fetchTerms']);
+    expect(CHILD_LIST_NAMES).toContain('fetchTerms');
     expect(Object.keys(api)).toContain('fetchTerms');
   });
 
@@ -2241,6 +2268,577 @@ describe('fetchTerms', () => {
 });
 
 /**
+ * The seeded domain's proposals, read straight off the fixture.
+ *
+ * @returns Its `source_config_proposals` rows, review-queue order.
+ */
+function seededProposals(): readonly SourceConfigProposal[] {
+  return listSourceProposals(getDomain(DEFAULT_DOMAIN_SLUG).id);
+}
+
+/**
+ * A status no fixture proposal carries, and one an operator can
+ * really rule a row to.
+ *
+ * `skipped` rather than `approved`: the first stored row already
+ * carries that one, and a mark the row holds would round-trip through
+ * the store perfectly while proving nothing.
+ */
+const PROPOSAL_MARK = 'skipped';
+
+describe('fetchSourceProposals', () => {
+  it('answers nothing for a domain nothing has been proposed for', async () => {
+    // The empty state the approval sub-route opens on, and the first
+    // case because it is the one a reader assumes rather than checks.
+    // The sparse domain carries no proposals at all, which is a
+    // property of the fixture asserted here rather than assumed — a
+    // seed that grew one would otherwise turn this into a case about
+    // nothing.
+    // Arrange
+    const sparse = getDomain(SPARSE_DOMAIN_SLUG);
+
+    // Act
+    const answered = await api.fetchSourceProposals(SPARSE_DOMAIN_SLUG);
+
+    // Assert
+    expect(listSourceProposals(sparse.id)).toEqual([]);
+    expect(answered).toEqual([]);
+  });
+
+  it('rejects an unknown domain slug', async () => {
+    // The same refusal every scoped read gives, asked of this one by
+    // name so a reader of this block does not have to go and find the
+    // whole-surface loop that also makes it.
+    // Arrange / Act
+    const outcome = await outcomeOf(api.fetchSourceProposals, UNKNOWN_SLUG);
+
+    // Assert
+    expect(outcome).toBe(REFUSAL);
+  });
+
+  it('answers every status rather than the pending ones alone', async () => {
+    // The decision `./api.ts` documents and this file has to hold it
+    // to, because it is the one a later author would "fix" first: the
+    // surface wants a PENDING queue, and the seam does not filter. A
+    // modal reading a pre-filtered list could not tell a source whose
+    // config was already approved from one nothing has ever been
+    // proposed for, and `./proposals.ts` ships both rows precisely so
+    // that distinction has a subject.
+    // Arrange
+    const stored = seededProposals();
+
+    // Act
+    const answered = await api.fetchSourceProposals(DEFAULT_DOMAIN_SLUG);
+    const statuses = [...new Set(answered.map((row) => row.status))].sort();
+
+    // Assert
+    expect(answered).toHaveLength(stored.length);
+    expect(statuses).toEqual(['approved', 'pending']);
+    expect(statuses.length).toBeGreaterThan(1);
+  });
+
+  it('answers exactly what the fixture lists, row for row', async () => {
+    // The composition claim, made by IDENTITY rather than equality —
+    // strictly more, and the difference is the whole point:
+    // `applyDrafts` hands undrafted rows back as the very objects it
+    // was given, so an accessor that rebuilt a plausible twin
+    // satisfies `toEqual` and fails here.
+    // Arrange
+    const stored = seededProposals();
+
+    // Act
+    const answered = await api.fetchSourceProposals(DEFAULT_DOMAIN_SLUG);
+
+    // Assert
+    expect(stored).not.toHaveLength(0);
+    expect(answered.map((row, index) => row === stored[index]))
+      .toEqual(stored.map(() => true));
+  });
+
+  it('keeps a ruled row in the list wearing its new status', async () => {
+    // What the no-filter decision above BUYS, and the reason a status
+    // filter here would be the same screen for a different reason: a
+    // ruling changes the row rather than removing it, so the queue
+    // shrinks because the modal stops matching it and not because the
+    // seam stopped answering it. An accessor filtering on `pending`
+    // after the overlay would drop the row entirely, and this is the
+    // assertion that tells the two apart.
+    // Arrange
+    const stored = seededProposals();
+    const target = rowAt(stored, 0);
+    const draft = { ...target, status: PROPOSAL_MARK };
+
+    recordDraft(
+      domainDraftScope(DEFAULT_DOMAIN_SLUG, 'source-proposals'),
+      draft,
+    );
+
+    // Act
+    const answered = await api.fetchSourceProposals(DEFAULT_DOMAIN_SLUG);
+    const shown = answered.filter((row) => row.id === target.id);
+
+    // Assert
+    expect(SOURCE_CONFIG_PROPOSALS.map((row) => row.status))
+      .not.toContain(PROPOSAL_MARK);
+    expect(answered).toHaveLength(stored.length);
+    expect(shown).toEqual([draft]);
+  });
+
+  it('shows what the matching write recorded', async () => {
+    // The two halves of the seam over one resource, end to end and
+    // through the barrel rather than through the store — which is
+    // what this read landing closes. `approveSourceConfig` has been
+    // recording under `source-proposals` since it landed, with no
+    // read to show it, and `./api.ts`'s header carried that gap as a
+    // stated ordering for exactly this long.
+    // Arrange
+    const stored = seededProposals();
+    const target = rowAt(stored, 0);
+    const ruled = { ...target, status: PROPOSAL_MARK };
+
+    // Act
+    await api.approveSourceConfig(DEFAULT_DOMAIN_SLUG, ruled);
+    const answered = await api.fetchSourceProposals(DEFAULT_DOMAIN_SLUG);
+
+    // Assert
+    expect(answered.filter((row) => row.id === target.id)).toEqual([ruled]);
+    expect(rowAt(answered, 0).status).toBe(PROPOSAL_MARK);
+  });
+});
+
+/**
+ * The seeded domain's sources, read straight off the fixture.
+ *
+ * @returns Its sources, in configuration order.
+ */
+function seededSources(): readonly Source[] {
+  return listSources(getDomain(DEFAULT_DOMAIN_SLUG).id);
+}
+
+/**
+ * The seeded domain's failed captures, whichever source they came
+ * from.
+ *
+ * The population {@link api.fetchSourceFailures} partitions by source,
+ * and what the per-source answers below are summed against — a read
+ * that ignored its source id would answer all of these for every
+ * source, and only a total can see that.
+ *
+ * @returns Its documents whose parse failed, newest capture first.
+ */
+function seededFailures(): readonly Document[] {
+  return listDocuments(getDomain(DEFAULT_DOMAIN_SLUG).id).filter(
+    (document) => document.parseStatus === 'failed',
+  );
+}
+
+/**
+ * A parse error no fixture document carries.
+ *
+ * The vacuity guard the overlay cases below rest on, and the field a
+ * failures modal's keep action would plausibly write — `./api.ts`
+ * leaves WHICH member a ruling moves to that modal, so this file
+ * picks one to demonstrate the overlay with rather than to prescribe.
+ */
+const FAILURE_MARK = 'ruled on by the operator';
+
+describe('fetchSourceFailures', () => {
+  it('answers nothing for a source that has failed nothing', async () => {
+    // The empty state the failures sub-route opens on, and NOT the
+    // refusal below: a source that exists and has parsed everything
+    // it captured is an ordinary answer. First because it is the
+    // reachable branch a reader is least likely to check — and unlike
+    // `fetchTerms`' empty case, this one has real subjects, which the
+    // first assertion puts on the record.
+    // Arrange
+    const healthy = seededSources().filter(
+      (source) => failuresOf(source.id).length === 0,
+    );
+
+    // Act
+    const answers = await Promise.all(healthy.map(async (source) => ({
+      id: source.id,
+      answered: await api.fetchSourceFailures(DEFAULT_DOMAIN_SLUG, source.id),
+    })));
+
+    // Assert
+    expect(healthy).not.toHaveLength(0);
+    expect(answers.filter((entry) => entry.answered.length > 0)).toEqual([]);
+  });
+
+  it('rejects an unknown domain slug', async () => {
+    // With a real source id, so this must fail on the DOMAIN and
+    // cannot be the missing-source refusal wearing another message.
+    // Arrange
+    const source = rowAt(seededSources(), 0);
+
+    // Act
+    const outcome = await outcomeOf(
+      (slug) => api.fetchSourceFailures(slug, source.id),
+      UNKNOWN_SLUG,
+    );
+
+    // Assert
+    expect(outcome).toBe(REFUSAL);
+  });
+
+  it('takes the slug first and the source id second', () => {
+    // The structural pin, and the reason this read joins the
+    // child-list population rather than either neighbour: a slug-only
+    // accessor would be called with one argument by every
+    // whole-surface block above, and a single-row read answers a row
+    // rather than a list.
+    // Arrange / Act / Assert
+    expect(api.fetchSourceFailures.length).toBe(2);
+    expect(CHILD_LIST_NAMES).toContain('fetchSourceFailures');
+    expect(Object.keys(api)).toContain('fetchSourceFailures');
+  });
+
+  it('rejects a source id no fixture carries', async () => {
+    // The refusal a stale bookmark actually produces. The second
+    // assertion is what makes it a claim about the SOURCE rather than
+    // about its documents: no document names this id, so an accessor
+    // that only filtered would resolve to `[]` here — an empty
+    // failures list over a source that does not exist, which reads as
+    // a healthy feed.
+    // Arrange
+    const absent = absentIdFor(seededSources());
+
+    // Act
+    const outcome = await outcomeOf(
+      (slug) => api.fetchSourceFailures(slug, absent),
+      DEFAULT_DOMAIN_SLUG,
+    );
+
+    // Assert
+    expect(failuresOf(absent)).toEqual([]);
+    expect(outcome).toBe(`rejected: Unknown source id: ${absent}`);
+  });
+
+  it('refuses a source belonging to another domain', async () => {
+    // The refusal `./api.ts` adds on top of the predicate, and the
+    // leak it exists to stop: `documents` is keyed by `source_id`
+    // alone, so this id answers the seeded domain's failures whatever
+    // slug stood in the URL. Compared against the MISSING-source
+    // outcome in the same case, because the two being
+    // indistinguishable is itself the claim — a message telling them
+    // apart would report which sources exist under a domain the
+    // caller was just refused.
+    // Arrange
+    const source = failingSource();
+    const absent = absentIdFor(seededSources());
+
+    // Act
+    const foreign = await outcomeOf(
+      (slug) => api.fetchSourceFailures(slug, source.id),
+      SPARSE_DOMAIN_SLUG,
+    );
+    const missing = await outcomeOf(
+      (slug) => api.fetchSourceFailures(slug, absent),
+      SPARSE_DOMAIN_SLUG,
+    );
+
+    // Assert
+    expect(failuresOf(source.id)).not.toHaveLength(0);
+    expect(foreign).toBe(`rejected: Unknown source id: ${source.id}`);
+    expect(foreign.replace(String(source.id), String(absent))).toBe(missing);
+  });
+
+  it('refuses the domain before the source', async () => {
+    // The ORDER of the two refusals, which neither one alone can
+    // show. Both arguments are wrong here and the domain is what has
+    // to answer — a seam that looked the source up first would report
+    // a missing source for a domain that does not exist, which is a
+    // 404 about the wrong thing.
+    // Arrange
+    const absent = absentIdFor(seededSources());
+
+    // Act
+    const outcome = await outcomeOf(
+      (slug) => api.fetchSourceFailures(slug, absent),
+      UNKNOWN_SLUG,
+    );
+
+    // Assert
+    expect(outcome).toBe(REFUSAL);
+  });
+
+  it('answers each source only its own failed captures', async () => {
+    // The predicate, both halves at once. The strays claim catches a
+    // read that dropped the source from its filter; the TOTAL catches
+    // the near-miss the strays claim cannot see on its own — an
+    // accessor that ignored its argument and answered the whole
+    // domain's failures for every source would put a stray in no
+    // list at all if the domain had one failing source, and would
+    // still sum to seven times the real figure.
+    // Arrange
+    const sources = seededSources();
+    const failed = seededFailures();
+
+    // Act
+    const answers = await Promise.all(sources.map(async (source) => ({
+      id: source.id,
+      answered: await api.fetchSourceFailures(DEFAULT_DOMAIN_SLUG, source.id),
+    })));
+    const strays = answers.flatMap(
+      (entry) => entry.answered.filter((row) => row.sourceId !== entry.id),
+    );
+    const total = answers.reduce(
+      (sum, entry) => sum + entry.answered.length,
+      0,
+    );
+
+    // Assert
+    expect(sources.length).toBeGreaterThan(1);
+    expect(failed).not.toHaveLength(0);
+    expect(strays).toEqual([]);
+    expect(total).toBe(failed.length);
+  });
+
+  it('answers only documents whose parse failed', async () => {
+    // The other half of the predicate, and it has to be asked ACROSS
+    // the sources rather than within one. The seeded feed that fails
+    // has failed every capture it ever made — a property of the seed
+    // rather than of this read — so a version that filtered by source
+    // and forgot the status would answer exactly the right rows for
+    // it and be caught by nothing. The domain's PARSED documents are
+    // the subject the claim needs, and they must appear in no
+    // source's queue at all.
+    // Arrange
+    const parsed = listDocuments(getDomain(DEFAULT_DOMAIN_SLUG).id).filter(
+      (document) => document.parseStatus !== 'failed',
+    );
+
+    // Act
+    const queues = await Promise.all(seededSources().map(
+      (source) => api.fetchSourceFailures(DEFAULT_DOMAIN_SLUG, source.id),
+    ));
+    const answered = queues.flat();
+    const leaked = answered.filter(
+      (row) => parsed.some((document) => document.id === row.id),
+    );
+
+    // Assert
+    expect(parsed).not.toHaveLength(0);
+    expect(answered).not.toHaveLength(0);
+    expect(answered.filter((row) => row.parseStatus !== 'failed')).toEqual([]);
+    expect(leaked).toEqual([]);
+  });
+
+  it('answers the fixture rows themselves, in the fixture order', async () => {
+    // Identity rather than equality, for the reason every other
+    // pass-through case here uses it: `applyDrafts` hands undrafted
+    // rows back as the very objects it was given, and the predicate
+    // filters that list rather than rebuilding it. Order is the
+    // fixture's too — `listDocuments` sorts newest capture first, and
+    // a filter preserves it.
+    // Arrange
+    const source = failingSource();
+    const stored = failuresOf(source.id);
+
+    // Act
+    const answered = await api.fetchSourceFailures(
+      DEFAULT_DOMAIN_SLUG,
+      source.id,
+    );
+
+    // Assert
+    expect(stored.length).toBeGreaterThan(1);
+    expect(answered.map((row, index) => row === stored[index]))
+      .toEqual(stored.map(() => true));
+  });
+
+  it('answers the ruled document', async () => {
+    // The overlay, read through the predicate. A modal that ruled on
+    // a capture and reopened showing the untouched row is the failure
+    // the shared scope prevents, and it is the same `documents` scope
+    // {@link api.fetchDocuments} overlays — one edit, two reads.
+    // Arrange
+    const source = failingSource();
+    const stored = failuresOf(source.id);
+    const target = rowAt(stored, 0);
+    const draft = { ...target, parseError: FAILURE_MARK };
+
+    recordDraft(domainDraftScope(DEFAULT_DOMAIN_SLUG, 'documents'), draft);
+
+    // Act
+    const answered = await api.fetchSourceFailures(
+      DEFAULT_DOMAIN_SLUG,
+      source.id,
+    );
+
+    // Assert
+    expect(target.parseError).not.toBe(FAILURE_MARK);
+    expect(answered.filter((row) => row.id === target.id)).toEqual([draft]);
+    expect(answered).toHaveLength(stored.length);
+  });
+
+  it('reads the predicate off the overlay rather than under it', async () => {
+    // The ORDERING claim `./api.ts` makes, and the only case that can
+    // tell the two apart: a draft that moves a document OUT of the
+    // failed set takes it out of this queue, because the predicate
+    // runs over the overlaid rows. Filtered first and overlaid after,
+    // the row would still be listed and merely wear its new status —
+    // a queue that never shortens.
+    //
+    // Which member a keep or a discard really moves is the failures
+    // modal's decision and `./api.ts` says so; `parseStatus` is
+    // picked here because it is the member the PREDICATE reads, which
+    // is what makes the ordering visible at all.
+    // Arrange
+    const source = failingSource();
+    const stored = failuresOf(source.id);
+    const target = rowAt(stored, 0);
+
+    recordDraft(
+      domainDraftScope(DEFAULT_DOMAIN_SLUG, 'documents'),
+      { ...target, parseStatus: 'ok', parseError: null },
+    );
+
+    // Act
+    const answered = await api.fetchSourceFailures(
+      DEFAULT_DOMAIN_SLUG,
+      source.id,
+    );
+
+    // Assert
+    expect(stored.length).toBeGreaterThan(1);
+    expect(answered).toHaveLength(stored.length - 1);
+    expect(answered.map((row) => row.id)).not.toContain(target.id);
+  });
+
+  it('leaves every unruled capture identical to the fixture', async () => {
+    // Membership and order are the fixture's, and exactly one row is
+    // not the fixture's own object — the never-grows, never-reorders
+    // half of `applyDrafts`' guarantee, read through the predicate.
+    // Arrange
+    const source = failingSource();
+    const stored = failuresOf(source.id);
+    const target = rowAt(stored, 0);
+
+    recordDraft(
+      domainDraftScope(DEFAULT_DOMAIN_SLUG, 'documents'),
+      { ...target, parseError: FAILURE_MARK },
+    );
+
+    // Act
+    const answered = await api.fetchSourceFailures(
+      DEFAULT_DOMAIN_SLUG,
+      source.id,
+    );
+    const compared = answered.map((row, index) => ({
+      id: row.id,
+      identical: row === stored[index],
+    }));
+
+    // Assert
+    expect(answered.map((row) => row.id)).toEqual(stored.map((row) => row.id));
+    expect(compared.filter((entry) => !entry.identical)).toEqual([
+      { id: target.id, identical: false },
+    ]);
+  });
+
+  it('ignores a draft filed under another domain', async () => {
+    // The cross-domain guard, made from the side that can still make
+    // it. Reading a seeded source under the sparse slug is refused
+    // outright by the ownership check above, so the leak left to ask
+    // about is the other direction: a ruling recorded under the
+    // SPARSE domain's scope for this very document must not reach the
+    // seeded read.
+    //
+    // Its LIMIT, recorded rather than papered over: only one fixture
+    // domain carries rows, so a scope hardcoded to the SEEDED slug
+    // stays green through this. Closing that leg needs a second
+    // populated domain, not another assertion — and the write side,
+    // where the store files whatever scope it is handed, is where the
+    // claim is fully testable.
+    // Arrange
+    const source = failingSource();
+    const stored = failuresOf(source.id);
+    const target = rowAt(stored, 0);
+
+    recordDraft(
+      domainDraftScope(SPARSE_DOMAIN_SLUG, 'documents'),
+      { ...target, parseError: FAILURE_MARK },
+    );
+
+    // Act
+    const answered = await api.fetchSourceFailures(
+      DEFAULT_DOMAIN_SLUG,
+      source.id,
+    );
+
+    // Assert
+    expect(answered).toEqual(stored);
+    expect(rowAt(answered, 0)).toBe(target);
+  });
+
+  it('shows what the matching write recorded', async () => {
+    // The two halves of the seam over one resource, end to end and
+    // through the barrel rather than through the store. Driven
+    // through `resolveSourceFailure` so a write filing under the
+    // wrong resource is reported here rather than by a store test
+    // that files it itself.
+    // Arrange
+    const source = failingSource();
+    const stored = failuresOf(source.id);
+    const target = rowAt(stored, 0);
+    const ruled = { ...target, parseError: FAILURE_MARK };
+
+    // Act
+    await api.resolveSourceFailure(DEFAULT_DOMAIN_SLUG, ruled);
+    const answered = await api.fetchSourceFailures(
+      DEFAULT_DOMAIN_SLUG,
+      source.id,
+    );
+
+    // Assert
+    expect(answered.filter((row) => row.id === target.id)).toEqual([ruled]);
+    expect(rowAt(answered, 0).parseError).toBe(FAILURE_MARK);
+  });
+});
+
+/**
+ * The seeded domain's failed captures for one source, read straight
+ * off the fixture.
+ *
+ * The predicate `./api.ts` applies, restated here so the cases above
+ * have something independent of the accessor to compare against.
+ *
+ * @param sourceId - Whose failures, real or otherwise.
+ * @returns Them, newest capture first.
+ */
+function failuresOf(sourceId: number): readonly Document[] {
+  return seededFailures().filter(
+    (document) => document.sourceId === sourceId,
+  );
+}
+
+/**
+ * The one seeded source that has failed something.
+ *
+ * Derived rather than written as an id, for the reason every other
+ * case here reads its rows off the fixture: a reseeded table silently
+ * turns a hardcoded id into somebody else's source, and the case goes
+ * on passing against a queue nobody meant.
+ *
+ * @returns It.
+ * @throws If no seeded source has a failed capture, which would make
+ * every populated case above vacuous.
+ */
+function failingSource(): Source {
+  const source = seededSources().find(
+    (candidate) => failuresOf(candidate.id).length > 0,
+  );
+
+  if (source === undefined) {
+    throw new Error('No seeded source carries a failed capture.');
+  }
+
+  return source;
+}
+
+/**
  * The seeded domain's first taxonomy category's terms.
  *
  * Resolved through `listCategories` rather than written as a category
@@ -2260,23 +2858,6 @@ function firstCategoryTerms(slug: string): readonly Term[] {
     ? []
     : listTerms(first.id);
 }
-
-/**
- * A stand-in proposal row, for the one write whose resource no fixture
- * module answers for yet.
- *
- * `./proposals.ts` arrives with the modal that rules on these, so
- * there is nothing to read a real row off. That makes the
- * {@link api.approveSourceConfig} cases weaker than the rest in one
- * specific way, worth stating rather than hiding behind a uniform
- * table: the vacuity guard every other case gets — the field is one
- * the STORED row carries — cannot be made here, because this object is
- * the only row there is. What the cases still prove is the half that
- * does not need a fixture: which scope the write files under, that it
- * refuses an unknown slug before recording, and that a row nothing
- * carries is recorded rather than dropped.
- */
-const SYNTHETIC_PROPOSAL = { id: 1, status: 'pending' };
 
 /**
  * The writes that take no domain slug, written out rather than derived
@@ -2312,12 +2893,8 @@ interface WriteCase {
   readonly resource: string;
   /** Where that edit must be filed, for a given slug. */
   readonly scopeFor: (slug: string) => DraftScope;
-  /**
-   * The rows the fixture layer carries for that resource, or null
-   * where no fixture module answers for it yet — see
-   * {@link SYNTHETIC_PROPOSAL}.
-   */
-  readonly storedRows: ((slug: string) => readonly DraftableRow[]) | null;
+  /** The rows the fixture layer carries for that resource. */
+  readonly storedRows: (slug: string) => readonly DraftableRow[];
   /** Save these rows through the accessor under test. */
   readonly save: (
     slug: string,
@@ -2382,11 +2959,17 @@ const WRITES: readonly WriteCase[] = [
     scoped: true,
     resource: 'source-proposals',
     scopeFor: (slug) => domainDraftScope(slug, 'source-proposals'),
-    // The one case with no fixture behind it — see the constant.
-    storedRows: null,
+    // Read off `./proposals.ts` rather than a stand-in object, which
+    // is what this case carried while no fixture module answered for
+    // the resource. It does now, so this case gets the vacuity guard
+    // every other one gets — and `approveSourceConfig` is typed on
+    // the store's structural constraint, so a real proposal row goes
+    // through it with no cast on `save`.
+    storedRows: (slug) => listSourceProposals(getDomain(slug).id),
     save: (slug, rows) => api.approveSourceConfig(slug, rowAt(rows, 0)),
     field: 'status',
-    mark: 'approved',
+    // Never `approved`: the first stored row already carries it.
+    mark: 'skipped',
   },
   {
     name: 'resolveSourceFailure',
@@ -2442,24 +3025,22 @@ const WRITES: readonly WriteCase[] = [
 /** The writes a second domain's scope can be asked about. */
 const SCOPED_WRITES = WRITES.filter((write) => write.scoped);
 
-/** The writes whose rows a fixture module really answers for. */
-const FIXTURE_BACKED_WRITES = WRITES.filter(
-  (write) => write.storedRows !== null,
-);
-
 /**
- * The rows one case edits — the fixture's, or the stand-in where no
- * fixture answers for that resource yet.
+ * The rows one case edits.
+ *
+ * A function rather than a direct call at each site, because it is
+ * what used to choose between a fixture and a stand-in row for the
+ * one resource no fixture module answered for. `./proposals.ts`
+ * closed that, so every case is fixture-backed and the vacuity guard
+ * below now covers all eight.
  *
  * @param write - The case.
  * @param slug - Which domain's rows.
- * @returns Its rows, never empty for the fixture-backed cases (the
- * vacuity guard below is what says so).
+ * @returns Its rows, never empty (the vacuity guard below is what
+ * says so).
  */
 function rowsFor(write: WriteCase, slug: string): readonly DraftableRow[] {
-  return write.storedRows === null
-    ? [SYNTHETIC_PROPOSAL]
-    : write.storedRows(slug);
+  return write.storedRows(slug);
 }
 
 /**
@@ -2555,15 +3136,16 @@ describe('the write half', () => {
     expect(UNSCOPED_WRITE_NAMES).toEqual(['saveConnector', 'saveSettings']);
   });
 
-  FIXTURE_BACKED_WRITES.forEach((write) => {
+  WRITES.forEach((write) => {
     it(`edits a real field to a value the fixture does not hold: ${write.name}`, () => {
       // The vacuity guard for every case that follows. A `field` the
       // row does not carry, or a `mark` equal to what it already
       // holds, both round-trip through the store perfectly and make
       // the assertions below pass while proving nothing about the
-      // surface that is supposed to write them. Made only over the
-      // fixture-backed cases — the proposal stand-in is its own row,
-      // so there is nothing independent to check it against.
+      // surface that is supposed to write them. Over the WHOLE table
+      // now: the proposal case was the one exemption, and it was an
+      // exemption only for as long as no fixture module answered for
+      // `source-proposals`.
       // Arrange
       const stored = rowsFor(write, DEFAULT_DOMAIN_SLUG);
 
@@ -2580,11 +3162,12 @@ describe('the write half', () => {
   WRITES.forEach((write) => {
     it(`records the edit under the scope its read overlays: ${write.name}`, async () => {
       // The whole point of the write half. The claim is deliberately
-      // made at the SCOPE rather than through the matching read: two
-      // of these resources have no read yet, so a read-side assertion
-      // could not cover them uniformly — and the thing that can go
-      // wrong is which scope the edit lands in, which is what this
-      // asks directly.
+      // made at the SCOPE rather than through the matching read.
+      // Every resource has a read now, but they do not share a
+      // SHAPE — a list, a derived count, a join, a singleton and two
+      // parent-scoped lists — so no read-side assertion covers the
+      // table uniformly, and the thing that can go wrong is which
+      // scope the edit lands in, which is what this asks directly.
       // Arrange
       const stored = rowsFor(write, DEFAULT_DOMAIN_SLUG);
       const target = rowAt(stored, 0);

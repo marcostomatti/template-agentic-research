@@ -71,7 +71,8 @@
  * inherits its read's answer rather than reaching one of its own.
  *
  * Nothing here copies, filters or reshapes what a fixture accessor
- * answered, and the SESSION DRAFT STORE is the one exception. Each of
+ * answered, and there are TWO exceptions: the SESSION DRAFT STORE,
+ * and the one predicate {@link fetchSourceFailures} applies. Each of
  * those functions documents its own aliasing stance (`listConnectors`
  * copies because there is nothing to filter on,
  * `listSearchSuggestions` hands back the shared frozen array on
@@ -79,6 +80,23 @@
  * decision made where it is explained. {@link fetchDomains} bends the
  * same rule in the small, for a reason its own docblock gives: there
  * is no accessor over there to inherit a stance from.
+ *
+ * The PREDICATE is the smaller exception and is a COLUMN COMPARISON
+ * rather than a policy. A failed capture is not a table of its own —
+ * the schema keeps the document with its parse error beside it
+ * instead of moving it to a queue — so there is no fixture accessor
+ * answering that list to inherit a stance FROM, and what the
+ * narrowing is made of is two members `./types.ts` already
+ * redeclares, `parseStatus` and `sourceId`, compared to values the
+ * caller supplied. Nothing there decides what a document MEANS, which
+ * is the thing this rule exists to keep out of a seam.
+ * {@link fetchSourceProposals} beside it is the counter-example that
+ * says where the line falls: the modal it feeds wants the PENDING
+ * proposals, and that filter stays OUT of here because
+ * `./proposals.ts` decided an already-approved proposal and a source
+ * nobody has ever proposed for are different sentences to put in
+ * front of an operator. Which rows exist is a clause; which of them
+ * mean what is a decision, and only the first belongs at a seam.
  *
  * The overlay is an EXCEPTION to that rule rather than a repeal of it,
  * because it decides nothing a fixture accessor decided. `applyDrafts`
@@ -97,13 +115,18 @@
  * FIVE shapes reach it, and the list is worth reading before adding a
  * write: a save no read shows is worse than no save at all.
  * {@link fetchDocuments}, {@link fetchFindings}, {@link fetchSources},
- * {@link fetchPersonas} and {@link fetchConnectors} answer the drafted
- * rows themselves, through {@link deliverDomainRows} or — for the one
- * deployment-scoped resource — {@link CONNECTOR_DRAFTS}.
- * {@link fetchTerms} answers them too and is the one member of that
- * shape which builds its scope itself: its rows hang off a CATEGORY,
- * so the ownership refusal has to run before there is a list to
- * overlay at all.
+ * {@link fetchPersonas}, {@link fetchSourceProposals} and
+ * {@link fetchConnectors} answer the drafted rows themselves, through
+ * {@link deliverDomainRows} or — for the one deployment-scoped
+ * resource — {@link CONNECTOR_DRAFTS}.
+ * {@link fetchTerms} and {@link fetchSourceFailures} answer them too
+ * and are the two members of that shape which build their scope
+ * themselves: their rows hang off a CATEGORY and off a SOURCE, so the
+ * ownership refusal has to run before there is a list to overlay at
+ * all. The second narrows what it overlaid rather than what it read,
+ * and that order is the claim — a queue of failed captures and the
+ * documents it is a queue OF must not come to disagree about what
+ * this tab has ruled.
  * {@link fetchSourceStatusCounts} COUNTS them, and composes
  * `countSourceStatuses` over the overlaid list rather than calling
  * `summarizeSources`; that is not a second policy but the very
@@ -145,34 +168,38 @@
  * delete a term; its polarity split can, once a term editor records
  * one, and that is what the narrowing costs.
  *
- * ONE resource `./drafts.ts` declares still has a WRITE here and no
- * read: `source-proposals`, which {@link approveSourceConfig} records.
- * That is the one place this module knowingly stands against its own
- * rule about a save no read shows, and it is an ORDERING rather than
- * a decision — `fetchSourceProposals` is the next accessor this file
- * gains, and it arrives with the overlay its write already files a
- * draft for. Until then that save records and nothing renders it,
- * which is worth knowing before reading a silent editor as a broken
- * write.
+ * EVERY resource `./drafts.ts` declares now has BOTH halves here, and
+ * `source-proposals` was the last one without.
+ * {@link fetchSourceProposals} is the read {@link approveSourceConfig}
+ * had been recording ahead of since it landed, exactly as
+ * {@link fetchTerms} was for {@link saveCategoryTerms}. So the rule
+ * this module states — a save no read shows is worse than no save at
+ * all — is one it now KEEPS rather than one it documents a standing
+ * exception to, and a write added here next inherits that as a
+ * requirement instead of as a precedent.
  *
- * `terms` was the other one and no longer is: {@link fetchTerms} is
- * the read {@link saveCategoryTerms} had been recording ahead of, and
- * the two now compose the same scope. What that closes is the whole
- * of the gap — an edited term is visible to the editor that saved it,
- * to a reopen of that editor, and to nothing else, `./lexicon.ts`'s
- * summaries being the one narrowing this module states below.
+ * What each closing bought is narrower than the rule sounds, and
+ * saying so is what keeps a quiet card from being read as a broken
+ * invalidation. An edited term is visible to the editor that saved
+ * it and to a reopen of that editor, and to nothing else —
+ * `./lexicon.ts`'s summaries are the one narrowing this module states
+ * below. A ruled proposal is visible to the queue it was ruled out
+ * of, which is what makes a pending list shrink after an approval
+ * without anything here filtering on a status.
  *
- * Three such days have arrived. {@link fetchEntities} was the first:
+ * Four such days have arrived. {@link fetchEntities} was the first:
  * the digest page joins its findings to their subjects, so the read
  * it needs is here rather than in the page. The five SINGLE-ROW reads
  * are the second, and they land AHEAD of their callers rather than
  * behind them: every modal sub-route still renders a placeholder over
  * its route parameter, which needs no read at all, while the editors
- * replacing those placeholders need exactly this. That ordering is
- * the same one the remaining unread write above is recorded under,
- * taken the other way round. {@link fetchTerms} is the third and is
- * both at once — a read landing ahead of its editor, and the one that
- * a write here had been waiting for.
+ * replacing those placeholders need exactly this. {@link fetchTerms}
+ * is the third and is both at once — a read landing ahead of its
+ * editor, and the one a write here had been waiting for. The fourth
+ * is a pair and is both at once again: {@link fetchSourceProposals}
+ * and {@link fetchSourceFailures} feed two sub-routes nobody has
+ * written, and stand behind the two writes that RULE on something
+ * rather than edit it.
  *
  * The `fetch` prefix is not decoration either. The fixture layer's
  * verbs are `list`/`get`/`find`/`summarize`; changing the verb at the
@@ -211,16 +238,21 @@
  * message telling them apart would report which ids exist under a
  * domain the caller was just refused.
  *
- * ## The read that is scoped twice
+ * ## The reads that are scoped twice
  *
- * {@link fetchTerms} is neither of the two shapes above, and it is
- * named here rather than left to be met further down: it takes a slug
- * AND a category id, and answers a LIST. The id is a PARENT's rather
- * than the answered rows' own, which is the one place a reader
- * counting `(slug, id)` accessors would file it in the wrong half —
- * it refuses like a single-row read and answers like a list one. Its
- * own docblock carries why the category is resolved before its terms
- * are listed.
+ * {@link fetchTerms} and {@link fetchSourceFailures} are neither of
+ * the two shapes above, and they are named here rather than left to
+ * be met further down: each takes a slug AND a row id, and each
+ * answers a LIST. That id is a PARENT's rather than the answered
+ * rows' own, which is the one place a reader counting `(slug, id)`
+ * accessors would file them in the wrong half — they refuse like a
+ * single-row read and answer like a list one.
+ *
+ * Their own docblocks carry why the parent is resolved before its
+ * children are listed, and it is the same reason twice: `terms` is
+ * keyed by `category_id` alone and `documents` by `source_id` alone,
+ * so an id off a URL answers the seeded domain's rows whatever slug
+ * stood beside it in that URL.
  *
  * ## The write half
  *
@@ -280,6 +312,7 @@ import type {
   DraftableRow,
 } from './drafts';
 import type { CategorySummary } from './lexicon';
+import type { SourceConfigProposal } from './proposals';
 import type { SourceStatusCounts } from './sources';
 import type {
   Category,
@@ -324,6 +357,7 @@ import {
 } from './drafts';
 import { findCategory, listTerms, summarizeCategories } from './lexicon';
 import { findPersona, listPersonas } from './personas';
+import { listSourceProposals } from './proposals';
 import { getSettings } from './settings';
 import { getOperator, listNotifications, listSearchSuggestions } from './shell';
 import { countSourceStatuses, findSource, listSources } from './sources';
@@ -780,6 +814,42 @@ export function fetchSourceStatusCounts(
 }
 
 /**
+ * The config arrangements a person may rule on — the review queue
+ * behind the sources surface's approval sub-route.
+ *
+ * Answers EVERY status rather than the pending ones alone, and that
+ * is `./proposals.ts`'s decision read through the seam rather than a
+ * narrowing this module declined to make. A queue filtered to
+ * `pending` HERE could not tell a source whose config was already
+ * approved from one nothing has ever proposed for, and those are
+ * different sentences to put in front of an operator. So the status
+ * filter belongs where the modal knows which source it is about, and
+ * so does the filter that picks that source's own proposals out of
+ * the domain's — `listSourceProposals` says both in one paragraph.
+ *
+ * That is also what lets the overlay do a pending queue's work with
+ * no second rule. {@link approveSourceConfig} records the row as it
+ * was ruled, `applyDrafts` puts it back in this list carrying its new
+ * status, and a modal filtering on `pending` stops showing it. A
+ * status filter applied here would take the row OUT of the list
+ * instead — the same screen for a different reason, and one that
+ * cannot tell a rejection from a proposal that never existed.
+ *
+ * @param slug - A resolved domain slug.
+ * @returns Its proposals in review-queue order, this tab's rulings
+ * applied; `[]` for a domain nothing has been proposed for.
+ */
+export function fetchSourceProposals(
+  slug: string,
+): Promise<readonly SourceConfigProposal[]> {
+  return deliverDomainRows(
+    slug,
+    'source-proposals',
+    (domain) => listSourceProposals(domain.id),
+  );
+}
+
+/**
  * One domain's personas — the agents surface's cards.
  *
  * @param slug - A resolved domain slug.
@@ -1079,6 +1149,68 @@ export function fetchTerms(
 }
 
 /**
+ * One source's failed captures — the list behind the sources
+ * surface's failures sub-route.
+ *
+ * A PREDICATE over `documents` rather than a read of a table of its
+ * own, because there is no such table to read. `DocumentParseStatus`
+ * is `'ok' | 'failed'`, and a capture that failed to parse is a
+ * document the pipeline KEPT with its error beside it — the
+ * fail-flag-keep behaviour `./digest.ts` seeds a row for — rather
+ * than a row moved to a dead-letter queue. Naming it a queue here
+ * would be this module inventing a shape the schema does not have,
+ * and the header says why the narrowing is a WHERE clause and not the
+ * second policy that rule forbids.
+ *
+ * The predicate runs OVER the overlay rather than under it, for the
+ * reason {@link fetchSourceStatusCounts} counts the overlaid list:
+ * this list and {@link fetchDocuments} beside it must not come to
+ * disagree about what this tab has ruled.
+ * {@link resolveSourceFailure} states that WHICH member a keep or a
+ * discard moves is the failures modal's decision and not this
+ * module's, so overlaying first is also the only ordering that
+ * follows whatever that decision turns out to be — a predicate run
+ * beneath the overlay would answer the stored rows and then paint the
+ * rulings on, which is a queue that never shortens.
+ *
+ * The SOURCE is resolved before its documents are read, through the
+ * same {@link ownedRow} the single-row reads refuse with, and for the
+ * reason {@link fetchTerms} resolves its category: `documents` is
+ * keyed by `source_id` alone, so a read that skipped the check would
+ * hand another domain's failures over and then lay THIS domain's
+ * drafts on top of them. Refusing with the SOURCE's own message keeps
+ * it indistinguishable from {@link fetchSource}'s refusal on the same
+ * id, which the modal holds beside it on one route.
+ *
+ * A source that exists and has failed nothing answers `[]`, which is
+ * the empty state the modal opens on and not that refusal. Most
+ * fixture sources are one, so unlike {@link fetchTerms}' empty branch
+ * this one has a subject to be tested against.
+ *
+ * @param slug - A resolved domain slug, off `:domainSlug`.
+ * @param sourceId - The `sources.id` off `:entityId` — the source
+ * whose failures are wanted, never a document's own id.
+ * @returns Its failed captures, newest capture first, this tab's
+ * rulings applied; rejects on a slug no domain carries, and on an id
+ * this domain has no source for.
+ */
+export function fetchSourceFailures(
+  slug: string,
+  sourceId: number,
+): Promise<readonly Document[]> {
+  const scope = domainDraftScope(slug, 'documents');
+
+  return deliverForDomain(slug, (domain) => {
+    const source = ownedRow(domain, sourceId, 'source', findSource(sourceId));
+
+    return applyDrafts(scope, listDocuments(domain.id)).filter(
+      (document) => document.sourceId === source.id
+        && document.parseStatus === 'failed',
+    );
+  });
+}
+
+/**
  * Save one category's terms — what the lexicon editor's save button
  * does.
  *
@@ -1161,13 +1293,15 @@ export function saveSource(slug: string, source: Source): Promise<void> {
  * `parser_config` it was approving, unreviewed.
  *
  * The one write here whose parameter is STRUCTURAL rather than a
- * fixture type. `./proposals.ts` — the module that redeclares the
- * `source_config_proposals` columns this surface renders — arrives
- * with the modal that needs it, so the only type available today is
- * the store's own constraint. It is not a placeholder to narrow later:
- * `recordDraft` files any row carrying an id, and a caller handing
- * over a proposal row satisfies this signature unchanged the day that
- * module lands.
+ * fixture type, and it STAYS that way now that `./proposals.ts` has
+ * landed — the module that redeclares the `source_config_proposals`
+ * columns this surface renders, and that
+ * {@link fetchSourceProposals} above reads through. This signature
+ * said it was not a placeholder to narrow later, and that is what
+ * happened: `recordDraft` files any row carrying an id, a
+ * {@link SourceConfigProposal} satisfies the constraint unchanged,
+ * and `./proposals.test.ts` puts that assignability in front of the
+ * compiler rather than leaving it asserted in prose.
  *
  * @param slug - A resolved domain slug. A proposal is about one
  * domain's source, so it is scoped like everything else about it.
@@ -1198,6 +1332,10 @@ export function approveSourceConfig(
  * spells no keep-versus-discard vocabulary of its own. Which member a
  * ruling moves is the failures modal's decision to make and to
  * document, and putting it here would be that decision made twice.
+ * {@link fetchSourceFailures} is what shows the result, and it stays
+ * out of that decision the same way: its predicate reads the OVERLAID
+ * documents, so whichever member the modal settles on is the one the
+ * queue follows.
  *
  * @param slug - A resolved domain slug.
  * @param document - The document as the ruling left it.

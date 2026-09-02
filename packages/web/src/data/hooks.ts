@@ -51,14 +51,28 @@
  * stays `string[]` end to end; a number would hash the same and read
  * as a second key shape nobody declared.
  *
- * {@link useTerms} borrows that same three-segment shape without
- * being a row read, and it is the only one that does: its last
- * segment is the CATEGORY the terms hang off rather than a term's own
- * id, so `[slug, 'terms']` is every category's vocabulary and the
- * segment below it is one category's. What the builder owns is the
- * one-segment extension, not the meaning of the segment — and the
- * prefix pays here too, {@link useSaveCategoryTerms} naming no
- * category and so invalidating all of them at once.
+ * {@link useTerms} and {@link useSourceFailures} borrow that same
+ * three-segment shape without being row reads: each one's last
+ * segment is the PARENT its rows hang off rather than an answered
+ * row's own id, so `[slug, 'terms']` is every category's vocabulary
+ * and the segment below it is one category's. What the builder owns
+ * is the one-segment extension, not the meaning of the segment — and
+ * the prefix pays here too, {@link useSaveCategoryTerms} and
+ * {@link useResolveSourceFailure} each naming no parent and so
+ * invalidating every list at once.
+ *
+ * {@link useSourceFailures} files under a resource of its OWN
+ * (`source-failures`) rather than under `documents`, and that is the
+ * one place the two borrowers differ. Nothing else files anything
+ * under `terms`, so the segment beneath it can only mean one thing;
+ * `documents` already carries {@link useDocuments}' whole-domain
+ * list, and a third segment there would be a SOURCE's id sitting in
+ * the position every other three-segment key in this module reads as
+ * the answered row's. One position, two meanings, under one resource
+ * — which is exactly the collision the key space is shaped to make
+ * impossible. The cost is that {@link useResolveSourceFailure} names
+ * two keys instead of relying on one prefix, and that cost is worth
+ * naming rather than paying silently.
  *
  * {@link DEPLOYMENT_SCOPE} carries an `@`, which no domain slug does
  * (slugs are lowercase-kebab natural keys), so the two key spaces
@@ -159,14 +173,20 @@
  *   which arrived with {@link useTerms} exactly as this bullet used
  *   to say it would — and as the two-segment PREFIX, the save naming
  *   no category to key one on.
- * - {@link useApproveSourceConfig} invalidates NOTHING, which is the
- *   same ordering seen from its other end: the proposals read is not
- *   written yet, so there is no key a ruling can change. That is a
- *   stated gap rather than an oversight, and it is why these are a
- *   LIST of whole keys rather than one key that might arrive empty —
+ * - {@link useApproveSourceConfig} invalidates ONE key, and that is
+ *   the last empty list in this module going away: it named nothing
+ *   while `fetchSourceProposals` did not exist, and gained
+ *   `[slug, 'source-proposals']` in the commit that wrote the read.
+ *   The shape it was the reason for stays — these are a LIST of whole
+ *   keys rather than one key that might arrive empty, because
  *   `invalidateQueries` with an EMPTY key matches every query in the
- *   cache, so the weakest write here would silently become the most
- *   expensive one.
+ *   cache and the weakest write here would silently become the most
+ *   expensive one. Nothing declares an empty list today, and the test
+ *   next door asserts that as a set rather than assuming it.
+ * - {@link useResolveSourceFailure} invalidates TWO keys for the
+ *   reason given above: the whole-domain document list it can change,
+ *   and the `[slug, 'source-failures']` PREFIX, since a ruling names
+ *   no source and so has to reach every source's queue.
  *
  * Keys match by PREFIX, which is load-bearing rather than incidental.
  * The single-row reads file under a list's own two segments with an
@@ -210,6 +230,7 @@
 
 import type { ExportSubscriptionSummary } from './connectors';
 import type { CategorySummary } from './lexicon';
+import type { SourceConfigProposal } from './proposals';
 import type { SourceStatusCounts } from './sources';
 import type {
   Category,
@@ -253,6 +274,8 @@ import {
   fetchSearchSuggestions,
   fetchSettings,
   fetchSource,
+  fetchSourceFailures,
+  fetchSourceProposals,
   fetchSourceStatusCounts,
   fetchSources,
   fetchSpendSummary,
@@ -326,6 +349,8 @@ export type DomainResource =
   | 'export-subscriptions'
   | 'findings'
   | 'personas'
+  | 'source-failures'
+  | 'source-proposals'
   | 'source-status-counts'
   | 'sources'
   | 'terms'
@@ -364,7 +389,7 @@ export const DEPLOYMENT_SCOPE = '@deployment';
  * no focus behaviour to pin, and what it does declare — which keys it
  * invalidates — is per hook rather than shared.
  *
- * One shared frozen object rather than a literal repeated twenty-two
+ * One shared frozen object rather than a literal repeated twenty-five
  * times, so "what this app's reads do" is one line to read and one
  * line to change. Frozen because it is handed to every call: an
  * options object a caller could write through would change the
@@ -612,6 +637,32 @@ export function useSourceStatusCounts(
   return useCache(
     domainQueryKey(slug, 'source-status-counts'),
     () => fetchSourceStatusCounts(slug),
+    READ_OPTIONS,
+  );
+}
+
+/**
+ * This domain's source-config proposals — the review queue behind the
+ * sources surface's approval sub-route.
+ *
+ * Every status, not the pending ones alone, which is `./api.ts`'s
+ * decision and not a hole in this key: the modal filters. That is why
+ * one entry serves a queue that shrinks after an approval — the
+ * ruling is recorded, {@link useApproveSourceConfig} invalidates this
+ * key, and the row comes back carrying the status the modal then
+ * filters it out on.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @returns Its proposals in review-queue order.
+ */
+export function useSourceProposals(
+  domainSlug?: string | null,
+): CachedRead<readonly SourceConfigProposal[]> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useCache(
+    domainQueryKey(slug, 'source-proposals'),
+    () => fetchSourceProposals(slug),
     READ_OPTIONS,
   );
 }
@@ -912,6 +963,47 @@ export function useTerms(
 }
 
 /**
+ * One source's failed captures — the list behind the sources
+ * surface's failures sub-route.
+ *
+ * The second of the two three-segment borrowers, and the one whose
+ * resource had to be invented: this module's header carries why
+ * `source-failures` rather than a third segment under `documents`,
+ * which is the spelling a reader reaches for first. The short version
+ * is that `documents` already has a whole-domain list hook, so the
+ * segment beneath it is read as an answered document's id — and a
+ * SOURCE's id in that position is one key shape meaning two things.
+ *
+ * The cost is real and is paid next door rather than hidden: the two
+ * resources are disjoint, so {@link useResolveSourceFailure} names
+ * `[slug, 'documents']` AND `[slug, 'source-failures']` instead of
+ * reaching both through one prefix.
+ *
+ * The slug segment is what stops a failures list outliving a domain
+ * switch. Source ids are unique across domains in the schema, so the
+ * id alone would be a correct-looking key that survives one — and
+ * `./api.ts` refuses a source of another domain, so the entry that
+ * survived would be one the read behind it now rejects.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @param sourceId - The `:entityId` route param, as a number.
+ * @returns Its failed captures, newest first, or the error state for
+ * an id this domain has no source for.
+ */
+export function useSourceFailures(
+  domainSlug: string | null | undefined,
+  sourceId: number,
+): CachedRead<readonly Document[]> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useCache(
+    domainRowQueryKey(slug, 'source-failures', sourceId),
+    () => fetchSourceFailures(slug, sourceId),
+    READ_OPTIONS,
+  );
+}
+
+/**
  * One cache key, as this module's two builders hand one over.
  *
  * Named so {@link useInvalidatingMutation} can take a LIST of keys
@@ -1077,14 +1169,17 @@ export function useSaveSource(
 /**
  * Rule on a pending source-config proposal — approve it, or reject it.
  *
- * Invalidates NOTHING, and this module's header explains rather than
- * hides it: a ruling changes the proposals list, and there is no read
- * of that list to key on yet. The empty list is what this hook can
- * honestly claim today, and the key arrives with the read.
+ * ONE key, and this hook is where the module's empty-list precedent
+ * ends: it named nothing while there was no read of the proposals to
+ * key on, and its own docblock said the key would arrive with that
+ * read. {@link useSourceProposals} is that read, and this is the key.
  *
- * It is not a stale-surface bug in the meantime, because there is no
- * surface: the modal that rules on a proposal and the accessor that
- * lists them land together, and this list grows in the same commit.
+ * The re-read is what makes an approval visible without this hook
+ * knowing anything about statuses. `./api.ts` answers every status
+ * and the modal filters to `pending`, so a ruled row comes back
+ * carrying the status it was ruled to and drops out of the queue on
+ * the same render — where a hand-written cache update would have had
+ * to splice it out and would then be wrong about a rejection.
  *
  * @param domainSlug - The `:domainSlug` route param.
  * @returns The mutation; `mutate` takes the proposal row as ruled.
@@ -1096,7 +1191,7 @@ export function useApproveSourceConfig(
 
   return useInvalidatingMutation<SourceConfigRuling>(
     (ruling) => approveSourceConfig(slug, ruling),
-    [],
+    [domainQueryKey(slug, 'source-proposals')],
   );
 }
 
@@ -1104,8 +1199,18 @@ export function useApproveSourceConfig(
  * Rule on one failed capture — the keep and discard actions on the
  * sources surface's failures list.
  *
- * One key, and the neighbour it deliberately leaves alone is worth
- * naming: the failing-source COUNT is not a count of failed documents.
+ * TWO keys, and neither is redundant, because the two reads it can
+ * change sit under DISJOINT resources: {@link useDocuments}' whole
+ * domain list under `documents`, and {@link useSourceFailures}' queue
+ * under `source-failures`. That second one is the two-segment PREFIX
+ * rather than one source's three, and the write is why — a ruling
+ * carries a document and names no source, so there is no single queue
+ * this could key on. Prefix matching turns that into the right
+ * behaviour rather than a compromise: every source's queue is
+ * re-read, and only the one open has a reader to notice.
+ *
+ * The neighbour it deliberately leaves alone is worth naming: the
+ * failing-source COUNT is not a count of failed documents.
  * `classifySource` reads a source's own flag and failure streak and
  * never opens a document, so a ruling here cannot move
  * `source-status-counts` and invalidating it would re-read a figure
@@ -1121,7 +1226,10 @@ export function useResolveSourceFailure(
 
   return useInvalidatingMutation<Document>(
     (document) => resolveSourceFailure(slug, document),
-    [domainQueryKey(slug, 'documents')],
+    [
+      domainQueryKey(slug, 'documents'),
+      domainQueryKey(slug, 'source-failures'),
+    ],
   );
 }
 
