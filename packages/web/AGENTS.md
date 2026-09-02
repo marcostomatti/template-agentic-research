@@ -52,7 +52,8 @@ point branches on which of the two is live:
   entry with no route is not something the app can express.
 - Five of the six surfaces carry at least one modal sub-route
   (`:entityId` on the digest, `:entityId/edit` on the other four, plus
-  `:entityId/config` on the sources; settings has none), each declared
+  `:entityId/config` and `:entityId/failures` on the sources; settings
+  has none), each declared
   as a CHILD of its list route so the list stays matched behind an
   open row. The router's table holds a LIST per surface for exactly
   that: a row openable in more than one way is a table row, not a
@@ -224,21 +225,22 @@ compose now that theirs has landed.
   a newly added prop and silently drops it on the way down, which
   type-checks on both sides.
 - `src/components/PlaceholderModal.tsx` is the element behind FOUR of
-  the twelve modal registrations (six addresses across two bases), so
-  it may only claim what is true of the agents and tools editors at
+  the fourteen modal registrations (seven addresses across two bases),
+  so it may only claim what is true of the agents and tools editors at
   once. The lexicon's two open
   `src/pages/lexicon/LexiconEditorModal.tsx`, the sources' `/edit`
-  pair opens `src/pages/sources/SourceEditorModal.tsx` and its
-  `/config` pair opens
-  `src/pages/sources/SourceConfigApprovalModal.tsx`, and the digest's
-  two open `src/pages/digest/DigestDetailModal.tsx`. Both halves of
-  the fraction move and they move separately: the numerator shrinks by
-  two with each surface after them, the denominator grows by two with
-  each SECOND address a surface declares. The digest's landing is what
-  narrowed the remaining set to ONE KIND — the placeholder no longer
-  has to be true of a read-only detail view as well as of an editor —
-  and the sources editor is what narrowed it to two surfaces of that
-  kind.
+  pair opens `src/pages/sources/SourceEditorModal.tsx`, its `/config`
+  pair opens `src/pages/sources/SourceConfigApprovalModal.tsx` and its
+  `/failures` pair opens
+  `src/pages/sources/SourceFailuresModal.tsx`, and the digest's two
+  open `src/pages/digest/DigestDetailModal.tsx`. Both halves of the
+  fraction move and they move separately: the numerator shrinks by two
+  with each surface after them, the denominator grows by two with each
+  address a surface declares BEYOND its first. The digest's landing is
+  what narrowed the remaining set to ONE KIND — the placeholder no
+  longer has to be true of a read-only detail view as well as of an
+  editor — and the sources editor is what narrowed it to two surfaces
+  of that kind.
 
 ## `@ar/ui` constraints this app is built around
 

@@ -99,10 +99,12 @@
  * `sources.enabled` is a real column and the UI spec has a menu that
  * writes to it, alongside approving a pending config and reviewing a
  * feed's failures. Not one of the three is a control in this menu.
- * Both rows it carries are NAVIGATIONS: `./SourceEditorModal.tsx`
- * holds the enable switch beside the flag, the endpoint and the kind,
- * and `./SourceConfigApprovalModal.tsx` holds the two answers to a
- * proposed config.
+ * All three rows it carries are NAVIGATIONS:
+ * `./SourceEditorModal.tsx` holds the enable switch beside the flag,
+ * the endpoint and the kind, `./SourceConfigApprovalModal.tsx` holds
+ * the two answers to a proposed config, and
+ * `./SourceFailuresModal.tsx` holds the two answers to each capture
+ * that would not parse.
  *
  * That is a decision rather than a stage. Every one of the editor's
  * four members is a whole-row PUT through `saveSource`, and a switch
@@ -112,8 +114,10 @@
  * menu item approving one would be a ruling made without reading the
  * documents it was about — which its own modal sets out at length.
  *
- * The third — working through a feed's failures — is its own
- * sub-route too, and the menu grows a row when its modal lands.
+ * The third is the same argument once more. Keeping or discarding a
+ * capture is an answer to something an operator has read, and the
+ * only place it can be read is the list behind that sub-route — so
+ * the menu opens the list and rules on nothing.
  *
  * ## Three states, not two
  *
@@ -188,13 +192,15 @@ const STATUS_PARAM = 'status';
 /**
  * The sub-routes a row's actions open, relative to this surface.
  *
- * Two of them, which is what `../../routes/router.tsx` widened its
- * modal table to hold: a source is edited at one address and its
- * proposed config is ruled on at the other, and neither is a child of
- * the other.
+ * Three of them, which is what `../../routes/router.tsx` widened its
+ * modal table to hold: a source is edited at one address, its
+ * proposed config is ruled on at another and its failed captures are
+ * worked through at a third, and none of them is a child of either
+ * other.
  */
 const EDIT_SEGMENT = 'edit';
 const CONFIG_SEGMENT = 'config';
+const FAILURES_SEGMENT = 'failures';
 
 /**
  * The locale every formatted value on this page is rendered in.
@@ -353,9 +359,10 @@ export const SourcesPage = () => {
       width: MENU_WIDTH,
       align: 'end',
       cell: (source) => renderCellContent('context-menu', {
-        // Two actions and both are navigations — see the header on
-        // why neither the four writable members nor the two answers
-        // to a proposed config is a menu item of its own.
+        // Three actions and all of them navigations — see the header
+        // on why neither the four writable members, nor the two
+        // answers to a proposed config, nor the two answers to a
+        // failed capture is a menu item of its own.
         //
         // Titles rather than labels: `RowContextAction` keys its
         // items by `title`, so two rows sharing one would collide on
@@ -374,6 +381,13 @@ export const SourcesPage = () => {
             title: 'Review proposed config',
             onClick: () => {
               void navigate(`${source.id}/${CONFIG_SEGMENT}`);
+            },
+          },
+          {
+            icon: 'triangle-alert',
+            title: 'View failures',
+            onClick: () => {
+              void navigate(`${source.id}/${FAILURES_SEGMENT}`);
             },
           },
         ],

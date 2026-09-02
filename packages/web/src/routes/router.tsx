@@ -43,30 +43,30 @@
  *
  * Five of the six surfaces open their rows over the list they sit on:
  * the digest at `:entityId`, the lexicon, sources, agents and tools at
- * `:entityId/edit`, and the sources again at `:entityId/config`.
- * Settings carries none — it is a single form, not a list with rows to
- * open.
+ * `:entityId/edit`, and the sources again at `:entityId/config` and
+ * `:entityId/failures`. Settings carries none — it is a single form,
+ * not a list with rows to open.
  *
  * Each of those five declares a LIST of them rather than one, because a
  * row can be openable in more than one WAY: editing a source, ruling on
  * its proposed config and listing its failures are three addresses over
  * one list, none of them a child of either other. The sources are the
- * first surface to use that: their list holds two entries, and the
- * second one cost a row in the table below rather than a branch in
- * {@link surfaceRoute} or a second factory. The other four still hold
- * one apiece.
+ * only surface using that so far, and they now use all three of it:
+ * their list holds THREE entries, and the second and third each cost a
+ * row in the table below rather than a branch in {@link surfaceRoute}
+ * or a second factory. The other four still hold one apiece.
  *
  * The other half is in use as of the lexicon's editor: an entry carries
  * its ELEMENT beside its path, and those elements have stopped being
  * one shared placeholder. TWO surfaces still open
  * {@link MODAL_PLACEHOLDER} — agents and tools — while the lexicon
  * opens {@link LEXICON_EDITOR}, the digest opens {@link DIGEST_DETAIL}
- * and the sources open {@link SOURCE_EDITOR} at one address and
- * {@link SOURCE_CONFIG_APPROVAL} at the other. That is what an entry
- * holding its own element was for: a surface's modal is not the same
- * modal as its neighbour's, any more than its second sub-route is the
- * same as its first, and the four that have landed are not even all
- * the same KIND of modal.
+ * and the sources open {@link SOURCE_EDITOR}, {@link
+ * SOURCE_CONFIG_APPROVAL} and {@link SOURCE_FAILURES} at their three
+ * addresses. That is what an entry holding its own element was for: a
+ * surface's modal is not the same modal as its neighbour's, any more
+ * than its second sub-route is the same as its first, and the five
+ * that have landed are not even all the same KIND of modal.
  *
  * Each is a CHILD of its list route rather than a sibling, which is the
  * whole point of the shape: the list stays matched and stays rendered,
@@ -126,6 +126,7 @@ import {
   SourceConfigApprovalModal,
 } from '../pages/sources/SourceConfigApprovalModal';
 import { SourceEditorModal } from '../pages/sources/SourceEditorModal';
+import { SourceFailuresModal } from '../pages/sources/SourceFailuresModal';
 
 import { DomainGuard } from './DomainGuard';
 import {
@@ -232,11 +233,11 @@ export const SURFACE_PLACEHOLDER = (
  * bottom of each one, so the row actions on those pages already open
  * it.
  *
- * It stands at FOUR of the twelve registrations now — agents and
+ * It stands at FOUR of the fourteen registrations now — agents and
  * tools, across both bases — and the count shrinks by two with each
  * editor that lands. The DENOMINATOR moves too, and separately: a
- * surface's second address is two more registrations that were never
- * this element's to hold.
+ * surface's second and third addresses are two more registrations
+ * apiece that were never this element's to hold.
  */
 export const MODAL_PLACEHOLDER = <PlaceholderModal />;
 
@@ -298,16 +299,32 @@ export const SOURCE_EDITOR = <SourceEditorModal />;
 export const SOURCE_CONFIG_APPROVAL = <SourceConfigApprovalModal />;
 
 /**
+ * The sources surface's failures list, at its third sub-route.
+ *
+ * The registration that says the table's LIST shape holds more than a
+ * pair: a source is edited at `:entityId/edit`, ruled on at
+ * `:entityId/config` and worked through at `:entityId/failures`, and
+ * the third cost exactly what the second did — one row in the table
+ * below. Not one of the three is a child of either other, and
+ * `../pages/sources/SourceFailuresModal.tsx` carries why a failed
+ * capture is a screen of its own rather than a panel in the editor.
+ *
+ * Held as an ELEMENT for the reason its five neighbours are: one
+ * object across both trees, so identity stays askable.
+ */
+export const SOURCE_FAILURES = <SourceFailuresModal />;
+
+/**
  * The modal sub-routes each list surface carries, keyed by surface id.
  *
  * A LIST per surface, so a row openable in more than one way costs a
  * row here rather than a shape change — see the header. The sources
- * hold TWO entries and the other four hold one apiece, and four of
- * the six entries now name a real modal rather than
+ * hold THREE entries and the other four hold one apiece, and five of
+ * the seven entries now name a real modal rather than
  * {@link MODAL_PLACEHOLDER}: the lexicon's editor, the sources editor,
- * the sources config approval and the digest's detail. A surface whose
- * list is empty and a surface with no key at all mean the same thing
- * to {@link surfaceRoute}.
+ * the sources config approval, the sources failures list and the
+ * digest's detail. A surface whose list is empty and a surface with no
+ * key at all mean the same thing to {@link surfaceRoute}.
  *
  * Declared BELOW the elements rather than beside the other route
  * constants at the top because it names them: an entry holds what it
@@ -324,6 +341,7 @@ const MODAL_SUB_ROUTE_TABLE: ModalSubRouteTable = {
   sources: [
     { path: `${ENTITY_PARAM}/edit`, element: SOURCE_EDITOR },
     { path: `${ENTITY_PARAM}/config`, element: SOURCE_CONFIG_APPROVAL },
+    { path: `${ENTITY_PARAM}/failures`, element: SOURCE_FAILURES },
   ],
   agents: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
   tools: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],

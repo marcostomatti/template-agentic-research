@@ -197,9 +197,9 @@
  * is the third and is both at once — a read landing ahead of its
  * editor, and the one a write here had been waiting for. The fourth
  * is a pair and is both at once again: {@link fetchSourceProposals}
- * and {@link fetchSourceFailures} feed two sub-routes nobody has
- * written, and stand behind the two writes that RULE on something
- * rather than edit it.
+ * and {@link fetchSourceFailures} landed ahead of the two sources
+ * sub-routes that now read them, and stand behind the two writes that
+ * RULE on something rather than edit it.
  *
  * The `fetch` prefix is not decoration either. The fixture layer's
  * verbs are `list`/`get`/`find`/`summarize`; changing the verb at the

@@ -11,6 +11,7 @@ import {
   MODAL_PLACEHOLDER,
   SOURCE_CONFIG_APPROVAL,
   SOURCE_EDITOR,
+  SOURCE_FAILURES,
   NOT_FOUND,
   ROUTES,
 } from './router';
@@ -93,7 +94,11 @@ const BASES = [
 const MODAL_ROUTE_PATTERNS: Readonly<Record<string, readonly string[]>> = {
   digest: [ENTITY_PARAM],
   lexicon: [`${ENTITY_PARAM}/edit`],
-  sources: [`${ENTITY_PARAM}/edit`, `${ENTITY_PARAM}/config`],
+  sources: [
+    `${ENTITY_PARAM}/edit`,
+    `${ENTITY_PARAM}/config`,
+    `${ENTITY_PARAM}/failures`,
+  ],
   agents: [`${ENTITY_PARAM}/edit`],
   tools: [`${ENTITY_PARAM}/edit`],
   settings: [],
@@ -508,6 +513,23 @@ describe('the modal sub-routes', () => {
     expect(opened).toHaveLength(BASES.length);
   });
 
+  it('opens the sources failures list at its third sub-route', () => {
+    // The registration that says the table's LIST shape holds more
+    // than a pair. Driven exactly as its two neighbours are: what
+    // differs is the CLAIM, and what it claims is that a third
+    // address under one surface reaches its own element under both
+    // bases rather than falling back to either sibling.
+    // Arrange / Act
+    const opened = openedElements([
+      addressOf('sources', `${ENTITY_PARAM}/failures`),
+    ]);
+
+    // Assert
+    expect(opened.filter((row) => row.element !== SOURCE_FAILURES))
+      .toEqual([]);
+    expect(opened).toHaveLength(BASES.length);
+  });
+
   it('opens the digest detail at its own sub-route', () => {
     // The element that says the ledger is a PARTITION rather than a
     // shrinking list: this modal is not an editor, so its
@@ -538,6 +560,7 @@ describe('the modal sub-routes', () => {
       addressOf('lexicon', `${ENTITY_PARAM}/edit`),
       addressOf('sources', `${ENTITY_PARAM}/edit`),
       addressOf('sources', `${ENTITY_PARAM}/config`),
+      addressOf('sources', `${ENTITY_PARAM}/failures`),
       addressOf('digest', ENTITY_PARAM),
     ];
     const declared = MODAL_SUB_ROUTES.map(
@@ -635,8 +658,9 @@ describe('the catch-all', () => {
   it('claims a fabricated segment below a row, under both bases', () => {
     // One segment past every declared sub-route: `7/<fabricated>` is two
     // deep under the digest's bare `:entityId` and a near miss on every
-    // trailing segment the others declare — `edit` on four surfaces and
-    // `config` on the sources. Both readings are the same claim —
+    // trailing segment the others declare — `edit` on four surfaces,
+    // and `config` and `failures` on the sources. Both readings are
+    // the same claim —
     // a sub-route pattern is matched WHOLE, and a list route does not
     // swallow whatever trails a row id — and the catch-all is where the
     // path lands when it holds.
