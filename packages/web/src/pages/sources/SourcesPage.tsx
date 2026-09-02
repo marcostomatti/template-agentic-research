@@ -73,6 +73,27 @@
  * would be a reading of this page that a shared link could not carry,
  * which is the property the URL-as-state rule exists to protect.
  *
+ * ## What the pulsing dot adds
+ *
+ * The status dot pulses on the rows `./rows.ts` reads as running, and
+ * it earns its place beside a word that already names the health: a
+ * feed the pipeline went through this morning and one it stopped
+ * visiting a week ago report their health in exactly the same words.
+ * The stamps that would separate them are two columns away, in cells
+ * nobody scans a list by.
+ *
+ * It does NOT restate the cursor column, and one fixture row shows
+ * why: the pulse takes whichever stamp is later and the cursor age
+ * takes the successful one, so a feed being read and rejected pulses
+ * beside a position that has not moved in days. Those are two
+ * readings of one feed and the table is meant to carry both.
+ *
+ * The pulse is also the one cell reading that motion alone would
+ * carry, so the dot is named on those rows and left decorative on the
+ * others — the cell says why, against what `CellStatus` actually does
+ * with a `label`. What that pulse can honestly mean over a fixture
+ * layer with no runs is `./rows.ts`'s subject, not this file's.
+ *
  * ## No enable switch, and no approve action
  *
  * `sources.enabled` is a real column and the UI spec has a menu that
@@ -136,10 +157,14 @@ import { ALL_FILTER_VALUE, filterByQuery, filterBySelect } from '../filters';
 
 import { statusBadges } from './badges';
 import {
+  LIVE_RUN_LABEL,
+  NEVER_FETCHED_LABEL,
   SOURCE_QUERY_FIELDS,
   SOURCE_STAT_CARDS,
+  cursorAgeStamp,
   cursorLabel,
   failureStreakLabel,
+  isRunLive,
   kindOptions,
   kindTone,
   sourceCountLabel,
@@ -167,9 +192,6 @@ const EDIT_SEGMENT = 'edit';
  * of the data.
  */
 const DISPLAY_LOCALE = 'en-US';
-
-/** What the cursor cell leads with for a feed nothing has read yet. */
-const NEVER_FETCHED = 'Never fetched';
 
 /** What the health cell says for a feed that has never come back bad. */
 const NEVER_FAILED = 'Never failed';
@@ -251,13 +273,32 @@ export const SourcesPage = () => {
       key: 'status',
       header: 'Status',
       width: STATUS_WIDTH,
-      // No `label`: the visible text already IS the status, and
-      // `CellStatus` would give the dot the same name to announce a
-      // second time.
-      cell: (source) => renderCellContent('status', {
-        tone: statusFacet(classifySource(source)).tone,
-        text: statusFacet(classifySource(source)).label,
-      }),
+      cell: (source) => {
+        const facet = statusFacet(classifySource(source));
+        // What the dot adds to the word beside it: the pipeline has
+        // been here recently. `./rows.ts` carries what that reading
+        // can and cannot mean over a fixture layer with no runs.
+        const live = isRunLive(source, FIXTURE_NOW);
+
+        return renderCellContent('status', {
+          tone: facet.tone,
+          text: facet.label,
+          pulse: live,
+          // `CellStatus` names the dot from `label` alone wherever a
+          // `text` renders, and from `label ?? tone` only where none
+          // does — so omitting it here leaves the dot aria-hidden
+          // rather than announcing the tone token, and passing the
+          // status word would put a second copy of the visible text
+          // in front of it.
+          //
+          // Which is why it is passed on the live rows and nowhere
+          // else: there the dot carries a reading the text does not,
+          // and motion on its own announces nothing at all.
+          label: live
+            ? LIVE_RUN_LABEL
+            : undefined,
+        });
+      },
     },
     {
       key: 'health',
@@ -270,23 +311,28 @@ export const SourcesPage = () => {
       header: 'Cursor',
       width: CURSOR_WIDTH,
       overflow: 'truncate',
-      // How old the position is over what the position says. The age
-      // is the reading an operator scans for; the token is the detail
-      // they check once they have stopped on a row.
-      cell: (source) => renderCellContent('double-line', {
-        title: source.lastSuccessAt === null
-          ? NEVER_FETCHED
-          : (
-            <FormattedRelativeTime
-              date={source.lastSuccessAt}
-              now={FIXTURE_NOW}
-              locale={DISPLAY_LOCALE}
-            />
+      // How old the position is over what the position says. Which
+      // stamp dates it, and what the absence reads as, are both
+      // `./rows.ts`'s — this cell only picks between a string and a
+      // rendered element, which is the half a `.tsx` has to hold.
+      cell: (source) => {
+        const writtenAt = cursorAgeStamp(source);
+
+        return renderCellContent('double-line', {
+          title: writtenAt === null
+            ? NEVER_FETCHED_LABEL
+            : (
+              <FormattedRelativeTime
+                date={writtenAt}
+                now={FIXTURE_NOW}
+                locale={DISPLAY_LOCALE}
+              />
+            ),
+          subtitle: (
+            <span className="font-mono">{cursorLabel(source.cursor)}</span>
           ),
-        subtitle: (
-          <span className="font-mono">{cursorLabel(source.cursor)}</span>
-        ),
-      }),
+        });
+      },
     },
     {
       key: 'menu',

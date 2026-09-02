@@ -4,6 +4,7 @@ import type { Source, SourceKind } from '../../data/types';
 import { describe, expect, it } from 'vitest';
 
 import { SOURCES } from '../../data/sources';
+import { FIXTURE_NOW } from '../../data/types';
 import { repeated } from '../../test-support/repeated';
 import { ALL_FILTER_VALUE, filterByQuery } from '../filters';
 
@@ -13,8 +14,10 @@ import {
   SOURCE_QUERY_FIELDS,
   SOURCE_STAT_CARDS,
   SOURCE_STATUS_FACETS,
+  cursorAgeStamp,
   cursorLabel,
   failureStreakLabel,
+  isRunLive,
   kindOptions,
   kindTone,
   sourceCountLabel,
@@ -94,6 +97,57 @@ const DISABLED_SOURCE: Source = {
   flagged: false,
 };
 
+/**
+ * The reference clock the live-run cases measure against.
+ *
+ * Its own literal rather than `FIXTURE_NOW`: the stamps below are
+ * written as offsets from it in prose, and a case reading a clock some
+ * other module owns would move the moment that module did. The
+ * fixture-reach case at the end of the block is the one that uses the
+ * real one, because reaching the shipped rows is the whole of what it
+ * claims.
+ */
+const RUN_CLOCK = '2026-06-11T14:30:00.000Z';
+
+/**
+ * How long a touch keeps a feed pulsing, in hours.
+ *
+ * Written out rather than imported: `./rows.ts` holds the policy, so a
+ * literal here is what turns a change to that number into a red case
+ * instead of two files agreeing with each other about nothing.
+ */
+const LIVE_WINDOW_HOURS = 12;
+
+/** Milliseconds in an hour, for building the stamps below. */
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * A stamp a given number of hours before {@link RUN_CLOCK}.
+ *
+ * Negative hours put it AFTER the clock, which is the skew case.
+ *
+ * @param hours - How far back to reach.
+ * @returns The instant, ISO.
+ */
+const hoursBefore = (hours: number): string => new Date(
+  Date.parse(RUN_CLOCK) - (hours * HOUR_MS),
+).toISOString();
+
+/**
+ * A feed with the two stamps and the switch a case wants.
+ *
+ * Built off {@link ACTIVE_SOURCE} so every other column stays a value
+ * no case reads, which is what keeps each case about the one thing it
+ * varies.
+ *
+ * @param patch - The members this case cares about.
+ * @returns The row.
+ */
+const sourceWith = (patch: Partial<Source>): Source => ({
+  ...ACTIVE_SOURCE,
+  ...patch,
+});
+
 /** The three above, as the search box sees them. */
 const QUERY_ROWS: readonly Source[] = [
   ACTIVE_SOURCE,
@@ -172,6 +226,141 @@ describe('statusFacet', () => {
 
     // Act / Assert
     expect(() => statusFacet(unlisted)).toThrow(/retired/);
+  });
+});
+
+describe('isRunLive', () => {
+  it('pulses a feed touched inside the window', () => {
+    // Arrange
+    const source = sourceWith({
+      lastSuccessAt: hoursBefore(LIVE_WINDOW_HOURS - 1),
+      lastFailureAt: null,
+    });
+
+    // Act / Assert
+    expect(isRunLive(source, RUN_CLOCK)).toBe(true);
+  });
+
+  it('leaves a feed touched a whole window ago still', () => {
+    // The boundary itself is outside: a pass that lasted exactly as
+    // long as the window has finished, and drawing it as running would
+    // put the one moving thing on the surface on a row that is not.
+    // Arrange
+    const source = sourceWith({
+      lastSuccessAt: hoursBefore(LIVE_WINDOW_HOURS),
+      lastFailureAt: null,
+    });
+
+    // Act / Assert
+    expect(isRunLive(source, RUN_CLOCK)).toBe(false);
+    expect(isRunLive(
+      sourceWith({
+        lastSuccessAt: hoursBefore(LIVE_WINDOW_HOURS + 1),
+        lastFailureAt: null,
+      }),
+      RUN_CLOCK,
+    )).toBe(false);
+  });
+
+  it('takes whichever stamp is later, not the successful one', () => {
+    // The reading is that the pipeline has been here, and a failed
+    // fetch is a visit. A feed whose last success is weeks old and
+    // whose last failure is minutes old is being read right now.
+    // Arrange
+    const failedSince = sourceWith({
+      lastSuccessAt: hoursBefore(LIVE_WINDOW_HOURS * 10),
+      lastFailureAt: hoursBefore(1),
+    });
+    const succeededSince = sourceWith({
+      lastSuccessAt: hoursBefore(1),
+      lastFailureAt: hoursBefore(LIVE_WINDOW_HOURS * 10),
+    });
+    // The control that says the pair above is measuring the LATER
+    // stamp rather than answering true for any row with two.
+    const bothStale = sourceWith({
+      lastSuccessAt: hoursBefore(LIVE_WINDOW_HOURS * 10),
+      lastFailureAt: hoursBefore(LIVE_WINDOW_HOURS * 2),
+    });
+
+    // Act / Assert
+    expect(isRunLive(failedSince, RUN_CLOCK)).toBe(true);
+    expect(isRunLive(succeededSince, RUN_CLOCK)).toBe(true);
+    expect(isRunLive(bothStale, RUN_CLOCK)).toBe(false);
+  });
+
+  it('never pulses a feed an operator switched off', () => {
+    // Whatever its counters remember: nothing is reading it, so
+    // nothing about it can be in flight.
+    // Arrange
+    const stamps = {
+      lastSuccessAt: hoursBefore(1),
+      lastFailureAt: null,
+    };
+
+    // Act / Assert
+    expect(isRunLive(sourceWith({ ...stamps, enabled: false }), RUN_CLOCK))
+      .toBe(false);
+    // The positive control: the same row, switched on. Without it a
+    // reading that had stopped pulsing anything would pass this case.
+    expect(isRunLive(sourceWith({ ...stamps, enabled: true }), RUN_CLOCK))
+      .toBe(true);
+  });
+
+  it('never pulses a feed nothing has touched', () => {
+    // Configured and never reached. There is no age to take, which is
+    // a different answer from an age that is too old.
+    // Arrange
+    const source = sourceWith({
+      lastSuccessAt: null,
+      lastFailureAt: null,
+    });
+
+    // Act / Assert
+    expect(isRunLive(source, RUN_CLOCK)).toBe(false);
+  });
+
+  it('pulses a stamp that lands ahead of the clock', () => {
+    // A service clock a moment fast is ordinary; a row that stopped
+    // pulsing over it would be a rendering fault rather than a
+    // reading.
+    // Arrange
+    const source = sourceWith({
+      lastSuccessAt: hoursBefore(-1),
+      lastFailureAt: null,
+    });
+
+    // Act / Assert
+    expect(isRunLive(source, RUN_CLOCK)).toBe(true);
+  });
+
+  it('leaves a stamp that will not parse still', () => {
+    // `IsoTimestamp` is a string, so nothing stops one arriving. The
+    // signed comparison answers false for it, which is the
+    // conservative half: an unreadable stamp draws no motion.
+    // Arrange
+    const source = sourceWith({
+      lastSuccessAt: 'not a timestamp',
+      lastFailureAt: null,
+    });
+
+    // Act / Assert
+    expect(isRunLive(source, RUN_CLOCK)).toBe(false);
+  });
+
+  it('reaches both readings over the shipped sources', () => {
+    // The demo and every later spec rest on this: a window nothing
+    // falls inside leaves the pulse with no subject, and one
+    // everything falls inside leaves its absence with none. Measured
+    // against the clock the page renders with, not against
+    // `RUN_CLOCK`.
+    // Arrange / Act
+    const live = SOURCES.filter((source) => isRunLive(source, FIXTURE_NOW));
+    const still = SOURCES.filter((source) => !isRunLive(source, FIXTURE_NOW));
+
+    // Assert
+    expect(live.length).toBeGreaterThan(0);
+    expect(still.length).toBeGreaterThan(0);
+    expect(live.length + still.length).toBe(SOURCES.length);
   });
 });
 
@@ -278,6 +467,54 @@ describe('failureStreakLabel', () => {
     // it should look wrong instead of looking healthy.
     // Arrange / Act / Assert
     expect(failureStreakLabel(-1)).toBe('-1 failures');
+  });
+});
+
+describe('cursorAgeStamp', () => {
+  it('dates a position by the fetch that wrote it', () => {
+    // Arrange
+    const source = sourceWith({
+      lastSuccessAt: '2026-06-10T18:40:00.000Z',
+      lastFailureAt: null,
+    });
+
+    // Act / Assert
+    expect(cursorAgeStamp(source)).toBe('2026-06-10T18:40:00.000Z');
+  });
+
+  it('is not moved by a failure since', () => {
+    // A failed fetch moves no cursor, so the position is exactly as
+    // old as it was. This is the whole difference between this
+    // reading and the one behind the pulse, which takes either stamp.
+    // Arrange
+    const source = sourceWith({
+      lastSuccessAt: '2026-06-05T21:10:00.000Z',
+      lastFailureAt: '2026-06-11T05:58:00.000Z',
+    });
+
+    // Act / Assert
+    expect(cursorAgeStamp(source)).toBe('2026-06-05T21:10:00.000Z');
+  });
+
+  it('reads a feed that only ever failed as one with no position', () => {
+    // The documented narrowing: a feed reached and never usable
+    // answers the same as one never reached at all, so the cursor
+    // column cannot separate them and the health column is what does.
+    // Asserted against each other rather than each against null, so
+    // the claim is the indistinguishability rather than two nulls.
+    // Arrange
+    const failedOnly = sourceWith({
+      lastSuccessAt: null,
+      lastFailureAt: '2026-06-10T22:15:00.000Z',
+    });
+    const neverTouched = sourceWith({
+      lastSuccessAt: null,
+      lastFailureAt: null,
+    });
+
+    // Act / Assert
+    expect(cursorAgeStamp(failedOnly)).toBe(cursorAgeStamp(neverTouched));
+    expect(cursorAgeStamp(failedOnly)).toBeNull();
   });
 });
 
