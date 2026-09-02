@@ -78,6 +78,128 @@
       }
     },
     {
+      "id": "select-model-connector",
+      "name": "Select Model Connector",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        880,
+        0
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH\n-- Where the address of the model this pass calls is read, and the only node in this\n-- group that can read one. A Code node opens no connection and a spliced library\n-- imports nothing, so the endpoint and the model name arrive here as data or the\n-- nodes below have nothing to call. ar-ingest carries a node of this name asking the\n-- same question of the same table and argues the whole of it, including why the\n-- oldest llm row wins and why neither member is validated anywhere before this\n-- projection. What is written out here is the half that differs.\n\n-- ONE READ FOR THE PASS, on that node's reasoning. executeOnce runs this against the\n-- first item it was handed and answers once, and which service this deployment calls\n-- is a fact about the deployment rather than about any one candidate.\n\n-- THE FIRST ITEM IS A GATED CANDIDATE, AND MAY BE A REFUSED ONE. That is what parts\n-- this node from its sibling. Gate Candidate Names above answers one item per drained\n-- candidate whether or not the name was accepted, and a refusal keeps run_id among\n-- the four members it carries, so the parameter below resolves off either kind.\n-- Which of the two arrived first is a property of the drain's order and is not\n-- something this node has to know.\n\n-- TWO QUIET PASSES REACH DIFFERENT PLACES, and telling them apart is worth a line. A\n-- pass that drained nothing never reaches this node at all, executeOnce having no\n-- first item to run against. A pass whose whole batch the gate refused does reach it,\n-- reads a connector and spends nothing, the node below staging no candidate. Neither\n-- makes a call and only the second reads the table.\n\n-- One parameter, the run, read off the item this node was handed. It travels for the\n-- reason it travels everywhere on this canvas: the ledger row below is charged to the\n-- run and not to a candidate.\nconnector AS (\n  -- The llm connector, by kind, oldest first and capped at one. connectors is not\n  -- domain scoped and nothing on a domain row names one, so there is nothing here to\n  -- narrow by. The sibling states what the cap decides and what reconfiguring rather\n  -- than adding a rival buys.\n  SELECT c.id, c.name, c.config\n  FROM connectors c\n  WHERE c.kind = 'llm'\n  ORDER BY c.id\n  LIMIT 1\n)\n\nSELECT\n-- Two members read out of the config object, each read as text only where it IS text\n-- and with the empty string taken for an absence. connectors.config carries no type\n-- annotation, its shape being the client's business, so nothing has validated either\n-- of these and this projection is where they are first read.\n\n-- A null endpoint means there is nowhere to reach, and the node below refuses on it\n-- by name. That is the last place this pass can stop before a call is attempted\n-- against an address nobody configured, and stopping there rather than here is\n-- deliberate: a research pass that cannot call is still a pass whose gate refusals\n-- are worth reporting, and this node answers a row rather than a verdict.\n\n-- A null model is an ordinary state and not a refusal. A gateway that routes, or a\n-- runtime serving whatever it was started with, takes no model name, and\n-- llm_calls.model is nullable for exactly that.\n\n-- connector_id and connector_name are carried for a reader rather than for a caller.\n-- Nothing below binds either one. They travel because the node that made a call and\n-- the row that named the service should be readable together on the canvas.\n  $1::bigint AS run_id,\n  (SELECT c.id FROM connector c) AS connector_id,\n  (SELECT c.name FROM connector c) AS connector_name,\n  (SELECT nullif(CASE WHEN jsonb_typeof(c.config -> 'endpoint') = 'string'\n                      THEN c.config ->> 'endpoint'\n                 END, '')\n     FROM connector c) AS endpoint,\n  (SELECT nullif(CASE WHEN jsonb_typeof(c.config -> 'model') = 'string'\n                      THEN c.config ->> 'model'\n                 END, '')\n     FROM connector c) AS model",
+        "options": {
+          "queryReplacement": "={{ $json.run_id }}"
+        }
+      }
+    },
+    {
+      "id": "apply-call-ceiling",
+      "name": "Apply Call Ceiling",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Where a research pass decides how much it is going to spend, and\n// the first node on this canvas that decides anything about money.\n// Nothing above it opens a connection to a model and nothing below\n// it can reduce what this one lets through. The ceiling is applied\n// here, before a chunk is prepared, because preparing one is work\n// and the cheapest call is the one that was never staged.\n//\n// THE CEILING IS A DECLARED CONSTANT. MAX_RESEARCH_CALLS_PER_RUN\n// below is an integer written into this source, which is what\n// docs/architecture/01-invariants.md means by an explicit per run\n// ceiling: a bound a reviewer finds by reading the declarations\n// rather than by following the arithmetic. It is deliberately not a\n// settings marker, on the reasoning ar-ingest gives at the node of\n// this name. ENV_DEFAULTS in scripts/workflow-markers.ts is where a\n// value an operator tunes per deployment lives, and moving this one\n// there is that edit plus its own entry in that table rather than\n// something to imply here.\n//\n// IT IS THE SECOND BOUND THIS PASS MEETS AND NOT THE FIRST. Drain\n// Approved Intentions bounds the rows the pass CARRIES at twenty\n// five and says in as many words that what the pass may SPEND is\n// declared again here, over what survives the gate. The two bound\n// different things, they coincide in value, and neither is derived\n// from the other: this one can never stage more candidates than the\n// drain fetched and usually stages fewer.\n//\n// WHAT SURVIVES THE GATE is read off one field. Gate Candidate\n// Names wrote name_ok onto every drained candidate, true where\n// validateEntityName accepted the name and false with a token\n// beside it where it did not, and only an accepted one still\n// carries the members a prompt is built from. There is no second\n// reading to make here: that node already refused a candidate\n// carrying no name at all, and it dropped search_terms and\n// documents from every refusal so that nothing below it could reach\n// a prompt out of one whatever it forgot to check.\n//\n// A REFUSED CANDIDATE DOES NOT TRAVEL AND IS NOT LOST. It stops\n// here, having nothing to spend on, and stays reachable at\n// $('Gate Candidate Names').all() for the group that reports what\n// the pass did. Dropping it from the stream is not dropping it from\n// the account, and the two would be the same thing only if this\n// node were the last reader of that one.\n//\n// THE BUDGET GOES TO THE HEAD OF THE QUEUE, and the order is the\n// drain's rather than a policy of this node's. That statement\n// orders oldest first so a queue worked top down empties rather\n// than churns, and the row at risk of never being drained is the\n// one that has waited longest. Re-sorting here on anything else\n// would put that row at the bottom of a second ordering nobody\n// asked for. So the arrival order is the spending order, and two\n// passes over one unchanged queue spend on the same candidates.\n//\n// That is where this parts from ar-ingest, which sorts its own\n// staging by gate score: a document is worth reading in proportion\n// to what a gate made of it, and nothing ruled on it first. Here a\n// person ruled on every row in the batch, so there is no ranking\n// left to apply and waiting time is the only thing that separates\n// them.\n//\n// WHAT THE CEILING DROPS COMES BACK. A candidate left outside the\n// bound is stamped by nothing, keeps its approval and its open\n// researched_at, and is fetched first again by the next pass, the\n// drain ordering oldest first. That is unlike ar-ingest, where a\n// document left outside its ceiling is never offered again at all,\n// and it is what makes this bound a pacing decision rather than a\n// permanent one.\n//\n// THE CONNECTOR IS REFUSED RATHER THAN PASSED ON. A deployment with\n// no llm connector, or one whose config states no endpoint, has\n// nowhere to send a call, and this node stops the pass by name\n// instead of emitting nothing. Emitting nothing is\n// indistinguishable from a pass whose queue was empty, and a\n// deployment in that state would go on researching nothing quietly\n// for as long as nobody looked. What the refusal costs is the run\n// row the group below would have written. Nothing above this node\n// is undone, because nothing above this node wrote anything: the\n// drain reads and the gate decides, and the first write on this\n// canvas is in the record group.\n//\n// CARDINALITY. This node is handed one item, the connector, and\n// answers one per candidate it stages. The gate's items are read\n// back by name, for the reason everything on this canvas is: the\n// Postgres node in front of this one replaced the item that held\n// them.\n\n// Twenty five candidates, the same number the drain bounds its own\n// batch with and chosen against the same asymmetry: a pass is\n// started cheaply and then charged once per candidate for as long\n// as nobody looks at the bill. Written out rather than shared,\n// because a SQL statement can splice nothing and no marker declares\n// this number, so the two spellings are one bound maintained in two\n// places on purpose.\nconst MAX_RESEARCH_CALLS_PER_RUN = 25;\n\nconst connector = $input.first();\n\nif (connector === undefined) {\n  throw new Error(\n    '[ar-research] Apply Call Ceiling was handed no connector item, '\n    + 'which Select Model Connector answers whatever the table holds',\n  );\n}\n\nconst endpoint = connector.json.endpoint;\n\nif (typeof endpoint !== 'string' || endpoint === '') {\n  throw new Error(\n    '[ar-research] Apply Call Ceiling has no endpoint to spend '\n    + 'against: connectors holds no llm row whose config states one',\n  );\n}\n\n// Staged in the order the drain fetched them, which is the order\n// this walk reads them in, so the slice below takes the front of\n// the queue and nothing here re-orders anything.\nconst staged = [];\n\nfor (const item of $('Gate Candidate Names').all()) {\n  const row = item.json;\n\n  if (row.name_ok !== true) {\n    continue;\n  }\n\n  staged.push(row);\n}\n\n// Sliced rather than filtered, so the bound is the one declared\n// above and never a property of what happened to arrive. What is\n// carried forward is the four ids a row below is written against,\n// the name the gate normalized, and the two members the node below\n// builds a prompt out of. name_ok and name_reason stop here, having\n// done everything they were read for.\nreturn staged.slice(0, MAX_RESEARCH_CALLS_PER_RUN).map((row) => ({\n  json: {\n    run_id: row.run_id,\n    pool_id: row.pool_id,\n    domain_id: row.domain_id,\n    entity_id: row.entity_id,\n    entity_name: row.entity_name,\n    search_terms: row.search_terms,\n    documents: row.documents,\n  },\n}));"
+      }
+    },
+    {
+      "id": "prepare-model-prompt",
+      "name": "Prepare Model Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "parameters": {
+        "jsCode": "__INLINE:chunk.ts__\n__INLINE:prompt-frame.ts__\n// Where an approved intention becomes the one payload a model may\n// receive. Both libraries above are spliced in whole and are wired\n// together here, which is the only place they can meet:\n// src/lib/chunk.ts reduces the material behind a candidate to a\n// bounded chunk and refuses the ones that are not worth a call, and\n// src/lib/prompt-frame.ts takes that chunk and fences it so that\n// everything inside the fence is read as data and never as\n// instructions. Nothing below states a reduction rule or a framing\n// rule of its own.\n//\n// AND NOTHING ELSE GOES FORWARD, which is the whole reason this\n// node exists as a separate one. The item it answers carries the\n// two framed halves, the four ids a row below is written against,\n// the ids of the documents the pass offered, and the measurements\n// of the prompt. Neither the candidate's name nor its terms nor a\n// document body survives it. So no expression below can reach for\n// the stored text, and the model node is fed a prepared chunk\n// because there is nothing else on the item to feed it.\n//\n// THE TRUSTED HALF AND THE UNTRUSTED HALF ARRIVE AS TWO MEMBERS,\n// which is the framing library's structural claim rather than a\n// convenience. A caller wiring a model node has to decide which\n// channel each half goes in, and two members make that decision\n// visible on this canvas: the node below puts system in the system\n// message and data in the prompt, and neither can be confused for\n// the other by an expression that reached for one string.\n//\n// THE PERSONA IS A ROW AND NEVER A LITERAL. It arrives from the\n// domain's personas, fetched by Load Domain Context at the top of\n// this pass, and personas in src/db/schema/domains.ts argues at\n// length why no prompt string is written into a workflow file at\n// all: one file serves every domain, the text is what an operator\n// tunes most, and a prompt fixed on a canvas is lost at the next\n// import. The role read is the researcher, which is the role that\n// reads documents, and it is the same role ar-ingest frames\n// against. The two ask different things of it and neither writes\n// the ask down here.\n//\n// THERE IS A HEADER, AND THAT IS WHERE THIS PARTS FROM ar-ingest.\n// buildChunk takes a roster of fields and the values already\n// resolved for them, and writes a header line per field so a model\n// does not have to guess what is known. At ingest nothing has\n// resolved a field yet, so that node passes no roster and says so.\n// Here three things are known before the call and every one of them\n// is a fact about the ask rather than a guess about the answer: the\n// subject a person approved research on, the search terms they\n// approved with it, and the ids of the documents this pass is\n// handing over. Writing them into the header is the difference\n// between asking about a candidate and asking about a body of text\n// that happens to mention one.\n//\n// THE OFFERED IDS ARE IN THE HEADER BECAUSE AN ANSWER IS JUDGED\n// AGAINST THEM. researchBriefErrors in src/lib/research-brief.ts\n// refuses an answer whose citations name a document the pass never\n// offered, and a model that was never told the ids can only guess\n// at them. So the header states the set the answer will be held to.\n//\n// WHAT A CITATION CAN AND CANNOT BE WRONG ABOUT is worth saying\n// rather than implying. Each document is introduced in the body by\n// a marker this node writes, and the text after that marker is\n// somebody else's, so a document is free to spell a marker of its\n// own. What that buys is a mis-attribution INSIDE the offered set,\n// which the record group cannot tell from a genuine one. What it\n// cannot buy is a citation outside that set: the offered ids\n// travel on the item, the answer is judged against them, and a\n// forged id naming a document this pass never handed over is\n// refused with the row left unstamped.\n//\n// A DOCUMENT WITH NO TEXT IS NOT OFFERED. The drain carries\n// parse_status beside every body precisely so this node can tell\n// an empty body from a failed parse, and both come to the same\n// thing for the composition: a document whose body reduced to\n// nothing was never handed over, so its id is not among the\n// offered ones and an answer citing it is refused. A parse that\n// FAILED and still left text is offered, with the marker saying\n// so, because partial text is still text somebody captured and\n// hiding that from a reader would be worse than labelling it.\n//\n// A CANDIDATE WITH NOTHING BEHIND IT IS SKIPPED RATHER THAN\n// ASKED ABOUT. The drain says an empty documents list is a real\n// state, and buildChunk refuses a body that reduced to nothing.\n// This node does not set allowFieldsOnly, and the omission is the\n// decision: nothing on this canvas reaches outside the corpus, so\n// a call made with a subject line and no material would be a call\n// answered out of the model's own parameters, and the result would\n// be stored as this domain's research with nothing behind it. The\n// three identifying flags a fields-only chunk would be judged by\n// are left off the roster below for the same reason: they govern\n// that flag alone and this node never sets it.\n//\n// THE EXCERPT CEILING IS THE LIBRARY'S AND IT IS SHARED. All the\n// bodies of one candidate are composed into a single excerpt, and\n// that excerpt meets MAX_EXCERPT_CHARS exactly as one document's\n// does at ingest. So five documents behind a candidate share the\n// bound that one document has to itself, which is a real cost and\n// the right one: what is capped is what a call is charged for, and\n// the cap belongs to the prompt rather than to the number of rows\n// it was assembled from.\n//\n// TWO REFUSALS, and they are answered differently because they are\n// faults of different things. A chunk refusal is about one\n// candidate: nothing survived the boilerplate removal, or what\n// survived is too short to be worth reading. That candidate is\n// skipped and the pass carries on. A persona refusal is about the\n// operator's own text, is identical for every candidate in the\n// pass, and would otherwise be a run that quietly made no calls at\n// all, so it stops the pass by name. Which of the three the framing\n// library refused is what parts them, and CHUNK_EMPTY_REASON is the\n// one that belongs to the candidate.\n//\n// WHAT A SKIPPED CANDIDATE LOSES, and it is less than a skipped\n// document loses at ingest. Nothing between the drain and the\n// record group writes a row, so a candidate that does not reach a\n// call is stamped by nothing: it keeps its approval and its open\n// researched_at and is fetched first again by the next pass. A\n// candidate skipped because the corpus behind it holds no prose is\n// a candidate that will be skipped again until something upstream\n// captures material for it, and that repetition costs a place at\n// the head of the queue and nothing else.\n//\n// CARDINALITY. One item in, at most one out, and fewer whenever a\n// chunk was refused. Nothing below pairs against the node above\n// this one: every item carries its own pool_id, and the ledger\n// below pairs against THIS node by position.\n\n// The role whose system text this workflow speaks with.\n// personas.role is free text and carries no CHECK, the roles a\n// pipeline plays growing with the pipeline, so this is a lookup\n// into rows an operator wrote rather than a member of a closed set.\n// The seed writes three: this one reads documents, and ar-ingest\n// reads the same row to ask a different question of it.\nconst PERSONA_ROLE = 'researcher';\n\n// The header roster, in the order buildChunk writes it. No entry\n// carries an identifying flag, and the omission is deliberate:\n// that flag governs allowFieldsOnly alone, which this node never\n// sets, so writing one would be configuration nothing reads.\nconst RESEARCH_FIELDS = [\n  {\n    key: 'subject',\n    label: 'Subject',\n    fallback: '(the intention names no subject)',\n  },\n  {\n    key: 'terms',\n    label: 'Approved search terms',\n    fallback: '(the intention names no terms)',\n  },\n  {\n    key: 'documents',\n    label: 'Documents offered, by id',\n    fallback: '(no documents offered)',\n  },\n];\n\n// What separates the members of a list inside one header line.\n// buildChunk collapses every value to a single line, so this is\n// about what a reader and a model can both parse rather than about\n// layout.\nconst LIST_SEPARATOR = ', ';\n\n// What separates one document from the next in the composed body.\nconst DOCUMENT_SEPARATOR = '\\n\\n';\n\n// A document id in the one spelling an answer will be judged\n// against. canonicalId in src/lib/research-brief.ts is the\n// authority and this is a second copy of its rule, the splice\n// forbidding the import that would share one, so a change there is\n// an edit here. Both halves are the rule. A number is read only\n// when it is a positive safe integer, past which the value has\n// already lost digits and names no document. A string is read only\n// in the canonical decimal spelling, so 012 is refused rather than\n// read as twelve and one document cannot arrive under two ids.\nfunction canonicalDocumentId(value) {\n  if (typeof value === 'number') {\n    return Number.isSafeInteger(value) && value > 0\n      ? String(value)\n      : null;\n  }\n\n  if (typeof value !== 'string') {\n    return null;\n  }\n\n  return /^[1-9][0-9]*$/.test(value)\n    ? value\n    : null;\n}\n\n// The documents this pass is handing over, in the order the drain\n// answered them, cut to the ones there is text to hand over. A row\n// whose body reduced to nothing was never offered, so its id stays\n// out of the header and an answer citing it is refused downstream.\n// parse_status decides how a document is LABELLED and never\n// whether it is offered: text a failed parse left behind is still\n// text somebody captured.\nfunction offeredDocuments(value) {\n  const offered = [];\n\n  if (!Array.isArray(value)) {\n    return offered;\n  }\n\n  for (const entry of value) {\n    if (entry === null || typeof entry !== 'object') {\n      continue;\n    }\n\n    const id = canonicalDocumentId(entry.id);\n    const body = typeof entry.body === 'string'\n      ? entry.body.trim()\n      : '';\n\n    if (id === null || body === '') {\n      continue;\n    }\n\n    offered.push({ id, body, parsed: entry.parse_status === 'ok' });\n  }\n\n  return offered;\n}\n\n// How one document is introduced in the composed body, and the\n// whole of what a model is told about where a passage came from.\n// The marker is trusted text this node writes; everything after it\n// is somebody else's.\nfunction documentBlock(entry) {\n  const marker = entry.parsed\n    ? '[document ' + entry.id + ']'\n    : '[document ' + entry.id + ', partial parse]';\n\n  return marker + '\\n' + entry.body;\n}\n\n// The approved terms as one line. research_pool.search_terms is a\n// jsonb list and nothing has validated its members, so a member\n// that is not text is dropped rather than coerced into a header\n// line, and an empty list leaves the roster's stand-in standing.\nfunction termsText(value) {\n  if (!Array.isArray(value)) {\n    return '';\n  }\n\n  const terms = [];\n\n  for (const term of value) {\n    if (typeof term === 'string' && term.trim() !== '') {\n      terms.push(term.trim());\n    }\n  }\n\n  return terms.join(LIST_SEPARATOR);\n}\n\n// The system text of the persona holding a role, or the empty\n// string where there is none. Every member is typed on the way\n// out, because these entries came back through jsonb and nothing\n// has validated them: a row whose system_text is not text is a row\n// an operator has not finished, and it refuses below with the same\n// sentence a missing row does.\nfunction personaText(entries, role) {\n  for (const entry of entries) {\n    if (entry !== null && typeof entry === 'object' && entry.role === role\n      && typeof entry.system_text === 'string') {\n      return entry.system_text;\n    }\n  }\n\n  return '';\n}\n\nconst context = $('Load Domain Context').first().json;\nconst personas = Array.isArray(context.personas)\n  ? context.personas\n  : [];\nconst persona = personaText(personas, PERSONA_ROLE);\n\n// A pass with no researcher persona, or one whose text is not\n// text. Both are the same fault from here and both are pass wide,\n// so this refuses before a single chunk is built rather than once\n// per candidate.\nif (persona === '') {\n  throw new Error(\n    '[ar-research] Prepare Model Prompt has no system text for the '\n    + PERSONA_ROLE + ' persona: the domain states none, or the row '\n    + 'it states holds no text',\n  );\n}\n\nconst items = [];\n\nfor (const item of $input.all()) {\n  const row = item.json;\n  const offered = offeredDocuments(row.documents);\n  const ids = offered.map((entry) => entry.id);\n  const built = buildChunk({\n    fields: RESEARCH_FIELDS,\n    values: {\n      subject: row.entity_name,\n      terms: termsText(row.search_terms),\n      documents: ids.join(LIST_SEPARATOR),\n    },\n    body: offered.map(documentBlock).join(DOCUMENT_SEPARATOR),\n  });\n\n  if (!built.usable) {\n    continue;\n  }\n\n  const framed = promptFrame(persona, built.chunk);\n\n  if (!framed.usable) {\n    // A framing refusal that is not about the chunk is about the\n    // persona, and a persona fault repeats on every candidate in\n    // the pass. Refusing by name here is what parts an operator\n    // text fault from a queue with nothing readable behind it.\n    if (framed.reason !== CHUNK_EMPTY_REASON) {\n      throw new Error(\n        '[ar-research] Prepare Model Prompt cannot frame the '\n        + PERSONA_ROLE + ' persona: ' + framed.reason,\n      );\n    }\n\n    continue;\n  }\n\n  const promptChars = framed.system.length + framed.data.length;\n\n  // What the model node is fed, and what the two nodes after it\n  // read. The name is gone, the terms are gone and no body is\n  // here: the fenced form is the only spelling of any of them that\n  // leaves this node.\n  //\n  // offered_ids is the exception and is not one of them. It is a\n  // list of ids this node derived, not a member the drain handed\n  // over, and it travels because the record group judges the\n  // answer's citations against exactly this set. Deriving it a\n  // second time down there would be a second statement of what was\n  // offered, and two statements of that can disagree.\n  items.push({\n    json: {\n      run_id: row.run_id,\n      pool_id: row.pool_id,\n      domain_id: row.domain_id,\n      entity_id: row.entity_id,\n      offered_ids: ids,\n      system: framed.system,\n      data: framed.data,\n      prompt_chars: promptChars,\n      est_tokens: estimateTokens(promptChars),\n      fence_cuts: framed.fenceCuts,\n      forms_defanged: framed.formsDefanged,\n    },\n  });\n}\n\nreturn items;"
+      }
+    },
+    {
+      "id": "research-candidate",
+      "name": "Research Candidate",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        1540,
+        0
+      ],
+      "retryOnFail": false,
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.data }}",
+        "messages": {
+          "messageValues": [
+            {
+              "type": "SystemMessagePromptTemplate",
+              "message": "={{ $json.system }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "model-endpoint",
+      "name": "Model Endpoint",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        220
+      ],
+      "retryOnFail": false,
+      "credentials": {
+        "openAiApi": {
+          "id": "ar-model",
+          "name": "AR Model"
+        }
+      },
+      "parameters": {
+        "model": "={{ $('Select Model Connector').first().json.model }}",
+        "options": {
+          "baseURL": "={{ $('Select Model Connector').first().json.endpoint }}",
+          "timeout": 60000,
+          "maxRetries": 0
+        }
+      }
+    },
+    {
+      "id": "ledger-model-call",
+      "name": "Ledger Model Call",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1760,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH\n-- Where a call is accounted for. One row per call, charged to the run that made it,\n-- and src/db/schema/runs.ts argues at length what that buys: the runs row accounts\n-- for a pass as a whole, and these rows account for the same work one call at a time,\n-- which is the granularity the question of what a call cost is asked at. ar-ingest\n-- carries a node of this name writing the same table, and the attribution argument,\n-- the no-conflict-target argument and the position-pairing argument are all made\n-- there rather than repeated here.\n\n-- THE CEILING AND THIS ROW ARE ONE PROPERTY read from two ends. Apply Call Ceiling\n-- states what a pass WILL spend and these rows are what it did, so a ceiling that\n-- quietly stopped being applied reads exactly like a pass whose queue happened to be\n-- short. Neither half is enforced by anything in this schema, which is why the\n-- property is asserted over the built artifact instead.\n\n-- ONE ROW OUT PER CALL. The insert sits in a CTE and the outer SELECT names no FROM,\n-- so this node answers exactly one item for every item it was handed, and the group\n-- below reads a candidate that was called about whether or not the call came back\n-- with anything. An INSERT ... RETURNING on its own would emit nothing for a\n-- statement that wrote no row, and a research pass whose call failed still has a pool\n-- row to account for.\n\n-- THREE PARAMETERS, in declaration order: the run, the model name, and the prepared\n-- item this call was made from. The first two are read off Select Model Connector,\n-- which answered one row for the whole pass, so neither is a per call reading and\n-- neither needs pairing. The third is bound by POSITION against Prepare Model Prompt,\n-- which is the one pairing on this canvas that is not a name or an id, and it holds\n-- for the reason ar-ingest gives: the node above answers one item per item it ran on,\n-- so the item at this position was made from the item at the same position there.\n\n-- WHAT BEING WRONG ABOUT THE PAIRING WOULD COST IS LARGER HERE than it is at ingest,\n-- and it is worth saying so rather than inheriting the sibling's reassurance. There\n-- two calls swapping would swap two documents' sizes and leave the run total exact.\n-- Here the projection below carries pool_id, entity_id and the offered set, and the\n-- record group writes an entity_research row against them, so a swap would file one\n-- candidate's research under another candidate's subject and judge its citations\n-- against the wrong offered set. The run total is still exact and it is no longer the\n-- only thing being read.\n\n-- BOUND AS ONE JSONB VALUE rather than as a member per column: fewer values for the\n-- comma splitter to get wrong, and the members are read out here where a comment can\n-- say what each one is.\nprepared AS (\n  SELECT $3::jsonb AS item\n),\n\n-- What the row says about the call, cast once. prompt_chars and est_tokens are in the\n-- signal class the schema calls out: null means nothing measured this call, and zero\n-- is a real reading rather than a stand in for one. Neither is COALESCEd to zero.\n\n-- The node name is a literal and is known by construction: the step that made the\n-- call is the node above this one, and its own name is the one fact it cannot fail to\n-- have. It is Research Candidate rather than the endpoint hanging off it, because the\n-- endpoint is where the credential sits and the chain node is what a pass asked.\n\n-- The model is nullable and arrives so. A gateway that routes, or a runtime serving\n-- whatever it was started with, takes no model name, and what is stored is what was\n-- asked for rather than what served it.\ncall AS (\n  SELECT\n    nullif($2::text, '') AS model,\n    (p.item ->> 'prompt_chars')::integer AS prompt_chars,\n    (p.item ->> 'est_tokens')::integer AS est_tokens\n  FROM prepared p\n),\n\nwritten AS (\n  INSERT INTO llm_calls (run_id, node, model, prompt_chars, est_tokens)\n  SELECT\n    $1::bigint,\n    'Research Candidate',\n    c.model,\n    c.prompt_chars,\n    c.est_tokens\n  FROM call c\n  RETURNING id\n)\n\nSELECT\n-- The item this node answers, and it is about the candidate rather than about the\n-- call. The three ids come back out of the prepared item so the group below has the\n-- pool row to stamp and the subject to file a result under, and the offered set comes\n-- back with them because that is what researchBriefErrors judges an answer's\n-- citations against. Every one of them was derived above this node, and passing them\n-- through here is a carry rather than a second derivation.\n\n-- The answer the model gave is deliberately not among them: it is untrusted text, it\n-- is reachable off Research Candidate by name, and routing it through a SQL parameter\n-- to get here would be a round trip that changes nothing about it.\n\n-- offered_ids travels as jsonb rather than as a text list, so it arrives below in the\n-- shape it left the framing node in and nothing has to parse it back apart.\n\n-- llm_call_id is the ledger row this call left behind. Nothing below reads it today.\n-- It travels because the row and the item it was written for are otherwise joined by\n-- nothing at all, this table carrying no reference to a candidate.\n  $1::bigint AS run_id,\n  (SELECT (p.item ->> 'pool_id')::bigint FROM prepared p) AS pool_id,\n  (SELECT (p.item ->> 'domain_id')::bigint FROM prepared p) AS domain_id,\n  (SELECT (p.item ->> 'entity_id')::bigint FROM prepared p) AS entity_id,\n  (SELECT p.item -> 'offered_ids' FROM prepared p) AS offered_ids,\n  (SELECT w.id FROM written w) AS llm_call_id",
+        "options": {
+          "queryReplacement": "={{ $('Select Model Connector').first().json.run_id }}, {{ $('Select Model Connector').first().json.model }}, {{ JSON.stringify($('Prepare Model Prompt').all()[$itemIndex].json) }}"
+        }
+      }
+    },
+    {
       "id": "one-caller-no-clock",
       "name": "One Caller No Clock",
       "type": "n8n-nodes-base.stickyNote",
@@ -137,6 +259,72 @@
           {
             "node": "Gate Candidate Names",
             "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate Candidate Names": {
+      "main": [
+        [
+          {
+            "node": "Select Model Connector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Model Connector": {
+      "main": [
+        [
+          {
+            "node": "Apply Call Ceiling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Call Ceiling": {
+      "main": [
+        [
+          {
+            "node": "Prepare Model Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Model Prompt": {
+      "main": [
+        [
+          {
+            "node": "Research Candidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Research Candidate": {
+      "main": [
+        [
+          {
+            "node": "Ledger Model Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model Endpoint": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Research Candidate",
+            "type": "ai_languageModel",
             "index": 0
           }
         ]
