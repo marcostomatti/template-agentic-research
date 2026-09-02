@@ -34,7 +34,8 @@ point branches on which of the two is live:
 /                     layout (AppLayout: rail + band + content)
   index               -> <Navigate to="digest" replace>
   <surface>           -> one route per SURFACES row
-    :entityId[/edit]  -> modal sub-route, a CHILD of its surface
+    :entityId[/<x>]   -> modal sub-route, a CHILD of its surface;
+                         a surface may declare more than one
   *                   -> not found, still inside the shell
 /d/:domainSlug        DomainGuard around the same layout, with the
                       same children built from one function
@@ -49,11 +50,14 @@ point branches on which of the two is live:
 - `SURFACES` is DERIVED from `NAV_ITEMS` — the nav id doubles as the
   route segment and as the `SidebarNav` selection key, so a sidebar
   entry with no route is not something the app can express.
-- Five of the six surfaces carry a modal sub-route (`:entityId` on the
-  digest, `:entityId/edit` on the other four; settings has none),
-  declared as a CHILD of its list route so the list stays matched
-  behind an open row. The catch-all is likewise a child of the LAYOUT
-  route, which is what keeps the shell mounted on a not-found page.
+- Five of the six surfaces carry at least one modal sub-route
+  (`:entityId` on the digest, `:entityId/edit` on the other four, plus
+  `:entityId/config` on the sources; settings has none), each declared
+  as a CHILD of its list route so the list stays matched behind an
+  open row. The router's table holds a LIST per surface for exactly
+  that: a row openable in more than one way is a table row, not a
+  branch. The catch-all is likewise a child of the LAYOUT route, which
+  is what keeps the shell mounted on a not-found page.
 - One element serves both bases wherever the target is RELATIVE: the
   index redirect resolves against whichever parent matched, and a
   modal closes by navigating to the parent route. Write the relative
@@ -220,16 +224,21 @@ compose now that theirs has landed.
   a newly added prop and silently drops it on the way down, which
   type-checks on both sides.
 - `src/components/PlaceholderModal.tsx` is the element behind FOUR of
-  the ten modal registrations (five surfaces across two bases), so it
-  may only claim what is true of the agents and tools editors at once.
-  The lexicon's two open `src/pages/lexicon/LexiconEditorModal.tsx`,
-  the sources' two open `src/pages/sources/SourceEditorModal.tsx` and
-  the digest's two open `src/pages/digest/DigestDetailModal.tsx`; the
-  count shrinks by two with each one after them. The digest's landing
-  is what narrowed the remaining set to ONE KIND — the placeholder no
-  longer has to be true of a read-only detail view as well as of an
-  editor — and the sources editor is what narrowed it to two
-  surfaces of that kind.
+  the twelve modal registrations (six addresses across two bases), so
+  it may only claim what is true of the agents and tools editors at
+  once. The lexicon's two open
+  `src/pages/lexicon/LexiconEditorModal.tsx`, the sources' `/edit`
+  pair opens `src/pages/sources/SourceEditorModal.tsx` and its
+  `/config` pair opens
+  `src/pages/sources/SourceConfigApprovalModal.tsx`, and the digest's
+  two open `src/pages/digest/DigestDetailModal.tsx`. Both halves of
+  the fraction move and they move separately: the numerator shrinks by
+  two with each surface after them, the denominator grows by two with
+  each SECOND address a surface declares. The digest's landing is what
+  narrowed the remaining set to ONE KIND — the placeholder no longer
+  has to be true of a read-only detail view as well as of an editor —
+  and the sources editor is what narrowed it to two surfaces of that
+  kind.
 
 ## `@ar/ui` constraints this app is built around
 

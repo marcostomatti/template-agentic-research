@@ -94,22 +94,26 @@
  * with a `label`. What that pulse can honestly mean over a fixture
  * layer with no runs is `./rows.ts`'s subject, not this file's.
  *
- * ## The enable switch is in the editor, and the approval is not here
+ * ## The menu opens screens; nothing in it writes
  *
  * `sources.enabled` is a real column and the UI spec has a menu that
  * writes to it, alongside approving a pending config and reviewing a
- * feed's failures. None of the three is a menu item here, and the one
- * that has landed did not become one: `./SourceEditorModal.tsx` holds
- * the enable switch, beside the flag, the endpoint and the kind, and
- * the menu's one action is the navigation that opens it.
+ * feed's failures. Not one of the three is a control in this menu.
+ * Both rows it carries are NAVIGATIONS: `./SourceEditorModal.tsx`
+ * holds the enable switch beside the flag, the endpoint and the kind,
+ * and `./SourceConfigApprovalModal.tsx` holds the two answers to a
+ * proposed config.
  *
- * That is a decision rather than a stage. Every one of those four
- * members is a whole-row PUT through `saveSource`, and a switch in a
- * row menu writing one of them would be a save an operator made
- * without seeing the row it saved. The other two — ruling on a
- * pending config, and working through a feed's failures — are their
- * own sub-routes and arrive with their own modals; the menu grows a
- * row apiece when they do.
+ * That is a decision rather than a stage. Every one of the editor's
+ * four members is a whole-row PUT through `saveSource`, and a switch
+ * in a row menu writing one of them would be a save an operator made
+ * without seeing the row it saved. The approval is the same argument
+ * about a different table: a proposal is ruled on as a ROW, and a
+ * menu item approving one would be a ruling made without reading the
+ * documents it was about — which its own modal sets out at length.
+ *
+ * The third — working through a feed's failures — is its own
+ * sub-route too, and the menu grows a row when its modal lands.
  *
  * ## Three states, not two
  *
@@ -181,8 +185,16 @@ const QUERY_PARAM = 'q';
 const KIND_PARAM = 'kind';
 const STATUS_PARAM = 'status';
 
-/** The sub-route a row's edit action opens, relative to this surface. */
+/**
+ * The sub-routes a row's actions open, relative to this surface.
+ *
+ * Two of them, which is what `../../routes/router.tsx` widened its
+ * modal table to hold: a source is edited at one address and its
+ * proposed config is ruled on at the other, and neither is a child of
+ * the other.
+ */
 const EDIT_SEGMENT = 'edit';
+const CONFIG_SEGMENT = 'config';
 
 /**
  * The locale every formatted value on this page is rendered in.
@@ -341,9 +353,13 @@ export const SourcesPage = () => {
       width: MENU_WIDTH,
       align: 'end',
       cell: (source) => renderCellContent('context-menu', {
-        // One action, and it opens the editor that holds the row's
-        // four writable members — see the header on why none of them
-        // is a menu item of its own.
+        // Two actions and both are navigations — see the header on
+        // why neither the four writable members nor the two answers
+        // to a proposed config is a menu item of its own.
+        //
+        // Titles rather than labels: `RowContextAction` keys its
+        // items by `title`, so two rows sharing one would collide on
+        // the React key.
         actions: [
           {
             icon: 'square-pen',
@@ -351,6 +367,13 @@ export const SourcesPage = () => {
             onClick: () => {
               // Relative, so one expression serves both route bases.
               void navigate(`${source.id}/${EDIT_SEGMENT}`);
+            },
+          },
+          {
+            icon: 'file-check',
+            title: 'Review proposed config',
+            onClick: () => {
+              void navigate(`${source.id}/${CONFIG_SEGMENT}`);
             },
           },
         ],

@@ -80,6 +80,39 @@
  * every page taking it would have to change on the day of the swap.
  * The gap is named here rather than paid for there.
  *
+ * ## The non-editing presentation, and why it is not a fourth prop
+ *
+ * {@link JsonEditorProps.readOnly} draws the same box with typing
+ * turned off. It is PRESENTATION and sits with the rest of it —
+ * outside the three-prop bargain above — because the replacement
+ * renders fields from a type definition and will need exactly the
+ * same thing: a document being ruled on rather than edited.
+ *
+ * The one caller today is the sources surface's config approval,
+ * where a proposal is accepted or refused as a ROW and the two
+ * documents on it are what an operator is deciding about. Offering
+ * them for editing there would let an approval rewrite the very
+ * `parser_config` it was approving, which is the whole thing that
+ * gate exists to prevent.
+ *
+ * `readOnly` rather than `disabled`: a document under review is read
+ * closely and copied out of, so it stays focusable, selectable and in
+ * the tab order. What it loses is the caret, and the two class
+ * overrides below are what say so on screen — a box that looked
+ * editable and refused every keystroke would be worse than either.
+ *
+ * {@link JsonEditorProps.onChange} stays required and is never
+ * called: a `readonly` textarea fires no change event at all. A
+ * caller in this mode passes a named no-op with the reason beside it,
+ * which is the binding a required-but-unused callback already gets
+ * elsewhere in this app.
+ *
+ * The schema still runs, and that is the point rather than a
+ * leftover: a STORED document this app cannot even read as an object
+ * is exactly what somebody ruling on it needs told, before they rule.
+ * The banner says a different thing in this mode, because the
+ * consequence is different — there is no save to be stopped.
+ *
  * ## Where the decisions are
  *
  * `./jsonDraft` holds them: reading text as a value, writing a value
@@ -127,6 +160,31 @@ const EDITOR_ROWS = 14;
  * operator needs is that this one has no way through.
  */
 const REFUSED_TITLE = 'This cannot be saved';
+
+/**
+ * What the banner over a refused payload says in the read-only
+ * presentation.
+ *
+ * Its neighbour above names a save this mode does not have. What is
+ * wrong here is the document itself, and the operator's next move is
+ * to refuse it rather than to fix a keystroke.
+ */
+const READ_ONLY_REFUSED_TITLE = 'This is not a readable document';
+
+/** What the label says under a box nothing can be typed into. */
+const READ_ONLY_HINT = 'Shown exactly as stored. Nothing here writes.';
+
+/**
+ * How the box is drawn when it cannot be typed into.
+ *
+ * `cn` is tailwind-merge, so these genuinely REPLACE the atom's own
+ * `bg-surface-1` and `resize-y` rather than stacking on them — this
+ * file knowing what is in `Textarea`'s class list, which is the first
+ * thing a promotion of this mode into `@ar/ui` would take over as a
+ * CVA variant. Sunk rather than tinted, because that surface already
+ * means "not where you type" everywhere else in the app.
+ */
+const READ_ONLY_CLASSES = 'bg-surface-sunk resize-none';
 
 /** What the editor's contents were read as. */
 type PayloadReading<T> =
@@ -216,13 +274,26 @@ export interface JsonEditorProps<T extends object> {
    * fields from.
    */
   readonly schema: ZodType<T>;
+  /**
+   * Draw the box with typing turned off.
+   *
+   * Presentation, not contract — the header says why, why the mode
+   * is `readOnly` rather than `disabled`, and why
+   * {@link JsonEditorProps.onChange} stays required while being
+   * unreachable.
+   *
+   * Absent means editable, which is what every caller that is not
+   * ruling on a document wants.
+   */
+  readonly readOnly?: boolean;
 }
 
 /**
  * The JSON fallback: the payload as text, and what the schema said.
  *
  * @typeParam T - The payload being edited.
- * @param props - The label, the payload, the report and the schema.
+ * @param props - The label, the payload, the report, the schema, and
+ * whether the box can be typed into.
  * @returns The labelled box, and the refusal under it while there is
  * one.
  */
@@ -231,6 +302,7 @@ export const JsonEditor = <T extends object>({
   value,
   onChange,
   schema,
+  readOnly = false,
 }: JsonEditorProps<T>) => {
   const fieldId = useId();
   const issuesId = `${fieldId}-issues`;
@@ -252,10 +324,17 @@ export const JsonEditor = <T extends object>({
     // flex gap would hold a space open for a banner that is not
     // there. The margin travels with the banner instead.
     <div className="flex flex-col">
-      <FormField label={label} htmlFor={fieldId}>
+      <FormField
+        label={label}
+        htmlFor={fieldId}
+        hint={readOnly
+          ? READ_ONLY_HINT
+          : undefined}
+      >
         <Textarea
           id={fieldId}
           value={text}
+          readOnly={readOnly}
           onChange={(next) => {
             setText(next);
 
@@ -270,7 +349,9 @@ export const JsonEditor = <T extends object>({
           aria-invalid={refused}
           aria-describedby={issuesId}
           spellCheck={false}
-          className="font-mono text-[13px]"
+          className={readOnly
+            ? `font-mono text-[13px] ${READ_ONLY_CLASSES}`
+            : 'font-mono text-[13px]'}
         />
       </FormField>
 
@@ -284,7 +365,13 @@ export const JsonEditor = <T extends object>({
       */}
       <div id={issuesId} role="status">
         {!read.ok && (
-          <Banner className="mt-3" tone="danger" title={REFUSED_TITLE}>
+          <Banner
+            className="mt-3"
+            tone="danger"
+            title={readOnly
+              ? READ_ONLY_REFUSED_TITLE
+              : REFUSED_TITLE}
+          >
             <ul className="m-0 flex list-none flex-col gap-1 p-0">
               {read.sentences.map((sentence, index) => (
                 // Keyed by position: the list is rebuilt whole on

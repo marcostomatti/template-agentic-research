@@ -42,28 +42,31 @@
  * ## The modal sub-routes
  *
  * Five of the six surfaces open their rows over the list they sit on:
- * the digest at `:entityId`, and the lexicon, sources, agents and tools
- * at `:entityId/edit`. Settings carries none — it is a single form, not
- * a list with rows to open.
+ * the digest at `:entityId`, the lexicon, sources, agents and tools at
+ * `:entityId/edit`, and the sources again at `:entityId/config`.
+ * Settings carries none — it is a single form, not a list with rows to
+ * open.
  *
  * Each of those five declares a LIST of them rather than one, because a
  * row can be openable in more than one WAY: editing a source, ruling on
- * its proposed config and listing its failures would be three addresses
- * over one list, none of them a child of either other. Every list still
- * holds exactly one entry, so that half of the shape remains capacity
- * rather than use — but it is the capacity that keeps a second address
- * a table row instead of a branch in {@link surfaceRoute}.
+ * its proposed config and listing its failures are three addresses over
+ * one list, none of them a child of either other. The sources are the
+ * first surface to use that: their list holds two entries, and the
+ * second one cost a row in the table below rather than a branch in
+ * {@link surfaceRoute} or a second factory. The other four still hold
+ * one apiece.
  *
  * The other half is in use as of the lexicon's editor: an entry carries
  * its ELEMENT beside its path, and those elements have stopped being
  * one shared placeholder. TWO surfaces still open
  * {@link MODAL_PLACEHOLDER} — agents and tools — while the lexicon
- * opens {@link LEXICON_EDITOR}, the sources open
- * {@link SOURCE_EDITOR} and the digest opens {@link DIGEST_DETAIL}.
- * That is what an entry holding its own element was for: a surface's
- * modal is not the same modal as its neighbour's, any more than its
- * second sub-route is the same as its first, and the three that have
- * landed are not even all the same KIND of modal.
+ * opens {@link LEXICON_EDITOR}, the digest opens {@link DIGEST_DETAIL}
+ * and the sources open {@link SOURCE_EDITOR} at one address and
+ * {@link SOURCE_CONFIG_APPROVAL} at the other. That is what an entry
+ * holding its own element was for: a surface's modal is not the same
+ * modal as its neighbour's, any more than its second sub-route is the
+ * same as its first, and the four that have landed are not even all
+ * the same KIND of modal.
  *
  * Each is a CHILD of its list route rather than a sibling, which is the
  * whole point of the shape: the list stays matched and stays rendered,
@@ -119,6 +122,9 @@ import { PlaceholderModal } from '../components/PlaceholderModal';
 import { findPage } from '../pages';
 import { DigestDetailModal } from '../pages/digest/DigestDetailModal';
 import { LexiconEditorModal } from '../pages/lexicon/LexiconEditorModal';
+import {
+  SourceConfigApprovalModal,
+} from '../pages/sources/SourceConfigApprovalModal';
 import { SourceEditorModal } from '../pages/sources/SourceEditorModal';
 
 import { DomainGuard } from './DomainGuard';
@@ -226,9 +232,11 @@ export const SURFACE_PLACEHOLDER = (
  * bottom of each one, so the row actions on those pages already open
  * it.
  *
- * It stands at FOUR of the ten registrations now — agents and tools,
- * across both bases — and the count shrinks by two with each editor
- * that lands.
+ * It stands at FOUR of the twelve registrations now — agents and
+ * tools, across both bases — and the count shrinks by two with each
+ * editor that lands. The DENOMINATOR moves too, and separately: a
+ * surface's second address is two more registrations that were never
+ * this element's to hold.
  */
 export const MODAL_PLACEHOLDER = <PlaceholderModal />;
 
@@ -275,15 +283,31 @@ export const DIGEST_DETAIL = <DigestDetailModal />;
 export const SOURCE_EDITOR = <SourceEditorModal />;
 
 /**
+ * The sources surface's config approval, at its second sub-route.
+ *
+ * The registration the table's LIST shape was widened for, and the
+ * first one to use it: a source is editable at `:entityId/edit` and
+ * ruled on at `:entityId/config`, and neither address is a child of
+ * the other — an operator ruling on a proposed config is not editing
+ * the feed, and `../pages/sources/SourceConfigApprovalModal.tsx`
+ * carries why that separation is the point rather than a layout.
+ *
+ * Held as an ELEMENT for the reason its four neighbours are: one
+ * object across both trees, so identity stays askable.
+ */
+export const SOURCE_CONFIG_APPROVAL = <SourceConfigApprovalModal />;
+
+/**
  * The modal sub-routes each list surface carries, keyed by surface id.
  *
  * A LIST per surface, so a row openable in more than one way costs a
- * row here rather than a shape change — see the header. Every list
- * holds exactly one entry today, and three of them now name a real
- * modal rather than {@link MODAL_PLACEHOLDER}: the lexicon's editor,
- * the sources editor and the digest's detail. A surface whose list is
- * empty and a surface with no key at all mean the same thing to
- * {@link surfaceRoute}.
+ * row here rather than a shape change — see the header. The sources
+ * hold TWO entries and the other four hold one apiece, and four of
+ * the six entries now name a real modal rather than
+ * {@link MODAL_PLACEHOLDER}: the lexicon's editor, the sources editor,
+ * the sources config approval and the digest's detail. A surface whose
+ * list is empty and a surface with no key at all mean the same thing
+ * to {@link surfaceRoute}.
  *
  * Declared BELOW the elements rather than beside the other route
  * constants at the top because it names them: an entry holds what it
@@ -297,7 +321,10 @@ export const SOURCE_EDITOR = <SourceEditorModal />;
 const MODAL_SUB_ROUTE_TABLE: ModalSubRouteTable = {
   digest: [{ path: ENTITY_PARAM, element: DIGEST_DETAIL }],
   lexicon: [{ path: `${ENTITY_PARAM}/edit`, element: LEXICON_EDITOR }],
-  sources: [{ path: `${ENTITY_PARAM}/edit`, element: SOURCE_EDITOR }],
+  sources: [
+    { path: `${ENTITY_PARAM}/edit`, element: SOURCE_EDITOR },
+    { path: `${ENTITY_PARAM}/config`, element: SOURCE_CONFIG_APPROVAL },
+  ],
   agents: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
   tools: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
 };

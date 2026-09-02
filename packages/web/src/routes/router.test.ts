@@ -9,6 +9,7 @@ import {
   DIGEST_DETAIL,
   LEXICON_EDITOR,
   MODAL_PLACEHOLDER,
+  SOURCE_CONFIG_APPROVAL,
   SOURCE_EDITOR,
   NOT_FOUND,
   ROUTES,
@@ -92,7 +93,7 @@ const BASES = [
 const MODAL_ROUTE_PATTERNS: Readonly<Record<string, readonly string[]>> = {
   digest: [ENTITY_PARAM],
   lexicon: [`${ENTITY_PARAM}/edit`],
-  sources: [`${ENTITY_PARAM}/edit`],
+  sources: [`${ENTITY_PARAM}/edit`, `${ENTITY_PARAM}/config`],
   agents: [`${ENTITY_PARAM}/edit`],
   tools: [`${ENTITY_PARAM}/edit`],
   settings: [],
@@ -126,41 +127,60 @@ const MODAL_SURFACES = SURFACES.filter(
 );
 
 /**
- * The surfaces whose modal sub-routes still render the placeholder.
+ * How one registration is named in the rosters below.
+ *
+ * An ADDRESS and not a surface, which is what the sources' second
+ * sub-route forced: a roster keyed by surface could hold `sources`
+ * once, and that surface now opens two different modals. Keying by
+ * the pair makes each registration claimable on its own and keeps the
+ * partition test's no-duplicate check meaningful.
+ *
+ * @param surfaceId - Nav id of the surface.
+ * @param pattern - The relative pattern the modal is declared at.
+ * @returns The address, as the rosters spell it.
+ */
+function addressOf(surfaceId: string, pattern: string): string {
+  return `${surfaceId} at ${pattern}`;
+}
+
+/**
+ * The registrations that still render the placeholder.
  *
  * A LEDGER, written out rather than derived: it is the list of what
  * this wave has not built yet, and a roster read back off the route
  * tree could only ever agree with whatever the tree currently says.
- * It shrinks by one as each real modal lands, and the partition test
- * below is what refuses a surface that leaves it without joining a
+ * It shrinks as each real modal lands, and the partition test below
+ * is what refuses a registration that leaves it without joining a
  * test that makes a claim about its element instead. Both remaining
  * are EDITORS — the digest's read-only detail has landed, so this
  * roster no longer stands for two kinds of modal at once.
  */
-const PLACEHOLDER_SURFACES: readonly string[] = [
-  'agents',
-  'tools',
+const PLACEHOLDER_ADDRESSES: readonly string[] = [
+  addressOf('agents', `${ENTITY_PARAM}/edit`),
+  addressOf('tools', `${ENTITY_PARAM}/edit`),
 ];
 
 /**
- * What each named surface's sub-routes render, under both bases.
+ * What each named ADDRESS renders, under both bases.
  *
- * Shared by the two element tests so they drive the tree identically
- * and differ only in which surfaces they ask about — the whole point
+ * Shared by the element tests so they drive the tree identically and
+ * differ only in which registrations they ask about — the whole point
  * of splitting the ledger being that the CLAIM differs, not the
  * reading.
  *
- * @param surfaceIds - The surfaces to open.
- * @returns One row per surface, pattern and base, naming the leaf
- * element the path resolved to.
+ * @param addresses - The registrations to open, as {@link addressOf}
+ * spells them.
+ * @returns One row per address and base, naming the leaf element the
+ * path resolved to.
  */
 function openedElements(
-  surfaceIds: readonly string[],
+  addresses: readonly string[],
 ): { at: string; element: ReactNode }[] {
   return BASES.flatMap(({ label, base }) => MODAL_SUB_ROUTES
-    .filter(({ surface }) => surfaceIds.includes(surface.id))
+    .filter(({ surface, pattern }) => addresses
+      .includes(addressOf(surface.id, pattern)))
     .map(({ surface, pattern }) => ({
-      at: `${label}: ${surface.id} at ${pattern}`,
+      at: `${label}: ${addressOf(surface.id, pattern)}`,
       element: leafElementOf(pathUnder(
         withBase(base, surface.id),
         pattern.replace(ENTITY_PARAM, ENTITY_ID),
@@ -427,12 +447,12 @@ describe('the modal sub-routes', () => {
     // below is what stops a surface leaving this list without joining
     // one that makes a claim about it.
     // Arrange / Act
-    const opened = openedElements(PLACEHOLDER_SURFACES);
+    const opened = openedElements(PLACEHOLDER_ADDRESSES);
 
     // Assert
     expect(opened.filter((row) => row.element !== MODAL_PLACEHOLDER))
       .toEqual([]);
-    expect(opened).toHaveLength(PLACEHOLDER_SURFACES.length * BASES.length);
+    expect(opened).toHaveLength(PLACEHOLDER_ADDRESSES.length * BASES.length);
   });
 
   it('opens the lexicon term editor at its own sub-route', () => {
@@ -440,7 +460,9 @@ describe('the modal sub-routes', () => {
     // carries an ELEMENT per entry rather than one shared placeholder
     // for all of them: a surface's modal is its own.
     // Arrange / Act
-    const opened = openedElements(['lexicon']);
+    const opened = openedElements([
+      addressOf('lexicon', `${ENTITY_PARAM}/edit`),
+    ]);
 
     // Assert
     expect(opened.filter((row) => row.element !== LEXICON_EDITOR))
@@ -450,13 +472,38 @@ describe('the modal sub-routes', () => {
 
   it('opens the sources feed editor at its own sub-route', () => {
     // The third real element, and the one that leaves the ledger
-    // above describable in two words. Driven exactly as its two
+    // above describable in two words. Driven exactly as its
     // neighbours are: the CLAIM differs, the reading does not.
+    //
+    // Named by ADDRESS rather than by surface, which is what the
+    // config approval below made necessary: `sources` now opens two
+    // different modals, so a roster naming the surface would put both
+    // of them in this claim and pass on neither.
     // Arrange / Act
-    const opened = openedElements(['sources']);
+    const opened = openedElements([
+      addressOf('sources', `${ENTITY_PARAM}/edit`),
+    ]);
 
     // Assert
     expect(opened.filter((row) => row.element !== SOURCE_EDITOR))
+      .toEqual([]);
+    expect(opened).toHaveLength(BASES.length);
+  });
+
+  it('opens the sources config approval at its second sub-route', () => {
+    // The registration the route table's LIST shape was widened for,
+    // and the first one to use it. Every test above it passed
+    // identically while every surface held one entry, so this is the
+    // leg that says the widening reaches both bases — a second
+    // address is a table row and nothing about building a base had to
+    // learn it.
+    // Arrange / Act
+    const opened = openedElements([
+      addressOf('sources', `${ENTITY_PARAM}/config`),
+    ]);
+
+    // Assert
+    expect(opened.filter((row) => row.element !== SOURCE_CONFIG_APPROVAL))
       .toEqual([]);
     expect(opened).toHaveLength(BASES.length);
   });
@@ -467,7 +514,7 @@ describe('the modal sub-routes', () => {
     // registration could never have been satisfied by whatever the
     // two remaining surfaces eventually open.
     // Arrange / Act
-    const opened = openedElements(['digest']);
+    const opened = openedElements([addressOf('digest', ENTITY_PARAM)]);
 
     // Assert
     expect(opened.filter((row) => row.element !== DIGEST_DETAIL))
@@ -477,17 +524,25 @@ describe('the modal sub-routes', () => {
 
   it('leaves no declared sub-route out of the claims above', () => {
     // Without this the tests above are each satisfiable by a list that
-    // quietly stopped covering a surface: a registration in NO roster
+    // quietly stopped covering a registration: an address in NO roster
     // is asserted about by nothing, and one in TWO would make one of
     // them wrong about the other's element.
+    //
+    // Over ADDRESSES rather than surfaces, which is what makes the
+    // duplicate check bite now that one surface declares two: a
+    // partition over surface ids could not tell the sources editor
+    // from the sources approval at all.
     // Arrange
     const claimed = [
-      ...PLACEHOLDER_SURFACES,
-      'lexicon',
-      'sources',
-      'digest',
+      ...PLACEHOLDER_ADDRESSES,
+      addressOf('lexicon', `${ENTITY_PARAM}/edit`),
+      addressOf('sources', `${ENTITY_PARAM}/edit`),
+      addressOf('sources', `${ENTITY_PARAM}/config`),
+      addressOf('digest', ENTITY_PARAM),
     ];
-    const declared = MODAL_SURFACES.map((surface) => surface.id);
+    const declared = MODAL_SUB_ROUTES.map(
+      ({ surface, pattern }) => addressOf(surface.id, pattern),
+    );
 
     // Assert
     expect([...claimed].sort()).toEqual([...declared].sort());
@@ -579,8 +634,9 @@ describe('the catch-all', () => {
 
   it('claims a fabricated segment below a row, under both bases', () => {
     // One segment past every declared sub-route: `7/<fabricated>` is two
-    // deep under the digest's bare `:entityId` and a near miss on the
-    // other four's `:entityId/edit`. Both readings are the same claim —
+    // deep under the digest's bare `:entityId` and a near miss on every
+    // trailing segment the others declare — `edit` on four surfaces and
+    // `config` on the sources. Both readings are the same claim —
     // a sub-route pattern is matched WHOLE, and a list route does not
     // swallow whatever trails a row id — and the catch-all is where the
     // path lands when it holds.
