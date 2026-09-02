@@ -22,43 +22,52 @@ calls.
 
 ## The set
 
-Six workflows, one file each under `workflows/src/`. The delivered-in
-column is the phase that lands the file, and says which of them have
-landed already.
+Six workflows, one file each under `workflows/src/`, and every row
+below now reads landed. The delivered-in column is the phase that
+landed the file; the reached-by column is what starts a run of one,
+which is a property of that workflow rather than of the set.
 
-| Workflow | Delivered in | Role |
-| --- | --- | --- |
-| `ar-dispatch` | 3 — landed | The only cron in the system. Claims schedulable rows that have come due and invokes the workflow each claimed row's kind asks for. |
-| `ar-ingest` | 5 — landed | Pull adapters, dedupe, gate, and document to finding. |
-| `ar-capture` | 5 — landed | A generic push webhook: capture clients POST against a documented capture contract. |
-| `ar-score` | 5 — landed | Scores findings against the domain's criteria. |
-| `ar-research` | 6 — landed | Entity research, carrying the `validateEntityName` capability gate. |
-| `ar-digest` | 6 — landed | Digests, and the export subscriptions the dispatcher schedules. |
+| Workflow | Delivered in | Reached by | Role |
+| --- | --- | --- | --- |
+| `ar-dispatch` | 3 — landed | Its own schedule trigger, the one the set allows. | The only cron in the system. Claims schedulable rows that have come due and invokes the workflow each claimed row's kind asks for. |
+| `ar-ingest` | 5 — landed | `ar-dispatch`, for a claimed `topic` row. | Pull adapters, dedupe, gate, and document to finding. |
+| `ar-capture` | 5 — landed | Its own webhook, from a capture client outside this system. | A generic push webhook: capture clients POST against a documented capture contract. |
+| `ar-score` | 5 — landed | `ar-ingest` and `ar-capture`, each from the end of its own chain. | Scores findings against the domain's criteria. |
+| `ar-research` | 6 — landed | `ar-ingest`, from the node after the scoring invocation. | Entity research, carrying the `validateEntityName` capability gate. |
+| `ar-digest` | 6 — landed | `ar-dispatch`, for a claimed `export` row. | Digests, and the export subscriptions the dispatcher schedules. |
 
 ### A workflow is a row here before it is a file
 
-A row carrying no `landed` beside its phase is listed here before it
-exists, for the reason `docs/architecture/01-invariants.md` defines a
-`Pending` reading at all: the set is decided once, and the phase that
-lands a workflow lands it against a role already written down. So the
-roster answers what the set IS, and the column answers how much of it
-`workflows/src/` holds today.
+Every row carries `landed` now, so the reading this section is here
+for is one nothing in the table is making. The rule outlived the
+state, which is why it is kept: a row carrying no `landed` beside its
+phase is listed here before it exists, for the reason
+`docs/architecture/01-invariants.md` defines a `Pending` reading at
+all — the set is decided once, and the phase that lands a workflow
+lands it against a role already written down. So the roster answers
+what the set IS, and the column answers which phase each file
+arrived in.
 
-Two of the delivered-in phases are the dispatcher's problem, which is
-why the column is worth reading rather than skipping. `ar-dispatch`
-invokes `ar-ingest` for a claimed topic and `ar-digest` for a claimed
-export subscription, and the two land a phase apart, so there is a
-stretch in which one of its targets exists and the other does not and
-a tick records successes and failures side by side for nobody's
-mistake. Whether the set is standing in that stretch is the column's
-to answer rather than this paragraph's.
+Two of the delivered-in phases were the dispatcher's problem, and the
+column is where that was read. `ar-dispatch` invokes `ar-ingest` for
+a claimed topic and `ar-digest` for a claimed export subscription,
+and those two landed a phase apart, so for the length of that stretch
+one of its targets existed and the other did not and a tick recorded
+successes and failures side by side for nobody's mistake. Both ids
+name a delivered workflow now, and
+`docs/architecture/06-scheduling.md` carries what reaches the failure
+branch in place of that window.
 
 ### `ar-dispatch` is the only workflow with a clock
 
 Nothing else in the set runs on a timer. Every other workflow is
-started by the dispatcher's Execute Workflow node, by an inbound
-request, or by hand, and which of those starts a given workflow is a
-property of that workflow rather than of the set.
+started by an Execute Workflow node in another workflow or by an
+inbound request, and which of the two starts a given workflow is a
+property of that workflow rather than of the set. The reached-by
+column above answers it per workflow: `ar-ingest` and `ar-digest` are
+the dispatcher's two targets, `ar-score` and `ar-research` are
+invoked from inside another workflow's chain, and `ar-capture` is
+reached from outside this system altogether.
 
 Scheduling is a row instead. A `topics` or `export_subscriptions` row
 carries how often it should run and when it is next due, `ar-dispatch`
@@ -357,11 +366,12 @@ side of that string records what the library is for.
 Rows of that table divide by whether a source already names the
 library. Some are named by a marker in `workflows/src/` today; the
 rest are written down here ahead of the workflow that will name one,
-the way the rows of the set at the top of this document are. The phase
-that lands a workflow is the phase that writes its markers, so which
-side of that line a row sits on moves with the set rather than with
-the library, and the markers are where it is read rather than here. A
-library waiting for one is not waiting to be exercised — the default
+on the same reading the set at the top of this document is listed
+under. The phase that lands a workflow is the phase that writes its
+markers, so which side of that line a row sits on moves with the set
+rather than with the library, and the markers are where it is read
+rather than here. A library waiting for one is not waiting to be
+exercised — the default
 suite imports it, and a build reads it.
 
 `tests/build/lib-splice.test.ts` is where that roster lives, and the
