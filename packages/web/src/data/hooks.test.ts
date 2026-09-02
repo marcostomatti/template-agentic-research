@@ -233,6 +233,30 @@ const DEPLOYMENT_HOOKS: readonly DeploymentHookCase[] = [
   },
 ];
 
+/**
+ * The accessors in `./api.ts` this module does not wrap yet.
+ *
+ * A LEDGER rather than an exemption, and the difference is what the
+ * pair of tests below enforces: every name here has to be a real
+ * export of the barrel, and none of them may already have a hook. The
+ * nine are the write half — they are wrapped by mutations rather than
+ * by `useCache`, which is a different hook with a different naming
+ * rule and a different thing to assert about each one, and it lands
+ * with the task that writes them. Striking a name off this list is
+ * part of adding its hook.
+ */
+const UNWRAPPED_WRITES: readonly string[] = [
+  'saveCategoryTerms',
+  'saveFinding',
+  'saveSource',
+  'approveSourceConfig',
+  'resolveSourceFailure',
+  'savePersona',
+  'saveConnector',
+  'saveExportSubscriptions',
+  'saveSettings',
+];
+
 /** Everything this module exports that is not a hook. */
 const KEY_LAYER = [
   'DEPLOYMENT_SCOPE',
@@ -425,8 +449,18 @@ describe('the hook surface', () => {
     // unwrapped is a failure rather than a page that goes and imports
     // it directly. The naming rule is the pin: `fetchX` becomes
     // `useX`, and nothing else in this module starts with `use`.
+    //
+    // The barrel now WRITES as well as reads, and the writes are
+    // wrapped by mutations rather than by `useCache` — a different
+    // hook, a different naming rule and a different thing to assert
+    // about each one. Until those land, {@link UNWRAPPED_WRITES}
+    // carries them, and it carries them by NAME so the surface claim
+    // stays total: every export of `./api.ts` is either wrapped here
+    // or listed there, and a write added to the barrel and to neither
+    // fails this test rather than being silently unwrapped.
     // Arrange
     const expected = Object.keys(api)
+      .filter((name) => !UNWRAPPED_WRITES.includes(name))
       .map((name) => name.replace(/^fetch/u, 'use'))
       .sort();
 
@@ -438,6 +472,32 @@ describe('the hook surface', () => {
     // Assert
     expect(exported).toEqual(expected);
     expect(exported).not.toHaveLength(0);
+  });
+
+  it('leaves exactly the write accessors unwrapped', () => {
+    // What keeps the exemption above from growing into a hiding place.
+    // Two ways it could: a name that is no longer an export at all,
+    // which would narrow the parity claim by a phantom; and a READ
+    // parked here to dodge that claim rather than given its hook,
+    // which is the one that would actually happen. The `fetch` prefix
+    // is the pin — `./api.ts` reserves it for reads and says so — so
+    // nothing named for a read can sit on this list.
+    //
+    // The shrinking half needs nothing here: a hook added for one of
+    // these while the name stayed listed fails the parity test above,
+    // because the hook appears among the exports and the expected set
+    // still excludes its accessor.
+    // Arrange
+    const exported = Object.keys(api);
+
+    // Act
+    const stale = UNWRAPPED_WRITES.filter((name) => !exported.includes(name));
+    const reads = UNWRAPPED_WRITES.filter((name) => name.startsWith('fetch'));
+
+    // Assert
+    expect(stale).toEqual([]);
+    expect(reads).toEqual([]);
+    expect(UNWRAPPED_WRITES).toHaveLength(9);
   });
 
   it('exports nothing beyond the hooks and the key layer', () => {

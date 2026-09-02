@@ -1,7 +1,14 @@
 /**
  * @packageDocumentation
- * The cache layer: one hook per accessor in `./api.ts`, and the query
- * keys those hooks file their answers under.
+ * The cache layer: one hook per READ accessor in `./api.ts`, and the
+ * query keys those hooks file their answers under.
+ *
+ * The barrel's nine WRITE accessors are unwrapped as this file stands.
+ * They want a mutation rather than a `useCache` — a different hook, a
+ * different naming rule and an invalidation to declare per write — and
+ * those land with the task that adds them. `./hooks.test.ts` carries
+ * the nine by NAME rather than exempting the shape, so the parity
+ * claim below stays total and the gap cannot widen quietly.
  *
  * Pages call the hooks below and nothing else. `./api.ts` is what they
  * read THROUGH — it is imported here and by no page — so the q15 swap

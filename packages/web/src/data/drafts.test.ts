@@ -6,10 +6,13 @@ import { DEFAULT_DOMAIN_SLUG, SPARSE_DOMAIN_SLUG, getDomain } from './domains';
 import {
   DEPLOYMENT_DRAFT_SCOPE,
   applyDrafts,
+  applySingletonDraft,
   clearDrafts,
+  clearSingletonDraft,
   deploymentDraftScope,
   domainDraftScope,
   recordDraft,
+  recordSingletonDraft,
   resetDrafts,
 } from './drafts';
 import { listSources } from './sources';
@@ -387,17 +390,136 @@ describe('clearDrafts', () => {
   });
 });
 
+describe('the singleton slot', () => {
+  it('answers the stored value where nothing has been saved', () => {
+    // The commonest state, and the singleton's half of the rule the
+    // row overlay keeps: nothing saved is a pass-through of the very
+    // object it was handed, by IDENTITY. That is what lets
+    // `./settings.ts` go on handing every reader one frozen object.
+    // Arrange
+    const stored: TestRow = { id: 1, label: 'stored' };
+
+    // Act
+    const applied = applySingletonDraft('settings', stored);
+
+    // Assert
+    expect(applied).toBe(stored);
+  });
+
+  it('answers the value this tab saved once one is recorded', () => {
+    // Arrange
+    const stored: TestRow = { id: 1, label: 'stored' };
+
+    recordSingletonDraft('settings', { id: 1, label: 'saved' });
+
+    // Act
+    const applied = applySingletonDraft<TestRow>('settings', stored);
+
+    // Assert
+    expect(applied).toEqual({ id: 1, label: 'saved' });
+    expect(applied).not.toBe(stored);
+  });
+
+  it('stores a copy, so editing the value afterwards changes nothing', () => {
+    // The same claim `recordDraft` makes, and it needs making twice
+    // because the two writers are two functions: a surface that holds
+    // its draft object and goes on editing it after a save would
+    // otherwise rewrite the saved value behind the save's back.
+    // Arrange
+    const draft: TestRow = { id: 1, label: 'at save time' };
+
+    recordSingletonDraft('settings', draft);
+
+    // Act
+    draft.label = 'typed afterwards';
+
+    // Assert
+    expect(applySingletonDraft<TestRow>('settings', { id: 1, label: 'x' }))
+      .toEqual({ id: 1, label: 'at save time' });
+  });
+
+  it('replaces the value already saved rather than merging it', () => {
+    // A preference set is saved whole, so the last save is the answer.
+    // Merging two would resurrect a setting the operator had already
+    // put back.
+    // Arrange
+    recordSingletonDraft('settings', { id: 1, label: 'first' });
+    recordSingletonDraft('settings', { id: 1, label: 'second' });
+
+    // Act
+    const applied = applySingletonDraft<TestRow>(
+      'settings',
+      { id: 1, label: 'stored' },
+    );
+
+    // Assert
+    expect(applied).toEqual({ id: 1, label: 'second' });
+  });
+
+  it('shares no key space with a row draft of the same resource name', () => {
+    // The two maps are two stores, which is the whole reason there are
+    // two: a singleton has no id segment, so a key built for one could
+    // only collide with a row draft by accident. Driven through the
+    // cast the unknown-resource cases above use, since `settings` is
+    // deliberately not a member of either row union.
+    // Arrange
+    const asRow = {
+      kind: 'deployment',
+      resource: 'settings',
+    } as unknown as DraftScope;
+
+    recordDraft(asRow, { id: 1, label: 'row edit' });
+
+    // Act
+    const applied = applySingletonDraft<TestRow>(
+      'settings',
+      { id: 1, label: 'stored' },
+    );
+
+    // Assert
+    expect(applied).toEqual({ id: 1, label: 'stored' });
+  });
+
+  it('is dropped by clearSingletonDraft and nothing else is', () => {
+    // The discard gesture, at the only granularity a singleton has.
+    // Arrange
+    const rows = domainDraftScope(DEFAULT_DOMAIN_SLUG, 'sources');
+
+    recordSingletonDraft('settings', { id: 1, label: 'saved' });
+    recordDraft(rows, { id: 1, label: 'sources edit' });
+
+    // Act
+    clearSingletonDraft('settings');
+
+    // Assert
+    expect(applySingletonDraft<TestRow>('settings', { id: 1, label: 'x' }))
+      .toEqual({ id: 1, label: 'x' });
+    expect(applyDrafts<TestRow>(rows, [{ id: 1, label: 'stored' }]))
+      .toEqual([{ id: 1, label: 'sources edit' }]);
+  });
+
+  it('is silent about a resource holding nothing', () => {
+    // Discarding a surface nobody changed is an ordinary gesture.
+    // Arrange / Act / Assert
+    expect(() => clearSingletonDraft('settings')).not.toThrow();
+  });
+});
+
 describe('resetDrafts', () => {
   it('empties every scope at once', () => {
     // What the `beforeEach` above leans on, asserted rather than
     // assumed: a reset that cleared only one scope would leave every
-    // later case in this file reading the one before it.
+    // later case in this file reading the one before it. The singleton
+    // is asserted beside the rows because they are two MAPS — a reset
+    // that emptied one would leak a case into the next through the
+    // other, and every row-shaped case here would still pass.
     // Arrange
     const sources = domainDraftScope(DEFAULT_DOMAIN_SLUG, 'sources');
     const connectors = deploymentDraftScope('connectors');
 
     recordDraft(sources, { id: 1, label: 'sources edit' });
     recordDraft(connectors, { id: 1, label: 'connectors edit' });
+    recordSingletonDraft('settings', { id: 1, label: 'settings edit' });
 
     // Act
     resetDrafts();
@@ -407,6 +529,8 @@ describe('resetDrafts', () => {
       .toEqual([{ id: 1, label: 'stored' }]);
     expect(applyDrafts<TestRow>(connectors, [{ id: 1, label: 'stored' }]))
       .toEqual([{ id: 1, label: 'stored' }]);
+    expect(applySingletonDraft<TestRow>('settings', { id: 1, label: 'x' }))
+      .toEqual({ id: 1, label: 'x' });
   });
 });
 

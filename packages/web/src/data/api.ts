@@ -4,9 +4,13 @@
  * does the data come from", and the one module q15 replaces when the
  * answer stops being a fixture.
  *
- * Everything above this line reads through it. `./hooks.ts` wraps each
- * accessor below in `useCache`, the pages call the hooks, and no page
- * or hook imports a fixture module directly. That is the whole point:
+ * Everything above this line reaches its data through it.
+ * `./hooks.ts` wraps each READ below in `useCache`, the pages call the
+ * hooks, and no page or hook imports a fixture module directly. The
+ * WRITES at the bottom of this file answer to the same rule and the
+ * same module — wrapped in mutations rather than in `useCache` — and
+ * those hooks land with the task that adds them, so no surface calls a
+ * save until they do. That is the whole point:
  * when the API waves land, the fixture modules beside this one are
  * deleted and the functions below are re-pointed at endpoints, and
  * nothing else in `src/` has to move.
@@ -43,8 +47,8 @@
  * single-domain base into `DEFAULT_DOMAIN_SLUG` — never the raw route
  * param.
  *
- * Seven accessors take no slug at all, and the rule has to name them
- * or it claims something false about nearly half the barrel:
+ * Seven READS take no slug at all, and the rule has to name them or
+ * it claims something false about nearly half the barrel:
  * {@link fetchDomains} (the switcher's own list — a domain list cannot
  * be scoped to a domain), {@link fetchConnectors} (`connectors` has no
  * `domain_id`; a connector is a fact about the installation),
@@ -58,6 +62,13 @@
  * KNOWN NARROWING in that set — a live search endpoint would be
  * scoped (`/d/:slug/search`) — and `./shell.ts` says why the fixture
  * is not.
+ *
+ * Two WRITES take no slug either, and for the same reasons their
+ * reads do not: {@link saveConnector} edits an installation-level row,
+ * and {@link saveSettings} edits a preference set that mirrors no
+ * table. Counting the two halves together gives nine, which is not a
+ * fact about anything — the split is per resource, so each write
+ * inherits its read's answer rather than reaching one of its own.
  *
  * Nothing here copies, filters or reshapes what a fixture accessor
  * answered, and the SESSION DRAFT STORE is the one exception. Each of
@@ -83,7 +94,7 @@
  * server answers that question and `./drafts.ts` is deleted alongside
  * the fixture modules in one commit.
  *
- * Three shapes reach it, and the list is worth reading before adding a
+ * FOUR shapes reach it, and the list is worth reading before adding a
  * write: a save no read shows is worse than no save at all.
  * {@link fetchDocuments}, {@link fetchFindings}, {@link fetchSources},
  * {@link fetchPersonas} and {@link fetchConnectors} answer the drafted
@@ -100,14 +111,16 @@
  * fixture layer's own `getConnector` — refusing a drafted delivery to
  * nowhere exactly as `summarizeExportSubscriptions` refuses a stored
  * one, instead of rendering a stale connector beside an edited row.
+ * {@link fetchSettings} is the fourth and the odd one: it answers no
+ * rows at all, so it composes `./drafts.ts`'s SINGLETON slot instead
+ * — one saved value replacing one stored one, by the same
+ * pass-through-when-nothing-is-saved rule the row overlay keeps.
  *
  * Every other read is untouched for a stated reason rather than by
- * oversight. `domains`, `entities` and `settings` name no draft
- * resource at all — nothing edits a domain or a subject, and
- * `Settings` carries no id to key a draft on, which `./drafts.ts`
- * explains — so {@link fetchDomains}, {@link fetchDomain},
- * {@link fetchVerdicts}, {@link fetchEntities} and
- * {@link fetchSettings} pass fixture answers straight through, as do
+ * oversight. `domains` and `entities` name no draft resource at all —
+ * nothing edits a domain or a subject — so {@link fetchDomains},
+ * {@link fetchDomain}, {@link fetchVerdicts} and
+ * {@link fetchEntities} pass fixture answers straight through, as do
  * the four shell and spend reads that mirror no table.
  * {@link fetchCategorySummaries} is the one real NARROWING:
  * `summarizeCategories` builds its per-category literal inside its own
@@ -118,9 +131,16 @@
  * delete a term; its polarity split can, once a term editor records
  * one, and that is what the narrowing costs.
  *
- * Two resources `./drafts.ts` declares have no read here yet: `terms`
- * and `source-proposals`. Their accessors and their overlays arrive
- * together, with the surfaces that need them.
+ * Two resources `./drafts.ts` declares have a WRITE here and no read
+ * yet: `terms`, which {@link saveCategoryTerms} records, and
+ * `source-proposals`, which {@link approveSourceConfig} does. That is
+ * the one place this module knowingly stands against its own rule
+ * about a save no read shows, and it is an ORDERING rather than a
+ * decision — `fetchTerms` and `fetchSourceProposals` are the next two
+ * accessors this file gains, and each arrives with the overlay its
+ * write already files a draft for. Until then those two saves record
+ * and nothing renders them, which is worth knowing before reading a
+ * silent editor as a broken write.
  *
  * What this barrel deliberately does NOT answer, so the next author
  * reads an omission rather than a gap: nothing loads a single row by
@@ -138,7 +158,61 @@
  * verbs are `list`/`get`/`find`/`summarize`; changing the verb at the
  * seam means an import of `listFindings` in a page reads differently
  * from `fetchFindings` at a glance, and the wrong one is the one that
- * bypasses the swap.
+ * bypasses the swap. The writes carry the same idea one step further:
+ * `save` for the ones that store an edited row, and the verb of the
+ * ACT for the two that rule on something rather than edit it
+ * ({@link approveSourceConfig}, {@link resolveSourceFailure}) — see
+ * the section below for why that distinction is not cosmetic.
+ *
+ * ## The write half
+ *
+ * Nine of the functions below record rather than read, and all nine
+ * go through the SAME {@link deliver} and {@link deliverForDomain}
+ * the reads do. That is the whole of what makes them a seam and not a
+ * side door: a write to a slug no domain carries rejects with the same
+ * message a read of it rejects with, on the same microtask, before a
+ * single draft has been recorded — because `getDomain` runs inside
+ * {@link deliver}'s callback and the recording runs after it. A save
+ * that refused a domain AFTER filing an edit under it would leave the
+ * store holding an edit for a page that can never render.
+ *
+ * They answer `Promise<void>`, which is a decision rather than an
+ * omission. The store has nothing to hand back that the caller did not
+ * hand in, and the pages do not read a save's answer: `./hooks.ts`
+ * wraps each of these in a mutation that INVALIDATES the keys its
+ * write can change, so what a surface renders next is the read
+ * re-running rather than a response body threaded through a component.
+ * On the day this becomes HTTP the endpoint's `200` body is that same
+ * row, and the invalidated read fetches it — so nothing above here has
+ * to change to start ignoring a payload it was never given.
+ *
+ * Each one takes the WHOLE row (or the whole list of them), never a
+ * patch. `recordDraft` stores a row and `applyDrafts` replaces one, so
+ * a partial edit would have to be merged with the stored row
+ * somewhere, and that merge is exactly the second policy this module's
+ * rule forbids — plus a rule about which absent member means "leave it
+ * alone" and which means "clear it", which no endpoint here has
+ * chosen. An editor is expected to build a full row out of the one it
+ * loaded, and the shared draft holder that will do it for all five is
+ * not written yet — until it is, a caller handing over a partial row
+ * is refused by the type and by nothing else.
+ *
+ * The TSDoc on each one names the HTTP VERB it eventually becomes, in
+ * prose and never as a route. The verb is a property of the write —
+ * whether it replaces a row, replaces a collection, or records an act
+ * — and it is stable enough to be worth writing down now. A route is
+ * not: the service's own API is being rewritten in parallel with this
+ * plan, and a path spelled here would be a claim about somebody else's
+ * module that nothing in this package could ever check.
+ *
+ * What the writes deliberately cannot do, because `./drafts.ts`
+ * cannot: INSERT and DELETE. A save edits rows that already exist, so
+ * a term added in an editor, a subscription cancelled, or a source
+ * created has nowhere to go until a real endpoint issues the id.
+ * `./drafts.ts` carries that argument in full; the consequence here is
+ * that {@link saveCategoryTerms} and {@link saveExportSubscriptions}
+ * take a LIST and record an edit per row, rather than replacing the
+ * collection the way the `PUT` they become would.
  */
 
 import type { ExportSubscriptionSummary } from './connectors';
@@ -154,11 +228,13 @@ import type {
   Document,
   Domain,
   Entity,
+  ExportSubscription,
   Finding,
   Persona,
   Settings,
   Source,
   SpendSummary,
+  Term,
 } from './types';
 import type {
   NotificationItem,
@@ -175,8 +251,11 @@ import { listDocuments, listEntities, listFindings } from './digest';
 import { DOMAINS, getDomain, resolveVerdictVocabulary } from './domains';
 import {
   applyDrafts,
+  applySingletonDraft,
   deploymentDraftScope,
   domainDraftScope,
+  recordDraft,
+  recordSingletonDraft,
 } from './drafts';
 import { summarizeCategories } from './lexicon';
 import { listPersonas } from './personas';
@@ -270,6 +349,45 @@ function deliverDomainRows<T extends DraftableRow>(
   const scope = domainDraftScope(slug, resource);
 
   return deliverForDomain(slug, (domain) => applyDrafts(scope, read(domain)));
+}
+
+/**
+ * The seam's WRITE half, scoped to one domain: record an edit to each
+ * of these rows under that domain's copy of one resource.
+ *
+ * The mirror of {@link deliverDomainRows}, and deliberately built the
+ * same way round. The scope comes off the SLUG THIS CALL WAS HANDED,
+ * so an edit made under one domain is invisible under every other
+ * without any accessor having to remember that — and the recording
+ * happens INSIDE the callback {@link deliverForDomain} runs after
+ * `getDomain`, so a write to a slug no domain carries rejects with
+ * nothing recorded. A store left holding an edit for a domain that
+ * does not exist would be an edit no page could ever render and no
+ * gesture could ever discard.
+ *
+ * Takes a LIST even where the caller has one row, because the two
+ * shapes are the same operation: `recordDraft` files one row at a
+ * time, and a collection write is that repeated. See this module's
+ * header for why replacing a collection wholesale is not something the
+ * store can express.
+ *
+ * @typeParam T - The row shape the surface edits.
+ * @param slug - A resolved domain slug.
+ * @param resource - Which of that domain's resources these rows are.
+ * @param rows - The edited rows, each carrying the id it is keyed by.
+ * @returns Nothing, once recorded; a rejection if no domain carries
+ * the slug, in which case nothing was recorded at all.
+ */
+function recordForDomain<T extends DraftableRow>(
+  slug: string,
+  resource: DomainDraftResource,
+  rows: readonly T[],
+): Promise<void> {
+  const scope = domainDraftScope(slug, resource);
+
+  return deliverForDomain(slug, () => {
+    rows.forEach((row) => recordDraft(scope, row));
+  });
 }
 
 /**
@@ -574,10 +692,18 @@ export function fetchConnectors(): Promise<readonly Connector[]> {
  * leaves this surface completely unchanged, including the default
  * domain it names.
  *
- * @returns The settings fixture. Always the same frozen object.
+ * The one overlay here that composes a SINGLETON rather than a list,
+ * for the reason `./drafts.ts` gives: there is no id to key a row
+ * draft on and no list to replace a row inside. The bargain is the
+ * same as the row overlay's, though — a tab that has saved nothing
+ * gets the frozen fixture back by IDENTITY, not a copy of it, so the
+ * settings surface reading twice on one render reads one object.
+ *
+ * @returns This tab's saved preferences, or the settings fixture
+ * itself where nothing has been saved.
  */
 export function fetchSettings(): Promise<Settings> {
-  return deliver(getSettings);
+  return deliver(() => applySingletonDraft('settings', getSettings()));
 }
 
 /**
@@ -631,4 +757,240 @@ export function fetchNotifications(): Promise<readonly NotificationItem[]> {
  */
 export function fetchOperator(): Promise<ProfileMenuUser> {
   return deliver(getOperator);
+}
+
+/**
+ * Save one category's terms — what the lexicon editor's save button
+ * does.
+ *
+ * Eventually a PUT: the editor holds the category's whole term list
+ * and hands back the whole of it, so the request REPLACES a collection
+ * rather than patching members of it. That is also the one place the
+ * fixture seam cannot follow the endpoint — the store edits rows and
+ * cannot insert or delete, so a term added or removed in the editor is
+ * recorded here only where it already had a row. `./drafts.ts` carries
+ * the reasoning.
+ *
+ * There is no category argument, and its absence is a decision: every
+ * {@link Term} names its own `categoryId`, which is where the path
+ * parameter of that PUT comes from at the swap. A third argument would
+ * be a second place to get the same answer, and the two could
+ * disagree.
+ *
+ * @param slug - A resolved domain slug. Terms belong to a category and
+ * a category to a domain, so the write is scoped like the read that
+ * shows it.
+ * @param terms - Every term of the category, as the editor left them.
+ * @returns Nothing; rejects if no domain carries the slug, having
+ * recorded nothing.
+ */
+export function saveCategoryTerms(
+  slug: string,
+  terms: readonly Term[],
+): Promise<void> {
+  return recordForDomain(slug, 'terms', terms);
+}
+
+/**
+ * Save one finding — the digest row action's verdict, and whatever
+ * else its detail modal edits.
+ *
+ * Eventually a PATCH rather than a PUT, and the difference is real
+ * here: {@link Finding.verdict} is not a `findings` column at all but
+ * a flattened `finding_labels` row, so the endpoint behind this writes
+ * a LABEL and answers the finding with its current one. Nothing above
+ * this seam should learn that, which is why the accessor takes the
+ * finding as the surface renders it.
+ *
+ * @param slug - A resolved domain slug.
+ * @param finding - The finding as the operator left it.
+ * @returns Nothing; rejects if no domain carries the slug, having
+ * recorded nothing.
+ */
+export function saveFinding(slug: string, finding: Finding): Promise<void> {
+  return recordForDomain(slug, 'findings', [finding]);
+}
+
+/**
+ * Save one source — the sources surface's editor.
+ *
+ * Eventually a PUT, the editor holding the row it loaded and handing
+ * back all of it. Worth knowing which members that includes: `cursor`,
+ * `consecutiveFailures`, `lastSuccessAt` and `lastFailureAt` are the
+ * PIPELINE's to write, not an operator's, so an endpoint accepting
+ * this payload has to ignore them rather than trust them. The fixture
+ * seam does trust them, having nothing else to compare against, which
+ * is a narrowing worth stating rather than discovering.
+ *
+ * @param slug - A resolved domain slug.
+ * @param source - The source as the operator left it.
+ * @returns Nothing; rejects if no domain carries the slug, having
+ * recorded nothing.
+ */
+export function saveSource(slug: string, source: Source): Promise<void> {
+  return recordForDomain(slug, 'sources', [source]);
+}
+
+/**
+ * Rule on a pending source-config proposal — approve it, or reject it.
+ *
+ * Eventually a POST and not a PUT, which is the distinction its name
+ * carries: an operator does not EDIT a proposal, they rule on it, and
+ * what the ruling changes is a status the proposer wrote and a config
+ * the pipeline then reads. Posting the act keeps the two apart; a PUT
+ * of an edited row would let an approval also rewrite the very
+ * `parser_config` it was approving, unreviewed.
+ *
+ * The one write here whose parameter is STRUCTURAL rather than a
+ * fixture type. `./proposals.ts` — the module that redeclares the
+ * `source_config_proposals` columns this surface renders — arrives
+ * with the modal that needs it, so the only type available today is
+ * the store's own constraint. It is not a placeholder to narrow later:
+ * `recordDraft` files any row carrying an id, and a caller handing
+ * over a proposal row satisfies this signature unchanged the day that
+ * module lands.
+ *
+ * @param slug - A resolved domain slug. A proposal is about one
+ * domain's source, so it is scoped like everything else about it.
+ * @param ruling - The proposal row as the operator ruled it.
+ * @returns Nothing; rejects if no domain carries the slug, having
+ * recorded nothing.
+ */
+export function approveSourceConfig(
+  slug: string,
+  ruling: DraftableRow,
+): Promise<void> {
+  return recordForDomain(slug, 'source-proposals', [ruling]);
+}
+
+/**
+ * Rule on one failed capture — the keep and discard actions on the
+ * sources surface's failures list.
+ *
+ * Eventually a POST, for the same reason {@link approveSourceConfig}
+ * is one: keeping or discarding a failed document is an act on a
+ * document rather than an edit of one, and the endpoint records the
+ * ruling and decides what it does to the row. What it does NOT do is
+ * delete the document — a capture that failed to parse is evidence
+ * about a source, and the failures list is a queue of unresolved ones
+ * rather than the only thing that refers to them.
+ *
+ * Takes the {@link Document} as the modal ruled it, so this module
+ * spells no keep-versus-discard vocabulary of its own. Which member a
+ * ruling moves is the failures modal's decision to make and to
+ * document, and putting it here would be that decision made twice.
+ *
+ * @param slug - A resolved domain slug.
+ * @param document - The document as the ruling left it.
+ * @returns Nothing; rejects if no domain carries the slug, having
+ * recorded nothing.
+ */
+export function resolveSourceFailure(
+  slug: string,
+  document: Document,
+): Promise<void> {
+  return recordForDomain(slug, 'documents', [document]);
+}
+
+/**
+ * Save one persona — the agents surface's editor.
+ *
+ * Eventually a PUT. A persona is three fields and all three are the
+ * operator's, so there is no pipeline-owned member for the endpoint to
+ * ignore the way {@link saveSource}'s has.
+ *
+ * @param slug - A resolved domain slug. A persona is configuration of
+ * a DOMAIN — what a researcher is asked to be is a property of the
+ * subject being researched — so this is scoped like the cards it
+ * feeds.
+ * @param persona - The persona as the operator left it.
+ * @returns Nothing; rejects if no domain carries the slug, having
+ * recorded nothing.
+ */
+export function savePersona(slug: string, persona: Persona): Promise<void> {
+  return recordForDomain(slug, 'personas', [persona]);
+}
+
+/**
+ * Save one connector — the tools surface's editor.
+ *
+ * Eventually a PUT with a hole in it. Secrets are WRITE-ONLY: the
+ * fixture redacts them and a real endpoint would never answer them
+ * either, so a payload that echoed the placeholder back would blank
+ * the stored credential on every save that did not retype it. The
+ * editor omits a secret field left untouched rather than sending its
+ * mask, which is a rule the editor owns and this accessor cannot
+ * enforce — it stores whatever row it is handed.
+ *
+ * Takes no slug, exactly as {@link fetchConnectors} does not: the
+ * `connectors` table carries no `domain_id`, so a connector is a fact
+ * about the installation and its edit is filed under
+ * {@link CONNECTOR_DRAFTS} rather than under whichever domain happened
+ * to be active. An operator who edits a connector and switches domain
+ * still sees the edit.
+ *
+ * @param connector - The connector as the operator left it.
+ * @returns Nothing. Cannot reject: there is no slug to refuse.
+ */
+export function saveConnector(connector: Connector): Promise<void> {
+  return deliver(() => {
+    recordDraft(CONNECTOR_DRAFTS, connector);
+  });
+}
+
+/**
+ * Save one domain's export subscriptions — the format list on the
+ * tools surface.
+ *
+ * Eventually a PUT of the collection, like {@link saveCategoryTerms}
+ * and with the same gap: subscribing to a format this domain has never
+ * subscribed to is an INSERT, and the store cannot mint the id one
+ * would need. So a toggle over a format that already has a row is
+ * recorded, and one over a format that does not has nowhere to go
+ * until the endpoint exists.
+ *
+ * A list rather than one row because the control is a list: an
+ * operator flips several formats and saves once, and recording them
+ * one call at a time would put the surface in charge of a transaction
+ * boundary the endpoint owns.
+ *
+ * @param slug - A resolved domain slug. This is the half of the tools
+ * surface that DOES move with the domain — the connector cards above
+ * it do not.
+ * @param subscriptions - Every subscription of the domain, as the list
+ * left them.
+ * @returns Nothing; rejects if no domain carries the slug, having
+ * recorded nothing.
+ */
+export function saveExportSubscriptions(
+  slug: string,
+  subscriptions: readonly ExportSubscription[],
+): Promise<void> {
+  return recordForDomain(slug, 'export-subscriptions', subscriptions);
+}
+
+/**
+ * Save the operator's preferences — the settings surface.
+ *
+ * Eventually a PUT of a singleton, and the one write here whose
+ * endpoint does not exist even in principle yet: {@link Settings}
+ * mirrors no table, so where an operator's preferences are persisted
+ * is a schema decision nobody has made. `./settings.ts` and
+ * `./types.ts` both say so on the fixture itself. What this accessor
+ * settles is only the SHAPE of the eventual call — the whole
+ * preference set replaced at once, since none of its members is
+ * independently addressable.
+ *
+ * Takes no slug: an operator is a person and not a workspace, so there
+ * is one preference set and a domain switch leaves it alone. Recorded
+ * through `./drafts.ts`'s singleton slot rather than as a row, for the
+ * reason that module gives — there is no id to key one on.
+ *
+ * @param settings - The preferences as the operator left them.
+ * @returns Nothing. Cannot reject: there is no slug to refuse.
+ */
+export function saveSettings(settings: Settings): Promise<void> {
+  return deliver(() => {
+    recordSingletonDraft('settings', settings);
+  });
 }

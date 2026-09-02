@@ -2,7 +2,12 @@
  * @packageDocumentation
  * The settings surface: the preferences that belong to the operator
  * rather than to any one research domain, and the one screen in this
- * shell with nowhere to save them.
+ * shell that saves nothing — for as long as that stays true. The seam
+ * grew somewhere to put them since this was written
+ * (`../../data/api.ts`'s `saveSettings`, over a singleton slot in
+ * `../../data/drafts.ts`); what has not happened yet is this page
+ * calling it, so every sentence below about a change being lost is
+ * still an accurate reading of what an operator meets here.
  *
  * ## Why it is not a list page
  *

@@ -96,16 +96,28 @@
  * reload. A surface that needs to add a row wants a real endpoint, not
  * a bigger store.
  *
- * The SETTINGS singleton is the one write in this wave whose shape
- * this key does not express — `Settings` mirrors no table and carries
- * no id, so there is no row to key on and no list to overlay. It is
- * absent from {@link DeploymentDraftResource} on purpose rather than
- * present and unusable, and belongs to whoever gives that surface its
- * save.
- *
  * Single-row reads compose out of what is here: a read answering one
  * row overlays it by passing a one-element list, which keeps the rule
  * about only replacing rows it was given true of that shape too.
+ *
+ * ## The singleton slot, and why it is a second map
+ *
+ * The SETTINGS preference set is the one write in this wave whose
+ * shape the key above cannot express: `Settings` mirrors no table and
+ * carries no id, so there is no row to key on and no list to overlay.
+ * Minting a synthetic id would put a member into the stored value that
+ * every reader would then have to strip back off — a reshape at the
+ * seam, which is the one thing `./api.ts` refuses to do there. So
+ * `settings` stays absent from {@link DeploymentDraftResource}, and
+ * {@link recordSingletonDraft}, {@link applySingletonDraft} and
+ * {@link clearSingletonDraft} hold it instead: one value per
+ * {@link SingletonDraftResource}, replaced whole, overlaid by handing
+ * the stored value in and taking back whatever this tab has saved.
+ *
+ * It is the same store by every property that matters — module-scoped,
+ * replaced rather than written through, emptied by
+ * {@link resetDrafts}, gone on the next reload — and a second map only
+ * because a value with no id has no key to share.
  */
 
 /**
@@ -158,6 +170,21 @@ export type DomainDraftResource =
  * `settings` is deliberately NOT a member — see this module's header.
  */
 export type DeploymentDraftResource = 'connectors';
+
+/**
+ * The resources whose draft is one VALUE rather than a row in a list.
+ *
+ * `settings` is the whole set, and this union exists so that stays a
+ * decision rather than a string: the two unions above name lists a
+ * read overlays row by row, and a preference set has no row and no
+ * list. See this module's header for why it could not simply join
+ * {@link DeploymentDraftResource}.
+ *
+ * Deployment-level by construction — there is no slug in the key at
+ * all — which is the same reading `./api.ts` gives the settings
+ * surface: a domain switch leaves it exactly where it was.
+ */
+export type SingletonDraftResource = 'settings';
 
 /**
  * The first key segment of every draft that is not about one domain.
@@ -250,6 +277,16 @@ export function deploymentDraftScope(
  * module's header for why nothing here is mutated in place.
  */
 let drafts = new Map<string, unknown>();
+
+/**
+ * Every singleton this tab has saved, keyed by its resource alone.
+ *
+ * A second map rather than a second kind of key in {@link drafts},
+ * because these values carry no id and so share no key shape with a
+ * row draft — see this module's header. `unknown` and `let` for the
+ * same two reasons the row store gives.
+ */
+let singletons = new Map<string, unknown>();
 
 /**
  * The scope's own key segment — a slug, or the deployment marker.
@@ -382,7 +419,84 @@ export function clearDrafts(scope: DraftScope): void {
 }
 
 /**
+ * Record this tab's whole value for a singleton resource, replacing
+ * any value already held for it.
+ *
+ * The counterpart to {@link recordDraft} for the shape that has no
+ * row: a preference set is saved WHOLE, so the last save is the
+ * answer and there is nothing to merge. Stores a shallow COPY for the
+ * reason {@link recordDraft} gives, and inherits the same limit — a
+ * caller that goes on mutating a NESTED member of the object it just
+ * saved rewrites the saved value behind its own back. Nothing above
+ * this module does that: every editor here builds a fresh value per
+ * change, which is the repo's immutability rule rather than a promise
+ * this function can keep on its own.
+ *
+ * @typeParam T - The value's shape, whatever the surface reads and
+ * edits.
+ * @param resource - Which singleton is being saved.
+ * @param value - The whole edited value.
+ */
+export function recordSingletonDraft<T extends object>(
+  resource: SingletonDraftResource,
+  value: T,
+): void {
+  singletons = new Map(singletons).set(resource, { ...value });
+}
+
+/**
+ * Overlay this tab's saved value for a singleton resource onto the
+ * stored one.
+ *
+ * The counterpart to {@link applyDrafts}, and deliberately the same
+ * bargain in the singular: nothing saved is a pass-through of the very
+ * object it was handed, so an unedited read stays identical to the
+ * fixture by identity and not merely by value. There is no list to
+ * grow, shrink or reorder, so the only property left to keep is that
+ * one.
+ *
+ * @typeParam T - The value's shape. The stored draft is asserted to
+ * it: {@link recordSingletonDraft} is the only writer, and the
+ * resource is what pairs the two.
+ * @param resource - Which singleton to read.
+ * @param stored - What the fixture layer answered.
+ * @returns This tab's saved value, or `stored` itself.
+ */
+export function applySingletonDraft<T>(
+  resource: SingletonDraftResource,
+  stored: T,
+): T {
+  const draft = singletons.get(resource);
+
+  return draft === undefined
+    ? stored
+    : (draft as T);
+}
+
+/**
+ * Forget this tab's saved value for one singleton resource.
+ *
+ * The counterpart to {@link clearDrafts} at the granularity a surface
+ * discards at — which for a singleton is the whole of it, there being
+ * no row to discard one of. Leaves every other resource standing.
+ *
+ * @param resource - Which singleton to drop.
+ */
+export function clearSingletonDraft(
+  resource: SingletonDraftResource,
+): void {
+  const remaining = new Map(singletons);
+
+  remaining.delete(resource);
+  singletons = remaining;
+}
+
+/**
  * Empty the whole store.
+ *
+ * BOTH halves of it — every row draft and every singleton — because a
+ * reset that emptied one map would leave the other one leaking a case
+ * into the next, which is the exact failure it exists to prevent.
  *
  * FOR TESTS ONLY. Module-scoped state outlives a single case, so a
  * suite without this reads whatever the case before it recorded and
@@ -395,4 +509,5 @@ export function clearDrafts(scope: DraftScope): void {
  */
 export function resetDrafts(): void {
   drafts = new Map();
+  singletons = new Map();
 }

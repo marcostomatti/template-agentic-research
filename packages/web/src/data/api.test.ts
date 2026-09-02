@@ -4,9 +4,12 @@ import type {
   Connector,
   Document,
   Domain,
+  ExportSubscription,
   Finding,
   Persona,
+  Settings,
   Source,
+  Term,
 } from './types';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,12 +30,14 @@ import {
   resolveVerdictVocabulary,
 } from './domains';
 import {
+  applyDrafts,
+  applySingletonDraft,
   deploymentDraftScope,
   domainDraftScope,
   recordDraft,
   resetDrafts,
 } from './drafts';
-import { summarizeCategories } from './lexicon';
+import { listCategories, listTerms, summarizeCategories } from './lexicon';
 import { listPersonas } from './personas';
 import { SETTINGS } from './settings';
 import { NOTIFICATIONS, OPERATOR, SEARCH_SUGGESTIONS } from './shell';
@@ -183,17 +188,59 @@ const UNSCOPED: readonly UnscopedCase[] = [
 type BarrelAccessor = (slug: string) => Promise<unknown>;
 
 /**
- * Every export of `./api.ts`, read off the module itself.
+ * Every export of `./api.ts`, name and value, with the value widened
+ * to `unknown`.
  *
- * The final block is written over this rather than over the two tables
- * above, which is the difference between "every accessor the author
- * listed obeys the rule" and "every accessor obeys the rule". An
- * accessor added to the barrel and to neither table is caught by the
+ * An ASSIGNMENT rather than a cast, which is what keeps it evidence:
+ * the barrel is heterogeneous now that it writes as well as reads —
+ * one-argument reads beside two-argument writes — so no single
+ * function type describes every member, and any type that claimed to
+ * would have been asserted rather than checked.
+ */
+const EXPORTED_ENTRIES: readonly (readonly [string, unknown])[] =
+  Object.entries(api);
+
+/**
+ * The names of the nine WRITE accessors.
+ *
+ * A literal, for the reason {@link UNSCOPED_EXEMPT} is one: derived
+ * from the write table below, an accessor filed there by mistake would
+ * exempt itself from every read rule in this file and nothing would
+ * report it. Written out, the same mistake leaves one of the two
+ * partitions short and the surface tests name it.
+ */
+const WRITE_NAMES: readonly string[] = [
+  'saveCategoryTerms',
+  'saveFinding',
+  'saveSource',
+  'approveSourceConfig',
+  'resolveSourceFailure',
+  'savePersona',
+  'saveConnector',
+  'saveExportSubscriptions',
+  'saveSettings',
+];
+
+/**
+ * Every READ export of `./api.ts`, resolved from the module itself.
+ *
+ * The read blocks are written over this rather than over the two
+ * tables above, which is the difference between "every accessor the
+ * author listed obeys the rule" and "every accessor obeys the rule".
+ * An accessor added to the barrel and to no table is caught by the
  * surface test below; one added to the barrel and to the WRONG table
  * is caught only there.
+ *
+ * The cast is from `unknown` and reaches exactly the members
+ * {@link WRITE_NAMES} did not claim, so it asserts one thing: that
+ * every remaining export is callable with a slug and nothing else.
+ * That claim is not free-floating — the arity tests below are what
+ * make it, and they run over these same values.
  */
 const EXPORTED: readonly (readonly [string, BarrelAccessor])[] =
-  Object.entries(api);
+  EXPORTED_ENTRIES
+    .filter(([name]) => !WRITE_NAMES.includes(name))
+    .map(([name, accessor]) => [name, accessor as BarrelAccessor] as const);
 
 /**
  * The accessors the unknown-slug rule does not reach, written out
@@ -285,15 +332,17 @@ beforeEach(() => {
 });
 
 describe('the barrel export surface', () => {
-  it('exports nothing beyond the two case tables below', () => {
+  it('exports nothing beyond the three case tables below', () => {
     // The guard the whole file rests on: every claim here is made
-    // over one of the two tables, so an accessor added to `./api.ts`
-    // and to neither table would be covered by nothing and reported
-    // by nothing. Sorted on both sides because it is a set claim.
+    // over one of the three tables, so an accessor added to
+    // `./api.ts` and to none of them would be covered by nothing and
+    // reported by nothing. Sorted on both sides because it is a set
+    // claim.
     // Arrange
     const covered = [
       ...DOMAIN_SCOPED.map((scoped) => scoped.name),
       ...UNSCOPED.map((unscoped) => unscoped.name),
+      ...WRITE_NAMES,
     ].sort();
 
     // Act
@@ -306,11 +355,15 @@ describe('the barrel export surface', () => {
   it('names each accessor once', () => {
     // The near-miss the set comparison above cannot catch on its own:
     // two table rows sharing a name would still produce the right set
-    // while covering one accessor twice and another not at all.
+    // while covering one accessor twice and another not at all. Over
+    // all three tables, so a write sharing a read's name — which
+    // would put one function under two sets of rules — is reported
+    // here too.
     // Arrange
     const named = [
       ...DOMAIN_SCOPED.map((scoped) => scoped.name),
       ...UNSCOPED.map((unscoped) => unscoped.name),
+      ...WRITE_NAMES,
     ];
 
     // Act
@@ -322,15 +375,38 @@ describe('the barrel export surface', () => {
     expect(duplicated).toEqual([]);
   });
 
-  it('scopes ten accessors by domain and leaves seven unscoped', () => {
+  it('reads through seventeen accessors and writes through nine', () => {
     // Counted against literals so that moving an accessor from one
-    // table to the other is a failure here rather than a silent
-    // re-reading of the rule. WHICH seven cannot be scoped — the
-    // count the module docblock states — is the arity test further
-    // down.
+    // table to another is a failure here rather than a silent
+    // re-reading of the rule. WHICH seven reads cannot be scoped is
+    // the arity test further down; WHICH writes are is the write
+    // table's own.
     // Arrange / Act / Assert
     expect(DOMAIN_SCOPED).toHaveLength(10);
     expect(UNSCOPED).toHaveLength(7);
+    expect(WRITE_NAMES).toHaveLength(9);
+  });
+
+  it('splits the module into reads and writes with nothing left over', () => {
+    // What licenses every `EXPORTED`-driven block below to say
+    // "every export": those blocks walk the READ half, so a write
+    // that failed to be recognised as one would fall into the read
+    // set and be called with a slug and no payload. Both halves are
+    // resolved from the module — `WRITE_NAMES` is the only literal —
+    // so a name in that list matching no export is reported rather
+    // than quietly narrowing the read set by nothing.
+    // Arrange
+    const exported = Object.keys(api);
+
+    // Act
+    const missing = WRITE_NAMES.filter((name) => !exported.includes(name));
+
+    // Assert
+    expect(missing).toEqual([]);
+    expect(EXPORTED).toHaveLength(exported.length - WRITE_NAMES.length);
+    expect(EXPORTED.map(([name]) => name).filter(
+      (name) => WRITE_NAMES.includes(name),
+    )).toEqual([]);
   });
 });
 
@@ -587,7 +663,7 @@ describe('fetchDomains', () => {
 });
 
 describe('the unknown-slug rule, over the module export surface', () => {
-  it('reaches every export the exemption list does not name', () => {
+  it('reaches every read the exemption list does not name', () => {
     // The guard the rest of this block rests on. Every claim below
     // compares a collected offender list against `[]`, which is a
     // sentence about nothing if the set it walked was empty — and both
@@ -595,8 +671,10 @@ describe('the unknown-slug rule, over the module export surface', () => {
     // satisfy the lot at once. The counts are literals rather than a
     // comparison against the tables above, so moving an accessor from
     // one side of the rule to the other fails here instead of being
-    // tracked silently; 9 and 7 are also what `./api.ts`'s own
-    // docblock says, which is the sentence this pins.
+    // tracked silently; the 7 is what `./api.ts`'s own docblock says
+    // about its unscoped READS, which is the sentence this pins. The
+    // writes obey the same rule and are exercised separately, because
+    // calling one of them takes a payload as well as a slug.
     // Arrange
     const exported = EXPORTED.map(([name]) => name);
 
@@ -631,7 +709,7 @@ describe('the unknown-slug rule, over the module export surface', () => {
   });
 
   it('resolves for every fixture domain slug', async () => {
-    // The other half, and the one written over EVERY export rather
+    // The other half, and the one written over every READ rather
     // than over the scoped subset: the exempt seven have to answer a
     // slug too, since a page reaches them through the same hooks on
     // the same render. Driven off `DOMAINS` rather than off the two
@@ -842,15 +920,28 @@ const DOMAIN_OVERLAID = ROW_OVERLAID.filter(
 const DERIVED_OVERLAID: readonly string[] = ['fetchSourceStatusCounts'];
 
 /**
+ * The read that composes a SINGLETON draft rather than a list of
+ * drafted rows.
+ *
+ * One member, and a list for the same reason {@link DERIVED_OVERLAID}
+ * is one: the partition below is a set claim over populations that add
+ * up to the barrel, and a bare name would read as a special case
+ * rather than as a fourth population. Its own block further down is
+ * where the shape is actually exercised — none of the row-shaped
+ * claims can be made about a value that is not in a list.
+ */
+const SINGLETON_OVERLAID: readonly string[] = ['fetchSettings'];
+
+/**
  * The reads the overlay deliberately does not reach.
  *
  * Written out rather than derived, for the reason {@link
  * UNSCOPED_EXEMPT} gives: derived, an accessor that lost its overlay
  * would move into this list on its own and the partition would still
  * balance. `./api.ts` carries a stated reason for every name here —
- * three resources nothing edits, the settings singleton that has no id
- * to key on, the four shell and spend reads that mirror no table, and
- * the one real narrowing on the lexicon summaries.
+ * two resources nothing edits, the four shell and spend reads that
+ * mirror no table, and the one real narrowing on the lexicon
+ * summaries.
  */
 const NOT_OVERLAID: readonly string[] = [
   'fetchDomains',
@@ -858,7 +949,6 @@ const NOT_OVERLAID: readonly string[] = [
   'fetchVerdicts',
   'fetchEntities',
   'fetchCategorySummaries',
-  'fetchSettings',
   'fetchSpendSummary',
   'fetchSearchSuggestions',
   'fetchNotifications',
@@ -927,18 +1017,24 @@ function draftOf(
 }
 
 describe('the draft overlay', () => {
-  it('partitions the barrel into overlaid, derived and untouched', () => {
+  it('partitions the barrel into overlaid, derived, singleton, untouched and written', () => {
     // The guard the rest of this file's overlay claims rest on. Every
     // case below is made over `ROW_OVERLAID`, so an accessor that was
     // given an overlay and no case — or lost one and kept its case —
-    // would be covered by nothing and reported by nothing. The three
+    // would be covered by nothing and reported by nothing. The five
     // populations are literals, so moving an accessor between them is
-    // a failure here rather than a silent re-reading of the rule.
+    // a failure here rather than a silent re-reading of the rule. The
+    // writes are one of the five rather than excluded from the claim:
+    // a write is not overlaid — it is what puts something there to
+    // overlay — and leaving them out would make this a partition of
+    // part of the module.
     // Arrange
     const claimed = [
       ...ROW_OVERLAID.map((overlaid) => overlaid.name),
       ...DERIVED_OVERLAID,
+      ...SINGLETON_OVERLAID,
       ...NOT_OVERLAID,
+      ...WRITE_NAMES,
     ].sort();
 
     // Act
@@ -948,7 +1044,8 @@ describe('the draft overlay', () => {
     expect(claimed).toEqual(exported);
     expect(ROW_OVERLAID).toHaveLength(6);
     expect(DERIVED_OVERLAID).toHaveLength(1);
-    expect(NOT_OVERLAID).toHaveLength(10);
+    expect(SINGLETON_OVERLAID).toHaveLength(1);
+    expect(NOT_OVERLAID).toHaveLength(9);
   });
 
   it('names each overlaid resource once', () => {
@@ -1275,5 +1372,595 @@ describe('the overlay behind the export join', () => {
 
     // Assert
     expect(outcome).toBe(`rejected: Unknown connector id: ${absent}`);
+  });
+});
+
+/**
+ * The seeded domain's first taxonomy category's terms.
+ *
+ * Resolved through `listCategories` rather than written as a category
+ * id, for the reason every other case here reads its rows off the
+ * fixture: a taxonomy reordered or reseeded silently turns a hardcoded
+ * id into somebody else's category, and the write would go on passing
+ * against a list nobody meant.
+ *
+ * @param slug - Which domain's taxonomy to read.
+ * @returns Its first category's terms, or `[]` for a domain with no
+ * taxonomy at all.
+ */
+function firstCategoryTerms(slug: string): readonly Term[] {
+  const [first] = listCategories(getDomain(slug).id);
+
+  return first === undefined
+    ? []
+    : listTerms(first.id);
+}
+
+/**
+ * A stand-in proposal row, for the one write whose resource no fixture
+ * module answers for yet.
+ *
+ * `./proposals.ts` arrives with the modal that rules on these, so
+ * there is nothing to read a real row off. That makes the
+ * {@link api.approveSourceConfig} cases weaker than the rest in one
+ * specific way, worth stating rather than hiding behind a uniform
+ * table: the vacuity guard every other case gets — the field is one
+ * the STORED row carries — cannot be made here, because this object is
+ * the only row there is. What the cases still prove is the half that
+ * does not need a fixture: which scope the write files under, that it
+ * refuses an unknown slug before recording, and that a row nothing
+ * carries is recorded rather than dropped.
+ */
+const SYNTHETIC_PROPOSAL = { id: 1, status: 'pending' };
+
+/**
+ * The writes that take no domain slug, written out rather than derived
+ * from {@link WRITES}.
+ *
+ * Derived, a write that lost its slug would move into this list on its
+ * own and the arity claim would re-read itself as satisfied. Written
+ * out, the same mistake leaves the arity split disagreeing with the
+ * table and the test names it. Both names are here for the reason
+ * `./api.ts` gives their reads: `connectors` carries no `domain_id`,
+ * and `Settings` mirrors no table at all.
+ */
+const UNSCOPED_WRITE_NAMES: readonly string[] = [
+  'saveConnector',
+  'saveSettings',
+];
+
+/**
+ * One write accessor, with everything a case needs to drive it without
+ * knowing which one it is holding.
+ *
+ * `field` and `mark` do the same work they do for the overlay cases:
+ * an edit is only evidence if it names a field the surface's editor
+ * really writes and a value the fixture does not already hold, and
+ * both are claims the first case below MAKES rather than assumes.
+ */
+interface WriteCase {
+  /** Its exported name, for the coverage check and the titles. */
+  readonly name: string;
+  /** Whether it takes a resolved domain slug as its first argument. */
+  readonly scoped: boolean;
+  /** The draft resource its edit must be filed under. */
+  readonly resource: string;
+  /** Where that edit must be filed, for a given slug. */
+  readonly scopeFor: (slug: string) => DraftScope;
+  /**
+   * The rows the fixture layer carries for that resource, or null
+   * where no fixture module answers for it yet — see
+   * {@link SYNTHETIC_PROPOSAL}.
+   */
+  readonly storedRows: ((slug: string) => readonly DraftableRow[]) | null;
+  /** Save these rows through the accessor under test. */
+  readonly save: (
+    slug: string,
+    rows: readonly DraftableRow[],
+  ) => Promise<void>;
+  /** A field the surface's editor really writes. */
+  readonly field: string;
+  /** What to write into it. Never a value the fixture already holds. */
+  readonly mark: unknown;
+}
+
+/**
+ * Every write that records ROWS.
+ *
+ * {@link api.saveSettings} is deliberately absent and has a block of
+ * its own: it records a singleton, so it has no row, no id and no
+ * scope, and not one of the row-shaped claims below can be made about
+ * it. The coverage test names both populations so that absence is a
+ * decision on the record rather than a write nobody wired up.
+ *
+ * The casts on `save` are the same bargain the overlay table makes for
+ * `rowsIn`: one table over eight unrelated row shapes, with the type
+ * each accessor actually declares reasserted at the boundary. They
+ * cost nothing that matters here — a case handing the wrong SHAPE
+ * still fails, because the field it then asserts on is not the one the
+ * row carries.
+ */
+const WRITES: readonly WriteCase[] = [
+  {
+    name: 'saveCategoryTerms',
+    scoped: true,
+    resource: 'terms',
+    scopeFor: (slug) => domainDraftScope(slug, 'terms'),
+    storedRows: (slug) => firstCategoryTerms(slug),
+    save: (slug, rows) => api.saveCategoryTerms(slug, rows as readonly Term[]),
+    field: 'weight',
+    mark: 97,
+  },
+  {
+    name: 'saveFinding',
+    scoped: true,
+    resource: 'findings',
+    scopeFor: (slug) => domainDraftScope(slug, 'findings'),
+    storedRows: (slug) => listFindings(getDomain(slug).id),
+    save: (slug, rows) => api.saveFinding(slug, rowAt(rows, 0) as Finding),
+    // The digest row action's own edit.
+    field: 'verdict',
+    mark: 'drafted-verdict',
+  },
+  {
+    name: 'saveSource',
+    scoped: true,
+    resource: 'sources',
+    scopeFor: (slug) => domainDraftScope(slug, 'sources'),
+    storedRows: (slug) => listSources(getDomain(slug).id),
+    save: (slug, rows) => api.saveSource(slug, rowAt(rows, 0) as Source),
+    field: 'endpoint',
+    mark: 'https://saved.example.test/feed',
+  },
+  {
+    name: 'approveSourceConfig',
+    scoped: true,
+    resource: 'source-proposals',
+    scopeFor: (slug) => domainDraftScope(slug, 'source-proposals'),
+    // The one case with no fixture behind it — see the constant.
+    storedRows: null,
+    save: (slug, rows) => api.approveSourceConfig(slug, rowAt(rows, 0)),
+    field: 'status',
+    mark: 'approved',
+  },
+  {
+    name: 'resolveSourceFailure',
+    scoped: true,
+    resource: 'documents',
+    scopeFor: (slug) => domainDraftScope(slug, 'documents'),
+    storedRows: (slug) => listDocuments(getDomain(slug).id),
+    save: (slug, rows) => api.resolveSourceFailure(
+      slug,
+      rowAt(rows, 0) as Document,
+    ),
+    field: 'parseError',
+    mark: 'resolved by the operator',
+  },
+  {
+    name: 'savePersona',
+    scoped: true,
+    resource: 'personas',
+    scopeFor: (slug) => domainDraftScope(slug, 'personas'),
+    storedRows: (slug) => listPersonas(getDomain(slug).id),
+    save: (slug, rows) => api.savePersona(slug, rowAt(rows, 0) as Persona),
+    field: 'systemText',
+    mark: 'Saved system text.',
+  },
+  {
+    name: 'saveConnector',
+    scoped: false,
+    resource: 'connectors',
+    // The one deployment-scoped write, so its scope ignores the slug —
+    // which is why the cross-domain block below cannot ask anything of
+    // it, and says so rather than exempting it silently.
+    scopeFor: () => deploymentDraftScope('connectors'),
+    storedRows: () => listConnectors(),
+    save: (_slug, rows) => api.saveConnector(rowAt(rows, 0) as Connector),
+    field: 'name',
+    mark: 'saved-connector',
+  },
+  {
+    name: 'saveExportSubscriptions',
+    scoped: true,
+    resource: 'export-subscriptions',
+    scopeFor: (slug) => domainDraftScope(slug, 'export-subscriptions'),
+    storedRows: (slug) => listExportSubscriptions(getDomain(slug).id),
+    save: (slug, rows) => api.saveExportSubscriptions(
+      slug,
+      rows as readonly ExportSubscription[],
+    ),
+    field: 'intervalSeconds',
+    mark: 123_456,
+  },
+];
+
+/** The writes a second domain's scope can be asked about. */
+const SCOPED_WRITES = WRITES.filter((write) => write.scoped);
+
+/** The writes whose rows a fixture module really answers for. */
+const FIXTURE_BACKED_WRITES = WRITES.filter(
+  (write) => write.storedRows !== null,
+);
+
+/**
+ * The rows one case edits — the fixture's, or the stand-in where no
+ * fixture answers for that resource yet.
+ *
+ * @param write - The case.
+ * @param slug - Which domain's rows.
+ * @returns Its rows, never empty for the fixture-backed cases (the
+ * vacuity guard below is what says so).
+ */
+function rowsFor(write: WriteCase, slug: string): readonly DraftableRow[] {
+  return write.storedRows === null
+    ? [SYNTHETIC_PROPOSAL]
+    : write.storedRows(slug);
+}
+
+/**
+ * An id no row in this list carries, derived rather than written.
+ *
+ * A hardcoded 9999 becomes a real id the day a fixture grows past it,
+ * and the case that depends on the row being absent then quietly
+ * asserts its opposite.
+ *
+ * @param rows - The rows the id must avoid.
+ * @returns One greater than the largest.
+ */
+function absentIdFor(rows: readonly DraftableRow[]): number {
+  return Math.max(...rows.map((row) => row.id)) + 1;
+}
+
+describe('the write half', () => {
+  it('drives every write the module exports', () => {
+    // The guard every claim below rests on. The cases are written over
+    // `WRITES`, so a write added to `./api.ts` and to no table would be
+    // covered by nothing and reported by nothing — and `saveSettings`
+    // is named here rather than left out, so its absence from the row
+    // table reads as the decision it is.
+    // Arrange
+    const covered = [
+      ...WRITES.map((write) => write.name),
+      'saveSettings',
+    ].sort();
+
+    // Act
+    const declared = [...WRITE_NAMES].sort();
+
+    // Assert
+    expect(covered).toEqual(declared);
+    expect(WRITES).toHaveLength(8);
+  });
+
+  it('names each written resource once', () => {
+    // The near-miss the set comparison cannot catch: two cases filed
+    // under one resource would cover that resource twice and leave
+    // another write filing under a scope no case ever builds.
+    // Arrange
+    const named = WRITES.map((write) => write.resource);
+
+    // Act
+    const duplicated = named.filter(
+      (resource, index) => named.indexOf(resource) !== index,
+    );
+
+    // Assert
+    expect(duplicated).toEqual([]);
+  });
+
+  it('takes the slug first and the payload second', () => {
+    // Structural pin on the call shape `./hooks.ts` wraps. A write
+    // that grew a third argument — a category id beside the terms that
+    // already name one, say — would be a second place to get the same
+    // answer, and the two could disagree. Read off the module rather
+    // than off the table's closures, which would only report their own
+    // arity.
+    // Arrange
+    const written = EXPORTED_ENTRIES.filter(
+      ([name]) => WRITE_NAMES.includes(name),
+    );
+
+    // Act
+    const arities = written.map(([name, accessor]) => ({
+      name,
+      arity: (accessor as (...args: never[]) => unknown).length,
+      expected: UNSCOPED_WRITE_NAMES.includes(name)
+        ? 1
+        : 2,
+    }));
+
+    // Assert
+    expect(arities).toHaveLength(WRITE_NAMES.length);
+    expect(arities.filter((entry) => entry.arity !== entry.expected))
+      .toEqual([]);
+  });
+
+  it('agrees with the write table about which writes take a slug', () => {
+    // The two lists are built differently on purpose — one literal,
+    // one flag per case — so this is what stops the arity claim above
+    // from being satisfied by a list that simply matches whatever the
+    // table says.
+    // Arrange / Act
+    const unscoped = WRITES
+      .filter((write) => !write.scoped)
+      .map((write) => write.name);
+
+    // Assert
+    expect(unscoped).toEqual(['saveConnector']);
+    expect(UNSCOPED_WRITE_NAMES).toEqual(['saveConnector', 'saveSettings']);
+  });
+
+  FIXTURE_BACKED_WRITES.forEach((write) => {
+    it(`edits a real field to a value the fixture does not hold: ${write.name}`, () => {
+      // The vacuity guard for every case that follows. A `field` the
+      // row does not carry, or a `mark` equal to what it already
+      // holds, both round-trip through the store perfectly and make
+      // the assertions below pass while proving nothing about the
+      // surface that is supposed to write them. Made only over the
+      // fixture-backed cases — the proposal stand-in is its own row,
+      // so there is nothing independent to check it against.
+      // Arrange
+      const stored = rowsFor(write, DEFAULT_DOMAIN_SLUG);
+
+      // Act
+      const target = rowAt(stored, 0);
+
+      // Assert
+      expect(stored.length).toBeGreaterThan(1);
+      expect(Object.keys(target)).toContain(write.field);
+      expect(fieldOf(target, write.field)).not.toBe(write.mark);
+    });
+  });
+
+  WRITES.forEach((write) => {
+    it(`records the edit under the scope its read overlays: ${write.name}`, async () => {
+      // The whole point of the write half. The claim is deliberately
+      // made at the SCOPE rather than through the matching read: two
+      // of these resources have no read yet, so a read-side assertion
+      // could not cover them uniformly — and the thing that can go
+      // wrong is which scope the edit lands in, which is what this
+      // asks directly.
+      // Arrange
+      const stored = rowsFor(write, DEFAULT_DOMAIN_SLUG);
+      const target = rowAt(stored, 0);
+      const draft = draftOf(target, write.field, write.mark);
+
+      // Act
+      await write.save(DEFAULT_DOMAIN_SLUG, [draft]);
+
+      const applied = applyDrafts(
+        write.scopeFor(DEFAULT_DOMAIN_SLUG),
+        [target],
+      );
+
+      // Assert
+      expect(applied).toEqual([draft]);
+      expect(fieldOf(rowAt(applied, 0), write.field)).toBe(write.mark);
+      expect(rowAt(applied, 0)).not.toBe(draft);
+    });
+
+    it(`records a row no fixture carries and disturbs nothing: ${write.name}`, async () => {
+      // A save against a row that has gone — a modal left open while
+      // the fixtures moved, or an id from another deployment. The
+      // store does not know which ids exist and deliberately does not
+      // check, so the write RESOLVES and the edit is filed where it
+      // will simply never be reached. Both halves are asserted: the
+      // stored rows come back untouched by identity, and the edit is
+      // genuinely in the store rather than silently dropped, which is
+      // the difference between a recorded no-op and a write that
+      // failed without saying so.
+      // Arrange
+      const stored = rowsFor(write, DEFAULT_DOMAIN_SLUG);
+      const absentId = absentIdFor(stored);
+      const draft = {
+        ...draftOf(rowAt(stored, 0), write.field, write.mark),
+        id: absentId,
+      };
+      const scope = write.scopeFor(DEFAULT_DOMAIN_SLUG);
+
+      // Act
+      await write.save(DEFAULT_DOMAIN_SLUG, [draft]);
+
+      // Assert
+      expect(applyDrafts(scope, stored)).toEqual(stored);
+      expect(
+        applyDrafts(scope, stored).filter((row, index) => row !== stored[index]),
+      ).toEqual([]);
+      expect(applyDrafts(scope, [{ id: absentId }])).toEqual([draft]);
+    });
+  });
+
+  SCOPED_WRITES.forEach((write) => {
+    it(`refuses an unknown slug by rejecting, not throwing: ${write.name}`, async () => {
+      // The seam's `async` doing for a write what it does for a read.
+      // A mutation hook can render a rejected promise as an error
+      // state beside the editor; an exception thrown before the caller
+      // ever held a promise reaches the render and takes the shell
+      // down with the modal.
+      // Arrange
+      const rows = [rowAt(rowsFor(write, DEFAULT_DOMAIN_SLUG), 0)];
+      const call = (): void => {
+        void write.save(UNKNOWN_SLUG, rows).catch(() => undefined);
+      };
+
+      // Act / Assert
+      expect(call).not.toThrow();
+      await expect(write.save(UNKNOWN_SLUG, rows)).rejects.toThrow(
+        `Unknown domain slug: ${UNKNOWN_SLUG}`,
+      );
+    });
+
+    it(`records nothing when it refuses an unknown slug: ${write.name}`, async () => {
+      // Why `recordForDomain` builds its scope outside the callback
+      // but records INSIDE it. A save that filed the edit and then
+      // refused the domain would leave the store holding an edit for a
+      // page nothing can render and no gesture can discard — a leak
+      // the reads could never report, since they reject that slug too.
+      // Arrange
+      const stored = rowsFor(write, DEFAULT_DOMAIN_SLUG);
+      const target = rowAt(stored, 0);
+      const draft = draftOf(target, write.field, write.mark);
+
+      // Act
+      await write.save(UNKNOWN_SLUG, [draft]).catch(() => undefined);
+
+      // Assert
+      expect(applyDrafts(write.scopeFor(UNKNOWN_SLUG), [target]))
+        .toEqual([target]);
+      expect(applyDrafts(write.scopeFor(DEFAULT_DOMAIN_SLUG), [target]))
+        .toEqual([target]);
+    });
+
+    it(`files the edit under the slug it was handed: ${write.name}`, async () => {
+      // The cross-domain guard from the WRITE side, and the one place
+      // this package can make it without reservation. Read-side, the
+      // same claim is half-vacuous — only one fixture domain carries
+      // rows, so a read of the other overlays an empty list whatever
+      // scope it built, and an accessor hardcoded to the SEEDED slug
+      // stays green. The store has no such blind spot: it holds
+      // whatever it is given under whatever scope it is given, so a
+      // hardcoded slug here shows up as the edit landing in the wrong
+      // one whichever domain was seeded.
+      // Arrange
+      const stored = rowsFor(write, DEFAULT_DOMAIN_SLUG);
+      const target = rowAt(stored, 0);
+      const draft = draftOf(target, write.field, write.mark);
+
+      // Act
+      await write.save(SPARSE_DOMAIN_SLUG, [draft]);
+
+      // Assert
+      expect(applyDrafts(write.scopeFor(SPARSE_DOMAIN_SLUG), [target]))
+        .toEqual([draft]);
+      expect(applyDrafts(write.scopeFor(DEFAULT_DOMAIN_SLUG), [target]))
+        .toEqual([target]);
+    });
+  });
+
+  it('leaves the fixture rows themselves untouched', async () => {
+    // The immutability claim, over the whole write table at once: a
+    // save records a COPY, so the frozen fixture arrays every other
+    // reader shares are still exactly what they were. An accessor that
+    // wrote through to the stored row would pass every case above —
+    // the overlay would answer the edit either way — and would change
+    // what a reload is supposed to undo.
+    // Arrange
+    const before = WRITES.map((write) => ({
+      name: write.name,
+      rows: JSON.stringify(rowsFor(write, DEFAULT_DOMAIN_SLUG)),
+    }));
+
+    // Act
+    await Promise.all(WRITES.map(async (write) => {
+      const stored = rowsFor(write, DEFAULT_DOMAIN_SLUG);
+
+      await write.save(
+        DEFAULT_DOMAIN_SLUG,
+        [draftOf(rowAt(stored, 0), write.field, write.mark)],
+      );
+    }));
+
+    // Assert
+    expect(WRITES.map((write) => ({
+      name: write.name,
+      rows: JSON.stringify(rowsFor(write, DEFAULT_DOMAIN_SLUG)),
+    }))).toEqual(before);
+  });
+});
+
+describe('saveSettings', () => {
+  /**
+   * The preference set with one member changed to a value the fixture
+   * does not hold.
+   *
+   * Built per case rather than shared, because a module-scope constant
+   * here would be the very object the store copies and the identity
+   * assertions below would be comparing it against itself.
+   *
+   * @returns The edited settings.
+   */
+  const edited = (): Settings => ({
+    ...SETTINGS,
+    defaultDomainSlug: SPARSE_DOMAIN_SLUG,
+  });
+
+  it('edits a member the fixture does not already hold', () => {
+    // The vacuity guard the cases below need, in the shape the row
+    // writes get theirs: a mark equal to the stored value round-trips
+    // perfectly and proves nothing.
+    // Arrange / Act / Assert
+    expect(SETTINGS.defaultDomainSlug).toBe(DEFAULT_DOMAIN_SLUG);
+    expect(edited().defaultDomainSlug).not.toBe(SETTINGS.defaultDomainSlug);
+  });
+
+  it('records the whole preference set', async () => {
+    // The singleton write's own claim, made at the store the way the
+    // row writes make theirs: `Settings` carries no id, so there is no
+    // scope to build and the resource IS the key.
+    // Arrange
+    const saved = edited();
+
+    // Act
+    await api.saveSettings(saved);
+
+    // Assert
+    expect(applySingletonDraft('settings', SETTINGS)).toEqual(saved);
+  });
+
+  it('is answered by the read that renders it', async () => {
+    // The end-to-end pair, and the one this file has to make itself:
+    // the settings overlay landed with this write, and `fetchSettings`
+    // is the only read that composes it. A save no read shows is worse
+    // than no save at all.
+    // Arrange
+    const saved = edited();
+
+    // Act
+    await api.saveSettings(saved);
+
+    // Assert
+    await expect(api.fetchSettings()).resolves.toEqual(saved);
+  });
+
+  it('hands the fixture itself back when nothing has been saved', async () => {
+    // Identity, not equality, and the property the overlay had to be
+    // written not to break: `./settings.ts` hands every reader one
+    // frozen object on purpose, and an overlay that copied on the way
+    // past would quietly hand out an unfrozen twin a caller could
+    // toggle in place.
+    // Arrange / Act / Assert
+    await expect(api.fetchSettings()).resolves.toBe(SETTINGS);
+  });
+
+  it('leaves the fixture standing after a save', async () => {
+    // What a reload is supposed to undo. The store holds a copy, so
+    // the shared frozen fixture is still the deployment's answer for
+    // every reader that has not been shown this tab's edit.
+    // Arrange
+    const before = { ...SETTINGS };
+
+    // Act
+    await api.saveSettings(edited());
+
+    // Assert
+    expect(SETTINGS).toEqual(before);
+    expect(SETTINGS.defaultDomainSlug).toBe(DEFAULT_DOMAIN_SLUG);
+  });
+
+  it('resolves on a microtask like every other accessor', async () => {
+    // The same pin the reads carry, made over a write: under fake
+    // timers nothing advances the clock, so a save that grew an
+    // artificial delay would never settle and this would time out
+    // rather than slow down.
+    // Arrange
+    vi.useFakeTimers();
+
+    try {
+      // Act / Assert
+      await expect(api.saveSettings(edited())).resolves.toBeUndefined();
+      await expect(api.fetchSettings()).resolves.toEqual(edited());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
