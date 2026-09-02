@@ -293,10 +293,15 @@ export function withDraftValues<T extends object>(
 /**
  * The holder with the operator's changes thrown away.
  *
- * What a modal's cancel and its discard gesture both reach for: the
+ * What a discard gesture inside an open editor reaches for: the
  * draft goes back to the row the read last answered, and the source
  * stays exactly where it was. Answers the holder it was given when
  * there is nothing to put back, including before the read resolves.
+ *
+ * A modal's CANCEL is not one of its callers. `./EditorModal.tsx`
+ * closes on cancel, and closing unmounts the modal the holder lives
+ * in — putting a draft back before throwing the whole thing away
+ * would be a state update nobody could observe.
  *
  * @typeParam T - The row's shape.
  * @param held - The holder as it stands.
