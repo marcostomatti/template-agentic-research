@@ -1,0 +1,73 @@
+{
+  "id": "ar-digest",
+  "name": "AR Digest",
+  "active": false,
+  "versionId": "00000000-0000-4000-8000-00000000af01",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "execute-workflow-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "load-domain-context",
+      "name": "Load Domain Context",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "ar-postgres",
+          "name": "AR Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH handover AS (\n  SELECT nullif($1::jsonb, 'null'::jsonb) AS item\n),\nclaim AS (\n  SELECT\n    CASE\n      WHEN h.item ->> 'run_id' ~ '^[0-9]{1,18}$'\n      THEN (h.item ->> 'run_id')::bigint\n    END AS run_id\n  FROM handover h\n),\nrun AS (\n  SELECT r.domain_id\n  FROM runs r\n  WHERE r.id = (SELECT run_id FROM claim)\n)\n-- The first node after the trigger, and the shape the parent design fixes for every\n-- workflow in this set (.specs/2026-08-19-research-pipeline-port.md, section 4): the\n-- domain's personas and taxonomy, read as ONE query answering exactly one row. Both\n-- halves are argued in full on ar-ingest's Load Domain Context, which asks the same\n-- question of the same tables and is not repeated here. What is written out below is\n-- what differs, which is the run this canvas is handed and the projection it cuts.\n\n-- THE RUN WAS OPENED FOR AN EXPORT SUBSCRIPTION. ar-dispatch claims two tables side\n-- by side and this canvas is the second one's target: AR_EXPORT_WORKFLOW_ID pairs a\n-- claimed export unit with this workflow the way AR_TOPIC_WORKFLOW_ID pairs a\n-- claimed topic with ar-ingest. The row read here is the one that dispatcher opened\n-- before invoking, and the domain comes off it rather than off any member of the\n-- hand-over item, which is ar-ingest's shape: a domain named on the item as well\n-- would be a second statement of something the run already carries, and two\n-- statements of one fact can disagree with nothing reporting it.\n\n-- WHICH SUBSCRIPTION IT WAS DOES NOT ARRIVE. Open Run in ar-dispatch returns the run\n-- id alone, so the claimed unit does not survive the hop and this statement could\n-- not read it if it wanted to. Naming that is the point rather than working around\n-- it here: what a pass was dispatched for is a question about export_subscriptions\n-- rows in this domain, and answering it belongs to the group that selects what a\n-- digest covers rather than to the node that resolves the domain.\n\n-- The whole hand-over item binds as ONE jsonb parameter rather than one parameter\n-- per member, which is ar-research's Load Domain Context and is argued in full\n-- there: JSON.stringify makes any item a valid jsonb literal, the nullif is what\n-- keeps JSON.stringify(null) from arriving as a value, ->> answers NULL for every\n-- jsonb that is not an object so a shape somebody else chose raises nothing, and the\n-- {1,18} digit bound is what keeps a longer run of digits from overflowing the cast.\n\n-- Three readings come out of this row and they are not two. A null run_id means the\n-- item named no run this statement could read. A run_id with a null domain_id means\n-- it named one that matches no runs row. A domain row means the pass resolved, and\n-- an empty list beside it is a domain that states no personas, no categories, no\n-- terms or no criteria. Read them in that order: a length says nothing until both\n-- have been read.\n\n-- Nothing here refuses. A digest pass with no domain has nothing to select and no\n-- briefing to write, and a refusal at the top of this workflow would end it with the\n-- runs row the dispatcher opened still waiting to be closed. What this answers\n-- instead is a row saying what it could and could not resolve.\n\n-- run_id travels as the parameter rather than as a column read back, so it survives\n-- a run id that resolves to nothing. It has to travel because this node's answer\n-- REPLACES the item the trigger was handed: whatever the dispatcher sent is gone\n-- past here, and the run is what a ledger row, a stored briefing and the closing\n-- update are all charged to. The invocation itself stays reachable at\n-- $('Execute Workflow Trigger').first().json, which is the handle every node here\n-- has on it.\n\n-- Every list is ordered, which nothing downstream requires and every reader benefits\n-- from: two passes over one unchanged domain hand the nodes below the same lists in\n-- the same order, so a diff between two digests is about the findings rather than\n-- about the order a planner happened to return rows in.\nSELECT\n  (SELECT run_id FROM claim) AS run_id,\n  (SELECT domain_id FROM run) AS domain_id,\n  -- The domain row, cut to the members a digest pass reads, and the same four\n  -- ar-research fetches rather than the six ar-ingest and ar-score do. Those two\n  -- carry feature_version and embedding_model because a feature vector is composed\n  -- on those canvases, and nothing here composes one. What is left is read on both\n  -- sides of the boundary this workflow stops at: slug and name are the identity an\n  -- operator reads a pass by and the values a renderer under src/exports/ puts in a\n  -- path and a title, and settings is where the heading vocabulary comes from,\n  -- DomainSettings.findingsDisplayName being the one member digest-assemble.ts\n  -- reads off it. NULL rather than an empty object when the item named no run this\n  -- statement could resolve, which is the second of the three readings above.\n  (SELECT jsonb_build_object(\n     'id', d.id,\n     'slug', d.slug,\n     'name', d.name,\n     'settings', d.settings)\n     FROM domains d\n    WHERE d.id = (SELECT domain_id FROM run)) AS domain,\n\n  -- The personas. system_text is operator-owned prose and is the trusted half of\n  -- what prompt-frame.ts composes around an untrusted chunk, and the whole list\n  -- travels rather than the one row a step needs: which role a step is framed\n  -- against is that step's to decide, and picking a row out of a list already here\n  -- is a read rather than a second query per role. A persona is a row and is never\n  -- written into a file, and no node below may put a finding's own text where one\n  -- belongs.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'id', p.id,\n       'role', p.role,\n       'system_text', p.system_text)\n       ORDER BY p.role, p.id)\n       FROM personas p\n      WHERE p.domain_id = (SELECT domain_id FROM run)),\n    '[]'::jsonb) AS personas,\n\n  -- The categories, and on this canvas they are more than the buckets the terms\n  -- below are filed under: they are the sections a digest is assembled into.\n  -- digest-assemble.ts sections by the domain's own category keys, in the order\n  -- they arrive, with one section for the findings under none, so this ORDER BY is\n  -- what fixes the shape of a stored briefing. key rather than id is what the code\n  -- matches on, and name is what a section is headed with when it is not the key.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'id', c.id,\n       'key', c.key,\n       'name', c.name,\n       'parent_id', c.parent_id)\n       ORDER BY c.key, c.id)\n       FROM categories c\n      WHERE c.domain_id = (SELECT domain_id FROM run)),\n    '[]'::jsonb) AS categories,\n\n  -- The terms, joined to their category's key rather than carrying category_id, in\n  -- the four-member spelling the rest of this set fetches them in. Nothing in a\n  -- digest reads them: a period's prose is drafted from findings that were scored\n  -- long before this pass, and re-reading the patterns behind those scores here\n  -- would be a second opinion about work already recorded. They are selected\n  -- because the design fixes the taxonomy as what this node fetches, and a term\n  -- list selected in some other spelling would be one a node group added below\n  -- could not hand to the libraries that read it.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'category', c.key,\n       'pattern', t.pattern,\n       'weight', t.weight,\n       'polarity', t.polarity)\n       ORDER BY c.key, t.pattern, t.id)\n       FROM terms t\n       JOIN categories c ON c.id = t.category_id\n      WHERE c.domain_id = (SELECT domain_id FROM run)),\n    '[]'::jsonb) AS terms,\n\n  -- The criteria, joined to their category the same way and here for the same\n  -- reason. Nothing in a digest scores anything: criteria are ar-score's subject,\n  -- and what a digest says about a finding is what the score already stored says.\n  -- They complete the taxonomy this node is fixed to fetch, so a node group added\n  -- below reads them without a second lookup and without a second branch to reason\n  -- about.\n  COALESCE(\n    (SELECT jsonb_agg(jsonb_build_object(\n       'id', k.id,\n       'category', c.key,\n       'value', k.value,\n       'kind', k.kind)\n       ORDER BY c.key, k.kind, k.id)\n       FROM criteria k\n       JOIN categories c ON c.id = k.category_id\n      WHERE k.domain_id = (SELECT domain_id FROM run)),\n    '[]'::jsonb) AS criteria",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json ?? null) }}"
+        }
+      }
+    },
+    {
+      "id": "dispatched-never-scheduled",
+      "name": "Dispatched Never Scheduled",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        -160
+      ],
+      "parameters": {
+        "width": 400,
+        "height": 1280,
+        "content": "## Dispatched, Never Scheduled\n\nThis workflow starts when `ar-dispatch` reaches it through Invoke Target Workflow, and the Execute Workflow Trigger on this canvas is the whole of what makes that possible. It holds no clock and may not acquire one: `ar-dispatch` carries the only Schedule Trigger in the system, and `tests/invariants/workflows.test.ts` counts them across every built workflow and names the one file allowed to hold one.\n\nIt is the target of the second of the dispatcher's two claims. A tick reads `topics` and `export_subscriptions` side by side, and `AR_EXPORT_WORKFLOW_ID` in `scripts/workflow-markers.ts` is what pairs a claimed `export` unit with this canvas, the way `AR_TOPIC_WORKFLOW_ID` pairs a claimed topic with `ar-ingest`. So scheduling a digest is a row rather than anything on this canvas: an `export_subscriptions` row carries the interval a digest is produced on and the time it is next due, and changing the cadence is an UPDATE.\n\n### What arrives, and what does not\n\nOne item carrying `run_id`, and nothing else. `Open Run` opens the `runs` row before the invocation and its `RETURNING` projection is the item forwarded here, so neither the claimed subscription nor the format it names survives the hop: what this workflow knows about the pass it is running is the run, and the domain is read back off that. `Load Domain Context` is where that happens.\n\nWhich subscription the tick claimed is therefore a question about this domain's own `export_subscriptions` rows rather than about the item, and no node here may read the absence as the caller having sent too little. Saying so is the point rather than working around it at the trigger: a member added to that hand-over is a change to `ar-dispatch` and to this canvas together, and a member invented here would be one the dispatcher never sent.\n\nThe trigger is typeVersion 1, which passes the caller's item through as it stands. Nothing here declares an input schema, so what the dispatcher sends is what the first node reads, and adding a schema later is a change to both ends rather than to this node alone.\n\n### Nothing here sends\n\nNo workflow in this set holds a send-capable node, and this is the canvas where that rule is easiest to doubt: a digest is the thing a subscriber would be sent. What a pass here does instead is store. A `briefings` row is where a period's digest lives, which is what makes every format render the same text rather than compose its own, and turning one into an artifact belongs to a renderer under `src/exports/`, which returns bytes to a caller and delivers nothing either. `docs/architecture/01-invariants.md` carries both halves of that rule and names the test that fails when either stops holding.\n\n### Started by hand\n\nA run started from this canvas rather than by the dispatcher carries no `run_id`, and nothing pretends otherwise. `Load Domain Context` answers a null `run_id`, a null `domain_id`, a null domain row and four empty lists, which is a shape a node below can refuse by name. It is not an error worth suppressing: a pass with no run to charge has nowhere to write what it did, and a pass with no domain has no findings to digest and no subscription to have been dispatched for."
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Domain Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
