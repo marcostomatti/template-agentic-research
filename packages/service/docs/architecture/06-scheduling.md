@@ -561,46 +561,54 @@ column a reader can query.
 ### A run opened against a target that is not there closes as failed
 
 `Invoke Target Workflow` addresses `ar-ingest` for a claimed topic and
-`ar-digest` for a claimed export subscription. Phase 5 delivered the
-first, so a claimed topic now reaches a workflow that exists; the
-second is phase 6's, and until it arrives the id resolves, nothing on
-the instance answers to it, the claimed unit takes the node's error
-output, and `Close Run Failed` writes its row as failed. One tick can
-now record both outcomes side by side. Why a routed failure is the
-right shape for the second is argued on `AR_TOPIC_WORKFLOW_ID` in
+`ar-digest` for a claimed export subscription, and the roster in
+`workflows/src/README.md` marks both delivered — the first in phase 5,
+the second in phase 6. So the window this section was written during
+has closed: a claimed unit of either kind now resolves an id AND finds
+something behind it, and a failed run is no longer the expected record
+for one of the two paths. What still arrives on the error branch is
+narrower and is not going away. `Plan Dispatch` passes on a unit whose
+kind it has no entry for carrying a null where an id belongs, a
+deployment that never imported a target or renamed one resolves a
+correct id to nothing, and a target that runs and raises fails its
+invocation like anything else. Why a routed failure is the right shape
+for all three is argued on `AR_TOPIC_WORKFLOW_ID` in
 `scripts/workflow-markers.ts`, and on the workflow's own canvas for an
-operator standing in front of it. What follows from two phases of it
-is this document's.
+operator standing in front of it. What follows from the phases the
+window lasted is this document's.
 
-The window does not compound, and what keeps it from compounding is
-the fold. A claim writes the row's next due time before anything looks
-at what it dispatched, so a unit whose target is missing has already
-been rescheduled by the time the invocation is attempted: it is not
-retried, and it is not still owed. A missing target therefore costs
-one failed run per row per interval, and no more of them on a tick
-than the cap kept — the same bound a working target would run under,
-reached for the opposite reason.
+A missing target does not compound, and what keeps it from compounding
+is the fold. A claim writes the row's next due time before anything
+looks at what it dispatched, so a unit whose target is missing has
+already been rescheduled by the time the invocation is attempted: it
+is not retried, and it is not still owed. A missing target therefore
+costs one failed run per row per interval, and no more of them on a
+tick than the cap kept — the same bound a working target would run
+under, reached for the opposite reason.
 
-For the length of the window the status column separates nothing.
-Every row this workflow closes says the same thing, so `runs` is a
+For the length of the window the status column separated nothing.
+Every row this workflow closed said the same thing, so `runs` was a
 list of dispatches rather than a mix of outcomes, and what it still
-answers is what the two columns the insert supplies were for: which
-domain a pass ran for, and the mode its schedule is attributed to. The
-failed branch appends an entry to `errors` naming the target it could
-not reach, which is where a row says which of the two ids it was
-about.
+answered was what the two columns the insert supplies were for: which
+domain a pass ran for, and the mode its schedule is attributed to.
+That much is history, and it is recorded rather than dropped because
+the reading it rested on outlived it: the failed branch appends an
+entry to `errors` naming the target it could not reach, which is still
+where a row says which of the two ids it was about.
 
 That is what makes a failed row worth keeping rather than filtering
 out. Reaching `failed` is the mechanism having run once end to end —
 the trigger fired, a claim took a row and moved its `next_run_at`, the
 cap kept the unit, a run was opened carrying a real domain, an
 invocation was attempted, the failure was routed rather than raised,
-and the row was closed. Before any target exists a pass leaves nothing
-else behind in this database, so a table of these rows is the closest
-it comes to reporting that the parts fit together.
+and the row was closed. While no target existed a pass left nothing
+else behind in this database, so a table of these rows was the closest
+it came to reporting that the parts fit together. That reading has
+been overtaken and not withdrawn: a failed row is still the one that
+says how far a dispatch got.
 
-Both ways of stopping the failures without building a target are
-watched, and what the branch writes once it gets there is not.
+Both ways of taking the routed failure out of the graph are watched,
+and what the branch writes once it gets there is not.
 `tests/invariants/dispatch-sql.test.ts` holds `Invoke Target Workflow`
 to the setting that appends a second output and holds
 `Close Run Failed` to being what arrives on it, so dropping that
@@ -613,12 +621,16 @@ closing its run as `ok` leaves both built-tree suites green —
 measured, with no case moving at all. The route is checked and the
 record on it is convention.
 
-When a target does land, `failed` starts meaning that a workflow ran
-and its work failed, rather than that no workflow was there, with
-nothing in this repository edited and nothing in a row to mark the
-change. The `errors` entry is what carries the difference, naming the
-target as it stood. And the absence that replaces this one is the
-opposite shape: a target returning no items puts nothing on the
-success output at all, so its run keeps the `running` status it was
-opened with, which is the limit `Close Run Succeeded` records against
-the phase that makes it real.
+Both targets landing is what turned `failed` into a report that a
+workflow ran and its work failed, rather than that no workflow was
+there, with nothing in this repository edited and nothing in a row to
+mark the change. The `errors` entry is what carries the difference,
+naming the target as it stood. And the absence that has replaced this
+one is the opposite shape: a target answering with no items puts
+nothing on the success output at all, so its run keeps the `running`
+status it was opened with, which is the limit `Close Run Succeeded`
+records. Phase 5 made that reachable through `ar-ingest` and phase 6
+reaches it again — a digest pass over a period with nothing to draft
+from stages nothing, so its chain ends above both the node that stores
+a briefing and the node that closes the run, and the workflow answers
+no item at all.
