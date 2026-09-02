@@ -90,8 +90,8 @@ const BUILT_WORKFLOWS = loadBuiltWorkflows();
 // ---------------------------------------------------------------------------
 
 /**
- * The workflows phases 3 and 5 have landed, by id and in the order
- * the read hands them back.
+ * The workflows phases 3, 5 and 6 have landed, by id and in the
+ * order the read hands them back.
  *
  * Declared rather than derived, which is what leaves a case standing
  * on it with anything to say. `buildAll` writes one artifact per
@@ -127,7 +127,7 @@ const BUILT_WORKFLOWS = loadBuiltWorkflows();
  * and the artifact an entry does name was built from a source under
  * `workflows/` — which that scan reads.
  */
-const PHASE_3_AND_5_WORKFLOW_IDS = [
+const PHASE_3_5_AND_6_WORKFLOW_IDS = [
   'ar-capture',
   'ar-dispatch',
   'ar-ingest',
@@ -234,22 +234,22 @@ function withSendNodePlanted(workflow: BuiltWorkflow): BuiltWorkflow {
 /**
  * The workflow the one schedule trigger belongs to, by id.
  *
- * Declared rather than read off {@link PHASE_3_AND_5_WORKFLOW_IDS},
+ * Declared rather than read off {@link PHASE_3_5_AND_6_WORKFLOW_IDS},
  * which names this id among its entries and no longer names it
  * first. The two are separate claims that used to coincide, that
  * roster having held one workflow: it says which artifacts the build
  * is expected to produce, this says which one of them schedules.
  * `ar-ingest` parted them, `ar-capture` parted them further with a
- * trigger of its own that starts a run and sets no clock, `ar-score`
- * parted them again with another of the kind `ar-ingest` carries,
- * and the entries phase 6 has still to deliver part them further
- * again, none of those being a schedule — so the roster grows and
- * this stays a set of one, which is the property itself and is what
- * a value derived from a list that grew with it would stop
- * asserting.
+ * trigger of its own that starts a run and sets no clock,
+ * `ar-score` parted them again with another of the kind `ar-ingest`
+ * carries, `ar-research` again with a third of that kind, and the
+ * entry phase 6 has still to deliver parts them further again,
+ * neither of those being a schedule — so the roster grows and this
+ * stays a set of one, which is the property itself and is what a
+ * value derived from a list that grew with it would stop asserting.
  *
  * By id and never by file name, for the reason
- * {@link PHASE_3_AND_5_WORKFLOW_IDS} gives: a workflow is one file
+ * {@link PHASE_3_5_AND_6_WORKFLOW_IDS} gives: a workflow is one file
  * called `<workflow-id>.json`, so a file name is a derivation and an
  * id is the thing to keep in step with the roster table in
  * `workflows/src/README.md`.
@@ -283,7 +283,7 @@ const WEBHOOK_TRIGGER_TYPE = 'n8n-nodes-base.webhook';
  *
  * Declared beside {@link SCHEDULE_TRIGGER_WORKFLOW_ID} and read the
  * same way, by id and never by file name, and kept apart from
- * {@link PHASE_3_AND_5_WORKFLOW_IDS} for the reason that one gives:
+ * {@link PHASE_3_5_AND_6_WORKFLOW_IDS} for the reason that one gives:
  * a roster growing with every source that lands cannot also answer
  * which of its entries carries what. The two ids are what the case
  * below turns into a per-workflow expectation, and every entry the
@@ -1089,7 +1089,7 @@ describe('workflow invariants — built tree', () => {
 
   // Held as an ordered list rather than as two sets, for two
   // reasons. `loadBuiltWorkflows` sorts, and
-  // `PHASE_3_AND_5_WORKFLOW_IDS` is written in that order. A
+  // `PHASE_3_5_AND_6_WORKFLOW_IDS` is written in that order. A
   // comparison sorting both sides again would be answered by a read
   // that never sorted at all, and a roster naming one id twice would
   // come back as the same set as one naming it once. An array parts
@@ -1119,18 +1119,21 @@ describe('workflow invariants — built tree', () => {
   // over the reader's surface reads: a walk that reached no workflow
   // fails on the record list rather than passing through an
   // expectation nothing ran.
-  it('holds every workflow the phase-3 and phase-5 roster expects', () => {
-    const built = BUILT_WORKFLOWS.map((workflow) => ({
-      file: workflow.file,
-      hasNodes: workflow.nodes.length > 0,
-    }));
-    const expected = PHASE_3_AND_5_WORKFLOW_IDS.map((id) => ({
-      file: `${id}.json`,
-      hasNodes: true,
-    }));
+  it(
+    'holds every workflow the phase-3, phase-5 and phase-6 roster expects',
+    () => {
+      const built = BUILT_WORKFLOWS.map((workflow) => ({
+        file: workflow.file,
+        hasNodes: workflow.nodes.length > 0,
+      }));
+      const expected = PHASE_3_5_AND_6_WORKFLOW_IDS.map((id) => ({
+        file: `${id}.json`,
+        hasNodes: true,
+      }));
 
-    expect(built).toEqual(expected);
-  });
+      expect(built).toEqual(expected);
+    },
+  );
 
   // The send-free rule read over built output: not one node of a
   // type that can reach outward, in any workflow this package
@@ -1362,7 +1365,7 @@ describe('workflow invariants — built tree', () => {
   // artifact in the built tree is actually started by.
   //
   // The expectation is derived from
-  // {@link PHASE_3_AND_5_WORKFLOW_IDS} and the two id constants
+  // {@link PHASE_3_5_AND_6_WORKFLOW_IDS} and the two id constants
   // rather than written out per file, so the roster stays the one
   // place a workflow is named. Every entry beyond those two is
   // expected to carry neither trigger, which is what makes this a
@@ -1412,7 +1415,7 @@ describe('workflow invariants — built tree', () => {
       };
 
       expect(control).toEqual({
-        perWorkflow: PHASE_3_AND_5_WORKFLOW_IDS.map((id) => ({
+        perWorkflow: PHASE_3_5_AND_6_WORKFLOW_IDS.map((id) => ({
           file: `${id}.json`,
           webhooks: id === WEBHOOK_TRIGGER_WORKFLOW_ID
             ? 1
