@@ -68,11 +68,17 @@
  *
  * `sources.enabled` is a real column and the UI spec has a menu that
  * writes to it, alongside approving a pending config and reviewing a
- * feed's failures. None of the three is offered: this round has no
- * write seam, and a control that silently did nothing would be worse
- * than one that is not there. What the menu does offer is the one
- * gesture that works — a navigation to this surface's editor
- * sub-route.
+ * feed's failures. None of the three is offered here, and a control
+ * that silently did nothing would be worse than one that is not there.
+ * What the menu does offer is the one gesture that works — a
+ * navigation to this surface's editor sub-route.
+ *
+ * The reason has narrowed since this was written and the sentence is
+ * worth keeping accurate: there IS a write seam now
+ * (`../../data/api.ts`'s `saveSource` and `approveSourceConfig`,
+ * reached through `../../data/hooks.ts` like every read). What is
+ * missing is the editor and the two modals that would call it, so the
+ * controls stay absent for the same reason and not for the old one.
  *
  * ## Three states, not two
  *

@@ -5,15 +5,14 @@
  * answer stops being a fixture.
  *
  * Everything above this line reaches its data through it.
- * `./hooks.ts` wraps each READ below in `useCache`, the pages call the
- * hooks, and no page or hook imports a fixture module directly. The
- * WRITES at the bottom of this file answer to the same rule and the
- * same module — wrapped in mutations rather than in `useCache` — and
- * those hooks land with the task that adds them, so no surface calls a
- * save until they do. That is the whole point:
- * when the API waves land, the fixture modules beside this one are
- * deleted and the functions below are re-pointed at endpoints, and
- * nothing else in `src/` has to move.
+ * `./hooks.ts` wraps each READ below in `useCache` and each WRITE in a
+ * mutation, the pages call the hooks, and no page or hook imports a
+ * fixture module directly. Both halves now have their hooks, so a
+ * surface CAN call a save; none does yet, and each page's own docblock
+ * says so where it matters. That is the whole point: when the API
+ * waves land, the fixture modules beside this one are deleted and the
+ * functions below are re-pointed at endpoints, and nothing else in
+ * `src/` has to move.
  *
  * Three properties are what make that swap a re-point rather than a
  * rewrite, and each one costs something today to buy it.

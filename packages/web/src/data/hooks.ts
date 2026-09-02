@@ -1,14 +1,20 @@
 /**
  * @packageDocumentation
- * The cache layer: one hook per READ accessor in `./api.ts`, and the
- * query keys those hooks file their answers under.
+ * The cache layer: one hook per accessor in `./api.ts` — a read hook
+ * per read, a mutation hook per write — and the query keys both
+ * halves file under.
  *
- * The barrel's nine WRITE accessors are unwrapped as this file stands.
- * They want a mutation rather than a `useCache` — a different hook, a
- * different naming rule and an invalidation to declare per write — and
- * those land with the task that adds them. `./hooks.test.ts` carries
- * the nine by NAME rather than exempting the shape, so the parity
- * claim below stays total and the gap cannot widen quietly.
+ * The two namings are deliberately different. A read's `fetchX`
+ * becomes `useX`; a write keeps its own verb, so `saveSource` becomes
+ * {@link useSaveSource} and `approveSourceConfig` becomes
+ * {@link useApproveSourceConfig}. `./api.ts` says why those verbs are
+ * not all `save` — ruling on a proposal is not editing one — and
+ * flattening them here would leave one undifferentiated list in which
+ * the only thing a caller needs to know, which of these records
+ * something, is the one thing the name no longer says.
+ * `./hooks.test.ts` derives BOTH namings from the barrel's own export
+ * list, so an accessor added there and left unwrapped here fails
+ * rather than sending a page off to import it directly.
  *
  * Pages call the hooks below and nothing else. `./api.ts` is what they
  * read THROUGH — it is imported here and by no page — so the q15 swap
@@ -78,12 +84,103 @@
  * `enabled`-gated: every read is unconditional, since a hook whose
  * accessor cannot fail to have an argument has nothing to wait for.
  *
- * Note this file is `.ts`, so `@ar/web`'s ESLint config applies
- * `react-hooks` to it not at all — the plugin is scoped to the JSX
- * extensions alone.
- * Nothing here is checked for conditional calls or dependency arrays.
- * The hooks are kept to one shape (resolve, key, read) so that the
- * missing check has nothing to catch.
+ * ## A write invalidates keys; it does not write to the cache
+ *
+ * Each mutation below names the keys its accessor can change and
+ * invalidates exactly those. It never puts the saved row into the
+ * cache itself. Both approaches put the new value on screen, and only
+ * one of them survives the day this seam stops being a fixture.
+ *
+ * A hand-written cache update is a SECOND implementation of the read.
+ * It has to know that editing a source also moves the status counts
+ * above the table, that an export summary carries a connector the
+ * edit may have re-pointed, that a domain list comes back seeded-first
+ * — every derivation `./api.ts` and the fixture modules already own,
+ * restated somewhere nothing compares the two. They agree on the day
+ * they are written and drift on the day either side moves, and the
+ * drift is invisible: a cache holding a plausible wrong row renders
+ * exactly like one holding the right row, until a reload replaces it
+ * with what the server actually thinks.
+ *
+ * Invalidating by key claims less and therefore cannot be wrong. It
+ * asks the read to run again and answer with whatever it answers,
+ * which is the read's job and is tested as such next door. Today that
+ * costs a microtask against a fixture; after the swap it costs a
+ * request, and the endpoint's answer — including whatever the server
+ * decided the row became — arrives without anything here having
+ * predicted it.
+ *
+ * ## Which keys, and why the list is sometimes not one
+ *
+ * "Exactly the keys this write can change" binds in both directions.
+ * Too few leaves a surface stale for the whole of `useCache`'s default
+ * `staleTime`, which is a save that looks like it did nothing. Too
+ * many re-read work whose answer cannot have changed, which is the
+ * cost {@link DEPLOYMENT_SCOPE} exists to avoid on a domain switch.
+ *
+ * Three are worth reading rather than assuming:
+ *
+ * - {@link useSaveSource} invalidates TWO keys. The stat cards above
+ *   the sources table are a separate read counting the same rows, and
+ *   `./api.ts` composes this tab's edits into both — so a save that
+ *   disabled a source and left `source-status-counts` alone would put
+ *   the cards and the table into exactly the disagreement
+ *   `summarizeSources` exists to prevent.
+ * - {@link useSaveCategoryTerms} invalidates the category SUMMARIES,
+ *   which a term save changes at the seam and does NOT change today.
+ *   `summarizeCategories` builds its per-category literal in its own
+ *   body, so `./api.ts` composes no draft into that read and names it
+ *   as the overlay's one real narrowing; the re-read is therefore
+ *   correct and currently answers the same card. The key belongs to
+ *   the WRITE, not to the overlay, which is what stops this list
+ *   needing a revisit on swap day. A term LIST has no accessor at all
+ *   yet — `./api.ts` records that ordering from the write's side —
+ *   and its key joins this one with the read that needs it.
+ * - {@link useApproveSourceConfig} invalidates NOTHING, which is the
+ *   same ordering seen from its other end: the proposals read is not
+ *   written yet, so there is no key a ruling can change. That is a
+ *   stated gap rather than an oversight, and it is why these are a
+ *   LIST of whole keys rather than one key that might arrive empty —
+ *   `invalidateQueries` with an EMPTY key matches every query in the
+ *   cache, so the weakest write here would silently become the most
+ *   expensive one.
+ *
+ * Keys match by PREFIX, which is load-bearing rather than incidental.
+ * A two-segment key names one entry today because nothing files
+ * anything longer; the single-row reads the editor modals want will
+ * file under the same two segments, so these lists already cover them
+ * and do not have to grow when they land.
+ *
+ * The invalidation is AWAITED — `onSuccess` hands its promise back —
+ * so a mutation stays pending until the reads it invalidated have
+ * settled. That is what lets a modal close on `mutateAsync` with the
+ * list behind it already right, rather than racing its own refetch.
+ *
+ * ## No `react-hooks` rule reads this file
+ *
+ * It is `.ts`, and `@ar/web`'s ESLint config extends the
+ * `react-hooks` plugin under the JSX extensions alone. Nothing here is
+ * checked for a conditional call, a call out of order, or a stale
+ * dependency list, so all three are hand-checked — and the shapes are
+ * kept few enough that hand-checking is a reading rather than an
+ * audit.
+ *
+ * There are exactly two. A read is resolve, key, read: one `useCache`,
+ * unconditional, at the top of the function. A write is resolve, keys,
+ * record: one {@link useInvalidatingMutation}, which is itself one
+ * `useQueryClient` followed by one `useMutation`, unconditional and in
+ * that order for every one of the nine. No branch, loop or early
+ * return sits above any of them, and no hook here calls another
+ * conditionally.
+ *
+ * There is also no dependency list in this module to get stale,
+ * because nothing here calls `useMemo`, `useCallback` or `useEffect`.
+ * That is deliberate rather than lucky: a memo is the obvious place to
+ * park a key array or a mutation function, and the rule that catches a
+ * stale one is precisely the rule this file does not get. So the
+ * arrays and closures are rebuilt every render instead — react-query
+ * hashes a query key by VALUE, and reads a mutation's options fresh
+ * per call, so rebuilding costs nothing either of them notices.
  */
 
 import type { ExportSubscriptionSummary } from './connectors';
@@ -94,11 +191,13 @@ import type {
   Document,
   Domain,
   Entity,
+  ExportSubscription,
   Finding,
   Persona,
   Settings,
   Source,
   SpendSummary,
+  Term,
 } from './types';
 import type {
   NotificationItem,
@@ -106,9 +205,10 @@ import type {
   SearchSuggestion,
 } from '@ar/ui';
 
-import { useCache } from '@ar/ui/cache';
+import { useCache, useMutation, useQueryClient } from '@ar/ui/cache';
 
 import {
+  approveSourceConfig,
   fetchCategorySummaries,
   fetchConnectors,
   fetchDocuments,
@@ -126,6 +226,14 @@ import {
   fetchSources,
   fetchSpendSummary,
   fetchVerdicts,
+  resolveSourceFailure,
+  saveCategoryTerms,
+  saveConnector,
+  saveExportSubscriptions,
+  saveFinding,
+  savePersona,
+  saveSettings,
+  saveSource,
 } from './api';
 import { resolveDomainSlug } from './domains';
 
@@ -142,6 +250,29 @@ import { resolveDomainSlug } from './domains';
  * @typeParam T - What the underlying accessor resolves to.
  */
 export type CachedRead<T> = ReturnType<typeof useCache<T>>;
+
+/**
+ * What every mutation hook here answers with.
+ *
+ * Written as the return type of `useMutation` for the reason
+ * {@link CachedRead} is written as `useCache`'s: `@ar/ui/cache`
+ * re-exports the hook but NOT the `UseMutationResult` interface behind
+ * it, so a redeclared `{ mutate, mutateAsync, isPending, isError,
+ * error, reset }` would be a second copy of a shape this package does
+ * not own, free to drift from the one the editors actually receive.
+ *
+ * `void` and `Error` are pinned rather than left to the defaults.
+ * Every write in `./api.ts` answers `Promise<void>` — that module says
+ * why a save hands nothing back — and the only rejection any of them
+ * can produce is the `Error` `getDomain` throws for a slug no domain
+ * carries.
+ *
+ * @typeParam TVariables - What `mutate` takes: the row, the list of
+ * rows, or the value the accessor records.
+ */
+export type RecordedWrite<TVariables> = ReturnType<
+  typeof useMutation<void, Error, TVariables>
+>;
 
 /**
  * The resources a domain-scoped key may name.
@@ -189,7 +320,11 @@ export type DeploymentResource =
 export const DEPLOYMENT_SCOPE = '@deployment';
 
 /**
- * The options every hook in this module passes to `useCache`.
+ * The options every READ hook in this module passes to `useCache`.
+ *
+ * The write half passes none: a mutation has no `staleTime` to set and
+ * no focus behaviour to pin, and what it does declare — which keys it
+ * invalidates — is per hook rather than shared.
  *
  * One shared frozen object rather than a literal repeated seventeen
  * times, so "what this app's reads do" is one line to read and one
@@ -536,5 +671,285 @@ export function useOperator(): CachedRead<ProfileMenuUser> {
     deploymentQueryKey('operator'),
     fetchOperator,
     READ_OPTIONS,
+  );
+}
+
+/**
+ * One cache key, as this module's two builders hand one over.
+ *
+ * Named so {@link useInvalidatingMutation} can take a LIST of keys
+ * without a reader having to work out whether the inner array is one
+ * key or a set of segments to match on. Spelled `CacheKey` rather than
+ * `QueryKey` because `@ar/ui/cache` re-exports a `QueryKey` of its own
+ * from react-query, and two spellings of one word in one file is worse
+ * than a second word. See this module's header for why an empty MEMBER
+ * of this list would be a hazard and an empty list is not.
+ */
+type CacheKey = readonly string[];
+
+/**
+ * What {@link useApproveSourceConfig} rules on.
+ *
+ * The one variables type here that is DERIVED from its accessor rather
+ * than named outright, because it is the one whose accessor cannot
+ * name it either: `./api.ts` types that parameter on the draft store's
+ * structural constraint on purpose, `./proposals.ts` being the module
+ * that redeclares the proposal columns and arriving with the modal
+ * that needs them. Derived, this narrows the day that module lands and
+ * the accessor's signature follows it. Restated, it would be a second
+ * declaration nobody would remember to move.
+ */
+type SourceConfigRuling = Parameters<typeof approveSourceConfig>[1];
+
+/**
+ * The one shape every write hook below has: record, then invalidate.
+ *
+ * Two hooks in a fixed order and nothing else — `useQueryClient`, then
+ * `useMutation` — which is what makes the hand-check this file's
+ * header owes a reading rather than an audit. Each write hook calls
+ * this once, unconditionally, after resolving its slug.
+ *
+ * The invalidation runs in `onSuccess` rather than after the write
+ * inside `mutationFn`, and that ordering is the point: a write that
+ * REJECTED must invalidate nothing. Every scoped accessor here refuses
+ * an unknown domain before recording a thing, so a failed save leaves
+ * both the store and the cache exactly as they were, and the surface
+ * renders the mutation's error instead of a set of reads that all
+ * answered again with the same rows.
+ *
+ * `Promise.all` is handed BACK rather than fired and forgotten, so the
+ * mutation stays pending until every invalidated read has settled.
+ * Nothing here caps that: with no key it resolves immediately, and
+ * with one it is a microtask against a fixture today and one request
+ * after the swap.
+ *
+ * @typeParam TVariables - What `mutate` takes.
+ * @param record - The write accessor, already bound to its domain
+ * where it has one.
+ * @param invalidates - Every key this write can change. May be empty,
+ * and an empty LIST invalidates nothing; an empty KEY would match
+ * everything, which is why no member of it is ever built here.
+ * @returns The mutation, for a surface to call and to read state off.
+ */
+function useInvalidatingMutation<TVariables>(
+  record: (variables: TVariables) => Promise<void>,
+  invalidates: readonly CacheKey[],
+): RecordedWrite<TVariables> {
+  const client = useQueryClient();
+
+  return useMutation<void, Error, TVariables>({
+    mutationFn: record,
+    onSuccess: () => Promise.all(
+      invalidates.map((key) => client.invalidateQueries({ queryKey: key })),
+    ),
+  });
+}
+
+/**
+ * Save one category's terms — what the lexicon editor's save does.
+ *
+ * Invalidates the category SUMMARIES: the lexicon grid renders a
+ * counted card per category and its polarity split is a reading of the
+ * very terms this saved, so that card is what a term save changes.
+ *
+ * Two qualifications, both stated so a silent card is read as the
+ * narrowing it is rather than as a broken invalidation. The re-read
+ * answers the SAME card today, because `./api.ts` composes no draft
+ * into `fetchCategorySummaries` and says why — the key names what this
+ * write changes, which is a property of the write and not of the
+ * fixture overlay. And the term LIST is not a key yet, so this is one
+ * key today and two on the day that read lands.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @returns The mutation; `mutate` takes the category's whole term
+ * list, as the editor left it.
+ */
+export function useSaveCategoryTerms(
+  domainSlug?: string | null,
+): RecordedWrite<readonly Term[]> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useInvalidatingMutation<readonly Term[]>(
+    (terms) => saveCategoryTerms(slug, terms),
+    [domainQueryKey(slug, 'category-summaries')],
+  );
+}
+
+/**
+ * Save one finding — the digest row action's verdict, and whatever
+ * else its detail modal edits.
+ *
+ * One key. The digest joins its findings to documents and entities in
+ * the page, and neither of those tables is what a verdict changed, so
+ * re-reading them would be work whose answer cannot have moved.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @returns The mutation; `mutate` takes the whole finding.
+ */
+export function useSaveFinding(
+  domainSlug?: string | null,
+): RecordedWrite<Finding> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useInvalidatingMutation<Finding>(
+    (finding) => saveFinding(slug, finding),
+    [domainQueryKey(slug, 'findings')],
+  );
+}
+
+/**
+ * Save one source — the sources surface's editor.
+ *
+ * The one write with TWO keys, and this module's header says why: the
+ * stat cards above the table are a separate read over the same rows,
+ * so a save that moved a source between statuses and invalidated only
+ * the table would leave the cards counting the old answer for the
+ * whole of the read's stale window.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @returns The mutation; `mutate` takes the whole source.
+ */
+export function useSaveSource(
+  domainSlug?: string | null,
+): RecordedWrite<Source> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useInvalidatingMutation<Source>(
+    (source) => saveSource(slug, source),
+    [
+      domainQueryKey(slug, 'sources'),
+      domainQueryKey(slug, 'source-status-counts'),
+    ],
+  );
+}
+
+/**
+ * Rule on a pending source-config proposal — approve it, or reject it.
+ *
+ * Invalidates NOTHING, and this module's header explains rather than
+ * hides it: a ruling changes the proposals list, and there is no read
+ * of that list to key on yet. The empty list is what this hook can
+ * honestly claim today, and the key arrives with the read.
+ *
+ * It is not a stale-surface bug in the meantime, because there is no
+ * surface: the modal that rules on a proposal and the accessor that
+ * lists them land together, and this list grows in the same commit.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @returns The mutation; `mutate` takes the proposal row as ruled.
+ */
+export function useApproveSourceConfig(
+  domainSlug?: string | null,
+): RecordedWrite<SourceConfigRuling> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useInvalidatingMutation<SourceConfigRuling>(
+    (ruling) => approveSourceConfig(slug, ruling),
+    [],
+  );
+}
+
+/**
+ * Rule on one failed capture — the keep and discard actions on the
+ * sources surface's failures list.
+ *
+ * One key, and the neighbour it deliberately leaves alone is worth
+ * naming: the failing-source COUNT is not a count of failed documents.
+ * `classifySource` reads a source's own flag and failure streak and
+ * never opens a document, so a ruling here cannot move
+ * `source-status-counts` and invalidating it would re-read a figure
+ * that is about something else.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @returns The mutation; `mutate` takes the document as ruled.
+ */
+export function useResolveSourceFailure(
+  domainSlug?: string | null,
+): RecordedWrite<Document> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useInvalidatingMutation<Document>(
+    (document) => resolveSourceFailure(slug, document),
+    [domainQueryKey(slug, 'documents')],
+  );
+}
+
+/**
+ * Save one persona — the agents surface's editor.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @returns The mutation; `mutate` takes the whole persona.
+ */
+export function useSavePersona(
+  domainSlug?: string | null,
+): RecordedWrite<Persona> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useInvalidatingMutation<Persona>(
+    (persona) => savePersona(slug, persona),
+    [domainQueryKey(slug, 'personas')],
+  );
+}
+
+/**
+ * Save one domain's export subscriptions — the format list on the
+ * tools surface.
+ *
+ * Domain-scoped, unlike the connector cards directly above it on the
+ * same surface. That asymmetry is `./api.ts`'s and it is visible here
+ * as two hooks with different arities feeding one page.
+ *
+ * @param domainSlug - The `:domainSlug` route param.
+ * @returns The mutation; `mutate` takes every subscription of the
+ * domain, as the list left them.
+ */
+export function useSaveExportSubscriptions(
+  domainSlug?: string | null,
+): RecordedWrite<readonly ExportSubscription[]> {
+  const slug = resolveDomainSlug(domainSlug);
+
+  return useInvalidatingMutation<readonly ExportSubscription[]>(
+    (subscriptions) => saveExportSubscriptions(slug, subscriptions),
+    [domainQueryKey(slug, 'export-subscriptions')],
+  );
+}
+
+/**
+ * Save one connector — the tools surface's editor.
+ *
+ * Takes no slug and invalidates a deployment-level key, exactly as
+ * {@link useConnectors} reads one: a connector is a fact about the
+ * installation, so an operator who edits one and switches domain still
+ * sees the edit rather than a re-read of somebody else's copy.
+ *
+ * The export list beside those cards is a KNOWN NARROWING rather than
+ * a missing key. It joins each subscription to its connector through
+ * the fixture layer, so it does not answer an edited connector at all
+ * today and invalidating it would re-read the same summary — and the
+ * key it would need carries a domain slug this hook has no other use
+ * for. `./api.ts` documents the join.
+ *
+ * @returns The mutation; `mutate` takes the whole connector.
+ */
+export function useSaveConnector(): RecordedWrite<Connector> {
+  return useInvalidatingMutation<Connector>(
+    saveConnector,
+    [deploymentQueryKey('connectors')],
+  );
+}
+
+/**
+ * Save the operator's preferences — the settings surface.
+ *
+ * Takes no slug and invalidates a deployment-level key: an operator is
+ * a person and not a workspace, so there is one preference set and a
+ * domain switch leaves it where it was.
+ *
+ * @returns The mutation; `mutate` takes the whole preference set.
+ */
+export function useSaveSettings(): RecordedWrite<Settings> {
+  return useInvalidatingMutation<Settings>(
+    saveSettings,
+    [deploymentQueryKey('settings')],
   );
 }

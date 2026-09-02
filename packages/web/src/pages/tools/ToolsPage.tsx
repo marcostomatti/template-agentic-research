@@ -54,9 +54,16 @@
  *
  * The spec has this page editing connectors, testing a connection,
  * duplicating a row, and toggling a delivery on and off. None of that
- * is offered: this round has no write seam, and the sources surface
- * already settled what to do about it — a control that silently did
- * nothing would be worse than one that is not there.
+ * is offered here, and the sources surface already settled what to do
+ * about it — a control that silently did nothing would be worse than
+ * one that is not there.
+ *
+ * The reason has narrowed and the sentence is worth keeping accurate:
+ * there IS a write seam now (`../../data/api.ts`'s `saveConnector` and
+ * `saveExportSubscriptions`, reached through `../../data/hooks.ts`
+ * like every read). What is missing is the editor modal and the toggle
+ * list that would call it, so the controls stay absent for the same
+ * reason and not for the old one.
  *
  * That is also why the deliveries are rows rather than the spec's
  * `DecoratedToggleList`. The stored `enabled` flag is drawn as a
