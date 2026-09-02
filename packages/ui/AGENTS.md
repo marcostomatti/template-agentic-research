@@ -80,8 +80,14 @@ the placeholder brand "Acme".
    intentionally changed (`bun run test:visual:update`), then re-assert.
 2. `bun run lint` — zero problems.
 3. `bun run check-types` — clean.
-4. `bun run test` — unit (cache) + storybook smoke suites.
-5. `bun run check:stories` — every story renders error-free.
+4. `bun run test` — the unit (cache) suite alone (`vitest run
+   --project unit`); the storybook smoke project runs under
+   `bun run test:full`.
+5. `bun run check:stories` — every story renders error-free. It
+   serves the gitignored `storybook-static/`, so
+   `bun run build:storybook` has to run first. It walks every story
+   in the built index through headless chromium, so it costs
+   minutes rather than seconds.
 
 Interrupted runs can leave static servers on ports 6006/6007/6016
 (`EADDRINUSE` false failures) — kill them before re-running.
