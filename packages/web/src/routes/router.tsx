@@ -56,13 +56,14 @@
  *
  * The other half is in use as of the lexicon's editor: an entry carries
  * its ELEMENT beside its path, and those elements have stopped being
- * one shared placeholder. THREE surfaces still open
- * {@link MODAL_PLACEHOLDER} — sources, agents and tools — while the
- * lexicon opens {@link LEXICON_EDITOR} and the digest opens
- * {@link DIGEST_DETAIL}. That is what an entry holding its own element
- * was for: a surface's modal is not the same modal as its neighbour's,
- * any more than its second sub-route is the same as its first, and the
- * two that have landed are not even the same KIND of modal.
+ * one shared placeholder. TWO surfaces still open
+ * {@link MODAL_PLACEHOLDER} — agents and tools — while the lexicon
+ * opens {@link LEXICON_EDITOR}, the sources open
+ * {@link SOURCE_EDITOR} and the digest opens {@link DIGEST_DETAIL}.
+ * That is what an entry holding its own element was for: a surface's
+ * modal is not the same modal as its neighbour's, any more than its
+ * second sub-route is the same as its first, and the three that have
+ * landed are not even all the same KIND of modal.
  *
  * Each is a CHILD of its list route rather than a sibling, which is the
  * whole point of the shape: the list stays matched and stays rendered,
@@ -118,6 +119,7 @@ import { PlaceholderModal } from '../components/PlaceholderModal';
 import { findPage } from '../pages';
 import { DigestDetailModal } from '../pages/digest/DigestDetailModal';
 import { LexiconEditorModal } from '../pages/lexicon/LexiconEditorModal';
+import { SourceEditorModal } from '../pages/sources/SourceEditorModal';
 
 import { DomainGuard } from './DomainGuard';
 import {
@@ -224,9 +226,9 @@ export const SURFACE_PLACEHOLDER = (
  * bottom of each one, so the row actions on those pages already open
  * it.
  *
- * It stands at SIX of the ten registrations now — sources, agents and
- * tools, across both bases — and the count shrinks by two with each
- * editor that lands.
+ * It stands at FOUR of the ten registrations now — agents and tools,
+ * across both bases — and the count shrinks by two with each editor
+ * that lands.
  */
 export const MODAL_PLACEHOLDER = <PlaceholderModal />;
 
@@ -261,14 +263,27 @@ export const LEXICON_EDITOR = <LexiconEditorModal />;
 export const DIGEST_DETAIL = <DigestDetailModal />;
 
 /**
+ * The sources surface's feed editor, at its own sub-route.
+ *
+ * The third real element in the table below, and the first landing
+ * that leaves the placeholder standing for a set it can describe in
+ * two words: agents and tools, both of them editors.
+ *
+ * Held as an ELEMENT for the reason its three neighbours are: one
+ * object across both trees, so identity stays askable.
+ */
+export const SOURCE_EDITOR = <SourceEditorModal />;
+
+/**
  * The modal sub-routes each list surface carries, keyed by surface id.
  *
  * A LIST per surface, so a row openable in more than one way costs a
  * row here rather than a shape change — see the header. Every list
- * holds exactly one entry today, and two of them now name a real modal
- * rather than {@link MODAL_PLACEHOLDER}: the lexicon's editor and the
- * digest's detail. A surface whose list is empty and a surface with no
- * key at all mean the same thing to {@link surfaceRoute}.
+ * holds exactly one entry today, and three of them now name a real
+ * modal rather than {@link MODAL_PLACEHOLDER}: the lexicon's editor,
+ * the sources editor and the digest's detail. A surface whose list is
+ * empty and a surface with no key at all mean the same thing to
+ * {@link surfaceRoute}.
  *
  * Declared BELOW the elements rather than beside the other route
  * constants at the top because it names them: an entry holds what it
@@ -282,7 +297,7 @@ export const DIGEST_DETAIL = <DigestDetailModal />;
 const MODAL_SUB_ROUTE_TABLE: ModalSubRouteTable = {
   digest: [{ path: ENTITY_PARAM, element: DIGEST_DETAIL }],
   lexicon: [{ path: `${ENTITY_PARAM}/edit`, element: LEXICON_EDITOR }],
-  sources: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
+  sources: [{ path: `${ENTITY_PARAM}/edit`, element: SOURCE_EDITOR }],
   agents: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
   tools: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
 };

@@ -94,21 +94,22 @@
  * with a `label`. What that pulse can honestly mean over a fixture
  * layer with no runs is `./rows.ts`'s subject, not this file's.
  *
- * ## No enable switch, and no approve action
+ * ## The enable switch is in the editor, and the approval is not here
  *
  * `sources.enabled` is a real column and the UI spec has a menu that
  * writes to it, alongside approving a pending config and reviewing a
- * feed's failures. None of the three is offered here, and a control
- * that silently did nothing would be worse than one that is not there.
- * What the menu does offer is the one gesture that works — a
- * navigation to this surface's editor sub-route.
+ * feed's failures. None of the three is a menu item here, and the one
+ * that has landed did not become one: `./SourceEditorModal.tsx` holds
+ * the enable switch, beside the flag, the endpoint and the kind, and
+ * the menu's one action is the navigation that opens it.
  *
- * The reason has narrowed since this was written and the sentence is
- * worth keeping accurate: there IS a write seam now
- * (`../../data/api.ts`'s `saveSource` and `approveSourceConfig`,
- * reached through `../../data/hooks.ts` like every read). What is
- * missing is the editor and the two modals that would call it, so the
- * controls stay absent for the same reason and not for the old one.
+ * That is a decision rather than a stage. Every one of those four
+ * members is a whole-row PUT through `saveSource`, and a switch in a
+ * row menu writing one of them would be a save an operator made
+ * without seeing the row it saved. The other two — ruling on a
+ * pending config, and working through a feed's failures — are their
+ * own sub-routes and arrive with their own modals; the menu grows a
+ * row apiece when they do.
  *
  * ## Three states, not two
  *
@@ -340,8 +341,9 @@ export const SourcesPage = () => {
       width: MENU_WIDTH,
       align: 'end',
       cell: (source) => renderCellContent('context-menu', {
-        // One action, and it is the one that works — see the header on
-        // the three the spec names and this round cannot honour.
+        // One action, and it opens the editor that holds the row's
+        // four writable members — see the header on why none of them
+        // is a menu item of its own.
         actions: [
           {
             icon: 'square-pen',

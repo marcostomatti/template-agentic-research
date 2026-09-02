@@ -331,11 +331,17 @@ const KIND_TONES: Readonly<Record<SourceKind, TagProps['tone']>> = {
 };
 
 /**
- * The order the kind filter lists the kinds in.
+ * The order this surface lists the kinds in.
  *
  * The three polled kinds first, alphabetically because nothing
  * distinguishes them, and the pushed one last for the reason
  * {@link KIND_TONES} gives.
+ *
+ * Read by BOTH controls that offer a kind — the toolbar's filter
+ * through {@link kindOptions} here, and the editor's field through
+ * `sourceKindChoices` in `./editor.ts`. The two lists differ by the
+ * clear-the-filter option and by nothing else, which is the whole
+ * reason the order lives in one place.
  */
 export const SOURCE_KINDS: readonly SourceKind[] = [
   'api',

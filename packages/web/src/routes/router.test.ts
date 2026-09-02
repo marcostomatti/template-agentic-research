@@ -9,6 +9,7 @@ import {
   DIGEST_DETAIL,
   LEXICON_EDITOR,
   MODAL_PLACEHOLDER,
+  SOURCE_EDITOR,
   NOT_FOUND,
   ROUTES,
 } from './router';
@@ -132,12 +133,11 @@ const MODAL_SURFACES = SURFACES.filter(
  * tree could only ever agree with whatever the tree currently says.
  * It shrinks by one as each real modal lands, and the partition test
  * below is what refuses a surface that leaves it without joining a
- * test that makes a claim about its element instead. All three
- * remaining are EDITORS — the digest's read-only detail has landed,
- * so this roster no longer stands for two kinds of modal at once.
+ * test that makes a claim about its element instead. Both remaining
+ * are EDITORS — the digest's read-only detail has landed, so this
+ * roster no longer stands for two kinds of modal at once.
  */
 const PLACEHOLDER_SURFACES: readonly string[] = [
-  'sources',
   'agents',
   'tools',
 ];
@@ -448,11 +448,24 @@ describe('the modal sub-routes', () => {
     expect(opened).toHaveLength(BASES.length);
   });
 
+  it('opens the sources feed editor at its own sub-route', () => {
+    // The third real element, and the one that leaves the ledger
+    // above describable in two words. Driven exactly as its two
+    // neighbours are: the CLAIM differs, the reading does not.
+    // Arrange / Act
+    const opened = openedElements(['sources']);
+
+    // Assert
+    expect(opened.filter((row) => row.element !== SOURCE_EDITOR))
+      .toEqual([]);
+    expect(opened).toHaveLength(BASES.length);
+  });
+
   it('opens the digest detail at its own sub-route', () => {
-    // The second real element, and the one that says the ledger is a
-    // PARTITION rather than a shrinking list: this modal is not an
-    // editor, so its registration could never have been satisfied by
-    // whatever the remaining three eventually open.
+    // The element that says the ledger is a PARTITION rather than a
+    // shrinking list: this modal is not an editor, so its
+    // registration could never have been satisfied by whatever the
+    // two remaining surfaces eventually open.
     // Arrange / Act
     const opened = openedElements(['digest']);
 
@@ -468,7 +481,12 @@ describe('the modal sub-routes', () => {
     // is asserted about by nothing, and one in TWO would make one of
     // them wrong about the other's element.
     // Arrange
-    const claimed = [...PLACEHOLDER_SURFACES, 'lexicon', 'digest'];
+    const claimed = [
+      ...PLACEHOLDER_SURFACES,
+      'lexicon',
+      'sources',
+      'digest',
+    ];
     const declared = MODAL_SURFACES.map((surface) => surface.id);
 
     // Assert
