@@ -179,9 +179,10 @@ property of the machine running the suite rather than of the data.
 
 ## App-local stand-ins for absent `@ar/ui` components
 
-`@ar/ui` ships no `PageHead` and no `EntityCard`. The UI spec names
-both, and q15 promotes them into the library — so the rule here is
-about what keeps that promotion cheap.
+`@ar/ui` ships no `PageHead`; it does now ship `EntityCard`, promoted
+into `molecules` on this branch. So the rule here is about what keeps
+the one REMAINING promotion cheap, and about what the card surfaces
+compose now that theirs has landed.
 
 - `src/components/PageHead.tsx` is the stand-in, and it exists in
   order to be DELETED. It imports NOTHING from this app (no route
@@ -195,10 +196,12 @@ about what keeps that promotion cheap.
   `cn(className)` merge). Every `@ar/ui` export carries it, nothing in
   this app needs it, and an API with no caller is kept alive by the
   next reader assuming one exists.
-- `EntityCard` has NO stand-in on purpose: the card surfaces compose
-  `Card` directly. An app-local card abstraction would have to be
-  unwound to land the promoted component, which is the opposite of
-  what a stand-in is for.
+- `EntityCard` had NO stand-in on purpose, and now needs none. An
+  app-local card abstraction would have had to be unwound to land the
+  promoted component, which is the opposite of what a stand-in is for
+  — so the card surfaces are refitted onto it one at a time, and the
+  ones that have not been reached yet still compose `Card` directly.
+  The lexicon grid is the first.
 - `src/components/ListPage.tsx` is NOT a stand-in and stays for good —
   it composes the router's `Outlet`, which no component library can
   take without taking a router with it. It sits beside `PageHead` and
