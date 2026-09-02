@@ -272,6 +272,18 @@ They are here because every one of them is invisible to `lint`,
   ?? tone : label`, so passing BOTH gives the indicator a `role="status"`
   name a screen reader reads on top of the visible text. Pass `label`
   only where it carries something the text does not.
+- **`Segmented` renders a HALF tab pattern.** It is `role="tablist"`
+  over `role="tab"` buttons carrying `aria-selected`, and it wires no
+  `aria-controls` — nor offers a prop that could, its `items` being
+  `{ key, label }` alone. So the region a segment switches is a plain
+  `div` and NOT a `tabpanel`: half a relationship reads worse than
+  none, and a spec reaching for `getByRole('tabpanel')` finds nothing.
+  Address the switch as `getByRole('tab', { name })` and give the
+  tablist an `aria-label` at the call site — the two words on the
+  segments say WHICH view, and nothing else says what they are views
+  of. It also spreads `HTMLAttributes`, so that label passes straight
+  through (measured). Its track is `inline-flex`, which stretches like
+  any flex child, so a call site inside a column wants `self-start`.
 - **A `Readonly<Record<Union, T>>` over a cva PROP union is not
   exhaustive** the way one over an app-owned union is: every
   `VariantProps` member resolves to `T | null | undefined`, so a key set

@@ -150,6 +150,48 @@
  * and it obeys the quoting rule above: two counts and this module's
  * own words, with nothing off the block in it.
  *
+ * ## Two presentations, one draft
+ *
+ * The editor draws a category two ways — the three buckets above,
+ * and the payload itself in a box — and a control switches between
+ * them. {@link termPresentationOptions} is that control's vocabulary,
+ * {@link termPresentationIndex} is where it sits, and
+ * {@link readTermPresentation} reads its answer back: the same pair
+ * {@link termPolarityOptions} and {@link readTermPolarity} make for
+ * the polarity control, for the same reason. A control reports a
+ * POSITION, and a fallback in the narrowing would be this module
+ * choosing a presentation on the operator's behalf.
+ *
+ * {@link toTermPayload} and {@link withTermPayload} are what make the
+ * two write the ONE draft, which is the whole point of offering both:
+ * an edit made in either is an edit the other opens on. The payload
+ * carries no `id` and no `categoryId` — `./schema.ts` says at length
+ * why those are the members an operator may not change — so it is a
+ * category's VOCABULARY rather than its rows, and re-associating an
+ * edited payload with the rows it is a reading of falls here, to the
+ * module holding both.
+ *
+ * That association is BY POSITION, because position is the only thing
+ * a payload carries. Three consequences, each deliberate:
+ *
+ * - Entry `n` keeps row `n`'s id and category and takes the four
+ *   members the operator may write. So reordering entries reorders
+ *   the vocabulary and leaves the ids where they are, which costs
+ *   nothing: `terms` records no order, as the drop-index argument
+ *   above says at length.
+ * - An entry past the last row is MINTED a row, by exactly the rule
+ *   {@link mergeTermCandidates} mints one. A payload and a pasted
+ *   block therefore produce the same kind of unsaved row, and
+ *   {@link isDraftTerm} reads both.
+ * - A row past the last entry is GONE from the draft. The payload is
+ *   the whole vocabulary and the save behind it replaces the
+ *   collection, so a shorter payload is a removal rather than an
+ *   omission.
+ *
+ * The seam limit stated above covers the last two: `../../data/
+ * drafts.ts` edits rows and neither inserts nor deletes one, so a
+ * save keeps neither the addition nor the removal.
+ *
  * ## What this deliberately does not answer
  *
  * Whether there is anything to save belongs to
@@ -159,6 +201,7 @@
  */
 
 import type { PolarityFacet } from './cards';
+import type { TermPayload, TermPayloadEntry } from './schema';
 import type { Term, TermPolarity } from '../../data/types';
 
 import { POLARITY_FACETS } from './cards';
@@ -191,6 +234,42 @@ const DRAFT_ID_CEILING = 0;
 
 /** What {@link describeTermBlockReading} says about an empty block. */
 const EMPTY_BLOCK_SENTENCE = 'That block held nothing to read.';
+
+/**
+ * The presentations the editor offers, in the order it offers them.
+ *
+ * The template first, because it is what an operator wants unless the
+ * payload has outgrown it — the header says what the fallback is for.
+ *
+ * A list rather than a record, because the ORDER is the whole of what
+ * this table is: a control draws its options left to right and reports
+ * the position it drew. {@link PRESENTATION_LABELS} is the record, and
+ * the two are split exactly as `./cards.ts` splits the same claims
+ * about a polarity — the compiler demands a key there, and the order
+ * lives here.
+ */
+const PRESENTATION_ORDER: readonly TermPresentation[] = [
+  'template',
+  'json',
+];
+
+/**
+ * What each presentation is called, in the surface's own words.
+ *
+ * Keyed by the union, so a presentation added to
+ * {@link TermPresentation} is a key the compiler demands rather than
+ * one the control quietly stops offering.
+ *
+ * 'Buckets' rather than 'Template': the operator is looking at three
+ * lists of terms, and the word this file uses for the code's sake is
+ * not the word on the screen. 'JSON' is the payload's own name and
+ * there is no plainer one — a box showing punctuation is what the
+ * fallback IS, and calling it 'Advanced' would hide that.
+ */
+const PRESENTATION_LABELS: Readonly<Record<TermPresentation, string>> = {
+  template: 'Buckets',
+  json: 'JSON',
+};
 
 /**
  * The polarities a line may name, in the order the surface draws them.
@@ -248,6 +327,34 @@ export interface TermPolarityOption {
   /** The polarity this option files a term under. */
   readonly value: TermPolarity;
   /** What it is called, in the surface's own words. */
+  readonly label: string;
+}
+
+/**
+ * Which of the editor's two drawings of a category is on screen.
+ *
+ * `template` is the three buckets and the paste panel under them;
+ * `json` is the payload in a box. Both write the one draft — the
+ * header says how — so this names a PRESENTATION and never a mode
+ * with rules of its own.
+ */
+export type TermPresentation = 'template' | 'json';
+
+/**
+ * What the presentation control offers.
+ *
+ * Declared here rather than imported from `@ar/ui`, for the reason
+ * {@link TermPolarityOption} gives: this module stays a pure `.ts`
+ * the unit runner can reach with no component library behind it.
+ * Structurally the library's own `SelectionItem` — a `key` and a
+ * `label` — with the key NARROWED to the union, which is what makes
+ * an option naming a presentation that does not exist a
+ * `check-types` error rather than a tab that renders nothing.
+ */
+export interface TermPresentationOption {
+  /** The presentation this option switches to. */
+  readonly key: TermPresentation;
+  /** What it is called, on the control itself. */
   readonly label: string;
 }
 
@@ -931,4 +1038,147 @@ export function describeTermBlockReading(
   return refused === 0
     ? `${addedPhrase}.`
     : `${addedPhrase} and refused ${refusedPhrase}.`;
+}
+
+/**
+ * What the presentation control offers, in the order it draws them.
+ *
+ * TOTAL over {@link TermPresentation} because it is built from
+ * {@link PRESENTATION_ORDER}: a presentation the editor can be in and
+ * the control cannot reach would be a drawing with no way back to it.
+ *
+ * Built fresh per call and owned by nobody — see the header on which
+ * array stance this module is in, and note that the library's control
+ * declares its `items` readonly while `Select` does not.
+ *
+ * @returns One option per presentation, in the order to offer them.
+ */
+export function termPresentationOptions(): TermPresentationOption[] {
+  return PRESENTATION_ORDER.map((key) => ({
+    key,
+    label: PRESENTATION_LABELS[key],
+  }));
+}
+
+/**
+ * Where a presentation sits among the options.
+ *
+ * The control is driven by an INDEX rather than by a value, so this
+ * is the other half of {@link readTermPresentation} and not a
+ * convenience: one turns a presentation into the position the control
+ * highlights, the other turns a position back into a presentation.
+ * Both read {@link PRESENTATION_ORDER}, so the two cannot disagree
+ * about an order only one of them holds.
+ *
+ * @param presentation - The one on screen.
+ * @returns Its position among the options, counting from zero.
+ */
+export function termPresentationIndex(
+  presentation: TermPresentation,
+): number {
+  return PRESENTATION_ORDER.indexOf(presentation);
+}
+
+/**
+ * The presentation an option position names, or `undefined`.
+ *
+ * The narrowing the control needs and cannot do itself: it reports
+ * the index it drew, and the state it writes into holds the union.
+ * Answering `undefined` rather than a default is the rule
+ * {@link readTermPolarity} keeps for the same reason — a fallback
+ * here would be this module choosing a drawing on the operator's
+ * behalf, and a position nothing offered should move nothing.
+ *
+ * @param index - Whatever the control reported.
+ * @returns The presentation at that position, or `undefined` for a
+ * position the control never drew.
+ */
+export function readTermPresentation(
+  index: number,
+): TermPresentation | undefined {
+  return PRESENTATION_ORDER[index];
+}
+
+/**
+ * A category's terms, as the payload the fallback edits.
+ *
+ * The four members an operator may write and nothing else: `id` and
+ * `categoryId` are the seam's, and `./schema.ts` states at length why
+ * their absence is the payload saying so rather than an omission.
+ *
+ * The members are spelled out rather than rest-destructured off the
+ * row, for the reason {@link mergeTermCandidates} spells its own out:
+ * a member that stopped existing on {@link Term} is then a
+ * `check-types` error here instead of a payload quietly missing a
+ * column. The list's order is the draft's own.
+ *
+ * @param terms - The list as the draft holds it.
+ * @returns The payload, in the same order.
+ */
+export function toTermPayload(terms: readonly Term[]): TermPayload {
+  return terms.map((term) => ({
+    pattern: term.pattern,
+    weight: term.weight,
+    polarity: term.polarity,
+    notes: term.notes,
+  }));
+}
+
+/**
+ * The term list an edited payload produces.
+ *
+ * {@link toTermPayload}'s inverse where the payload still has as many
+ * entries as the list had rows, and the header states what happens
+ * either side of that: entry `n` keeps row `n`'s id and category, an
+ * entry past the last row is minted one, and a row past the last
+ * entry is gone. Position is the only association available, the
+ * payload carrying no id by design.
+ *
+ * Minting follows {@link mergeTermCandidates} exactly — descending
+ * from below the lowest id the list carries, so no minted id can
+ * collide with another or with a serial the service issued, and
+ * {@link isDraftTerm} reads a payload's additions and a paste's
+ * alike.
+ *
+ * A fresh list every time, with every row rebuilt: the list is a
+ * draft the modal holds in state, and a row written through in place
+ * is a new value that compares equal to the old one and renders
+ * nothing.
+ *
+ * @param terms - The list as it stands, stored rows and earlier
+ * additions alike.
+ * @param payload - What the fallback accepted, in its own order.
+ * @param categoryId - The `categories.id` this editor is open on,
+ * which is where a minted row hangs. Passed rather than read off a
+ * member of `terms`, which would leave an empty category with
+ * nowhere to get it.
+ * @returns The new list: one row per entry, in the payload's order.
+ */
+export function withTermPayload(
+  terms: readonly Term[],
+  payload: readonly TermPayloadEntry[],
+  categoryId: number,
+): Term[] {
+  const lowest = terms.reduce(
+    (low, term) => Math.min(low, term.id),
+    DRAFT_ID_CEILING,
+  );
+
+  return payload.map((entry, index) => {
+    const held = terms[index];
+
+    // How far past the last row this entry sits, counting from one —
+    // which is what makes the first minted id `lowest - 1`. Unread
+    // wherever a row answered, where it is zero or below.
+    const minted = index - terms.length + 1;
+
+    return {
+      id: held?.id ?? lowest - minted,
+      categoryId: held?.categoryId ?? categoryId,
+      pattern: entry.pattern,
+      weight: entry.weight,
+      polarity: entry.polarity,
+      notes: entry.notes,
+    };
+  });
 }

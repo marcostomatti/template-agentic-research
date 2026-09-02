@@ -1,4 +1,5 @@
-import type { TermCandidate } from './terms';
+import type { TermPayloadEntry } from './schema';
+import type { TermCandidate, TermPresentation } from './terms';
 import type { Term, TermPolarity } from '../../data/types';
 
 import { describe, expect, it } from 'vitest';
@@ -12,9 +13,14 @@ import {
   mergeTermCandidates,
   parseTermBlock,
   readTermPolarity,
+  readTermPresentation,
   readTermWeight,
   splitTermBuckets,
   termPolarityOptions,
+  termPresentationIndex,
+  termPresentationOptions,
+  toTermPayload,
+  withTermPayload,
   withTermPolarity,
   withTermWeight,
 } from './terms';
@@ -1044,5 +1050,342 @@ describe('describeTermBlockReading', () => {
     // both a candidate and a refusal in it, not an empty one.
     expect(sentence)
       .toBe('Added 1 term as an unsaved row and refused 1 line.');
+  });
+});
+
+/**
+ * One payload entry, spelled out.
+ *
+ * The `candidate` helper's counterpart for the shape the JSON
+ * fallback hands back. Typed, because an inline literal inside a
+ * spread widens `polarity` to `string` and the call then reports a
+ * mismatch that is the LITERAL's and not the module's.
+ *
+ * @param pattern - What the row looks for.
+ * @param polarity - Which bucket it sits in.
+ * @param weight - Its magnitude.
+ * @returns The entry.
+ */
+function entry(
+  pattern: string,
+  polarity: TermPolarity,
+  weight = 1,
+): TermPayloadEntry {
+  return { pattern, weight, polarity, notes: null };
+}
+
+describe('termPresentationOptions', () => {
+  it('offers every drawing the editor can be in', () => {
+    // The equivalence the pair exists for, as a set: a presentation
+    // the state can hold and the control cannot reach is a drawing
+    // with no way back to it, and it is invisible from either side.
+    // Arrange
+    const reachable: readonly TermPresentation[] = ['template', 'json'];
+
+    // Act
+    const offered = termPresentationOptions().map((option) => option.key);
+
+    // Assert
+    expect(offered).toEqual(reachable);
+  });
+
+  it('labels each option, and no two of them the same', () => {
+    // Act
+    const labels = termPresentationOptions().map((option) => option.label);
+
+    // Assert
+    expect(labels.filter((label) => label !== '')).toHaveLength(2);
+    expect(repeated(labels)).toEqual([]);
+  });
+
+  it('builds a fresh list per call, owned by nobody', () => {
+    // The one-line form of the array-ownership stance the header
+    // states — and the library's control declares its `items`
+    // readonly, so nothing at the call site would report a mutation.
+    // Arrange
+    const first = termPresentationOptions();
+
+    // Act
+    first.push({ key: 'json', label: 'planted' });
+
+    // Assert
+    expect(termPresentationOptions()).toHaveLength(2);
+  });
+});
+
+describe('readTermPresentation', () => {
+  it('answers nothing for a position the control never drew', () => {
+    // A default here would be this module choosing a drawing for the
+    // operator, which is the one thing a narrowing must not do.
+    expect(readTermPresentation(-1)).toBeUndefined();
+    expect(readTermPresentation(2)).toBeUndefined();
+    expect(readTermPresentation(Number.NaN)).toBeUndefined();
+  });
+
+  it('round-trips every option the control offers', () => {
+    // Driven off the option list rather than a literal, so a
+    // presentation added upstream is covered with this file untouched.
+    // Arrange
+    const offered = termPresentationOptions();
+
+    // Act
+    const read = offered.map(
+      (option, index) => readTermPresentation(index),
+    );
+
+    // Assert
+    expect(read).toEqual(offered.map((option) => option.key));
+    expect(read).toHaveLength(2);
+  });
+});
+
+describe('termPresentationIndex', () => {
+  it('answers the position the option list drew each presentation at', () => {
+    // The two halves held against each other rather than against a
+    // pair of literals: they read one order, and a test comparing each
+    // to its own copy would pass while they disagreed.
+    // Arrange
+    const offered = termPresentationOptions();
+
+    // Act
+    const positions = offered.map((option) => termPresentationIndex(
+      option.key,
+    ));
+
+    // Assert
+    expect(positions).toEqual(offered.map((_option, index) => index));
+  });
+
+  it('round-trips a position back to the presentation at it', () => {
+    // Arrange
+    const held: TermPresentation = 'json';
+
+    // Act
+    const index = termPresentationIndex(held);
+
+    // Assert
+    expect(readTermPresentation(index)).toBe(held);
+    // The vacuity guard: a pair of functions both answering the first
+    // option would satisfy the line above.
+    expect(index).not.toBe(0);
+  });
+});
+
+describe('toTermPayload', () => {
+  it('drops the two members an operator may not change', () => {
+    // `id` and `categoryId` are the seam's, and their absence is the
+    // payload saying which members the box may be edited over.
+    // Act
+    const payload = toTermPayload(MIXED);
+
+    // Assert
+    expect(payload.map((entry) => Object.keys(entry).sort())).toEqual(
+      MIXED.map(() => ['notes', 'pattern', 'polarity', 'weight']),
+    );
+  });
+
+  it('carries every member the row named, in the list order', () => {
+    // Arrange
+    const noted: Term = {
+      id: 12,
+      categoryId: CATEGORY_ID,
+      pattern: 'service mesh',
+      weight: 2.5,
+      polarity: 'negative',
+      notes: 'Worth watching.',
+    };
+
+    // Act
+    const payload = toTermPayload([noted, term(13, 'framework', 'ignore')]);
+
+    // Assert
+    expect(payload).toEqual([
+      {
+        pattern: 'service mesh',
+        weight: 2.5,
+        polarity: 'negative',
+        notes: 'Worth watching.',
+      },
+      { pattern: 'framework', weight: 1, polarity: 'ignore', notes: null },
+    ]);
+  });
+
+  it('answers an empty payload for a category with no vocabulary', () => {
+    // The state the editor opens in over an empty category, and the
+    // one the schema accepts on purpose.
+    expect(toTermPayload([])).toEqual([]);
+  });
+
+  it('builds a fresh list per call, owned by nobody', () => {
+    // Arrange
+    const first = toTermPayload(MIXED);
+
+    // Act
+    first.push({
+      pattern: 'planted',
+      weight: 1,
+      polarity: 'ignore',
+      notes: null,
+    });
+
+    // Assert
+    expect(toTermPayload(MIXED)).toHaveLength(MIXED.length);
+  });
+});
+
+describe('withTermPayload', () => {
+  it('answers nothing at all for an emptied payload', () => {
+    // A shorter payload is a REMOVAL and not an omission — the
+    // payload is the whole vocabulary, and the save behind it
+    // replaces the collection.
+    expect(withTermPayload(MIXED, [], CATEGORY_ID)).toEqual([]);
+  });
+
+  it('drops the rows a shortened payload no longer names', () => {
+    // Arrange
+    const payload = toTermPayload(MIXED).slice(0, 2);
+
+    // Act
+    const next = withTermPayload(MIXED, payload, CATEGORY_ID);
+
+    // Assert
+    expect(next.map((row) => row.id)).toEqual([1, 2]);
+  });
+
+  it('answers a fresh list reading the same when nothing was edited', () => {
+    // The round trip, which is what makes switching presentation
+    // free: a payload read off the draft and written straight back
+    // has to be the draft.
+    // Act
+    const next = withTermPayload(MIXED, toTermPayload(MIXED), CATEGORY_ID);
+
+    // Assert
+    expect(next).toEqual(MIXED);
+    expect(next).not.toBe(MIXED);
+  });
+
+  it('keeps each row its id and category while it writes the four', () => {
+    // Arrange
+    const payload = toTermPayload(MIXED).map((entry) => ({
+      ...entry,
+      weight: entry.weight + 10,
+    }));
+
+    // Act
+    const next = withTermPayload(MIXED, payload, 999);
+
+    // Assert
+    expect(next.map((row) => row.id)).toEqual(MIXED.map((row) => row.id));
+    expect(next.map((row) => row.categoryId))
+      .toEqual(MIXED.map((row) => row.categoryId));
+    expect(next.map((row) => row.weight))
+      .toEqual(MIXED.map((row) => row.weight + 10));
+  });
+
+  it('leaves the ids where they are when entries are reordered', () => {
+    // Position is the only association a payload carries, so a
+    // reorder moves the VOCABULARY and not the rows. Nothing is lost
+    // by that: `terms` records no order.
+    // Arrange
+    const payload = toTermPayload(MIXED).slice()
+      .reverse();
+
+    // Act
+    const next = withTermPayload(MIXED, payload, CATEGORY_ID);
+
+    // Assert
+    expect(next.map((row) => row.id)).toEqual(MIXED.map((row) => row.id));
+    expect(next.map((row) => row.pattern))
+      .toEqual(MIXED.map((row) => row.pattern).reverse());
+  });
+
+  it('mints ids below every id the list already carries', () => {
+    // The same rule `mergeTermCandidates` mints by, so a payload's
+    // additions and a paste's are the same kind of row.
+    // Arrange
+    const payload = [
+      ...toTermPayload(MIXED),
+      entry('service mesh', 'positive', 2),
+      entry('edge runtime', 'negative', 3),
+    ];
+
+    // Act
+    const next = withTermPayload(MIXED, payload, CATEGORY_ID);
+    const added = next.slice(MIXED.length);
+
+    // Assert
+    expect(added.map((row) => row.id)).toEqual([-1, -2]);
+    expect(added.every((row) => isDraftTerm(row))).toBe(true);
+    expect(added.map((row) => row.categoryId))
+      .toEqual([CATEGORY_ID, CATEGORY_ID]);
+  });
+
+  it('keeps descending below a list that already holds minted rows', () => {
+    // Arrange
+    const held = mergeTermCandidates(
+      MIXED,
+      [candidate('service mesh', 'positive')],
+      CATEGORY_ID,
+    );
+    const payload = [
+      ...toTermPayload(held),
+      entry('edge runtime', 'negative', 3),
+    ];
+
+    // Act
+    const next = withTermPayload(held, payload, CATEGORY_ID);
+
+    // Assert
+    expect(next.map((row) => row.id).slice(-2)).toEqual([-1, -2]);
+    expect(repeated(next.map((row) => row.id))).toEqual([]);
+  });
+
+  it('mints against the category the editor is open on', () => {
+    // Read off the argument rather than off a member of `terms`,
+    // which is what leaves an empty category somewhere to get it.
+    // Act
+    const next = withTermPayload(
+      [],
+      [entry('service mesh', 'positive', 2)],
+      CATEGORY_ID,
+    );
+
+    // Assert
+    expect(next).toEqual([
+      {
+        id: -1,
+        categoryId: CATEGORY_ID,
+        pattern: 'service mesh',
+        weight: 2,
+        polarity: 'positive',
+        notes: null,
+      },
+    ]);
+  });
+
+  it('rebuilds every row rather than writing one through', () => {
+    // A row mutated in place is a new value comparing equal to the
+    // old one, which renders nothing.
+    // Arrange
+    const payload = toTermPayload(MIXED);
+
+    // Act
+    const next = withTermPayload(MIXED, payload, CATEGORY_ID);
+
+    // Assert
+    expect(next.every((row, index) => row !== MIXED[index])).toBe(true);
+  });
+
+  it('builds a fresh list per call, owned by nobody', () => {
+    // Arrange
+    const payload = toTermPayload(MIXED);
+    const first = withTermPayload(MIXED, payload, CATEGORY_ID);
+
+    // Act
+    first.push(term(99, 'planted', 'ignore'));
+
+    // Assert
+    expect(withTermPayload(MIXED, payload, CATEGORY_ID))
+      .toHaveLength(MIXED.length);
   });
 });

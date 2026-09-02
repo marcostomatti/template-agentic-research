@@ -147,8 +147,11 @@
  *
  * Radix unmounts a closed item's children, so the box does not exist
  * while the panel is shut. The typed block lives in the panel
- * component, which stays mounted either way, so collapsing it keeps
- * what was typed.
+ * component, which stays mounted through a collapse, so collapsing it
+ * keeps what was typed. Switching PRESENTATION does not: that swap
+ * unmounts the whole template branch, and the section below says why
+ * discarding a block nobody has read yet is the honest half of
+ * "switching loses no edit".
  *
  * ## Pressing the button twice
  *
@@ -161,17 +164,63 @@
  * instead of leaving it: a sentence names a LINE NUMBER, and a
  * keystroke can move the line it points at.
  *
- * ## What is not here yet
+ * ## The JSON fallback, and what it is a stand-in for
  *
- * The JSON fallback over `./schema.ts` is the branch this editor
- * grows next, and it writes the same draft both of the above do.
- * Nothing in this file is reachable from the unit suite, which is
- * node-only and collects `.ts` alone — its decisions are next door,
- * its bindings are proven by a `check-types` mutation grid, and what
- * it renders falls to the Playwright specs.
+ * A control at the top of the body chooses between the fixed template
+ * above and the payload itself in a box, validated by `./schema.ts`.
+ * The template is the answer for the shape a category usually has;
+ * the box is the v1 answer for every shape it cannot express — a note
+ * carrying the separator the paste format splits on, a weight typed
+ * beside forty others, a vocabulary being moved between two
+ * deployments by copy and paste.
+ *
+ * v1 is the operative word. `../../components/JsonEditor.tsx` is
+ * deliberately thin because the dynamic form provider replaces this
+ * whole branch: it renders editable fields from a type definition, so
+ * the shapes this box exists for get real controls and nobody edits
+ * punctuation to change a weight. On the day it lands this file swaps
+ * one component for another and keeps everything around it — the
+ * payload, the schema and the two projections are what the
+ * replacement takes too, which is the whole reason that seam is three
+ * props wide.
+ *
+ * ## Both presentations write the ONE draft
+ *
+ * That is what makes switching free, and it is why the fallback is a
+ * PRESENTATION rather than a second editor. {@link toTermPayload}
+ * reads the draft into the box's value and {@link withTermPayload}
+ * writes an accepted payload back, so an edit made in either drawing
+ * is an edit the other opens on. Neither branch knows the other
+ * exists, and no third state records which one made a change.
+ *
+ * What a swap DOES discard is text that is not yet an edit: the box's
+ * unparsed characters and whatever is typed into the paste panel,
+ * both of which live in a component the swap unmounts. Nothing there
+ * ever reached the draft — the box reports a payload only once it
+ * parses AND satisfies the schema — so the draft is exactly what the
+ * footer counts and what a save writes, whichever drawing is up.
+ *
+ * The re-association is BY POSITION and `./terms.ts` carries its
+ * three consequences: a reorder moves the vocabulary and leaves the
+ * ids, an entry past the last row is minted an unsaved row, and a row
+ * past the last entry is gone. The last two run into the same seam
+ * limit the paste panel does, and the badge reads both the same way.
+ *
+ * ## What no test in this package reaches
+ *
+ * Nothing in this file. The unit suite is node-only and collects
+ * `.ts` alone — this file's decisions are next door, its bindings are
+ * proven by a `check-types` mutation grid, and what it renders falls
+ * to the Playwright specs.
  */
 
-import type { TermBlockReading, TermBucket, TermCandidate } from './terms';
+import type { TermPayload } from './schema';
+import type {
+  TermBlockReading,
+  TermBucket,
+  TermCandidate,
+  TermPresentation,
+} from './terms';
 import type { EditorDraft } from '../../components/editorDraft';
 import type { Term, TermPolarity } from '../../data/types';
 
@@ -182,6 +231,7 @@ import {
   Banner,
   Button,
   EmptyState,
+  Segmented,
   Select,
   Skeleton,
   Sortable,
@@ -199,21 +249,28 @@ import {
   withLoadedRow,
 } from '../../components/editorDraft';
 import { EditorModal } from '../../components/EditorModal';
+import { JsonEditor } from '../../components/JsonEditor';
 import {
   useCategory,
   useSaveCategoryTerms,
   useTerms,
 } from '../../data/hooks';
 
+import { termPayloadSchema } from './schema';
 import {
   describeTermBlockReading,
   isDraftTerm,
   mergeTermCandidates,
   parseTermBlock,
   readTermPolarity,
+  readTermPresentation,
   readTermWeight,
   splitTermBuckets,
   termPolarityOptions,
+  termPresentationIndex,
+  termPresentationOptions,
+  toTermPayload,
+  withTermPayload,
   withTermPolarity,
   withTermWeight,
 } from './terms';
@@ -272,6 +329,26 @@ const PASTE_REFUSED_TITLE = 'These lines were not added';
 
 /** What marks a row this editor minted and no save will keep. */
 const DRAFT_ROW_LABEL = 'Unsaved';
+
+/**
+ * What the presentation control is called.
+ *
+ * `Segmented` renders a `tablist`, and a tablist with no accessible
+ * name is a set of unexplained tabs to anyone not looking at the two
+ * words on them. Its own labels say WHICH drawing; this says what
+ * they are drawings of.
+ */
+const PRESENTATION_LABEL = 'Term editor presentation';
+
+/**
+ * What the fallback's box is called.
+ *
+ * The payload's own name, matching `./schema.ts`'s vocabulary rather
+ * than the surface's: what is in the box is the whole category's
+ * vocabulary as one value, and 'Terms' would read as the box holding
+ * the same thing the buckets do one row at a time.
+ */
+const JSON_FIELD_LABEL = 'Term payload';
 
 /**
  * A category's vocabulary, as the draft holder carries it.
@@ -376,6 +453,18 @@ export const LexiconEditorModal = () => {
     writeTerms(mergeTermCandidates(edited, candidates, categoryId));
   };
 
+  // The fallback's write, and the third of the three that reach this
+  // one draft. It fires only over a payload that parsed AND satisfied
+  // the schema — `../../components/JsonEditor.tsx` refuses everything
+  // else — so nothing unreadable is ever in what a save reads.
+  const handlePayload = (payload: TermPayload) => {
+    if (edited === undefined) {
+      return;
+    }
+
+    writeTerms(withTermPayload(edited, payload, categoryId));
+  };
+
   return (
     <EditorModal
       size="lg"
@@ -402,6 +491,7 @@ export const LexiconEditorModal = () => {
         onPolarityChange={handlePolarityChange}
         onWeightTextChange={handleWeightTextChange}
         onAddCandidates={handleCandidates}
+        onPayloadChange={handlePayload}
       />
     </EditorModal>
   );
@@ -424,6 +514,8 @@ interface LexiconEditorBodyProps {
   readonly onWeightTextChange: (termId: number, text: string) => void;
   /** Report the candidates a pasted block was read into. */
   readonly onAddCandidates: (candidates: readonly TermCandidate[]) => void;
+  /** Report a payload the fallback parsed and the schema accepted. */
+  readonly onPayloadChange: (payload: TermPayload) => void;
 }
 
 /**
@@ -440,9 +532,16 @@ interface LexiconEditorBodyProps {
  * gesture, so the empty state stands where the buckets would and the
  * panel sits under either.
  *
+ * Which PRESENTATION is up is held here rather than in the modal,
+ * because it is not a draft: it changes nothing an operator could
+ * save, and the footer would have to learn to ignore it. Held above
+ * the early returns so a read settling does not put the editor back
+ * on a drawing nobody chose, and so the hook order does not depend on
+ * which state the read is in.
+ *
  * @param props - Which state the read is in, and what to render with.
  * @returns The buckets and the panel, the empty state and the panel,
- * or whichever read state is standing.
+ * the payload in a box, or whichever read state is standing.
  */
 const LexiconEditorBody = ({
   failed,
@@ -451,7 +550,12 @@ const LexiconEditorBody = ({
   onPolarityChange,
   onWeightTextChange,
   onAddCandidates,
+  onPayloadChange,
 }: LexiconEditorBodyProps) => {
+  const [presentation, setPresentation] = useState<TermPresentation>(
+    'template',
+  );
+
   if (failed) {
     return (
       <EmptyState
@@ -470,28 +574,75 @@ const LexiconEditorBody = ({
 
   return (
     <div className="flex flex-col gap-5">
-      {terms.length === 0
+      {/*
+        `self-start` because the track is `inline-flex` and a flex
+        child stretches by default, which would draw a two-option
+        switch the width of the modal.
+
+        The library wires no `aria-controls` per tab and offers no way
+        to, so what follows is a plain region rather than a
+        `tabpanel`: half a tab relationship reads worse to assistive
+        technology than none, and closing it properly is a change to
+        `@ar/ui` and not to this file.
+      */}
+      <Segmented
+        size="sm"
+        className="self-start"
+        aria-label={PRESENTATION_LABEL}
+        items={termPresentationOptions()}
+        index={termPresentationIndex(presentation)}
+        onChange={(index) => {
+          // Narrowed next door rather than asserted here: the control
+          // reports a position, and a position nothing offered leaves
+          // the editor on the drawing it is already showing.
+          const next = readTermPresentation(index);
+
+          if (next !== undefined) {
+            setPresentation(next);
+          }
+        }}
+      />
+
+      {presentation === 'json'
         ? (
-          <EmptyState
-            title="No terms yet"
-            description="This category carries no vocabulary. A term is what the pipeline matches on, and its polarity is what the match is worth. Paste a block below to start one."
+          // Seeded from the draft at mount and owned by the box from
+          // then on — the swap that gets here is the remount its own
+          // header names as the way a caller re-seeds it. Nothing is
+          // keyed: the two branches are different element types, so
+          // React unmounts either way round.
+          <JsonEditor
+            label={JSON_FIELD_LABEL}
+            value={toTermPayload(terms)}
+            schema={termPayloadSchema}
+            onChange={onPayloadChange}
           />
         )
         : (
-          <div className="flex flex-col gap-4">
-            {splitTermBuckets(terms).map((bucket) => (
-              <BucketList
-                key={bucket.polarity}
-                bucket={bucket}
-                weightTexts={weightTexts}
-                onPolarityChange={onPolarityChange}
-                onWeightTextChange={onWeightTextChange}
-              />
-            ))}
-          </div>
-        )}
+          <>
+            {terms.length === 0
+              ? (
+                <EmptyState
+                  title="No terms yet"
+                  description="This category carries no vocabulary. A term is what the pipeline matches on, and its polarity is what the match is worth. Paste a block below to start one."
+                />
+              )
+              : (
+                <div className="flex flex-col gap-4">
+                  {splitTermBuckets(terms).map((bucket) => (
+                    <BucketList
+                      key={bucket.polarity}
+                      bucket={bucket}
+                      weightTexts={weightTexts}
+                      onPolarityChange={onPolarityChange}
+                      onWeightTextChange={onWeightTextChange}
+                    />
+                  ))}
+                </div>
+              )}
 
-      <TermPastePanel terms={terms} onAdd={onAddCandidates} />
+            <TermPastePanel terms={terms} onAdd={onAddCandidates} />
+          </>
+        )}
     </div>
   );
 };
