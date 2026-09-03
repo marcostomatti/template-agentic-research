@@ -1,14 +1,15 @@
 /**
  * @packageDocumentation
  * The in-memory dataset every research store port is driven through
- * in the isolated suite. All nine halves are here — the domains
+ * in the isolated suite. All ten halves are here — the domains
  * half, the taxonomy half with categories and terms together, the
  * personas beside them, the topics the dispatcher comes for, the
  * sources it reads and the review queue over what they captured, the
  * connectors the deployment reaches other services through, the
  * export subscriptions that pair the two, the operator settings it
- * is configured by, and the findings a pass made with the sightings,
- * rulings and research that hang off them.
+ * is configured by, the findings a pass made with the sightings,
+ * rulings and research that hang off them, and the corpus one domain
+ * has captured whatever feed it arrived through.
  *
  * ONE DATASET RATHER THAN SEVEN FAKES, which is why this file is not
  * named for any one of the ports it satisfies. `src/domains/store.ts`
@@ -514,6 +515,60 @@
  * divergence stated at both seams and pinned by a case rather than
  * left to be discovered.
  *
+ * THE DOCUMENTS HALF WRITES NOTHING AT ALL, WHICH IS A SHAPE NO HALF
+ * ABOVE HAS EITHER. `DocumentStore` declares two methods and both
+ * are reads, so there is no insert to burn an id on, no update, no
+ * delete, and no mechanism for this half to imitate. It throws no
+ * {@link StoreRefusal} for the settings half's reason reached by a
+ * shorter argument: that port cannot reach the `operator_settings`
+ * mechanisms, and this one has no write to reach
+ * `documents_parse_status_check`, `documents_hash_unique` or either
+ * of that table's foreign keys WITH. So the whole half is a seam,
+ * two reads, and one line in the domain cascade.
+ *
+ * AND IT PLANTS THE SAME TABLE THE SOURCES HALF PLANTS, KEYED
+ * DIFFERENTLY, which is this file's FIFTH known divergence and its
+ * second over `documents`.
+ * {@link MemoryResearchStore.setSourceDocuments} is keyed by the
+ * source a capture came through and
+ * {@link MemoryResearchStore.setDomainDocuments} by the domain that
+ * holds it, because the two ports ask different questions of the
+ * table: that one is one SOURCE's failures worked from the top, and
+ * this one is one DOMAIN's corpus whatever its status and whatever
+ * it arrived through. A row planted through either seam is invisible
+ * to the other, and both faces are pinned by a case rather than left
+ * to be discovered — the sightings divergence stated one table over,
+ * for the same reason.
+ *
+ * A NULL `source_id` IS WHAT MAKES THAT MORE THAN A BOOKKEEPING
+ * CHOICE. An ingested file and a pasted body land in the corpus
+ * carrying no source at all, and the sources seam is keyed BY a
+ * source id — so those rows are not merely planted somewhere else,
+ * they have no key to be planted under there. A fake resolving one
+ * seam through the other could not hold the collection this half
+ * exists for.
+ *
+ * ITS PAGE IS `captured_at` DESCENDING WITH `id` DESCENDING, AND THE
+ * TIE THE SECOND KEY BREAKS IS THE SERVER'S OWN. `captured_at`
+ * defaults to `now()`, which is the TRANSACTION's start time, so a
+ * batch capture writes rows tying to the microsecond and a page
+ * boundary falling inside that tie would show one document twice and
+ * another never. The failures queue orders by the same pair over the
+ * same rows; that the two agree is the column's doing rather than a
+ * shared helper's, and each ordering is expressed where its own
+ * reader can be checked against it.
+ *
+ * ITS FILTER NARROWS AND NEVER SETS, AND ABSENT IS BOTH STATUSES. A
+ * failed document is IN the corpus rather than behind a flag, which
+ * is fail-flag-keep read from the debug page's side: a default that
+ * hid them would make this collection agree with every other reader
+ * precisely where an operator is looking for the disagreement. A
+ * status no row carries is an empty page rather than a refusal, and
+ * a status outside `DOCUMENT_PARSE_STATUSES` never reaches here at
+ * all — `src/documents/service.ts` refuses it with a `422` before
+ * this port is called, which is why the filter's member is the union
+ * where the record's is `string`.
+ *
  * THE SETTINGS HALF REFUSES NOTHING, AND THAT IS A MEASUREMENT
  * RATHER THAN A SIMPLIFICATION. `operator_settings` carries two
  * mechanisms and neither is reachable through the port: a second
@@ -658,6 +713,11 @@ import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type { OperatorSettings } from '../../src/db/schema/settings.js';
 import type { DocumentParseStatus } from '../../src/db/schema/values.js';
 import type {
+  DocumentFilter,
+  DocumentRecord,
+  DocumentStore,
+} from '../../src/documents/store.js';
+import type {
   DomainDependentCounts,
   DomainPatch,
   DomainRecord,
@@ -770,6 +830,77 @@ export interface MemorySourceDocument {
    * what the aggregate groups by.
    */
   readonly parseStatus: DocumentParseStatus;
+}
+
+/**
+ * One planted `documents` row, as the documents half reads it.
+ *
+ * {@link DocumentRecord} MEMBER FOR MEMBER, which is the one plant
+ * in this file that carries every column its record answers. The
+ * other three drop the key they are planted under; this one has
+ * nothing to drop, because the record already omits `domainId` on
+ * its own reasoning — a document is met in its domain and addressed
+ * by nothing else, so `src/documents/store.ts` leaves the scope out
+ * of the row and {@link MemoryResearchStore.setDomainDocuments}
+ * plants under exactly the member the record does not carry.
+ *
+ * ITS `parseStatus` IS THE UNION WHERE THE RECORD'S IS `string`,
+ * and the asymmetry is the point rather than a slip. A plant stands
+ * in for the WRITER that stored the row, and a writer is held to
+ * `documents_parse_status_check`; a record is what a SELECT answers,
+ * and a SELECT answers whatever is stored, including a value written
+ * before the tuple was narrowed. {@link MemorySourceDocument} takes
+ * the same view of the same column for the same reason.
+ *
+ * IT IS NOT {@link MemorySourceDocument}, AND THE DIFFERENCE IS
+ * `sourceId`. That shape omits the column because the source is its
+ * key; this one carries it, nullable, because the corpus holds
+ * documents that came through no feed at all. The two are two shapes
+ * over one table rather than one shape somebody split, on the
+ * two-ports argument `src/documents/store.ts` makes: each is scoped
+ * to what its own readers can see, and one shape serving both would
+ * put a column added for one collection into the other.
+ */
+export interface MemoryDomainDocument {
+  /** `documents.id`, and the tiebreak on the corpus page's order. */
+  readonly id: number;
+
+  /**
+   * The feed this document was captured through, or null when it
+   * came through none.
+   *
+   * NULL IS AN ORDINARY STATE rather than an edge case, and it is
+   * the state {@link MemoryResearchStore.setSourceDocuments} has no
+   * key to plant: an ingested file and a pasted body sit in the
+   * middle of this page by capture time and are unreachable through
+   * a seam keyed by a source.
+   */
+  readonly sourceId: number | null;
+
+  /** Where the document can be read at its source, or null. */
+  readonly url: string | null;
+
+  /** The document's text as captured, verbatim and possibly empty. */
+  readonly body: string;
+
+  /**
+   * Which side of `documents_parse_status_check` the row sits on,
+   * and what {@link DocumentFilter.parseStatus} narrows against.
+   */
+  readonly parseStatus: DocumentParseStatus;
+
+  /**
+   * What went wrong, or null when nothing was recorded — including
+   * on a row that is `failed`, which is storable and is the shape
+   * that costs an operator the most.
+   */
+  readonly parseError: string | null;
+
+  /**
+   * When the pipeline captured it, which is the page's first key.
+   * Copied on the way in.
+   */
+  readonly capturedAt: Date;
 }
 
 /**
@@ -920,7 +1051,7 @@ export interface MemoryEntityResearch {
 }
 
 /**
- * All nine research ports over one dataset, plus the seven seams a
+ * All ten research ports over one dataset, plus the eight seams a
  * case needs that no port declares.
  *
  * EVERY ONE OF THEM WHOLE rather than a `Pick` of it. The category
@@ -929,8 +1060,9 @@ export interface MemoryEntityResearch {
  * than a gap papered over with stubs; all twelve taxonomy methods,
  * all six persona ones, all seven topic ones, all nine source ones,
  * all seven connector ones, all seven subscription ones, both
- * settings ones and all seven finding ones are here now, so a caller
- * wanting any of the nine ports entire can be handed this store.
+ * settings ones, all seven finding ones and both document ones are
+ * here now, so a caller wanting any of the ten ports entire can be
+ * handed this store.
  *
  * `TopicStore` was the first member from outside wave 1 and
  * `SourceStore` is the second, and both join this file rather than
@@ -970,6 +1102,16 @@ export interface MemoryEntityResearch {
  * half could not say why a sighting planted through this port is
  * invisible to `SourceStore.countSourceDependents`.
  *
+ * `DocumentStore` IS THE SIXTH AND NEEDS THE FIRST REASON ALONE AS
+ * WELL, on the shallowest reading of it any half here has.
+ * `documents.domain_id` cascades, so a domain deleted through
+ * `DomainStore` has to take its corpus, and nothing hangs off a
+ * document that this store can plant. What it could not do standing
+ * alone is the OTHER thing: `SourceStore` reads the same table two
+ * ways, so only a shared dataset can say why a row planted for the
+ * corpus page answers no failures queue and holds no source's
+ * delete.
+ *
  * Nothing in `src/` is handed a {@link MemoryResearchStore} — a
  * service takes the port — so the seams below cannot become a way for
  * the code under test to route around them.
@@ -983,7 +1125,8 @@ export interface MemoryResearchStore extends
   SourceStore,
   ConnectorStore,
   SubscriptionStore,
-  FindingStore {
+  FindingStore,
+  DocumentStore {
   /**
    * Plants what a domain has ACCUMULATED, for the delete guard to
    * read back through {@link DomainStore.countDomainDependents}.
@@ -1240,6 +1383,45 @@ export interface MemoryResearchStore extends
   setEntityResearch(
     entityId: number,
     research: readonly MemoryEntityResearch[],
+  ): void;
+
+  /**
+   * Plants the `documents` rows one domain holds, for the two reads
+   * over that table to answer from.
+   *
+   * NO PORT WRITES A `documents` ROW, and `src/documents/store.ts`
+   * states the absence IS the read-first rule rather than an
+   * omission: a handler cannot offer to re-parse a failed capture
+   * because there is nothing on the port to call. That leaves the
+   * corpus page and its count with no reachable state, so this seam
+   * supplies it — and it supplies ROWS rather than a number, because
+   * one of the two answers rows and the other counts the same
+   * predicate over them.
+   *
+   * IT IS NOT {@link MemoryResearchStore.setSourceDocuments}, AND
+   * NEITHER SEES THE OTHER'S ROWS. That is this file's fifth known
+   * divergence: the two ports read `documents` differently, so each
+   * gets the seam its own readers can be driven through, and a row
+   * planted here answers no parse-status aggregate, no failures
+   * queue and no `documents` member of
+   * {@link SourceStore.countSourceDependents}. One case pins each
+   * face rather than leaving it to be discovered, and
+   * `tests/live/api-wave3.live.test.ts` is where one table behind
+   * both is discharged.
+   *
+   * @param domainId - The domain that holds them. Need not name a
+   *   stored domain: the rows are plantable ahead of it, and both
+   *   reads answer about an id rather than about a domain.
+   * @param documents - What to record, WHOLE. A second call replaces
+   *   the first rather than appending to it — the same whole-unit
+   *   rule {@link MemoryResearchStore.setDomainFindings} states, for
+   *   the same reason: under an append there is no way to express a
+   *   domain going back to none. Each row's `capturedAt` is copied
+   *   on the way in.
+   */
+  setDomainDocuments(
+    domainId: number,
+    documents: readonly MemoryDomainDocument[],
   ): void;
 }
 
@@ -1727,6 +1909,52 @@ function failureOf(row: MemorySourceDocument): SourceFailureRecord {
 }
 
 /**
+ * A planted corpus document whose `Date` belongs to nobody else.
+ *
+ * Used on the way IN, where the seam is handed a row a case built,
+ * and again on the way out through {@link documentOf}.
+ * {@link copyPlantedDocument} is the same shape one seam over, and
+ * the two are separate for the reason their plants are:
+ * `MemoryDomainDocument` carries a column `MemorySourceDocument`
+ * does not, so one function serving both would have to widen the
+ * narrower shape.
+ *
+ * @param row - The document to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedCorpusDocument(
+  row: MemoryDomainDocument,
+): MemoryDomainDocument {
+  return { ...row, capturedAt: copyInstant(row.capturedAt) };
+}
+
+/**
+ * The corpus page's projection of one planted document.
+ *
+ * EVERY MEMBER, unlike {@link failureOf} beside it: the record and
+ * the plant carry the same seven columns, so this is a copy with a
+ * fresh `Date` rather than a narrowing. What makes it a projection
+ * anyway is the table — `documents` carries `raw`, `features`,
+ * `feature_version`, `embedding`, `embedding_model`, `hash` and
+ * `domain_id` too, and neither shape here has ever held them.
+ *
+ * @param row - The stored document.
+ * @returns The seven members {@link DocumentRecord} declares, its
+ *   `capturedAt` copied.
+ */
+function documentOf(row: MemoryDomainDocument): DocumentRecord {
+  return {
+    id: row.id,
+    sourceId: row.sourceId,
+    url: row.url,
+    body: row.body,
+    parseStatus: row.parseStatus,
+    parseError: row.parseError,
+    capturedAt: copyInstant(row.capturedAt),
+  };
+}
+
+/**
  * A connector record whose config belongs to nobody else.
  *
  * ONE MEMBER rather than {@link copySource}'s four:
@@ -2053,6 +2281,12 @@ export function createMemoryResearchStore(
   // three. The fourth is WRITTEN: `finding_labels` is the one table
   // this half appends to, so it is keyed by its own id and carries a
   // counter beside the eight above.
+  // The documents half's whole state, and the second seam over
+  // `documents` in this file. Keyed by the DOMAIN that holds the
+  // corpus rather than by the source a capture came through, because
+  // the two ports read the table differently and a row with no
+  // `source_id` has no key on the other seam at all.
+  const domainDocuments = new Map<number, MemoryDomainDocument[]>();
   const domainFindings = new Map<number, MemoryDomainFinding[]>();
   const findingSightings = new Map<number, MemoryFindingSighting[]>();
   const entityResearch = new Map<number, MemoryEntityResearch[]>();
@@ -3306,6 +3540,110 @@ export function createMemoryResearchStore(
     domainFindings.delete(domainId);
   }
 
+  /**
+   * The documents planted under one domain.
+   *
+   * @param domainId - The domain to read.
+   * @returns Its planted rows, or none. A fresh array every call, so
+   *   a caller filtering, sorting or slicing what this answers cannot
+   *   reach the planted list.
+   */
+  function corpusOf(domainId: number): MemoryDomainDocument[] {
+    return [...(domainDocuments.get(domainId) ?? [])];
+  }
+
+  /**
+   * Whether one document stands under a filter.
+   *
+   * The predicate the page and the count BOTH read through, written
+   * once so that a page's `meta.total` cannot come to describe a
+   * different collection than the page —
+   * {@link matchesFindingFilter}'s reason one group over.
+   *
+   * AN ABSENT MEMBER WIDENS, which is the whole of the default page:
+   * a failed document is IN the corpus rather than behind a flag, so
+   * a filter naming no status answers both members of
+   * `DOCUMENT_PARSE_STATUSES` rather than the `ok` half. Nothing
+   * here refuses a status outside the tuple, and nothing here can be
+   * handed one: `DocumentFilter.parseStatus` is the union, and
+   * `src/documents/service.ts` is where a `422` is decided.
+   *
+   * @param row - The document to judge.
+   * @param filter - What to narrow to.
+   * @returns Whether it belongs in the collection.
+   */
+  function matchesDocumentFilter(
+    row: MemoryDomainDocument,
+    filter: DocumentFilter,
+  ): boolean {
+    return filter.parseStatus === undefined
+      || row.parseStatus === filter.parseStatus;
+  }
+
+  /**
+   * One domain's corpus, narrowed and ordered newest first.
+   *
+   * `captured_at` descending with `id` descending breaking a tie, as
+   * {@link DocumentStore.listDocuments} promises. THE TIEBREAK IS
+   * NOT OPTIONAL AND THE TIE IS THE SERVER'S: `captured_at` defaults
+   * to the transaction's start time, so a batch capture writes rows
+   * carrying one instant and a page boundary falling inside that tie
+   * would show one document twice and another never.
+   *
+   * The same pair {@link failuresOf} orders by over the same table,
+   * expressed again rather than shared. The two collections agree
+   * because the column does, and a helper serving both would make
+   * one reader's ordering unfalsifiable from the other's cases.
+   *
+   * @param domainId - The domain to read within.
+   * @param filter - What to narrow to.
+   * @returns The rows in that order. A fresh array, so the sort
+   *   never reaches the planted list.
+   */
+  function orderedDocuments(
+    domainId: number,
+    filter: DocumentFilter,
+  ): MemoryDomainDocument[] {
+    return corpusOf(domainId)
+      .filter((row) => matchesDocumentFilter(row, filter))
+      .sort((left, right) => {
+        const byCapture = right.capturedAt.getTime()
+          - left.capturedAt.getTime();
+
+        return byCapture === 0
+          ? right.id - left.id
+          : byCapture;
+      });
+  }
+
+  /**
+   * Removes every document of one domain, as `ON DELETE CASCADE`
+   * does.
+   *
+   * ONE LEVEL AND ONE TABLE HERE, and the two keys onto
+   * `documents.id` are both worth naming for a reader checking this
+   * against the schema. `findings.document_id` is `ON DELETE
+   * cascade`, and those rows have gone in the line above either
+   * way, so the two orders are indistinguishable.
+   * `ingested_files.document_id` is `ON DELETE no action` and
+   * REFUSES the domain delete in a deployment while its rows cite
+   * these documents — left unimitated for
+   * `research_pool.finding_id`'s reason, since no port here writes
+   * that table and no seam plants one, so there is no dataset this
+   * store can be in where the key would fire.
+   *
+   * IT DOES NOT REACH {@link MemoryResearchStore.setSourceDocuments}'
+   * PLANTS, and {@link dropSourcesOf} does not reach these. The two
+   * seams hold the same table separately, so the domain delete has
+   * to clear both — which is what makes the fifth known divergence
+   * survive a cascade rather than leaking a row through it.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropDocumentsOf(domainId: number): void {
+    domainDocuments.delete(domainId);
+  }
+
   return {
     /** One window of the list, slug ascending. */
     async listDomains(window: StoreWindow): Promise<readonly DomainRecord[]> {
@@ -3500,6 +3838,16 @@ export function createMemoryResearchStore(
      * `ON DELETE no action` key onto `findings.id` sits on a table
      * nothing here can put a row in.
      *
+     * ITS DOCUMENTS GO IN THAT SAME PLACE, THROUGH A SECOND LINE
+     * OVER A TABLE {@link dropSourcesOf} HAS ALREADY REACHED. The
+     * two seams over `documents` are keyed differently and neither
+     * sees the other's rows, so clearing the sources' plants leaves
+     * this domain's corpus standing and clearing the corpus leaves
+     * their plants standing — the fifth known divergence surviving
+     * the cascade rather than leaking a row through it. Both lines
+     * are needed and neither is redundant, which one case reads from
+     * each side.
+     *
      * IT DOES NOT MOVE THE PLANTED DEPENDENT COUNTS OF ANY OTHER
      * DOMAIN, and dropping the topics does not move them at all:
      * {@link MemoryResearchStore.setDomainDependents} records what
@@ -3513,6 +3861,7 @@ export function createMemoryResearchStore(
       dropSourcesOf(id);
       dropSubscriptionsOf(id);
       dropFindingsOf(id);
+      dropDocumentsOf(id);
 
       for (const [categoryId, row] of categories) {
         if (row.domainId === id) {
@@ -5303,6 +5652,61 @@ export function createMemoryResearchStore(
       return copyFindingLabel(row);
     },
 
+    /**
+     * One window of a domain's corpus, narrowed and ordered newest
+     * first.
+     *
+     * READS DOCUMENTS AND WRITES NONE — there is no insert, update
+     * or delete over that table anywhere on this port, so the corpus
+     * page is read-only structurally rather than by convention. Every
+     * row here arrived through
+     * {@link MemoryResearchStore.setDomainDocuments}.
+     *
+     * BOTH STATUSES BY DEFAULT, and the filter is the CALLER's where
+     * the failures queue's is that method's own. A failed document
+     * is in the corpus rather than behind a flag, so this collection
+     * can be asked for the corpus and for either half of it, which
+     * is the difference between a debug page and a review queue.
+     *
+     * BODIES COME BACK AS STORED, unmasked and uncut.
+     * `src/documents/service.ts` is what replaces a control byte with
+     * its text form and cuts the body at `BODY_CODE_POINT_CAP`, and
+     * keeping that out of here is what lets it be tested against a
+     * planted control byte with no database.
+     */
+    async listDocuments(
+      domainId: number,
+      filter: DocumentFilter,
+      window: StoreWindow,
+    ): Promise<readonly DocumentRecord[]> {
+      return orderedDocuments(domainId, filter)
+        .slice(window.offset, window.offset + window.limit)
+        .map(documentOf);
+    },
+
+    /**
+     * How many of one domain's documents the same filter selects,
+     * ignoring any window.
+     *
+     * The same predicate the page read through — one dataset and one
+     * {@link matchesDocumentFilter} behind both is what makes a
+     * page's `meta.total` describe the page's own collection here
+     * rather than by coincidence.
+     *
+     * A window past the end still counts the whole, and an id no
+     * domain carries counts zero. Neither is a special case: the
+     * window is not this method's to read, and nothing points at a
+     * row that is not there.
+     */
+    async countDocuments(
+      domainId: number,
+      filter: DocumentFilter,
+    ): Promise<number> {
+      return corpusOf(domainId).filter(
+        (row) => matchesDocumentFilter(row, filter),
+      ).length;
+    },
+
     setDomainDependents(
       domainId: number,
       counts: Partial<DomainDependentCounts>,
@@ -5353,6 +5757,17 @@ export function createMemoryResearchStore(
       research: readonly MemoryEntityResearch[],
     ): void {
       entityResearch.set(entityId, research.map(copyPlantedResearch));
+    },
+
+    setDomainDocuments(
+      domainId: number,
+      documents: readonly MemoryDomainDocument[],
+    ): void {
+      // Copied on the way in, row by row, so a caller that goes on
+      // moving a planted `capturedAt` does not move a stored one —
+      // and the list itself is rebuilt, so pushing onto what was
+      // planted does not plant a further document.
+      domainDocuments.set(domainId, documents.map(copyPlantedCorpusDocument));
     },
   };
 }

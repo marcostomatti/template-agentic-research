@@ -1,10 +1,11 @@
 /**
- * `tests/helpers/memory-research-store.ts` in all nine ports it
+ * `tests/helpers/memory-research-store.ts` in all ten ports it
  * implements — the claims that make it a second implementation of
  * `DomainStore`, of `TaxonomyStore` WHOLE with categories and terms
  * together, of `PersonaStore`, of `TopicStore`, of `SourceStore`, of
- * `ConnectorStore`, of `SubscriptionStore`, of `SettingsStore` and of
- * `FindingStore`, rather than a bag that stores what it is handed.
+ * `ConnectorStore`, of `SubscriptionStore`, of `SettingsStore`, of
+ * `FindingStore` and of `DocumentStore`, rather than a bag that
+ * stores what it is handed.
  *
  * THAT IT REFUSES WHAT POSTGRES REFUSES. Every refusal case names
  * the `reason` a SQLSTATE classifies to and the constraint the
@@ -435,6 +436,55 @@
  * An id no finding carries answers the same empty list, which is the
  * one place two different absences legitimately compare equal.
  *
+ * THAT THE DOCUMENTS HALF WRITES NOTHING AT ALL, which is a shape no
+ * half above has: two methods, both reads, no mechanism to refuse
+ * with and no id to burn. So there is no refusal case in this half
+ * and no id-sequence case either, and both absences are the port's
+ * shape rather than coverage nobody wrote.
+ *
+ * THAT ITS PAGE IS `captured_at` DESCENDING WITH `id` DESCENDING AND
+ * THAT THE TIE IS THE SERVER'S OWN. The fixture plants five
+ * documents in an order no read answers, and its NEWEST row carries
+ * the LOWEST id so that an ordering by `id` in either direction
+ * disagrees with the answer rather than resembling it. Two rows
+ * carry ONE instant and are planted with the lower id first, so a
+ * stable sort that lost the tiebreak answers them the wrong way
+ * round; one case reads both their stamps off the store before
+ * asserting the order, which is what makes the tie a measurement
+ * rather than a fixture comment.
+ *
+ * THAT A FAILED DOCUMENT IS IN THE CORPUS RATHER THAN BEHIND A FLAG.
+ * The default page's statuses are read as a SET against
+ * `DOCUMENT_PARSE_STATUSES` rather than counted, since a store
+ * answering five `ok` rows passes a length assertion; and the two
+ * narrowed pages are asserted in ONE body, which is what says the
+ * filter selects rather than that `failed` happens to name
+ * everything. A status no row carries is an empty page rather than a
+ * refusal, with the unnarrowed page beside it as the control.
+ *
+ * THAT IT HOLDS DOCUMENTS THE FAILURES QUEUE STRUCTURALLY CANNOT.
+ * One case reads a null `sourceId` back with a sibling carrying the
+ * feed in the same body, because the state that makes this
+ * collection wider than the queue is the one
+ * {@link MemoryResearchStore.setSourceDocuments} has no key to plant
+ * at all.
+ *
+ * THAT IT PLANTS THE SAME TABLE THE SOURCES HALF PLANTS, KEYED
+ * DIFFERENTLY. That is this file's FIFTH known divergence, and it is
+ * pinned from both faces: a `failed` corpus document answers a queue
+ * of zero, an aggregate of zero and a dependent count of zero, so
+ * its source's delete LANDS, while the sibling case plants through
+ * the sources seam and reads that same delete refused by name. A
+ * third case reads the divergence the other way round, a queued
+ * failure being absent from the corpus page. None of the three
+ * describes a guard that had stopped guarding.
+ *
+ * THAT A DOMAIN TAKES ITS CORPUS THROUGH A SECOND CASCADE LINE OVER
+ * A TABLE THE SOURCES LINE HAS ALREADY REACHED. The two seams hold
+ * `documents` separately, so one case asserts the state BEFORE the
+ * delete and then reads BOTH seams empty after it — which is what
+ * says the two lines are two claims rather than one written twice.
+ *
  * THAT THE SETTINGS HALF REFUSES NOTHING AT ALL, which no case here
  * can assert directly and which is therefore stated rather than
  * pinned. `operator_settings` carries two mechanisms — a second
@@ -582,6 +632,100 @@
  * rather than as a count. Every figure below moves again when a
  * later task adds a case to this file, so re-derive the whole grid
  * rather than appending legs for the new rows.
+ *
+ * THE DOCUMENTS HALF FOLLOWED THE FILE'S SUBSTITUTE AND WIDENED THE
+ * RECORDED SET IT RE-RAN. The file holds 453 cases, of which 19 are
+ * this half's. What was run is this half's OWN nineteen legs plus
+ * FIFTEEN recorded ones, chosen by reading what the new cases CALL:
+ * the eight the findings half re-ran, the two sources legs it added,
+ * and five more sources legs these cases drive directly — the source
+ * delete refused by DOCUMENTS, the parse-status aggregate, the
+ * failures queue's own `failed` filter, and the two cascade legs
+ * over `dropSourcesOf`. The rest are closed by the same argument as
+ * before: every old case is untouched and every non-document path in
+ * the store is byte-identical but for the one added line in
+ * `deleteDomain`.
+ *
+ * THE LIVENESS CONTROL IS THE BEFORE-AND-AFTER DIFF AGAIN, AND IT
+ * HELD ON ALL FIFTEEN. Each recorded leg was applied to the store
+ * and run TWICE, once against `git show HEAD:` of this file and once
+ * at the tip, and what is read is the SET each run reddened. HEAD
+ * reproduced the findings half's eight figures EXACTLY — 97, 7, 59,
+ * 33, 50, 8, 6 and 4 — and every one of the fifteen legs' OUTSIDE
+ * sets came back identical member for member, nothing gained and
+ * nothing lost.
+ *
+ * THE DOCUMENTS HALF MOVED FOUR OF THOSE FIFTEEN, BY ONE CASE EACH,
+ * and all four are sources legs reached by a documents case that
+ * plants in the sources half on purpose. Accepting a source delete
+ * while DOCUMENTS cite it went 3 to 4, through the divergence
+ * control; accumulating the aggregate rather than seeding it from
+ * `DOCUMENT_PARSE_STATUSES` went 6 to 7, through the case that reads
+ * that aggregate answering zero over a corpus plant; and leaving the
+ * sources standing in the cascade went 5 to 6 while leaving their
+ * PLANTS standing went 1 to 2, both through the ONE case that reads
+ * both seams empty after a delete. The eleven that did not move
+ * include every one of the eight the findings half re-ran: no
+ * documents case writes a category, a term, a persona or a topic,
+ * reads a domain's dates or touches the operator's row.
+ *
+ * ONE OF THOSE FIFTEEN CARRIES A FIGURE THE SOURCES PARAGRAPH BELOW
+ * RECORDS DIFFERENTLY, and it is that paragraph's own snapshot rule
+ * rather than drift. Leaving the sources standing reads 5 at HEAD
+ * where the sources half recorded 4, the fifth member being a
+ * CONNECTORS cascade case landed since. Read every figure below as
+ * of the half that wrote it.
+ *
+ * Nineteen documents legs redden between 1 and 17, and EVERY red one
+ * of them lands wholly inside the documents describes. The whole
+ * grid was run TWICE over one tree and every leg's set came back
+ * identical member for member, which is what separates a measurement
+ * from a bad capture.
+ *
+ * Planting no document at all is this half's whole-half control and
+ * reddens 17 of the 19. The two survivors are exactly the divergence
+ * cases whose subject is the SOURCES seam — the one reading the
+ * queue, the aggregate and the dependent count answering zero, and
+ * the one reading that same delete refused once the sources seam
+ * holds a row.
+ *
+ * The ordering legs are four and they fall into two IDENTICAL PAIRS,
+ * which is the honest reading of a five-row fixture rather than four
+ * claims. Dropping the capture key and ordering oldest-first redden
+ * the SAME 5, told apart only by the assertion that fails inside
+ * each; dropping the id tiebreak and breaking it ASCENDING redden
+ * the same 5 as each other and a DIFFERENT 5 from the first pair,
+ * overlapping in 3. That the tiebreak legs redden at all is the
+ * fixture's doing rather than the store's: `Array.prototype.sort` is
+ * stable, so the tied pair is planted in the order the tiebreak
+ * REVERSES.
+ *
+ * The filter legs are three and they are not one size. Ignoring the
+ * filter and inverting it redden the same 3; defaulting it to `ok`
+ * rather than to both statuses reddens 9, and THAT is the leg the
+ * failed-by-default claim rests on rather than any assertion naming
+ * it. The three count legs are disjoint from the page's and from
+ * each other in what they are about: counting only the first window
+ * reddens 3, counting the whole domain under any filter 2, and
+ * counting every domain's documents at once 2.
+ *
+ * The two scope legs redden the SAME 2, which is what says the page
+ * and the count are scoped through one predicate rather than two.
+ * Ignoring the window reddens 2, disjoint from both.
+ *
+ * The two divergence legs are disjoint at 2 apiece: resolving the
+ * corpus through the sources seam, and leaving the corpus standing
+ * through a domain delete, the second being both cascade cases.
+ *
+ * The copy legs are one per DIRECTION and the two directions sit in
+ * two case bodies for exactly that reason. Answering the planted
+ * document by reference reddens 1 and handing its stored `Date` out
+ * reddens the SAME 1 — one answer site, `listDocuments` being the
+ * whole of the port's read surface, which is where this half is
+ * narrower than the findings one. Storing the `Date` a plant was
+ * handed reddens the OTHER copy case, and keeping the planted list
+ * rather than rebuilding it reddens that one plus the case named for
+ * it.
  *
  * THE FINDINGS HALF FOLLOWED THE FILE'S SUBSTITUTE AND SHARPENED ITS
  * LIVENESS CONTROL, which is the one change to the practice. The
@@ -1335,6 +1479,7 @@
  * here.
  */
 import type {
+  MemoryDomainDocument,
   MemoryDomainFinding,
   MemoryResearchStore,
   MemorySourceDocument,
@@ -1345,6 +1490,10 @@ import type {
 } from '../../src/connectors/store.js';
 import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type { OperatorSettings } from '../../src/db/schema/settings.js';
+import type {
+  DocumentFilter,
+  DocumentRecord,
+} from '../../src/documents/store.js';
 import type {
   DomainRecord,
   InsertDomainInput,
@@ -10139,5 +10288,584 @@ describe('the finding payload crossing the boundary', () => {
     store.setDomainFindings(domain.id, []);
 
     expect(await pageOf(store, domain.id)).toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The documents half's fixture
+// ---------------------------------------------------------------------------
+
+/**
+ * The four instants the corpus fixture is captured across, oldest
+ * first and one day apart.
+ *
+ * SPELLED OUT RATHER THAN DERIVED FROM ONE ANOTHER, so that an
+ * ordering case compares against stamps no arithmetic of the store's
+ * could have produced. Distinct from {@link CAPTURED}, which is the
+ * sources half's default over the same table and the same column: the
+ * two seams hold that table separately, and sharing an instant across
+ * them would put a fixture at the centre of a divergence two cases
+ * here exist to read.
+ */
+const CAPTURED_T0 = '2026-04-01T09:00:00.000Z';
+const CAPTURED_T1 = '2026-04-02T09:00:00.000Z';
+const CAPTURED_T2 = '2026-04-03T09:00:00.000Z';
+const CAPTURED_T3 = '2026-04-04T09:00:00.000Z';
+
+/**
+ * The five documents the corpus fixture plants, named for what each
+ * is in the page rather than for its id.
+ *
+ * The ids are the fixture's own, `DocumentStore` declaring no insert.
+ * `TIED_FAILED` and `TIED_OK` carry ONE instant, so only `id`
+ * separates them, and they are planted with the LOWER id first — a
+ * stable sort that lost the tiebreak answers them the wrong way round
+ * rather than reproducing this order by accident. `PASTED` is the
+ * newest row AND the lowest id, so an ordering by `id` alone in
+ * either direction disagrees with the answer rather than resembling
+ * it.
+ */
+const PASTED = 51;
+const TIED_FAILED = 52;
+const TIED_OK = 53;
+const STALE = 54;
+const RECENT_FAILED = 55;
+
+/** The corpus filter that narrows nothing: both parse statuses. */
+const EVERY_DOCUMENT: DocumentFilter = {};
+
+/** What {@link captured} defaults when a case is not about it. */
+type CorpusDefaults = Partial<Omit<MemoryDomainDocument, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setDomainDocuments}.
+ *
+ * A function rather than a constant, for the reason {@link planted}
+ * is one: the copy cases WRITE into the `capturedAt` they planted,
+ * which is the whole point of them.
+ *
+ * @param id - The document id, which is the page's tiebreak.
+ * @param values - The six members a case may care about. `sourceId`
+ *   defaults to NULL, which is the state the sources seam has no key
+ *   to plant, and `parseStatus` to `ok` so that a case about a
+ *   failure says so.
+ * @returns The row to plant.
+ */
+function captured(
+  id: number,
+  values: CorpusDefaults = {},
+): MemoryDomainDocument {
+  return {
+    id,
+    sourceId: values.sourceId ?? null,
+    url: values.url ?? null,
+    body: values.body ?? `Body of document ${id}`,
+    parseStatus: values.parseStatus ?? 'ok',
+    parseError: values.parseError ?? null,
+    capturedAt: values.capturedAt ?? new Date(CAPTURED_T0),
+  };
+}
+
+/**
+ * A domain carrying the five documents every ordering, filter and
+ * window case reads, and the feed four of them came through.
+ *
+ * PLANTED IN AN ORDER NO READ ANSWERS, which is what lets one fixture
+ * tell the capture ordering from an ordering by insertion or by `id`
+ * in either direction. The answer is written out in the cases rather
+ * than here.
+ *
+ * THE FIFTH CAME THROUGH NO FEED, which is the state that makes this
+ * collection wider than the failures queue rather than a second
+ * spelling of it: `setSourceDocuments` is keyed BY a source, so a
+ * pasted body has no key to be planted under there at all.
+ *
+ * @param store - The store to write to.
+ * @returns The domain the corpus hangs off and the source four of its
+ *   documents name.
+ */
+async function seedDocuments(
+  store: MemoryResearchStore,
+): Promise<{ domain: DomainRecord; feed: SourceRecord }> {
+  const domain = await store.insertDomain(domainInput(RADAR));
+  const feed = await addSource(store, domain.id, FEED_ENDPOINT);
+
+  store.setDomainDocuments(domain.id, [
+    captured(TIED_FAILED, {
+      capturedAt: new Date(CAPTURED_T1),
+      parseError: 'no title',
+      parseStatus: 'failed',
+      sourceId: feed.id,
+    }),
+    captured(STALE, {
+      capturedAt: new Date(CAPTURED_T0),
+      parseStatus: 'failed',
+      sourceId: feed.id,
+    }),
+    captured(PASTED, { capturedAt: new Date(CAPTURED_T3) }),
+    captured(RECENT_FAILED, {
+      capturedAt: new Date(CAPTURED_T2),
+      parseStatus: 'failed',
+      sourceId: feed.id,
+    }),
+    captured(TIED_OK, {
+      capturedAt: new Date(CAPTURED_T1),
+      sourceId: feed.id,
+    }),
+  ]);
+
+  return { domain, feed };
+}
+
+/**
+ * Reads one window of a domain's corpus under a filter.
+ *
+ * @param store - The store to read.
+ * @param domainId - The domain to read within.
+ * @param filter - What to narrow to, both statuses by default so that
+ *   a case about an order says nothing about a status.
+ * @returns The ids on the first page, in the order they arrived.
+ */
+async function corpusPage(
+  store: MemoryResearchStore,
+  domainId: number,
+  filter: DocumentFilter = EVERY_DOCUMENT,
+): Promise<number[]> {
+  const page = await store.listDocuments(
+    domainId,
+    filter,
+    WHOLE_COLLECTION,
+  );
+
+  return page.map((row) => row.id);
+}
+
+/**
+ * Reads a corpus document that must be there.
+ *
+ * Off the PAGE rather than off a lookup, `DocumentStore` declaring no
+ * read by id: a document is met in its domain and addressed by
+ * nothing else.
+ *
+ * @param store - The store to read.
+ * @param domainId - The domain to read within.
+ * @param id - The document to find on its page.
+ * @returns The row.
+ * @throws When the page carries no such document, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readDocument(
+  store: MemoryResearchStore,
+  domainId: number,
+  id: number,
+): Promise<DocumentRecord> {
+  const page = await store.listDocuments(
+    domainId,
+    EVERY_DOCUMENT,
+    WHOLE_COLLECTION,
+  );
+  const row = page.find((held) => held.id === id);
+
+  if (row === undefined) {
+    throw new Error(`expected a stored document under ${id}`);
+  }
+
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// The order the corpus page answers in, and the tie the server makes
+// ---------------------------------------------------------------------------
+
+describe('the corpus page ordering', () => {
+  it('orders newest first with the id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+
+    // Neither the order the rows were planted in
+    // (52, 54, 51, 55, 53) nor either direction of id: the newest
+    // document carries the LOWEST id, so an ordering by id descending
+    // would lead with 55 and one ascending with 51 followed by 52.
+    expect(await corpusPage(store, domain.id)).toStrictEqual(
+      [PASTED, RECENT_FAILED, TIED_OK, TIED_FAILED, STALE],
+    );
+  });
+
+  it('separates two documents tied on capture by id', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const tied = await Promise.all([
+      readDocument(store, domain.id, TIED_FAILED),
+      readDocument(store, domain.id, TIED_OK),
+    ]);
+
+    // The tie is read off the store rather than assumed: both rows
+    // carry one instant, so `id` descending is the only thing
+    // ordering them. That tie is the SERVER's own — `captured_at`
+    // defaults to the transaction's start time, so a batch capture
+    // writes rows tying to the microsecond and a page boundary
+    // falling inside one would show a document twice and another
+    // never.
+    expect(tied.map((row) => row.capturedAt.getTime())).toStrictEqual(
+      [Date.UTC(2026, 3, 2, 9), Date.UTC(2026, 3, 2, 9)],
+    );
+
+    const page = await corpusPage(store, domain.id);
+
+    expect(page.indexOf(TIED_OK)).toBeLessThan(page.indexOf(TIED_FAILED));
+  });
+
+  it('orders one status the same way it orders both', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const failed = { parseStatus: 'failed' } as const;
+
+    // A narrowed page is the same ordering over fewer rows rather
+    // than a second read: the filter and the sort are separate
+    // decisions, and a store applying the window before the order
+    // answers the same rows in another sequence.
+    expect(await corpusPage(store, domain.id, failed)).toStrictEqual(
+      [RECENT_FAILED, TIED_FAILED, STALE],
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the parse-status filter narrows, and what the default holds
+// ---------------------------------------------------------------------------
+
+describe('the corpus parse-status filter', () => {
+  it('carries both statuses when no filter is given', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const page = await store.listDocuments(
+      domain.id,
+      EVERY_DOCUMENT,
+      WHOLE_COLLECTION,
+    );
+
+    // A failed document is IN the corpus rather than behind a flag,
+    // which is fail-flag-keep read from the debug page's side. The
+    // statuses are read as a SET off the page rather than counted:
+    // a store answering five `ok` rows passes a length assertion.
+    expect(new Set(page.map((row) => row.parseStatus))).toStrictEqual(
+      new Set(DOCUMENT_PARSE_STATUSES),
+    );
+    expect(await store.countDocuments(domain.id, EVERY_DOCUMENT)).toBe(5);
+  });
+
+  it('answers the failures alone and the parsed alone', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const failed = { parseStatus: 'failed' } as const;
+    const ok = { parseStatus: 'ok' } as const;
+
+    expect(await corpusPage(store, domain.id, failed)).toStrictEqual(
+      [RECENT_FAILED, TIED_FAILED, STALE],
+    );
+    expect(await store.countDocuments(domain.id, failed)).toBe(3);
+
+    // The other half in the same body, which is what says the filter
+    // selects rather than that `failed` happens to name everything:
+    // the two pages partition the default one and neither is it.
+    expect(await corpusPage(store, domain.id, ok)).toStrictEqual(
+      [PASTED, TIED_OK],
+    );
+    expect(await store.countDocuments(domain.id, ok)).toBe(2);
+  });
+
+  it('answers an empty page for a status no row carries', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const failed = { parseStatus: 'failed' } as const;
+
+    store.setDomainDocuments(domain.id, [
+      captured(PASTED),
+      captured(TIED_OK),
+    ]);
+
+    // A domain whose captures all parsed is not a failure to read,
+    // and a status outside the tuple never reaches here at all —
+    // `src/documents/service.ts` refuses that with a `422`.
+    expect(await corpusPage(store, domain.id, failed)).toStrictEqual([]);
+    expect(await store.countDocuments(domain.id, failed)).toBe(0);
+
+    // The control: the page is narrowed rather than empty, and the
+    // count beside it describes the same collection.
+    expect(await corpusPage(store, domain.id)).toStrictEqual(
+      [TIED_OK, PASTED],
+    );
+    expect(await store.countDocuments(domain.id, EVERY_DOCUMENT)).toBe(2);
+  });
+
+  it('carries a document that came through no feed at all', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedDocuments(store);
+
+    // The state the sources seam has no key to plant: an ingested
+    // file and a pasted body sit in the middle of this page by
+    // capture time and are unreachable through a seam keyed by a
+    // source. The sibling in the same body is the control that a
+    // null is answered rather than written over every row.
+    expect(await readDocument(store, domain.id, PASTED)).toMatchObject({
+      sourceId: null,
+    });
+    expect(await readDocument(store, domain.id, TIED_OK)).toMatchObject({
+      sourceId: feed.id,
+    });
+  });
+
+  it('answers the body and the error as stored, uncut', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const body = `before${String.fromCharCode(0)}after`;
+
+    store.setDomainDocuments(domain.id, [
+      captured(TIED_FAILED, {
+        body,
+        parseError: `broke${String.fromCharCode(27)}here`,
+        parseStatus: 'failed',
+      }),
+    ]);
+
+    // The masking belongs to `src/documents/service.ts`, and keeping
+    // it out of the port is what lets it be tested against a planted
+    // control byte with no database. A store masking here would
+    // answer a body no column holds and would leave `bodyBytes`
+    // reporting the length of something else.
+    const row = await readDocument(store, domain.id, TIED_FAILED);
+
+    expect(row.body).toBe(body);
+    expect(row.parseError).toBe(`broke${String.fromCharCode(27)}here`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The window over the corpus page, and the count beside it
+// ---------------------------------------------------------------------------
+
+describe('the corpus page window', () => {
+  it('answers one window of the ordered page', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+
+    const page = await store.listDocuments(domain.id, EVERY_DOCUMENT, {
+      limit: 2,
+      offset: 1,
+    });
+
+    // The window is taken from the ORDERED collection rather than
+    // from the planted list, so the second and third of the page
+    // arrive rather than the second and third row planted.
+    expect(page.map((row) => row.id)).toStrictEqual(
+      [RECENT_FAILED, TIED_OK],
+    );
+  });
+
+  it('answers an empty page past the end and counts the whole', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+
+    const page = await store.listDocuments(domain.id, EVERY_DOCUMENT, {
+      limit: 50,
+      offset: 50,
+    });
+
+    expect(page).toStrictEqual([]);
+
+    // The count ignores the window, which is what a page's
+    // `meta.total` is read for: a window past the end still
+    // describes a collection of five.
+    expect(await store.countDocuments(domain.id, EVERY_DOCUMENT)).toBe(5);
+  });
+
+  it('answers nothing for a domain that has captured none', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const other = await store.insertDomain(domainInput(TRANSIT));
+
+    expect(await corpusPage(store, other.id)).toStrictEqual([]);
+    expect(await store.countDocuments(other.id, EVERY_DOCUMENT)).toBe(0);
+
+    // The control: the page is scoped rather than empty for
+    // everyone, and an id no domain carries answers the same way a
+    // domain holding nothing does.
+    expect(await corpusPage(store, domain.id)).toHaveLength(5);
+    expect(await corpusPage(store, 9999)).toStrictEqual([]);
+    expect(await store.countDocuments(9999, EVERY_DOCUMENT)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a domain delete takes, over a table two seams hold separately
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its documents', () => {
+  it('takes its corpus and leaves another domain standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const other = await store.insertDomain(domainInput(TRANSIT));
+
+    store.setDomainDocuments(other.id, [captured(61)]);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    expect(await corpusPage(store, domain.id)).toStrictEqual([]);
+    expect(await store.countDocuments(domain.id, EVERY_DOCUMENT)).toBe(0);
+
+    // The other domain's document is standing, so this is a cascade
+    // rather than a store that cleared everything.
+    expect(await corpusPage(store, other.id)).toStrictEqual([61]);
+  });
+
+  it('clears both seams over the one table it cascades to', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedDocuments(store);
+
+    store.setSourceDocuments(feed.id, [
+      planted(71, { parseStatus: 'failed' }),
+    ]);
+
+    // The state before, so the two empties after are a delete
+    // reaching them rather than reads that never answered.
+    expect(await corpusPage(store, domain.id)).toHaveLength(5);
+    expect(await store.countSourceFailures(feed.id)).toBe(1);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // Two lines rather than one, and neither is redundant: the
+    // sources plants go with their sources and the corpus goes with
+    // its domain, so a delete dropping only one of the two leaves
+    // rows of the same table behind.
+    expect(await store.countDocuments(domain.id, EVERY_DOCUMENT)).toBe(0);
+    expect(await store.countSourceFailures(feed.id)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The fifth known divergence: two seams, one table, neither seeing
+// the other
+// ---------------------------------------------------------------------------
+
+describe('the corpus the failures queue does not see', () => {
+  it('answers no queue, no aggregate and no dependent count', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedDocuments(store);
+
+    // Three of the corpus's five are `failed` and four of them name
+    // this feed, so a store reading one seam through the other would
+    // answer three here rather than nought.
+    expect(await store.countSourceFailures(feed.id)).toBe(0);
+    expect(await store.countSourceDependents(feed.id)).toStrictEqual({
+      documents: 0,
+      findingSightings: 0,
+    });
+
+    const [listed] = await store.listSourcesWithParseStats(
+      domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    expect(listed?.parseStats).toStrictEqual({ ok: 0, failed: 0 });
+
+    // So the delete LANDS, where the same rows planted through the
+    // sources seam would refuse it. That is the divergence rather
+    // than a guard that had stopped guarding, and the case below
+    // reads the other face.
+    expect(await store.deleteSource(feed.id)).toBe(true);
+  });
+
+  it('refuses the same delete over the sources seam', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedDocuments(store);
+
+    store.setSourceDocuments(feed.id, [planted(71)]);
+
+    // The control the case above needs: the guard still refuses a
+    // source whose OWN seam holds a document, so the delete landing
+    // there is a seam it cannot see rather than a rule that has
+    // gone.
+    const refusal = await refusalFrom(() => store.deleteSource(feed.id));
+
+    expect(refusal.constraint).toBe('documents_source_id_sources_id_fk');
+  });
+
+  it('leaves a sources plant out of the corpus page', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedDocuments(store);
+
+    store.setSourceDocuments(feed.id, [
+      planted(71, { parseStatus: 'failed' }),
+    ]);
+
+    // The divergence read from the other end: a row the failures
+    // queue answers is not on this page, and the five that are stay
+    // put. A store resolving the sources seam through its source's
+    // domain would answer six.
+    expect(await store.countSourceFailures(feed.id)).toBe(1);
+    expect(await corpusPage(store, domain.id)).toStrictEqual(
+      [PASTED, RECENT_FAILED, TIED_OK, TIED_FAILED, STALE],
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the documents half copies across the boundary
+// ---------------------------------------------------------------------------
+
+describe('the corpus document crossing the boundary', () => {
+  it('does not store the capturedAt a plant was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const taken = new Date(CAPTURED_T1);
+
+    store.setDomainDocuments(domain.id, [
+      captured(PASTED, { capturedAt: taken }),
+    ]);
+
+    taken.setUTCFullYear(2030);
+
+    // Compared against the arithmetic rather than against an instant
+    // an earlier read answered: a store sharing the caller's `Date`
+    // would otherwise hold one lie against itself and pass.
+    expect(
+      (await readDocument(store, domain.id, PASTED)).capturedAt.getTime(),
+    ).toBe(Date.UTC(2026, 3, 2, 9));
+  });
+
+  it('does not answer the capturedAt it stores', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const answered = await readDocument(store, domain.id, PASTED);
+
+    answered.capturedAt.setUTCFullYear(2031);
+
+    // The other direction, in its own case so that the two are told
+    // apart by which one reddens — one seam and one answer site,
+    // and a store keeping either has every page it hands out moving
+    // together.
+    expect(
+      (await readDocument(store, domain.id, PASTED)).capturedAt.getTime(),
+    ).toBe(Date.UTC(2026, 3, 4, 9));
+  });
+
+  it('rebuilds the planted list rather than holding it', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const rows = [captured(PASTED)];
+
+    store.setDomainDocuments(domain.id, rows);
+
+    rows.push(captured(TIED_OK));
+
+    // The seam copies row by row AND rebuilds the array, so pushing
+    // onto what was planted does not plant a second document.
+    expect(await corpusPage(store, domain.id)).toStrictEqual([PASTED]);
+
+    // A second call REPLACES rather than appends, which is what
+    // makes a domain going back to none expressible.
+    store.setDomainDocuments(domain.id, []);
+
+    expect(await corpusPage(store, domain.id)).toStrictEqual([]);
   });
 });
