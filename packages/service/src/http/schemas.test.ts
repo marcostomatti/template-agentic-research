@@ -5,7 +5,7 @@
  * `sortQuerySchema` and `toTimeWindow` beside them, which is how a
  * collection is narrowed and ordered once it has been addressed.
  *
- * Nine claims, and each one is a promise a route makes to a caller
+ * Twelve claims, and each one is a promise a route makes to a caller
  * that only ever sees a status and an envelope. That a domain is
  * addressed by a slug the app can also build a link from, so the two
  * ends of the eventual API swap agree about which strings are
@@ -27,6 +27,16 @@
  * name. And that a narrowing sent to a route which declares none is
  * a refusal rather than a filter quietly dropped.
  *
+ * Three more are what the accepted half is for, and not one of them
+ * shows up in a refusal. That an absent bound reaches a store as an
+ * open end rather than as an endpoint the translation invented.
+ * That a row stamped exactly at a bound lands on the side the
+ * member names claim, `sinceInclusive` holding it and
+ * `untilExclusive` not. And that a `?sort` nobody sent is the first
+ * key of the declaring route's own tuple, through the composed
+ * query a list route parses rather than through the sort schema
+ * alone.
+ *
  * Every wave-1 table here carries BOTH outcomes, and a guard per
  * table asserts it. A block of nothing but refusals is fully green
  * against a schema that refuses everything, and a block of nothing
@@ -38,90 +48,149 @@
  * so `perPage` 200 sits beside 201, and the largest safe integer sits
  * beside a value two above it.
  *
- * The window and sort table is refusals only, and carries its control
- * INSIDE each case rather than beside it: every row states the same
- * request with its own axis put right, which has to parse. That is
- * the same argument in the shape the section needs — a table of
- * accepts could not be a control for a row refused by a DIFFERENT
- * schema, which two of these rows are, and an axis-wise control can.
- * Each row also submits a sentinel and counts it to zero in the
+ * The window and sort refusal table carries its control INSIDE each
+ * case rather than beside it: every row states the same request with
+ * its own axis put right, which has to parse. That is the same
+ * argument in the shape the section needs — a table of accepts
+ * could not be a control for a row refused by a DIFFERENT schema,
+ * which two of these rows are, and an axis-wise control can. Each
+ * row also submits a sentinel and counts it to zero in the
  * serialised refusal, against a planted envelope that has to find
  * every one of them.
+ *
+ * The accepted window table answers the same problem in the other
+ * direction and for the mirror reason: a block of nothing but
+ * accepts is green against a schema that accepts everything, so
+ * every row carries the same request with its own axis put WRONG,
+ * which has to be refused. The row a reader would think needs no
+ * control has the sharpest one — `{}` parses because it is empty
+ * and every parameter is declared rather than because the schema
+ * takes what it is given, so its broken sibling is an undeclared
+ * key and not a bad bound.
+ *
+ * The boundary table is neither shape. It reads a window built
+ * through the schema and the translation with a predicate written
+ * here, because there is nothing to import: the half-open rule
+ * lives in two sentences of TSDoc on `TimeWindow`'s own members and
+ * in no code at all until a store exists. So the table IS the
+ * control — two rows at the bounds and three around them, where a
+ * predicate answering one way for everything reddens one group or
+ * the other.
  *
  * Expected values are written down rather than imported. The cap, the
  * two defaults and the safe-integer bound appear here as literals, so
  * this file pins them; importing them would only assert that the
- * module agrees with itself.
+ * module agrees with itself. The two accepted instants are a
+ * sharper version of the same rule: they are written as calendar
+ * FIELDS through `Date.UTC` rather than parsed from the stamps
+ * beside them, because parsing those stamps is the operation under
+ * test and an expected instant derived through `Date.parse` would
+ * agree with a schema that had read them wrongly in exactly the
+ * same way.
  *
- * Mutation grid, measured over the 76 cases in this file with
- * `--reporter=json` and confirmed by a second full pass. Nine legs on
- * the address half, each isolating one claim, and the two slug legs
- * are each other's control: a pattern accepting everything reddens
- * the 7 refused slug cases and nothing else, one accepting nothing
- * reddens the 5 accepted cases and nothing else. Dropping
- * `.positive()` from the id schema reddens exactly its 3 `too_small`
- * cases, and dropping `.int()` exactly its 2 others — the fraction
- * and the id above the safe bound — which is what says the two
- * checks are pinned separately rather than as one. Raising the cap to
- * 1000 reddens the one case past it; lowering the default `perPage`
- * to 25 reddens 3, the two accepted rows that expect 50 and the
- * translation case built on one. Turning `(page - 1) * perPage` into
- * `page * perPage` reddens all 5 `toStoreWindow` cases.
+ * Mutation grid, measured over the 97 cases in this file with
+ * `--reporter=json` — and measured a SECOND time over the 76 cases
+ * the file held before the accepted half landed, so which figures
+ * MOVED is a reading rather than a recollection. Thirteen of the
+ * eighteen carried-in legs held unchanged at the widened total,
+ * five moved, and seven legs are new. Four of those seven reddened
+ * NOTHING at all against the file as it stood, which is the
+ * sharpest thing this section can say about what the accepted half
+ * was for.
  *
- * Removing `.strict()` from `paginationQuerySchema` reddens 3, and
- * that leg is worth reading rather than counting: one is the misspelt
- * parameter it was written for, and the other two are the window
- * section's undeclared-bound row and its containment sibling. The
- * page schema's strictness is what refuses a `?since` sent to a route
- * declaring no window, so the two halves of this file are pinned to
- * one decision rather than to two that agree.
+ * The address legs are unmoved except where they are composed into.
+ * The two slug legs are each other's control: a pattern accepting
+ * everything reddens the 7 refused slug cases and nothing else, one
+ * accepting nothing reddens the 5 accepted cases and nothing else.
+ * Dropping `.positive()` from the id schema reddens exactly its 3
+ * `too_small` cases, and dropping `.int()` exactly its 2 others —
+ * the fraction and the id above the safe bound — which is what
+ * says the two checks are pinned separately rather than as one.
+ * Raising the cap to 1000 reddens the one case past it. Turning
+ * `(page - 1) * perPage` into `page * perPage` reddens all 5
+ * `toStoreWindow` cases; swapping `limit` and `offset` reddens 4 of
+ * them, page 2 at 50 per page having both members at 50, which is
+ * why the first page and the deep small window are in the table.
  *
- * The ninth address leg is the other one to read rather than count.
- * Swapping `limit` and `offset` reddens 4 of the 5 and leaves
- * `translates the second page` green — page 2 at 50 per page has
- * `limit` and `offset` both 50, so the row cannot see the swap at
- * all. A window table made only of such rows would prove nothing
- * about which member is which, which is why the first page and the
- * deep small window are in it.
+ * Lowering the default `perPage` to 25 reddens 4 where it reddened
+ * 3, and the case it gained is worth reading rather than counting:
+ * the composed list query's default row parses `{}` through all
+ * three vocabularies at once, so the page defaults are pinned there
+ * as well as in their own section. Removing `.strict()` from
+ * `paginationQuerySchema` still reddens 3 — the misspelt
+ * parameter it was written for, plus the window section's
+ * undeclared-bound row and its containment sibling — so the page
+ * schema's strictness is what refuses a `?since` sent to a route
+ * declaring no window.
  *
- * Nine more legs cover the window and the sort. Dropping the ordering
- * refinement reddens 6, the three ordering rows and their three
- * containment siblings. Turning its `<` into `<=` reddens exactly 2,
- * the equal-bounds row and its sibling — which is what says `at`
- * is pinned separately from `after`, a distinction one inverted row
- * would have collapsed. Naming `until` in the issue path instead of
- * `since` reddens the 3 field assertions and no containment case.
- * Widening `sortQuerySchema` from `z.enum(keys)` to a free string
- * reddens the 2 sort cases. And a TEST-side leg composing the list
- * query the other way round — `paginationQuerySchema` extended
- * with the window's shape — reddens the composed row alone, which
+ * On the window and the sort, four legs held. Naming `until` in the
+ * issue path instead of `since` reddens the 3 field assertions and
+ * no containment case. Turning the ordering `<` into `<=` reddens
+ * exactly 2, the equal-bounds row and its sibling — which is
+ * what says `at` is pinned separately from `after`, a distinction
+ * one inverted row would have collapsed. Widening `sortQuerySchema`
+ * from `z.enum(keys)` to a free string reddens the 2 sort cases.
+ * And the TEST-side leg composing the list query the other way
+ * round — `paginationQuerySchema` extended with the window's
+ * shape — reddens 2, both belonging to the composed row, which
  * is the whole of what reports that `.extend()` carries an object
  * refinement outwards and not inwards.
  *
- * Replacing `z.iso.datetime` with `z.coerce.date()` reddens 1 and not
- * 2, and the case that stays green is the point: a `Date` coercion
- * still refuses `sentinel-not-a-stamp`, just with a different code,
- * so only the row asserting the code moves. A containment count is
- * blind to which rule did the refusing, which is why the two live in
- * separate cases.
+ * Replacing `z.iso.datetime` with `z.coerce.date()` still reddens 1
+ * and not 2, and the case that stays green is the point: a `Date`
+ * coercion still refuses `sentinel-not-a-stamp`, just with a
+ * different code, so only the row asserting the code moves. A
+ * containment count is blind to which rule did the refusing, which
+ * is why the two live in separate cases.
  *
- * The last three legs are the positive controls' own proof, and they
- * are what stops this section resting on a schema that refuses
- * everything. A window schema refusing every HALF-bounded window
- * reddens the two one-bound controls (and row one's own refusal,
- * which then carries a second detail); one refusing every ORDERED
- * window reddens the three two-bound controls and no refusal case at
- * all; and a sort tuple accepting neither declared key reddens the
- * sort control alone. Between them every control in the table is
- * shown live.
+ * Dropping the ordering refinement reddens 7 where it reddened 6:
+ * the three ordering rows with their three containment siblings,
+ * and now the accepted both-bounds row's own broken control, which
+ * is an inverted window and has to stay refused.
+ *
+ * The three legs that prove the refusal table's positive controls
+ * live all GREW, because the accepted rows are driven by the same
+ * schema. A window schema refusing every HALF-bounded window
+ * reddens 5 where it reddened 3, gaining the two half-bounded
+ * translation rows. One refusing every ORDERED window reddens 9
+ * where it reddened 3, gaining the both-bounds translation row and
+ * all five boundary rows, every one of which reads a two-bounded
+ * window. And a sort tuple declaring neither key reddens 5 where it
+ * reddened 1, gaining all four of the sort section's cases.
+ *
+ * Four legs reddened nothing before and report now, which is the
+ * accepted half stated as a measurement rather than as a claim.
+ * `toTimeWindow` answering `new Date(0)` instead of `null` for an
+ * absent bound reddens 3, every row with an open end. Swapping its
+ * two members reddens 5, the three bounded translation rows and the
+ * two boundary rows a swap can move — the other three expect a
+ * row to be OUT, and the swapped window holds nothing at all.
+ * `sortQuerySchema` without its `.default(keys[0])` reddens 2, the
+ * bare default and the composed one. And `timeWindowQuerySchema`
+ * without `.strict()` reddens 1, the unbounded row's
+ * undeclared-key control, which is the only case in the file that
+ * asks the window schema to refuse a key.
+ *
+ * Three further legs are new for other reasons. A bound schema
+ * accepting any string at all reddens 4 where it would have
+ * reddened 2 — the refusal table's not-a-stamp row with its
+ * containment sibling, and now the two half-bounded rows' broken
+ * controls, which is what shows those controls are refused by the
+ * FORMAT rather than by something else. The two TEST-side legs on
+ * the boundary predicate could not have run at all before, the
+ * predicate being new; they are that table's own proof: answering
+ * `true` for everything reddens the 3 rows the window drops,
+ * answering `false` for everything reddens the 2 it holds, so
+ * neither answer leaves a row that could not tell.
  *
  * What no module mutation reaches: the table guards, which read only
  * the tables beside them — an accepted or refused side deleted
  * whole, a cap left with no row on one side of it, a refusal class
- * dropped, a sentinel that stopped being distinct from its
- * neighbours, and the planted envelope that keeps every containment
- * zero honest.
+ * dropped, a bound combination nothing asks for, a sentinel that
+ * stopped being distinct from its neighbours, and the planted
+ * envelope that keeps every containment zero honest.
  */
+import type { TimeWindow } from './schemas.js';
 import type { ZodSafeParseResult, ZodType } from 'zod';
 
 import { describe, expect, it } from 'vitest';
@@ -135,6 +204,7 @@ import {
   sortQuerySchema,
   timeWindowQuerySchema,
   toStoreWindow,
+  toTimeWindow,
 } from './schemas.js';
 import { parseQuery } from './validation.js';
 
@@ -963,4 +1033,337 @@ describe('what a window or a sort refuses', () => {
       expect(Object.keys(parsed as object)).toContain(row.axis);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// timeWindowQuerySchema, toTimeWindow and sortQuerySchema — what they take
+// ---------------------------------------------------------------------------
+
+/**
+ * The instant every accepted window opens at, written as calendar
+ * FIELDS rather than parsed from the stamp beside it.
+ *
+ * Parsing that stamp is the operation under test, so an expected
+ * instant derived through `Date.parse` would agree with a schema
+ * that had read it wrongly in exactly the same way. `Date.UTC`
+ * takes a 0-based month, so `2` is March.
+ */
+const OPENS_MS = Date.UTC(2026, 2, 4, 5, 6, 7);
+
+/** The stamp {@link OPENS_MS} is the instant of. */
+const OPENS_STAMP = '2026-03-04T05:06:07Z';
+
+/**
+ * The instant every accepted window closes at, on the same terms
+ * as {@link OPENS_MS}. A week later rather than a second, so no
+ * row below is inside one bound and outside the other by accident.
+ */
+const CLOSES_MS = Date.UTC(2026, 2, 11, 5, 6, 7);
+
+/** The stamp {@link CLOSES_MS} is the instant of. */
+const CLOSES_STAMP = '2026-03-11T05:06:07Z';
+
+/**
+ * A bound that is not a stamp, submitted where one belongs.
+ *
+ * Deliberately neither {@link SENTINEL_STAMP} nor a substring of
+ * it. Nothing counts occurrences of this string, and a needle
+ * shared with the refusal table above would read as one that is.
+ */
+const NOT_A_BOUND = 'this-is-not-a-bound';
+
+/**
+ * One accepted window, the bounds it reaches a store as, and the
+ * same request with its own axis put wrong.
+ */
+interface WindowAcceptCase {
+  /** What makes this row different from every other. */
+  readonly label: string;
+
+  /** The query, as Express hands one over. */
+  readonly query: Query;
+
+  /**
+   * The lower bound as an instant, or `null` where the window is
+   * open at that end. An instant rather than a `Date`, because
+   * `null` and a `Date` are the two things the translation has to
+   * tell apart and a number says which without being one.
+   */
+  readonly sinceMs: number | null;
+
+  /** The upper bound as an instant, or `null`. */
+  readonly untilMs: number | null;
+
+  /**
+   * The same request with this row's own axis put wrong, which has
+   * to be refused.
+   *
+   * The negative control, in the case rather than beside it. Every
+   * other assertion in a block of nothing but accepts is green
+   * against a schema that accepts everything, and this is the one
+   * that is not — which is the argument the refusal table above
+   * makes in the other direction.
+   */
+  readonly broken: Query;
+}
+
+/**
+ * The four windows a caller can ask for, and for each the request
+ * that differs from it only along the axis it is about.
+ *
+ * The first row is the one a reader is likeliest to think needs no
+ * case. An absent query is what a list route sees whenever nobody
+ * narrowed anything, and `toTimeWindow` answering two `null`s for
+ * it is the whole of how a store is told there is no window — a
+ * translation reaching for `new Date(0)` instead would answer a
+ * window nobody asked for and no schema would report it.
+ *
+ * Its broken sibling is a key rather than a bad bound, because the
+ * row has no bound to spoil: `{}` parses because it is empty and
+ * every parameter is declared, not because this schema takes what
+ * it is given.
+ */
+const WINDOW_ACCEPT_CASES: readonly WindowAcceptCase[] = [
+  {
+    label: 'a window bounded at neither end',
+    query: {},
+    sinceMs: null, untilMs: null,
+    broken: { unbounded: 'true' },
+  },
+  {
+    label: 'a window bounded below alone',
+    query: { since: OPENS_STAMP },
+    sinceMs: OPENS_MS, untilMs: null,
+    broken: { since: NOT_A_BOUND },
+  },
+  {
+    label: 'a window bounded above alone',
+    query: { until: CLOSES_STAMP },
+    sinceMs: null, untilMs: CLOSES_MS,
+    broken: { until: NOT_A_BOUND },
+  },
+  {
+    label: 'a window bounded at both ends',
+    query: { since: OPENS_STAMP, until: CLOSES_STAMP },
+    sinceMs: OPENS_MS, untilMs: CLOSES_MS,
+    broken: { since: CLOSES_STAMP, until: OPENS_STAMP },
+  },
+];
+
+/**
+ * Which of the four bound combinations a row states.
+ *
+ * Derived from the expected bounds rather than declared beside
+ * them, so the coverage guard below cannot go on agreeing with a
+ * row that has since been edited into a different shape.
+ *
+ * @param row - The accepted window.
+ * @returns `neither`, `since`, `until` or `both`.
+ */
+function boundednessOf(row: WindowAcceptCase): string {
+  if (row.sinceMs === null && row.untilMs === null) {
+    return 'neither';
+  }
+
+  if (row.untilMs === null) {
+    return 'since';
+  }
+
+  if (row.sinceMs === null) {
+    return 'until';
+  }
+
+  return 'both';
+}
+
+/** A second, the step a boundary row sits either side of a bound by. */
+const ONE_SECOND_MS = 1000;
+
+/**
+ * Whether a window holds a row stamped at an instant, read the way
+ * the member NAMES of `TimeWindow` oblige a store to read it:
+ * closed below, open above.
+ *
+ * Written here rather than imported because there is nothing to
+ * import. The half-open rule lives in two sentences of TSDoc on
+ * the interface's own members — a row stamped at
+ * `sinceInclusive` is IN, one stamped at `untilExclusive` is OUT
+ * — and no code states it until a store does. This function is
+ * those two sentences, and the table below is what says a bound
+ * stamp lands on the side each of them claims.
+ *
+ * @param window - The bounds a store was handed.
+ * @param at - When the row is stamped.
+ * @returns Whether the window holds it.
+ */
+function holdsRowAt(window: TimeWindow, at: Date): boolean {
+  const since = window.sinceInclusive;
+  const until = window.untilExclusive;
+
+  if (since !== null && at.getTime() < since.getTime()) {
+    return false;
+  }
+
+  if (until !== null && at.getTime() >= until.getTime()) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * The window every boundary row is read against: bounded at both
+ * ends, so both halves of the half-open rule are in play at once.
+ *
+ * Built through the schema and the translation rather than by hand,
+ * so a boundary row is a claim about what a route hands a store
+ * and not about a literal written beside it.
+ *
+ * @returns The translated bounds.
+ */
+function boundedWindow(): TimeWindow {
+  const query = { since: OPENS_STAMP, until: CLOSES_STAMP };
+
+  return toTimeWindow(parseQuery(timeWindowQuerySchema, query));
+}
+
+/** One row's stamp, and whether {@link boundedWindow} holds it. */
+interface BoundaryCase {
+  /** What makes this row different from every other. */
+  readonly label: string;
+
+  /** When the row is stamped. */
+  readonly atMs: number;
+
+  /** Whether the window holds it. */
+  readonly held: boolean;
+}
+
+/**
+ * Five stamps across one window, of which two are the claim and
+ * three are what make it discriminating.
+ *
+ * The two at the bounds are the half-open rule itself. The three
+ * around them are the control that rule needs: a predicate
+ * answering `true` for everything passes both held rows, one
+ * answering `false` for everything passes all three dropped rows,
+ * and only a table carrying both kinds reports either.
+ */
+const BOUNDARY_CASES: readonly BoundaryCase[] = [
+  {
+    label: 'a row stamped a second before the window opens',
+    atMs: OPENS_MS - ONE_SECOND_MS, held: false,
+  },
+  {
+    label: 'a row stamped exactly at the lower bound',
+    atMs: OPENS_MS, held: true,
+  },
+  {
+    label: 'a row stamped inside the window',
+    atMs: OPENS_MS + ONE_SECOND_MS, held: true,
+  },
+  {
+    label: 'a row stamped exactly at the upper bound',
+    atMs: CLOSES_MS, held: false,
+  },
+  {
+    label: 'a row stamped a second after the window closes',
+    atMs: CLOSES_MS + ONE_SECOND_MS, held: false,
+  },
+];
+
+describe('what a window accepts', () => {
+  it('labels every row distinctly', () => {
+    const labels = WINDOW_ACCEPT_CASES.map((row) => row.label);
+
+    expect(labels.length).toBe(new Set(labels).size);
+  });
+
+  it('covers every combination of bounds', () => {
+    // A set rather than a count, so a missing combination fails
+    // NAMING the one nothing in the table asks for.
+    const covered = WINDOW_ACCEPT_CASES.map(boundednessOf);
+
+    expect([...new Set(covered)].sort()).toEqual([
+      'both', 'neither', 'since', 'until',
+    ]);
+  });
+
+  for (const row of WINDOW_ACCEPT_CASES) {
+    it(`translates ${row.label}`, () => {
+      const parsed = parseQuery(timeWindowQuerySchema, row.query);
+      const window = toTimeWindow(parsed);
+
+      expect([
+        window.sinceInclusive?.getTime() ?? null,
+        window.untilExclusive?.getTime() ?? null,
+      ]).toEqual([row.sinceMs, row.untilMs]);
+    });
+
+    it(`refuses ${row.label} with its axis wrong`, () => {
+      // The negative control, varied along this row's own axis.
+      const parse = () => parseQuery(timeWindowQuerySchema, row.broken);
+      const err = validationErrorFrom(parse);
+
+      expect(detailsOf(err).length).toBeGreaterThan(0);
+    });
+  }
+});
+
+describe('the side a boundary stamp lands on', () => {
+  it('carries rows the window holds and rows it drops', () => {
+    const held = BOUNDARY_CASES.filter((row) => row.held);
+    const dropped = BOUNDARY_CASES.filter((row) => !row.held);
+
+    expect([held.length > 0, dropped.length > 0]).toEqual([true, true]);
+  });
+
+  it('holds a row at the lower bound and drops one at the upper', () => {
+    const atLower = BOUNDARY_CASES.filter((row) => row.atMs === OPENS_MS);
+    const atUpper = BOUNDARY_CASES.filter((row) => row.atMs === CLOSES_MS);
+
+    expect([
+      atLower.map((row) => row.held),
+      atUpper.map((row) => row.held),
+    ]).toEqual([[true], [false]]);
+  });
+
+  for (const row of BOUNDARY_CASES) {
+    it(`answers ${row.label}`, () => {
+      const window = boundedWindow();
+
+      expect(holdsRowAt(window, new Date(row.atMs))).toBe(row.held);
+    });
+  }
+});
+
+describe('what a sort defaults to', () => {
+  it('states its default by the order of its own tuple', () => {
+    // The key below is the default because it is the tuple's first
+    // member and not because it is called `score`. A tuple written
+    // the other way round is a different default, and this is the
+    // case that says so rather than the two beneath it.
+    expect(SORT_KEYS[0]).toBe('score');
+  });
+
+  it('defaults to the first declared key when sort is absent', () => {
+    expect(parseQuery(sortSchema, {})).toStrictEqual({ sort: 'score' });
+  });
+
+  it('answers a declared key it was given', () => {
+    // The control on the case above: a schema answering `score`
+    // whatever it was handed would pass that one and fail this.
+    const query = { sort: 'recency' };
+
+    expect(parseQuery(sortSchema, query)).toStrictEqual({ sort: 'recency' });
+  });
+
+  it('carries every default through a composed list query', () => {
+    // The parse a findings list route makes. A default surviving
+    // its own schema but not the composition is a route ordering
+    // by nothing, and no case above this one would report it.
+    expect(parseQuery(findingListQuerySchema, {})).toStrictEqual({
+      page: 1, perPage: 50, sort: 'score',
+    });
+  });
 });
