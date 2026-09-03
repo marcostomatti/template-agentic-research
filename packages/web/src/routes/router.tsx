@@ -58,15 +58,16 @@
  *
  * The other half is in use as of the lexicon's editor: an entry carries
  * its ELEMENT beside its path, and those elements have stopped being
- * one shared placeholder. TWO surfaces still open
- * {@link MODAL_PLACEHOLDER} — agents and tools — while the lexicon
- * opens {@link LEXICON_EDITOR}, the digest opens {@link DIGEST_DETAIL}
- * and the sources open {@link SOURCE_EDITOR}, {@link
- * SOURCE_CONFIG_APPROVAL} and {@link SOURCE_FAILURES} at their three
- * addresses. That is what an entry holding its own element was for: a
- * surface's modal is not the same modal as its neighbour's, any more
- * than its second sub-route is the same as its first, and the five
- * that have landed are not even all the same KIND of modal.
+ * one shared placeholder. ONE surface still opens
+ * {@link MODAL_PLACEHOLDER} — tools — while the lexicon opens
+ * {@link LEXICON_EDITOR}, the digest opens {@link DIGEST_DETAIL}, the
+ * agents open {@link AGENT_EDITOR} and the sources open
+ * {@link SOURCE_EDITOR}, {@link SOURCE_CONFIG_APPROVAL} and
+ * {@link SOURCE_FAILURES} at their three addresses. That is what an
+ * entry holding its own element was for: a surface's modal is not the
+ * same modal as its neighbour's, any more than its second sub-route is
+ * the same as its first, and the six that have landed are not even all
+ * the same KIND of modal.
  *
  * Each is a CHILD of its list route rather than a sibling, which is the
  * whole point of the shape: the list stays matched and stays rendered,
@@ -120,6 +121,7 @@ import { Sidebar } from '../app-shell/Sidebar';
 import { Topbar } from '../app-shell/Topbar';
 import { PlaceholderModal } from '../components/PlaceholderModal';
 import { findPage } from '../pages';
+import { AgentEditorModal } from '../pages/agents/AgentEditorModal';
 import { DigestDetailModal } from '../pages/digest/DigestDetailModal';
 import { LexiconEditorModal } from '../pages/lexicon/LexiconEditorModal';
 import {
@@ -233,11 +235,11 @@ export const SURFACE_PLACEHOLDER = (
  * bottom of each one, so the row actions on those pages already open
  * it.
  *
- * It stands at FOUR of the fourteen registrations now — agents and
- * tools, across both bases — and the count shrinks by two with each
- * editor that lands. The DENOMINATOR moves too, and separately: a
- * surface's second and third addresses are two more registrations
- * apiece that were never this element's to hold.
+ * It stands at TWO of the fourteen registrations now — tools, across
+ * both bases — and the count shrinks by two with each editor that
+ * lands. The DENOMINATOR moves too, and separately: a surface's second
+ * and third addresses are two more registrations apiece that were
+ * never this element's to hold.
  */
 export const MODAL_PLACEHOLDER = <PlaceholderModal />;
 
@@ -275,8 +277,9 @@ export const DIGEST_DETAIL = <DigestDetailModal />;
  * The sources surface's feed editor, at its own sub-route.
  *
  * The third real element in the table below, and the first landing
- * that leaves the placeholder standing for a set it can describe in
- * two words: agents and tools, both of them editors.
+ * that left the placeholder standing for a set it could describe in
+ * two words: agents and tools, both of them editors. The agents
+ * editor has since landed too, so that set is now one surface.
  *
  * Held as an ELEMENT for the reason its three neighbours are: one
  * object across both trees, so identity stays askable.
@@ -315,16 +318,32 @@ export const SOURCE_CONFIG_APPROVAL = <SourceConfigApprovalModal />;
 export const SOURCE_FAILURES = <SourceFailuresModal />;
 
 /**
+ * The agents surface's persona editor, at its own sub-route.
+ *
+ * The sixth real element in the table below, and the one that leaves
+ * {@link MODAL_PLACEHOLDER} standing for a single surface. It is an
+ * editor like the lexicon's and the sources', over the smallest row
+ * any of them edits — `../pages/agents/AgentEditorModal.tsx` carries
+ * why three fields is the whole of that row rather than a first
+ * instalment.
+ *
+ * Held as an ELEMENT for the reason its five neighbours are: one
+ * object across both trees, so identity stays askable.
+ */
+export const AGENT_EDITOR = <AgentEditorModal />;
+
+/**
  * The modal sub-routes each list surface carries, keyed by surface id.
  *
  * A LIST per surface, so a row openable in more than one way costs a
  * row here rather than a shape change — see the header. The sources
- * hold THREE entries and the other four hold one apiece, and five of
+ * hold THREE entries and the other four hold one apiece, and six of
  * the seven entries now name a real modal rather than
  * {@link MODAL_PLACEHOLDER}: the lexicon's editor, the sources editor,
- * the sources config approval, the sources failures list and the
- * digest's detail. A surface whose list is empty and a surface with no
- * key at all mean the same thing to {@link surfaceRoute}.
+ * the sources config approval, the sources failures list, the digest's
+ * detail and the agents editor. A surface whose list is empty and a
+ * surface with no key at all mean the same thing to
+ * {@link surfaceRoute}.
  *
  * Declared BELOW the elements rather than beside the other route
  * constants at the top because it names them: an entry holds what it
@@ -343,7 +362,7 @@ const MODAL_SUB_ROUTE_TABLE: ModalSubRouteTable = {
     { path: `${ENTITY_PARAM}/config`, element: SOURCE_CONFIG_APPROVAL },
     { path: `${ENTITY_PARAM}/failures`, element: SOURCE_FAILURES },
   ],
-  agents: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
+  agents: [{ path: `${ENTITY_PARAM}/edit`, element: AGENT_EDITOR }],
   tools: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
 };
 

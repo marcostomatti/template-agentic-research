@@ -41,8 +41,8 @@
  * be is a property of the subject being researched — and because at
  * the `/` base nothing else on this page names which domain that is.
  * It is the same on all three cards today, which is honest: they are
- * three roles of one domain, and the editor modal q15 brings has
- * domain scope as its third field for exactly this reason.
+ * three roles of one domain, and `./AgentEditorModal.tsx` states the
+ * domain as its third field for exactly this reason.
  *
  * It rides the badge row rather than a meta footer because it is what
  * the card is scoped BY and not a measurement of the row — read once

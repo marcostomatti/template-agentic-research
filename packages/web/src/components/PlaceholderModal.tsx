@@ -7,14 +7,15 @@
  * sit on — the digest at `:entityId`, the lexicon, sources, agents and
  * tools at `:entityId/edit`, and the sources again at
  * `:entityId/config` and `:entityId/failures` — and each address is
- * declared under both route bases. FOUR of those fourteen
+ * declared under both route bases. TWO of those fourteen
  * registrations render this component: the lexicon's two open
  * `../pages/lexicon/LexiconEditorModal`, the sources' `/edit` pair
  * opens `../pages/sources/SourceEditorModal`, its `/config` pair opens
  * `../pages/sources/SourceConfigApprovalModal` and its `/failures`
- * pair opens `../pages/sources/SourceFailuresModal`, and the digest's
- * two open `../pages/digest/DigestDetailModal`, which is why the count
- * here is worth stating rather than implying.
+ * pair opens `../pages/sources/SourceFailuresModal`, the agents' two
+ * open `../pages/agents/AgentEditorModal`, and the digest's two open
+ * `../pages/digest/DigestDetailModal`, which is why the count here is
+ * worth stating rather than implying.
  *
  * Both halves of it move, and separately. The NUMERATOR shrinks by two
  * with each surface after those; the DENOMINATOR grows by two with
@@ -22,11 +23,19 @@
  * this element's to hold.
  *
  * That remaining set is the whole constraint on what this may say, and
- * the set is now agents and tools, both of them waiting on an EDITOR.
- * The digest's read-only detail landed first and is what narrowed the
- * set to ONE KIND; the sources editor is what narrowed it to two
- * surfaces of that kind, and the sources approval and failures list —
- * neither of them an editor — left that narrowing standing.
+ * the set is now the tools surface alone, waiting on an EDITOR. The
+ * digest's read-only detail landed first and is what narrowed the set
+ * to ONE KIND; the sources editor narrowed it to two surfaces of that
+ * kind and the agents editor to one, while the sources approval and
+ * failures list — neither of them an editor — left that narrowing
+ * standing.
+ *
+ * A set of ONE is the state just before this component stops being
+ * reachable at all. It is still a placeholder rather than a
+ * tools-specific stand-in: the two registrations left are one
+ * surface under two bases, and writing anything here that only the
+ * connector editor could be true of would be describing the modal
+ * that replaces it.
  *
  * There is still no footer here, and the reason has changed rather
  * than gone. A disabled `Save` would now be honest about both — but it
@@ -76,9 +85,11 @@
  * The eyebrow is the surface's own title, derived from the path
  * exactly as the topbar derives its heading — never from state, since
  * a back button and the domain switcher's base swap both change the
- * surface without passing through anything here. It is what
- * distinguishes the two registrations that remain without there being
- * one element apiece.
+ * surface without passing through anything here. It named the
+ * remaining registrations apart while they belonged to two different
+ * surfaces; the two left are one surface under both bases, so what it
+ * still does is put this dialog on the surface an operator is looking
+ * at rather than leaving it unplaced.
  *
  * The title is passed for a second reason beyond naming the row:
  * `Modal` draws its header, and with it the close button and the

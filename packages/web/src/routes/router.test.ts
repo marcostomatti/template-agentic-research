@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SINGLE_DOMAIN_BASE, SURFACES, withBase } from './paths';
 import {
+  AGENT_EDITOR,
   DIGEST_DETAIL,
   LEXICON_EDITOR,
   MODAL_PLACEHOLDER,
@@ -156,12 +157,11 @@ function addressOf(surfaceId: string, pattern: string): string {
  * tree could only ever agree with whatever the tree currently says.
  * It shrinks as each real modal lands, and the partition test below
  * is what refuses a registration that leaves it without joining a
- * test that makes a claim about its element instead. Both remaining
- * are EDITORS — the digest's read-only detail has landed, so this
- * roster no longer stands for two kinds of modal at once.
+ * test that makes a claim about its element instead. The one
+ * remaining is an EDITOR — the digest's read-only detail has landed,
+ * so this roster no longer stands for two kinds of modal at once.
  */
 const PLACEHOLDER_ADDRESSES: readonly string[] = [
-  addressOf('agents', `${ENTITY_PARAM}/edit`),
   addressOf('tools', `${ENTITY_PARAM}/edit`),
 ];
 
@@ -530,6 +530,21 @@ describe('the modal sub-routes', () => {
     expect(opened).toHaveLength(BASES.length);
   });
 
+  it('opens the agents persona editor at its own sub-route', () => {
+    // The sixth real element, and the one that leaves the ledger
+    // above naming a single surface. Driven exactly as its
+    // neighbours are: the CLAIM differs, the reading does not.
+    // Arrange / Act
+    const opened = openedElements([
+      addressOf('agents', `${ENTITY_PARAM}/edit`),
+    ]);
+
+    // Assert
+    expect(opened.filter((row) => row.element !== AGENT_EDITOR))
+      .toEqual([]);
+    expect(opened).toHaveLength(BASES.length);
+  });
+
   it('opens the digest detail at its own sub-route', () => {
     // The element that says the ledger is a PARTITION rather than a
     // shrinking list: this modal is not an editor, so its
@@ -561,6 +576,7 @@ describe('the modal sub-routes', () => {
       addressOf('sources', `${ENTITY_PARAM}/edit`),
       addressOf('sources', `${ENTITY_PARAM}/config`),
       addressOf('sources', `${ENTITY_PARAM}/failures`),
+      addressOf('agents', `${ENTITY_PARAM}/edit`),
       addressOf('digest', ENTITY_PARAM),
     ];
     const declared = MODAL_SUB_ROUTES.map(

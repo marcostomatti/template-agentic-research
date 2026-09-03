@@ -10,10 +10,10 @@
  * reachable by no test in this package at all, which leaves
  * `./AgentEditorModal.tsx` one control per field and the read states.
  *
- * Written a task ahead of that modal, so nothing imports this yet. The
- * grid next door is unchanged by it: `./AgentsPage.tsx` still offers
- * one action, and the sentences below are read by nobody until the
- * editor arrives.
+ * Written a task ahead of that modal, and imported by it since. The
+ * grid next door is still unchanged by any of it: `./AgentsPage.tsx`
+ * offers the one action it always did, and everything below is read
+ * from the modal alone.
  *
  * ## Three fields, and all three are the operator's
  *
