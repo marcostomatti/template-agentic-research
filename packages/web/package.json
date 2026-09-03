@@ -13,7 +13,9 @@
     "lint": "eslint src tests *.ts *.mjs",
     "lint:fix": "eslint src tests *.ts *.mjs --fix",
     "pretest": "bun run --filter '@ar/ui' build",
-    "test": "vitest run && playwright test"
+    "test": "vitest run && playwright test",
+    "test:visual": "playwright test --config playwright.visual.config.ts",
+    "test:visual:update": "playwright test --config playwright.visual.config.ts --update-snapshots=changed"
   },
   "dependencies": {
     "@ar/ui": "workspace:*",
