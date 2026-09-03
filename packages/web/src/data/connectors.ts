@@ -499,6 +499,14 @@ const EXPORT_SUBSCRIPTIONS_BY_ID = new Map<number, ExportSubscription>(
  * {@link ConnectorStatus} for what that costs and what would have to
  * be stored to buy it back.
  *
+ * That bars a third STATUS and not a second reading of the payload.
+ * `../pages/tools/connectionTest.ts` reads this same config for
+ * whether the address it names could be dialled at all, which is a
+ * fact about the row rather than a claim about the service, and it
+ * refuses rows this answers `ready` for — a documentation-reserved
+ * endpoint among them. Two readings of one column, and only this one
+ * goes on a card.
+ *
  * @param connector - The row to read.
  * @returns Its status. Total: every connector has exactly one.
  */
