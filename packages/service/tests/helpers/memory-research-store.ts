@@ -1,13 +1,14 @@
 /**
  * @packageDocumentation
  * The in-memory dataset every research store port is driven through
- * in the isolated suite. All eight halves are here — the domains
+ * in the isolated suite. All nine halves are here — the domains
  * half, the taxonomy half with categories and terms together, the
  * personas beside them, the topics the dispatcher comes for, the
  * sources it reads and the review queue over what they captured, the
  * connectors the deployment reaches other services through, the
- * export subscriptions that pair the two, and the operator settings
- * it is configured by.
+ * export subscriptions that pair the two, the operator settings it
+ * is configured by, and the findings a pass made with the sightings,
+ * rulings and research that hang off them.
  *
  * ONE DATASET RATHER THAN SEVEN FAKES, which is why this file is not
  * named for any one of the ports it satisfies. `src/domains/store.ts`
@@ -446,6 +447,73 @@
  * `tests/live/api-wave2.live.test.ts` is where the counted answer is
  * discharged.
  *
+ * THE FINDINGS HALF WRITES ONE TABLE AND PLANTS THREE, WHICH IS THE
+ * SHAPE NO HALF ABOVE HAS. `FindingStore` declares six readers and
+ * one writer, and the writer appends a `finding_labels` row — so
+ * `findings`, `finding_sightings` and `entity_research` are supplied
+ * by seams, on the reasoning `documents` already is one table over.
+ * The consequence for a reader of this file is that the half has ONE
+ * refusal mechanism rather than the sources half's four:
+ * `finding_labels_finding_id_findings_id_fk`, refusing a ruling
+ * appended onto a finding that is not there. No CHECK, no unique key
+ * and no guarded delete, because there is nothing else a method can
+ * reach.
+ *
+ * ITS PAGE IS ORDERED BY `compareFindings`' KEYS WRITTEN OUT rather
+ * than by that comparator called, and the distinction is what one
+ * suite one layer up rests on. `src/lib/digest-assemble.ts` exports
+ * the ordering the digest selection and every renderer already agree
+ * on, and `src/findings/service.test.ts` holds a page THIS store
+ * answered against `orderFindings` over the same rows — so a store
+ * importing the library would leave that comparison holding one
+ * authority against itself. Expressing the keys here is the same
+ * decision `src/findings/db-store.ts` takes when it expresses them
+ * in SQL, and the two suites then check one rule from two sides.
+ *
+ * AN ABSENT SCORE IS THE TAIL OF THAT ORDER AND NOT ITS FLOOR, which
+ * is the half of it a store gets wrong by sorting nulls low. Two
+ * unscored findings tie on the first key and fall through to the
+ * stamp, so the tail keeps an order of its own. Both orderings end
+ * in `id` descending, `created_at` defaulting to the transaction's
+ * start time and a pass therefore writing findings that tie to the
+ * microsecond.
+ *
+ * ITS VERDICT FILTER READS THE LATEST RULING AND NOT ANY. The table
+ * carries no unique key at all, so re-judging APPENDS and the row in
+ * force is the newest by `labelled_at` with `id` breaking the tie. A
+ * store matching any label answers a page of findings an operator
+ * has already moved on from, with every count beside it agreeing,
+ * and a finding nobody has judged matches no verdict a caller can
+ * name.
+ *
+ * ITS CATEGORY FILTER IS A `jsonb` READ AND NOT A JOIN. No column
+ * links a finding to a category: a domain files one through the
+ * `fields` payload, under the member named in this file and in
+ * `ar-digest`'s assembly node and nowhere else. What is imitated is
+ * the COLUMN read `fields->>'category'` rather than the digest's own
+ * reduction of that member — `src/findings/store.ts` names that as
+ * the one place the two filings could part — so a numeric member
+ * answers its text here exactly as `->>` does, and a key the domain
+ * never declared is an empty page rather than a refusal.
+ *
+ * ITS WINDOW IS HALF-OPEN OVER `created_at`,
+ * `[sinceInclusive, untilExclusive)`, and the member names are what
+ * say which side each bound closes. A store writing `<=` on the
+ * upper bound is a bug no type could report, and two adjacent
+ * windows would then both take the seam a caller paging through time
+ * crosses most often. Neither bound is re-checked for order:
+ * `timeWindowQuerySchema` refuses an inverted window before any of
+ * this is reached.
+ *
+ * AND ITS SIGHTINGS ARE ROWS WHERE THE SOURCES HALF PLANTS A NUMBER,
+ * OVER ONE TABLE. `SourceStore.countSourceDependents` can only be
+ * asked how many `finding_sightings` rows cite a source, while
+ * `FindingStore.listFindingSightings` answers the rows themselves,
+ * so one shape cannot serve both. A row planted through the findings
+ * seam therefore does not hold its source's delete, which is a known
+ * divergence stated at both seams and pinned by a case rather than
+ * left to be discovered.
+ *
  * THE SETTINGS HALF REFUSES NOTHING, AND THAT IS A MEASUREMENT
  * RATHER THAN A SIMPLIFICATION. `operator_settings` carries two
  * mechanisms and neither is reachable through the port: a second
@@ -596,6 +664,16 @@ import type {
   DomainStore,
   InsertDomainInput,
 } from '../../src/domains/store.js';
+import type {
+  FindingFilter,
+  FindingLabelRecord,
+  FindingRecord,
+  FindingResearchRecord,
+  FindingSightingRecord,
+  FindingSort,
+  FindingStore,
+  InsertFindingLabelInput,
+} from '../../src/findings/store.js';
 import type { StoreWindow } from '../../src/http/schemas.js';
 import type {
   InsertPersonaInput,
@@ -695,7 +773,154 @@ export interface MemorySourceDocument {
 }
 
 /**
- * All eight research ports over one dataset, plus the four seams a
+ * One planted `findings` row, as the findings half reads it.
+ *
+ * {@link FindingRecord} minus its `domainId`, which is the argument
+ * {@link MemoryResearchStore.setDomainFindings} is planting under —
+ * the same omission {@link MemorySourceDocument} makes of its
+ * `sourceId`, and for the same reason: a member repeating the key it
+ * was planted beneath is a second authority for one fact, and a plant
+ * naming a domain other than its key would leave every read here
+ * deciding which of the two it meant.
+ *
+ * A PLANT RATHER THAN A WRITE, because `FindingStore` declares no
+ * insert at all. Six of its seven methods read `findings` and the
+ * seventh appends a LABEL, so a case wanting a finding to page, to
+ * order, to filter or to judge has to be handed a seam — the
+ * decision {@link MemoryResearchStore.setSourceDocuments} already
+ * took for `documents`, one table over and for the same reason.
+ *
+ * EVERY COLUMN THE RECORD CARRIES IS HERE, INCLUDING `score` AND
+ * `scoreVersion`, and that is not a way in for a writer. Nothing on
+ * the port accepts either — `src/findings/store.ts` says so of its
+ * whole write surface — so the only thing that can set a score is a
+ * case saying what state it is asking about, which is what a fixture
+ * is for.
+ */
+export interface MemoryDomainFinding {
+  /** `findings.id`, and the last key of both orderings. */
+  readonly id: number;
+
+  /** The document this was read out of. */
+  readonly documentId: number;
+
+  /**
+   * The entity it is about, or null when it is about nobody in
+   * particular. The null is the state
+   * {@link FindingStore.listFindingResearch} answers an empty list
+   * for, and it is ordinary rather than exceptional.
+   */
+  readonly entityId: number | null;
+
+  /**
+   * What the pass extracted. The category filter reads the one
+   * member of this payload named below and nothing else, no column
+   * linking a finding to a category at all.
+   */
+  readonly fields: Record<string, unknown>;
+
+  /**
+   * What scoring made of it, or null while nothing has. Null is the
+   * TAIL of the score ordering rather than its floor, which is the
+   * one thing about that order a fixture has to be able to state.
+   */
+  readonly score: number | null;
+
+  /** Which scoring pass that was, or null beside a null score. */
+  readonly scoreVersion: number | null;
+
+  /**
+   * When it was made: the window's subject and the second key of
+   * both orderings. Copied on the way in, so a caller that goes on
+   * moving the `Date` it planted does not move a stored one.
+   */
+  readonly createdAt: Date;
+}
+
+/**
+ * One planted `finding_sightings` row, as the findings half reads
+ * it.
+ *
+ * {@link FindingSightingRecord} minus its `findingId`, which is the
+ * argument {@link MemoryResearchStore.setFindingSightings} is
+ * planting under, on the reasoning {@link MemoryDomainFinding}
+ * gives.
+ *
+ * ROWS HERE AND A NUMBER AT
+ * {@link MemoryResearchStore.setSourceSightings}, OVER ONE TABLE.
+ * That is the shape difference this file already draws between
+ * {@link MemoryResearchStore.setDomainDependents} and
+ * {@link MemoryResearchStore.setSourceDocuments}, and it lands on
+ * `finding_sightings` because the two ports ask about it
+ * differently: `SourceStore.countSourceDependents` can only be asked
+ * HOW MANY cite a source, while
+ * {@link FindingStore.listFindingSightings} answers the rows. A
+ * planted row therefore does NOT move that count, which is a known
+ * divergence rather than an oversight and is stated at both seams.
+ */
+export interface MemoryFindingSighting {
+  /** `finding_sightings.id`, and the tiebreak on the read's order. */
+  readonly id: number;
+
+  /**
+   * The feed it was seen at. Carried because
+   * {@link FindingSightingRecord} carries it: the sightings table IS
+   * the provenance record, and a projection dropping the feed would
+   * leave the rows saying only that something was seen.
+   */
+  readonly sourceId: number;
+
+  /** What the feed called it there, or null when it named nothing. */
+  readonly externalId: string | null;
+
+  /** When it was seen. Copied on the way in. */
+  readonly seenAt: Date;
+}
+
+/**
+ * One planted `entity_research` row, as the findings half reads it.
+ *
+ * {@link FindingResearchRecord} minus its `entityId`, which is the
+ * argument {@link MemoryResearchStore.setEntityResearch} is planting
+ * under, on the reasoning {@link MemoryDomainFinding} gives.
+ *
+ * PLANTED BY ENTITY AND READ BY FINDING, which is the one seam here
+ * whose key is not the key it is read back through.
+ * {@link FindingStore.listFindingResearch} takes a finding, reads
+ * its `entityId` and answers what was planted under that — so a
+ * case has to attribute a finding before any of this is reachable,
+ * and a finding attributed to nothing reaches none of it whatever
+ * was planted.
+ *
+ * NOTHING ON THIS PORT WRITES ONE. `src/findings/store.ts` states
+ * that `entity_research` is `ar-research`'s to write and that the
+ * embedding is read-only structurally rather than by convention,
+ * which is exactly why a seam is what supplies these rows.
+ */
+export interface MemoryEntityResearch {
+  /** `entity_research.id`, and the tiebreak on the read's order. */
+  readonly id: number;
+
+  /** The pass that recorded it, or null when none is named. */
+  readonly runId: number | null;
+
+  /** What it came to in prose, or null when nothing was written. */
+  readonly summary: string | null;
+
+  /**
+   * The structured findings of the pass. `unknown` rather than a
+   * record, exactly as {@link FindingResearchRecord} declares it:
+   * the column carries no `$type`, so what a pass records is that
+   * pass's business.
+   */
+  readonly payload: unknown;
+
+  /** When the research was recorded. Copied on the way in. */
+  readonly researchedAt: Date;
+}
+
+/**
+ * All nine research ports over one dataset, plus the seven seams a
  * case needs that no port declares.
  *
  * EVERY ONE OF THEM WHOLE rather than a `Pick` of it. The category
@@ -703,9 +928,9 @@ export interface MemorySourceDocument {
  * unwritten, which was the honest statement of what existed rather
  * than a gap papered over with stubs; all twelve taxonomy methods,
  * all six persona ones, all seven topic ones, all nine source ones,
- * all seven connector ones, all seven subscription ones and both
- * settings ones are here now, so a caller wanting any of the eight
- * ports entire can be handed this store.
+ * all seven connector ones, all seven subscription ones, both
+ * settings ones and all seven finding ones are here now, so a caller
+ * wanting any of the nine ports entire can be handed this store.
  *
  * `TopicStore` was the first member from outside wave 1 and
  * `SourceStore` is the second, and both join this file rather than
@@ -723,15 +948,27 @@ export interface MemorySourceDocument {
  * refused by rows the half below it writes.
  *
  * `SubscriptionStore` IS THE FOURTH AND IS THE ONE THAT NEEDS BOTH
- * REASONS AT ONCE, which is why it is last and why it could not have
- * stood on its own at all. `export_subscriptions.domain_id`
- * cascades, so a domain deleted through `DomainStore` has to take its
- * subscriptions with it — the topics and sources argument — and
+ * REASONS AT ONCE, which is why it was the last of wave 2's four
+ * and why it could not have stood on its own at all.
+ * `export_subscriptions.domain_id` cascades, so a domain deleted
+ * through `DomainStore` has to take its subscriptions with it — the
+ * topics and sources argument — and
  * `export_subscriptions.connector_id` names a `connectors` row, so a
  * write here has to be able to ask whether that row is there — the
  * connectors argument, read from the writing end. A subscriptions
  * fake standing alone could answer neither question, and two fakes
  * would agree with each other until a case deleted something.
+ *
+ * `FindingStore` IS THE FIFTH AND NEEDS THE FIRST REASON ALONE,
+ * which is the topics-and-sources argument reaching two levels
+ * further than it has before. `findings.domain_id` cascades, so a
+ * domain deleted through `DomainStore` has to take its findings —
+ * and `finding_sightings.finding_id` and `finding_labels.finding_id`
+ * cascade onto those, so it has to take their sightings and their
+ * rulings too. A findings fake standing alone could not be asked
+ * about a domain at all, and one sharing no state with the sources
+ * half could not say why a sighting planted through this port is
+ * invisible to `SourceStore.countSourceDependents`.
  *
  * Nothing in `src/` is handed a {@link MemoryResearchStore} — a
  * service takes the port — so the seams below cannot become a way for
@@ -745,18 +982,30 @@ export interface MemoryResearchStore extends
   TopicStore,
   SourceStore,
   ConnectorStore,
-  SubscriptionStore {
+  SubscriptionStore,
+  FindingStore {
   /**
    * Plants what a domain has ACCUMULATED, for the delete guard to
    * read back through {@link DomainStore.countDomainDependents}.
    *
-   * NOTHING HERE WRITES `findings`. No port declares an insert for
-   * it, and the pipeline that fills it arrives in a later phase — so
-   * the state the delete guard exists for is unreachable through the
-   * ports themselves, and without this seam every count answers zero
-   * and the guard is exercisable only against a real database. That
+   * NOTHING HERE WRITES `findings`, AND A SEAM NOW PLANTS THEM.
+   * No port declares an insert for that table — `FindingStore`
+   * reads it six ways and writes only a LABEL — so the state the
+   * delete guard exists for was unreachable through the ports
+   * themselves, and without this seam every count answered zero and
+   * the guard was exercisable only against a real database. That
    * would put the one rule the spec argues hardest for in the half of
    * the suite that needs a container up.
+   *
+   * {@link MemoryResearchStore.setDomainFindings} DOES NOT MOVE THIS
+   * COUNT, and that is the file's third known divergence rather than
+   * a second authority. Rows planted there are what the findings
+   * page, its total and the single lookup answer from; the number
+   * planted HERE is what `countDomainDependents` answers, because
+   * `src/domains/service.test.ts` and `src/domains/routes.test.ts`
+   * reach that guard over a store holding no finding at all. The
+   * paragraph below states the same decision for `topics` and
+   * `sources`, and that seam's own TSDoc carries the rest.
    *
    * `topics` AND `sources` ARE NOW BOTH WRITABLE AND BOTH COUNTS ARE
    * STILL PLANTED, which is the one place this file knowingly answers
@@ -895,6 +1144,103 @@ export interface MemoryResearchStore extends
    *   zero is how a case takes a plant back.
    */
   setConnectorSubscriptions(connectorId: number, count: number): void;
+
+  /**
+   * Plants the `findings` rows one domain has made, for the six
+   * reads over that table to answer from.
+   *
+   * NO PORT WRITES A `findings` ROW, and `src/findings/store.ts`
+   * states the absence IS the read-first rule rather than an
+   * omission: a handler cannot re-score a finding because there is
+   * nothing on the port to call. That leaves the page, its count,
+   * the single lookup and the three embedded reads with no reachable
+   * state, so this seam supplies it — and it supplies ROWS rather
+   * than numbers, because five of those six answer rows.
+   *
+   * THE COUNT IS COUNTED FROM WHAT WAS PLANTED, which is what keeps
+   * one dataset behind the page and its `meta.total`. A case
+   * planting four findings and asking for the second page of two
+   * gets a page of two and a total of four without saying either.
+   *
+   * IT DOES NOT MOVE {@link DomainStore.countDomainDependents},
+   * WHICH IS THIS FILE'S THIRD KNOWN DIVERGENCE and is
+   * {@link MemoryResearchStore.setConnectorSubscriptions}' decision
+   * taken again. That guard reads the number
+   * {@link MemoryResearchStore.setDomainDependents} planted and
+   * never these rows, because `src/domains/service.test.ts` and
+   * `src/domains/routes.test.ts` reach it by PLANTING over a store
+   * holding no finding at all, and a rule mixing a planted number
+   * with a counted one answers neither. So a domain holding a
+   * planted finding is offered a delete `src/domains/db-store.ts`
+   * would refuse, one case here pins that rather than leaving it to
+   * be discovered, and `tests/live/api-wave3.live.test.ts` is where
+   * the counted answer is discharged.
+   *
+   * @param domainId - The domain that made them. Need not name a
+   *   stored domain: the rows are plantable ahead of it, and every
+   *   read below answers about an id rather than about a domain.
+   * @param findings - What to record, WHOLE. A second call replaces
+   *   the first rather than appending to it — the same whole-unit
+   *   rule {@link MemoryResearchStore.setSourceDocuments} states,
+   *   for the same reason: under an append there is no way to
+   *   express a domain going back to none. Each row's `createdAt`
+   *   and each `fields` payload is copied on the way in.
+   */
+  setDomainFindings(
+    domainId: number,
+    findings: readonly MemoryDomainFinding[],
+  ): void;
+
+  /**
+   * Plants where one finding has been seen, for
+   * {@link FindingStore.listFindingSightings} to answer from.
+   *
+   * ROWS RATHER THAN THE NUMBER
+   * {@link MemoryResearchStore.setSourceSightings} PLANTS OVER THE
+   * SAME TABLE, and {@link MemoryFindingSighting} carries why: the
+   * two ports can ask different questions of `finding_sightings`, so
+   * a shape answering one cannot answer the other. The consequence
+   * is that a row planted here is invisible to
+   * `SourceStore.countSourceDependents` and cannot hold a source's
+   * delete, which is a known divergence stated at both seams and
+   * pinned by a case.
+   *
+   * @param findingId - The finding the rows cite. Need not name a
+   *   planted finding: the read answers about an id rather than
+   *   about a finding, and an id nothing carries answers an empty
+   *   list either way.
+   * @param sightings - What to record, WHOLE. A second call replaces
+   *   the first, on the terms
+   *   {@link MemoryResearchStore.setDomainFindings} states, and each
+   *   row's `seenAt` is copied on the way in.
+   */
+  setFindingSightings(
+    findingId: number,
+    sightings: readonly MemoryFindingSighting[],
+  ): void;
+
+  /**
+   * Plants what research has recorded about one entity, for
+   * {@link FindingStore.listFindingResearch} to answer from.
+   *
+   * KEYED BY THE ENTITY AND READ THROUGH A FINDING, which is the one
+   * seam here whose key differs from the id its read takes.
+   * {@link MemoryEntityResearch} carries what that costs a case: a
+   * finding has to be attributed before any planted research is
+   * reachable at all.
+   *
+   * @param entityId - The subject the research is about. Need not
+   *   name anything: no port here stores an entity, so an id is all
+   *   there is to plant under until `EntityStore` lands.
+   * @param research - What to record, WHOLE. A second call replaces
+   *   the first, on the terms
+   *   {@link MemoryResearchStore.setDomainFindings} states, and each
+   *   row's `researchedAt` and `payload` is copied on the way in.
+   */
+  setEntityResearch(
+    entityId: number,
+    research: readonly MemoryEntityResearch[],
+  ): void;
 }
 
 /** What {@link createMemoryResearchStore} may be handed. */
@@ -1109,6 +1455,43 @@ const SUBSCRIPTION_DOMAIN_FK
  */
 const SUBSCRIPTION_CONNECTOR_FK
   = 'export_subscriptions_connector_id_connectors_id_fk';
+
+/**
+ * The foreign key from `finding_labels.finding_id`, and the ONE
+ * mechanism the findings half can reach.
+ *
+ * `ON DELETE cascade`, so it never holds a delete the way
+ * {@link SOURCE_DOCUMENTS_FK} does — what it refuses is the WRITE,
+ * a ruling appended onto a finding that is not there.
+ * `src/findings/store.ts` calls that a race rather than the ordinary
+ * path, the service having resolved the finding first, but a race a
+ * deployment can lose is a state this store can be put in directly.
+ *
+ * It is the half's whole refusal surface. `findings`,
+ * `finding_sightings` and `entity_research` are all PLANTED here
+ * rather than written, so no key onto any of them is reachable
+ * through a method, and `research_pool_finding_id_findings_id_fk` —
+ * the one `ON DELETE no action` key onto `findings.id` — is left
+ * unimitated for the reason
+ * `source_config_proposals_source_id_sources_id_fk` is: no port
+ * writes a pool row and no seam plants one, so there is no dataset
+ * this store can be in where it would fire.
+ */
+const FINDING_LABEL_FINDING_FK = 'finding_labels_finding_id_findings_id_fk';
+
+/**
+ * The member of a finding's `fields` payload naming the category it
+ * is filed under.
+ *
+ * A SECOND DECLARATION OF ONE NAME, and saying so is the honest
+ * reading rather than a gap to close here: `ar-digest`'s assembly
+ * node declares `FINDING_CATEGORY_FIELD` for the same string, and
+ * nothing in the tree exports either. `src/findings/store.ts` names
+ * that constant as the authority and this file imitates the column
+ * read rather than the digest's own reduction of it, which is the
+ * one place the two are stated to part.
+ */
+const FINDING_CATEGORY_FIELD = 'category';
 
 /** Three zeros: what a domain nothing points at has accumulated. */
 const NO_DEPENDENTS: DomainDependentCounts = {
@@ -1410,6 +1793,229 @@ function copyDomain(row: DomainRecord): DomainRecord {
 }
 
 /**
+ * A `fields` payload sharing no object with the one handed in.
+ *
+ * A JSON round trip for the reason {@link copySettings} gives, and a
+ * function of its own rather than a widening of
+ * {@link copyJsonDocument} because the shape is DECLARED here:
+ * `findings.fields` carries `$type<Record<string, unknown>>()`, so
+ * what crosses the port is a record rather than the `unknown` a
+ * parser config is. The round trip is also what a `jsonb` column
+ * does in each direction, which is the behaviour being imitated
+ * rather than merely a deep copy — and it is what keeps a key
+ * spelling `__proto__` an OWN member on the way out, `JSON.parse`
+ * making one where an object literal could not.
+ *
+ * @param fields - The payload to copy.
+ * @returns An equal payload sharing nothing with it.
+ */
+function copyFields(
+  fields: Record<string, unknown>,
+): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(fields)) as Record<string, unknown>;
+}
+
+/**
+ * A planted finding whose mutable members belong to nobody else.
+ *
+ * Used on the way IN, where the seam is handed a row a case built,
+ * and its two mutable members are the `jsonb` payload and the stamp.
+ * `createdAt` is never null, unlike a source's two, so there is no
+ * branch.
+ *
+ * @param row - The finding to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedFinding(
+  row: MemoryDomainFinding,
+): MemoryDomainFinding {
+  return {
+    ...row,
+    fields: copyFields(row.fields),
+    createdAt: copyInstant(row.createdAt),
+  };
+}
+
+/**
+ * A planted sighting whose `Date` belongs to nobody else.
+ *
+ * {@link copyPlantedDocument}'s shape: one stamp and nothing one
+ * level down, `external_id` being text and `source_id` a number.
+ *
+ * @param row - The sighting to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedSighting(
+  row: MemoryFindingSighting,
+): MemoryFindingSighting {
+  return { ...row, seenAt: copyInstant(row.seenAt) };
+}
+
+/**
+ * A planted research row whose mutable members belong to nobody
+ * else.
+ *
+ * {@link copyPlantedFinding}'s shape with {@link copyJsonDocument}
+ * standing where {@link copyFields} does, for the reason
+ * {@link MemoryEntityResearch} gives: `entity_research.payload`
+ * carries no `$type`, so there is no declared depth a spread could
+ * be written to instead.
+ *
+ * @param row - The research to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedResearch(
+  row: MemoryEntityResearch,
+): MemoryEntityResearch {
+  return {
+    ...row,
+    payload: copyJsonDocument(row.payload),
+    researchedAt: copyInstant(row.researchedAt),
+  };
+}
+
+/**
+ * A label record whose `Date` belongs to nobody else.
+ *
+ * The one record in this half that a METHOD writes rather than a
+ * seam plants, so this copy runs in both directions: over the row
+ * the append answers and over every row the sequence read answers.
+ *
+ * @param row - The stored row.
+ * @returns A copy safe to hand across the port.
+ */
+function copyFindingLabel(row: FindingLabelRecord): FindingLabelRecord {
+  return { ...row, labelledAt: copyInstant(row.labelledAt) };
+}
+
+/**
+ * The port's projection of one planted finding.
+ *
+ * The domain arrives as the KEY the row was planted under rather
+ * than off the row, which is what {@link MemoryDomainFinding} omits
+ * it for.
+ *
+ * @param domainId - The domain the row was planted under.
+ * @param row - The stored finding.
+ * @returns The eight members {@link FindingRecord} declares, its
+ *   payload and its stamp copied.
+ */
+function findingOf(
+  domainId: number,
+  row: MemoryDomainFinding,
+): FindingRecord {
+  return {
+    id: row.id,
+    domainId,
+    documentId: row.documentId,
+    entityId: row.entityId,
+    fields: copyFields(row.fields),
+    score: row.score,
+    scoreVersion: row.scoreVersion,
+    createdAt: copyInstant(row.createdAt),
+  };
+}
+
+/**
+ * The port's projection of one planted sighting.
+ *
+ * @param findingId - The finding the row was planted under.
+ * @param row - The stored sighting.
+ * @returns The five members {@link FindingSightingRecord} declares,
+ *   its stamp copied.
+ */
+function sightingOf(
+  findingId: number,
+  row: MemoryFindingSighting,
+): FindingSightingRecord {
+  return {
+    id: row.id,
+    findingId,
+    sourceId: row.sourceId,
+    externalId: row.externalId,
+    seenAt: copyInstant(row.seenAt),
+  };
+}
+
+/**
+ * The port's projection of one planted research row.
+ *
+ * @param entityId - The entity the row was planted under.
+ * @param row - The stored research.
+ * @returns The six members {@link FindingResearchRecord} declares,
+ *   its payload and its stamp copied.
+ */
+function researchOf(
+  entityId: number,
+  row: MemoryEntityResearch,
+): FindingResearchRecord {
+  return {
+    id: row.id,
+    entityId,
+    runId: row.runId,
+    summary: row.summary,
+    payload: copyJsonDocument(row.payload),
+    researchedAt: copyInstant(row.researchedAt),
+  };
+}
+
+/**
+ * The text `fields->>'category'` answers over one payload.
+ *
+ * THE COLUMN READ RATHER THAN THE DIGEST'S, which is the one place
+ * `src/findings/store.ts` says the two filings could part. Read by
+ * OWN key alone: the payload came out of a column rather than out of
+ * this file, so it carries a prototype, and an inherited member
+ * standing in for one nobody wrote would file a finding under a
+ * section on the strength of nothing.
+ *
+ * `->>` ANSWERS TEXT AND NOT A STRING MEMBER, which is why a
+ * non-string value is stringified rather than dropped: Postgres
+ * answers `5` for a numeric member and `true` for a boolean one, and
+ * a store matching strings alone would answer an empty page where a
+ * deployment answers a row. The honest limit is a COMPOSITE member,
+ * where jsonb normalises key order and whitespace and this does not,
+ * so the two spellings are not claimed to agree — no case rests on
+ * one, and a category key is text in every state a domain can
+ * declare.
+ *
+ * THE OWN-KEY READ IS AN HONEST ZERO HERE, and saying so is better
+ * than letting it read as a rule this file pins. A payload reaching
+ * this function came through {@link copyFields}, whose round trip
+ * keeps own members and drops everything else — which is what a
+ * `jsonb` column does too — so there is no inherited member left
+ * to guard against and no key on `Object.prototype` is spelled
+ * `category`. Measured: dropping the guard reddens no case in
+ * `tests/helpers/memory-research-store.test.ts`. It is kept because
+ * `ar-digest`'s assembly node reads a payload straight off a driver
+ * row, where the guard DOES have a subject, and a store spelling
+ * the read differently from the node it is imitating would be one
+ * more thing that can drift.
+ *
+ * @param fields - The stored payload.
+ * @returns The member's text, or null when the payload does not
+ *   carry it and when it carries the JSON null. Both are SQL NULL
+ *   under `->>`, and neither matches any key a caller can ask for.
+ */
+function categoryTextOf(
+  fields: Record<string, unknown>,
+): string | null {
+  if (!Object.hasOwn(fields, FINDING_CATEGORY_FIELD)) {
+    return null;
+  }
+
+  const held = fields[FINDING_CATEGORY_FIELD];
+
+  if (held === null || held === undefined) {
+    return null;
+  }
+
+  return typeof held === 'string'
+    ? held
+    : JSON.stringify(held);
+}
+
+/**
  * Builds a store over one dataset, holding no rows.
  *
  * @param options - Where the clock comes from; see
@@ -1439,6 +2045,18 @@ export function createMemoryResearchStore(
   const sourceDocuments = new Map<number, MemorySourceDocument[]>();
   const sourceSightings = new Map<number, number>();
   const connectorSubscriptions = new Map<number, number>();
+
+  // The findings half's four collections. Three are PLANTED —
+  // `findings` keyed by the domain that made them, `finding_sightings`
+  // keyed by the finding they cite, and `entity_research` keyed by the
+  // entity it is about — because no port here writes any of the
+  // three. The fourth is WRITTEN: `finding_labels` is the one table
+  // this half appends to, so it is keyed by its own id and carries a
+  // counter beside the eight above.
+  const domainFindings = new Map<number, MemoryDomainFinding[]>();
+  const findingSightings = new Map<number, MemoryFindingSighting[]>();
+  const entityResearch = new Map<number, MemoryEntityResearch[]>();
+  const findingLabels = new Map<number, FindingLabelRecord>();
   let nextDomainId = 1;
   let nextCategoryId = 1;
   let nextTermId = 1;
@@ -1447,6 +2065,7 @@ export function createMemoryResearchStore(
   let nextSourceId = 1;
   let nextConnectorId = 1;
   let nextSubscriptionId = 1;
+  let nextFindingLabelId = 1;
 
   // The whole of the settings half's state. Not a Map, because
   // there is no key: `src/settings/store.ts` states a second
@@ -2369,6 +2988,324 @@ export function createMemoryResearchStore(
     }
   }
 
+  /**
+   * One planted finding and the domain it was planted under.
+   *
+   * The one lookup three reads and the half's only guard share, so
+   * that a finding a case planted is found the same way whether it
+   * is being read, resolved through to its entity, or checked for by
+   * the foreign key behind the append.
+   *
+   * @param id - The finding to look for.
+   * @returns The row and its domain, or null when nothing carries
+   *   the id. Null rather than a throw: an id no finding carries is
+   *   a fact three of the four callers answer differently.
+   */
+  function plantedFinding(
+    id: number,
+  ): { domainId: number; row: MemoryDomainFinding } | null {
+    for (const [domainId, planted] of domainFindings) {
+      const row = planted.find((held) => held.id === id);
+
+      if (row !== undefined) {
+        return { domainId, row };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * One domain's findings, as records and unordered.
+   *
+   * A fresh record every call, which is what lets the caller sort
+   * and slice without reaching into planted state.
+   *
+   * @param domainId - The domain to read.
+   * @returns Its findings. Empty for a domain that has made none AND
+   *   for an id no domain carries.
+   */
+  function findingsIn(domainId: number): FindingRecord[] {
+    return (domainFindings.get(domainId) ?? []).map(
+      (row) => findingOf(domainId, row),
+    );
+  }
+
+  /**
+   * One finding's rulings, newest first: `labelled_at` descending
+   * with `id` descending breaking a tie, as
+   * {@link FindingStore.listFindingLabels} promises.
+   *
+   * THE TIEBREAK IS NOT OPTIONAL and it is what
+   * {@link verdictInForce} rests on. `labelled_at` defaults to the
+   * transaction's start time, so two rulings written in one
+   * transaction tie to the microsecond and `id` is the only thing
+   * separating them — which, for a lookup whose whole answer is the
+   * first row, is the difference between a verdict and a coin flip.
+   * The clock this store stamps from can be held FIXED, so that tie
+   * is reachable here rather than only against a server.
+   *
+   * @param findingId - The finding to read.
+   * @returns Its rulings in that order. A fresh array, so the sort
+   *   never reaches stored state.
+   */
+  function labelsOf(findingId: number): FindingLabelRecord[] {
+    return [...findingLabels.values()]
+      .filter((row) => row.findingId === findingId)
+      .sort((left, right) => {
+        const byMoment = right.labelledAt.getTime()
+          - left.labelledAt.getTime();
+
+        if (byMoment !== 0) {
+          return byMoment;
+        }
+
+        return right.id - left.id;
+      });
+  }
+
+  /**
+   * The verdict one finding stands under, or null when nobody has
+   * judged it.
+   *
+   * THE LATEST AND NOT ANY, which is `FindingFilter.verdict`'s whole
+   * rule: a finding judged one way and re-judged another is matched
+   * by the second and not by the first, because the first is no
+   * longer in force. A store matching any label would answer a page
+   * of findings an operator has already moved on from, with every
+   * count beside it agreeing.
+   *
+   * @param findingId - The finding to read.
+   * @returns The head of {@link labelsOf}, or null. Null matches no
+   *   verdict a caller can name, which is how a finding nobody has
+   *   judged falls out of a filtered page.
+   */
+  function verdictInForce(findingId: number): string | null {
+    const [latest] = labelsOf(findingId);
+
+    return latest === undefined
+      ? null
+      : latest.verdict;
+  }
+
+  /**
+   * Whether one finding stands under a filter.
+   *
+   * The predicate the page and the count BOTH read through, written
+   * once so that a page's `meta.total` cannot come to describe a
+   * different collection than the page.
+   *
+   * THE WINDOW IS HALF-OPEN, `[sinceInclusive, untilExclusive)`. A
+   * finding made exactly at the lower bound is IN and one made
+   * exactly at the upper bound is OUT, so two adjacent windows do
+   * not both take the seam a caller paging through time crosses most
+   * often. Neither bound is re-checked for order: `FindingFilter`
+   * records that an inverted window never reaches this port.
+   *
+   * @param row - The finding to judge.
+   * @param filter - What to narrow to.
+   * @returns Whether it belongs in the collection.
+   */
+  function matchesFindingFilter(
+    row: FindingRecord,
+    filter: FindingFilter,
+  ): boolean {
+    const verdict = filter.verdict;
+
+    if (verdict !== undefined && verdictInForce(row.id) !== verdict) {
+      return false;
+    }
+
+    const category = filter.category;
+
+    if (category !== undefined && categoryTextOf(row.fields) !== category) {
+      return false;
+    }
+
+    const made = row.createdAt.getTime();
+    const since = filter.window.sinceInclusive;
+    const until = filter.window.untilExclusive;
+
+    if (since !== null && made < since.getTime()) {
+      return false;
+    }
+
+    return until === null || made < until.getTime();
+  }
+
+  /**
+   * Where one finding sorts against another under one sort key.
+   *
+   * THE KEYS OF `compareFindings` WRITTEN OUT, not that comparator
+   * called. `src/lib/digest-assemble.ts` exports it and this store
+   * could import it, but then `src/findings/service.test.ts` holding
+   * a page this store answered against `orderFindings` over the same
+   * rows would be holding one authority against itself — and the
+   * page the isolated suite reads is THIS one. So the ordering is
+   * expressed independently here, exactly as `./db-store.ts`
+   * expresses it in SQL, and the comparison in that suite is a real
+   * one between two derivations of one rule.
+   *
+   * AN ABSENT SCORE IS THE TAIL AND NOT THE FLOOR. Two unscored
+   * findings tie on the first key and fall through to the stamp,
+   * which is what keeps the tail in an order of its own rather than
+   * in whatever order the rows happened to arrive.
+   *
+   * BOTH ORDERINGS END IN `id` DESCENDING. `created_at` defaults to
+   * the transaction's start time, so findings written by one pass
+   * tie to the microsecond, and a page boundary falling inside that
+   * tie would show a row twice.
+   *
+   * @param left - The first finding.
+   * @param right - The second.
+   * @param sort - Which ordering to answer in. `recency` is this
+   *   same comparison with the score key dropped rather than a
+   *   second rule.
+   * @returns Negative when the first sorts earlier, positive when it
+   *   sorts later, zero when the two are indistinguishable to every
+   *   key — which no pair of stored rows is, `id` being unique.
+   */
+  function compareFindingRows(
+    left: FindingRecord,
+    right: FindingRecord,
+    sort: FindingSort,
+  ): number {
+    if (sort === 'score' && left.score !== right.score) {
+      if (left.score === null) {
+        return 1;
+      }
+
+      if (right.score === null) {
+        return -1;
+      }
+
+      return right.score - left.score;
+    }
+
+    const byMoment = right.createdAt.getTime() - left.createdAt.getTime();
+
+    if (byMoment !== 0) {
+      return byMoment;
+    }
+
+    return right.id - left.id;
+  }
+
+  /**
+   * One domain's findings, narrowed and ordered.
+   *
+   * @param domainId - The domain to read within.
+   * @param filter - What to narrow to.
+   * @param sort - Which ordering to answer in.
+   * @returns The rows, ordered. A fresh array of fresh records.
+   */
+  function orderedFindings(
+    domainId: number,
+    filter: FindingFilter,
+    sort: FindingSort,
+  ): FindingRecord[] {
+    return findingsIn(domainId)
+      .filter((row) => matchesFindingFilter(row, filter))
+      .sort((left, right) => compareFindingRows(left, right, sort));
+  }
+
+  /**
+   * One finding's sightings, newest first: `seen_at` descending with
+   * `id` descending breaking a tie, as
+   * {@link FindingStore.listFindingSightings} promises.
+   *
+   * @param findingId - The finding to read.
+   * @returns Its sightings in that order, possibly empty.
+   */
+  function orderedSightings(findingId: number): FindingSightingRecord[] {
+    return (findingSightings.get(findingId) ?? [])
+      .map((row) => sightingOf(findingId, row))
+      .sort((left, right) => {
+        const byMoment = right.seenAt.getTime() - left.seenAt.getTime();
+
+        if (byMoment !== 0) {
+          return byMoment;
+        }
+
+        return right.id - left.id;
+      });
+  }
+
+  /**
+   * One entity's research, newest first: `researched_at` descending
+   * with `id` descending breaking a tie, as
+   * {@link FindingStore.listFindingResearch} promises.
+   *
+   * @param entityId - The subject to read.
+   * @returns Its research in that order, possibly empty.
+   */
+  function orderedResearch(entityId: number): FindingResearchRecord[] {
+    return (entityResearch.get(entityId) ?? [])
+      .map((row) => researchOf(entityId, row))
+      .sort((left, right) => {
+        const byMoment = right.researchedAt.getTime()
+          - left.researchedAt.getTime();
+
+        if (byMoment !== 0) {
+          return byMoment;
+        }
+
+        return right.id - left.id;
+      });
+  }
+
+  /**
+   * Refuses a `findingId` that names no planted finding.
+   *
+   * @param findingId - The finding a ruling is being appended to.
+   * @throws A `foreign-key-violation` {@link StoreRefusal} naming
+   *   `finding_labels_finding_id_findings_id_fk`. Reached from the
+   *   append alone, which is the half's only write.
+   */
+  function guardLabelFinding(findingId: number): void {
+    if (plantedFinding(findingId) === null) {
+      throw new StoreRefusal({
+        reason: 'foreign-key-violation',
+        constraint: FINDING_LABEL_FINDING_FK,
+      });
+    }
+  }
+
+  /**
+   * Removes every finding of one domain, and its sightings and its
+   * rulings with it, as `ON DELETE CASCADE` does.
+   *
+   * TWO LEVELS DOWN, which is {@link dropSourcesOf}'s reach reached
+   * for a different reason. `findings.domain_id` cascades, and
+   * `finding_sightings.finding_id` and `finding_labels.finding_id`
+   * cascade onto the findings — so one statement takes all three
+   * tables. There is no guarded finding delete to reuse in any case:
+   * `FindingStore` declares no delete at all.
+   *
+   * IT IS NOT REFUSED BY THE `NO ACTION` ON
+   * `research_pool.finding_id`, and that is unreachability rather
+   * than a decision. No port here writes a pool row and no seam
+   * plants one, so there is no dataset this store can be in where
+   * that key would fire — the reasoning
+   * `source_config_proposals_source_id_sources_id_fk` is left
+   * unimitated on.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropFindingsOf(domainId: number): void {
+    for (const row of domainFindings.get(domainId) ?? []) {
+      findingSightings.delete(row.id);
+
+      for (const [labelId, label] of findingLabels) {
+        if (label.findingId === row.id) {
+          findingLabels.delete(labelId);
+        }
+      }
+    }
+
+    domainFindings.delete(domainId);
+  }
+
   return {
     /** One window of the list, slug ascending. */
     async listDomains(window: StoreWindow): Promise<readonly DomainRecord[]> {
@@ -2537,6 +3474,16 @@ export function createMemoryResearchStore(
      * which is what makes `connectors` and `operator_settings` the
      * two tables no domain delete reaches.
      *
+     * ITS FINDINGS GO IN THAT SAME PLACE AND TAKE TWO TABLES WITH
+     * THEM, which is {@link dropSourcesOf}'s reach for a different
+     * reason. `findings.domain_id` cascades, and
+     * `finding_sightings.finding_id` and `finding_labels.finding_id`
+     * cascade onto the findings, so one statement clears all three.
+     * There is no guarded finding delete to be careful of reusing:
+     * `FindingStore` declares no delete at all, and the one
+     * `ON DELETE no action` key onto `findings.id` sits on a table
+     * nothing here can put a row in.
+     *
      * IT DOES NOT MOVE THE PLANTED DEPENDENT COUNTS OF ANY OTHER
      * DOMAIN, and dropping the topics does not move them at all:
      * {@link MemoryResearchStore.setDomainDependents} records what
@@ -2549,6 +3496,7 @@ export function createMemoryResearchStore(
       dropTopicsOf(id);
       dropSourcesOf(id);
       dropSubscriptionsOf(id);
+      dropFindingsOf(id);
 
       for (const [categoryId, row] of categories) {
         if (row.domainId === id) {
@@ -4156,6 +5104,189 @@ export function createMemoryResearchStore(
       return copyOperatorSettings(storedSettings);
     },
 
+    /**
+     * One window of a domain's findings, narrowed and ordered.
+     *
+     * THE ORDER IS `compareFindings`' KEYS EXPRESSED HERE rather
+     * than that comparator called, and {@link compareFindingRows}
+     * carries why: the page `src/findings/service.test.ts` holds
+     * against `orderFindings` is this one, so importing the library
+     * would leave that comparison holding one authority against
+     * itself.
+     *
+     * READS FINDINGS AND WRITES NONE. Nothing on this port inserts,
+     * patches or deletes a finding, so every row here arrived
+     * through {@link MemoryResearchStore.setDomainFindings} — which
+     * is the read-first law being structural rather than kept.
+     *
+     * FIELDS COME BACK AS STORED, unreduced and uncut. What
+     * `ar-digest` does to a payload before filing it is that
+     * pipeline's, and a store imitating it would make the column
+     * read this page filters on unreachable.
+     */
+    async listFindings(
+      domainId: number,
+      filter: FindingFilter,
+      sort: FindingSort,
+      window: StoreWindow,
+    ): Promise<readonly FindingRecord[]> {
+      return orderedFindings(domainId, filter, sort)
+        .slice(window.offset, window.offset + window.limit);
+    },
+
+    /**
+     * How many of one domain's findings the same filter selects,
+     * ignoring any window and any ordering.
+     *
+     * The same predicate the page read through — one dataset and
+     * one {@link matchesFindingFilter} behind both is what makes a
+     * page's `meta.total` describe the page's own collection here
+     * rather than by coincidence.
+     *
+     * NO SORT PARAMETER, which the port states as a claim: an
+     * ordering cannot change how many rows a predicate selects.
+     */
+    async countFindings(
+      domainId: number,
+      filter: FindingFilter,
+    ): Promise<number> {
+      return findingsIn(domainId).filter(
+        (row) => matchesFindingFilter(row, filter),
+      ).length;
+    },
+
+    /**
+     * One finding by its id, or null.
+     *
+     * TAKES NO DOMAIN, which is the addressing rule the surface
+     * keeps: a domain is met by slug and everything else by its id.
+     * The domain the row was planted under is what
+     * {@link FindingRecord.domainId} answers, so a caller learns the
+     * owner from the row rather than having to name it.
+     */
+    async findFindingById(id: number): Promise<FindingRecord | null> {
+      const held = plantedFinding(id);
+
+      return held === null
+        ? null
+        : findingOf(held.domainId, held.row);
+    },
+
+    /**
+     * Where one finding has been seen, newest first.
+     *
+     * UNBOUNDED, as the port declares: these rows are embedded in a
+     * single finding's answer rather than paged, so there is no
+     * window to take and nothing here cuts them.
+     *
+     * A ROW HERE DOES NOT HOLD ITS SOURCE'S DELETE, which is the
+     * known divergence {@link MemoryFindingSighting} states.
+     * `SourceStore.countSourceDependents` reads what
+     * {@link MemoryResearchStore.setSourceSightings} planted and
+     * never these rows.
+     */
+    async listFindingSightings(
+      findingId: number,
+    ): Promise<readonly FindingSightingRecord[]> {
+      return orderedSightings(findingId);
+    },
+
+    /**
+     * One finding's rulings, newest first and WHOLE.
+     *
+     * THE FIRST ROW IS THE VERDICT IN FORCE and the rest are the
+     * record of an operator changing their mind, which is why the
+     * sequence is answered rather than the head of it. The table
+     * carries no unique key at all, so re-judging appends and a read
+     * that forgot to order would report whichever row it reached
+     * first.
+     */
+    async listFindingLabels(
+      findingId: number,
+    ): Promise<readonly FindingLabelRecord[]> {
+      return labelsOf(findingId).map(copyFindingLabel);
+    },
+
+    /**
+     * What research has recorded about the entity one finding names,
+     * newest first.
+     *
+     * ADDRESSED BY THE FINDING, RESOLVED THROUGH ITS ENTITY. The
+     * join is this port's rather than the caller's, so a caller
+     * holding a finding does not have to read its `entityId`, branch
+     * on the nullability and address a second surface.
+     *
+     * AN UNATTRIBUTED FINDING ANSWERS AN EMPTY LIST, and so does an
+     * id no finding carries. Neither is a failure to read: a null
+     * `entity_id` is an ordinary state, and there is no entity to
+     * resolve research through either way.
+     *
+     * READS `entity_research` AND WRITES NOTHING — there is no
+     * insert, update or delete over that table anywhere on this
+     * port, so the embedding is read-only structurally. Those rows
+     * are `ar-research`'s to write, and
+     * {@link MemoryResearchStore.setEntityResearch} is what stands
+     * in for that writer here.
+     */
+    async listFindingResearch(
+      findingId: number,
+    ): Promise<readonly FindingResearchRecord[]> {
+      const held = plantedFinding(findingId);
+
+      if (held === null || held.row.entityId === null) {
+        return [];
+      }
+
+      return orderedResearch(held.row.entityId);
+    },
+
+    /**
+     * Appends one ruling to a finding. THE HALF'S ONE WRITE.
+     *
+     * APPENDS AND NEVER UPDATES. There is no upsert here and no key
+     * to upsert on — `finding_labels` carries no unique key at all
+     * — so a second ruling on one finding is a second row and both
+     * are readable afterwards.
+     *
+     * TAKES THE VERDICT AS GIVEN. The owning domain's vocabulary is
+     * read per request by `src/findings/verdict-service.ts`, one
+     * layer up, and nothing here consults one. A store refusing a
+     * verdict on its own would refuse writes the database accepts,
+     * and would move a per-domain rule into the half that cannot be
+     * exercised without a database.
+     *
+     * The id comes off the counter first, so the refusal below burns
+     * one exactly as the sequence does. No measurement of this table
+     * was taken: `personas` is where the gap of two was measured,
+     * over a key refusal and a foreign-key one, and this counter is
+     * expected to reproduce the second of that pair.
+     *
+     * THE STAMP IS READ OFF THE CLOCK AND NEVER OFF THE ARGUMENT,
+     * which {@link InsertFindingLabelInput} has no member for. A
+     * back-dated ruling is the one thing that would make the newest
+     * row stop being the verdict in force.
+     */
+    async insertFindingLabel(
+      input: InsertFindingLabelInput,
+    ): Promise<FindingLabelRecord> {
+      const id = nextFindingLabelId;
+
+      nextFindingLabelId += 1;
+      guardLabelFinding(input.findingId);
+
+      const row: FindingLabelRecord = {
+        id,
+        findingId: input.findingId,
+        verdict: input.verdict,
+        note: input.note,
+        labelledAt: stamp(),
+      };
+
+      findingLabels.set(id, row);
+
+      return copyFindingLabel(row);
+    },
+
     setDomainDependents(
       domainId: number,
       counts: Partial<DomainDependentCounts>,
@@ -4180,6 +5311,32 @@ export function createMemoryResearchStore(
 
     setConnectorSubscriptions(connectorId: number, count: number): void {
       connectorSubscriptions.set(connectorId, count);
+    },
+
+    setDomainFindings(
+      domainId: number,
+      findings: readonly MemoryDomainFinding[],
+    ): void {
+      // Copied on the way in, row by row, so a caller that goes on
+      // moving a planted `createdAt` or writing into a planted
+      // `fields` does not move stored state — and the list itself
+      // is rebuilt, so pushing onto what was planted does not plant
+      // a further finding.
+      domainFindings.set(domainId, findings.map(copyPlantedFinding));
+    },
+
+    setFindingSightings(
+      findingId: number,
+      sightings: readonly MemoryFindingSighting[],
+    ): void {
+      findingSightings.set(findingId, sightings.map(copyPlantedSighting));
+    },
+
+    setEntityResearch(
+      entityId: number,
+      research: readonly MemoryEntityResearch[],
+    ): void {
+      entityResearch.set(entityId, research.map(copyPlantedResearch));
     },
   };
 }

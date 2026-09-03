@@ -1,10 +1,10 @@
 /**
- * `tests/helpers/memory-research-store.ts` in all eight ports it
+ * `tests/helpers/memory-research-store.ts` in all nine ports it
  * implements — the claims that make it a second implementation of
  * `DomainStore`, of `TaxonomyStore` WHOLE with categories and terms
  * together, of `PersonaStore`, of `TopicStore`, of `SourceStore`, of
- * `ConnectorStore`, of `SubscriptionStore` and of `SettingsStore`,
- * rather than a bag that stores what it is handed.
+ * `ConnectorStore`, of `SubscriptionStore`, of `SettingsStore` and of
+ * `FindingStore`, rather than a bag that stores what it is handed.
  *
  * THAT IT REFUSES WHAT POSTGRES REFUSES. Every refusal case names
  * the `reason` a SQLSTATE classifies to and the constraint the
@@ -355,6 +355,86 @@
  * copy reaching for the instant unconditionally throws on a null, and
  * the three answer sites are asserted in one body.
  *
+ * THAT THE FINDINGS HALF PLANTS THREE TABLES AND WRITES ONE, which
+ * is a shape no half above has. `FindingStore` declares six readers
+ * and one writer, so `findings`, `finding_sightings` and
+ * `entity_research` arrive through seams and only `finding_labels`
+ * is appended to. The consequence for this file is that the half has
+ * ONE mechanism rather than the sources half's four:
+ * `finding_labels_finding_id_findings_id_fk`, refusing a ruling
+ * appended onto a finding that is not there. Its case carries the
+ * positive control in the same body and the id-burn case beside it
+ * pins the counter, on the `personas` measurement rather than one of
+ * this table's own.
+ *
+ * THAT ITS PAGE IS ORDERED BY `compareFindings`' KEYS AND THAT THE
+ * TAIL IS NOT THE FLOOR. The fixture is planted in an order no read
+ * answers and its five rows tell the score ordering from the recency
+ * one and both from either direction of `id`: two rows carry one
+ * score AND one stamp, so only the tiebreak separates them, and they
+ * are planted with the LOWER id first so that a stable sort losing
+ * that tiebreak answers them the wrong way round rather than
+ * reproducing the right order by accident. One case reads the
+ * absent score against a ZERO one, which is the pair a store
+ * reading null as zero gets wrong: those two tie on the first key
+ * and fall through to the stamp, and the unscored row is the newest
+ * in the fixture.
+ *
+ * THAT ITS VERDICT FILTER READS THE LATEST RULING AND NOT ANY, which
+ * needs a finding judged TWICE before any case can see it. The
+ * re-judged row falls out of the first verdict and into the second
+ * while both labels stay readable, so a store matching any label
+ * answers both findings and a store reading the head of an unordered
+ * read answers whichever it reached. One case ties the two stamps
+ * under a fixed clock, which is where `id` is the only thing
+ * deciding what is in force.
+ *
+ * THAT ITS CATEGORY FILTER IS THE COLUMN READ AND NOT THE DIGEST'S.
+ * `fields->>'category'` answers TEXT, so a numeric member is matched
+ * by its digits and a store comparing only strings answers an empty
+ * page where a deployment answers a row. A key the domain never
+ * declared answers a page and a key it DID declare that nothing
+ * carries answers none, which is one case reading both directions:
+ * no column links a finding to a category, so the taxonomy in force
+ * decides neither. A third case plants an INHERITED member and reads
+ * it back gone, which is the seam storing what a `jsonb` column
+ * would.
+ *
+ * THAT ITS WINDOW IS HALF-OPEN AND THAT A NULL BOUND IS UNBOUNDED.
+ * One case takes the lower boundary and drops the upper in the same
+ * body, one reads each bound alone against the unbounded page, and
+ * one drives all three members at once so that the filter is shown
+ * selecting an intersection rather than the last member written.
+ *
+ * THAT IT PLANTS SIGHTINGS AS ROWS WHERE THE SOURCES HALF PLANTS A
+ * NUMBER, OVER ONE TABLE. That is this file's FOURTH known
+ * divergence and it is pinned from both faces: a sighting planted
+ * through the findings seam answers a `findingSightings` count of
+ * zero and its source's delete LANDS, while the planted number in
+ * the sibling case still refuses that same delete. Neither case
+ * describes a guard that had stopped guarding.
+ *
+ * THAT A PLANTED FINDING DOES NOT MOVE THE DOMAIN DEPENDENT COUNT,
+ * which is the THIRD known divergence and is
+ * `setConnectorSubscriptions`' decision taken again for its reason.
+ * The case reads the counted zero beside a page of five and then
+ * plants the number to show the guard still reads it.
+ *
+ * THAT A DOMAIN TAKES ITS FINDINGS AND TWO TABLES BELOW THEM. The
+ * cascade case asserts the state BEFORE the delete so the three
+ * empties after it are a delete reaching them rather than reads that
+ * never answered, a sibling domain's finding is left standing so a
+ * store clearing everything fails, and a third case appends a ruling
+ * onto the gone finding and reads the foreign key refusing it.
+ *
+ * THAT THE RESEARCH EMBEDDING IS ADDRESSED BY THE FINDING AND
+ * RESOLVED THROUGH ITS ENTITY. Two findings attributed to one
+ * subject answer the same rows, a finding attributed to another
+ * answers that one's, and an unattributed finding answers an empty
+ * list with the attributed sibling in the same body as the control.
+ * An id no finding carries answers the same empty list, which is the
+ * one place two different absences legitimately compare equal.
+ *
  * THAT THE SETTINGS HALF REFUSES NOTHING AT ALL, which no case here
  * can assert directly and which is therefore stated rather than
  * pinned. `operator_settings` carries two mechanisms — a second
@@ -502,6 +582,114 @@
  * rather than as a count. Every figure below moves again when a
  * later task adds a case to this file, so re-derive the whole grid
  * rather than appending legs for the new rows.
+ *
+ * THE FINDINGS HALF FOLLOWED THE FILE'S SUBSTITUTE AND SHARPENED ITS
+ * LIVENESS CONTROL, which is the one change to the practice. The
+ * file holds 434 cases, of which 44 are this half's. What was run is
+ * this half's OWN thirty-eight legs plus TEN recorded ones, chosen by
+ * reading what the new cases CALL: the same eight the subscriptions
+ * half re-ran, plus two sources legs the sightings cases reach. The
+ * rest are closed by the same argument as before, every old case
+ * being untouched and every non-findings path in the store
+ * byte-identical but for the one added line in `deleteDomain`.
+ *
+ * THE LIVENESS CONTROL IS NOW A BEFORE-AND-AFTER DIFF RATHER THAN A
+ * COMPARISON AGAINST A FIGURE IN THIS HEADER, and it is what caught
+ * that two of the eight figures above are pre-subscriptions
+ * snapshots. Each recorded leg was applied to the store and run
+ * TWICE, once against `git show HEAD:` of this file and once at the
+ * tip, and what is read is the SET each run reddened. HEAD
+ * reproduced 96, 7, 59, 33, 50, 8, 6 and 4 — the eight figures the
+ * paragraph below records as 95 ... 49, each already moved by the
+ * one subscriptions case that paragraph names — and every one of
+ * the ten legs' OUTSIDE sets came back identical member for member,
+ * nothing gained and nothing lost.
+ *
+ * THE FINDINGS HALF MOVED THREE OF THOSE TEN, BY ONE CASE EACH, and
+ * all three are findings cases reaching another half's rules on
+ * purpose. Refusing a null parent as a missing one went 96 to 97
+ * through the one case that declares a category, so that a key the
+ * domain HAS declared can be asked for beside one it has not.
+ * Accepting a source delete while sightings cite it went 3 to 4 and
+ * naming the documents key on that refusal went 2 to 3, both through
+ * the single case that reads the planted count still refusing.
+ * The other seven are identical member for member: no findings case
+ * writes a term, a persona or a topic, deletes a category, reads a
+ * domain's dates or touches the operator's row.
+ *
+ * Thirty-eight findings legs redden between 0 and 39 and EVERY red
+ * one of them lands wholly inside the findings describes, which is
+ * the mirror of the paragraph above. One leg had to be EARNED rather
+ * than found: dropping the id tiebreak reddened ZERO until the
+ * fixture was reordered, because `Array.prototype.sort` is stable
+ * and the tied pair had been planted in the very order the tiebreak
+ * answers. It reddens 5 now, and breaking the tie the other way
+ * reddens the same 5.
+ *
+ * The one honest zero is dropping the own-key guard on the category
+ * read, and it is the EIGHTH in this file though it is not the
+ * empty-patch branch the other seven are. A payload reaching that
+ * function came through a JSON round trip, which keeps own members
+ * and drops everything else exactly as a `jsonb` column does, so
+ * there is no inherited member left for the guard to refuse and no
+ * key on `Object.prototype` is spelled `category`. The guard is kept
+ * because `ar-digest`'s assembly node reads a driver row where it
+ * DOES have a subject; `categoryTextOf`'s own TSDoc carries that,
+ * and nothing else pins it.
+ *
+ * Planting no finding at all is this half's whole-half control and
+ * reddens 39 of the 44. The five survivors are exactly the cases
+ * that assert something no planted finding is needed for: the four
+ * sightings cases, whose rows hang off a finding ID rather than off
+ * a finding, and the one dependent-count case whose whole subject is
+ * a planted NUMBER.
+ *
+ * The ordering legs are six and they separate the three keys.
+ * Dropping the score key reddens 6 and ordering the score ASCENDING
+ * reddens 4, inside it. Sorting an absent score FIRST, which is what
+ * a bare SQL `DESC` does, reddens 4; sorting it LOWEST, which is
+ * what `score ?? 0` does, reddens 2 — the smaller figure being the
+ * sharper leg, since only the zero-scored row can tell that fault
+ * from the correct answer. Dropping the stamp key reddens 2 and
+ * dropping the id tiebreak 5.
+ *
+ * The three filter legs redden 5, 5 and 4 and are DISJOINT, which is
+ * what says the three members are three claims. Inside them the
+ * sharper legs are smaller: matching ANY ruling rather than the
+ * latest reddens 2, reading the OLDEST as the one in force 2, and
+ * dropping the id tiebreak from the rulings order 4. Matching a
+ * string member alone rather than the column text reddens exactly 1,
+ * the case written for it. Closing the upper bound of the window
+ * reddens 3 and opening the lower bound 3.
+ *
+ * The write legs are three and they are disjoint from every read
+ * leg. Replacing a ruling rather than appending one reddens 3,
+ * skipping the foreign key 3, and taking the id after that key
+ * exactly 1 — the id-burn case, which is the burn pinned once for
+ * the half's one mechanism.
+ *
+ * The embedded reads redden small and singly, which is the honest
+ * shape for three unbounded lists: ordering the sightings oldest
+ * first reddens 1, dropping their id tiebreak 1, and dropping the
+ * research one 1. Resolving research through the FINDING id rather
+ * than through its entity reddens 6, and answering research for an
+ * unattributed finding anyway reddens 1 inside it.
+ *
+ * The cascade legs NEST at 4 and 1: leaving the findings standing
+ * reddens 4, and leaving only their sightings and rulings standing
+ * reddens the one case written for the second level.
+ *
+ * The copy legs are one per ANSWER SITE and they redden 1 or 2
+ * apiece, disjointly. Answering the planted finding by reference
+ * reddens 2 — the lookup and the page, which is the term half's
+ * shape rather than the category half's, `listFindings` mapping
+ * through the same projection the lookup does. Storing the `fields`
+ * object a plant was handed reddens 1 and storing its `createdAt` 1,
+ * a split the sources half could not make with two documents on one
+ * write. Keeping the planted LIST rather than rebuilding it reddens
+ * 3. Answering a sighting or a research row by reference reddens 1,
+ * answering the stored label by reference 1, and stamping a label
+ * with the clock's own instance 1.
  *
  * THE SUBSCRIPTIONS HALF FOLLOWED THE FILE'S SUBSTITUTE AS WELL, and
  * it is the last half this file will get, so read the case totals
@@ -1147,6 +1335,7 @@
  * here.
  */
 import type {
+  MemoryDomainFinding,
   MemoryResearchStore,
   MemorySourceDocument,
 } from './memory-research-store.js';
@@ -1160,6 +1349,12 @@ import type {
   DomainRecord,
   InsertDomainInput,
 } from '../../src/domains/store.js';
+import type {
+  FindingFilter,
+  FindingLabelRecord,
+  FindingRecord,
+  FindingSort,
+} from '../../src/findings/store.js';
 import type { PersonaRecord } from '../../src/personas/store.js';
 import type {
   InsertSourceInput,
@@ -8635,5 +8830,1314 @@ describe('the settings a domain delete leaves standing', () => {
       notificationChannels: { email: true, webhook: false },
     });
     expect(await store.findDomainBySlug(RADAR)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The findings half's fixture
+// ---------------------------------------------------------------------------
+
+/**
+ * The four instants the findings fixture is made across, oldest
+ * first and one day apart.
+ *
+ * SPELLED OUT RATHER THAN DERIVED FROM ONE ANOTHER, so that a case
+ * asserting a half-open window compares against a stamp no arithmetic
+ * of the store's could have produced.
+ */
+const MADE_T0 = '2026-03-01T09:00:00.000Z';
+const MADE_T1 = '2026-03-02T09:00:00.000Z';
+const MADE_T2 = '2026-03-03T09:00:00.000Z';
+const MADE_T3 = '2026-03-04T09:00:00.000Z';
+
+/**
+ * The five findings the fixture plants, named for what each is in
+ * the two orderings rather than for its id.
+ *
+ * The ids are the fixture's own rather than a sequence's: nothing on
+ * `FindingStore` inserts a finding, so a case says which row it means
+ * and the store never chooses. `HIGH_FIRST` and `HIGH_SECOND` carry
+ * one score and one stamp, so only `id` separates them and only
+ * descending puts the later insert first.
+ */
+const NO_SCORE = 11;
+const HIGH_FIRST = 12;
+const MIDDLE_SCORE = 13;
+const HIGH_SECOND = 14;
+const ZERO_SCORE = 15;
+
+/**
+ * Two entity ids, neither of which names anything.
+ *
+ * No port here stores an entity, so an id is the whole of what a
+ * finding can be attributed to and the whole of what research can be
+ * planted under. `EntityStore` is a later task; until then this is
+ * the honest shape rather than a placeholder.
+ */
+const SUBJECT = 71;
+const OTHER_SUBJECT = 72;
+
+/**
+ * A category key the fixture files a finding under and no domain
+ * declares.
+ */
+const RETIRED = 'retired-key';
+
+/** A window with neither bound: every finding the domain has made. */
+const EVERY_INSTANT = { sinceInclusive: null, untilExclusive: null };
+
+/**
+ * The filter that narrows nothing, on the terms {@link EVERY_KIND}
+ * states.
+ */
+const EVERY_FINDING: FindingFilter = { window: EVERY_INSTANT };
+
+/** What {@link madeFinding} defaults when a case is not about it. */
+type FindingDefaults = Partial<Omit<MemoryDomainFinding, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setDomainFindings}.
+ *
+ * A function rather than a constant, for the reason {@link planted}
+ * is one: the copy cases WRITE into the `fields` and the `createdAt`
+ * they planted, which is the whole point of them.
+ *
+ * @param id - The finding id, which is the last key of both
+ *   orderings and the id a ruling is appended against.
+ * @param values - The six members a case may care about. `score`
+ *   defaults to null, which is the side of the ordering a store
+ *   sorting absence lowest gets wrong.
+ * @returns The row to plant.
+ */
+function madeFinding(
+  id: number,
+  values: FindingDefaults = {},
+): MemoryDomainFinding {
+  return {
+    documentId: values.documentId ?? id,
+    entityId: values.entityId ?? null,
+    fields: values.fields ?? {},
+    id,
+    score: values.score ?? null,
+    scoreVersion: values.scoreVersion ?? null,
+    createdAt: values.createdAt ?? new Date(MADE_T0),
+  };
+}
+
+/**
+ * A domain carrying the five findings every ordering, filter and
+ * window case reads.
+ *
+ * PLANTED IN AN ORDER NO READ ANSWERS, which is what lets one fixture
+ * tell the score ordering from the recency one, and both of those
+ * from an ordering by insertion or by id in either direction. The
+ * four answers are written out in the cases rather than here.
+ *
+ * @param store - The store to write to.
+ * @returns The domain the findings hang off.
+ */
+async function seedFindings(
+  store: MemoryResearchStore,
+): Promise<DomainRecord> {
+  const domain = await store.insertDomain(domainInput(RADAR));
+
+  store.setDomainFindings(domain.id, [
+    madeFinding(HIGH_FIRST, {
+      createdAt: new Date(MADE_T1),
+      entityId: SUBJECT,
+      fields: { category: RUNTIMES },
+      score: 0.9,
+    }),
+    madeFinding(MIDDLE_SCORE, {
+      createdAt: new Date(MADE_T2),
+      fields: { category: PLATFORMS },
+      score: 0.2,
+    }),
+    madeFinding(ZERO_SCORE, {
+      createdAt: new Date(MADE_T0),
+      entityId: OTHER_SUBJECT,
+      fields: { category: RETIRED },
+      score: 0,
+    }),
+    madeFinding(NO_SCORE, { createdAt: new Date(MADE_T3) }),
+    madeFinding(HIGH_SECOND, {
+      createdAt: new Date(MADE_T1),
+      entityId: SUBJECT,
+      fields: { category: PLATFORMS },
+      score: 0.9,
+    }),
+  ]);
+
+  return domain;
+}
+
+/**
+ * @param rows - A page of findings.
+ * @returns Their ids in the order they arrived, which is what every
+ *   ordering case compares rather than the rows themselves.
+ */
+function findingIds(rows: readonly FindingRecord[]): number[] {
+  return rows.map((row) => row.id);
+}
+
+/**
+ * Reads one window of a domain's findings under a filter.
+ *
+ * @param store - The store to read.
+ * @param domainId - The domain to read within.
+ * @param filter - What to narrow to.
+ * @param sort - Which ordering to answer in, `score` by default so
+ *   that a case about a filter says nothing about an order.
+ * @returns The ids on the first page.
+ */
+async function pageOf(
+  store: MemoryResearchStore,
+  domainId: number,
+  filter: FindingFilter = EVERY_FINDING,
+  sort: FindingSort = 'score',
+): Promise<number[]> {
+  const page = await store.listFindings(
+    domainId,
+    filter,
+    sort,
+    WHOLE_COLLECTION,
+  );
+
+  return findingIds(page);
+}
+
+/**
+ * Reads a finding that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no finding carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readFinding(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<FindingRecord> {
+  const row = await store.findFindingById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored finding under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * Appends one ruling, defaulting the note a case is not about.
+ *
+ * @param store - The store to write to.
+ * @param findingId - The finding being judged.
+ * @param verdict - The ruling, stored as submitted: no vocabulary is
+ *   consulted below the service.
+ * @param note - What the operator wanted to say, null by default
+ *   because null is what a ruling with nothing recorded carries.
+ * @returns The stored label.
+ */
+async function judge(
+  store: MemoryResearchStore,
+  findingId: number,
+  verdict: string,
+  note: string | null = null,
+): Promise<FindingLabelRecord> {
+  return store.insertFindingLabel({ findingId, note, verdict });
+}
+
+/** Three verdicts, in the same neutral register as the taxonomy keys. */
+const KEEP = 'keep';
+const DROP = 'drop';
+const HOLD = 'hold';
+
+// ---------------------------------------------------------------------------
+// The one key this half can refuse on
+// ---------------------------------------------------------------------------
+
+describe('the finding label foreign key', () => {
+  it('refuses a ruling appended onto a finding nothing carries', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    const refusal = await refusalFrom(
+      () => judge(store, 9999, KEEP),
+    );
+
+    expect(refusal).toBeInstanceOf(StoreRefusal);
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe(
+      'finding_labels_finding_id_findings_id_fk',
+    );
+
+    // The positive control, in this body rather than in a sibling
+    // case: a store refusing every append passes the assertion
+    // above. The same call over a finding that IS there lands.
+    const stored = await judge(store, NO_SCORE, KEEP);
+
+    expect(stored.findingId).toBe(NO_SCORE);
+    expect(await pageOf(store, domain.id)).toHaveLength(5);
+  });
+
+  it('burns an id on the append it refused', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+
+    const first = await judge(store, NO_SCORE, KEEP);
+
+    await refusalFrom(() => judge(store, 9999, DROP));
+
+    const second = await judge(store, NO_SCORE, DROP);
+
+    // The counter is read while the row is being formed and the
+    // foreign key is checked afterwards, so a refused append leaves
+    // the id it took unused. Measured on `personas`, over a key
+    // refusal and a foreign-key one; this table carries only the
+    // second of that pair.
+    expect(first.id).toBe(1);
+    expect(second.id).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The two orderings, and the tail an absent score sorts into
+// ---------------------------------------------------------------------------
+
+describe('the findings page ordering', () => {
+  it('orders by score, then by stamp, then by id descending', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    // Neither the order the rows were planted in
+    // (12, 13, 15, 11, 14) nor either direction of id. The tied
+    // pair is planted with the LOWER id first, so a stable sort
+    // that lost the tiebreak answers them the wrong way round
+    // rather than reproducing this order by accident.
+    const page = await pageOf(store, domain.id, EVERY_FINDING, 'score');
+
+    expect(page).toStrictEqual(
+      [HIGH_SECOND, HIGH_FIRST, MIDDLE_SCORE, ZERO_SCORE, NO_SCORE],
+    );
+  });
+
+  it('orders by recency with the score key dropped', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    // The same three keys with the first removed rather than a
+    // second rule: the unscored finding leads because it is the
+    // newest, and the tie the two high scores share still falls to
+    // id descending.
+    expect(
+      await pageOf(store, domain.id, EVERY_FINDING, 'recency'),
+    ).toStrictEqual(
+      [NO_SCORE, MIDDLE_SCORE, HIGH_SECOND, HIGH_FIRST, ZERO_SCORE],
+    );
+  });
+
+  it('sorts an absent score behind a zero one', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const byScore = await pageOf(store, domain.id, EVERY_FINDING, 'score');
+
+    // A store reading a null score as zero ties these two on the
+    // first key and falls through to the stamp, which would put the
+    // unscored finding FIRST of the pair: it is the newest row in
+    // the fixture and the zero-scored one is the oldest. The
+    // recency page in the same body is what says the two stamps
+    // genuinely run that way.
+    expect(byScore.indexOf(ZERO_SCORE)).toBeLessThan(
+      byScore.indexOf(NO_SCORE),
+    );
+
+    const byRecency = await pageOf(
+      store,
+      domain.id,
+      EVERY_FINDING,
+      'recency',
+    );
+
+    expect(byRecency.indexOf(NO_SCORE)).toBeLessThan(
+      byRecency.indexOf(ZERO_SCORE),
+    );
+  });
+
+  it('separates two findings tied on score and stamp by id', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const high = await Promise.all([
+      readFinding(store, HIGH_FIRST),
+      readFinding(store, HIGH_SECOND),
+    ]);
+
+    // The tie is real rather than assumed: both rows carry one
+    // score and one instant, so `id` descending is the only thing
+    // ordering them and the later insert leads.
+    expect(high.map((row) => row.score)).toStrictEqual([0.9, 0.9]);
+    expect(high.map((row) => row.createdAt.getTime())).toStrictEqual(
+      [Date.UTC(2026, 2, 2, 9), Date.UTC(2026, 2, 2, 9)],
+    );
+
+    const page = await pageOf(store, domain.id);
+
+    expect(page.indexOf(HIGH_SECOND)).toBeLessThan(page.indexOf(HIGH_FIRST));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The window over the page, and the count beside it
+// ---------------------------------------------------------------------------
+
+describe('the findings page window', () => {
+  it('answers one window of the ordered page', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    const page = await store.listFindings(
+      domain.id,
+      EVERY_FINDING,
+      'score',
+      { limit: 2, offset: 1 },
+    );
+
+    // The window is taken from the ORDERED collection rather than
+    // from the planted list, so the second and third of the score
+    // order arrive rather than the second and third row planted.
+    expect(findingIds(page)).toStrictEqual([HIGH_FIRST, MIDDLE_SCORE]);
+  });
+
+  it('answers an empty page past the end and counts the whole', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    const page = await store.listFindings(
+      domain.id,
+      EVERY_FINDING,
+      'score',
+      { limit: 50, offset: 50 },
+    );
+
+    expect(page).toStrictEqual([]);
+
+    // The count ignores the window, which is what a page's
+    // `meta.total` is read for: a window past the end still
+    // describes a collection of five.
+    expect(await store.countFindings(domain.id, EVERY_FINDING)).toBe(5);
+  });
+
+  it('answers nothing for a domain that has made none', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const other = await store.insertDomain(domainInput(TRANSIT));
+
+    expect(await pageOf(store, other.id)).toStrictEqual([]);
+    expect(await store.countFindings(other.id, EVERY_FINDING)).toBe(0);
+
+    // The control: the page is scoped rather than empty for
+    // everyone, and an id no domain carries answers the same way a
+    // domain holding nothing does.
+    expect(await pageOf(store, domain.id)).toHaveLength(5);
+    expect(await pageOf(store, 9999)).toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The verdict a finding stands under, and the ruling that replaced it
+// ---------------------------------------------------------------------------
+
+describe('the findings verdict filter', () => {
+  it('answers the findings whose latest ruling carries it', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await judge(store, MIDDLE_SCORE, KEEP);
+    await judge(store, HIGH_FIRST, KEEP);
+    await judge(store, ZERO_SCORE, DROP);
+
+    const kept = { ...EVERY_FINDING, verdict: KEEP };
+
+    // Ordered by the score keys inside the filter rather than by
+    // the order the rulings were written.
+    expect(await pageOf(store, domain.id, kept)).toStrictEqual(
+      [HIGH_FIRST, MIDDLE_SCORE],
+    );
+    expect(await store.countFindings(domain.id, kept)).toBe(2);
+  });
+
+  it('drops a finding re-judged away from the verdict', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await judge(store, HIGH_FIRST, KEEP);
+    await judge(store, HIGH_SECOND, KEEP);
+    await judge(store, HIGH_FIRST, DROP);
+
+    const kept = { ...EVERY_FINDING, verdict: KEEP };
+    const dropped = { ...EVERY_FINDING, verdict: DROP };
+
+    // The LATEST and not any: the first ruling is still stored and
+    // still readable, and it no longer selects the row. A store
+    // matching any label answers both findings here.
+    expect(await pageOf(store, domain.id, kept)).toStrictEqual(
+      [HIGH_SECOND],
+    );
+    expect(await pageOf(store, domain.id, dropped)).toStrictEqual(
+      [HIGH_FIRST],
+    );
+    expect(await store.listFindingLabels(HIGH_FIRST)).toHaveLength(2);
+  });
+
+  it('leaves a finding nobody has judged out of every verdict', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await judge(store, HIGH_FIRST, KEEP);
+
+    const unjudged = [NO_SCORE, MIDDLE_SCORE, HIGH_SECOND, ZERO_SCORE];
+
+    for (const verdict of [KEEP, DROP, HOLD]) {
+      const page = await pageOf(store, domain.id, {
+        ...EVERY_FINDING,
+        verdict,
+      });
+
+      for (const id of unjudged) {
+        expect(page).not.toContain(id);
+      }
+    }
+
+    // The control: the loop above is satisfied by a store answering
+    // an empty page for every verdict, and this is the one finding
+    // that HAS been judged.
+    expect(
+      await pageOf(store, domain.id, { ...EVERY_FINDING, verdict: KEEP }),
+    ).toStrictEqual([HIGH_FIRST]);
+  });
+
+  it('answers an empty page for a verdict no label carries', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await judge(store, HIGH_FIRST, KEEP);
+
+    const held = { ...EVERY_FINDING, verdict: HOLD };
+
+    // An empty page rather than a refusal: a verdict may be one the
+    // domain has since retired, which rows stored under it still
+    // answer to, so nothing here failed to read.
+    expect(await pageOf(store, domain.id, held)).toStrictEqual([]);
+    expect(await store.countFindings(domain.id, held)).toBe(0);
+    expect(await store.countFindings(domain.id, EVERY_FINDING)).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The category a finding is filed under, which is a member and not a column
+// ---------------------------------------------------------------------------
+
+describe('the findings category filter', () => {
+  it('answers the findings filed under one key', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const platforms = { ...EVERY_FINDING, category: PLATFORMS };
+
+    expect(await pageOf(store, domain.id, platforms)).toStrictEqual(
+      [HIGH_SECOND, MIDDLE_SCORE],
+    );
+    expect(await store.countFindings(domain.id, platforms)).toBe(2);
+
+    // The control: the filter narrows rather than answering
+    // everything, and a second key answers a different row.
+    expect(
+      await pageOf(store, domain.id, { ...EVERY_FINDING, category: RUNTIMES }),
+    ).toStrictEqual([HIGH_FIRST]);
+  });
+
+  it('answers an empty page for a key nothing is filed under', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await addCategory(store, domain.id, TOOLING);
+
+    const tooling = { ...EVERY_FINDING, category: TOOLING };
+
+    // A key the domain DECLARED and nothing carries, and a key the
+    // domain never declared that a finding IS filed under, answer
+    // the same way: an empty page and a page of one. No column
+    // links a finding to a category, so the taxonomy in force at
+    // the moment of the request decides neither.
+    expect(await pageOf(store, domain.id, tooling)).toStrictEqual([]);
+    expect(
+      await pageOf(store, domain.id, { ...EVERY_FINDING, category: RETIRED }),
+    ).toStrictEqual([ZERO_SCORE]);
+  });
+
+  it('files by a stored member and not an inherited one', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const inherited: Record<string, unknown> = Object.assign(
+      Object.create({ category: PLATFORMS }) as Record<string, unknown>,
+      { topic: RUNTIMES },
+    );
+
+    store.setDomainFindings(domain.id, [
+      madeFinding(NO_SCORE, { fields: inherited }),
+      madeFinding(HIGH_FIRST, { fields: { category: PLATFORMS } }),
+    ]);
+
+    const platforms = { ...EVERY_FINDING, category: PLATFORMS };
+
+    // The seam stores what a `jsonb` column would: own members and
+    // nothing else. So the inherited key is gone before any filter
+    // reads one, and the sibling in the same body is what says the
+    // filter still finds a member that WAS stored.
+    expect(await pageOf(store, domain.id, platforms)).toStrictEqual(
+      [HIGH_FIRST],
+    );
+
+    const stored = await readFinding(store, NO_SCORE);
+
+    expect(stored.fields).toStrictEqual({ topic: RUNTIMES });
+  });
+
+  it('matches a numeric member by the text the column answers', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    store.setDomainFindings(domain.id, [
+      madeFinding(NO_SCORE, { fields: { category: 5 } }),
+      madeFinding(HIGH_FIRST, { fields: { category: PLATFORMS } }),
+    ]);
+
+    // `fields->>'category'` answers TEXT rather than a string
+    // member, so a numeric 5 is matched by '5' and a store
+    // comparing only strings answers an empty page where a
+    // deployment answers a row. The sibling in the same body is the
+    // control that the filter has not simply widened to everything.
+    expect(
+      await pageOf(store, domain.id, { ...EVERY_FINDING, category: '5' }),
+    ).toStrictEqual([NO_SCORE]);
+
+    const platforms = { ...EVERY_FINDING, category: PLATFORMS };
+
+    expect(await pageOf(store, domain.id, platforms)).toStrictEqual(
+      [HIGH_FIRST],
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The half-open window over when a finding was made
+// ---------------------------------------------------------------------------
+
+describe('the findings window over when they were made', () => {
+  it('takes the lower boundary and drops the upper', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    // `[sinceInclusive, untilExclusive)` written out rather than
+    // read off the store: the two findings made at the lower bound
+    // are IN and the one made at the upper bound is OUT, so two
+    // adjacent windows do not both take the seam between them.
+    const page = await pageOf(store, domain.id, {
+      window: {
+        sinceInclusive: new Date(MADE_T1),
+        untilExclusive: new Date(MADE_T2),
+      },
+    });
+
+    expect(page).toStrictEqual([HIGH_SECOND, HIGH_FIRST]);
+    expect(page).not.toContain(MIDDLE_SCORE);
+    expect(page).not.toContain(ZERO_SCORE);
+  });
+
+  it('narrows on one bound alone and on neither', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    const since = await pageOf(store, domain.id, {
+      window: {
+        sinceInclusive: new Date(MADE_T2),
+        untilExclusive: null,
+      },
+    });
+
+    const until = await pageOf(store, domain.id, {
+      window: {
+        sinceInclusive: null,
+        untilExclusive: new Date(MADE_T1),
+      },
+    });
+
+    // A bound holding null is unbounded on that side rather than a
+    // bound at the epoch, and the two half-bounded pages plus the
+    // unbounded one below are what say so.
+    expect(since).toStrictEqual([MIDDLE_SCORE, NO_SCORE]);
+    expect(until).toStrictEqual([ZERO_SCORE]);
+    expect(await pageOf(store, domain.id)).toHaveLength(5);
+  });
+
+  it('answers an empty page for a span nothing was made in', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const quiet = {
+      window: {
+        sinceInclusive: new Date('2027-01-01T00:00:00.000Z'),
+        untilExclusive: new Date('2027-02-01T00:00:00.000Z'),
+      },
+    };
+
+    expect(await pageOf(store, domain.id, quiet)).toStrictEqual([]);
+    expect(await store.countFindings(domain.id, quiet)).toBe(0);
+
+    // The control: an empty window is a legitimate request rather
+    // than a store that had stopped answering.
+    expect(await store.countFindings(domain.id, EVERY_FINDING)).toBe(5);
+  });
+
+  it('narrows beside a verdict and a category at once', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await judge(store, HIGH_SECOND, KEEP);
+    await judge(store, MIDDLE_SCORE, KEEP);
+
+    // Three members at once select the intersection rather than the
+    // last one written: only `HIGH_SECOND` is kept, filed under
+    // platforms AND made inside the window.
+    const page = await pageOf(store, domain.id, {
+      category: PLATFORMS,
+      verdict: KEEP,
+      window: {
+        sinceInclusive: new Date(MADE_T1),
+        untilExclusive: new Date(MADE_T2),
+      },
+    });
+
+    expect(page).toStrictEqual([HIGH_SECOND]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The rulings a finding accumulates, and the sequence they are read in
+// ---------------------------------------------------------------------------
+
+describe('the rulings appended to a finding', () => {
+  it('appends a second ruling rather than replacing the first', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+
+    const first = await judge(store, HIGH_FIRST, KEEP, 'worth keeping');
+    const second = await judge(store, HIGH_FIRST, DROP);
+    const stored = await store.listFindingLabels(HIGH_FIRST);
+
+    // `finding_labels` carries no unique key at all, so there is
+    // nothing to upsert on and re-judging is a second ROW. Both are
+    // readable afterwards, which is what makes the sequence the
+    // record of an operator changing their mind.
+    expect(stored).toHaveLength(2);
+    expect(stored.map((row) => row.id)).toStrictEqual(
+      [second.id, first.id],
+    );
+    expect(stored.map((row) => row.verdict)).toStrictEqual([DROP, KEEP]);
+    expect(stored.map((row) => row.note)).toStrictEqual(
+      [null, 'worth keeping'],
+    );
+  });
+
+  it('breaks a tie on the stamp by id descending', async () => {
+    const fixed = new Date('2026-03-05T10:00:00.000Z');
+    const store = createMemoryResearchStore({ now: () => fixed });
+
+    await seedFindings(store);
+    await judge(store, HIGH_FIRST, KEEP);
+    await judge(store, HIGH_FIRST, DROP);
+    await judge(store, HIGH_FIRST, HOLD);
+
+    const stored = await store.listFindingLabels(HIGH_FIRST);
+
+    // `labelled_at` is the transaction's start time, so rulings
+    // written in one transaction tie to the microsecond and `id` is
+    // the only thing separating them. The tie is asserted rather
+    // than assumed, and for a lookup whose whole answer is the
+    // first row it is the difference between a verdict and a coin
+    // flip.
+    const stamps = new Set(stored.map((row) => row.labelledAt.getTime()));
+
+    expect(stamps).toStrictEqual(new Set([fixed.getTime()]));
+    expect(stored.map((row) => row.verdict)).toStrictEqual(
+      [HOLD, DROP, KEEP],
+    );
+  });
+
+  it('reads the verdict in force off the head of that sequence', async () => {
+    const fixed = new Date('2026-03-05T10:00:00.000Z');
+    const store = createMemoryResearchStore({ now: () => fixed });
+    const domain = await seedFindings(store);
+
+    await judge(store, HIGH_FIRST, KEEP);
+    await judge(store, HIGH_FIRST, DROP);
+
+    // The filter reads the same head the list answers, under a
+    // clock that ties the two stamps: a store falling back on the
+    // first row it reaches would select this finding under `keep`.
+    expect(
+      await pageOf(store, domain.id, { ...EVERY_FINDING, verdict: DROP }),
+    ).toStrictEqual([HIGH_FIRST]);
+    expect(
+      await pageOf(store, domain.id, { ...EVERY_FINDING, verdict: KEEP }),
+    ).toStrictEqual([]);
+  });
+
+  it('answers no ruling for an unjudged and an unknown id', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+    await judge(store, HIGH_FIRST, KEEP);
+
+    expect(await store.listFindingLabels(NO_SCORE)).toStrictEqual([]);
+    expect(await store.listFindingLabels(9999)).toStrictEqual([]);
+
+    // The control: the read answers rows for a finding that HAS
+    // been judged, so the two empties above are answers rather than
+    // a read that had stopped working.
+    expect(await store.listFindingLabels(HIGH_FIRST)).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sightings one finding carries, and the count they do not move
+// ---------------------------------------------------------------------------
+
+describe('the sightings a finding carries', () => {
+  it('answers them newest first with id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+    const seen = '2026-03-06T08:00:00.000Z';
+    const later = '2026-03-07T08:00:00.000Z';
+
+    await seedFindings(store);
+
+    store.setFindingSightings(HIGH_FIRST, [
+      { externalId: 'a', id: 31, seenAt: new Date(seen), sourceId: 5 },
+      { externalId: null, id: 33, seenAt: new Date(later), sourceId: 6 },
+      { externalId: 'c', id: 32, seenAt: new Date(seen), sourceId: 7 },
+    ]);
+
+    const rows = await store.listFindingSightings(HIGH_FIRST);
+
+    // Planted in an order neither answer gives, so this tells the
+    // ordering from the planted one and from id alone.
+    expect(rows.map((row) => row.id)).toStrictEqual([33, 32, 31]);
+    expect(rows.map((row) => row.findingId)).toStrictEqual(
+      [HIGH_FIRST, HIGH_FIRST, HIGH_FIRST],
+    );
+    expect(rows.map((row) => row.sourceId)).toStrictEqual([6, 7, 5]);
+    expect(rows.map((row) => row.externalId)).toStrictEqual(
+      [null, 'c', 'a'],
+    );
+  });
+
+  it('answers nothing for a finding seen nowhere', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+
+    store.setFindingSightings(HIGH_FIRST, [
+      { externalId: null, id: 31, seenAt: new Date(MADE_T1), sourceId: 5 },
+    ]);
+
+    expect(await store.listFindingSightings(NO_SCORE)).toStrictEqual([]);
+    expect(await store.listFindingSightings(9999)).toStrictEqual([]);
+    expect(await store.listFindingSightings(HIGH_FIRST)).toHaveLength(1);
+  });
+
+  it('does not move the count that holds a source delete', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const source = await store.insertSource({
+      contract: {},
+      domainId: domain.id,
+      enabled: true,
+      endpoint: FEED_ENDPOINT,
+      kind: 'rss',
+      parserConfig: {},
+    });
+
+    store.setFindingSightings(HIGH_FIRST, [
+      {
+        externalId: null,
+        id: 31,
+        seenAt: new Date(MADE_T1),
+        sourceId: source.id,
+      },
+    ]);
+
+    const counts = await store.countSourceDependents(source.id);
+
+    // The file's fourth known divergence, pinned rather than left
+    // to be discovered. `countSourceDependents` reads what
+    // `setSourceSightings` planted and never these rows, because
+    // one port can only be asked HOW MANY cite a source while the
+    // other answers the rows. So a row planted here does not hold
+    // the delete a deployment would refuse.
+    expect(counts.findingSightings).toBe(0);
+    expect(await store.listFindingSightings(HIGH_FIRST)).toHaveLength(1);
+    expect(await store.deleteSource(source.id)).toBe(true);
+  });
+
+  it('leaves the planted count refusing that delete', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const source = await store.insertSource({
+      contract: {},
+      domainId: domain.id,
+      enabled: true,
+      endpoint: FEED_ENDPOINT,
+      kind: 'rss',
+      parserConfig: {},
+    });
+
+    store.setSourceSightings(source.id, 1);
+
+    // The control for the case above: the guard still works, so
+    // that case describes a seam the guard cannot see rather than a
+    // guard that had stopped guarding.
+    const refusal = await refusalFrom(() => store.deleteSource(source.id));
+
+    expect(refusal.constraint).toBe(
+      'finding_sightings_source_id_sources_id_fk',
+    );
+    const counts = await store.countSourceDependents(source.id);
+
+    expect(counts.findingSightings).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The research a finding resolves through its entity
+// ---------------------------------------------------------------------------
+
+describe('the research a finding resolves through its entity', () => {
+  it('answers what was planted under the entity it names', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+
+    store.setEntityResearch(SUBJECT, [
+      {
+        id: 41,
+        payload: { note: 'first pass' },
+        researchedAt: new Date(MADE_T1),
+        runId: 9,
+        summary: 'what the first pass came to',
+      },
+    ]);
+    store.setEntityResearch(OTHER_SUBJECT, [
+      {
+        id: 42,
+        payload: {},
+        researchedAt: new Date(MADE_T2),
+        runId: null,
+        summary: null,
+      },
+    ]);
+
+    const rows = await store.listFindingResearch(HIGH_FIRST);
+
+    // Addressed by the FINDING and resolved through its entity, so
+    // a caller holding a finding never reads `entityId` itself. The
+    // two findings attributed to one subject answer the same rows,
+    // and a finding attributed to the other answers that one's.
+    expect(rows.map((row) => row.id)).toStrictEqual([41]);
+    expect(rows.map((row) => row.entityId)).toStrictEqual([SUBJECT]);
+    expect(rows.map((row) => row.runId)).toStrictEqual([9]);
+    expect(rows.map((row) => row.summary)).toStrictEqual(
+      ['what the first pass came to'],
+    );
+
+    const sibling = await store.listFindingResearch(HIGH_SECOND);
+
+    expect(sibling.map((row) => row.id)).toStrictEqual([41]);
+    expect(
+      (await store.listFindingResearch(ZERO_SCORE)).map((row) => row.id),
+    ).toStrictEqual([42]);
+  });
+
+  it('answers an empty list for an unattributed finding', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+
+    store.setEntityResearch(SUBJECT, [
+      {
+        id: 41,
+        payload: {},
+        researchedAt: new Date(MADE_T1),
+        runId: null,
+        summary: null,
+      },
+    ]);
+
+    // A null `entity_id` is an ordinary state rather than an edge
+    // case, so there is no entity to resolve research through and
+    // nothing failed to read. The attributed sibling in the same
+    // body is what says the read still answers rows at all.
+    expect(await readFinding(store, NO_SCORE)).toMatchObject({
+      entityId: null,
+    });
+    expect(await store.listFindingResearch(NO_SCORE)).toStrictEqual([]);
+    expect(await store.listFindingResearch(HIGH_FIRST)).toHaveLength(1);
+  });
+
+  it('answers an empty list for an id no finding carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+
+    store.setEntityResearch(SUBJECT, [
+      {
+        id: 41,
+        payload: {},
+        researchedAt: new Date(MADE_T1),
+        runId: null,
+        summary: null,
+      },
+    ]);
+
+    expect(await store.listFindingResearch(9999)).toStrictEqual([]);
+    expect(await store.listFindingResearch(HIGH_SECOND)).toHaveLength(1);
+  });
+
+  it('answers the research newest first with id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+    const tied = '2026-03-08T08:00:00.000Z';
+
+    await seedFindings(store);
+
+    store.setEntityResearch(SUBJECT, [
+      {
+        id: 41,
+        payload: {},
+        researchedAt: new Date(tied),
+        runId: null,
+        summary: null,
+      },
+      {
+        id: 43,
+        payload: {},
+        researchedAt: new Date(MADE_T0),
+        runId: null,
+        summary: null,
+      },
+      {
+        id: 42,
+        payload: {},
+        researchedAt: new Date(tied),
+        runId: null,
+        summary: null,
+      },
+    ]);
+
+    // Planted in an order neither answer gives, so this tells the
+    // ordering from the planted one and from id alone.
+    expect(
+      (await store.listFindingResearch(HIGH_FIRST)).map((row) => row.id),
+    ).toStrictEqual([42, 41, 43]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a domain delete takes, and the count it does not read
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its findings', () => {
+  it('takes its findings and leaves another domain standing', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const other = await store.insertDomain(domainInput(TRANSIT));
+
+    store.setDomainFindings(other.id, [madeFinding(21, { score: 0.5 })]);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    expect(await pageOf(store, domain.id)).toStrictEqual([]);
+    expect(await store.countFindings(domain.id, EVERY_FINDING)).toBe(0);
+    expect(await store.findFindingById(HIGH_FIRST)).toBeNull();
+
+    // The other domain's finding is standing, so this is a cascade
+    // rather than a store that cleared everything.
+    expect(await pageOf(store, other.id)).toStrictEqual([21]);
+  });
+
+  it('takes their sightings and their rulings with them', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    store.setFindingSightings(HIGH_FIRST, [
+      { externalId: null, id: 31, seenAt: new Date(MADE_T1), sourceId: 5 },
+    ]);
+    store.setEntityResearch(SUBJECT, [
+      {
+        id: 41,
+        payload: {},
+        researchedAt: new Date(MADE_T1),
+        runId: null,
+        summary: null,
+      },
+    ]);
+
+    await judge(store, HIGH_FIRST, KEEP);
+
+    // The state before, so the three empties below are a delete
+    // reaching them rather than reads that never answered.
+    expect(await store.listFindingSightings(HIGH_FIRST)).toHaveLength(1);
+    expect(await store.listFindingLabels(HIGH_FIRST)).toHaveLength(1);
+    expect(await store.listFindingResearch(HIGH_FIRST)).toHaveLength(1);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // Two levels down: `findings.domain_id` cascades, and both
+    // `finding_sightings.finding_id` and `finding_labels.finding_id`
+    // cascade onto the findings. The research goes unreachable for
+    // the third reason rather than the same one — the finding it
+    // was resolved through is gone, which is where `EntityStore`
+    // will take over the cascade proper.
+    expect(await store.listFindingSightings(HIGH_FIRST)).toStrictEqual([]);
+    expect(await store.listFindingLabels(HIGH_FIRST)).toStrictEqual([]);
+    expect(await store.listFindingResearch(HIGH_FIRST)).toStrictEqual([]);
+  });
+
+  it('lets a ruling be refused once the finding has gone', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await judge(store, HIGH_FIRST, KEEP);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // The foreign key read from the write's side after the cascade:
+    // the finding a ruling named is not there, so the append is
+    // refused rather than storing a row citing nothing.
+    const refusal = await refusalFrom(() => judge(store, HIGH_FIRST, DROP));
+
+    expect(refusal.constraint).toBe(
+      'finding_labels_finding_id_findings_id_fk',
+    );
+  });
+});
+
+describe('the findings a dependent count does not see', () => {
+  it('answers the planted number over a planted finding row', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    // The file's third known divergence, pinned rather than left to
+    // be discovered. `countDomainDependents` reads what
+    // `setDomainDependents` planted and never these rows, because
+    // `src/domains/service.test.ts` and `src/domains/routes.test.ts`
+    // reach that guard over a store holding no finding at all.
+    expect(await store.countDomainDependents(domain.id)).toStrictEqual({
+      findings: 0,
+      sources: 0,
+      topics: 0,
+    });
+    expect(await store.countFindings(domain.id, EVERY_FINDING)).toBe(5);
+
+    store.setDomainDependents(domain.id, { findings: 2 });
+
+    // The control: the guard still reads the plant, so the zero
+    // above is a seam it cannot see rather than a count that had
+    // stopped counting.
+    expect(await store.countDomainDependents(domain.id)).toStrictEqual({
+      findings: 2,
+      sources: 0,
+      topics: 0,
+    });
+  });
+
+  it('drops the plant and the rows in one delete', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    store.setDomainDependents(domain.id, { findings: 5 });
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    expect(await store.countDomainDependents(domain.id)).toStrictEqual({
+      findings: 0,
+      sources: 0,
+      topics: 0,
+    });
+    expect(await store.countFindings(domain.id, EVERY_FINDING)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the findings half copies across the boundary
+// ---------------------------------------------------------------------------
+
+describe('the finding payload crossing the boundary', () => {
+  it('does not store the fields object a plant was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const fields: Record<string, unknown> = { category: PLATFORMS };
+
+    store.setDomainFindings(domain.id, [madeFinding(NO_SCORE, { fields })]);
+
+    fields.category = RUNTIMES;
+
+    // Compared against the CONSTANT rather than against a record an
+    // earlier read answered: a store sharing its own object would
+    // otherwise hold one lie against itself and pass.
+    expect(await readFinding(store, NO_SCORE)).toMatchObject({
+      fields: { category: PLATFORMS },
+    });
+
+    const platforms = { ...EVERY_FINDING, category: PLATFORMS };
+
+    expect(await pageOf(store, domain.id, platforms)).toStrictEqual(
+      [NO_SCORE],
+    );
+  });
+
+  it('does not answer the fields object it stores', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const answered = await readFinding(store, HIGH_FIRST);
+
+    answered.fields.category = RETIRED;
+
+    expect((await readFinding(store, HIGH_FIRST)).fields).toStrictEqual({
+      category: RUNTIMES,
+    });
+
+    const [paged] = await store.listFindings(
+      domain.id,
+      { ...EVERY_FINDING, category: RUNTIMES },
+      'score',
+      WHOLE_COLLECTION,
+    );
+
+    // The page is a second answer site rather than the same one:
+    // `listFindings` builds its records through the same projection
+    // the lookup does, and a store mapping stored rows straight out
+    // would share them from both.
+    expect(paged?.fields).toStrictEqual({ category: RUNTIMES });
+  });
+
+  it('does not store or answer the createdAt a plant was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const made = new Date(MADE_T1);
+
+    store.setDomainFindings(domain.id, [
+      madeFinding(NO_SCORE, { createdAt: made }),
+    ]);
+
+    made.setUTCFullYear(2030);
+
+    const stored = await readFinding(store, NO_SCORE);
+
+    expect(stored.createdAt.getTime()).toBe(Date.UTC(2026, 2, 2, 9));
+
+    stored.createdAt.setUTCFullYear(2031);
+
+    expect(
+      (await readFinding(store, NO_SCORE)).createdAt.getTime(),
+    ).toBe(Date.UTC(2026, 2, 2, 9));
+  });
+
+  it('does not share a sighting or a research row it answers', async () => {
+    const store = createMemoryResearchStore();
+    const seen = new Date(MADE_T1);
+    const researched = new Date(MADE_T2);
+    const payload: Record<string, unknown> = { note: 'as recorded' };
+
+    await seedFindings(store);
+
+    store.setFindingSightings(HIGH_FIRST, [
+      { externalId: null, id: 31, seenAt: seen, sourceId: 5 },
+    ]);
+    store.setEntityResearch(SUBJECT, [
+      {
+        id: 41,
+        payload,
+        researchedAt: researched,
+        runId: null,
+        summary: null,
+      },
+    ]);
+
+    seen.setUTCFullYear(2030);
+    researched.setUTCFullYear(2030);
+    payload.note = 'rewritten';
+
+    const [sighting] = await store.listFindingSightings(HIGH_FIRST);
+    const [research] = await store.listFindingResearch(HIGH_FIRST);
+
+    expect(sighting?.seenAt.getTime()).toBe(Date.UTC(2026, 2, 2, 9));
+    expect(research?.researchedAt.getTime()).toBe(Date.UTC(2026, 2, 3, 9));
+    expect(research?.payload).toStrictEqual({ note: 'as recorded' });
+
+    sighting?.seenAt.setUTCFullYear(2031);
+    research?.researchedAt.setUTCFullYear(2031);
+
+    const [again] = await store.listFindingSightings(HIGH_FIRST);
+    const [researchAgain] = await store.listFindingResearch(HIGH_FIRST);
+
+    expect(again?.seenAt.getTime()).toBe(Date.UTC(2026, 2, 2, 9));
+    expect(researchAgain?.researchedAt.getTime()).toBe(
+      Date.UTC(2026, 2, 3, 9),
+    );
+  });
+
+  it('does not share the labelledAt an append or a read answers', async () => {
+    const fixed = new Date('2026-03-05T10:00:00.000Z');
+    const store = createMemoryResearchStore({ now: () => fixed });
+
+    await seedFindings(store);
+
+    const appended = await judge(store, HIGH_FIRST, KEEP);
+
+    appended.labelledAt.setUTCFullYear(2031);
+    fixed.setUTCFullYear(2032);
+
+    const [read] = await store.listFindingLabels(HIGH_FIRST);
+
+    // Three answer sites and one clock: the row the append handed
+    // back, the row the read hands out, and the `Date` the clock
+    // itself answered. A store keeping any of the three would have
+    // every stamped row moving together.
+    expect(read?.labelledAt.getTime()).toBe(Date.UTC(2026, 2, 5, 10));
+
+    read?.labelledAt.setUTCFullYear(2033);
+
+    const [again] = await store.listFindingLabels(HIGH_FIRST);
+
+    expect(again?.labelledAt.getTime()).toBe(Date.UTC(2026, 2, 5, 10));
+  });
+
+  it('rebuilds the planted list rather than holding it', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const rows = [madeFinding(NO_SCORE)];
+
+    store.setDomainFindings(domain.id, rows);
+
+    rows.push(madeFinding(HIGH_FIRST));
+
+    // The seam copies row by row AND rebuilds the array, so pushing
+    // onto what was planted does not plant a second finding.
+    expect(await pageOf(store, domain.id)).toStrictEqual([NO_SCORE]);
+
+    // A second call REPLACES rather than appends, which is what
+    // makes a domain going back to none expressible.
+    store.setDomainFindings(domain.id, []);
+
+    expect(await pageOf(store, domain.id)).toStrictEqual([]);
   });
 });
