@@ -206,7 +206,9 @@ compose now that theirs has landed.
   promoted component, which is the opposite of what a stand-in is for
   — so the card surfaces are refitted onto it one at a time, and the
   ones that have not been reached yet still compose `Card` directly.
-  The lexicon grid is the first.
+  The lexicon grid was the first and the agents grid the second, so
+  the connector grid in `src/pages/tools/ToolsPage.tsx` is the one
+  card surface still composing `Card` itself.
 - `src/components/FilterBadgeRow.tsx` is app-local for the opposite
   reason to `PageHead`: it is NOT waiting to be promoted. `@ar/ui`
   ships no `FilterBadge` (measured — zero occurrences under
