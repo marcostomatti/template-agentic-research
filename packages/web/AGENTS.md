@@ -18,12 +18,13 @@ package.
 | `src/main.tsx` | The browser entry, and the only module here that touches the DOM directly: `StrictMode` > `QueryProvider` (`@ar/ui/cache`) > `RouterProvider`. The cache sits ABOVE the router deliberately — it holds one query client for the life of the tab, so navigating between surfaces, or across the two bases, leaves the cache standing rather than starting every read cold. |
 | `src/app-shell/` | The persistent chrome. `nav.ts` is nav-as-data and the single table the route surfaces derive from; `AppLayout.tsx` is the layout route and the sole owner of the sidebar collapse flag; `Sidebar.tsx` and `Topbar.tsx` fill its slots; `theme.ts` splits a pure resolver from the hook that writes `data-theme`. |
 | `src/routes/` | `paths.ts` (the surface table and the two-base path arithmetic), `router.tsx` (the route tree as DATA plus a `createAppRouter` factory), `DomainGuard.tsx`, `useSearchParamState.ts`. |
-| `src/data/` | The fixture data layer and the API swap seam. See below. |
-| `src/pages/` | One directory per surface, plus `index.ts` — the surface-id to component registry the router reads. Each page keeps its pure helpers beside it as `.ts` (`rows.ts`, `cards.ts`, `fields.ts`), which is where colocated tests can reach them. |
+| `src/data/` | The fixture data layer and the API swap seam: `api.ts` (the accessors — reads, and, since the editors landed, writes), `hooks.ts` (one cache hook per accessor), `types.ts` (the redeclared schema vocabulary and `FIXTURE_NOW`), one fixture module per table — `proposals.ts` is the newest of them, redeclaring `source_config_proposals` — and `drafts.ts`, the session draft store every write is recorded in. See below. |
+| `src/pages/` | One directory per surface, plus `index.ts` — the surface-id to component registry the router reads. Each page keeps its pure helpers beside it as `.ts` (`rows.ts`, `cards.ts`, `fields.ts`, `editor.ts`, `schema.ts`), which is where colocated tests can reach them, and its own modal `.tsx` beside the list page — all seven the router registers live in the surface directory that owns them, never in `src/components/`. |
 | `src/components/` | App-local stand-ins for `@ar/ui` components that do not exist yet, the shared list-page skeleton, the frame the editor modals are built in (`EditorModal.tsx`), the JSON fallback an editor offers for a shape no fixed template covers (`JsonEditor.tsx`), the pressable-badge filter row the sources toolbar uses in place of a count-carrying `Select` (`FilterBadgeRow.tsx`), and the pure `.ts` modules they share (`editorDraft.ts` for the draft a modal holds, `jsonDraft.ts` for the JSON fallback's parse, format and refusal sentences). See below. |
 | `src/test-support/` | Helpers shared by colocated tests only. No app module imports it and the vitest include collects no non-`*.test.ts` file, so it ships in no bundle. |
 | `src/styles.css` | Two imports: `tailwindcss` and `@ar/ui/styles.css`. The design tokens, the element defaults and the theme contract all belong to `@ar/ui`. |
-| `tests/e2e/` | The Playwright suite. `tests/README.md` states the two-runner split, and why that README is itself load-bearing. |
+| `tests/e2e/` | The default Playwright suite, behind `playwright.config.ts`. `tests/README.md` states the two-runner split, and why that README is itself load-bearing. |
+| `tests/visual/` | The screenshot suite, behind `playwright.visual.config.ts` and deliberately outside the default run. Its baselines are per-machine and untracked; these specs are not, which is what `packages/web/.gitignore` exists to say. |
 
 ## The two route bases
 
@@ -50,15 +51,25 @@ point branches on which of the two is live:
 - `SURFACES` is DERIVED from `NAV_ITEMS` — the nav id doubles as the
   route segment and as the `SidebarNav` selection key, so a sidebar
   entry with no route is not something the app can express.
-- Five of the six surfaces carry at least one modal sub-route
-  (`:entityId` on the digest, `:entityId/edit` on the other four, plus
-  `:entityId/config` and `:entityId/failures` on the sources; settings
-  has none), each declared
-  as a CHILD of its list route so the list stays matched behind an
-  open row. The router's table holds a LIST per surface for exactly
-  that: a row openable in more than one way is a table row, not a
-  branch. The catch-all is likewise a child of the LAYOUT route, which
-  is what keeps the shell mounted on a not-found page.
+- Five of the six surfaces carry at least one modal sub-route, seven
+  addresses in all; settings has none, being one form rather than a
+  list with rows to open. Each is declared as a CHILD of its list
+  route so the list stays matched behind an open row, and the
+  router's table holds a LIST per surface for exactly that: a row
+  openable in more than one way is a table row, not a branch. The
+  catch-all is likewise a child of the LAYOUT route, which is what
+  keeps the shell mounted on a not-found page.
+- Every one of those seven entries carries its own ELEMENT beside its
+  path, and none of them is the shared placeholder any more. The
+  digest opens `DigestDetailModal` at a bare `:entityId` — read-only,
+  and already the address a routed detail page would answer at. The
+  lexicon, agents and tools each open one editor at `:entityId/edit`
+  (`LexiconEditorModal`, `AgentEditorModal`, `ConnectorEditorModal`).
+  The sources are the only surface using the list shape so far and
+  use all of it: `:entityId/edit` opens `SourceEditorModal`,
+  `:entityId/config` opens `SourceConfigApprovalModal`, and
+  `:entityId/failures` opens `SourceFailuresModal` — three
+  addresses over one list, none of them a child of either other.
 - One element serves both bases wherever the target is RELATIVE: the
   index redirect resolves against whichever parent matched, and a
   modal closes by navigating to the parent route. Write the relative
@@ -290,7 +301,13 @@ They are here because every one of them is invisible to `lint`,
 - **`Grid`'s `cols` is a FIXED track count with no responsive form**, and
   `cn` is tailwind-merge — so `<Grid cols="3" className="md:grid-cols-3">`
   silently drops the variant's own class. Pick the BASE from the variant
-  and put only the breakpoint in `className`.
+  and put only the breakpoint in `className`. `EntityCard`'s promotion
+  did NOT retire this bullet, which is worth stating because it did
+  narrow it: `EntityCardGrid` owns an auto-fill track as a `min`
+  variant, so the three card surfaces no longer reach for `Grid`. The
+  one remaining caller under `src/` is the sources stat band, and it
+  is written exactly as prescribed — `cols="1"` taken from the
+  variant, `md:grid-cols-3` alone in `className`.
 - **`SmallStatCard` formats a numeric `value` with `short` defaulting to
   TRUE**, so a count paints `1.2K` at 1200. Pass `short={false}` beside
   the locale pin; neither is visible as wrong against fixtures small
@@ -354,25 +371,65 @@ the banned names never appear as literals. That gate reads IMPORTS
 only — the brand slot above is prose and markup, and nothing
 automated defends it.
 
-## Testing — two runners
+## Testing — two runners, two Playwright configs
 
-`test` is `vitest run && playwright test` behind one script line, with
-a `pretest` that builds `@ar/ui` so the suite is self-contained
-whatever order the root fan-out reaches the packages in.
+Two runners, and Playwright is configured TWICE over the one app:
 
 | Runner | What it reaches | Where the tests live |
 | --- | --- | --- |
 | `vitest` | Pure modules only — node environment, no DOM, include `src/**/*.test.ts` (`.ts`, never `.tsx`) | Colocated beside the module |
-| `playwright` | The assembled app in a real browser, chromium alone | `tests/e2e/*.spec.ts` |
+| `playwright` via `playwright.config.ts` | The assembled app in a real browser, chromium alone, on port 5174 | `tests/e2e/*.spec.ts` |
+| `playwright` via `playwright.visual.config.ts` | The same app screenshotted at four widths in both themes, on port 5175 | `tests/visual/*.spec.ts` |
 
 That split is what makes the pure-function/component division in this
 package load-bearing rather than stylistic: a `.tsx` file is read by
 `lint` and `check-types` and by NO test, so shape each module so the
 decision is a pure function over already-read browser values and the
 component or hook is the thin part around it. `pages/*/rows.ts`,
-`cards.ts`, `fields.ts`, `pages/filters.ts` and `app-shell/theme.ts`
-are all that shape. Anything touching `document` at import time
-crashes the unit runner outright and takes its whole file with it.
+`cards.ts`, `fields.ts`, `editor.ts`, `pages/filters.ts`,
+`app-shell/theme.ts` and the pair under `src/components/`
+(`editorDraft.ts`, `jsonDraft.ts`) are all that shape. Anything
+touching `document` at import time crashes the unit runner outright
+and takes its whole file with it.
+
+Four scripts drive them, and only the first two are ever a gate:
+
+| Script | What it is |
+| --- | --- |
+| `pretest` | `bun run --filter '@ar/ui' build`, so the suite is self-contained whatever order the root fan-out reaches the packages in |
+| `test` | `vitest run && playwright test` behind one script line — the default config, and the only test script CI runs here |
+| `test:visual` | `playwright test --config playwright.visual.config.ts`, asserting the screenshots against THIS machine's baselines |
+| `test:visual:update` | the same with `--update-snapshots=changed`, which seeds a machine's set or refreshes only the shots that moved |
+
+The screenshot suite sits outside the default run for a measured
+reason rather than a preference. At the pinned 1.62.1 `updateSnapshots`
+defaults to `missing`, and a baseline that does not exist is WRITTEN
+and reported as a soft error — so the first run on a machine with
+none exits 1 having also created the file. CI runs `bun run test` in
+this package on a hosted runner that has no baselines at all, so a
+screenshot spec living under `tests/e2e/` would red that job on the
+first push and stay red. Three consequences, none of them visible
+from a green run:
+
+- Neither visual script gets a `pretest`. bun's lifecycle hook is
+  `pre` plus the WHOLE script name, so only `test` declares one here
+  and the two visual scripts build nothing at all. Build `@ar/ui` by
+  hand first, or a baseline is a picture of whatever that package's
+  gitignored `dist/` last held.
+- `snapshotPathTemplate` resolves a RELATIVE result against the config
+  file's own directory, so the set lands in
+  `packages/web/visual/__screenshots__/` — inside the repo-root
+  `.gitignore`'s unanchored `visual/` entry, which is the whole reason
+  the path is spelled that way. The baselines are per-environment for
+  the reason `@ar/ui`'s are: regenerate a set, never copy one between
+  machines.
+- That same unanchored entry also swallowed `tests/visual/`, the
+  suite's own SOURCE, and did it silently: every gate reads a spec off
+  disk whatever git thinks, so `lint`, `check-types` and the runner
+  all stay green while `git add -A` stages nothing.
+  `packages/web/.gitignore` restates `visual/` and then negates
+  `!tests/visual/` — within one ignore file the LAST matching
+  pattern wins.
 
 Reading a run:
 
@@ -410,6 +467,10 @@ Spec conventions:
   test. `retries` is 0, stated rather than inherited: the data
   resolves from memory and the server is started by the config, so a
   second attempt that passed would be hiding a real bug.
+  `playwright.visual.config.ts` repeats all four decisions on port
+  5175, which is what lets the two suites coexist: a shared port would
+  leave whichever started second either waiting out its timeout or
+  screenshotting a tree it did not build.
 - Output (`test-results/`, `playwright-report/`) is gitignored at the
   repo root, and a failing run writes the first of those even with
   every artifact setting at its default.
@@ -471,9 +532,11 @@ trigger — but delete it in the same step, because `tests/e2e/` IS the
   opens with a same-calendar-day rung returning a local clock time, so
   `FIXTURE_NOW` alone does not make that output deterministic.
 
-CI runs both runners from `.github/workflows/front.yml`'s `checks`
-job, with `working-directory: packages/web` on the browser install and
-on the test step. That directory is load-bearing rather than tidy:
+CI runs `bun run test` — the vitest suite and the default
+Playwright config, never the screenshot one — from
+`.github/workflows/front.yml`'s `checks` job, with
+`working-directory: packages/web` on the browser install and on the
+test step. That directory is load-bearing rather than tidy:
 bun's isolated linker leaves the repo root with no playwright binary
 to resolve, so `bun x playwright` there silently fetches a version the
 lockfile never chose.
