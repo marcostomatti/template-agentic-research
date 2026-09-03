@@ -1,15 +1,15 @@
 /**
  * `src/findings/verdict-service.ts` — what the one write on the
- * findings surface refuses, and what each refusal is careful not to
- * say. Driven over `tests/helpers/memory-research-store.ts`, so
- * every claim here is answered with no database anywhere.
+ * findings surface refuses, what it answers when it does not, and
+ * what each refusal is careful not to say. Driven over
+ * `tests/helpers/memory-research-store.ts`, so every claim here is
+ * answered with no database anywhere.
  *
- * SIX SECTIONS AND FIFTEEN CASES, ALL OF THEM ABOUT A REFUSAL.
- * What a ruling ANSWERS — the appended row, the second ruling that
- * does not replace the first, the note and its absence — is the
- * next task's, and this file deliberately reads none of it: every
- * positive call below is a CONTROL inside a refusal case rather
- * than a case of its own.
+ * ELEVEN SECTIONS AND TWENTY-FIVE CASES. Fifteen are about a
+ * refusal and ten about what a ruling ANSWERS: the row read back
+ * off the store, the two ladders a verdict can be inside, the
+ * second ruling that does not replace the first, the note and its
+ * two absences, and the store methods a ruling never reaches.
  *
  * EVERY REFUSAL CASE CARRIES ITS OWN CONTROL, VARIED ALONG THAT
  * ROW'S OWN AXIS. A function refusing every ruling passes each
@@ -18,6 +18,52 @@
  * thing under test: the same body under a verdict the ladder names,
  * the same body under an id that resolves, the same verdict under a
  * domain that accepts it.
+ *
+ * AND EVERY POSITIVE CASE CARRIES ONE TOO, on the mirrored
+ * reasoning: a block of nothing but accepts is green against a
+ * service that accepts everything and stores whatever it is
+ * handed. Each is the same ruling varied along its own axis — the
+ * same verdict against a domain whose ladder does not name it, a
+ * verdict outside the ladder on the same finding, the fallback's
+ * own verdict against the domain that declared the EMPTY list, one
+ * ruling answering one row beside two answering two, and the same
+ * body with the note left out.
+ *
+ * THE ANSWER IS READ BACK OFF THE STORE RATHER THAN COMPARED
+ * MEMBER BY MEMBER, which is the sharpest thing the positive
+ * sections do. A service answering an object built out of the body
+ * it was handed satisfies every member assertion there is: the
+ * request carried neither an id nor a stamp, so the row a case
+ * holds against `listFindingLabels` is the only reading that says
+ * the answer came from the write. Measured — answering a rebuilt
+ * row reddens 5 cases at the tip and reddened NONE before these
+ * sections existed.
+ *
+ * A SECOND RULING CARRYING THE SAME VERDICT IS WHAT PINS THE
+ * APPEND. Two rulings that DIFFER are readable as an append or as
+ * an update that left the first row behind, and the list read
+ * afterwards separates them; an upsert keyed on the finding AND
+ * the verdict survives that pair and collapses only the identical
+ * one. Both cases are here, and the store-side leg that collapses
+ * them reddens exactly the second and the note case beside it.
+ *
+ * THE NOTE HAS TWO ABSENCES AND THEY ARE ASSERTED AS A PAIR. An
+ * omitted note is NULL because nobody wrote one, and a submitted
+ * empty string is stored as itself, so neither half reports on its
+ * own: a service spelling `|| null` answers null for both, and one
+ * defaulting the absent member to the empty string fails the
+ * other. It is the one member of a ruling no ladder judges.
+ *
+ * THE READ-FIRST LAW IS READ AS A REACHED-METHOD SET. `score` and
+ * `score_version` are `ar-score`'s to write and
+ * {@link VerdictServiceStore} has no member either could arrive
+ * through, but a type is not a run — so one case hands the WHOLE
+ * fixture store in behind a recording proxy and reads the three
+ * names it reached, in order, against a roster carrying every
+ * writer the fixture has. `setDomainFindings` is on that roster
+ * deliberately: it is the only member anywhere here that can move
+ * a finding's score at all. The direct reading sits beside it, the
+ * finding read before and after a ruling being the same row.
  *
  * AND THE SENTINEL ALONE WOULD NOT BE ENOUGH, which is the sharpest
  * thing the fixture buys. {@link MISSING_VERDICT} is outside every
@@ -86,20 +132,26 @@
  * reading of the refusal.
  *
  * Mutation grid, run whole over this file with `--reporter=json`
- * and read as the failed case SET rather than as a count. FOURTEEN
- * legs, every one of them mutating `./verdict-service.ts`: each
- * rule this file is about belongs to the service, and the store
- * behind it stores whatever verdict it is handed.
+ * and read as the failed case SET rather than as a count. EIGHTEEN
+ * legs, seventeen of them mutating `./verdict-service.ts` and one
+ * mutating the in-memory store — the append is the store's act,
+ * and no mutation of the service can reach it. The previous
+ * revision of this header claimed fourteen and enumerated
+ * thirteen; the eighteen below were each run TWICE, once against
+ * that revision of this file and once at the tip, and every one of
+ * the HEAD sets is a SUBSET of its tip set: the positive sections
+ * added cases to nine legs and took none away.
  *
  * Judging against `DEFAULT_VERDICT_VOCABULARY` whatever the domain
- * declares reddens 11 of 15, the widest leg here, and its size is
- * the CONTROLS rather than the subjects: seven cases store
- * {@link DECLARED_MEMBER}, which the default does not name, so the
- * accepted half of a case about something else reds with it.
- * Dropping the ladder check reddens 10 and refusing every verdict
- * reddens 10, and the two sets differ on exactly the cases each is
- * about — the first loses every refusal and takes the containment
- * case with it, the second loses every control.
+ * declares reddens 20 of 25, the widest leg here, and its size is
+ * the CONTROLS and the positive cases rather than the subjects:
+ * every case that stores {@link DECLARED_MEMBER}, which the
+ * default does not name, reds with it. Dropping the ladder check
+ * reddens 14 and refusing every verdict reddens 20, and the two
+ * sets differ on exactly the cases each is about — the first loses
+ * every refusal and takes the containment case with it, the second
+ * loses every control and every positive case. The three read 11,
+ * 10 and 10 before these sections landed.
  *
  * Appending the ruling and THEN refusing it reddens exactly 1, the
  * write tally, with every status assertion in the file green
@@ -123,10 +175,27 @@
  * verdict into that message reddens 1, the containment case. The
  * two sets are disjoint, which is what keeps naming the accepted
  * set and quoting the submitted one separate claims rather than
- * one claim asserted twice.
+ * one claim asserted twice. That 1 is the verdict rendered INTO
+ * the message; the coarser spelling that appends it to the ladder
+ * ARRAY reddens 2, taking the empty-ladder naming case whose `[]`
+ * it fills — a second mutation rather than a second figure for
+ * one.
  *
  * Testing the stored member for EMPTINESS rather than for absence
- * reddens 2, both of the empty-ladder cases and nothing else.
+ * reddens 3: both empty-ladder cases, and the fallback's own
+ * positive case, whose control submits the fallback's verdict
+ * against the closed domain and is answered rather than refused.
+ * It read 2 before that case existed.
+ *
+ * FIVE LEGS THE POSITIVE SECTIONS BOUGHT, each recorded with what
+ * it read before them. Answering a row rebuilt from the argument:
+ * 5, from 0. Storing the note as null whatever was sent: 4, from
+ * 1. Issuing the finding read twice: 4, from 3, the added case
+ * being the reached-method set. Swapping `?? null` for `|| null`
+ * on the note: 1, from 0, and it is the EMPTY-note case alone,
+ * which is why that pair is asserted together. And the store-side
+ * leg, a ruling REPLACING one that carries the same verdict rather
+ * than landing beside it: 2, from 0.
  *
  * AND ONE LEG READS ZERO, RECORDED RATHER THAN DROPPED. Swapping
  * `??` for `||` in the fallback reddens NOTHING, because an empty
@@ -180,6 +249,15 @@ const DECLARED_LADDER: readonly string[] = ['adopt', 'hold'];
 
 /** One member of it, for the controls that have to be accepted. */
 const DECLARED_MEMBER = 'adopt';
+
+/**
+ * A SECOND member of it, for the cases about re-judging.
+ *
+ * A second ruling has to be able to differ from the first, or an
+ * append and a replace answer the same one-verdict list and nothing
+ * separates them.
+ */
+const DECLARED_OTHER = 'hold';
 
 /** One member of the default ladder, on the same terms. */
 const FALLBACK_MEMBER = 'neutral';
@@ -241,6 +319,19 @@ const CLOCK_START = '2026-03-10T00:00:00.000Z';
 const CLOCK_STEP_MS = 60000;
 
 /**
+ * The score every finding here is planted with.
+ *
+ * A CONSTANT RATHER THAN A LITERAL IN TWO PLACES, because one case
+ * asserts the value is still there after a ruling. Written out
+ * twice, the assertion would agree with a fixture that had moved
+ * and say nothing about the service.
+ */
+const PLANTED_SCORE = 0.5;
+
+/** The score version beside it, on the same terms. */
+const PLANTED_SCORE_VERSION = 1;
+
+/**
  * One finding, in the shape the planting seam takes.
  *
  * PLANTED RATHER THAN WRITTEN, because `FindingStore` declares no
@@ -249,10 +340,12 @@ const CLOCK_STEP_MS = 60000;
  * is the only way this table gets rows.
  *
  * @param id - The finding's id.
- * @returns The row. Nothing below reads its score, its stamp or its
- *   payload — a ruling is judged against the DOMAIN — so the three
- *   are the same on every finding here and no case can come to rest
- *   on one of them.
+ * @returns The row. A ruling is judged against the DOMAIN, so no
+ *   case here rules differently for a different score, stamp or
+ *   payload, and the three are the same on every finding. The two
+ *   score columns ARE read once, by the case that asserts a ruling
+ *   left them where it found them — which is the read-first law
+ *   read from the only side this file can read it.
  */
 function findingRow(id: number): MemoryDomainFinding {
   return {
@@ -260,8 +353,8 @@ function findingRow(id: number): MemoryDomainFinding {
     documentId: id,
     entityId: null,
     fields: {},
-    score: 0.5,
-    scoreVersion: 1,
+    score: PLANTED_SCORE,
+    scoreVersion: PLANTED_SCORE_VERSION,
     createdAt: new Date('2026-03-01T00:00:00.000Z'),
   };
 }
@@ -333,6 +426,50 @@ async function plantLadders(): Promise<PlantedLadders> {
 
   return { store };
 }
+
+/**
+ * The three port methods a ruling reaches, in the order it reaches
+ * them.
+ *
+ * AN ORDER AND NOT A SET, which is the only reading of the module's
+ * sequential-reads rule available anywhere: the domain is addressed
+ * by a member of the finding and the ladder decides whether the
+ * append happens at all, so a service issuing them together, or the
+ * domain read first, answers the same row.
+ */
+const VERDICT_CALLS: readonly string[] = [
+  'findFindingById',
+  'findDomainById',
+  'insertFindingLabel',
+];
+
+/**
+ * Store methods that WRITE, named rather than counted, and none of
+ * them reached by a ruling.
+ *
+ * WHAT MAKES THE REACHED SET A READING OF `finding_labels`. Every
+ * write in this fixture goes through one of these names, and
+ * `setDomainFindings` is on the list deliberately: it is the ONLY
+ * member that can move a finding's `score` or `score_version`, so a
+ * ruling that had reached it is exactly the read-first violation the
+ * port's shape is meant to make unreachable.
+ *
+ * Each name is asserted PRESENT on the store's own roster in the
+ * same case, so a name misspelt here fails rather than passing as a
+ * writer nothing reached.
+ */
+const WRITERS_NOT_REACHED: readonly string[] = [
+  'setDomainFindings',
+  'insertDomain',
+  'updateDomain',
+  'deleteDomain',
+  'insertTopic',
+  'updateTopicSchedule',
+  'insertSource',
+  'updateSource',
+  'insertConnector',
+  'deleteSubscription',
+];
 
 /** How many times each of the three port methods was called. */
 interface CallCounts {
@@ -540,6 +677,60 @@ function namesEachOf(ladder: readonly string[], err: AppError): boolean[] {
 /** @returns `ladder.map(() => true)`, for the assertion above. */
 function allNamed(ladder: readonly string[]): boolean[] {
   return ladder.map(() => true);
+}
+
+/**
+ * Every function-valued member the store carries, by name.
+ *
+ * @param store - The store to read.
+ * @returns The roster. What makes the reached SET below a reading
+ *   rather than a tautology: a zero over a three-method port says
+ *   nothing at all, and this roster holds every writer the fixture
+ *   has.
+ */
+function methodsOf(store: MemoryResearchStore): string[] {
+  return Object.keys(store).filter(
+    (key) => typeof Reflect.get(store, key) === 'function',
+  );
+}
+
+/**
+ * Wraps the WHOLE store so that every method reached through it is
+ * recorded, in call order.
+ *
+ * WIDER THAN {@link countingStore} ON PURPOSE, and the two are not
+ * redundant. That one is the three-method port, so a service
+ * reaching for a fourth method dies on it and no case can say WHICH
+ * method it wanted; this one forwards every member of the fixture,
+ * so a reach outside the three ANSWERS and is named. Neither
+ * subsumes the other — one reads the tally of the three, the other
+ * reads that there were only three.
+ *
+ * @param store - The store to wrap.
+ * @param calls - The array every reached name is pushed onto.
+ * @returns A store answering exactly as the wrapped one does.
+ */
+function recordingStore(
+  store: MemoryResearchStore,
+  calls: string[],
+): MemoryResearchStore {
+  return new Proxy(store, {
+    get(target, key): unknown {
+      const member = Reflect.get(target, key) as unknown;
+
+      if (typeof member !== 'function') {
+        return member;
+      }
+
+      const method = member as (...args: unknown[]) => unknown;
+
+      return (...args: unknown[]): unknown => {
+        calls.push(String(key));
+
+        return Reflect.apply(method, target, args);
+      };
+    },
+  });
 }
 
 // -------------------------------------------------------------------------
@@ -1012,5 +1203,339 @@ describe('what a refusal carries', () => {
       .toEqual(refusals.map(() => true));
     expect(refusals.map((refusal) => detailsOf(refusal).length))
       .toEqual([1, 1, 1, 0]);
+  });
+});
+
+// -------------------------------------------------------------------------
+// A ruling a declared ladder names
+// -------------------------------------------------------------------------
+
+describe('a ruling a declared ladder names', () => {
+  it('answers the row the store appended', async () => {
+    const { store } = await plantLadders();
+    const stored = await recordVerdict(store, DECLARED_FINDING_ID, {
+      verdict: DECLARED_MEMBER,
+    });
+
+    expect(stored.findingId).toBe(DECLARED_FINDING_ID);
+    expect(stored.verdict).toBe(DECLARED_MEMBER);
+    expect(stored.note).toBeNull();
+
+    // READ BACK RATHER THAN COMPARED MEMBER BY MEMBER, which is the
+    // sharpest thing this case does. A service answering an object
+    // built out of the body it was handed satisfies the three
+    // assertions above and fails this one: the id and the stamp are
+    // the store's, and nothing in the request carried either.
+    const labels = await store.listFindingLabels(DECLARED_FINDING_ID);
+
+    expect(labels).toEqual([stored]);
+    expect(stored.labelledAt).toBeInstanceOf(Date);
+
+    // And the ruling landed on THIS finding rather than on findings
+    // generally: the other two are unjudged in the same store.
+    expect(await store.listFindingLabels(FALLBACK_FINDING_ID)).toEqual([]);
+
+    // The control, varied along the one axis under test: the same
+    // verdict against a finding whose domain declares a ladder that
+    // does not name it. What was accepted above is this domain's
+    // ladder rather than a service that accepts anything.
+    const refusal = await refusedVerdict(
+      store,
+      FALLBACK_FINDING_ID,
+      DECLARED_MEMBER,
+    );
+
+    expect(refusal.statusCode).toBe(422);
+  });
+
+  it('takes every verdict the ladder declares', async () => {
+    // One member accepted is one member accepted; a ladder is a
+    // SET, and a service holding a single verdict of its own would
+    // pass the case above and fail here.
+    const { store } = await plantLadders();
+    const stored: string[] = [];
+
+    for (const verdict of DECLARED_LADDER) {
+      const row = await recordVerdict(store, DECLARED_FINDING_ID, {
+        verdict,
+      });
+
+      stored.push(row.verdict);
+    }
+
+    expect(stored).toEqual([...DECLARED_LADDER]);
+
+    const labels = await store.listFindingLabels(DECLARED_FINDING_ID);
+
+    expect(labels).toHaveLength(DECLARED_LADDER.length);
+
+    // The control, on the same finding and in the same case: a
+    // verdict outside that same ladder. A service accepting
+    // everything passes the loop above and fails here.
+    const refusal = await refusedVerdict(
+      store,
+      DECLARED_FINDING_ID,
+      MISSING_VERDICT,
+    );
+
+    expect(refusal.statusCode).toBe(422);
+  });
+});
+
+// -------------------------------------------------------------------------
+// A ruling the fallback ladder names
+// -------------------------------------------------------------------------
+
+describe('a ruling the fallback ladder names', () => {
+  it('answers the row the store appended', async () => {
+    const { store } = await plantLadders();
+    const stored = await recordVerdict(store, FALLBACK_FINDING_ID, {
+      verdict: FALLBACK_MEMBER,
+    });
+
+    expect(stored.findingId).toBe(FALLBACK_FINDING_ID);
+    expect(stored.verdict).toBe(FALLBACK_MEMBER);
+    expect(await store.listFindingLabels(FALLBACK_FINDING_ID))
+      .toEqual([stored]);
+
+    // The fixture premise this case rests on, read rather than
+    // assumed: the verdict is the DEFAULT ladder's and the other
+    // domain's list does not name it, so acceptance here cannot be
+    // a service reading the wrong domain's setting.
+    expect(DEFAULT_VERDICT_VOCABULARY).toContain(FALLBACK_MEMBER);
+    expect(DECLARED_LADDER).not.toContain(FALLBACK_MEMBER);
+
+    // The control, varied along the one axis under test: the same
+    // verdict against the domain that declares the EMPTY ladder.
+    // The fallback answers an ABSENT member and never an empty one,
+    // and this is that rule read from the positive side.
+    const refusal = await refusedVerdict(
+      store,
+      CLOSED_FINDING_ID,
+      FALLBACK_MEMBER,
+    );
+
+    expect(refusal.statusCode).toBe(422);
+  });
+
+  it('takes every verdict the default names', async () => {
+    const { store } = await plantLadders();
+    const stored: string[] = [];
+
+    for (const verdict of DEFAULT_VERDICT_VOCABULARY) {
+      const row = await recordVerdict(store, FALLBACK_FINDING_ID, {
+        verdict,
+      });
+
+      stored.push(row.verdict);
+    }
+
+    expect(stored).toEqual([...DEFAULT_VERDICT_VOCABULARY]);
+
+    // The control, on the same finding and in the same case: the
+    // other domain's verdict, which the default does not name. A
+    // domain declaring nothing is judged against that ladder rather
+    // than against none.
+    const refusal = await refusedVerdict(
+      store,
+      FALLBACK_FINDING_ID,
+      DECLARED_MEMBER,
+    );
+
+    expect(refusal.statusCode).toBe(422);
+  });
+});
+
+// -------------------------------------------------------------------------
+// A second ruling on one finding
+// -------------------------------------------------------------------------
+
+describe('a second ruling on one finding', () => {
+  it('appends a row and leaves the first readable', async () => {
+    // The table carries no unique key at all, so re-judging is a
+    // second ROW and the sequence is the record of an operator
+    // changing their mind. An UPDATE would answer the same 200 and
+    // the same current verdict, and only a read of the whole list
+    // separates the two.
+    const { store } = await plantLadders();
+    const first = await recordVerdict(store, DECLARED_FINDING_ID, {
+      note: NOTE,
+      verdict: DECLARED_MEMBER,
+    });
+    const second = await recordVerdict(store, DECLARED_FINDING_ID, {
+      verdict: DECLARED_OTHER,
+    });
+    const labels = await store.listFindingLabels(DECLARED_FINDING_ID);
+
+    expect(labels).toEqual([second, first]);
+    expect(labels.map((row) => row.verdict))
+      .toEqual([DECLARED_OTHER, DECLARED_MEMBER]);
+    expect(second.id).not.toBe(first.id);
+    expect(second.labelledAt.getTime())
+      .toBeGreaterThan(first.labelledAt.getTime());
+
+    // The first ruling's NOTE survived the second, which is the
+    // reading a verdict comparison cannot make: a note is a member
+    // of the row rather than of the finding, so an update would
+    // have taken it with the verdict it replaced.
+    expect(first.note).toBe(NOTE);
+    expect(second.note).toBeNull();
+
+    // The fixture premise, read rather than assumed: the two
+    // verdicts differ and both are members of the one ladder, so a
+    // replace and an append answer different lists.
+    expect(DECLARED_OTHER).not.toBe(DECLARED_MEMBER);
+    expect(DECLARED_LADDER).toContain(DECLARED_OTHER);
+
+    // The control, in the same case: another finding's rulings are
+    // untouched. A store appending to one shared list passes every
+    // assertion above.
+    expect(await store.listFindingLabels(FALLBACK_FINDING_ID)).toEqual([]);
+  });
+
+  it('appends a second row for the same verdict', async () => {
+    // The reading a DIFFERING pair cannot make. An upsert keyed on
+    // the finding and the verdict collapses these two into one row
+    // with nothing raised, and the case above stays green through
+    // it because its two verdicts differ.
+    const { store } = await plantLadders();
+    const first = await recordVerdict(store, DECLARED_FINDING_ID, {
+      verdict: DECLARED_MEMBER,
+    });
+    const second = await recordVerdict(store, DECLARED_FINDING_ID, {
+      verdict: DECLARED_MEMBER,
+    });
+    const labels = await store.listFindingLabels(DECLARED_FINDING_ID);
+
+    expect(labels).toHaveLength(2);
+    expect(labels.map((row) => row.id)).toEqual([second.id, first.id]);
+    expect(labels.map((row) => row.verdict))
+      .toEqual([DECLARED_MEMBER, DECLARED_MEMBER]);
+
+    // The control, in the same case: ONE ruling answers ONE row. A
+    // store answering a list of two whatever it holds passes the
+    // length above and fails here.
+    const only = await recordVerdict(store, FALLBACK_FINDING_ID, {
+      verdict: FALLBACK_MEMBER,
+    });
+
+    expect(await store.listFindingLabels(FALLBACK_FINDING_ID))
+      .toEqual([only]);
+  });
+});
+
+// -------------------------------------------------------------------------
+// A note and its absence
+// -------------------------------------------------------------------------
+
+describe('a note and its absence', () => {
+  it('stores what the operator wrote beside the ruling', async () => {
+    const { store } = await plantLadders();
+    const written = await recordVerdict(store, DECLARED_FINDING_ID, {
+      note: NOTE,
+      verdict: DECLARED_MEMBER,
+    });
+
+    expect(written.note).toBe(NOTE);
+
+    // The control, varied along the one axis under test: the same
+    // ruling with the member omitted, in the same case. A service
+    // storing a constant note passes the assertion above and fails
+    // here, and one storing none fails the assertion above.
+    const omitted = await recordVerdict(store, DECLARED_FINDING_ID, {
+      verdict: DECLARED_MEMBER,
+    });
+
+    expect(omitted.note).toBeNull();
+
+    // Both are on the store rather than only in the two answers,
+    // newest first.
+    expect(await store.listFindingLabels(DECLARED_FINDING_ID))
+      .toEqual([omitted, written]);
+  });
+
+  it('keeps an omitted note apart from an empty one', async () => {
+    // The two states a normalisation collapses, asserted as a PAIR
+    // because neither half reports on its own. An omitted note is
+    // NULL because nobody wrote one; a submitted empty string is
+    // stored as itself. A service spelling `|| null` answers null
+    // for both and fails the second, and one defaulting the absent
+    // member to the empty string fails the first.
+    const { store } = await plantLadders();
+    const omitted = await recordVerdict(store, DECLARED_FINDING_ID, {
+      verdict: DECLARED_MEMBER,
+    });
+    const empty = await recordVerdict(store, DECLARED_FINDING_ID, {
+      note: '',
+      verdict: DECLARED_MEMBER,
+    });
+
+    expect(omitted.note).toBeNull();
+    expect(empty.note).toBe('');
+    expect(empty.note).not.toBeNull();
+  });
+});
+
+// -------------------------------------------------------------------------
+// What a ruling does not touch
+// -------------------------------------------------------------------------
+
+describe('what a ruling does not touch', () => {
+  it('reaches three store methods and no other', async () => {
+    // The read-first law read from the only side an isolated suite
+    // can read it. `VerdictServiceStore` is a three-method port and
+    // so has no member a fourth write could arrive through, but a
+    // type is not a run: this case hands the WHOLE store in, so a
+    // reach outside the three ANSWERS and is named rather than
+    // dying on a member that is not there.
+    const { store } = await plantLadders();
+    const calls: string[] = [];
+    const stored = await recordVerdict(
+      recordingStore(store, calls),
+      DECLARED_FINDING_ID,
+      { verdict: DECLARED_MEMBER },
+    );
+
+    expect(stored.verdict).toBe(DECLARED_MEMBER);
+    expect(calls).toEqual([...VERDICT_CALLS]);
+
+    // The zero above is over a roster that HAS writers in it, which
+    // is what makes it a reading rather than a tautology. Each is
+    // asserted PRESENT on the store first, so a name misspelt in
+    // the roster fails here instead of passing as a writer nothing
+    // reached.
+    const roster = methodsOf(store);
+
+    expect(WRITERS_NOT_REACHED.filter((name) => roster.includes(name)))
+      .toEqual([...WRITERS_NOT_REACHED]);
+    expect(WRITERS_NOT_REACHED.filter((name) => calls.includes(name)))
+      .toEqual([]);
+    expect(roster.length).toBeGreaterThan(VERDICT_CALLS.length);
+  });
+
+  it('leaves the finding it ruled on as it found it', async () => {
+    // `score` and `score_version` are `ar-score`'s to write and no
+    // method on this port accepts either, so the claim has a direct
+    // reading: the row before and the row after are the same row.
+    const { store } = await plantLadders();
+    const before = await store.findFindingById(DECLARED_FINDING_ID);
+
+    await recordVerdict(store, DECLARED_FINDING_ID, {
+      note: NOTE,
+      verdict: DECLARED_MEMBER,
+    });
+
+    const after = await store.findFindingById(DECLARED_FINDING_ID);
+
+    expect(after).toEqual(before);
+    expect(after?.score).toBe(PLANTED_SCORE);
+    expect(after?.scoreVersion).toBe(PLANTED_SCORE_VERSION);
+
+    // The control, in the same case: this IS a store a write moves.
+    // Two rows read equal on a store that had stopped storing
+    // anything at all, and the ruling above is what says it did
+    // not.
+    expect(await store.listFindingLabels(DECLARED_FINDING_ID))
+      .toHaveLength(1);
   });
 });
