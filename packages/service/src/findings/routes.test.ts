@@ -20,12 +20,15 @@
  * all. So every case below reads a response, and the one that
  * cannot reads the arguments a recording port was handed.
  *
- * ELEVEN CASES IN SEVEN GROUPS. Two guard the fixture and the
- * query vocabulary every refusal is read against, one holds the
- * shapes every answer is compared to, one is the page, two are
- * what the handler hands the port, two are the single get, one is
- * the address, and two are the parameter this route does not
- * declare.
+ * FIFTEEN CASES IN ELEVEN GROUPS. Two guard the fixture, the
+ * query vocabulary and the ladder every refusal is read against,
+ * one holds the shapes every answer is compared to, one is the
+ * page, two are what the handler hands the port, two are the
+ * single get, one is the address, two are the parameter this
+ * route does not declare, and FOUR are the ruling: what it
+ * stores, what it refuses a verdict outside the ladder with, what
+ * it answers about an id no finding carries, and what it says
+ * about a key the body may not name.
  *
  * THE PAGE. One request with no query at all beside two windows of
  * ONE over the same three rows, which is the reading a refusal
@@ -107,62 +110,132 @@
  * an empty page is exactly where a handler echoing its filter back
  * would be least visible.
  *
+ * THE RULING IS FOUR CASES, AND ITS 200 IS READ AGAINST THE
+ * STORE. What comes back is held against `listFindingLabels`
+ * rather than member by member, because `id` and `labelledAt` are
+ * the two members no request carried — a response rebuilt
+ * around the parsed body would satisfy any comparison whose every
+ * member came from the body, and this one cannot. Beside it the
+ * two rulings the fixture wrote are still readable in their own
+ * order, so the append is a third row rather than the second one
+ * rewritten, and the same sequence is read back a second way
+ * through the single get, which is the path `./routes.ts` names
+ * as the only one a client has.
+ *
+ * ITS TWO 422s ARE DIFFERENT REFUSALS and are asserted as whole
+ * bodies rather than by status. One names `verdict` under a code
+ * no schema could have raised and carries the accepted set; the
+ * other names `body` under `unrecognized_keys` and names no key
+ * at all. The set is rendered from `DEFAULT_VERDICT_VOCABULARY`
+ * rather than spelled again, so a member added to that constant
+ * moves the expected sentence with it rather than leaving two
+ * files agreeing by hand. Both are counted for what a caller
+ * submitted, each against a planted envelope carrying it.
+ *
+ * AND ITS ADDRESS IS READ BEFORE ITS PAYLOAD, which is the one
+ * ordering on this router a case here CAN take: a segment that is
+ * not an id carrying a body that is not a ruling either is
+ * answered about the segment. The list route's ordering is the
+ * honest zero recorded at the foot of this header, and the two
+ * are opposite halves of one rule rather than one claim read
+ * twice.
+ *
  * WHAT THIS FILE DOES NOT CLAIM. That the router sits behind
  * `ctx.requireAuth` is `tests/api/wiring.test.ts`'s claim, and
  * what a refusal may CONTAIN across the whole surface is
- * `tests/api/request-echo.test.ts`'s — the containment reading
- * below is scoped to the channels these two GETs open. The ruling
- * that appends a `finding_labels` row IS on this router now, and
- * NO case in this file reads it: every envelope, every count and
- * every containment window below is about the two reads, so a
- * regression in `PATCH /findings/:id/verdict` would leave this
- * file green. Those cases are owed, and until they land the only
- * readings of that route are `./verdict-service.test.ts`'s, taken
- * over direct calls with no server.
+ * `tests/api/request-echo.test.ts`'s — the containment readings
+ * below are scoped to the channels these three routes open. Which
+ * ladder a domain is judged against, that a domain declaring an
+ * EMPTY one refuses everything, that a raced domain is the same
+ * 404 and that an omitted note is stored as NULL are
+ * `./verdict-service.test.ts`'s, taken over direct calls with no
+ * server: every domain here declares no vocabulary at all, so the
+ * four cases below read one ladder and add the status, the
+ * envelope and the wire text those rules reach a caller as.
  *
  * MUTATION GRID, taken by mutating one file one edit at a time and
  * reading the failed `fullName` SET off a `--reporter=json` run
- * rather than a count. TEN legs, each named by the EDIT it makes
- * rather than by its effect, since a leg described only by its
- * effect is one nobody can run again. Seven mutate `./routes.ts`
- * or `./service.ts`, one mutates the composed query schema and one
- * mutates `tests/helpers/memory-research-store.ts`, whose ordering
- * no mutation of the router could reach.
+ * rather than a count. EIGHTEEN legs, each named by the EDIT it
+ * makes rather than by its effect, since a leg described only by
+ * its effect is one nobody can run again. Eleven mutate
+ * `./routes.ts`, `./service.ts` or `./verdict-service.ts`, one
+ * mutates the composed query schema, one the ruling's own body
+ * schema, and one mutates `tests/helpers/memory-research-store.ts`,
+ * whose ordering no mutation of the router could reach.
  *
- * THE HANDOFF. Building the filter as a SPREAD of the parsed query
- * beside its window reddens 2, both recording cases, and nothing
- * else — no response in the file changes at all, which is the
- * whole reason that pair reads arguments rather than bodies.
- * Handing the tuple default in place of `query.sort` reddens 1,
- * the narrowing one. A fixed store window in place of
+ * EVERY LEG WAS RUN TWICE, once against this file as HEAD had it
+ * and once at the tip, and what is recorded is the SET diff rather
+ * than a figure held against the sentence the earlier revision
+ * wrote. Fifteen of the eighteen sets were identical on both
+ * sides; three moved, all by the same one case, and the ruling's
+ * own seven all read ZERO before its cases existed — which is the
+ * sharpest thing a case-adding task can report, a leg with a base
+ * count of 0 being the only kind that could not have been green
+ * some other way.
+ *
+ * THE HANDOFF, UNMOVED. Building the filter as a SPREAD of the
+ * parsed query beside its window reddens 2, both recording cases,
+ * and nothing else — no response in the file changes at all, which
+ * is the whole reason that pair reads arguments rather than
+ * bodies. Handing the tuple default in place of `query.sort`
+ * reddens 1, the narrowing one. A fixed store window in place of
  * `toStoreWindow(query)` reddens 2 and `total: page.rows.length`
  * in place of `total: page.total` reddens the SAME 2, the page and
  * the narrowing recording case, which are the only two reads here
  * that take a window narrower than their collection.
  *
- * THE SINGLE GET. `res.status(201)` reddens 3 — both of its cases
- * and the control inside the address case. Swapping `sightings`
- * and `labels` in the assembled detail reddens exactly 1, the
- * populated one, and only because those two lists are one and two
- * rows long; emptying the research list reddens 2, the second
- * being the empty-lists case, whose own control reads the
- * populated finding research back. Reversing the in-memory label
- * ordering reddens 2, and the second is worth naming: the
- * narrowing recording case filters on a verdict, and a verdict
- * filter reads the LATEST ruling, so an ordering answered
- * backwards moves which finding that page counts.
+ * THE SINGLE GET, AND THE THREE FIGURES THE RULING MOVED. All
+ * three moves are the same one case joining the set, and for one
+ * reason: the ruling's 200 reads its own row back through
+ * `GET /findings/:id`, which puts it inside the single get's blast
+ * radius. `res.status(201)` on the single get reddens 4, its own
+ * two cases, the control inside the address case and that
+ * read-back, where HEAD read 3. Swapping `sightings` and `labels`
+ * in the assembled detail reddens 2 against HEAD's 1, and only
+ * because those two lists are one and two rows long. Reversing the
+ * in-memory label ordering reddens 3 against HEAD's 2, and the
+ * other two are worth naming: the narrowing recording case filters
+ * on a verdict, and a verdict filter reads the LATEST ruling, so an
+ * ordering answered backwards moves which finding that page
+ * counts. Emptying the research list reddens 2 on BOTH sides, the
+ * second being the empty-lists case, whose own control reads the
+ * populated finding's research back.
  *
  * THE QUERY. Making `findingListQuerySchema` loose reddens 2, both
- * undeclared-parameter cases, and reaches nothing else.
+ * undeclared-parameter cases, and reaches nothing else, on both
+ * sides.
  *
- * AND ONE HONEST ZERO. Parsing the address BEFORE the query on the
- * list route reddens NOTHING here, because no request in this file
- * gets both wrong at once — the reading
- * `src/sources/failures-routes.test.ts` takes with an over-cap
- * window on a segment that is not an id. The ordering
- * `./routes.ts` argues for is therefore unpinned by this file, and
- * saying so is cheaper than a case that would have to name a
- * refusal about a slug to make the point.
+ * THE RULING, ALL SEVEN OF THEM ZERO AT HEAD. Answering a row
+ * REBUILT from the parsed body — insert, discard what it returned,
+ * return `{...input, id: 0, labelledAt: new Date(0)}` — reddens 1,
+ * the 200, and it is the leg the store comparison exists for: a
+ * member-by-member check would stay green through it, every member
+ * asserted having come from the request. `res.status(201)` on the
+ * PATCH reddens 4, every ruling case, since three of them carry a
+ * landing control. Refusing with an EMPTY accepted set reddens 1
+ * and appending the SUBMITTED verdict to the named set reddens the
+ * same 1 — two different faults landing on one case, which is what
+ * that case bundling the wording and the containment costs, and is
+ * worth knowing before either figure is read as coverage of the
+ * other. Changing the ruling's own 404 sentence reddens 1, which
+ * is what the cross-module comparison in that case is for, the two
+ * modules spelling it separately. Handing the segment on unparsed,
+ * so the body is refused before the address, reddens the same 1.
+ * And dropping `.strict()` from `verdictBodySchema` reddens 1, the
+ * undeclared-key case.
+ *
+ * AND TWO HONEST ZEROS, both measured rather than assumed. Parsing
+ * the address BEFORE the query on the LIST route reddens NOTHING,
+ * because no request in this file gets both wrong at once — the
+ * reading `src/sources/failures-routes.test.ts` takes with an
+ * over-cap window on a segment that is not an id. Moving the
+ * ruling's body parse BELOW its finding lookup reddens nothing
+ * either, for the mirror reason: no request here carries a
+ * malformed body to an id no finding holds. The router's own half
+ * of that rule IS pinned — a bad segment beside an undeclared body
+ * key is answered about the segment — so the two orderings are
+ * opposite halves rather than one claim, and only one of them has
+ * a reading here.
  */
 import type {
   FindingDetail,
@@ -201,6 +274,7 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { DEFAULT_VERDICT_VOCABULARY } from '../db/schema/values.js';
 
 import { buildFindingsRouter } from './routes.js';
 import {
@@ -319,6 +393,48 @@ const MISSING_VERDICT = 'zzsentinelverdictzz';
 const MISSING_CATEGORY = 'zzsentinelcategoryzz';
 
 /**
+ * The verdict a ruling that LANDS submits.
+ *
+ * A MEMBER OF {@link DEFAULT_VERDICT_VOCABULARY}, because the two
+ * domains here are inserted declaring no ladder of their own and
+ * are therefore judged against that constant. Written out rather
+ * than indexed off it, and held against it by the fixture guard:
+ * a verdict a reader assumes reads exactly like a route that has
+ * stopped accepting anything, since both answer `422`.
+ *
+ * NOT ONE OF THE TWO THE FIXTURE PLANTED either, which the same
+ * guard asserts — the appended row has to be distinguishable from
+ * the rulings already under the finding for the sequence a case
+ * reads afterwards to say which row is new.
+ */
+const RULED = 'interested';
+
+/** What an operator wrote beside it, where a case sends one. */
+const RULING_NOTE = 'ruled again';
+
+/**
+ * A key `verdictBodySchema` does not declare.
+ *
+ * Sentinel-shaped on {@link MISSING_VERDICT}'s terms, and in
+ * {@link SUBMITTED_SENTINELS} for the same reason: the refusal it
+ * produces names the CONTAINER rather than the key, so a count of
+ * it is what says the key itself never came back.
+ */
+const UNDECLARED_KEY = 'zzsentinelkeyzz';
+
+/** What that key is submitted with, on the same terms. */
+const UNDECLARED_KEY_VALUE = 'zzsentinelbodyvaluezz';
+
+/**
+ * A path segment that is not an id, and is not a number at all.
+ *
+ * `resourceIdParamSchema` COERCES, so what refuses this is the
+ * integer check reading a `NaN` rather than a pattern: the
+ * refusal is `invalid_type` and never a format code.
+ */
+const NOT_AN_ID = 'zzsentinelidzz';
+
+/**
  * A query parameter `findingListQuerySchema` does not declare.
  *
  * Read against that schema at runtime by the fixture guard rather
@@ -337,19 +453,29 @@ const UNDECLARED_PARAM = 'zzsortparamzz';
 const UNDECLARED_VALUE = 'zzsortvaluezz';
 
 /**
- * Every sentinel a request in this file submits.
+ * Every sentinel a request in this file submits, across all three
+ * routes.
  *
- * ONE ROSTER BEHIND THE CONTAINMENT CASE, so a needle added to a
- * request without being added here is the only way a channel goes
- * unread — and the planted control below is built from this same
- * list, which is what keeps the two halves of that case describing
- * one set.
+ * ONE ROSTER BEHIND EVERY CONTAINMENT READING, so a needle added
+ * to a request without being added here is the only way a channel
+ * goes unread — and every planted control below is built from this
+ * same list, which is what keeps the two halves of each of those
+ * readings describing one set.
+ *
+ * THREE OF THE NINE ARE THE RULING'S, and one is BOTH: the verdict
+ * no label carries is submitted as a `?verdict` by a GET and as
+ * the ruling itself by a PATCH, which is the sharpest needle here.
+ * The route whose subject is a string a caller chose is the one
+ * where an echo would be least surprising and most costly.
  */
 const SUBMITTED_SENTINELS: readonly string[] = [
   MISSING_CATEGORY,
   MISSING_SLUG,
   MISSING_SORT,
   MISSING_VERDICT,
+  NOT_AN_ID,
+  UNDECLARED_KEY,
+  UNDECLARED_KEY_VALUE,
   UNDECLARED_PARAM,
   UNDECLARED_VALUE,
 ];
@@ -534,6 +660,9 @@ const FINDINGS_TEMPLATE = '/domains/:slug/findings';
 
 /** The path TEMPLATE the single get registers. */
 const FINDING_TEMPLATE = '/findings/:id';
+
+/** The path TEMPLATE the ruling registers. */
+const VERDICT_TEMPLATE = '/findings/:id/verdict';
 
 /**
  * One answered finding, as the WIRE has it.
@@ -1033,6 +1162,47 @@ function findingPath(id: number | string): string {
 }
 
 /**
+ * The path one finding is RULED ON under.
+ *
+ * A THIRD TEMPLATE RATHER THAN THE SECOND ONE WITH A SUFFIX, so
+ * the string a case sends is the string the router declared: a
+ * path built by appending to {@link FINDING_TEMPLATE} would go on
+ * agreeing with itself if the router moved the ruling somewhere
+ * else entirely.
+ *
+ * @param id - The finding id, or whatever a case is sending in its
+ *   place.
+ * @returns The wire path, on {@link findingsPath}'s terms.
+ */
+function verdictPath(id: number | string): string {
+  return VERDICT_TEMPLATE.replace(':id', String(id));
+}
+
+/**
+ * The ruling in force on one finding, as the store has it.
+ *
+ * THROWS rather than answering undefined, on {@link rowFor}'s
+ * terms: what it returns is compared as a whole record, and an
+ * absent row would otherwise reach `toStrictEqual` as `undefined`
+ * and pass against any other absent one.
+ *
+ * @param rows - What `listFindingLabels` answered, newest first.
+ * @returns The head of that list.
+ * @throws Error - When the finding carries no ruling at all.
+ */
+function newestRuling(
+  rows: readonly FindingLabelRecord[],
+): FindingLabelRecord {
+  const [newest] = rows;
+
+  if (newest === undefined) {
+    throw new Error('the store holds no ruling on that finding');
+  }
+
+  return newest;
+}
+
+/**
  * A clock that moves one step on every reading.
  *
  * FIXED AND ADVANCING RATHER THAN THE WALL CLOCK, which is what
@@ -1215,6 +1385,76 @@ const BAD_SORT_BODY = {
 };
 
 /**
+ * The whole body a verdict outside the domain's ladder answers
+ * with.
+ *
+ * THE ACCEPTED SET IS RENDERED FROM THE CONSTANT rather than
+ * spelled again, so a member added to
+ * {@link DEFAULT_VERDICT_VOCABULARY} moves this expectation with
+ * it and a refusal naming a ladder that has drifted from the one
+ * in force is a red rather than a sentence two files agree on by
+ * hand. `JSON.stringify` because that is what the service used,
+ * which is also why a verdict carrying a comma would still read as
+ * one member.
+ *
+ * `verdict_outside_vocabulary` IS NOT A ZOD CODE. No schema raised
+ * it, because none could: the accepted set is not knowable until
+ * the finding has been read. A client branching on it learns that
+ * the DOMAIN refused the ruling rather than that the request was
+ * malformed, which is the one thing separating this 422 from the
+ * one beside it.
+ */
+const OUTSIDE_LADDER_BODY = {
+  code: 'VALIDATION_ERROR',
+  message: 'Validation failed',
+  details: [{
+    field: 'verdict',
+    message: 'Not a verdict this domain accepts. Its ladder: '
+      + JSON.stringify(DEFAULT_VERDICT_VOCABULARY),
+    code: 'verdict_outside_vocabulary',
+  }],
+};
+
+/**
+ * The whole body a ruling carrying an undeclared key answers with.
+ *
+ * ONE detail naming `body` rather than the key, and `body` rather
+ * than `query` because `parseBody` is what the service called: the
+ * two parsers differ ONLY in the name a root-level issue takes, so
+ * this constant is also the reading that the ruling reached for
+ * the right one. Nothing the request submitted is in this envelope
+ * at all, which is the claim its case makes by asserting the whole
+ * of it.
+ */
+const UNDECLARED_RULING_BODY = {
+  code: 'VALIDATION_ERROR',
+  message: 'Validation failed',
+  details: [{
+    field: 'body',
+    message: 'Carries a key this endpoint does not declare.',
+    code: 'unrecognized_keys',
+  }],
+};
+
+/**
+ * The whole body a segment that is not an id answers with.
+ *
+ * `invalid_type` rather than a format code, because
+ * `resourceIdParamSchema` COERCES: `Number(NOT_AN_ID)` is `NaN`,
+ * which fails the integer check as a type fault and never reaches
+ * the positivity one.
+ */
+const NOT_AN_ID_BODY = {
+  code: 'VALIDATION_ERROR',
+  message: 'Validation failed',
+  details: [{
+    field: 'id',
+    message: 'Missing, or not of the expected type.',
+    code: 'invalid_type',
+  }],
+};
+
+/**
  * @param needle - One sentinel.
  * @returns Whether another sentinel contains it, which would make
  *   a count of one indistinguishable from a count of its
@@ -1279,6 +1519,24 @@ describe('the fixture every case below is read through', () => {
     expect([...new Set(EMBEDDED_LENGTHS)]).toHaveLength(
       EMBEDDED_LENGTHS.length,
     );
+    // THE LADDER THE RULING CASES ARE READ AGAINST. Both domains
+    // are inserted declaring no vocabulary, so every ruling below
+    // is judged against the fallback — and a verdict a reader
+    // assumes is a member of it reads exactly like a route that
+    // has stopped accepting anything, both answering `422`.
+    expect(DEFAULT_VERDICT_VOCABULARY).toContain(RULED);
+    expect(DEFAULT_VERDICT_VOCABULARY).not.toContain(MISSING_VERDICT);
+    // And the verdict a landing ruling submits is neither of the
+    // two the fixture planted, which is what lets the sequence a
+    // case reads afterwards say which row is the new one. The
+    // planted pair are outside the ladder too, so neither could
+    // have arrived through this route.
+    expect(RULINGS_NEWEST_FIRST).not.toContain(RULED);
+    expect(
+      RULINGS_NEWEST_FIRST.filter(
+        (verdict) => DEFAULT_VERDICT_VOCABULARY.includes(verdict),
+      ),
+    ).toStrictEqual([]);
     // And the rows really are there, which the counts above cannot
     // say: a fixture whose plant seam had stopped planting would
     // satisfy every premise in this case.
@@ -1344,8 +1602,19 @@ describe('the shapes every answer below is held to', () => {
     // plausible refusal.
     expect(FINDINGS_TEMPLATE).toContain(':slug');
     expect(FINDING_TEMPLATE).toContain(':id');
+    expect(VERDICT_TEMPLATE).toContain(':id');
     expect(findingsPath(RADAR)).not.toContain(':');
     expect(findingPath(MISSING_ID)).not.toContain(':');
+    expect(verdictPath(MISSING_ID)).not.toContain(':');
+    // And the three are three DIFFERENT strings, which is what the
+    // ruling's own template is for: a path built by appending to
+    // the single get's would go on agreeing with itself if the
+    // router moved the ruling somewhere else entirely.
+    expect(new Set([
+      FINDINGS_TEMPLATE,
+      FINDING_TEMPLATE,
+      VERDICT_TEMPLATE,
+    ]).size).toBe(3);
   });
 });
 
@@ -1811,5 +2080,244 @@ describe('a query parameter this route does not declare', () => {
     for (const text of answered) {
       expect(text.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The ruling: what it stores, and what the response is a reading of
+// ---------------------------------------------------------------------------
+
+describe('a ruling that lands', () => {
+  it('answers 200 with the row the append stored', async () => {
+    const { store } = await plantFindings();
+    const app = buildFindingsApp(store);
+
+    const answer = await request(app)
+      .patch(verdictPath(JUDGED_ID))
+      .send({ verdict: RULED, note: RULING_NOTE });
+    const stored = await store.listFindingLabels(JUDGED_ID);
+    // The sequence as the route's own read-back path carries it,
+    // which is where `./routes.ts` says a caller sees the ruling
+    // again: there is no `/findings/:id/verdict/:labelId` for a
+    // `Location` to name, so the single get is the whole of it.
+    const detail = await request(app).get(findingPath(JUDGED_ID));
+    const labels = detail.body.data.labels as readonly WireLabel[];
+
+    // `200` and not `201`, because the appended row is not a
+    // resource this surface addresses.
+    expect(answer.status).toBe(200);
+    // TWO members and not three: a ruling applies no window, so
+    // there is no `meta` to describe one. This is `ok()`'s
+    // envelope rather than `okPage()`'s.
+    expect(keysOf(answer.body)).toStrictEqual(RESOURCE_KEY_SET);
+    expect(keysOf(answer.body.data)).toStrictEqual(LABEL_KEY_SET);
+    // THE ANSWER IS HELD AGAINST THE STORE'S OWN READ rather than
+    // member by member, and that is the whole reading: `id` and
+    // `labelledAt` are the two members no request carried, so a
+    // response rebuilt around the parsed body would satisfy any
+    // comparison whose every member came from the body. This one
+    // cannot — it is the row as the write left it.
+    const newest = newestRuling(stored);
+
+    expect(answer.body.data).toStrictEqual({
+      ...newest,
+      labelledAt: newest.labelledAt.toISOString(),
+    });
+    // What the request DID carry is in it too, so the pair says
+    // the row is the ruling that was asked for rather than some
+    // other row the store happened to hold.
+    expect(newest.verdict).toBe(RULED);
+    expect(newest.note).toBe(RULING_NOTE);
+    expect(newest.findingId).toBe(JUDGED_ID);
+    // AND IT APPENDED. The two the fixture wrote are still
+    // readable beneath it, in the order they were written, so this
+    // is a third row rather than the second one rewritten — which
+    // an assertion over the newest row alone could not say.
+    expect(stored).toHaveLength(PLANTED_RULINGS.length + 1);
+    expect(stored.map((row) => row.verdict))
+      .toStrictEqual([RULED, ...RULINGS_NEWEST_FIRST]);
+    // And the same sequence reaches the wire through the single
+    // get, newest first, which is the read a client makes of it.
+    expect(detail.status).toBe(200);
+    expect(labels.map((row) => row.verdict))
+      .toStrictEqual([RULED, ...RULINGS_NEWEST_FIRST]);
+    expect(labels.map((row) => row.id)).toStrictEqual(
+      stored.map((row) => row.id),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The ruling: a verdict the owning domain does not accept
+// ---------------------------------------------------------------------------
+
+describe('a verdict outside the owning domain ladder', () => {
+  it('answers 422 naming the set and not the string', async () => {
+    const { store } = await plantFindings();
+    const app = buildFindingsApp(store);
+    const verdict = verdictPath(JUDGED_ID);
+
+    const refused = await request(app)
+      .patch(verdict)
+      .send({ verdict: MISSING_VERDICT });
+    const afterRefusal = await store.listFindingLabels(JUDGED_ID);
+    // The control, along the axis under test and through the SAME
+    // operation: a route refusing every ruling satisfies the
+    // assertion above on its own, and exactly one member of the
+    // body differs between the two requests.
+    const accepted = await request(app)
+      .patch(verdict)
+      .send({ verdict: RULED });
+    const afterRuling = await store.listFindingLabels(JUDGED_ID);
+
+    expect(refused.status).toBe(422);
+    expect(refused.body).toStrictEqual(OUTSIDE_LADDER_BODY);
+    expect(accepted.status).toBe(200);
+    // THE ACCEPTED SET IS IN THE BODY, member by member, read off
+    // the constant the domain falls back to rather than off the
+    // sentence the refusal composed. The whole-body assertion
+    // above pins the wording; this pins that a caller is told what
+    // it MAY say, which is the reason the refusal names a set at
+    // all.
+    const text = JSON.stringify(refused.body);
+
+    expect(DEFAULT_VERDICT_VOCABULARY.filter(
+      (member) => countOccurrences(text, member) === 0,
+    )).toStrictEqual([]);
+    expect(DEFAULT_VERDICT_VOCABULARY.length).toBeGreaterThan(0);
+    // AND THE SUBMITTED STRING IS IN NO PART OF IT. Counted rather
+    // than asserted absent, and read against a planted envelope
+    // carrying it, counted by the same function in the same case —
+    // so the zero is a reading rather than a search that could
+    // only ever answer nothing.
+    const planted = JSON.stringify({
+      code: 'VALIDATION_ERROR',
+      message: 'Validation failed',
+      details: [{
+        field: 'verdict',
+        message: `refused ${MISSING_VERDICT}`,
+        code: 'verdict_outside_vocabulary',
+      }],
+    });
+
+    expect(countOccurrences(text, MISSING_VERDICT)).toBe(0);
+    expect(countOccurrences(planted, MISSING_VERDICT)).toBe(1);
+    // The refusal is raised BEFORE the insert, so a ruling that is
+    // turned away leaves the table as it found it — and the
+    // control that landed is what says the table was writable
+    // through this path all along.
+    expect(afterRefusal).toHaveLength(PLANTED_RULINGS.length);
+    expect(afterRuling).toHaveLength(PLANTED_RULINGS.length + 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The ruling: an id naming no finding, and a segment that is not one
+// ---------------------------------------------------------------------------
+
+describe('a ruling on an id naming no finding', () => {
+  it('answers 404 carrying no detail at all', async () => {
+    const { store } = await plantFindings();
+    const app = buildFindingsApp(store);
+
+    const missing = await request(app)
+      .patch(verdictPath(MISSING_ID))
+      .send({ verdict: RULED });
+    // The control, along the axis under test and through the SAME
+    // operation: a route answering 404 to every ruling satisfies
+    // the assertion above on its own.
+    const found = await request(app)
+      .patch(verdictPath(JUDGED_ID))
+      .send({ verdict: RULED });
+    // And the ADDRESS is read before the payload, which is this
+    // router's own ordering and the one reading no direct call to
+    // the service can take: a segment that is not an id carrying a
+    // body that is not a ruling either is answered about the
+    // SEGMENT. The list route's own ordering stays unpinned here,
+    // for the reason this file's header records.
+    const badSegment = await request(app)
+      .patch(verdictPath(NOT_AN_ID))
+      .send({ [UNDECLARED_KEY]: UNDECLARED_KEY_VALUE });
+    const stored = await store.listFindingLabels(JUDGED_ID);
+
+    expect(missing.status).toBe(404);
+    // The whole body, so the 404 is read as carrying `code` and a
+    // sentence and NOTHING else — no `details` rides along, which
+    // is what separates this refusal from the two 422s beside it.
+    expect(missing.body).toStrictEqual(NO_SUCH_FINDING_BODY);
+    expect(found.status).toBe(200);
+    expect(found.body.data.verdict).toBe(RULED);
+    expect(badSegment.status).toBe(422);
+    expect(badSegment.body).toStrictEqual(NOT_AN_ID_BODY);
+    // The ruling and the single get answer the same sentence about
+    // the same id, and the two modules spell it separately: the
+    // pair is what says they still agree, which neither file could
+    // claim for itself.
+    const read = await request(app).get(findingPath(MISSING_ID));
+
+    expect(read.body).toStrictEqual(missing.body);
+    // Only the control wrote, so neither refusal reached the
+    // insert — and the id the 404s named still carries nothing.
+    expect(stored).toHaveLength(PLANTED_RULINGS.length + 1);
+    expect(await store.listFindingLabels(MISSING_ID))
+      .toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The ruling: a body key this route does not declare
+// ---------------------------------------------------------------------------
+
+describe('a ruling body carrying an undeclared key', () => {
+  it('answers 422 naming the body rather than the key', async () => {
+    const { store } = await plantFindings();
+    const app = buildFindingsApp(store);
+    const verdict = verdictPath(JUDGED_ID);
+
+    const undeclared = await request(app)
+      .patch(verdict)
+      .send({
+        verdict: RULED,
+        [UNDECLARED_KEY]: UNDECLARED_KEY_VALUE,
+      });
+    const afterRefusal = await store.listFindingLabels(JUDGED_ID);
+    // The control is the identical request with that key removed,
+    // so the pair says the refusal is about the KEY rather than
+    // about a route refusing every body it is handed — and the
+    // verdict is legal on its own, which is what makes the
+    // difference between the two requests the one member.
+    const declared = await request(app)
+      .patch(verdict)
+      .send({ verdict: RULED });
+    const afterRuling = await store.listFindingLabels(JUDGED_ID);
+
+    expect(undeclared.status).toBe(422);
+    expect(undeclared.body).toStrictEqual(UNDECLARED_RULING_BODY);
+    expect(declared.status).toBe(200);
+    expect(declared.body.data.verdict).toBe(RULED);
+    // NEITHER THE KEY NOR ITS VALUE COMES BACK, which is what the
+    // detail naming the container is for: the key is something the
+    // REQUEST said. Counted rather than asserted absent, against a
+    // planted envelope carrying both, counted by the same function
+    // in the same case.
+    const text = JSON.stringify(undeclared.body);
+    const planted = JSON.stringify({
+      code: 'VALIDATION_ERROR',
+      message: `Unrecognized key: "${UNDECLARED_KEY}"`,
+      details: [{ field: UNDECLARED_KEY_VALUE }],
+    });
+
+    expect([
+      countOccurrences(text, UNDECLARED_KEY),
+      countOccurrences(text, UNDECLARED_KEY_VALUE),
+    ]).toStrictEqual([0, 0]);
+    expect([
+      countOccurrences(planted, UNDECLARED_KEY),
+      countOccurrences(planted, UNDECLARED_KEY_VALUE),
+    ]).toStrictEqual([1, 1]);
+    // And this refusal reached no insert either, on the terms the
+    // vocabulary one is read on.
+    expect(afterRefusal).toHaveLength(PLANTED_RULINGS.length);
+    expect(afterRuling).toHaveLength(PLANTED_RULINGS.length + 1);
   });
 });
