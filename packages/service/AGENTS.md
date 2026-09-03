@@ -66,6 +66,95 @@ Two rules bind every phase of that port:
   package's scanned source — `tests/invariants/naming.test.ts` fails
   naming the file and line of every hit.
 
+### Authoring and verifying a workflow source
+
+A canvas is a JSON file nothing lints for shape, nothing type-checks and
+no suite opens except by node TYPE, so most of what follows is convention
+held by nothing. Read it before adding a node.
+
+- **The roster law.** An id joins `DELIVERED_WORKFLOW_IDS` in
+  `tests/invariants/workflows.test.ts` in the SAME commit as the source it
+  names — two cases derive from that constant and both red the moment
+  `pretest` rebuilds `workflows/dist/`, so a roster edit scheduled as a
+  later task runs the whole stage red. A landing commit is exactly four
+  files: the source, the two roster rows (`workflows/src/README.md` and
+  `docs/architecture/03-workflows.md`), and that constant.
+- **Write a NEW file from python**, `json.dumps(envelope, indent=2,
+  ensure_ascii=True) + a newline`, which is what `scripts/scaffold.ts`
+  does and for the same reason: a Code-node body is a JS program inside a
+  JSON string and one missed escape is a source no build can parse. Every
+  tracked source is 100% ASCII where `docs/*.md` carries raw em dashes —
+  opposite conventions, so a builder copying doc style lands non-ASCII in
+  a canvas. `indent=2` is required rather than tidy: the package lint
+  script reads `workflows/` and `jsonc/indent` applies.
+- **EDITING one is a different rule, and which rule is measurable.**
+  Assert `json.dumps(json.loads(raw), indent=2, ensure_ascii=True) +
+  newline == raw` BEFORE editing. True (the fully-expanded sources) means
+  load-modify-dump reproduces the tracked bytes and a node may be built as
+  a dict; false (the sources keeping short arrays inline) means a raw-text
+  `str.replace` with `raw.count(old) == 1` asserted is the only safe edit,
+  since a round trip is a 275-line reformat burying a three-node change.
+- **Three comment widths in one file**, none of them the 78 the rest of
+  the package uses: a Postgres node's SQL comments wrap at <= 86, a Code
+  node's JS comments at <= 72 and its code at <= 78. A sticky's `content`
+  is unwrapped prose, so a `str.replace` there has no wrap hazard at all.
+- **The canvas grid, which no gate reads.** Pipeline nodes run along y=0
+  spaced 220 apart in x from the trigger at [0,0]; a model endpoint hangs
+  at [x, 220] off its own chain node. Every node carrying a sticky sits at
+  a multiple of 440, and a sticky's x is exactly that node's x minus 20 —
+  the 440 band is a consequence of 400-wide notes over every other node,
+  not the rule. Stickies are 400 wide on the y=-760 band and go LAST in
+  the `nodes` array; the trigger's sits alone at [-460,-160]. Height is
+  `len(content)` over that STICKY's own ratio (1.3 to 2.6 measured, not
+  uniform within a file) rounded to 20, with 1300 the ceiling in the tree.
+- **A model group is SIX nodes and the invariants read four.** An
+  `@n8n/n8n-nodes-langchain.lm*` node is a SUB-node: it carries the
+  credential and connects by `ai_languageModel` to a `chainLlm` root on
+  the main path, so an `lm` node alone leaves the pipeline broken. The
+  endpoint and model name arrive as DATA from a `Select Model Connector`
+  Postgres node, because a Code node opens no connection and a spliced
+  library imports nothing.
+- **Drive a Code node offline before any suite exists.** A /tmp `.ts`
+  under `bun run` importing `tests/workflows/code-node.js` by ABSOLUTE
+  path gives `codeNodes('<id>.json').run(node, { input, nodes })` over
+  `workflows/dist/`, `nodes` keyed by canvas name. It collects
+  `n8n-nodes-base.code` ALONE, so a decision made in a Postgres node's SQL
+  or its `queryReplacement` is invisible to that whole harness — check
+  every refusal shape a plan names against `codeNodes('<id>.json').names`
+  before writing the file, and say in the header where the other half is
+  held.
+- **Drive a node's SQL live against `ar_live`.** The credential is spelled
+  once, in `test:live`'s own script definition, so the invocation is
+  `docker exec -i service-postgres-live-1 psql -U ar -d ar_live -f -`
+  (`-U postgres` fails: no such role). `PREPARE q AS <query>;` alone
+  proves it compiles against the real schema and settles the constructs a
+  reader doubts. Behaviour goes in one `BEGIN; ... ROLLBACK;` script
+  driving `EXECUTE`, in ONE session — a second `docker exec` answers
+  `prepared statement "q" does not exist`. A statement you expect to be
+  REFUSED needs `SAVEPOINT`/`ROLLBACK TO SAVEPOINT` around it (a CHECK
+  violation aborts the transaction, so the after-state a nothing-was-
+  written case reads is otherwise unreadable) and `\set ON_ERROR_STOP
+  off`/`on`, or the probe stops at the refusal it was written to observe.
+  Roll back to the savepoint only when the statement actually threw.
+- **Get a live fixture's shape from the database, not from schema files.**
+  `information_schema.columns` filtered to `is_nullable='NO' and
+  column_default is null` names every column an INSERT must supply, and
+  `pg_get_constraintdef` over `pg_constraint` names the value vocabularies
+  a CHECK enforces — neither is guessable from a column name, and a
+  violation aborts the transaction so every later `\gset` then fails with
+  a syntax error at `:`, which reads as a psql quoting problem.
+- **A mutation leg over a built artifact goes in `workflows/dist/` and is
+  run with `bun x vitest run <file>` DIRECTLY**, never through the package
+  script, whose `pretest` rebuilds the plant away; `bun run
+  build:workflows` restores byte-for-byte. A LIVE file that rebuilds dist
+  in its own `beforeAll` inverts this — the plant goes in
+  `workflows/src/` and the restore is a `cp` from a /tmp hold.
+- **Know what the invariants do NOT read.** Every per-node case keys on a
+  node TYPE, so deleting a closing Postgres node wholesale left all 11
+  invariant files passing. A Postgres node's whole verification is the
+  psql harness plus an offline drive of its `queryReplacement`; a task
+  should say so rather than leaning on a suite that never opened it.
+
 ## Conventions
 
 - **Env**: all configuration through `src/config.ts` — zod-validated at
@@ -916,7 +1005,7 @@ suite; in `lib/express/builtin-routes.test.ts`, `GET /health`'s
 which is transport-level rather than an assertion at all.
 
 Distinct from those four, and reaching `src/**` and the vendored `lib/`
-half alike, is the macOS supertest PORT-STEAL flake. It has EIGHT measured
+half alike, is the macOS supertest PORT-STEAL flake. It has NINE measured
 presentations, so a triage keyed on any one of them sees nothing: `socket
 hang up`; a wrong STATUS (404 for an expected 200, 401 for an expected
 204); `Error: Parse Error: Expected HTTP/`; `AssertionError: Target cannot
@@ -925,7 +1014,26 @@ MATCHING status beside an EMPTY body; an empty CONTENT-TYPE header
 (`expected '' to be 'application/json'`); a plain `expected false to be
 true` from a boolean envelope check; and — worst-shaped — a `socket hang
 up` inside `beforeAll`, which fails the whole FILE so a mutation-grid
-runner reading the JSON reporter scores that leg N-of-N.
+runner reading the JSON reporter scores that leg N-of-N. The ninth is the
+one likeliest to be filed as a real defect: a plain vitest `Test timed out
+in 5000ms` naming a case and a line number, with no HTTP status and no
+socket error anywhere in the capture.
+
+Two clauses a reader infers from the above are FALSE at fan-out scale, and
+both were measured. "Exactly one failing case" is no part of the signature
+— one `bun run test:all` failed THREE cases over THREE files with THREE
+different error shapes at once, and a red whose own shapes disagree is MORE
+flake-like rather than less. And a package-scope green is not the
+discriminator either: `bun run test` from `packages/service` has been seen
+red over its own disjoint sets in the same sitting. What holds is the
+failing file SET moving between runs, `git log $(git merge-base main
+HEAD)..HEAD -- <path>` answering empty beside a control path the branch DID
+author answering non-zero, and every failing file green when run alone.
+Budget three to four fan-out runs for a green rather than reading the first
+red as attribution — measured RED, RED, RED, GREEN in one sitting at one
+clean tree. Give the run-alone leg the ` RUN  v<version>` banner equality:
+it is a hand-invoked `bun x vitest` against a package-script fan-out, and
+`bun x` resolves a different vitest per working directory.
 
 `tests/helpers/loopback-bind.ts` does NOT exist on this HEAD, so the
 mitigation is genuinely unreachable rather than merely unverified: `ls
