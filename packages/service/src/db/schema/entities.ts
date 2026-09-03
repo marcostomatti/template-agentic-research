@@ -100,6 +100,19 @@ export const entities = pgTable('entities', {
    * answers it here has to be a single definition for the same
    * reason.
    *
+   * `normalizeEntityName` in `src/lib/entity-name-norm.ts` is that
+   * definition, and it is a library rather than a stored function
+   * because the writers are not all in the database: a route
+   * recomputes this key on a rename and a workflow Code node keys a
+   * subject it has just extracted, and only one of those can call
+   * SQL. It lives under `src/lib/` so both reach the same code —
+   * that directory is what the workflow build splices into a node
+   * body — and it THROWS on a name reducing to nothing rather than
+   * answering the value the paragraph below forbids. Adding a
+   * writer means calling it; deriving the key beside it is the
+   * silent miss this column is about, and no CHECK here can report
+   * one.
+   *
    * The empty string is the one value that must never be stored. A
    * blank key collapses every subject a writer could not name onto a
    * single row per domain — one entity accumulating the research,
