@@ -16,12 +16,14 @@ import {
   CONNECTOR_STATUS_FACETS,
   EXPORT_FORMATS,
   NO_CADENCE_LABEL,
+  applyEnabledDeliveries,
   cadenceLabel,
   configEntries,
   configValueLabel,
   connectorCountLabel,
   connectorStatusFacet,
-  exportCountLabel,
+  deliveryToggleId,
+  enabledDeliveryIds,
   formatFacet,
   kindFacet,
   unsubscribedFormats,
@@ -68,16 +70,23 @@ const SURFACE_FORMAT_ORDER: readonly ExportFormat[] = [
  * a test that reads its values back cannot say which of them it is
  * actually about.
  *
+ * The id defaults rather than being required because most cases here
+ * read the format alone. The toggle cases pass it: an option is keyed
+ * on the subscription id, so two rows left sharing one would be one
+ * control and the claim would be about nothing.
+ *
  * @param format - The format the row renders.
  * @param enabled - Whether the row takes part in scheduling.
+ * @param id - The `export_subscriptions.id` the row carries.
  * @returns A summary, with a destination attached.
  */
 function summary(
   format: ExportFormat,
   enabled: boolean,
+  id = 1,
 ): ExportSubscriptionSummary {
   const subscription: ExportSubscription = {
-    id: 1,
+    id,
     domainId: 1,
     format,
     connectorId: 2,
@@ -562,32 +571,244 @@ describe('unsubscribedLabel', () => {
   });
 });
 
-describe('exportCountLabel', () => {
-  it('counts the running deliveries out of the configured ones', () => {
+describe('deliveryToggleId', () => {
+  it('names a delivery by the row it is', () => {
+    // Arrange
+    const { subscription } = summary('rss', true, 7);
+
+    // Act / Assert
+    expect(deliveryToggleId(subscription)).toBe('7');
+  });
+
+  it('tells two rows of one format apart', () => {
+    // The reason an option is not keyed on the format: the seeded
+    // domain writes RSS to two destinations, and a control that
+    // folded them together would switch off a delivery nobody
+    // touched. Asserted over the SHIPPED rows rather than over
+    // constructed ones, so the day the fixture stops carrying the
+    // collision this case says so.
+    // Arrange
+    const rss = EXPORT_SUBSCRIPTIONS.filter(
+      (subscription) => subscription.format === 'rss',
+    );
+
+    // Act
+    const ids = rss.map(deliveryToggleId);
+
+    // Assert
+    expect(rss.length).toBeGreaterThan(1);
+    expect(repeated(ids)).toEqual([]);
+  });
+
+  it('gives every fixture delivery an id of its own', () => {
+    // The whole-collection form of the claim above: the write behind
+    // the list replaces every row, so one duplicate id would flip a
+    // delivery the operator never saw.
+    // Arrange / Act
+    const ids = EXPORT_SUBSCRIPTIONS.map(deliveryToggleId);
+
+    // Assert
+    expect(ids).toHaveLength(EXPORT_SUBSCRIPTIONS.length);
+    expect(repeated(ids)).toEqual([]);
+    expect(ids.filter((id) => id.trim() === '')).toEqual([]);
+  });
+});
+
+describe('enabledDeliveryIds', () => {
+  it('answers the running deliveries and leaves the paused out', () => {
     // Arrange
     const summaries = [
-      summary('rss', true),
-      summary('pdf', true),
-      summary('email_draft', false),
+      summary('rss', true, 1),
+      summary('pdf', false, 2),
+      summary('email_draft', true, 3),
     ];
 
     // Act / Assert
-    expect(exportCountLabel(summaries)).toBe('2 of 3 active');
+    expect(enabledDeliveryIds(summaries)).toEqual(['1', '3']);
   });
 
-  it('reads a domain whose every delivery is paused', () => {
-    // The figure the section header carries in place of the toggle
-    // list's own indicator — zero of something is a reading, not an
-    // empty state.
+  it('answers nothing for a domain whose every delivery is paused', () => {
     // Arrange
-    const summaries = [summary('rss', false)];
+    const summaries = [summary('rss', false, 1), summary('pdf', false, 2)];
 
     // Act / Assert
-    expect(exportCountLabel(summaries)).toBe('0 of 1 active');
+    expect(enabledDeliveryIds(summaries)).toEqual([]);
   });
 
-  it('reads a domain with no deliveries at all', () => {
+  it('answers nothing for a domain with no deliveries at all', () => {
     // Arrange / Act / Assert
-    expect(exportCountLabel([])).toBe('0 of 0 active');
+    expect(enabledDeliveryIds([])).toEqual([]);
+  });
+
+  it('reads the seeded domain as one paused row out of five', () => {
+    // The fixture partition the control has to have a subject for: a
+    // list drawn entirely on or entirely off would let a binding that
+    // ignored the flag pass. Both sides asserted non-empty, so the
+    // day the seed changes this case reports it rather than going
+    // quietly vacuous.
+    // Arrange
+    const summaries = EXPORT_SUBSCRIPTIONS.map(
+      (subscription) => summary(
+        subscription.format,
+        subscription.enabled,
+        subscription.id,
+      ),
+    );
+
+    // Act
+    const on = enabledDeliveryIds(summaries);
+
+    // Assert
+    expect(on).toEqual(['1', '2', '3', '4']);
+    expect(on.length).toBeLessThan(EXPORT_SUBSCRIPTIONS.length);
+    expect(on.length).toBeGreaterThan(0);
+  });
+
+  it('is owned by nobody', () => {
+    // Built fresh per call, which is what the two array-ownership
+    // stances come down to for a reading a component binds straight
+    // into a mutable prop.
+    // Arrange
+    const summaries = [summary('rss', true, 1)];
+
+    // Act
+    const first = enabledDeliveryIds(summaries) as string[];
+
+    first.push('planted');
+
+    // Assert
+    expect(enabledDeliveryIds(summaries)).toEqual(['1']);
+  });
+});
+
+describe('applyEnabledDeliveries', () => {
+  it('switches on the ids the set carries', () => {
+    // Arrange
+    const summaries = [summary('rss', false, 1), summary('pdf', false, 2)];
+
+    // Act
+    const next = applyEnabledDeliveries(summaries, ['2']);
+
+    // Assert
+    expect(next.map((row) => [row.id, row.enabled])).toEqual([
+      [1, false],
+      [2, true],
+    ]);
+  });
+
+  it('switches off every id the set leaves out', () => {
+    // The other direction through the same function: the control
+    // hands back what is ON, so absence is the whole of what OFF
+    // means and a pair of functions could disagree about it.
+    // Arrange
+    const summaries = [summary('rss', true, 1), summary('pdf', true, 2)];
+
+    // Act
+    const next = applyEnabledDeliveries(summaries, ['1']);
+
+    // Assert
+    expect(next.map((row) => [row.id, row.enabled])).toEqual([
+      [1, true],
+      [2, false],
+    ]);
+  });
+
+  it('answers every subscription, not the one that moved', () => {
+    // `saveExportSubscriptions` is a PUT of the collection, so a
+    // payload naming one row would read as a domain that had
+    // unsubscribed from the rest.
+    // Arrange
+    const summaries = EXPORT_SUBSCRIPTIONS.map(
+      (subscription) => summary(
+        subscription.format,
+        subscription.enabled,
+        subscription.id,
+      ),
+    );
+
+    // Act
+    const next = applyEnabledDeliveries(summaries, ['1']);
+
+    // Assert
+    expect(next).toHaveLength(EXPORT_SUBSCRIPTIONS.length);
+    expect(next.map((row) => row.id))
+      .toEqual(EXPORT_SUBSCRIPTIONS.map((row) => row.id));
+  });
+
+  it('leaves every other member of a row where it was', () => {
+    // Disabling is not cancelling: the cadence, the due time and the
+    // destination survive the flip, and a mover that cleared any of
+    // them would destroy what the operator meant to keep.
+    // Arrange
+    const [before] = [summary('rss', true, 3)];
+    const summaries = [before];
+
+    // Act
+    const [after] = applyEnabledDeliveries(summaries, []);
+
+    // Assert
+    expect(after).toEqual({ ...before.subscription, enabled: false });
+  });
+
+  it('rebuilds every row rather than handing the stored one back', () => {
+    // The fixture rows are frozen and shared: a payload carrying one
+    // of them would let a later reader see an edit nobody saved.
+    // Identity is the only reading that separates the two, so `toBe`
+    // is deliberate here where `toEqual` would pass either way.
+    // Arrange
+    const summaries = [summary('rss', true, 1)];
+    const [stored] = summaries;
+
+    // Act
+    const [next] = applyEnabledDeliveries(summaries, ['1']);
+
+    // Assert
+    expect(next).not.toBe(stored?.subscription);
+    expect(next).toEqual(stored?.subscription);
+  });
+
+  it('ignores an id no delivery carries', () => {
+    // Unreachable from the control, which builds its set out of the
+    // very options it was handed, and cheap to be total about: a
+    // stray id must not resurrect a row or add one.
+    // Arrange
+    const summaries = [summary('rss', false, 1)];
+
+    // Act
+    const next = applyEnabledDeliveries(summaries, ['404']);
+
+    // Assert
+    expect(next).toHaveLength(1);
+    expect(next.map((row) => row.enabled)).toEqual([false]);
+  });
+
+  it('answers nothing for a domain with no deliveries at all', () => {
+    // Arrange / Act / Assert
+    expect(applyEnabledDeliveries([], ['1'])).toEqual([]);
+  });
+
+  it('round-trips the reading the list draws', () => {
+    // The two functions are one claim: what `enabledDeliveryIds`
+    // answers, handed straight back, must leave every flag where it
+    // was. Without this the pair is free to drift into two spellings
+    // of an id.
+    // Arrange
+    const summaries = EXPORT_SUBSCRIPTIONS.map(
+      (subscription) => summary(
+        subscription.format,
+        subscription.enabled,
+        subscription.id,
+      ),
+    );
+
+    // Act
+    const next = applyEnabledDeliveries(
+      summaries,
+      enabledDeliveryIds(summaries),
+    );
+
+    // Assert
+    expect(next.map((row) => row.enabled))
+      .toEqual(EXPORT_SUBSCRIPTIONS.map((row) => row.enabled));
   });
 });

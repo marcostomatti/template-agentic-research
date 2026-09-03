@@ -59,7 +59,7 @@
  *
  * Inventing a fixture column instead would have been the quiet
  * mistake: it would read as a schema decision already taken, and the
- * q15 swap would meet an endpoint with nothing to answer it. What this
+ * API swap would meet an endpoint with nothing to answer it. What this
  * shape says instead is that the decision is still open — a
  * `categories.enabled` column, or a suspension list under the domain's
  * settings — and that the shell is ready for either.
@@ -68,11 +68,17 @@
 import type { PolaritySplit } from '../../data/lexicon';
 import type { TermPolarity } from '../../data/types';
 
-/** How one polarity is labelled and drawn on a card. */
+/**
+ * How one polarity is labelled and drawn on this surface.
+ *
+ * Named for the card because that is where it started, and read by
+ * the editor too: `./terms.ts` extends it into a bucket, so a
+ * polarity is called and coloured the same thing in both places.
+ */
 export interface PolarityFacet {
   /** Which polarity this reads. */
   readonly polarity: TermPolarity;
-  /** What the figure is called, in the card's own words. */
+  /** What the figure is called, in the surface's own words. */
   readonly label: string;
   /**
    * The Tailwind background utility the dot and the bar segment share.
@@ -107,7 +113,7 @@ const POLARITY_FACET_BODIES: Readonly<
 };
 
 /**
- * The order a card lists the three readings in.
+ * The order this surface lists the three readings in.
  *
  * Private, and the only reason it exists is that a record has no order
  * — see the header on what the order means.
@@ -119,11 +125,13 @@ const POLARITY_ORDER: readonly TermPolarity[] = [
 ];
 
 /**
- * The three readings a card draws, in card order.
+ * The three readings the surface draws, in its own order.
  *
- * What the component maps over: one dot, one label and one bar segment
+ * What the card maps over: one dot, one label and one bar segment
  * per member, with the count read off the split by
- * {@link PolarityFacet.polarity}.
+ * {@link PolarityFacet.polarity}. `./terms.ts` maps over the same
+ * list for the editor's three buckets, so the order is declared here
+ * once rather than in each surface that draws it.
  */
 export const POLARITY_FACETS: readonly PolarityFacet[] = POLARITY_ORDER
   .map((polarity) => ({ polarity, ...POLARITY_FACET_BODIES[polarity] }));

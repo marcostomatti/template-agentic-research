@@ -59,7 +59,7 @@
  * domain at all.
  *
  * Against fixtures every gap here is one frame. They exist for the
- * q15 swap, when these reads become HTTP and the gap becomes real —
+ * API swap, when these reads become HTTP and the gap becomes real —
  * which is the reason the chrome goes through `../data/hooks` instead
  * of reading the fixture accessors it could reach directly.
  *
@@ -76,8 +76,8 @@
  * copy of the list. So the rendered list stays derived from the read
  * on every render, there is no effect seeding state from an async
  * answer, and a refetch that adds a notification cannot be masked by a
- * stale local copy. After q15 the same gesture becomes a mutation and
- * this set is what it replaces.
+ * stale local copy. After the API swap the same gesture becomes a
+ * mutation and this set is what it replaces.
  *
  * ## Theme
  *

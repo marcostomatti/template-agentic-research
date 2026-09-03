@@ -6,7 +6,7 @@
  * Two tables rather than one, because the lexicon surface is the join:
  * a card is a {@link Category} plus a reading of the {@link Term}s
  * hanging off it. Keeping them apart here means the page performs the
- * same join the q15 endpoint will have to answer with, rather than a
+ * same join the API endpoint will have to answer with, rather than a
  * flattened row shape invented for one page and then unpicked when the
  * API lands.
  *
@@ -95,7 +95,7 @@ export type PolaritySplit = Readonly<Record<TermPolarity, number>>;
  *
  * The category plus the two readings of its vocabulary — how much of it
  * there is, and which way it points. Assembled here rather than in the
- * page because it is the shape the q15 endpoint has to answer with: a
+ * page because it is the shape the API endpoint has to answer with: a
  * page counting the terms itself would need every term of every
  * category shipped to it to render a summary.
  */
@@ -370,7 +370,7 @@ export function splitPolarity(terms: readonly Term[]): PolaritySplit {
  * One summary per category of a domain — what the lexicon renders.
  *
  * The join this module exists to answer: the page maps over these and
- * renders a card each, so the counting stays here and the q15 swap
+ * renders a card each, so the counting stays here and the API swap
  * replaces one accessor rather than a page.
  *
  * @param domainId - The `domains.id` whose lexicon is wanted.

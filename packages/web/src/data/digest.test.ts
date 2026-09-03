@@ -629,7 +629,7 @@ describe('listDocuments', () => {
 
   it('returns the most recently captured document first', () => {
     // The digest is a list of the latest material, so the order is part
-    // of what the accessor means and the q15 endpoint has to answer in.
+    // of what the accessor means and the API endpoint has to answer in.
     // Arrange
     const seededId = getDomain(DEFAULT_DOMAIN_SLUG).id;
 

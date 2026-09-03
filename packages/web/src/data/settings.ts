@@ -10,16 +10,20 @@
  * says so on {@link Settings} itself — schema v2 keeps per-DOMAIN
  * configuration in `domains.settings` and keeps nothing per operator.
  * So there is no seed to transcribe, no column to narrow, and no
- * endpoint for the q15 swap to point at until somewhere to persist
+ * endpoint for the API swap to point at until somewhere to persist
  * this has been decided. What the settings surface does about that is
- * hold an operator's changes as a delta for the life of the tab and
- * say so in a banner over the page: a switch that flips and forgets is
- * a bad answer only while it is silent about forgetting. It has no
- * choice in any case — `SelectProps` carries no `disabled`, so the
- * default-domain and digest controls could only be live or absent. The
- * two operator text fields there ARE inert, because a free-text box
- * accepts values this deployment has never seen and echoing one back
- * would be a fabrication rather than a reading.
+ * SAVE — through `./api.ts`'s `saveSettings` into the singleton
+ * slot in `./drafts.ts`, which lays the saved value back over this
+ * fixture on every later read — and say in a banner over the page
+ * that what it keeps, it keeps for the life of the tab: a save that
+ * forgets is a bad answer only while it is silent about forgetting.
+ * The controls have no choice in any case — `SelectProps` carries no
+ * `disabled`, so the default-domain and digest controls could only be
+ * live or absent. The two operator text fields there ARE inert, and
+ * stay so after the seam: {@link Settings} names no member either of
+ * them could be saved in, and a free-text box accepts values this
+ * deployment has never seen, so echoing one back would be a
+ * fabrication rather than a reading.
  * `../pages/settings/fields.ts` carries the argument in full.
  *
  * What the fixture is for, then, is the SHAPE of that decision. Each
@@ -46,8 +50,8 @@
  * `./settings.test.ts` asserts the pin — the alternative is a settings
  * page reporting one domain while `/` quietly loads another, which
  * neither surface could detect on its own. Whether `resolveDomainSlug`
- * should start reading a stored preference is q15's call, and it needs
- * somewhere to store one first.
+ * should start reading a stored preference is a later wave's call, and
+ * it needs somewhere to store one first.
  *
  * The whole fixture is frozen, and both halves matter: it is a SINGLE
  * object handed to every caller rather than a table each accessor

@@ -523,10 +523,10 @@ describe('EXPORT_SUBSCRIPTIONS', () => {
   });
 
   it('leaves one export format unsubscribed', () => {
-    // Deliberate: the tools surface renders a toggle per format rather
-    // than a row per subscription, so a format nothing subscribes to is
-    // the OFF state that list has to render. A fixture set covering
-    // every member would leave it unrehearsed.
+    // Deliberate: the tools surface names the formats a domain
+    // receives nothing under in one sentence under its toggle list,
+    // and a fixture set covering every member would leave that
+    // sentence unrehearsed.
     // Arrange / Act
     const subscribed = new Set(
       EXPORT_SUBSCRIPTIONS.map((subscription) => subscription.format),
@@ -723,7 +723,7 @@ describe('getExportSubscription', () => {
 describe('summarizeExportSubscriptions', () => {
   it('resolves every destination for the seeded domain', () => {
     // The join this module exists to answer: the page maps over these
-    // and renders a row each, so the resolution stays here and the q15
+    // and renders a row each, so the resolution stays here and the API
     // swap replaces one accessor rather than a page.
     // Arrange
     const seededId = getDomain(DEFAULT_DOMAIN_SLUG).id;

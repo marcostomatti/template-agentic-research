@@ -14,8 +14,8 @@
  * from, the source that fetched that document, and the taxonomy bucket
  * its subject was matched under. Those are four tables in the schema
  * and four reads through `../../data/hooks`, and this page performs the
- * join — the arrangement `../../data/digest.ts` documents, so that a
- * q15 endpoint answers with the tables it has rather than a flattened
+ * join — the arrangement `../../data/digest.ts` documents, so that an
+ * API endpoint answers with the tables it has rather than a flattened
  * row shape invented for this component.
  *
  * The join itself lives in `./rows`, not here: it is pure, and the node
@@ -24,10 +24,12 @@
  *
  * ## Filters live in the URL
  *
- * Four controls, four search parameters, no component state at all —
+ * Four controls, four search parameters, no state of their own —
  * `../../routes/useSearchParamState` is the whole of it. A filtered
  * digest is therefore a link, a reload keeps it, and the back button
- * undoes the last change.
+ * undoes the last change. The page does hold one piece of component
+ * state, but it belongs to the row menu rather than to a filter: see
+ * below.
  *
  * Three of the four are equality filters over a column and go through
  * `../filters`; the time window is a cutoff rather than a value and
@@ -48,6 +50,38 @@
  * exactly the property the URL-as-state rule exists to protect. A
  * sortable digest arrives with a controlled sort, not before.
  *
+ * ## What a row action does
+ *
+ * The trailing column is a `RowContextAction`, and its menu is the
+ * whole of what this surface writes. Three things sit on it and they
+ * are of two kinds: opening a row is a navigation to this surface's
+ * modal sub-route and needs nothing but the router, while ruling on a
+ * finding and queueing one for research are mutations. `./actions`
+ * holds both transitions as pure functions and `../../data/hooks`
+ * holds the write and its invalidation, so what is left here is which
+ * item is offered and what is said about the answer.
+ *
+ * The ruling a row already carries is not offered. `verdictChoices`
+ * guarantees a stored verdict a place because a `Select` resolves a
+ * value none of its options carry to the first one; a menu holds no
+ * value, so that guarantee has nothing to protect here and an item
+ * writing back what is already there would be a save with nothing to
+ * save.
+ *
+ * Queueing is the one action whose result reaches no cell — `./rows`
+ * reads none of the payload it writes, deliberately — so its outcome
+ * is said in a `Banner` above the table, and that notice is the
+ * component state the filter section above disclaims. BOTH outcomes
+ * are said, not just the refusal: a queued finding that looked exactly
+ * like an unqueued one is what makes an operator ask for it twice,
+ * which is the very thing `sendToResearch`'s guard is there to refuse.
+ *
+ * A save cannot fail from here, so nothing renders one. Every write in
+ * `../../data/api` rejects on one thing, a domain slug nothing answers
+ * to, and a slug like that has already failed the findings read — the
+ * body below is then the could-not-be-read state and there is no table
+ * to open a menu on.
+ *
  * ## Three states, not two
  *
  * A reader that has not settled is not the same as a domain with no
@@ -62,9 +96,11 @@
  */
 
 import type { DigestRow } from './rows';
-import type { Column, SelectOption } from '@ar/ui';
+import type { Finding } from '../../data/types';
+import type { Column, RowContextActionItem, SelectOption } from '@ar/ui';
 
 import {
+  Banner,
   EmptyState,
   Select,
   SearchInput,
@@ -74,6 +110,7 @@ import {
   ToolbarSep,
   renderCellContent,
 } from '@ar/ui';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
 import { ListPage } from '../../components/ListPage';
@@ -82,6 +119,7 @@ import {
   useDocuments,
   useEntities,
   useFindings,
+  useSaveFinding,
   useSources,
   useVerdicts,
 } from '../../data/hooks';
@@ -95,6 +133,14 @@ import {
   withAllOption,
 } from '../filters';
 
+import {
+  NO_VERDICT_VALUE,
+  readVerdictChoice,
+  sendToResearch,
+  verdictChoices,
+  verdictSelectValue,
+  withVerdict,
+} from './actions';
 import {
   DIGEST_QUERY_FIELDS,
   UNRATED_VERDICT_LABEL,
@@ -141,9 +187,68 @@ const SOURCE_WIDTH = 210;
 const AGE_WIDTH = 124;
 const MENU_WIDTH = 52;
 
+/** What the notice says once an intention has been recorded. */
+const QUEUED_TITLE = 'Queued for research';
+const QUEUED_BODY = 'A later pass drains the queue a few rows at a '
+  + 'time. Nothing on this screen moves in the meantime: the digest '
+  + 'lists what the pipeline has read, not what it has been asked to '
+  + 'look into.';
+
+/** What it says when the guard refused a second intention. */
+const NOT_QUEUED_TITLE = 'Not queued again';
+
+/**
+ * The accessible name the row-action notice is addressed by.
+ *
+ * A live region here needs a name of its own, and the reason is
+ * measured rather than defensive: the source cell's `StatusIndicator`
+ * carries `role="status"` on every row, so a digest of six findings
+ * already has six of them and a bare `getByRole('status')` resolves to
+ * a fistful of decorative dots. Naming this one is what keeps the
+ * notice addressable — to a spec and to anything reading the page
+ * region by region — without touching a library component six
+ * surfaces share.
+ */
+const NOTICE_LABEL = 'Row action result';
+
 /** Read the column each filter select narrows. */
 const readVerdict = (row: DigestRow) => row.verdict;
 const readCategory = (row: DigestRow) => row.categoryKey;
+
+/**
+ * One offered ruling, as a row-menu item.
+ *
+ * Taking a ruling back is not the same gesture as making one — the
+ * column permits both and this is the only control in the shell that
+ * offers the first — so the unruled option gets its own words and its
+ * own glyph rather than reading as a verdict named `unrated`.
+ *
+ * The title carries the value rather than `./actions`'s label, and the
+ * two agree: every label there IS the domain's own word, and the one
+ * that is not belongs to the branch above.
+ *
+ * @param value - An option value from {@link verdictChoices}.
+ * @param onClick - What choosing it does.
+ * @returns The item, ready for the menu's data contract.
+ */
+const rulingAction = (
+  value: string,
+  onClick: () => void,
+): RowContextActionItem => (value === NO_VERDICT_VALUE
+  ? { icon: 'undo-2', title: 'Clear verdict', onClick }
+  : { icon: 'gavel', title: `Set verdict: ${value}`, onClick });
+
+/** What the row menu leaves on screen after a send. */
+interface ActionNotice {
+  /** `success` where the intention was recorded, `info` where not. */
+  readonly tone: 'success' | 'info';
+  /** The outcome, in three words. */
+  readonly title: string;
+  /** Which finding it is about — the title that row shows. */
+  readonly name: string;
+  /** What happened, in the words of whatever decided it. */
+  readonly body: string;
+}
 
 /**
  * The digest surface.
@@ -161,11 +266,17 @@ export const DigestPage = () => {
   const sourcesRead = useSources(domainSlug);
   const verdictsRead = useVerdicts(domainSlug);
   const categoriesRead = useCategorySummaries(domainSlug);
+  const saveFinding = useSaveFinding(domainSlug);
 
   const query = useSearchParamState(QUERY_PARAM, '');
   const verdict = useSearchParamState(VERDICT_PARAM, ALL_FILTER_VALUE);
   const category = useSearchParamState(CATEGORY_PARAM, ALL_FILTER_VALUE);
   const window = useSearchParamState(WINDOW_PARAM, ALL_FILTER_VALUE);
+
+  // The page's one piece of component state, and the header says why
+  // the menu needs it: queueing a finding changes nothing a cell reads,
+  // so an operator with no notice cannot tell it from a dead item.
+  const [notice, setNotice] = useState<ActionNotice | null>(null);
 
   // The four reads the rows are joined from, named as constants so the
   // check below narrows all four at once — `useCache` answers
@@ -199,9 +310,11 @@ export const DigestPage = () => {
   // The ladder keeps its own order; the labels are the domain's own
   // words, shown as it configured them rather than title-cased into
   // something it never said.
+  const vocabulary = verdictsRead.data ?? [];
+
   const verdictOptions = withAllOption(
     'All verdicts',
-    (verdictsRead.data ?? []).map((name) => ({ value: name, label: name })),
+    vocabulary.map((name) => ({ value: name, label: name })),
   );
 
   const categoryOptions: SelectOption[] = withAllOption(
@@ -211,6 +324,124 @@ export const DigestPage = () => {
       label: summary.category.name,
     })),
   );
+
+  // The actions write FINDINGS and the menu hangs off joined rows, so
+  // the two have to be reconnected: `./rows` flattens a finding into
+  // cells and drops the payload `./actions` transitions. Indexed once
+  // per render rather than searched per click, since every visible row
+  // builds a menu of its own.
+  const findingsById = new Map(
+    (findings ?? []).map((finding): [number, Finding] => [
+      finding.id,
+      finding,
+    ]),
+  );
+
+  /**
+   * Record a ruling on one row.
+   *
+   * Silent for a row whose finding is not in this render's index. The
+   * two can only disagree while a read is in flight — the menu is
+   * built from rows that were joined out of the very list indexed here
+   * — and doing nothing is what a row nobody can name means.
+   *
+   * @param row - The row the menu was opened on.
+   * @param choice - The option value chosen, as `./actions` spells it.
+   */
+  const ruleOn = (row: DigestRow, choice: string) => {
+    const finding = findingsById.get(row.id);
+
+    if (finding === undefined) {
+      return;
+    }
+
+    // A ruling supersedes whatever the last send said: the notice
+    // names one finding, and leaving it up while another row moves
+    // invites reading it as this action's answer.
+    setNotice(null);
+    saveFinding.mutate(withVerdict(finding, readVerdictChoice(choice)));
+  };
+
+  /**
+   * Ask for one row's finding to be researched.
+   *
+   * Both outcomes are reported — see the header on why the refusal
+   * alone would be the wrong half.
+   *
+   * @param row - The row the menu was opened on.
+   */
+  const queueForResearch = (row: DigestRow) => {
+    const finding = findingsById.get(row.id);
+
+    if (finding === undefined) {
+      return;
+    }
+
+    const name = row.summary ?? NO_SUMMARY;
+    // The shell's pinned instant, which is the same `now` every
+    // relative time on this page is rendered against: a wall-clock
+    // read here would date the intention off the ladder the rest of
+    // the surface is measured on.
+    const outcome = sendToResearch(finding, FIXTURE_NOW);
+
+    if (!outcome.sent) {
+      setNotice({
+        tone: 'info',
+        title: NOT_QUEUED_TITLE,
+        name,
+        body: outcome.reason,
+      });
+
+      return;
+    }
+
+    setNotice({
+      tone: 'success',
+      title: QUEUED_TITLE,
+      name,
+      body: QUEUED_BODY,
+    });
+    saveFinding.mutate(outcome.finding);
+  };
+
+  /**
+   * The menu one row offers.
+   *
+   * Built per row rather than once per page: every item closes over
+   * the finding it acts on, and which rulings are on offer depends on
+   * the one that row already carries.
+   *
+   * @param row - The row the menu hangs off.
+   * @returns Its items, rulings first.
+   */
+  const rowActions = (row: DigestRow): RowContextActionItem[] => {
+    const held = verdictSelectValue(row.verdict);
+
+    const rulings = verdictChoices(vocabulary, row.verdict)
+      .filter((choice) => choice.value !== held)
+      .map((choice) => rulingAction(choice.value, () => {
+        ruleOn(row, choice.value);
+      }));
+
+    return [
+      ...rulings,
+      {
+        icon: 'eye',
+        title: 'Open',
+        onClick: () => {
+          // Relative, so one expression serves both route bases.
+          void navigate(String(row.id));
+        },
+      },
+      {
+        icon: 'flask-conical',
+        title: 'Send to research',
+        onClick: () => {
+          queueForResearch(row);
+        },
+      },
+    ];
+  };
 
   const columns: Column<DigestRow>[] = [
     {
@@ -290,22 +521,20 @@ export const DigestPage = () => {
       width: MENU_WIDTH,
       align: 'end',
       cell: (row) => renderCellContent('context-menu', {
-        // One action, and it is the one that works: opening a row is a
-        // navigation to this surface's modal sub-route. Setting a
-        // verdict and sending to research are mutations, and this
-        // round has no seam to write through — a menu item that did
-        // nothing would be worse than one that is not there.
-        actions: [
-          {
-            icon: 'eye',
-            title: 'Open',
-            onClick: () => {
-              // Relative, so one expression serves both route bases.
-              void navigate(String(row.id));
-            },
-          },
-        ],
+        // The three the surface offers, of two kinds: the rulings and
+        // the queue request write through `../../data/hooks`, opening
+        // a row is a navigation this page performs itself. Which
+        // ruling is left off, and where a queue request is answered,
+        // are both in the header.
+        actions: rowActions(row),
         entityType: 'finding',
+        // The trigger's accessible name is `Actions for <this>`, and a
+        // row's own name is the run-together text of its cells, so
+        // naming the menu after the finding is what makes the whole
+        // row addressable by title: `getByRole('row', { name })`.
+        // The leading cell is then asserted separately, because that
+        // row name also carries the verdict, the score and the source
+        // and says nothing about which cell the title landed in.
         entityName: row.summary ?? NO_SUMMARY,
       }),
     },
@@ -353,13 +582,34 @@ export const DigestPage = () => {
         </>
       )}
     >
-      <DigestBody
-        failed={findingsRead.isError}
-        joined={joined}
-        rows={rows}
-        visible={visible}
-        columns={columns}
-      />
+      <>
+        {notice != null && (
+          <Banner
+            // Polite rather than assertive: the operator asked for
+            // this, so it is a report and not an interruption. Named,
+            // for the reason {@link NOTICE_LABEL} sets out.
+            role="status"
+            aria-label={NOTICE_LABEL}
+            tone={notice.tone}
+            title={notice.title}
+            onClose={() => {
+              setNotice(null);
+            }}
+          >
+            <span className="font-semibold text-fg1">{notice.name}</span>
+            {' — '}
+            {notice.body}
+          </Banner>
+        )}
+
+        <DigestBody
+          failed={findingsRead.isError}
+          joined={joined}
+          rows={rows}
+          visible={visible}
+          columns={columns}
+        />
+      </>
     </ListPage>
   );
 };

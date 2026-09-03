@@ -24,7 +24,7 @@
  * rail resolves the base on every render, a malformed slug that MATCHED
  * `/d/:domainSlug` would throw through the chrome rather than render a
  * not-found page. The route tree is where that has to be caught —
- * react-router v7 has no pattern-level param constraint, so the check
+ * react-router has no pattern-level param constraint, so the check
  * belongs in the route element or a loader.
  *
  * ## The brand block
@@ -190,7 +190,7 @@ export const Sidebar = ({ collapsed }: SidebarProps) => {
       {spend.data !== undefined && (
         // Rendered only once the read has resolved. The fixture accessor
         // settles on a microtask, so this is a single frame today and a
-        // real gap after the q15 swap — which is the point of going
+        // real gap after the API swap — which is the point of going
         // through the cache hook rather than reading the fixture here.
         <SidebarWeekSummary
           status={spend.data.status}

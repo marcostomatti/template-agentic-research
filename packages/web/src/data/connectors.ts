@@ -14,7 +14,7 @@
  * written across two files that nothing holds in step.
  *
  * The two are scoped DIFFERENTLY, which is the fact most likely to be
- * got wrong by a page or by the q15 swap:
+ * got wrong by a page or by the API swap:
  *
  * - Connectors are DEPLOYMENT-level. There is no `domain_id` on the
  *   table, so {@link listConnectors} takes no domain and `./api.ts`
@@ -80,9 +80,9 @@
  * stores nothing of the sort: `connectors` has four columns and none
  * of them is a timestamp, and `llm_calls` — the one table that records
  * calls going out — carries no connector reference to aggregate over.
- * So a last-used reading is a schema decision q15 has to make before
- * an endpoint can answer it, and the honest stand-in the stored
- * columns support is the subscription join
+ * So a last-used reading is a schema decision a later wave has to
+ * make before an endpoint can answer it, and the honest stand-in the
+ * stored columns support is the subscription join
  * {@link summarizeExportSubscriptions} returns: what a destination
  * receives, and when it is next due.
  *
@@ -166,7 +166,7 @@ export type ConnectorStatus = 'ready' | 'unconfigured';
  *
  * The subscription plus the connector it delivers through, resolved.
  * Assembled here rather than in the page because it is the shape the
- * q15 endpoint has to answer with: a page resolving destinations
+ * API endpoint has to answer with: a page resolving destinations
  * itself would need every connector shipped to it in order to render
  * a domain's deliveries, and would have to invent its own answer for a
  * reference nothing resolves.
@@ -375,10 +375,11 @@ const MAIL_TARGET_ID = exportTargetId('mail-drafts');
  *
  * The set covers four of the five `ExportFormat` members. The
  * fifth, `notion_md`, is left UNSUBSCRIBED on purpose: the tools
- * surface renders a toggle per format rather than a row per
- * subscription, so a format nothing subscribes to is the OFF state
- * that list has to render, and a fixture set covering every member
- * would leave it unrehearsed.
+ * surface names the formats a domain receives nothing under in one
+ * sentence under its toggle list, and a fixture set covering every
+ * member would leave that sentence unrehearsed. A sentence rather
+ * than an OFF toggle because subscribing to a new format is an
+ * insert, which the write seam cannot perform.
  *
  * Two pairs make the natural key
  * `export_subscriptions_domain_id_format_connector_id_unique` the
@@ -499,6 +500,14 @@ const EXPORT_SUBSCRIPTIONS_BY_ID = new Map<number, ExportSubscription>(
  * {@link ConnectorStatus} for what that costs and what would have to
  * be stored to buy it back.
  *
+ * That bars a third STATUS and not a second reading of the payload.
+ * `../pages/tools/connectionTest.ts` reads this same config for
+ * whether the address it names could be dialled at all, which is a
+ * fact about the row rather than a claim about the service, and it
+ * refuses rows this answers `ready` for — a documentation-reserved
+ * endpoint among them. Two readings of one column, and only this one
+ * goes on a card.
+ *
  * @param connector - The row to read.
  * @returns Its status. Total: every connector has exactly one.
  */
@@ -571,7 +580,7 @@ export function getConnector(id: number): Connector {
  *
  * The lookup a RUN makes — a workflow needs the endpoint of the llm
  * connector it was configured to use, by name — and so the one the
- * q15 endpoint has to answer as well as the id lookup above. Kept here
+ * API endpoint has to answer as well as the id lookup above. Kept here
  * rather than left to each caller's `find` over
  * {@link listConnectors} so that the composite key is written once:
  * see {@link kindNameKey} for what goes wrong when it is not.
@@ -654,7 +663,7 @@ export function getExportSubscription(id: number): ExportSubscription {
  *
  * The join this module exists to answer, and the reason both tables
  * live in one file: the page maps over these and renders a row each,
- * so the resolution stays here and the q15 swap replaces one accessor
+ * so the resolution stays here and the API swap replaces one accessor
  * rather than a page.
  *
  * Resolves through {@link getConnector} and so THROWS on a dangling

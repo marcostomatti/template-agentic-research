@@ -37,6 +37,11 @@
  * which costs this page the one thing it is uniquely able to show. The
  * reading lives on the delivery rows instead.
  *
+ * Nothing stands in for it either: the card passes `EntityCard` no
+ * `meta` slot at all, so no rule is drawn under an absence. A card
+ * whose bottom edge borders empty space reads as a field that failed
+ * to load rather than as one nothing has yet.
+ *
  * ## No toolbar
  *
  * `ListPage` renders no filter bar for a surface that passes no
@@ -50,31 +55,90 @@
  * narrow — `SectionCard` has an `action` slot for exactly that — and
  * not in the page head.
  *
- * ## No writes, and no controls that pretend otherwise
+ * ## What this page writes, and the one gesture it still does not
  *
- * The spec has this page editing connectors, testing a connection,
- * duplicating a row, and toggling a delivery on and off. None of that
- * is offered: this round has no write seam, and the sources surface
- * already settled what to do about it — a control that silently did
- * nothing would be worse than one that is not there.
+ * The spec has this surface editing connectors, testing a connection,
+ * duplicating a row, and toggling a delivery on and off. Three of the
+ * four are offered. Editing a connector opens at the sub-route the
+ * card and the row menu both name, in `./ConnectorEditorModal.tsx` —
+ * which is where the connection test landed too, as a reading of the
+ * configuration in front of the operator rather than as a card-level
+ * control (`./connectionTest.ts` says why a test of the stored row
+ * would answer about the wrong payload). And a delivery is switched
+ * on and off here, on the page, through `../../data/api.ts`'s
+ * `saveExportSubscriptions` and the hook over it.
  *
- * That is also why the deliveries are rows rather than the spec's
- * `DecoratedToggleList`. The stored `enabled` flag is drawn as a
- * badge, in the idiom the lexicon card's `Suspended` badge set, and
- * the switch arrives with the endpoint that can answer it. A disabled
- * switch was the alternative, and it costs the whole section the
- * library's `disabled:opacity-50` — five faded rows read as a section
- * that failed to load rather than as one that is up to date.
+ * DUPLICATE is the one left, and the sources surface already settled
+ * what to do about it — a control that silently did nothing would be
+ * worse than one that is not there. Nothing can carry it yet:
+ * duplicating a connector is an INSERT, and `../../data/drafts.ts`
+ * has no id to mint.
  *
- * The one gesture that works is offered, on the cards: a navigation to
- * this surface's editor sub-route.
+ * ## The deliveries are the spec's toggle list now
  *
- * ## The card is not a link
+ * This section shipped once as badge-bearing rows: the stored
+ * `enabled` flag was drawn as a `Paused` badge, in the idiom the
+ * lexicon card's `Suspended` badge set, because the write a switch
+ * would call had no caller and a control that did nothing was the
+ * worse of the two. It has one, so the rows are `DecoratedToggleList`
+ * options and the badge is gone — the switch IS the flag, and
+ * drawing both would give one fact two places to disagree.
  *
- * As on the lexicon and agents grids: a card carrying a menu cannot
- * also be a button without nesting one interactive control inside
- * another, and the click gesture arrives with the generic `EntityCard`
- * q15 promotes into `@ar/ui/molecules`.
+ * What an option is KEYED on is `./cards.ts`'s decision and its
+ * header carries the argument: a subscription rather than a format,
+ * because two rows may share one and the seeded domain's two RSS
+ * deliveries do. The formats this domain subscribes to nothing under
+ * stay out of the list and keep the footer sentence they always had,
+ * for the reason that module gives — switching one on is an INSERT
+ * the seam cannot perform.
+ *
+ * The save cannot reject while the list is on screen, which is why
+ * nothing here reports one. Its only refusal is a slug no domain
+ * carries, and that is the same slug the READ resolves through: a
+ * domain the write would refuse is one whose section is already
+ * drawing its rejected state, with no control in it.
+ *
+ * The count went with the rows. `DecoratedToggleList` draws an
+ * on-of-total indicator in its own group header, so the chip that
+ * carried that figure in the section's action slot would now be a
+ * second copy of one reading forty pixels away from the first.
+ *
+ * ## The grid track is the library's, and the page picks it
+ *
+ * `EntityCardGrid` owns the track as a variant, so this page carries
+ * no grid-template class at all: it names which of the two minimums
+ * the connector grid takes and leaves the rest to `@ar/ui`. `lg` is
+ * the 340px the UI spec asks for here, and the wider of the two
+ * because a connector card carries a stored config block — a key and
+ * a value on one line, both clipped at the 300px the other grids take,
+ * would leave a card saying which keys are set and not what they are
+ * set to.
+ *
+ * Spelled rather than left to the variant's own default, for the
+ * reason the lexicon and agents headers give: it is a real choice,
+ * and both of those already name this grid as the one that takes the
+ * other track.
+ *
+ * ## The card opens, and the menu still works
+ *
+ * The UI spec has a card click open its editor, and `EntityCard` is
+ * how a card carrying a menu gets one without nesting an interactive
+ * control inside another: the TITLE is the button, an `absolute
+ * inset-0` child stretches its hit area over the whole card, and the
+ * `action` slot sits in a positioned layer above that overlay. One
+ * focusable open control per card, with the menu still reachable on
+ * its own.
+ *
+ * What it costs is where things may go. The overlay covers the badge
+ * row and the config block, so neither is selectable and nothing in
+ * either may be interactive — which is why the `RowContextAction` is
+ * passed as a SLOT rather than written into markup this page controls.
+ *
+ * The menu keeps its `Edit connector` item beside the gesture that
+ * now duplicates it: it is the same navigation, and an entry dropped
+ * because the card learned to open would read as one that was taken
+ * away. It is still the only action offered, for the reason the
+ * section above gives about DUPLICATE.
  *
  * Nothing in this file is reachable from the unit suite, which is
  * node-only and collects `.ts` alone. Its bindings are proven by a
@@ -84,13 +148,15 @@
 
 import type { ExportSubscriptionSummary } from '../../data/connectors';
 import type { Connector } from '../../data/types';
+import type { DecoratedToggleOption } from '@ar/ui';
 
 import {
   Badge,
-  Card,
+  DecoratedToggleList,
   EmptyState,
+  EntityCard,
+  EntityCardGrid,
   FormattedRelativeTime,
-  Grid,
   Icon,
   RowContextAction,
   SectionCard,
@@ -102,18 +168,24 @@ import { useNavigate, useParams } from 'react-router';
 
 import { ListPage } from '../../components/ListPage';
 import { classifyConnector } from '../../data/connectors';
-import { useConnectors, useExportSubscriptions } from '../../data/hooks';
+import {
+  useConnectors,
+  useExportSubscriptions,
+  useSaveExportSubscriptions,
+} from '../../data/hooks';
 import { FIXTURE_NOW } from '../../data/types';
 import { getSurface } from '../../routes/paths';
 
 import {
   NEVER_SCHEDULED_LABEL,
   NOTHING_CONFIGURED_LABEL,
+  applyEnabledDeliveries,
   cadenceLabel,
   configEntries,
   connectorCountLabel,
   connectorStatusFacet,
-  exportCountLabel,
+  deliveryToggleId,
+  enabledDeliveryIds,
   formatFacet,
   kindFacet,
   unsubscribedFormats,
@@ -143,6 +215,16 @@ const EXPORTS_SUBTITLE
   + 'belong to the deployment; these belong to the domain.';
 
 /**
+ * What the toggle list calls the group it draws.
+ *
+ * `DecoratedToggleList` renders it beside its own on-of-total
+ * indicator, so it has to be a word the ratio reads against rather
+ * than a repeat of the section heading directly above it: five
+ * FORMATS, four of them running.
+ */
+const EXPORTS_GROUP_TITLE = 'Formats';
+
+/**
  * The tools surface.
  *
  * @returns The page: its head, the deployment's connector grid, this
@@ -157,6 +239,9 @@ export const ToolsPage = () => {
   // domain-scoped read below is the only half a switch touches.
   const connectorsRead = useConnectors();
   const exportsRead = useExportSubscriptions(domainSlug);
+  // Scoped like the read beside it and unlike the connector half:
+  // whose deliveries these are moves with the domain.
+  const saveSubscriptions = useSaveExportSubscriptions(domainSlug);
 
   const connectors = connectorsRead.data;
   const summaries = exportsRead.data;
@@ -164,6 +249,25 @@ export const ToolsPage = () => {
   const handleEdit = (connectorId: number) => {
     // Relative, so one expression serves both route bases.
     void navigate(`${connectorId}/${EDIT_SEGMENT}`);
+  };
+
+  /**
+   * Record the delivery list as a flip left it.
+   *
+   * Silent for a read that has not settled, which the control cannot
+   * reach: the list is rendered out of `summaries`, so there is no
+   * toggle on screen while it is undefined. The guard is what narrows
+   * the type, and doing nothing is what an absent collection means.
+   *
+   * @param enabledIds - Every option the list now draws as on.
+   */
+  const handleDeliveryToggle = (enabledIds: readonly string[]) => {
+    if (summaries === undefined) {
+      return;
+    }
+
+    // The WHOLE collection, per `./cards.ts`: the write is a PUT.
+    saveSubscriptions.mutate(applyEnabledDeliveries(summaries, enabledIds));
   };
 
   return (
@@ -189,6 +293,7 @@ export const ToolsPage = () => {
       <ExportsSection
         failed={exportsRead.isError}
         summaries={summaries}
+        onToggle={handleDeliveryToggle}
       />
     </ListPage>
   );
@@ -201,7 +306,7 @@ interface ConnectorsBodyProps {
    *
    * Unreachable against the fixtures — `fetchConnectors` takes no
    * argument and resolves from memory — and kept anyway, because the
-   * q15 swap makes it an HTTP call that can fail. Without this branch
+   * API swap makes it an HTTP call that can fail. Without this branch
    * that failure would render as a deployment with no connectors
    * configured, which is a different and much more alarming statement.
    */
@@ -254,7 +359,10 @@ const ConnectorsBody = ({
   }
 
   return (
-    <Grid>
+    // `lg` is the 340px track — spelled rather than defaulted, per
+    // the page header on why a surface states which of the two it
+    // takes, and on why this is the grid that takes the wider one.
+    <EntityCardGrid min="lg">
       {connectors.map((connector) => (
         <ConnectorCard
           key={connector.id}
@@ -262,7 +370,7 @@ const ConnectorsBody = ({
           onEdit={onEdit}
         />
       ))}
-    </Grid>
+    </EntityCardGrid>
   );
 };
 
@@ -277,10 +385,22 @@ interface ConnectorCardProps {
 /**
  * One configured service, as a card.
  *
- * The name sets in the monospace face because it is a stored key
- * rather than a word this surface chose — the same treatment the
- * agents card gives a persona role — and it is the card's heading
- * because a connector's identity is its name within its kind.
+ * The name is the card's title because a connector's identity is its
+ * name within its kind. It gives up the monospace face this page's
+ * own heading gave it: `EntityCard` takes `title` as a string and
+ * draws it itself, and a page reaching past that to restyle one
+ * library heading would be this app choosing the library's typography
+ * for one surface, on the last of three grids meant to read alike.
+ * The agents card gave the same face up for the same reason. What it
+ * was saying is still said a few lines down, where a reader can act
+ * on it: the stored config sets key and value alike in monospace,
+ * which is where a token is actually compared.
+ *
+ * Everything an operator can DO with the connector is passed to
+ * `EntityCard` rather than rendered here — `onOpen` makes the title
+ * the open control, and `action` is the layer the card keeps above
+ * the overlay that gesture stretches. Everything they only READ goes
+ * in the badge row and the body, which the overlay covers.
  *
  * @param props - The connector and the gesture the card reports.
  * @returns The card.
@@ -290,47 +410,42 @@ const ConnectorCard = ({ connector, onEdit }: ConnectorCardProps) => {
   const status = connectorStatusFacet(classifyConnector(connector));
 
   return (
-    <Card
-      header={(
+    <EntityCard
+      title={connector.name}
+      // The open gesture. `EntityCard` derives the card's hover
+      // affordance from this being present, so there is no second
+      // thing to keep in step with it.
+      onOpen={() => onEdit(connector.id)}
+      badges={(
         <>
-          {/* The card is a section of the page, so its title is an
-              `h2` — cancelling the two element defaults `tokens.css`
-              gives one, and leaving weight and colour to it. */}
-          <h2
-            className="m-0 min-w-0 truncate font-mono text-base"
-            title={connector.name}
-          >
-            {connector.name}
-          </h2>
+          <Badge tone={kind.tone} size="sm">{kind.label}</Badge>
 
-          {/* One action, and it is the one that works. See the header
-              on the three the spec names and this round cannot
-              honour. */}
-          <RowContextAction
-            actions={[{
-              icon: 'square-pen',
-              title: 'Edit connector',
-              onClick: () => onEdit(connector.id),
-            }]}
-            entityType="connector"
-            entityName={connector.name}
-          />
+          <span className="ml-auto flex items-center gap-1.5 text-[12.5px] text-fg2">
+            {/* No `label`: the words beside it already ARE the status,
+                and naming the dot would announce them a second time. */}
+            <StatusIndicator tone={status.tone} />
+            {status.label}
+          </span>
         </>
       )}
+      // One action, and it is the one the card itself now performs.
+      // Kept because it is the same navigation under a name — see
+      // the page header on the three the spec names and this round
+      // cannot honour.
+      action={(
+        <RowContextAction
+          actions={[{
+            icon: 'square-pen',
+            title: 'Edit connector',
+            onClick: () => onEdit(connector.id),
+          }]}
+          entityType="connector"
+          entityName={connector.name}
+        />
+      )}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={kind.tone} size="sm">{kind.label}</Badge>
-
-        <span className="ml-auto flex items-center gap-1.5 text-[12.5px] text-fg2">
-          {/* No `label`: the words beside it already ARE the status,
-              and naming the dot would announce them a second time. */}
-          <StatusIndicator tone={status.tone} />
-          {status.label}
-        </span>
-      </div>
-
       <ConnectorConfig connector={connector} />
-    </Card>
+    </EntityCard>
   );
 };
 
@@ -347,6 +462,12 @@ interface ConnectorConfigProps {
  * config runs to: cards in a grid row stretch to the tallest, and
  * seven config blocks at seven different heights would read as seven
  * different kinds of thing.
+ *
+ * It is the card's BODY rather than its `meta` slot, though it draws
+ * the footer's own rule: `entityCardMeta` lays its children out as a
+ * wrapping ROW, and a key-and-value list read down a column is the
+ * one shape that layout cannot carry. Passing it there would also
+ * have drawn a second border over the one below.
  *
  * Values truncate with the whole string kept in a `title`, which is
  * the treatment the sources table gives an endpoint and for the same
@@ -389,6 +510,14 @@ interface ExportsSectionProps {
   readonly failed: boolean;
   /** This domain's deliveries, or undefined until the read settles. */
   readonly summaries: readonly ExportSubscriptionSummary[] | undefined;
+  /**
+   * Report the toggle list's new ON set.
+   *
+   * The complete set rather than the option that moved, which is the
+   * control's own contract and what lets one function record a flip
+   * in either direction.
+   */
+  readonly onToggle: (enabledIds: readonly string[]) => void;
 }
 
 /**
@@ -402,16 +531,27 @@ interface ExportsSectionProps {
  * — including the one where the domain could not be read, which is
  * exactly when a reader needs to be told what this section is.
  *
- * The count and the unsubscribed line are dropped in every other
- * state. `0 of 0 active` over a body saying the domain could not be
- * read is a confident answer to a question nobody could answer, and a
- * list of every format this domain does not receive is worse than the
- * empty state that says the same thing in one sentence.
+ * The unsubscribed line is dropped in every other state: a list of
+ * every format this domain does not receive is worse than the empty
+ * state that says the same thing in one sentence, and over a body
+ * reporting that the domain could not be read it would be a confident
+ * answer to a question nobody could answer.
  *
- * @param props - Which state the read is in.
+ * No action slot and no `padded` override, both of which went with
+ * the rows. The header's chip carried the on-of-total figure the
+ * toggle list now draws itself, and the body is padded in every state
+ * because the options are bordered boxes — full-bleed put the old
+ * rows' own dividers flush with the section's border, and would put
+ * two borders a pixel apart here.
+ *
+ * @param props - Which state the read is in, and what to report.
  * @returns The section.
  */
-const ExportsSection = ({ failed, summaries }: ExportsSectionProps) => {
+const ExportsSection = ({
+  failed,
+  summaries,
+  onToggle,
+}: ExportsSectionProps) => {
   const listed = failed
     ? undefined
     : summaries;
@@ -421,30 +561,31 @@ const ExportsSection = ({ failed, summaries }: ExportsSectionProps) => {
     <SectionCard
       title={EXPORTS_TITLE}
       subtitle={EXPORTS_SUBTITLE}
-      action={hasDeliveries
-        ? <Tag tone="neutral">{exportCountLabel(listed)}</Tag>
-        : undefined}
-      // Full-bleed for the row list, padded for the single message
-      // every other state renders — a message flush against the
-      // section's border would read as a rendering fault.
-      padded={!hasDeliveries}
       footer={hasDeliveries
         ? unsubscribedLabel(unsubscribedFormats(listed)) ?? undefined
         : undefined}
       footerDivider
     >
-      <ExportsBody failed={failed} summaries={summaries} />
+      <ExportsBody
+        failed={failed}
+        summaries={summaries}
+        onToggle={onToggle}
+      />
     </SectionCard>
   );
 };
 
 /**
- * The delivery rows, or the reason there are not any.
+ * The delivery toggles, or the reason there are not any.
  *
- * @param props - Which state the read is in.
- * @returns The list, an empty state, or the loading stand-in.
+ * @param props - Which state the read is in, and what to report.
+ * @returns The toggle list, an empty state, or the loading stand-in.
  */
-const ExportsBody = ({ failed, summaries }: ExportsSectionProps) => {
+const ExportsBody = ({
+  failed,
+  summaries,
+  onToggle,
+}: ExportsSectionProps) => {
   if (failed) {
     return (
       <EmptyState
@@ -468,92 +609,86 @@ const ExportsBody = ({ failed, summaries }: ExportsSectionProps) => {
   }
 
   return (
-    <ul>
-      {summaries.map((summary) => (
-        <li
-          key={summary.subscription.id}
-          className="border-b border-border-soft px-[18px] py-3 last:border-b-0"
-        >
-          <DeliveryRow summary={summary} />
-        </li>
-      ))}
-    </ul>
+    <DecoratedToggleList
+      title={EXPORTS_GROUP_TITLE}
+      // `options` is declared mutable, and mapping a readonly array
+      // already answers a fresh mutable one, so nothing is copied
+      // here. `value` below is the binding that has to.
+      options={summaries.map(deliveryOption)}
+      // `enabledDeliveryIds` answers a READONLY array and the prop is
+      // `string[]`. Spread rather than cast: the control is free to
+      // hold what it is handed, and a cast would hand it a reading
+      // several other things on this page derive from.
+      value={[...enabledDeliveryIds(summaries)]}
+      onChange={onToggle}
+    />
   );
 };
 
-/** What one delivery row is given. */
-interface DeliveryRowProps {
-  /** The subscription and the destination it was resolved to. */
-  readonly summary: ExportSubscriptionSummary;
-}
-
 /**
- * One standing delivery: what is rendered, where it goes, how often,
- * and when it is next due.
+ * One standing delivery, as an option in the toggle list.
  *
- * The stored format token leads in the monospace face, with the words
- * for it underneath — the same split the connector cards make, and the
- * reason both halves of this page read as one surface. The cadence
- * rides in a badge because it is the value an operator compares
- * between rows.
+ * Every reading the old row carried survives the move, in the slot
+ * `DecoratedToggle` gives it. The stored format token is the TITLE,
+ * which the library already draws in the monospace face the row gave
+ * it by hand; the words for that token are the DESCRIPTION underneath;
+ * and the destination and the schedule ride in META, beside the title,
+ * because they are what an operator compares between deliveries.
  *
- * `Paused` is drawn only where the row is switched off, in the idiom
- * the lexicon card's `Suspended` badge set: the absence of a marker is
- * the ordinary state, and marking both would make a scan of the list
- * harder rather than easier. Disabling is not cancelling, so a paused
- * row keeps its cadence and its due time on display.
+ * The one reading that does NOT survive is `Paused`. The switch is
+ * that badge now, and a row wearing both would give one stored flag
+ * two things to disagree about.
  *
- * @param props - The delivery.
- * @returns The row.
+ * Nothing in here may be interactive: `DecoratedToggle` renders the
+ * whole option as one `button`, which is what buys it a single
+ * focusable control per row. `Badge`, `Icon` and
+ * `FormattedRelativeTime` are a span, a span and a `time`, so all
+ * three are content a button may hold.
+ *
+ * @param summary - The subscription and the destination it resolved
+ * to.
+ * @returns The option, keyed on the subscription rather than on its
+ * format — `./cards.ts` carries that argument.
  */
-const DeliveryRow = ({ summary }: DeliveryRowProps) => {
+const deliveryOption = (
+  summary: ExportSubscriptionSummary,
+): DecoratedToggleOption => {
   const { subscription, connector } = summary;
   const facet = formatFacet(subscription.format);
 
-  return (
-    <div className="flex items-center gap-3">
-      <span className="shrink-0 text-fg3" aria-hidden>
-        <Icon name={facet.icon} size={16} />
-      </span>
+  return {
+    id: deliveryToggleId(subscription),
+    title: subscription.format,
+    description: facet.label,
+    decoration: <Icon name={facet.icon} size={16} />,
+    meta: (
+      <>
+        <Badge tone="neutral" size="sm">
+          {cadenceLabel(subscription.intervalSeconds)}
+        </Badge>
 
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[13px] font-semibold">
-            {subscription.format}
-          </span>
-
-          <Badge tone="neutral" size="sm">
-            {cadenceLabel(subscription.intervalSeconds)}
-          </Badge>
-
-          {!subscription.enabled && (
-            <Badge tone="neutral" size="sm">Paused</Badge>
-          )}
-        </div>
-
-        <p className="m-0 mt-0.5 truncate text-xs text-fg3">
-          {facet.label}
-          {' to '}
+        <span className="text-[12.5px] font-normal text-fg3">
+          {'to '}
           <span className="font-mono" title={connector.name}>
             {connector.name}
           </span>
-        </p>
-      </div>
+        </span>
 
-      <span className="shrink-0 text-xs text-fg3">
-        {subscription.nextRunAt === null
-          ? NEVER_SCHEDULED_LABEL
-          : (
-            <>
-              {'Due '}
-              <FormattedRelativeTime
-                date={subscription.nextRunAt}
-                now={FIXTURE_NOW}
-                locale={DISPLAY_LOCALE}
-              />
-            </>
-          )}
-      </span>
-    </div>
-  );
+        <span className="text-[12.5px] font-normal text-fg3">
+          {subscription.nextRunAt === null
+            ? NEVER_SCHEDULED_LABEL
+            : (
+              <>
+                {'Due '}
+                <FormattedRelativeTime
+                  date={subscription.nextRunAt}
+                  now={FIXTURE_NOW}
+                  locale={DISPLAY_LOCALE}
+                />
+              </>
+            )}
+        </span>
+      </>
+    ),
+  };
 };

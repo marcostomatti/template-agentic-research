@@ -20,23 +20,33 @@
  *
  * ## What each card says, and what it does not
  *
- * Role, domain, and the opening of the system text. The UI spec names
- * a fourth field, last-run, and this card has none: `personas` is four
- * columns and not one of them is a timestamp. When a persona was last
+ * Role as the heading, domain in the badge row, and the opening of the
+ * system text as the body. The UI spec names a fourth field, last-run,
+ * and this card has none: `personas` is four columns and not one of
+ * them is a timestamp. When a persona was last
  * played is a fact about a RUN — a join through `runs` and `llm_calls`
  * — and neither table is modelled in this shell's fixture layer at
  * all. Drawing a plausible date beside three real fields would be the
- * quiet mistake: it would read as a column that exists, and q15 would
- * meet an endpoint with nothing to answer it. The field arrives when
- * the run tables do.
+ * quiet mistake: it would read as a column that exists, and the API
+ * swap would meet an endpoint with nothing to answer it. The field
+ * arrives when the run tables do.
+ *
+ * Nothing stands in for it either: the card passes `EntityCard` no
+ * `meta` slot at all, so no rule is drawn under an absence. A card
+ * whose bottom edge borders empty space reads as a field that failed
+ * to load rather than as one nothing has yet.
  *
  * The domain is on the card rather than only in the topbar because a
  * persona is configuration OF a domain — what a researcher is asked to
  * be is a property of the subject being researched — and because at
  * the `/` base nothing else on this page names which domain that is.
  * It is the same on all three cards today, which is honest: they are
- * three roles of one domain, and the editor modal q15 brings has
- * domain scope as its third field for exactly this reason.
+ * three roles of one domain, and `./AgentEditorModal.tsx` states the
+ * domain as its third field for exactly this reason.
+ *
+ * It rides the badge row rather than a meta footer because it is what
+ * the card is scoped BY and not a measurement of the row — read once
+ * near the top with the role, rather than looked up at the bottom.
  *
  * ## The excerpt is a cut, not a CSS clamp
  *
@@ -70,16 +80,41 @@
  * cannot already see, and an empty bordered control strip reads as one
  * that failed to load.
  *
- * ## The card is not a link
+ * ## The grid track is the library's, and the page picks it
  *
- * The UI spec has a card click open its editor. It does not yet, for
- * the reason the lexicon card gives: a card carrying a menu cannot
- * also be a button without nesting one interactive control inside
- * another, and the gesture arrives with the generic `EntityCard` q15
- * promotes into `@ar/ui/molecules`. The menu reaches the same
- * sub-route in the meantime, and it is the only action offered —
- * duplicating or deleting a persona is a write, and this round has no
- * seam to write through.
+ * `EntityCardGrid` owns the track as a variant, so this page carries
+ * no grid-template class at all: it names which of the two minimums
+ * the persona grid takes and leaves the rest to `@ar/ui`. `md` is the
+ * 300px the UI spec asks for here, and what `Grid`'s `auto` columns
+ * (`minmax(180px, 1fr)`) could not give it. Spelled rather than left
+ * to the variant's own default, because it is a real choice — the
+ * connector grid takes `lg` — and a surface whose track can be read
+ * without opening the library is one that cannot drift from the spec
+ * quietly.
+ *
+ * ## The card opens, and the menu still works
+ *
+ * The UI spec has a card click open its editor, and `EntityCard` is
+ * how a card carrying a menu gets one without nesting an interactive
+ * control inside another: the TITLE is the button, an `absolute
+ * inset-0` child stretches its hit area over the whole card, and the
+ * `action` slot sits in a positioned layer above that overlay. One
+ * focusable open control per card, with the menu still reachable on
+ * its own.
+ *
+ * What it costs is where things may go. The overlay covers the badge
+ * row and the body, so neither is selectable and nothing in either
+ * may be interactive — which is why the `RowContextAction` is passed
+ * as a SLOT rather than written into markup this page controls.
+ *
+ * The menu keeps its `Edit persona` item beside the gesture that now
+ * duplicates it: it is the same navigation, and an entry dropped
+ * because the card learned to open would read as one that was taken
+ * away. It is still the only action offered. The seam behind this
+ * wave can UPDATE a persona — `savePersona` is what the editor modal
+ * saves through — but `../../data/drafts.ts` records edits to rows
+ * that already exist and can insert or remove none, so duplicating
+ * and deleting are the two gestures with nothing behind them.
  *
  * ## Four states
  *
@@ -99,9 +134,9 @@
 import type { Domain, Persona } from '../../data/types';
 
 import {
-  Card,
   EmptyState,
-  Grid,
+  EntityCard,
+  EntityCardGrid,
   RowContextAction,
   Skeleton,
   Tag,
@@ -224,7 +259,9 @@ const AgentsBody = ({
   }
 
   return (
-    <Grid>
+    // `md` is the 300px track — spelled rather than defaulted, per the
+    // page header on why a surface states which of the two it takes.
+    <EntityCardGrid min="md">
       {personas.map((persona) => (
         <PersonaCard
           key={persona.id}
@@ -233,7 +270,7 @@ const AgentsBody = ({
           onEdit={onEdit}
         />
       ))}
-    </Grid>
+    </EntityCardGrid>
   );
 };
 
@@ -257,61 +294,61 @@ interface PersonaCardProps {
 /**
  * One standing instruction, as a card.
  *
- * The role sets in the monospace face because it is a stored key
- * rather than a word this surface chose — the same treatment the
- * sources table gives a source kind — and it is the card's heading
- * because a persona has no name column: the role IS its identity, and
- * it is unique within the domain.
+ * The role is the card's title because a persona has no name column:
+ * the role IS its identity, and it is unique within the domain. It
+ * gives up the monospace face the page's own heading gave it —
+ * `EntityCard` takes `title` as a string and draws it itself, and a
+ * page reaching past that to restyle one library heading would be
+ * this app choosing the library's typography for one surface, on the
+ * first of three grids meant to read alike. What that face was
+ * saying is still said where a reader can act on it: the editor
+ * modal shows the role as a stored field rather than as prose.
+ *
+ * Everything an operator can DO with the persona is passed to
+ * `EntityCard` rather than rendered here — `onOpen` makes the title
+ * the open control, and `action` is the layer the card keeps above
+ * the overlay that gesture stretches. Everything they only READ goes
+ * in the badge row and the body, which the overlay covers.
  *
  * @param props - The persona, its domain, and the gesture the card
  * reports.
  * @returns The card.
  */
 const PersonaCard = ({ persona, domain, onEdit }: PersonaCardProps) => (
-  <Card
-    header={(
-      <>
-        {/* The card is a section of the page, so its title is an `h2`
-            — cancelling the two element defaults `tokens.css` gives
-            one, and leaving weight and colour to it. */}
-        <h2
-          className="m-0 min-w-0 truncate font-mono text-base"
-          title={persona.role}
-        >
-          {persona.role}
-        </h2>
-
-        {/* One action, and it is the one that works: opening the
-            editor is a navigation to this surface's modal sub-route.
-            See the header on the writes this round cannot offer. */}
-        <RowContextAction
-          actions={[{
-            icon: 'square-pen',
-            title: 'Edit persona',
-            onClick: () => onEdit(persona.id),
-          }]}
-          entityType="persona"
-          entityName={persona.role}
-        />
-      </>
+  <EntityCard
+    title={persona.role}
+    // The open gesture. `EntityCard` derives the card's hover
+    // affordance from this being present, so there is no second thing
+    // to keep in step with it.
+    onOpen={() => onEdit(persona.id)}
+    // `Tag` and not `Badge`: the domain classifies the persona rather
+    // than reporting a state it is in. `mono={false}` because a domain
+    // NAME is prose — the tag's default face is for bare ids — and the
+    // key rides inside the pill, so the value keeps the label the meta
+    // footer used to give it.
+    badges={(
+      <Tag tone="neutral" mono={false}>
+        <span className="text-fg3">Domain</span>
+        {domain.name}
+      </Tag>
+    )}
+    // One action, and it is the one the card itself now performs.
+    // Kept because it is the same navigation under a name — see the
+    // header on why it stays, and on the two gestures with no seam.
+    action={(
+      <RowContextAction
+        actions={[{
+          icon: 'square-pen',
+          title: 'Edit persona',
+          onClick: () => onEdit(persona.id),
+        }]}
+        entityType="persona"
+        entityName={persona.role}
+      />
     )}
   >
     <p className="m-0 text-sm leading-relaxed text-fg2">
       {excerpt(persona.systemText, SYSTEM_TEXT_EXCERPT_LIMIT)}
     </p>
-
-    {/* `mt-auto` so the meta line sits on the bottom edge whatever the
-        excerpt runs to: cards in a grid row stretch to the tallest,
-        and three domain lines at three different heights would read as
-        three different kinds of thing. */}
-    <dl className="mt-auto flex items-center gap-2 border-t border-border-soft pt-3 text-[12.5px]">
-      <dt className="text-fg3">Domain</dt>
-      <dd
-        className="ml-auto min-w-0 truncate font-medium"
-        title={domain.name}
-      >
-        {domain.name}
-      </dd>
-    </dl>
-  </Card>
+  </EntityCard>
 );

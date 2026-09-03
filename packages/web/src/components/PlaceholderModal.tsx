@@ -1,21 +1,43 @@
 /**
  * @packageDocumentation
- * What every modal sub-route renders until that surface's real modal
- * lands: the row the URL names, and nothing an operator can change.
+ * What every modal sub-route USED to render until that surface's real
+ * modal landed: the row the URL names, and nothing an operator can
+ * change.
  *
  * Five of the six surfaces open one of their rows over the list they
  * sit on — the digest at `:entityId`, the lexicon, sources, agents and
- * tools at `:entityId/edit` — and each is declared under both route
- * bases, so ten registrations render this one component. That is the
- * whole constraint on what it may say: anything it claimed would have
- * to be true of a finding opening READ-ONLY and of four editors at
- * once.
+ * tools at `:entityId/edit`, and the sources again at
+ * `:entityId/config` and `:entityId/failures` — and each address is
+ * declared under both route bases. NONE of those fourteen
+ * registrations renders this component any more: the lexicon's two
+ * open `../pages/lexicon/LexiconEditorModal`, the sources' `/edit`
+ * pair opens `../pages/sources/SourceEditorModal`, its `/config` pair
+ * opens `../pages/sources/SourceConfigApprovalModal` and its
+ * `/failures` pair opens `../pages/sources/SourceFailuresModal`, the
+ * agents' two open `../pages/agents/AgentEditorModal`, the tools' two
+ * open `../pages/tools/ConnectorEditorModal`, and the digest's two
+ * open `../pages/digest/DigestDetailModal`.
  *
- * It is why there is no footer here. A disabled `Save` would state the
- * shape of the four editors and misstate the digest's, whose bare
- * `:entityId` is the read-only detail path the UI spec grows into a
- * full page later. The body says the one thing true of all five: the
- * address is live and nothing behind it is.
+ * The numerator ran down two at a time, one surface per landing,
+ * while the denominator grew by two with each address a surface
+ * declared BEYOND its first — those were never this element's to
+ * hold. It is at zero of fourteen, which is where it stops.
+ *
+ * So this component is unreachable, and everything below describes a
+ * shape rather than a screen anybody sees. It survives the last
+ * landing for two reasons that are not about rendering: it is still
+ * named by `../routes/router.tsx`, whose test asks whether ANY
+ * declared address opens it — a claim, where it used to be a ledger —
+ * and it is the file four landed modals cite for the relative-close
+ * reading below. Removing it is therefore a decision of its own and
+ * not a line in the commit that emptied it.
+ *
+ * There is no footer here, and the reason has changed rather than
+ * gone. A disabled `Save` would have been honest about the editors it
+ * stood for — but it would state the shape of an editor this
+ * component has no draft behind, which is a promise about behaviour
+ * rather than about an address. The body says the one thing that was
+ * always true of it: the address is live and nothing behind it is.
  *
  * ## Why `open` is a literal
  *
@@ -34,9 +56,11 @@
  *
  * Closing cannot flip a flag, so it navigates to the parent route.
  * That target is `..` rather than a built path, for the reason the
- * router's index redirect is relative too: one expression then serves
- * all ten registrations, and no caller has to resolve which base it is
- * rendering under.
+ * router's index redirect is relative too: one expression served
+ * every registration this ever rendered, and no caller had to resolve
+ * which base it was rendering under. `../components/EditorModal.tsx`
+ * spells the same expression out separately, for the reason its own
+ * header gives about outliving this file.
  *
  * `relative: 'route'` is stated rather than inherited, because the
  * difference is load-bearing here rather than cosmetic. Route-relative
@@ -56,9 +80,10 @@
  * The eyebrow is the surface's own title, derived from the path
  * exactly as the topbar derives its heading — never from state, since
  * a back button and the domain switcher's base swap both change the
- * surface without passing through anything here. It is what
- * distinguishes the five registrations without there being five
- * elements.
+ * surface without passing through anything here. It named the
+ * registrations apart while they belonged to different surfaces, and
+ * it is why nothing in this file ever had to be told which one it was
+ * standing in for.
  *
  * The title is passed for a second reason beyond naming the row:
  * `Modal` draws its header, and with it the close button and the
@@ -68,11 +93,12 @@
  *
  * ## This is a placeholder, not a stand-in
  *
- * Its neighbour `./PageHead` exists to be PROMOTED — q15 moves it into
- * `@ar/ui/molecules`, which is why that file imports nothing from this
- * app. This one exists to be REPLACED, surface by surface, as each
- * real modal is written; there is nothing here for a component library
- * to take, since every line of it reads the router.
+ * Its neighbour `./PageHead` exists to be PROMOTED — a later wave
+ * moves it into `@ar/ui/molecules`, which is why that file imports
+ * nothing from this app. This one existed to be REPLACED, surface by
+ * surface, as each real modal was written, and now has been; there was
+ * never anything here for a component library to take, since every
+ * line of it reads the router.
  *
  * Nothing in this file is reachable from the unit suite, which is
  * node-only and collects `.ts` alone. Its bindings are proven by a
@@ -108,7 +134,10 @@ const CLOSE_OPTIONS = { relative: 'route' } as const;
 const UNKNOWN_ROW = 'unknown';
 
 /**
- * The stand-in modal every list surface's sub-route opens.
+ * The stand-in modal every list surface's sub-route used to open.
+ *
+ * Registered at no address as of the tools connector editor — see the
+ * header on why it survives that anyway.
  *
  * @returns The modal, naming the row from the URL, over a body with
  * nothing live in it.

@@ -50,11 +50,20 @@
  * list is therefore a link, a reload keeps it, and the back button
  * undoes the last change.
  *
- * The status control carries a count per option, and those counts are
- * measured over the rows the OTHER two controls have already left: a
- * figure promising three rows is only true if everything else stays
- * where it is. The kind control carries none, because its options are
- * the closed schema union rather than a reading of the data.
+ * The status control is a row of pressable badges rather than a
+ * select, and what that buys is visibility: every status, the count
+ * under each of them, and which one is pressed, all readable without
+ * opening anything. `./badges.ts` carries the model — which badge is
+ * pressed and what a press writes — and
+ * `../../components/FilterBadgeRow.tsx` carries why the row is
+ * app-local rather than a `@ar/ui` component.
+ *
+ * The counts are measured over the rows the OTHER two controls have
+ * already left: a badge promising three rows is only true if
+ * everything else stays where it is. The kind control carries none
+ * and stays a select, because its options are the closed schema
+ * union rather than a reading of the data — four values that never
+ * move are a choice to make, not a reading to scan.
  *
  * ## No sort
  *
@@ -64,15 +73,51 @@
  * would be a reading of this page that a shared link could not carry,
  * which is the property the URL-as-state rule exists to protect.
  *
- * ## No enable switch, and no approve action
+ * ## What the pulsing dot adds
+ *
+ * The status dot pulses on the rows `./rows.ts` reads as running, and
+ * it earns its place beside a word that already names the health: a
+ * feed the pipeline went through this morning and one it stopped
+ * visiting a week ago report their health in exactly the same words.
+ * The stamps that would separate them are two columns away, in cells
+ * nobody scans a list by.
+ *
+ * It does NOT restate the cursor column, and one fixture row shows
+ * why: the pulse takes whichever stamp is later and the cursor age
+ * takes the successful one, so a feed being read and rejected pulses
+ * beside a position that has not moved in days. Those are two
+ * readings of one feed and the table is meant to carry both.
+ *
+ * The pulse is also the one cell reading that motion alone would
+ * carry, so the dot is named on those rows and left decorative on the
+ * others — the cell says why, against what `CellStatus` actually does
+ * with a `label`. What that pulse can honestly mean over a fixture
+ * layer with no runs is `./rows.ts`'s subject, not this file's.
+ *
+ * ## The menu opens screens; nothing in it writes
  *
  * `sources.enabled` is a real column and the UI spec has a menu that
  * writes to it, alongside approving a pending config and reviewing a
- * feed's failures. None of the three is offered: this round has no
- * write seam, and a control that silently did nothing would be worse
- * than one that is not there. What the menu does offer is the one
- * gesture that works — a navigation to this surface's editor
- * sub-route.
+ * feed's failures. Not one of the three is a control in this menu.
+ * All three rows it carries are NAVIGATIONS:
+ * `./SourceEditorModal.tsx` holds the enable switch beside the flag,
+ * the endpoint and the kind, `./SourceConfigApprovalModal.tsx` holds
+ * the two answers to a proposed config, and
+ * `./SourceFailuresModal.tsx` holds the two answers to each capture
+ * that would not parse.
+ *
+ * That is a decision rather than a stage. Every one of the editor's
+ * four members is a whole-row PUT through `saveSource`, and a switch
+ * in a row menu writing one of them would be a save an operator made
+ * without seeing the row it saved. The approval is the same argument
+ * about a different table: a proposal is ruled on as a ROW, and a
+ * menu item approving one would be a ruling made without reading the
+ * documents it was about — which its own modal sets out at length.
+ *
+ * The third is the same argument once more. Keeping or discarding a
+ * capture is an answer to something an operator has read, and the
+ * only place it can be read is the list behind that sub-route — so
+ * the menu opens the list and rules on nothing.
  *
  * ## Three states, not two
  *
@@ -110,6 +155,7 @@ import {
 } from '@ar/ui';
 import { useNavigate, useParams } from 'react-router';
 
+import { FilterBadgeRow } from '../../components/FilterBadgeRow';
 import { ListPage } from '../../components/ListPage';
 import { useSourceStatusCounts, useSources } from '../../data/hooks';
 import { classifySource, countSourceStatuses } from '../../data/sources';
@@ -118,17 +164,21 @@ import { getSurface } from '../../routes/paths';
 import { useSearchParamState } from '../../routes/useSearchParamState';
 import { ALL_FILTER_VALUE, filterByQuery, filterBySelect } from '../filters';
 
+import { statusBadges } from './badges';
 import {
+  LIVE_RUN_LABEL,
+  NEVER_FETCHED_LABEL,
   SOURCE_QUERY_FIELDS,
   SOURCE_STAT_CARDS,
+  cursorAgeStamp,
   cursorLabel,
   failureStreakLabel,
+  isRunLive,
   kindOptions,
   kindTone,
   sourceCountLabel,
   splitEndpoint,
   statusFacet,
-  statusOptions,
 } from './rows';
 
 /** Which surface this is — the page title comes off the same table. */
@@ -139,8 +189,18 @@ const QUERY_PARAM = 'q';
 const KIND_PARAM = 'kind';
 const STATUS_PARAM = 'status';
 
-/** The sub-route a row's edit action opens, relative to this surface. */
+/**
+ * The sub-routes a row's actions open, relative to this surface.
+ *
+ * Three of them, which is what `../../routes/router.tsx` widened its
+ * modal table to hold: a source is edited at one address, its
+ * proposed config is ruled on at another and its failed captures are
+ * worked through at a third, and none of them is a child of either
+ * other.
+ */
 const EDIT_SEGMENT = 'edit';
+const CONFIG_SEGMENT = 'config';
+const FAILURES_SEGMENT = 'failures';
 
 /**
  * The locale every formatted value on this page is rendered in.
@@ -151,9 +211,6 @@ const EDIT_SEGMENT = 'edit';
  * of the data.
  */
 const DISPLAY_LOCALE = 'en-US';
-
-/** What the cursor cell leads with for a feed nothing has read yet. */
-const NEVER_FETCHED = 'Never fetched';
 
 /** What the health cell says for a feed that has never come back bad. */
 const NEVER_FAILED = 'Never failed';
@@ -168,7 +225,7 @@ const MENU_WIDTH = 52;
 /** The stat band's own tracks: stacked on a narrow viewport, three across. */
 const STAT_BAND_COLUMNS = 'md:grid-cols-3';
 
-/** Read the column each filter select narrows. */
+/** Read the column each filter narrows. */
 const readKind = (source: Source) => source.kind;
 const readStatus = (source: Source) => classifySource(source);
 
@@ -235,13 +292,32 @@ export const SourcesPage = () => {
       key: 'status',
       header: 'Status',
       width: STATUS_WIDTH,
-      // No `label`: the visible text already IS the status, and
-      // `CellStatus` would give the dot the same name to announce a
-      // second time.
-      cell: (source) => renderCellContent('status', {
-        tone: statusFacet(classifySource(source)).tone,
-        text: statusFacet(classifySource(source)).label,
-      }),
+      cell: (source) => {
+        const facet = statusFacet(classifySource(source));
+        // What the dot adds to the word beside it: the pipeline has
+        // been here recently. `./rows.ts` carries what that reading
+        // can and cannot mean over a fixture layer with no runs.
+        const live = isRunLive(source, FIXTURE_NOW);
+
+        return renderCellContent('status', {
+          tone: facet.tone,
+          text: facet.label,
+          pulse: live,
+          // `CellStatus` names the dot from `label` alone wherever a
+          // `text` renders, and from `label ?? tone` only where none
+          // does — so omitting it here leaves the dot aria-hidden
+          // rather than announcing the tone token, and passing the
+          // status word would put a second copy of the visible text
+          // in front of it.
+          //
+          // Which is why it is passed on the live rows and nowhere
+          // else: there the dot carries a reading the text does not,
+          // and motion on its own announces nothing at all.
+          label: live
+            ? LIVE_RUN_LABEL
+            : undefined,
+        });
+      },
     },
     {
       key: 'health',
@@ -254,23 +330,28 @@ export const SourcesPage = () => {
       header: 'Cursor',
       width: CURSOR_WIDTH,
       overflow: 'truncate',
-      // How old the position is over what the position says. The age
-      // is the reading an operator scans for; the token is the detail
-      // they check once they have stopped on a row.
-      cell: (source) => renderCellContent('double-line', {
-        title: source.lastSuccessAt === null
-          ? NEVER_FETCHED
-          : (
-            <FormattedRelativeTime
-              date={source.lastSuccessAt}
-              now={FIXTURE_NOW}
-              locale={DISPLAY_LOCALE}
-            />
+      // How old the position is over what the position says. Which
+      // stamp dates it, and what the absence reads as, are both
+      // `./rows.ts`'s — this cell only picks between a string and a
+      // rendered element, which is the half a `.tsx` has to hold.
+      cell: (source) => {
+        const writtenAt = cursorAgeStamp(source);
+
+        return renderCellContent('double-line', {
+          title: writtenAt === null
+            ? NEVER_FETCHED_LABEL
+            : (
+              <FormattedRelativeTime
+                date={writtenAt}
+                now={FIXTURE_NOW}
+                locale={DISPLAY_LOCALE}
+              />
+            ),
+          subtitle: (
+            <span className="font-mono">{cursorLabel(source.cursor)}</span>
           ),
-        subtitle: (
-          <span className="font-mono">{cursorLabel(source.cursor)}</span>
-        ),
-      }),
+        });
+      },
     },
     {
       key: 'menu',
@@ -278,8 +359,14 @@ export const SourcesPage = () => {
       width: MENU_WIDTH,
       align: 'end',
       cell: (source) => renderCellContent('context-menu', {
-        // One action, and it is the one that works — see the header on
-        // the three the spec names and this round cannot honour.
+        // Three actions and all of them navigations — see the header
+        // on why neither the four writable members, nor the two
+        // answers to a proposed config, nor the two answers to a
+        // failed capture is a menu item of its own.
+        //
+        // Titles rather than labels: `RowContextAction` keys its
+        // items by `title`, so two rows sharing one would collide on
+        // the React key.
         actions: [
           {
             icon: 'square-pen',
@@ -287,6 +374,20 @@ export const SourcesPage = () => {
             onClick: () => {
               // Relative, so one expression serves both route bases.
               void navigate(`${source.id}/${EDIT_SEGMENT}`);
+            },
+          },
+          {
+            icon: 'file-check',
+            title: 'Review proposed config',
+            onClick: () => {
+              void navigate(`${source.id}/${CONFIG_SEGMENT}`);
+            },
+          },
+          {
+            icon: 'triangle-alert',
+            title: 'View failures',
+            onClick: () => {
+              void navigate(`${source.id}/${FAILURES_SEGMENT}`);
             },
           },
         ],
@@ -329,11 +430,12 @@ export const SourcesPage = () => {
               ariaLabel="Filter by kind"
             />
 
-            <Select
-              value={status.value}
-              options={statusOptions(statusCounts)}
-              onChange={status.setValue}
+            <ToolbarSep />
+
+            <FilterBadgeRow
               ariaLabel="Filter by status"
+              badges={statusBadges(statusCounts, status.value)}
+              onPress={status.setValue}
             />
           </>
         )}

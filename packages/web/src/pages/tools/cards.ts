@@ -74,26 +74,46 @@
  * So the reading lives on the export rows below and nowhere on a
  * card, and last-used arrives when a table stores it.
  *
- * ## The deliveries are rows, not a toggle per format
+ * ## The deliveries are toggles, and a toggle is a SUBSCRIPTION
  *
- * The UI spec describes the export list as a toggle list of FORMATS.
- * The stored shape refuses that: `export_subscriptions` is keyed on
- * the triple (domain, format, connector), and the fixtures carry two
- * `rss` rows to two different destinations precisely because neither
- * pair inside that triple is the key on its own. One toggle per
- * format would render those two as one row and lose a destination.
+ * The UI spec draws the export list as a `DecoratedToggleList` of
+ * formats, and the page does. What an option is KEYED on is the one
+ * place the stored shape has a say: `export_subscriptions` is keyed
+ * on the triple (domain, format, connector), and the fixtures carry
+ * two `rss` rows to two different destinations precisely because
+ * neither pair inside that triple is the key on its own. One toggle
+ * per format would draw those two as one control and lose a
+ * destination, so an option is a SUBSCRIPTION wearing its format as
+ * its title — which is the shape the parent design spells out beside
+ * the component it names, a row per format, connector and schedule.
  *
- * So a row is a SUBSCRIPTION, and the formats a domain has subscribed
- * to nothing under are named once underneath by
- * {@link unsubscribedFormats} — which is the reading the spec's OFF
- * state was after, without pretending a row exists to carry it.
+ * {@link deliveryToggleId}, {@link enabledDeliveryIds} and
+ * {@link applyEnabledDeliveries} are that control's whole decision
+ * set: what an option is called, which of them the list draws as on,
+ * and what the collection looks like after a flip. The last of those
+ * answers EVERY subscription rather than the one that moved, because
+ * the write behind it replaces the collection — see
+ * `../../data/api.ts`'s `saveExportSubscriptions` on why that is a
+ * PUT and not a row update.
+ *
+ * The formats this domain subscribes to nothing under stay OUT of the
+ * list and are named once underneath by {@link unsubscribedFormats}.
+ * That is not a layout preference: switching such a format on is an
+ * INSERT, the write seam cannot mint the id one would need, and a
+ * toggle whose ON state has nowhere to go is worse than the sentence
+ * that says the same thing. The same accessor's docblock carries the
+ * argument.
  */
 
 import type {
   ConnectorStatus,
   ExportSubscriptionSummary,
 } from '../../data/connectors';
-import type { ConnectorKind, ExportFormat } from '../../data/types';
+import type {
+  ConnectorKind,
+  ExportFormat,
+  ExportSubscription,
+} from '../../data/types';
 import type { BadgeProps, IconName, StatusIndicatorProps } from '@ar/ui';
 
 /** What a card says where a connector's config is empty. */
@@ -580,22 +600,76 @@ export function unsubscribedLabel(
 }
 
 /**
- * How many deliveries are running, out of how many are configured.
+ * What one delivery is called inside the toggle list.
  *
- * The reading `DecoratedToggleList` draws in its own header — this
- * surface renders the rows without that wrapper, since the section
- * around them already carries a heading, so the figure moves to the
- * section's action slot and is derived here instead.
+ * The subscription's own id, as a string because
+ * `DecoratedToggleOption.id` is one. Not the format, for the reason
+ * the header gives: two rows may share one and an option keyed on it
+ * would swallow a destination. Not an invented composite of the
+ * triple either — the row already carries a key, and a second one
+ * derived beside it would be free to disagree with it.
+ *
+ * @param subscription - The standing delivery.
+ * @returns Its option id.
+ */
+export function deliveryToggleId(subscription: ExportSubscription): string {
+  return String(subscription.id);
+}
+
+/**
+ * Which of this domain's deliveries the list draws as ON.
+ *
+ * The stored `enabled` flag and nothing else: the control holds no
+ * state of its own, so what it shows is a reading of the rows the
+ * accessor answered. A row switched off keeps its cadence and its
+ * destination, which is why the option stays in the list rather than
+ * leaving it.
  *
  * @param summaries - This domain's deliveries.
- * @returns The chip's text.
+ * @returns The ids of the enabled ones, in the order they arrived.
+ * Built fresh per call and owned by nobody.
  */
-export function exportCountLabel(
+export function enabledDeliveryIds(
   summaries: readonly ExportSubscriptionSummary[],
-): string {
-  const active = summaries
+): readonly string[] {
+  return summaries
     .filter((summary) => summary.subscription.enabled)
-    .length;
+    .map((summary) => deliveryToggleId(summary.subscription));
+}
 
-  return `${active} of ${summaries.length} active`;
+/**
+ * This domain's deliveries as a toggle set leaves them.
+ *
+ * Answers EVERY subscription rather than the one that moved, because
+ * the write behind it replaces the collection: `saveExportSubscriptions`
+ * is a PUT of the list, so a payload naming one row would read as a
+ * domain that had unsubscribed from the rest.
+ *
+ * An id the set does not carry is OFF. That is the control's own
+ * contract — `DecoratedToggleList` hands back the complete list of
+ * what is on — and it is what lets a flip in either direction go
+ * through one function rather than through a pair that could
+ * disagree.
+ *
+ * Every row is rebuilt rather than mutated, `enabled` included where
+ * it did not move: the fixture rows are frozen, and a payload sharing
+ * an object with the store would let a later reader see an edit
+ * nobody saved.
+ *
+ * @param summaries - This domain's deliveries, as the read answered.
+ * @param enabledIds - Every option the list now draws as on, as
+ * {@link deliveryToggleId} spells them.
+ * @returns The whole collection, in the order it was read, each row
+ * carrying the flag the list left it with.
+ */
+export function applyEnabledDeliveries(
+  summaries: readonly ExportSubscriptionSummary[],
+  enabledIds: readonly string[],
+): readonly ExportSubscription[] {
+  const on = new Set(enabledIds);
+
+  return summaries.map((summary) => ({
+    ...summary.subscription,
+    enabled: on.has(deliveryToggleId(summary.subscription)),
+  }));
 }

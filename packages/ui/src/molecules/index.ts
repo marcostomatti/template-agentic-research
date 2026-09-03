@@ -17,6 +17,7 @@ export * from './CodeInput';
 export * from './CalendarHeatmap';
 export * from './CellContent';
 export * from './ConfirmPopover';
+export * from './EntityCard';
 export * from './FilesChanged';
 export * from './KnownEntities';
 export * from './LineChart';

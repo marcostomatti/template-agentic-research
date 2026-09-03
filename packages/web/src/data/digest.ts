@@ -6,7 +6,7 @@
  * Three tables rather than one, because the digest surface is a join: a
  * row shows a {@link Finding}'s verdict and score, the {@link Document}
  * it was read from, and the {@link Entity} it is about. Keeping them
- * apart here means the page performs the same join the q15 endpoint
+ * apart here means the page performs the same join the API endpoint
  * will have to answer with, instead of a flattened row shape invented
  * for one table and then unpicked when the API lands.
  *
@@ -393,7 +393,7 @@ const ENTITIES_BY_ID = new Map<number, Entity>(
 );
 
 /**
- * Newest first — the order the digest renders, and the order the q15
+ * Newest first — the order the digest renders, and the order the API
  * endpoint has to answer in for the page to keep working unchanged.
  *
  * Compared as parsed instants rather than as text. Every fixture stamp
@@ -434,7 +434,7 @@ export function listDocuments(domainId: number): readonly Document[] {
  *
  * Ordering is part of what the digest means — the surface shows the
  * latest readings — so it belongs here rather than in the page, where
- * the q15 swap would drop it.
+ * the API swap would drop it.
  *
  * @param domainId - The `domains.id` whose findings are wanted.
  * @returns Its findings, newest first. Never the stored array.

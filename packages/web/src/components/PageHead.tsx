@@ -5,11 +5,12 @@
  *
  * ## An app-local stand-in
  *
- * `@ar/ui` ships no `PageHead`. The UI spec names one, and q15
- * promotes it into `@ar/ui/molecules` beside the `EntityCard` this
- * plan also does without — so this file exists in order to be
- * DELETED, and its whole brief is to make that deletion a change of
- * import rather than a rewrite of six pages.
+ * `@ar/ui` ships no `PageHead`. The UI spec names one, and a later
+ * wave promotes it into `@ar/ui/molecules`. The wave that shipped
+ * `EntityCard` was allowed ONE library deliverable and this was not
+ * it — so this file exists in order to be DELETED, and its whole brief
+ * is to make that deletion a change of import rather than a rewrite
+ * of six pages.
  *
  * Two rules follow from that, and both are cheap to hold while it
  * lives here:

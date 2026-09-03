@@ -17,7 +17,7 @@
  * happens in the data layer, so the page has no join to perform and no
  * partial state to guard against. What that costs is worth naming — a
  * card cannot show a term until the editor modal loads them — and what
- * it buys is that the q15 endpoint answers a card with one response
+ * it buys is that the API endpoint answers a card with one response
  * rather than shipping every term of every category to be counted in
  * a browser.
  *
@@ -31,32 +31,48 @@
  *
  * The search this surface will eventually want is over TERMS, not
  * over categories — `end of life`, which bucket is it in — and terms
- * arrive with the editor modal in q15. Adding a category filter now
- * would be the wrong control in the right place.
+ * are loaded by `./LexiconEditorModal.tsx`, not by this grid. Adding
+ * a category filter here would be the wrong control in the right
+ * place.
  *
  * ## The switch stores nothing
  *
  * `categories` has no enabled column, so the toggle is a delta held
  * for the life of the tab and written nowhere. `./cards.ts` documents
- * what that means and which schema decision q15 has to take; this file
- * owns the state and hands each card the reading of it.
+ * what that means and which schema decision a later wave has to take;
+ * this file owns the state and hands each card the reading of it.
  *
- * ## The grid track is the library's
+ * ## The grid track is the library's, and the page picks it
  *
- * `Grid`'s `auto` columns are `minmax(180px, 1fr)`, narrower than the
- * 300px the UI spec asks for. That is deliberate here: the spec's
- * track lands with the generic `EntityCard` q15 promotes into
- * `@ar/ui/molecules`, and widening it from the app would put a layout
- * decision in a page that the library is about to make for every
- * surface using it.
+ * `EntityCardGrid` owns the track as a variant, so this page carries
+ * no grid-template class at all: it names which of the two minimums
+ * the taxonomy takes and leaves the rest to `@ar/ui`. `md` is the
+ * 300px the UI spec asks for here, and what `Grid`'s `auto` columns
+ * (`minmax(180px, 1fr)`) could not give it.
  *
- * ## The card is not a link
+ * Spelled rather than left to the variant's own default, because it is
+ * a real choice — the connector grid takes `lg` — and a surface whose
+ * track can be read without opening the library is one that cannot
+ * drift from the spec quietly.
  *
- * The UI spec has a card click open the editor. It does not yet,
- * because a card carrying a switch and a menu cannot also be a button
- * without nesting one interactive control inside another — the
- * gesture arrives with `EntityCard`, which owns that composition. The
- * menu's `Edit terms` reaches the same sub-route in the meantime.
+ * ## The card opens, and the switch still works
+ *
+ * The UI spec has a card click open the editor, and `EntityCard` is
+ * how a card carrying a switch and a menu gets one without nesting an
+ * interactive control inside another: the TITLE is the button, an
+ * `absolute inset-0` child stretches its hit area over the whole card,
+ * and the `control` and `action` slots sit in a positioned layer above
+ * that overlay. One focusable open control per card, with the switch
+ * and the menu still reachable on their own.
+ *
+ * What it costs is where things may go. The overlay covers the badge
+ * row, the body and the meta footer, so nothing in them is selectable
+ * and nothing in them may be interactive — which is why the switch and
+ * the `RowContextAction` are passed as SLOTS rather than written into
+ * markup this page controls. The menu keeps its `Edit terms` item
+ * beside the gesture that now duplicates it: it is the same
+ * navigation, and an entry dropped because the card learned to open
+ * would read as one that was taken away.
  *
  * ## Four states
  *
@@ -77,9 +93,9 @@ import type { CategorySummary } from '../../data/lexicon';
 
 import {
   Badge,
-  Card,
   EmptyState,
-  Grid,
+  EntityCard,
+  EntityCardGrid,
   RowContextAction,
   Skeleton,
   Switch,
@@ -221,7 +237,9 @@ const LexiconBody = ({
   }
 
   return (
-    <Grid>
+    // `md` is the 300px track — spelled rather than defaulted, per the
+    // page header on why a surface states which of the two it takes.
+    <EntityCardGrid min="md">
       {summaries.map((summary) => (
         <CategoryCard
           key={summary.category.id}
@@ -231,7 +249,7 @@ const LexiconBody = ({
           onEdit={onEdit}
         />
       ))}
-    </Grid>
+    </EntityCardGrid>
   );
 };
 
@@ -250,11 +268,18 @@ interface CategoryCardProps {
 /**
  * One taxonomy bucket, as a card.
  *
+ * Everything an operator can DO with the bucket is passed to
+ * `EntityCard` rather than rendered here: `onOpen` makes the title
+ * the open control, and `control` and `action` are the layer the card
+ * keeps above the overlay that gesture stretches. Everything they
+ * only READ goes in the body and the meta footer, which the overlay
+ * covers — that is what makes the whole card open.
+ *
  * The split is drawn twice on purpose: a bar to compare this card
- * against the one beside it without reading, and three figures for
- * the operator who is. The bar is `aria-hidden` because it says
- * nothing the figures under it do not — a screen reader meeting both
- * would hear the same three numbers twice.
+ * against the one beside it without reading, and three figures for the
+ * operator who is. The bar is `aria-hidden` because it says nothing
+ * the figures under it do not — a screen reader meeting both would
+ * hear the same three numbers twice.
  *
  * @param props - The summary, the switch's reading, and the two
  * gestures the card reports.
@@ -270,67 +295,82 @@ const CategoryCard = ({
   const shares = polarityShares(polarity);
 
   return (
-    <Card
-      header={(
+    <EntityCard
+      title={category.name}
+      // The open gesture. `EntityCard` derives the card's hover
+      // affordance from this being present, so there is no second
+      // thing to keep in step with it.
+      onOpen={() => onEdit(category.id)}
+      // Undefined rather than `false` for a live category: the card
+      // renders its badge row for anything that is not null, and
+      // `false` would give it an empty one to space around.
+      //
+      // Said in words as well as by the switch, because the switch is
+      // a control an operator looks at when they are using it and the
+      // badge is a state they read across a grid.
+      badges={enabled
+        ? undefined
+        : <Badge tone="neutral" size="sm">Suspended</Badge>}
+      // The label names the setting rather than its state: the state
+      // rides `aria-checked`, which the switch keeps in step with what
+      // is drawn.
+      control={(
+        <Switch
+          checked={enabled}
+          onChange={(next) => onEnabledChange(category.id, next)}
+          aria-label={`Enable ${category.name}`}
+        />
+      )}
+      // One action, and it is the one the card itself now performs.
+      // Kept because it is the same navigation under a name, where
+      // exporting a seed and deleting a category are mutations this
+      // round still has no seam to write through — a menu item that
+      // did nothing would be worse than one that is not there.
+      action={(
+        <RowContextAction
+          actions={[{
+            icon: 'square-pen',
+            title: 'Edit terms',
+            onClick: () => onEdit(category.id),
+          }]}
+          entityType="category"
+          entityName={category.name}
+        />
+      )}
+      meta={(
         <>
-          {/* The card is a section of the page, so its title is an
-              `h2` — cancelling the two element defaults `tokens.css`
-              gives one, and leaving family, weight and colour to it. */}
-          <h2 className="m-0 min-w-0 truncate text-base" title={category.name}>
-            {category.name}
-          </h2>
+          {/* A `span` and not a `p`: `tokens.css` sets a paragraph's
+              own font-size, which beats the footer's inherited one. */}
+          <span className="text-fg1">
+            <span className="font-mono">{termCount}</span> {termNoun(termCount)}
+          </span>
 
-          <div className="flex shrink-0 items-center gap-1">
-            {/* The label names the setting rather than its state: the
-                state rides `aria-checked`, which the switch keeps in
-                step with what is drawn. */}
-            <Switch
-              checked={enabled}
-              onChange={(next) => onEnabledChange(category.id, next)}
-              aria-label={`Enable ${category.name}`}
-            />
-
-            {/* One action, and it is the one that works: opening the
-                editor is a navigation to this surface's modal
-                sub-route. Exporting a seed and deleting a category are
-                mutations, and this round has no seam to write through
-                — a menu item that did nothing would be worse than one
-                that is not there. */}
-            <RowContextAction
-              actions={[{
-                icon: 'square-pen',
-                title: 'Edit terms',
-                onClick: () => onEdit(category.id),
-              }]}
-              entityType="category"
-              entityName={category.name}
-            />
-          </div>
+          <dl className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {POLARITY_FACETS.map((facet) => (
+              <div key={facet.polarity} className="flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className={cn(
+                    'size-2 shrink-0 rounded-full',
+                    facet.fillClass,
+                  )}
+                />
+                <dt>{facet.label}</dt>
+                <dd className="font-mono text-fg1">
+                  {polarity[facet.polarity]}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </>
       )}
     >
-      <div className="flex items-center gap-2">
-        <p className="m-0 flex items-baseline gap-1.5">
-          <span className="font-display text-2xl leading-none">
-            {termCount}
-          </span>
-          <span className="text-sm text-fg3">{termNoun(termCount)}</span>
-        </p>
-
-        {/* Said in words as well as by the switch, because the switch
-            is a control an operator looks at when they are using it
-            and the badge is a state they read across a grid. */}
-        {!enabled && (
-          <Badge tone="neutral" size="sm" className="ml-auto">Suspended</Badge>
-        )}
-      </div>
-
       <div
         aria-hidden
         className={cn(
           'flex h-1.5 w-full overflow-hidden rounded-full bg-surface-sunk',
           // Not a text colour, so dimming it costs no contrast — see
-          // the header on why the card says this twice.
+          // the badge above on why the card says this twice.
           !enabled && 'opacity-40',
         )}
       >
@@ -345,19 +385,6 @@ const CategoryCard = ({
           />
         ))}
       </div>
-
-      <dl className="flex flex-col gap-1.5 text-[12.5px]">
-        {POLARITY_FACETS.map((facet) => (
-          <div key={facet.polarity} className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className={cn('size-2 shrink-0 rounded-full', facet.fillClass)}
-            />
-            <dt className="text-fg2">{facet.label}</dt>
-            <dd className="ml-auto font-mono">{polarity[facet.polarity]}</dd>
-          </div>
-        ))}
-      </dl>
-    </Card>
+    </EntityCard>
   );
 };

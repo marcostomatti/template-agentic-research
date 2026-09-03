@@ -106,11 +106,17 @@ jobs:
         working-directory: packages/web
         run: bun run build
 
-      # The same 1.61.1 the visual job installs, RESOLVED rather than
-      # spelled: @ar/web pins @playwright/test and it dedupes onto the
-      # playwright/playwright-core @ar/ui pins, so one download serves
-      # both packages and a future bump moves the pin and this step
-      # together. The working-directory is load-bearing, not cosmetic —
+      # NOT the version the visual job installs, and the two do not
+      # dedupe: @ar/web pins @playwright/test plus playwright-core at
+      # 1.62.1 while @ar/ui pins playwright/playwright-core at 1.61.1,
+      # so each job downloads its own browser build. @ar/web's explicit
+      # playwright-core pin is what binds @axe-core/playwright's peer to
+      # the same copy `page` comes from — without it that peer resolves
+      # to @ar/ui's 1.61.1 on a clean install and the a11y spec fails
+      # TS2322, while an incrementally-grown local tree resolves it to
+      # NOTHING and stays green under skipLibCheck. Bump the two pins
+      # separately, and the visual cache key (below) with @ar/ui's.
+      # The working-directory is load-bearing, not cosmetic —
       # bun's isolated linker leaves the repo root with no playwright
       # binary to resolve, and `bun x playwright` there silently fetches
       # the registry's latest instead — measured with `install --dry-run`,

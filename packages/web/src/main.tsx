@@ -25,7 +25,8 @@
  * inside the tree the router swaps, and every read would start cold.
  *
  * That is invisible against the fixture accessors, which resolve on a
- * microtask, and it is the whole point once q15 re-points them at HTTP.
+ * microtask, and it is the whole point once the API swap re-points
+ * them at HTTP.
  *
  * ## Why the router is built here
  *
