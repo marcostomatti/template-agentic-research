@@ -92,6 +92,34 @@ the placeholder brand "Acme".
 Interrupted runs can leave static servers on ports 6006/6007/6016
 (`EADDRINUSE` false failures) — kill them before re-running.
 
+**Step 1's pass count is not a gate reading.** `bun run test:visual` is
+GREEN over an EMPTY baseline directory and its summary lines are
+identical either way: `scripts/test-visual.sh` clears CI/GITHUB_ACTIONS
+for the jest child on purpose, so a MISSING baseline is WRITTEN and
+PASSES. Measured — the seed run and the assert run both printed
+`Test Suites: 85 passed` / `Tests: 366 passed`, and only
+`visual-report.json` separated them (`matched: 0, added: 732,
+didUpdate: true` against `matched: 732, added: 0`). So parse that
+report and say which KIND of run produced it. Two traps in doing so:
+its counters nest under a `snapshot` KEY rather than at the top level
+(the reflexive top-level read answers `None` for every one of them and
+an if/elif classifier falls through to its GREEN arm, reporting the
+verdict it would give a real assert run — print the keys you
+actually resolved beside the verdict), and the file is REWRITTEN by
+every run including `--update`, so copy it aside before re-running or
+the previous state is unrecoverable.
+
+The free second readings, neither costing a run: an mtime HISTOGRAM
+over the baseline directory bucketed by minute names WHICH files a
+reseed touched (two clusters over 744 files here) and is more
+informative than a sha256 manifest diff, which is the fallback when
+two runs land in the same minute. And `test:visual`'s `Tests: N`
+against `check:stories`'s `N/N stories render clean` — equal is what
+separates "every story rendered" from "one runner collected fewer
+files than exist", the two reaching the stories through completely
+different pipelines. Hold them against each other rather than quoting
+one.
+
 ## Visual CI
 
 `.github/workflows/front.yml` runs the visual suite on a self-hosted runner
@@ -103,6 +131,66 @@ repository Actions variable `VISUAL_CI` is `enabled` (runner override via
 The local visual suite is independent and always available. Operator setup and
 enablement live in `docs/ci/grow-box-runner-setup.md`; wiring is checked by
 `scripts/verify-visual-ci.sh`.
+
+## Open debt measured from `@ar/web`
+
+The app package runs an axe scan, a keyboard walk and a reduced-motion
+suite over this library as consumed. Five findings are OWNED HERE and
+none of them is repairable from `packages/web`; each was measured
+twice and is deterministic. They are recorded so the next wave that
+owns this package does not re-derive them.
+
+- **`aria-dialog-name`** (1 node, every modal address). `Modal` puts
+  `aria-labelledby` on its role-less panel `div` while `role="dialog"`
+  sits on the `Dialog.Content` that `Overlay` renders one level up.
+  `Overlay` takes a `label` prop for exactly this and `Modal` never
+  passes it, so NO call site can name a dialog. Attribute-only; moves
+  no pixel, so it costs no visual reseed.
+- **`aria-progressbar-name`** (1 node, every surface).
+  `SidebarWeekSummary` renders `Progress` with no accessible name.
+  Also attribute-only.
+- **`color-contrast`.** `Badge.variants.ts` pairs each tone with a
+  wash of itself (success 2.98:1, warning 2.22:1, danger 3.9:1) and
+  the `--fg3` token reads 2.53:1 at 11.5px. This one is a theme
+  decision with a real baseline blast radius.
+- **Focus is never returned to the control that opened a modal.**
+  Radix's `DialogContentModal` composes `onCloseAutoFocus` to
+  `preventDefault()` its own restore and focus
+  `context.triggerRef.current` instead — a ref only a
+  `Dialog.Trigger` fills, and `Overlay` renders none, its consumers
+  opening modals by ROUTE. So the restore is cancelled and nothing is
+  focused in its place: `document.activeElement` is the BODY after
+  every close, and the next Tab restarts the whole shell. App-side
+  repairs were measured GREEN and prove nothing (a focus call inside
+  the close handler is clobbered by Radix's unmount restore; behind a
+  `setTimeout` it lands too late). The leg that WORKS is in `Overlay`:
+  capture `document.activeElement` in a `useState` INITIALISER (a
+  `useRef` plus `useEffect` is too late, Radix having already
+  autofocused) and restore it from `onCloseAutoFocus` with a
+  `preventDefault`. `@ar/web` carries the current behaviour as a
+  documented ledger assertion, so the repair will red exactly two
+  named cases there.
+- **The app shell has no responsive behaviour.** `appShellSidebar` is
+  a flat `w-[var(--sidebar-w)]` with no media query (measured 264px
+  identically at 320, 768, 1024 and 1440) and nothing watches the
+  viewport, so a 320px viewport is a 264px rail beside a 56px content
+  column.
+
+Two related non-defects worth not re-measuring: `Overlay`'s
+`trapFocus={false}` does NOT stop Tab looping (Radix hardcodes
+`loop: true` in `DialogContentImpl`, so the flag only reaches
+`Dialog.Root`'s `modal`), and `Overlay` ships no enter/exit transition
+at all, so there is no modal transition to reduce.
+
+A `packages/ui` mutation leg IS reachable from a `packages/web`
+Playwright grid, and the pipeline is proven rather than assumed: edit
+the source, `bun run build` here, then run the spec — Playwright
+starts its own vite per run, so the rebuilt `dist` is what the browser
+gets. Confirm the leg took by grepping `dist/index.js` for the
+MINIFIED form of the change (a boolean default reads
+`trapFocus: a = !1`), because a leg that never reached the browser is
+indistinguishable from one the tests do not discriminate. Budget two
+builds per leg, one to apply and one to restore.
 
 ## Reference-free rule (CRITICAL)
 

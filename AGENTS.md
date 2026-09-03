@@ -54,14 +54,36 @@ wanted in both places must be made in both repos.
   is missing — look under the package, or the check reports absent for
   everything the apps actually depend on. And `bun x <tool>` resolves a
   DIFFERENT version per working directory: `bun x playwright --version`
-  prints the pinned 1.61.1 from `packages/ui` or `packages/web` and 1.62.1
-  from the root, whose `node_modules/.bin` carries no playwright at all —
-  the root resolves nothing and silently fetches the registry's latest.
+  prints a version PER DIRECTORY, and those pins move separately —
+  re-derive them from each package manifest rather than quoting a number
+  here (measured at the q15 tip: 1.61.1 from `packages/ui`, 1.62.1 from
+  `packages/web`, and 1.62.1 from the root, whose `node_modules/.bin`
+  carries no playwright at all, so the root resolves nothing and silently
+  fetches the registry's latest).
   So a CI step (or any command) invoking a PINNED tool through `bun x`
   must run from a directory that pins it, or it runs a version the
   lockfile never chose while looking identical in the log. Use
   `bun add --cwd packages/<pkg> <name>` to add a workspace dependency; it
   updates the root `bun.lock` in the same step.
+- That add is NOT a plain `bun add`, because the ROOT manifest pins some
+  packages through an `overrides` block rather than through a dependency
+  (`zod` is the standing example): the add silently resolves the PINNED
+  version and then writes a CARET range derived from what it resolved, so
+  the package manifest reads `^4.5.1` like any floating range and nothing
+  in it says the version is held — only root `overrides` plus
+  `bun.lock` do. Read `overrides` before taking a range at face value or
+  "fixing" one that looks behind latest. The reading that separates
+  "resolved the pin" from "fetched a fresh registry latest" is the
+  lockfile's `packages` SECTION and not the version string: a correct add
+  leaves the existing entry byte-identical and adds exactly ONE content
+  line under the workspace's own dependencies, and since bun separates
+  entries with a BLANK line a correctly-deduped one-package add lands as a
+  THREE-line diff — predict CONTENT lines, or the separator reads as
+  the one line unaccounted for, which is exactly the shape a SPLIT would
+  have. Pair it with `bun pm view <name> version` as the discriminating
+  control, and say so when that control is VACUOUS: for a package no
+  manifest overrides, resolving registry latest IS the correct outcome, so
+  a matching version is satisfied by construction and proves nothing.
 - Three surfaces are linted by NOTHING, each measured rather than assumed.
   `.github/workflows/*.yml`: `eslint.base.mjs` scopes its blocks to
   js/mjs/ts, md and json, so ESLint answers `File ignored because no
@@ -149,6 +171,118 @@ wanted in both places must be made in both repos.
   finding with a small script that rewrites the byte to its escape
   (binary read/write) — an edit tool cannot reliably match a control
   character it renders as whitespace.
+- Three zsh behaviours CORRUPT OR ABORT a whole Bash call, each measured
+  here and each reading as something other than what it is. `path` is a
+  SPECIAL ARRAY tied to `$PATH`, so the reflexive `while IFS=$'\t' read -r
+  rule path` clobbers the search path and every later external command in
+  that call dies as `command not found: git` — never bind `path`,
+  `cdpath`, `fpath` or `manpath`; `p`, `target` and `filepath` are free.
+  There is no `${!var}` indirect expansion (that is a bash-ism), so a
+  roster loop over variable NAMES aborts the call with `bad substitution`,
+  taking every later statement with it — read env vars from python
+  instead. And a bare `$var:X` takes zsh's HISTORY-STYLE MODIFIERS, so
+  `git show "$ref:AGENTS.md"` is mangled into `<abspath>GENTS.md` (`:A` is
+  the absolute-path modifier and eats the `A`) and fails as an ambiguous
+  revision; it fires only for paths whose first letter is a modifier
+  letter, so `"$ref:src/x.ts"` works and `"$ref:AGENTS.md"` does not.
+  Always brace the parameter: `"${ref}:AGENTS.md"`.
+- `bun -e <code>` exposes a trailing argument at `process.argv[1]`, NOT
+  `[2]`: there is no script-path slot to occupy the middle position, and a
+  `--` separator is consumed either way. The node reflex therefore reads
+  `undefined`, and a probe handing itself a JSON payload dies as a parse
+  error naming `"undefined"` — which reads as a malformed payload
+  rather than as an argv index. Pass structured or large payloads through
+  the ENVIRONMENT (`process.env.AR_PROBE_X`), which also dodges ARG_MAX
+  for a `git ls-files`-sized list.
+- The working tree can be switched OUT FROM UNDER a running task by
+  another process, several worktrees sharing one `.git`, and the symptom
+  is a file you read minutes ago reporting `No such file or directory`
+  while `pwd` and every path are correct. Measured: HEAD moved to `main`
+  via a `checkout` + `pull --ff-only` pair sitting at HEAD@{1}/HEAD@{0},
+  so half a plan's modules vanished and eslint reported
+  `import/no-unresolved` for three of them. Untracked work SURVIVES the
+  switch. The repair is `git branch --show-current`, `git reflog -8` to
+  attribute it, `git checkout <branch>` — then RE-RUN every reading
+  taken before the move, a green from the other branch being evidence
+  about a tree you were not on. Suspect it whenever an established path
+  stops resolving, rather than assuming your own edit. A SECOND cause
+  produces the same `import/no-unresolved` symptom and needs the opposite
+  response: another process REBUILDING a package's gitignored `dist/`.
+  `@ar/web`'s `pretest` wipes and rewrites `@ar/ui`'s, so a `lint` started
+  while that build is in flight reports the error against a file the
+  branch never touched, with `check-types` GREEN through it (that
+  package's exports map resolves types and values from DIFFERENT files).
+  Attribute before investigating — `git log --oneline <base>..HEAD --
+  <the named file>` and `git status --short -uall -- <it>` both answering
+  zero means the finding is not yours — and never run a package gate in
+  the foreground alongside a backgrounded `test`/`test:all`.
+- The Bash tool's persisted cwd is NOT reliably updated by a `cd <dir> &&
+  <cmd>` in a later call, and the symptom is byte-identical to that
+  worktree switch: an established relative path answers `No such file or
+  directory` while the tree is fine. Measured in one sitting
+  — a bare `cd` persisted, a later `cd <root> && python3 ...` ran from
+  the root for THAT CALL ALONE, and the call after it was back in the old
+  directory. The discriminator is one command, `pwd` beside `git branch
+  --show-current`: a correct branch under a wrong pwd is cwd and never a
+  checkout, and no reading needs re-running. Use ABSOLUTE paths in any
+  probe spanning more than one call.
+- `.claude/worktrees/<name>/` holds FULL sibling checkouts of this repo,
+  excluded at `.git/info/exclude`, so `git grep` and `git ls-files` never
+  see them while a plain `grep -r` does (measured on one doc heading: 1
+  file from `git grep`, 2 from `grep -rl`). Prefer `git grep` for every
+  sweep, or exclude the directory by name — an extra hit is another
+  leg's tree, and a prose sweep that "fixes" it writes into a checkout
+  this branch will never commit.
+- A git PATHSPEC's `*` crosses `/` (git uses wildmatch without
+  FNM_PATHNAME), so `'src/*.test.ts'` and `'src/**/*.test.ts'` answer the
+  IDENTICAL set and the `**` reads as load-bearing when it is not.
+  Harmless for a set-equality check, fatal for a DEPTH question: ask depth
+  with a regex over the listing (`^src/[^/]+\.test\.ts$`). The sibling
+  trap in the same family is a character class that silently matches
+  nothing — `tests/[a-z]*/` misses `tests/e2e` outright, the `2` being
+  a digit, and reports a green run as having executed no spec at all. Use
+  `[a-z0-9]`, and pair any such sweep with a PLANTED path in the same
+  command.
+- A FOREGROUND Bash call that times out ORPHANS the process it spawned:
+  the tool gives up at its timeout but the child survives the shell and
+  spins detached (measured: a hand-rolled tokenizer whose index stopped
+  advancing burned 100% CPU for hours, invisible to every terminal). So
+  any hand-rolled scanner loop must provably advance its index on EVERY
+  branch, and a risky one-off script wants a hard cap the OS can reap
+  (`timeout 60 python3 ...`, gtimeout via coreutils on macOS, or a
+  `signal.alarm` inside the script). The general rule for anything
+  multi-minute — `test:all` is ~6 min here — is the tool's own
+  `run_in_background` writing BOTH a capture and a separate
+  `echo EXIT=$? > <f>.exit`, never a manual `(cmd; echo ...) &` inside a
+  foreground call (the tool returns when its own last statement does and
+  the subshell is killed mid-run, leaving a truncated capture and NO exit
+  file, which reads exactly like a gate still running). `rm -f` BOTH files
+  in the same command that launches the run: `/tmp` survives sessions, so
+  a poll before the run finishes reads a PREVIOUS run's verdict and
+  reports the opposite of what happened (measured). The harness refuses a
+  foreground `sleep`, so the poll is `until [ -f <f>.exit ]; do sleep 5;
+  done` launched the same way — which then notifies on completion, so
+  no polling call is needed at all.
+- `bun pm view <pkg>` SUMMARY omits peerDependencies entirely: it prints a
+  `deps: N` line and a `dependencies (N)` block and stops, so a package
+  whose only constraint on the tree is a PEER reads as unconstrained
+  (measured on `@axe-core/playwright`, whose summary showed one dependency
+  and no peer section while `bun pm view <pkg> peerDependencies` answered
+  `playwright-core: ">= 1.0.0"` — exactly the constraint worth knowing
+  in a repo pinning playwright twice at two versions). Query the field by
+  NAME before predicting a lockfile delta or reading a green type-check.
+- Walking a dependency chain under the isolated linker is realpath, then
+  the SIBLING, then realpath again. A package's `node_modules/<dep>` is a
+  symlink into `.bun/<name>@<ver>+<hash>/node_modules/<name>`, and a
+  dependency OF that package sits BESIDE it in the same
+  `.bun/.../node_modules/` rather than under the realpath'd store dir.
+  Getting the shape wrong is silent at the hop and loud three steps later,
+  because `os.path.realpath` returns a non-existent path UNCHANGED rather
+  than raising: the walk prints a plausible nested path and dies at the
+  first file read, which reads as a missing file rather than as a bad
+  walk. `ls` the store dir's own `node_modules` before trusting a chain
+  — its sibling list is also the free reading of what that consumer
+  can see.
 
 ## Plans and specs (CRITICAL)
 
@@ -335,12 +469,28 @@ reading).
   false-positive fixtures. A control returning those 2 files alone is a DEAD
   control reporting only the scanner — only the third-party members say the
   guard discriminates against what is actually in the tree.
+- An unguarded near-neighbour control needs a FORM CHOSEN PER NEEDLE, and
+  a needle with no guard to drop has no canonical one — which is what
+  reconciles the two contradictory host-control figures this file and
+  `progress.txt` have both recorded. Where the needle IS guarded, drop the
+  guard (lookbehind, scheme separator, delimiting slashes) and the control
+  is live. Where it is a bare multi-fragment LABEL, the only unguarded form
+  available is a LEADING FRAGMENT of it, and that form reproduces the
+  `2 hits across the invariant's own two files` reading while the FULL
+  label reproduces `zero files anywhere`. Both are correct about different
+  probes and the DEAD verdict is the same either way, so SAY WHICH FORM a
+  control used — a bare "the host control is dead" sentence is
+  unfalsifiable without it. The related claim that the invariant's own two
+  files hit ALL the controls "by construction" is FALSE for the two needles
+  with no false-positive fixture: both are assembled from fragments in
+  their declaring files, so no contiguous copy exists to self-hit, and a
+  legitimately EMPTY file set is the expected answer rather than a broken
+  probe. Read each control's file SET individually.
 - One of those four controls IS dead here, and the tell is the file SET
-  rather than the count: dropping the guard from the origin HOST needle
-  returns 2 hits across exactly the invariant's own two files and ZERO
-  third-party ones, because that label has no legitimate near neighbour in
-  this tree at all. The other three do discriminate (prefix-without-
-  lookbehind: 15 hits, 1 third-party; note-app-without-scheme: 33 across 16;
+  rather than the count: the origin HOST needle has no legitimate near
+  neighbour in this tree at all. The other three do discriminate
+  (prefix-without-lookbehind: 15 hits, 1 third-party;
+  note-app-without-scheme: 33 across 16;
   path-segment-without-slashes: 27 across 3). So say which zeros are backed
   by a live control and which rest on the planted sample ALONE — a blanket
   "the controls proved the guards discriminate" is false of the host needle
@@ -448,6 +598,25 @@ red package never masks another and a single run gives the whole picture.
   still leaves the other two printing `0` (the filter does not
   short-circuit). A capture MISSING package lines is the root failing,
   never three silent passes.
+- A package `check-types` GREEN can rest on a peer type that resolved to
+  NOTHING, and `skipLibCheck` is what hides it — so a clean CI install
+  reds a call site an incrementally-grown `node_modules` type-checked
+  against no contract at all. Measured at the q15 PR: `@axe-core/
+  playwright` declares `playwright-core` as a PEER and its `.d.ts` opens
+  `import { Page } from 'playwright-core'`; locally that store dir's only
+  sibling was `playwright` and no `playwright-core` existed at the root or
+  under `packages/web`, so the import resolved to nothing,
+  `tsconfig.base.json`'s `skipLibCheck: true` suppressed the resulting
+  TS2307 inside `node_modules`, `Page` degraded to `any`, and the call was
+  green. The runner's `bun install --frozen-lockfile` resolved the same
+  peer to the OTHER pinned copy and answered TS2322 naming both store
+  paths. Two rules. A dependency whose constraint on the tree is a PEER is
+  an install-layout-dependent type check wherever this repo pins its
+  provider more than once, so ask `bun pm view <pkg> peerDependencies` by
+  NAME before reading a green. And where the local and hosted answers
+  disagree the LOCAL one is the suspect: read the error's two store paths,
+  then check what the importing package's own store dir has as a SIBLING
+  — an empty answer there is the diagnosis, not a missing file.
 - Proving a gate READ the files a change added is a set diff, not a count:
   `eslint <paths> --format json` piped through a `filePath` print, or
   `bun x tsc --showConfig` filtered to the non-`node_modules` entries of
@@ -788,6 +957,44 @@ matching anything prints exactly the same five lines.
   package's `eslint.config.mjs:7`. The one-word-script-edit rule above is
   true of the first half and false of the second, and the two are
   byte-identical from the fan-out.
+- Un-TARGETED is not un-LINTABLE, and the gap between the two hides a real
+  error nobody will ever be shown. The base config's markdown block DOES
+  carry rules for a package-root `.md`: an explicit-path `bun x eslint -f
+  json AGENTS.md` from inside `packages/web` returned neither the
+  covered-and-clean shape NOR an ignore warning, but one severity-2
+  `markdown/fenced-code-language` naming a route-diagram fence —
+  pre-existing, confirmed by reading the merge-base blob. Run the
+  explicit-path form once on any package-root docs task: it is the ONLY
+  reading that exists, no fan-out line is evidence about the file, and a
+  fence or link fault introduced there is invisible forever.
+- The covered-and-clean shape has NO liveness of its own, and for the ROOT
+  `AGENTS.md` it is a zero over an EMPTY rule surface: that file carries
+  ZERO fenced code blocks, so the one markdown rule measured to fire here
+  has nothing to read there and `messages: []` is the answer whether the
+  block matched or not. Close it with a planted control in the same
+  sitting — append a languageless fence, re-run, read the exit 1 and
+  the named rule, restore — and pair that with the IGNORED shape from a
+  sibling path (`packages/web/AGENTS.md` handed to the same root-run
+  command). The plant proves a rule COULD fire; the sibling proves the run
+  is not ignoring its subject. Neither alone is the reading.
+- A "this directory was never touched" claim has a needle-liveness half,
+  and BOTH git commands fail silently without it: `git diff --name-only
+  <range> -- packages/servicx` and `git log --oneline <range> --
+  packages/servicx` each exit 0 with zero bytes on stdout AND on stderr,
+  byte-identical to a correctly spelled pathspec answering honestly empty.
+  A sibling path asserted PRESENT proves the RANGE is non-empty and says
+  nothing about the spelling. `git ls-files -- <pathspec> | wc -l` above
+  zero, or `git ls-files --error-unmatch -- <a known member>` at exit 0
+  with a fabricated sibling asserted exit 1, is the leg that closes it.
+  Three free widenings: `--full-history` (print the branch's MERGE COUNT
+  beside it, since zero merges means the two forms agree by construction
+  and the flag proved nothing), `--no-renames`, and the whole-branch
+  changed set bucketed by TOP-LEVEL path, which needs no pathspec at all
+  and so cannot inherit a pathspec fault. Both subject commands read
+  COMMITTED history alone, so the claim also owes the working-tree half
+  (`git status --short -uall -- <path>` plus `git diff HEAD --name-only --
+  <path>`) — trivially empty on a clean tree, which is exactly when a
+  reader forgets it was part of the claim.
 - An explicit-path `-f json` run and the SCRIPT's own pathspec answer
   DIFFERENT questions, and a gate-coverage claim owes BOTH. The explicit
   run proves ESLint does not IGNORE the file and says nothing about
@@ -853,8 +1060,32 @@ matching anything prints exactly the same five lines.
   discrimination — both of them SYNTHETIC, with no real subject in the
   tree. Report it as an identity plus its synthetic controls, expect the
   excluded count to stay 0 until the first tracked binary asset lands, and
-  re-derive the denominator: it moved 780 -> 831 -> 832 across three
-  recorded readings.
+  re-derive the denominator: it moved 780 -> 831 -> 832 -> 975 across four
+  recorded readings, the tracked extension inventory holding at the same
+  twelve extensions while only the extensionless half grew (the newcomer
+  being `packages/web/.gitignore`, which `isScannable` files there because
+  it keys on `lastIndexOf('.') <= 0` rather than on an extension called
+  `gitignore`).
+- That scanned count is a COVERAGE reading and says NOTHING about whether
+  the scanner still discriminates — which is the half the identity
+  above cannot supply. The zero-risk liveness control drives the same
+  binary at a THROWAWAY repo instead: `git init` a `/tmp` dir, write one
+  clean file and one carrying a raw NUL (python `bytes([0])`, never an
+  edit tool, which cannot reliably emit a byte it renders as whitespace),
+  commit, and run the gate with `--root <that dir>`. Measured exit 1
+  naming `planted.ts:1:20  0x00` with the byte rendered back as `<0x00>`,
+  then exit 0 over the same repo after a `git rm` of the plant. That
+  exercises walk, selection, read, scan and exit code end to end with the
+  real tree never touched, which is what makes a 975-file zero a reading
+  rather than a dead needle.
+- Extend the coverage proof from the ADDED/REMOVED count delta to per-PATH
+  MEMBERSHIP, which is the leg that says the gate read THIS BRANCH rather
+  than that a number matched: every path in `git diff --name-only -z
+  <base>..HEAD` still present at HEAD must be a member of the
+  `isScannable`-filtered `git ls-files` set (measured 101 of 101 present,
+  0 deleted, 0 unscanned), with the fabricated-absent control asserted NOT
+  in that set in the same command. Under a predicate that is the identity
+  over the tracked set, a count cannot say anything at all.
 - The clause beside it — "confirm the ignored trio is absent from
   `git status --short --untracked-files=all`" — is evaluated against an
   EMPTY capture on a clean tree, where a grep returns 0 for every needle
@@ -959,9 +1190,56 @@ the `Auto-merging` / `CONFLICT (content)` block naming each one. Doing it
 first is what lets a PR body NAME the conflicts and their shape instead of
 the reviewer discovering a red merge box, and it is the same reading
 `gh pr view --json mergeable` gives only once the PR exists and is
-therefore too late to write about. Expect the complementary-additions shape
-here: the recurring conflicts are `docs/architecture/` tables both sides
-appended rows to, which want both sides kept.
+therefore too late to write about.
+
+**But `merge-tree` exits 1 for TWO different reasons**, and "exits 1 on
+conflict" covers only one: an UNRESOLVABLE ref answers exit 1 with
+`merge-tree: <ref> - not something we can merge` and NO tree OID at all,
+indistinguishable from a conflict at the exit code alone. The
+discriminator is the FIRST LINE — a 40-hex OID means the merge RAN
+(conflicted if stage entries follow, clean if the capture is that one
+line), anything else means it never started. Read the first line, never
+`$?`. A CLEAN reading is then a zero-hit shape owing a liveness control,
+and that control needs nothing written into the shared object database
+(which matters with a parallel leg on the same `.git`): `git init` a
+`/tmp` dir, commit a three-line file, branch twice off that base
+rewriting the SAME line differently, and `merge-tree --write-tree` the
+pair. It reproduces the documented conflict shape exactly at exit 1,
+while a second pair appending to DIFFERENT files answers exit 0 and one
+line. Both in one command, about 2s.
+
+**The complementary-additions conflict is NOT the default outcome**, and
+the q15 wrap measured the opposite: both docs files the two sides had
+edited (root `AGENTS.md`, `packages/web/AGENTS.md`) auto-merged, their
+hunk ranges being disjoint. So the absence of a `CONFLICT` block settles
+nothing by itself. The reading that says a real three-way merge RAN
+rather than one side winning is LINE ARITHMETIC over `git cat-file -p
+<merged-tree>:<path>` — merged == base + (HEAD - base) + (main -
+base) EXACTLY, with the merged blob differing from base, from HEAD and
+from main. And verify a PLAN's predicted conflict against which HUNK each
+side actually touched before reporting it as expected or as missing:
+`git diff --unified=0 <base> <ref> -- <path> | grep '^@@'` for both sides
+is the whole reading, with `comm -12` over the two `--name-only` sets
+naming the both-touched paths first. Measured at the q15 wrap: the plan
+expected the workspace-map row to conflict, 111 commits had landed on
+main, and main left that row byte-identical to the base.
+
+**A textually clean merge makes NO semantic check**, and the merged
+content exists nowhere on disk — so sweep the MERGED BLOB rather than
+the working copy: `git cat-file -p <the merge-tree OID>:<path>`. Two
+readings pay for themselves and both are zero-hit shapes needing a
+planted control in the same command: conflict-marker lines
+(`grep -cE '^(<{7}|={7}|>{7})( |$)'`) and DUPLICATED HEADINGS
+(`grep -E '^#{1,4} ' | sort | uniq -d`), the latter being the classic
+both-sides-added-the-same-section hazard.
+
+**`git ls-remote origin refs/heads/main` is the currency check** any
+mergeability reading owes: without it the answer may be about a stale
+`origin/main` and nothing in the output would say so. It touches no ref,
+no index and no working tree, which matters here because a `fetch` writes
+into the `.git` two checkouts share. Print the local `git rev-parse
+origin/main` beside it — equal is the reading, and unequal means
+fetch before believing the merge answer.
 
 **A conflicting PR dispatches NO workflow at all**, so `no checks reported`
 on a fresh PR is a MERGE-STATE reading and not a trigger or changed-path
@@ -981,6 +1259,31 @@ tag. `git tag --list 'v*' | sort -V | tail` plus
 `git log -1 --format='%h %s' <tag>` is the check, and an honest close-out
 row states what is TRUE at the commit (built, gates green at `<sha>`, PR
 and tag pending) rather than a number the push task will discover.
+
+**A PR-opening task's own verification is `gh pr checks`**, and it can
+find a defect no local gate could — run it rather than treating the
+create's URL as the outcome. Two readings it gives free. Jobs EXISTING is
+the post-push corroboration of a pre-push clean `merge-tree` reading,
+since a DIRTY PR dispatches none. And `mergeStateStatus` `UNSTABLE`
+beside `mergeable: MERGEABLE` is checks-in-flight-or-failed and NEVER a
+merge problem, so a reader keying on "not CLEAN" reports a healthy PR as
+blocked. Poll it with the tool's own `run_in_background` and a loop over
+`gh pr checks` breaking when no row reads `pending`; a job's log is
+unreachable through `gh run view --log-failed` while ANY job in the run
+is still going, and the fetchable form meanwhile is
+`gh api repos/<o>/<r>/actions/jobs/<id>/logs`, with the step list from
+the same endpoint without `/logs`.
+
+**When a hosted gate contradicts a body you already published, AMEND the
+body** rather than reporting the red only in the chat or a spec: an
+outbound document asserting green while its own CI is red is the one
+artifact a reviewer takes entirely on trust. The shape that worked — a
+`## Known red` section LEADING the body with the mechanism and the
+candidate repairs, the DoD bullet the red belongs to qualified in place,
+and a pointer inside the contradicted capture block itself, so a reader
+landing on the capture cannot take it for a verdict. Do NOT pick the
+repair inside a PR task where the candidates differ in blast radius
+— state them and let the next plan choose.
 
 **Compare a published PR body in BYTES on both sides**, or the two figures
 disagree by exactly the multi-byte characters and a correct edit reads as
