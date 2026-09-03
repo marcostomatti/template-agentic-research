@@ -4,17 +4,19 @@
  * Driven over `tests/helpers/memory-research-store.ts`, so every
  * claim here is answered with no database anywhere.
  *
- * TEN SECTIONS AND THIRTY CASES. Nineteen are about a refusal and
- * eleven about what a read ANSWERS: the scoping, the two filters,
- * the window's two boundaries, and the single get's three embedded
- * lists. What ORDER a findings PAGE comes back in is still another
- * task's half, so every PAGE assertion below reads a membership, a
- * count or a call tally rather than a position. The ordering claims
- * this file does make are over the two EMBEDDED lists a single get
- * carries, whose order the port promises: a finding's rulings and
- * its entity's research, both newest first. The rulings are the one
- * that is load-bearing rather than presentational — the head of
- * that list is the verdict in force.
+ * ELEVEN SECTIONS AND THIRTY-FIVE CASES. Nineteen are about a
+ * refusal and sixteen about what a read ANSWERS: the scoping, the
+ * two filters, the window's two boundaries, the single get's three
+ * embedded lists, and the ORDER a page comes back in. Three orders
+ * are read here and the port promises all three. A findings PAGE
+ * is one of them, and it is the one held against another module
+ * rather than against a list written out here. The other two are
+ * the EMBEDDED lists a single get carries: a finding's rulings and
+ * its entity's research, both newest first. The rulings are the
+ * one that is load-bearing rather than presentational — the head
+ * of that list is the verdict in force. Every OTHER page assertion
+ * still reads a membership, a count or a call tally, so a section
+ * about a narrowing cannot fail for an ordering reason.
  *
  * EVERY REFUSAL CASE CARRIES ITS OWN CONTROL, VARIED ALONG THAT
  * ROW'S OWN AXIS. A function refusing everything and a schema
@@ -59,6 +61,18 @@
  * window — one before the lower bound, one exactly on it, one
  * exactly on the upper — so a store closing either bound the other
  * way answers a different pair.
+ *
+ * A THIRD DOMAIN CARRIES THE ORDERING FIXTURE AND NOTHING ELSE
+ * READS IT. Its six findings are judged by nobody and filed under
+ * no category, so no narrowing above reaches them, and the rows an
+ * ordering needs would otherwise have moved every window and every
+ * category page in this file. They are PLANTED IN AN ORDER THE
+ * ANSWER REVERSES AT EVERY TIEBREAK, which is the one thing such a
+ * fixture has to do and the one thing a green suite cannot report:
+ * `sort` is stable, so a pair planted in the answer's own order
+ * comes back right with the key separating it removed, and the leg
+ * that should have caught it reads zero for a reason the fixture
+ * owns rather than the store.
  *
  * THE CLOCK IS FIXED AND ADVANCING. Rulings are stamped off it, so
  * a re-judged finding's two labels carry two instants rather than
@@ -109,6 +123,21 @@
  * declares, which is why it reads as a composition claim rather
  * than as a second copy of `src/http/schemas.test.ts`.
  *
+ * THAT A PAGE COMES BACK IN THE ORDER A DIGEST SHOWS, AND THAT
+ * THIS IS TWO DERIVATIONS OF ONE RULE RATHER THAN ONE HELD AGAINST
+ * ITSELF. `orderFindings` in `src/lib/digest-assemble.ts` is the
+ * comparator the digest selection and every renderer already agree
+ * on, and `tests/helpers/memory-research-store.ts` writes its
+ * three keys out independently rather than calling it — exactly as
+ * `./db-store.ts` will express them in SQL. So the ordering
+ * section holds a page this store answered against that library
+ * over the same rows, twice: the library re-sorting the answered
+ * page changes nothing, and the same page equals the library's
+ * order over the PLANT, which never saw what the store did. The
+ * `recency` expectation is derived from the same library rather
+ * than from a second comparator, by handing it the same rows with
+ * every score removed — which is what a key being DROPPED means.
+ *
  * THAT NO REFUSAL QUOTES ANYTHING. The containment block counts
  * occurrences of a planted sentinel in each serialised refusal
  * rather than asserting absence, and takes the same count over a
@@ -122,58 +151,68 @@
  * the leak this rule exists to close.
  *
  * Mutation grid, run whole over this file with `--reporter=json`
- * and read as the failed case SET rather than as a count. Sixteen
- * legs, each measured TWICE — once against HEAD's copy of this file
- * and once at the tip — so what the positive sections bought is a
- * before/after difference rather than a comparison against a figure
- * some header records. Eight legs mutate `./service.ts` and eight
- * mutate `tests/helpers/memory-research-store.ts`, and that split
- * is itself the change: the previous revision could say every leg
- * was a service mutation because nothing here rested on the store's
- * own scoping, filtering or ordering, and now nine cases do.
+ * and read as the failed case SET rather than as a count.
+ * TWENTY-TWO legs, each measured TWICE — once against HEAD's copy
+ * of this file and once at the tip — so what the ordering section
+ * bought is a before/after difference rather than a comparison
+ * against a figure some header records. Eight mutate
+ * `./service.ts` and fourteen mutate
+ * `tests/helpers/memory-research-store.ts`, six of those fourteen
+ * being new legs over the store's own comparator.
  *
- * THE SIX CARRIED-IN LEGS THAT ALREADY REDDENED SOMETHING HELD
- * EXACTLY, 19 cases to 30, which is what says the refusal sections
- * were not disturbed. Comparing a resolved row against `undefined`
- * so the branch never fires reddens 8 — three cases in each lookup
- * section plus the two containment cases that go through them.
- * Issuing the reads above the lookup reddens exactly 2, one per
- * counting case, every status assertion being green either way.
- * Reversing the `.extend()` direction reddens 3: both inverted-
- * window cases and the containment case that submits one, since a
- * query no longer refused reaches the helper's own throw.
+ * FIFTEEN OF THE SIXTEEN CARRIED-IN LEGS HELD BYTE-IDENTICAL SETS,
+ * 30 cases to 35, which is what says the sections this revision did
+ * not touch were not disturbed. Comparing a resolved row against
+ * `undefined` so the branch never fires reddens 8 — three cases in
+ * each lookup section plus the two containment cases that go
+ * through them. Issuing the reads above the lookup reddens exactly
+ * 2, one per counting case, every status assertion being green
+ * either way. Reversing the `.extend()` direction reddens 3: both
+ * inverted-window cases and the containment case that submits one,
+ * since a query no longer refused reaches the helper's own throw.
  * Reordering `FINDING_SORT_KEYS` reddens 1. The two quoting legs
- * redden 1 each, disjoint.
+ * redden 1 each, disjoint. Dropping the filter from the count read
+ * reddens 5: every narrowed page that reads a `total`, which is
+ * every one of them except the unjudged-finding case, whose subject
+ * is a membership. Swapping two of the single get's three embedded
+ * lists reddens 2. Dropping the verdict narrowing reddens 2 and
+ * dropping the category narrowing reddens 2. Taking the OLDEST
+ * ruling as the one in force reddens 1, and the fixture's
+ * opposite-order pair is the only thing that can report it. Closing
+ * the upper bound reddens 2 and opening the lower bound reddens 3.
+ * Ordering the rulings oldest first reddens 3 — the two single-get
+ * cases and the verdict page, which reads the head of that same
+ * list — and ordering the research oldest first reddens 1.
  *
- * THE TWO LEGS THE PREVIOUS REVISION RECORDED AS REDDENING NOTHING
- * ARE CLOSED, each from 0 at HEAD to a set naming its own sections.
- * Dropping the filter from the count read reddens 5: every narrowed
- * page that reads a `total`, which is every one of them except the
- * unjudged-finding case, whose subject is a membership. Swapping
- * two of the single get's three embedded lists reddens 2: the one
- * new single-get case whose finding carries all three, and the
- * refusal section's own positive control, which could not report it
- * while all three lists held one row.
+ * TWO IS THE EMBEDDED-LIST SWAP'S CEILING RATHER THAN A GAP IN IT.
+ * The other two single-get cases address findings whose two swapped
+ * lists are both EMPTY, so no reading over them can tell the swap
+ * from the truth — which is the equal-length trap one step further
+ * along, and it cannot be closed without taking those two cases off
+ * the states they are there to hold.
  *
- * TWO IS THAT LEG'S CEILING RATHER THAN A GAP IN IT. The other two
- * single-get cases address findings whose two swapped lists are
- * both EMPTY, so no reading over them can tell the swap from the
- * truth — which is the equal-length trap one step further along,
- * and it cannot be closed without taking those two cases off the
- * states they are there to hold.
+ * THE ONE CARRIED-IN LEG THAT MOVED IS THE SCOPING ONE, from 10 to
+ * 13, and its three ADDED members are exactly the three ordering
+ * cases that page a domain of their own. Nothing was REMOVED from
+ * any of the sixteen. The two tie cases are not among the three,
+ * and that is the honest limit of the reading: no other domain here
+ * files a finding at either paired score, so an unscoped page still
+ * leaves each tied pair adjacent and in order.
  *
- * THE EIGHT STORE LEGS ALL READ 0 AT HEAD, which is the sharpest
- * thing these sections can be said to have bought. Dropping the
- * domain from the findings read reddens 10 against 1 at HEAD, that
- * one being the case which plants findings under a domain id no row
- * carries. Dropping the verdict narrowing reddens 2 and dropping
- * the category narrowing reddens 2. Taking the OLDEST ruling as the
- * one in force reddens 1, and the fixture's opposite-order pair is
- * the only thing that can report it. Closing the upper bound
- * reddens 2 and opening the lower bound reddens 3. Ordering the
- * rulings oldest first reddens 3 — the two single-get cases and the
- * verdict page, which reads the head of that same list — and
- * ordering the research oldest first reddens 1.
+ * THE SIX NEW LEGS ALL READ 0 AT HEAD, which is the sharpest thing
+ * the ordering section can be said to have bought, and each names
+ * the case it is about. Sorting an absent score FIRST rather than
+ * last reddens 3, and reading an absent score AS zero reddens the
+ * same 3 — the whole-page comparison, the recency case and the
+ * unscored case, which is why the fixture carries a measured zero
+ * as well as an absence. Dropping the stamp key reddens 3 and
+ * dropping the id tiebreak reddens 3, each of them the whole-page
+ * comparison, the recency case and its own tie case. Ignoring the
+ * sort key so `recency` answers the score order reddens 1, the
+ * recency case. Reversing the score direction reddens 1, the
+ * whole-page comparison — which is what that case is for: every
+ * per-key case below asks about one pair, and only the comparison
+ * against the library asks about the order entire.
  */
 import type {
   FindingListQuery,
@@ -203,6 +242,7 @@ import {
 } from '../../tests/helpers/memory-research-store.js';
 import { toStoreWindow, toTimeWindow } from '../http/schemas.js';
 import { parseQuery } from '../http/validation.js';
+import { orderFindings } from '../lib/digest-assemble.js';
 
 import {
   FINDING_SORT_KEYS,
@@ -383,9 +423,10 @@ const EVERY_FINDING: FindingFilter = {
  * bound, exactly on it, exactly on the upper — so a store closing
  * either bound the other way answers a different pair.
  *
- * What the ORDER of them is still belongs to another task, which is
- * why every page assertion below reads a count or a membership
- * rather than a position.
+ * WHAT ORDER THEY COME BACK IN IS NOT READ OFF THESE THREE. The
+ * ordering section pages a domain of its own, so every assertion
+ * over this fixture is a count or a membership and a narrowing
+ * case cannot fail for an ordering reason.
  */
 const PLANTED_FINDINGS: readonly MemoryDomainFinding[] = [
   {
@@ -466,6 +507,210 @@ const SIBLING_COUNT = SIBLING_FINDINGS.length;
 
 /** Their ids, ascending, on {@link PLANTED_IDS}' terms. */
 const SIBLING_IDS: readonly number[] = SIBLING_FINDINGS.map(
+  (row) => row.id,
+);
+
+/**
+ * A third domain, and the only one in this file whose page is read
+ * as a POSITION.
+ *
+ * SEPARATE FROM THE TWO ABOVE RATHER THAN FOLDED INTO EITHER. The
+ * rows an ordering reading needs — two pairs tied on a key, a
+ * measured zero, and an unscored row that has to be the NEWEST —
+ * would move every window and every category page above, and those
+ * sections would then be reading a fixture built for something
+ * else. Nothing here is judged and nothing is filed under a
+ * category, so no narrowing in this file reaches these rows.
+ *
+ * IT IS PLANTED BESIDE THE OTHER TWO, so an unscoped read answers
+ * this page with all eleven findings, whose scores and stamps
+ * interleave with these. That is a scoping reading for the two
+ * cases about the WHOLE order and for the one about the tail, and
+ * measurably not for the two about a tied PAIR: no other domain
+ * here files a finding at either paired score, so an unscoped
+ * page still leaves each pair adjacent and in order. Dropping
+ * the domain from the store's read reddens three of these five.
+ */
+const ORDERING = 'example-ordering';
+
+/**
+ * The unscored finding, and the NEWEST row in its domain.
+ *
+ * NEWEST ON PURPOSE, which is what makes its position a reading
+ * rather than a coincidence: it wins both tiebreaks, so the only
+ * thing that can put it at the foot of a score page is the score
+ * key holding an absent score behind every score there is. A store
+ * spelling `score DESC` without `NULLS LAST` — which is Postgres's
+ * own default for that word — answers it FIRST.
+ */
+const UNSCORED_ID = 61;
+
+/**
+ * The lower-id half of the pair tied on score AND stamp.
+ *
+ * PLANTED BEFORE ITS SIBLING, so the tiebreak the answer applies
+ * REVERSES the plant order. `sort` is stable, so a tied pair keeps
+ * the order it arrived in when the key separating it is gone — and
+ * a pair planted in the answer's own order reproduces the right
+ * page with the rule removed.
+ */
+const SAME_MOMENT_LOW_ID = 62;
+
+/** The higher-id half, and the one that has to come first. */
+const SAME_MOMENT_HIGH_ID = 63;
+
+/**
+ * The older half of the pair tied on score alone, planted first on
+ * {@link SAME_MOMENT_LOW_ID}'s reasoning.
+ *
+ * IT CARRIES THE HIGHER ID OF THE TWO, which is the other half of
+ * the same trap: the stamp key answers the newer row first, so a
+ * pair whose newer row also carried the higher id would come back
+ * right with the STAMP key gone, the id tiebreak beneath it
+ * reaching the same answer. Measured — before the two ids were
+ * swapped, dropping the stamp key reddened one case in this file
+ * and neither of the two that are about it.
+ */
+const SAME_SCORE_OLDER_ID = 65;
+
+/** The newer half, and the one that has to come first. */
+const SAME_SCORE_NEWER_ID = 64;
+
+/**
+ * The finding that scored exactly ZERO, and what separates an
+ * absent score sorted LAST from one compared as a number.
+ *
+ * A MEASURED ZERO IS A SCORE AND AN ABSENT ONE IS NOT. This row is
+ * OLDER than {@link UNSCORED_ID}, so a store reading absence AS
+ * zero ties the two on the first key, falls through to the stamp
+ * and answers the newer of them — which is the unscored one.
+ * Without a zero in the fixture that mistake is unreachable: every
+ * other score here is positive, and an absent score compared as a
+ * number below all of them lands exactly where the tail does.
+ *
+ * IT ALSO SHARES A STAMP WITH {@link SAME_SCORE_OLDER_ID}, which
+ * is what carries the id tiebreak into the recency ordering, where
+ * there is no score key above it.
+ */
+const MEASURED_ZERO_ID = 66;
+
+/** The score {@link SAME_MOMENT_LOW_ID} and its sibling share. */
+const PAIRED_TOP_SCORE = 0.8;
+
+/** The score {@link SAME_SCORE_OLDER_ID} and its sibling share. */
+const PAIRED_SCORE = 0.5;
+
+/** When both halves of the tied-on-both pair were made. */
+const ORDER_EARLY = '2026-05-01T00:00:00.000Z';
+
+/** When the two rows that share a stamp were made. */
+const ORDER_MID = '2026-05-02T00:00:00.000Z';
+
+/** When {@link SAME_SCORE_NEWER_ID} was made. */
+const ORDER_LATE = '2026-05-03T00:00:00.000Z';
+
+/** When {@link UNSCORED_ID} was made: after every row above. */
+const ORDER_NEWEST = '2026-05-04T00:00:00.000Z';
+
+/** The ordering an absent `?sort` takes, named by the port. */
+const SCORE_SORT = 'score';
+
+/** The other, which is that ordering with the score key dropped. */
+const RECENCY_SORT = 'recency';
+
+/**
+ * The six findings {@link plantFindings} gives {@link ORDERING}.
+ *
+ * PLANTED IN AN ORDER THE ANSWER REVERSES AT EVERY TIEBREAK, which
+ * is the one thing a fixture for an ordering has to do and the one
+ * thing a green suite cannot report. The unscored row goes in
+ * FIRST and has to come out LAST, the lower id of each pair
+ * sharing a stamp goes in before the higher, and the older of the
+ * pair tied on score goes in before the newer.
+ *
+ * AND NO KEY MAY BE MASKED BY THE KEY BENEATH IT, which is the
+ * same trap one level down. The pair tied on score carries its
+ * HIGHER id on its OLDER row, so the stamp key and the id key
+ * disagree about that pair and dropping the stamp is reportable;
+ * a pair where the two agreed would come back right with the
+ * stamp key gone. See {@link SAME_SCORE_OLDER_ID}.
+ *
+ * THREE KEYS AND FOUR READINGS. One pair ties on score and is
+ * separated by the stamp. One ties on score and stamp and is
+ * separated by the id. One row scored nothing at all and one
+ * scored zero, which is what separates a tail from a floor. And
+ * two rows share a stamp with no score tie above them, which is
+ * the id tiebreak reached under `recency`, where the score key is
+ * not there to separate them first.
+ *
+ * NOTHING HERE IS JUDGED AND NOTHING IS FILED, per {@link ORDERING}
+ * — these rows are invisible to every narrowing this file makes.
+ */
+const ORDERING_FINDINGS: readonly MemoryDomainFinding[] = [
+  {
+    id: UNSCORED_ID,
+    documentId: 6,
+    entityId: null,
+    fields: {},
+    score: null,
+    scoreVersion: null,
+    createdAt: new Date(ORDER_NEWEST),
+  },
+  {
+    id: SAME_MOMENT_LOW_ID,
+    documentId: 7,
+    entityId: null,
+    fields: {},
+    score: PAIRED_TOP_SCORE,
+    scoreVersion: 1,
+    createdAt: new Date(ORDER_EARLY),
+  },
+  {
+    id: SAME_MOMENT_HIGH_ID,
+    documentId: 8,
+    entityId: null,
+    fields: {},
+    score: PAIRED_TOP_SCORE,
+    scoreVersion: 1,
+    createdAt: new Date(ORDER_EARLY),
+  },
+  {
+    id: SAME_SCORE_OLDER_ID,
+    documentId: 9,
+    entityId: null,
+    fields: {},
+    score: PAIRED_SCORE,
+    scoreVersion: 1,
+    createdAt: new Date(ORDER_MID),
+  },
+  {
+    id: SAME_SCORE_NEWER_ID,
+    documentId: 10,
+    entityId: null,
+    fields: {},
+    score: PAIRED_SCORE,
+    scoreVersion: 1,
+    createdAt: new Date(ORDER_LATE),
+  },
+  {
+    id: MEASURED_ZERO_ID,
+    documentId: 11,
+    entityId: null,
+    fields: {},
+    score: 0,
+    scoreVersion: 1,
+    createdAt: new Date(ORDER_MID),
+  },
+];
+
+/** How many {@link plantFindings} gives {@link ORDERING}. */
+const ORDERING_COUNT = ORDERING_FINDINGS.length;
+
+/**
+ * Their ids IN PLANT ORDER, which is what every answer below is
+ * asserted NOT to be.
+ */
+const ORDERING_PLANT_IDS: readonly number[] = ORDERING_FINDINGS.map(
   (row) => row.id,
 );
 
@@ -592,15 +837,17 @@ interface PlantedDomain {
 /**
  * Plants that shape.
  *
- * @returns The store, both domain ids and one finding's id.
+ * @returns The store, the two paged domain ids and one finding's
+ *   id. {@link ORDERING} is not among them: every case that pages
+ *   it goes through {@link pageOf}, which takes a slug.
  *
  * @remarks
- * THE SECOND DOMAIN IS PLANTED FOR EVERY CASE, including the ones
- * about a refusal, and it is what turns each narrowed page below
+ * ALL THREE DOMAINS ARE PLANTED FOR EVERY CASE, including the ones
+ * about a refusal, and that is what turns each narrowed page below
  * into a scoping reading as well. Nothing in the refusal sections
- * reads it: those cases page {@link RADAR}, whose own page is
- * unchanged by a domain sitting beside it, which is exactly the
- * claim the first positive section makes.
+ * reads the other two: those cases page {@link RADAR}, whose own
+ * page is unchanged by a domain sitting beside it, which is
+ * exactly the claim the first positive section makes.
  */
 async function plantFindings(): Promise<PlantedDomain> {
   const store = createMemoryResearchStore({ now: advancingClock() });
@@ -614,9 +861,15 @@ async function plantFindings(): Promise<PlantedDomain> {
     name: 'Newsroom',
     settings: {},
   });
+  const ordering = await store.insertDomain({
+    slug: ORDERING,
+    name: 'Ordering',
+    settings: {},
+  });
 
   store.setDomainFindings(domain.id, PLANTED_FINDINGS);
   store.setDomainFindings(sibling.id, SIBLING_FINDINGS);
+  store.setDomainFindings(ordering.id, ORDERING_FINDINGS);
   store.setFindingSightings(CONFIRMED_ID, PLANTED_SIGHTINGS);
   store.setEntityResearch(ENTITY_ID, PLANTED_RESEARCH);
 
@@ -825,8 +1078,10 @@ function countOccurrences(haystack: string, needle: string): number {
 /**
  * @param rows - The page a read answered.
  * @returns The ids in it, ASCENDING, for a membership reading that
- *   says nothing about the order a page came back in — which
- *   belongs to another task.
+ *   says nothing about the order a page came back in. The ordering
+ *   section reads {@link orderedIdsOf} instead, which does not
+ *   sort — so a narrowing case here cannot fail for an ordering
+ *   reason and an ordering case cannot pass for a narrowing one.
  */
 function idsOf(rows: readonly FindingRecord[]): number[] {
   return [...rows].map((row) => row.id).sort((left, right) => left - right);
@@ -840,6 +1095,58 @@ function idsOf(rows: readonly FindingRecord[]): number[] {
  */
 function orderedIdsOf(rows: readonly { readonly id: number }[]): number[] {
   return rows.map((row) => row.id);
+}
+
+/**
+ * @param id - A finding planted under {@link ORDERING}.
+ * @returns The row as the FIXTURE holds it, so a premise about a
+ *   score or a stamp is the value really planted rather than one
+ *   asserted of it. `undefined` for an id nothing plants, which
+ *   fails the assertion it is read in.
+ */
+function orderingRow(id: number): MemoryDomainFinding | undefined {
+  return ORDERING_FINDINGS.find((row) => row.id === id);
+}
+
+/**
+ * The order `compareFindings` puts rows in, by id.
+ *
+ * THE LIBRARY AND NOT A LIST WRITTEN OUT HERE.
+ * `src/lib/digest-assemble.ts` is the authority the store's own
+ * ordering is expressed against, and
+ * `tests/helpers/memory-research-store.ts` writes those keys out
+ * independently rather than calling it — so a page held against
+ * this is a real comparison between two derivations of one rule
+ * and not one authority held against itself.
+ *
+ * The call is the shape pin too: `orderFindings` takes rows
+ * extending `DigestFinding`, so a fixture row it could no longer
+ * be handed is a `check-types` error here rather than a sentence
+ * that had quietly stopped being true.
+ *
+ * @param rows - The rows, in any order.
+ * @returns Their ids, ordered.
+ */
+function digestOrderOf(rows: readonly MemoryDomainFinding[]): number[] {
+  return orderFindings(rows).map((row) => row.id);
+}
+
+/**
+ * The same order with the score key dropped, by id.
+ *
+ * DERIVED BY REMOVING THE SCORES RATHER THAN BY A SECOND
+ * COMPARATOR, which is what `FindingSort`'s `recency` member says
+ * it is: rows carrying no score tie on the first key and fall
+ * through to the stamp and then to the id, so the library answers
+ * the recency ordering when handed rows with nothing to rank. A
+ * comparator written out here would be a third authority for an
+ * order this repository has settled once.
+ *
+ * @param rows - The rows, in any order.
+ * @returns Their ids, ordered by stamp and then by id.
+ */
+function recencyOrderOf(rows: readonly MemoryDomainFinding[]): number[] {
+  return digestOrderOf(rows.map((row) => ({ ...row, score: null })));
 }
 
 /**
@@ -1132,8 +1439,8 @@ describe('a sort outside the declared tuple', () => {
   it('drives the store with each declared key', async () => {
     // What ties the tuple to the port: every key the schema takes is
     // an ordering `FindingStore.listFindings` accepts, driven end to
-    // end over the planted rows. Which ORDER each answers in belongs
-    // to another task, so this reads membership and a total.
+    // end over the planted rows. Which ORDER each answers in is the
+    // ordering section's, so this reads membership and a total.
     const { store } = await plantFindings();
 
     for (const key of FINDING_SORT_KEYS) {
@@ -1396,9 +1703,9 @@ describe('a page scoped to one domain', () => {
   it('answers one domain and not the other', async () => {
     // The two pages are each other's control, varied along the one
     // axis under test: a store that had stopped scoping answers all
-    // five rows to both, and a store answering nothing fails both.
-    // Read as a membership rather than as a position — what order a
-    // page comes back in is another task's half.
+    // eleven rows to both, and a store answering nothing fails
+    // both. Read as a membership rather than as a position, which
+    // is the ordering section's own subject.
     const { store } = await plantFindings();
     const radar = await pageOf(store, RADAR, {});
     const sibling = await pageOf(store, SIBLING, {});
@@ -1641,5 +1948,142 @@ describe('one finding and what hangs off it', () => {
     expect(detail.finding.entityId).toBeNull();
     expect(detail.sightings).toEqual([]);
     expect(detail.research).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The order a page comes back in
+// ---------------------------------------------------------------------------
+
+describe('the order a page comes back in', () => {
+  it('answers the order orderFindings answers', async () => {
+    // TWO DERIVATIONS OF ONE RULE, HELD AGAINST EACH OTHER, which
+    // is what `FindingStore.listFindings` promises and what the
+    // store expresses `compareFindings`' keys in its own terms
+    // for. Two readings, and neither subsumes the other: the
+    // library re-sorting the ANSWERED page changes nothing, and
+    // that same page equals the library's order over the PLANT,
+    // which never saw what the store did.
+    const { store } = await plantFindings();
+    const page = await pageOf(store, ORDERING, { sort: SCORE_SORT });
+    const answered = orderedIdsOf(page.rows);
+
+    expect(answered).toEqual(orderedIdsOf(orderFindings(page.rows)));
+    expect(answered).toEqual(digestOrderOf(ORDERING_FINDINGS));
+    expect(page.total).toBe(ORDERING_COUNT);
+
+    // Anti-vacuity for every case in this section: the rows are
+    // planted in an order the answer reverses at every tiebreak,
+    // so a store that sorted nothing answers the plant and fails
+    // here. And the key is one the tuple declares, so this is a
+    // page a caller can really ask for.
+    expect(answered).not.toEqual(ORDERING_PLANT_IDS);
+    expect([...FINDING_SORT_KEYS]).toContain(SCORE_SORT);
+  });
+
+  it('sorts an unscored finding last of all', async () => {
+    // LAST RATHER THAN LOWEST, and the fixture is what makes the
+    // two different. The unscored row is the NEWEST, so it wins
+    // both tiebreaks and only the score key can put it at the
+    // foot: a store spelling `score DESC` without `NULLS LAST`
+    // answers it first. The row that scored ZERO sits above it,
+    // which is the other half — a store reading absence AS zero
+    // ties those two on the first key, falls to the stamp, and
+    // answers the newer of them. Both premises are read off the
+    // fixture in the same case.
+    const { store } = await plantFindings();
+    const page = await pageOf(store, ORDERING, { sort: SCORE_SORT });
+    const answered = orderedIdsOf(page.rows);
+
+    expect(orderingRow(UNSCORED_ID)?.score).toBeNull();
+    expect(orderingRow(MEASURED_ZERO_ID)?.score).toBe(0);
+    expect(orderingRow(UNSCORED_ID)?.createdAt)
+      .toEqual(new Date(ORDER_NEWEST));
+
+    expect(answered.at(-1)).toBe(UNSCORED_ID);
+    expect(answered.indexOf(MEASURED_ZERO_ID))
+      .toBeLessThan(answered.indexOf(UNSCORED_ID));
+  });
+
+  it('separates two tied on score by their stamps', async () => {
+    // The second key, read on a pair the first cannot separate:
+    // both carry one score, so a store that had lost the stamp key
+    // answers them in the order they arrived — which the plant
+    // puts the older way round on purpose. Asserted ADJACENT, so
+    // this is a reading about the pair rather than about where the
+    // page happens to put each of them.
+    const { store } = await plantFindings();
+    const page = await pageOf(store, ORDERING, { sort: SCORE_SORT });
+    const answered = orderedIdsOf(page.rows);
+
+    expect(orderingRow(SAME_SCORE_OLDER_ID)?.score).toBe(PAIRED_SCORE);
+    expect(orderingRow(SAME_SCORE_NEWER_ID)?.score).toBe(PAIRED_SCORE);
+    expect(orderingRow(SAME_SCORE_OLDER_ID)?.createdAt)
+      .toEqual(new Date(ORDER_MID));
+    expect(orderingRow(SAME_SCORE_NEWER_ID)?.createdAt)
+      .toEqual(new Date(ORDER_LATE));
+
+    expect(ORDERING_PLANT_IDS.indexOf(SAME_SCORE_OLDER_ID))
+      .toBeLessThan(ORDERING_PLANT_IDS.indexOf(SAME_SCORE_NEWER_ID));
+    expect(answered.indexOf(SAME_SCORE_NEWER_ID) + 1)
+      .toBe(answered.indexOf(SAME_SCORE_OLDER_ID));
+  });
+
+  it('separates two tied on both by their ids', async () => {
+    // The last key, read on the only pair the first two cannot
+    // separate: one score and one stamp between them. The plant
+    // puts the LOWER id first, which is what makes the leg
+    // reportable at all — `sort` being stable, a pair planted in
+    // the answer's own order comes back right with the tiebreak
+    // gone. Both halves of that premise are measured here: the
+    // scores and the stamps are equal, and the plant order is the
+    // reverse of the answer's.
+    const { store } = await plantFindings();
+    const page = await pageOf(store, ORDERING, { sort: SCORE_SORT });
+    const answered = orderedIdsOf(page.rows);
+    const low = orderingRow(SAME_MOMENT_LOW_ID);
+    const high = orderingRow(SAME_MOMENT_HIGH_ID);
+
+    expect(low?.score).toBe(PAIRED_TOP_SCORE);
+    expect(high?.score).toBe(PAIRED_TOP_SCORE);
+    expect(low?.createdAt).toEqual(new Date(ORDER_EARLY));
+    expect(high?.createdAt).toEqual(new Date(ORDER_EARLY));
+
+    expect(ORDERING_PLANT_IDS.indexOf(SAME_MOMENT_LOW_ID))
+      .toBeLessThan(ORDERING_PLANT_IDS.indexOf(SAME_MOMENT_HIGH_ID));
+    expect(answered.indexOf(SAME_MOMENT_HIGH_ID) + 1)
+      .toBe(answered.indexOf(SAME_MOMENT_LOW_ID));
+  });
+
+  it('drops the score key under recency', async () => {
+    // THE SAME ORDERING WITH ONE KEY GONE, which is what
+    // `FindingSort`'s second member says it is — so the expectation
+    // is the library handed the same rows with nothing to rank,
+    // rather than a comparator written out a third time.
+    //
+    // Three readings beside it. The two pages differ at all. The
+    // unscored row moves from the FOOT of the score page to the
+    // HEAD of this one, which no reordering within either page
+    // could produce. And the id tiebreak is still in the path: two
+    // rows share a stamp with no score tie above them, and the
+    // higher id comes first.
+    const { store } = await plantFindings();
+    const byScore = await pageOf(store, ORDERING, { sort: SCORE_SORT });
+    const byRecency = await pageOf(store, ORDERING, { sort: RECENCY_SORT });
+    const recent = orderedIdsOf(byRecency.rows);
+
+    expect(recent).toEqual(recencyOrderOf(ORDERING_FINDINGS));
+    expect(recent).not.toEqual(orderedIdsOf(byScore.rows));
+    expect(byRecency.total).toBe(ORDERING_COUNT);
+
+    expect(recent[0]).toBe(UNSCORED_ID);
+    expect(orderedIdsOf(byScore.rows).at(-1)).toBe(UNSCORED_ID);
+
+    expect(orderingRow(MEASURED_ZERO_ID)?.createdAt)
+      .toEqual(orderingRow(SAME_SCORE_OLDER_ID)?.createdAt);
+    expect(recent.indexOf(MEASURED_ZERO_ID) + 1)
+      .toBe(recent.indexOf(SAME_SCORE_OLDER_ID));
+
+    expect([...FINDING_SORT_KEYS]).toContain(RECENCY_SORT);
   });
 });
