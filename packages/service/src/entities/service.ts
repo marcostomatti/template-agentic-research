@@ -1,19 +1,21 @@
 /**
  * @packageDocumentation
- * The entities surface's reads and its one write: a subject read
- * by id, the passes recorded about it, and the patch that rewrites
- * what the registry says it is.
+ * The entities surface's reads and its two writes: a subject read
+ * by id, the passes recorded about it, the patch that rewrites what
+ * the registry says it is, and the ruling that lets one queued
+ * intention be researched.
  *
- * THREE FUNCTIONS AND ONE WRITER. {@link getEntity} and
- * {@link listEntityResearch} read; {@link patchEntity} is the only
- * thing here that changes anything, and it changes `entities`
- * alone. `entity_research` is `ar-research`'s to write and no
- * method on `EntityStore` reaches it, so the ratify-and-never-write
- * split is a property of the port rather than of this module's
- * restraint — `docs/architecture/08-http-api.md` states that
- * read-first law for the whole wave and
- * `tests/invariants/api-read-first.test.ts` derives it from `keyof`
- * over the port types rather than from either paragraph.
+ * FOUR FUNCTIONS AND TWO WRITERS. {@link getEntity} and
+ * {@link listEntityResearch} read; {@link patchEntity} rewrites
+ * `entities` and {@link approveEntityResearch} stamps one
+ * `research_pool` row, and those two are the whole of what this
+ * module changes. `entity_research` is `ar-research`'s to write and
+ * no method on `EntityStore` reaches it, so the
+ * ratify-and-never-write split is a property of the port rather
+ * than of this module's restraint — the read-first law for the
+ * whole wave is stated in `docs/architecture/08-http-api.md`,
+ * and `tests/invariants/api-read-first.test.ts` derives it from
+ * `keyof` over the port types rather than from either paragraph.
  *
  * THE SUBJECT IS RESOLVED BEFORE EITHER READ ANSWERS AND BEFORE
  * THE WRITE IS ISSUED, and the patch pays for that lookup twice
@@ -93,11 +95,37 @@
  * no database: `tests/helpers/memory-research-store.ts` plants the
  * registry and answers the writer behind the port.
  *
- * THE APPROVAL GATE IS NOT HERE YET. `POST
- * /entities/:id/approve-research` rules on a `research_pool` row
- * through the port's second writer, and it arrives with
- * `approveEntityResearch` and the pool methods
- * {@link EntitiesServiceStore} does not yet name.
+ * THE APPROVAL RATIFIES AND NEVER RESEARCHES.
+ * {@link approveEntityResearch} calls `approvePoolRow` and nothing
+ * else: it records that a person agreed to one intention and moves
+ * that row's status, and whatever the agreement makes possible is
+ * `ar-research`'s to do and to record. There is no method on this
+ * module's port that writes `entity_research`, so the split is the
+ * same property of the type the paragraph above names.
+ *
+ * THE INTENTION IS NAMED IN THE BODY AND ITS SUBJECT IN THE PATH,
+ * AND THE TWO MAY DISAGREE. `EntityStore.findPoolRowById` is
+ * unscoped on purpose, so a row raised about another subject is
+ * read and then REFUSED rather than approved — a 404, because a
+ * caller is not entitled to learn that somebody else's intention
+ * exists. A row naming no subject at all is refused by that same
+ * comparison, `research_pool.entity_id` being nullable, and the
+ * refusals are one sentence between them for the reason
+ * {@link NO_SUCH_INTENTION} gives.
+ *
+ * THE GATE'S VOCABULARY IS `src/approvals/ruling.ts` AND NOT THIS
+ * MODULE'S. `refuseRuling` decides, `describeRuling` projects, and
+ * the ordering that puts the parent check ahead of every other one
+ * is argued there — so this gate and the proposal gate one group
+ * over cannot drift into answering differently about the same act.
+ *
+ * RULING TWICE IS A NO-OP RATHER THAN A SECOND RULING.
+ * `approved_at` is written `coalesce(approved_at, now())` by both
+ * implementations of the port, so a second approval answers the
+ * FIRST one's instant and a row already closed ratifies without
+ * complaint. That is `RULING_ACTS` rather than a rule of this
+ * module's: `ratify` permits what `apply` refuses, and reading it
+ * off that roster is what keeps the difference declared once.
  */
 import type {
   EntityNamePatch,
@@ -106,6 +134,11 @@ import type {
   EntityResearchRecord,
   EntityStore,
 } from './store.js';
+import type {
+  Ruling,
+  RulingAct,
+  RulingRefusalReason,
+} from '../approvals/ruling.js';
 import type { StoreWindow } from '../http/schemas.js';
 
 import { z } from 'zod';
@@ -115,6 +148,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../lib/errors/index.js';
+import { describeRuling, refuseRuling } from '../approvals/ruling.js';
 import { StoreRefusal } from '../db/store-errors.js';
 import { parseBody } from '../http/validation.js';
 import { normalizeEntityName } from '../lib/entity-name-norm.js';
@@ -129,14 +163,14 @@ import { normalizeEntityName } from '../lib/entity-name-norm.js';
  * own id, so `DomainStore` is reached for nothing at all and the
  * domain a subject belongs to arrives on the subject.
  *
- * FOUR OF `EntityStore`'S EIGHT METHODS ARE ABSENT, and the absence
- * is a statement rather than an oversight. `findPoolRowById` and
- * `approvePoolRow` belong to the approval gate this module's header
- * says is still to come. `listEntityPool` and `countEntityPool` are
- * reached by nothing on this wave at all, which
- * `src/entities/store.ts` records on each of them — naming them
- * here would have this module claim to need a collection no route
- * pages.
+ * TWO OF `EntityStore`'S EIGHT METHODS ARE ABSENT, and the absence
+ * is a statement rather than an oversight. `listEntityPool` and
+ * `countEntityPool` are reached by nothing on this wave at all,
+ * which `src/entities/store.ts` records on each of them — naming
+ * them here would have this module claim to need a collection no
+ * route pages. The other six are all of it: the four the reads and
+ * the patch need, plus the pool lookup and the approval this
+ * module's own gate calls.
  *
  * Built with `Pick` rather than by listing signatures, so a method
  * here cannot drift from the thing it names: a hand-copied
@@ -145,8 +179,10 @@ import { normalizeEntityName } from '../lib/entity-name-norm.js';
  */
 export type EntitiesServiceStore = Pick<
   EntityStore,
+  | 'approvePoolRow'
   | 'countEntityResearch'
   | 'findEntityById'
+  | 'findPoolRowById'
   | 'listEntityResearch'
   | 'updateEntity'
 >;
@@ -208,6 +244,31 @@ export const patchEntitySchema = z.object({
 
 /** A parsed entity patch: every member present only if sent. */
 export type PatchEntityBody = z.infer<typeof patchEntitySchema>;
+
+/**
+ * The body `POST /entities/:id/approve-research` accepts.
+ *
+ * ONE MEMBER, AND IT NAMES A ROW RATHER THAN DESCRIBING ONE. A
+ * ruling is given to one stored intention, whose exact search terms
+ * are what an operator read before agreeing, so the request carries
+ * that row's id and nothing a caller composed. There is no spelling
+ * here for approving a subject's queue wholesale, and adding one
+ * would be approving terms nobody was shown.
+ *
+ * STRICT, so a body naming `entityId`, `status` or `approvedAt` is
+ * refused rather than quietly ignored. The first is already in the
+ * path; the other two are columns this surface WRITES rather than
+ * accepts, and a caller able to set either would be ruling and
+ * back-dating the ruling in one request.
+ */
+export const approveResearchSchema = z.object({
+  poolId: z.number().int()
+    .positive(),
+}).strict();
+
+/** A parsed approval request: the intention being ruled on. */
+export type ApproveResearchBody
+  = z.infer<typeof approveResearchSchema>;
 
 /**
  * One page of what has been found out about a subject, beside the
@@ -340,6 +401,49 @@ const ALIAS_MUST_EXIST = 'No entity carries the id named as the alias';
 
 /** The code that detail carries. */
 const UNKNOWN_ALIAS_CODE = 'unknown_alias';
+
+/**
+ * The act this gate performs, named from `RULING_ACTS`.
+ *
+ * ANNOTATED RATHER THAN INFERRED, so a member removed from that
+ * roster reports on this line instead of at a call site further
+ * down. It is also the whole of what tells `refuseRuling` that a
+ * closed row ratifies here where it would be refused one group
+ * over: the difference between the two gates is a value declared
+ * once, and not an `if` in either of them.
+ */
+const RATIFY: RulingAct = 'ratify';
+
+/**
+ * What a caller is told when the body names no intention this
+ * subject holds.
+ *
+ * ONE SENTENCE FOR THREE REFUSALS, WHICH IS THE CONTAINMENT RULE
+ * RATHER THAN A SHORTCUT. `refuseRuling` separates `no-such-ruling`
+ * from `not-on-this-parent` so that a gate can act differently on
+ * them; what a CALLER reads has to be the same either way, or the
+ * two answers between them tell it that a row it does not own
+ * exists. The write's own null answers it for a third reason, the
+ * row having gone in between.
+ *
+ * The submitted id is not in it, per this module's header.
+ */
+const NO_SUCH_INTENTION
+  = 'No intention of this subject carries that id';
+
+/**
+ * What a ratification refused for a closed row would say.
+ *
+ * UNREACHABLE, AND THE GUARD IS THE POINT. `RULING_ACTS` records
+ * that ratifying twice is a no-op, so `refuseRuling` never answers
+ * `already-ruled` for {@link RATIFY} and no request can reach this
+ * sentence. It is a plain `Error` answering 500 rather than a 404
+ * given quietly in a 409's place: the day that roster says
+ * otherwise, the mismatch is a fault somebody is shown instead of
+ * a status nobody notices.
+ */
+const CLOSED_ROW_IS_RATIFIABLE
+  = 'A ratification cannot be refused for a closed row';
 
 /**
  * Builds the 422 an alias refusal answers with.
@@ -540,6 +644,27 @@ async function requireAliasable(
 }
 
 /**
+ * Turns a refusal reason into what the caller is told.
+ *
+ * @param reason - What `refuseRuling` answered.
+ * @returns The error to throw. Both reasons a ratification can
+ *   produce are one 404 between them, per
+ *   {@link NO_SUCH_INTENTION}; the third is unreachable and
+ *   answers a plain `Error`, per {@link CLOSED_ROW_IS_RATIFIABLE}.
+ *
+ * @remarks
+ * IT RETURNS RATHER THAN THROWS, so the call site reads `throw` and
+ * nothing here depends on the compiler taking a view about whether
+ * this function comes back — which is what {@link refuseWrite}
+ * above, whose every path throws, has to be `return`ed from to say.
+ */
+function ratificationRefusal(reason: RulingRefusalReason): Error {
+  return reason === 'already-ruled'
+    ? new Error(CLOSED_ROW_IS_RATIFIABLE)
+    : new NotFoundError(NO_SUCH_INTENTION);
+}
+
+/**
  * Reads one subject of one registry.
  *
  * @param store - Where the row is read.
@@ -689,4 +814,81 @@ export async function patchEntity(
   }
 
   return updated;
+}
+
+/**
+ * Records that a person ruled in favour of one queued intention.
+ *
+ * @param store - Where the subject and the intention are read, and
+ *   where the ruling is written.
+ * @param id - The subject's own id, from the path.
+ * @param body - The unvalidated request body, or the arguments an
+ *   MCP tool was called with.
+ * @returns The four-member ruling `describeRuling` projects, taken
+ *   off the row the write answered rather than rebuilt from the
+ *   request: the row's id, where it stands, when a person agreed,
+ *   and when the intention was closed.
+ * @throws ValidationError - When the body does not satisfy
+ *   {@link approveResearchSchema}.
+ * @throws NotFoundError - When no entity carries the id; when no
+ *   intention carries the submitted `poolId`; and when the
+ *   intention it carries was raised about another subject, or about
+ *   none at all. The last three answer one sentence, per
+ *   {@link NO_SUCH_INTENTION}.
+ *
+ * @remarks
+ * THE SUBJECT IS RESOLVED BEFORE THE INTENTION IS READ, so an id
+ * nothing carries costs one lookup and never reaches the queue. The
+ * ordering is also what makes the parent comparison decidable: it
+ * is the ADDRESSED entity the stored row has to name.
+ *
+ * THE ROW IS READ AND THEN JUDGED RATHER THAN SELECTED. A lookup
+ * scoped to the subject would answer null for `no such row` and for
+ * `not this subject's row` alike, and this gate has to tell the two
+ * apart even though a caller reads one sentence for both —
+ * `EntityStore.findPoolRowById` argues it from the port's end.
+ *
+ * NOTHING IS ASKED OF THE ROW'S STATE. `refuseRuling` reads the two
+ * timestamps and never `status`, exactly as
+ * `research_pool_approval_check` does, and for {@link RATIFY} a
+ * closed row is no refusal at all: it is ratified again, the
+ * instant a person first agreed at stands, and the status moves to
+ * approved.
+ *
+ * THE WRITE IS THE ONE THING THIS FUNCTION DOES. `approvePoolRow`
+ * stamps two columns of one row; no research is recorded and no
+ * search is issued, which is the ratify-and-never-write split the
+ * header states and `EntityStore` holds structurally.
+ *
+ * THE WRITE'S OWN NULL IS THE ROW HAVING GONE between the read and
+ * the ruling, and it answers the sentence the read's own absence
+ * answers. No ordinary sequence of calls produces it.
+ */
+export async function approveEntityResearch(
+  store: EntitiesServiceStore,
+  id: number,
+  body: unknown,
+): Promise<Ruling> {
+  const input = parseBody(approveResearchSchema, body);
+  const entity = await requireEntity(store, id);
+  const row = await store.findPoolRowById(input.poolId);
+  const reason = refuseRuling({
+    act: RATIFY,
+    parentId: entity.id,
+    candidate: row === null
+      ? null
+      : { parentId: row.entityId, row },
+  });
+
+  if (reason !== null) {
+    throw ratificationRefusal(reason);
+  }
+
+  const ruled = await store.approvePoolRow(input.poolId);
+
+  if (ruled === null) {
+    throw new NotFoundError(NO_SUCH_INTENTION);
+  }
+
+  return describeRuling(ruled);
 }

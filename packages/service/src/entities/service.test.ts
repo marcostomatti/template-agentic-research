@@ -5,23 +5,34 @@
  * `tests/helpers/memory-research-store.ts`, so every claim here is
  * answered with no database anywhere.
  *
- * TWELVE SECTIONS AND TWENTY-FOUR CASES, IN TWO HALVES. The first
- * seven sections are about refusals; the five below them read what
- * a call answers — a row read whole, a key recomputed from a name
- * the caller spelled, a payload replaced, a pointer set and
- * cleared, and a page of passes. The successful calls inside a
- * refusal case stay CONTROLS rather than coverage of any of that,
- * and each still reads the one member its own refusal is about.
+ * SEVENTEEN SECTIONS AND THIRTY-TWO CASES, IN THREE GROUPS. The
+ * first seven sections are the registry's refusals; the five below
+ * them read what a registry call answers — a row read whole, a key
+ * recomputed from a name the caller spelled, a payload replaced, a
+ * pointer set and cleared, and a page of passes; and the last five
+ * are the APPROVAL GATE, which refuses and answers inside the same
+ * sections because a ruling has both to be given and to be withheld
+ * over one queue. The successful calls inside a refusal case stay
+ * CONTROLS rather than coverage of any of that, and each still
+ * reads the one member its own refusal is about.
  *
- * THE SECOND HALF IS WHAT MAKES SEVEN LEGS LIVE AT ALL. Run against
- * `git show HEAD:./service.test.ts` with the identical leg list,
- * seven mutations reddened NOTHING over the refusal-only revision
- * and redden one or two cases apiece here: `getEntity` following an
- * alias, `null` read as an absent member, the page re-sorted after
- * the store ordered it, the total taken off the page, the store
- * MERGING a payload, the projection widened by a member, and the
- * research order by the id alone. No refusal can report any of
- * them, every one being a fact about an answer.
+ * THE SECOND GROUP IS WHAT MADE SEVEN LEGS LIVE AT ALL, measured
+ * when it landed against the refusal-only revision before it: seven
+ * mutations reddened NOTHING there and redden one or two cases
+ * apiece here — `getEntity` following an alias, `null` read as an
+ * absent member, the page re-sorted after the store ordered it, the
+ * total taken off the page, the store MERGING a payload, the
+ * projection widened by a member, and the research order by the id
+ * alone. No refusal can report any of them, every one being a fact
+ * about an answer. Every one of the seven is re-measured at this
+ * revision below rather than carried across, and every one held.
+ *
+ * THE THIRD GROUP BOUGHT EIGHT MORE THE SAME WAY, and that is
+ * almost the whole of what it moved: run against
+ * `git show HEAD:./service.test.ts`'s twenty-four-case copy with an
+ * identical thirty-one-leg list, twenty-one carried-in legs held
+ * BYTE-IDENTICAL sets, exactly one moved, eight went from zero to
+ * live, and one had no anchor at HEAD to run against at all.
  *
  * EVERY REFUSAL CASE CARRIES ITS OWN CONTROL, VARIED ALONG THAT
  * ROW'S OWN AXIS. A service refusing everything passes a refusal
@@ -40,7 +51,7 @@
  * domains therefore hold a subject reducing to `kubernetes`, and
  * the collision section's key is held in one of them alone.
  *
- * TWO ROWS ARE PLANTED FOR THE SECOND HALF ALONE, and each is a
+ * TWO ROWS ARE PLANTED FOR THE SECOND GROUP ALONE, and each is a
  * discrimination rather than a subject. {@link ALIASED} is the one
  * row here with nothing at its default, which is what separates a
  * function answering a constant `null` and a constant `{}` from one
@@ -50,34 +61,76 @@
  * the id tiebreak beneath it disagree, and newest-first is then
  * none of the four orders a three-row page could reach by accident.
  *
- * THE SIX REFUSALS SPLIT THREE WAYS BY WHO RAISES THEM, and saying
- * so is half of what the file is for. ONE is the SCHEMA's, raised
- * before any function ran: a key the patch does not declare, of
- * which `nameNorm` is the one that matters. THREE are this
- * MODULE's, raised because neither a schema nor a constraint could
- * hold them: a name carrying nothing that identifies a subject, a
- * subject aliased to itself, and one aliased into another registry.
- * And TWO are the DATABASE's, translated rather than repeated: the
- * unique key answering a rename as a 409, and the alias foreign key
- * answering an id no entity carries as a 422. The 404 sits across
- * all three, being a fact about a row rather than about a rule.
+ * FIVE INTENTIONS ARE PLANTED FOR THE THIRD, ONE PER STATE, and the
+ * seam is keyed by the DOMAIN rather than by the subject — which is
+ * what lets one of them name no subject at all. Two are open
+ * intentions of the addressed subject, the second of which is the
+ * clock's control and nothing else; one belongs to a sibling
+ * subject; one belongs to nobody; and one is already ruled on AND
+ * already closed. Only that last row carries either stamp, so a
+ * projection answering a constant `null` for the closing one
+ * satisfies every other row here and fails on it alone — and its
+ * status is planted as `done` rather than `approved`, so a ruling
+ * moving the column to the approved member is visible as a MOVE.
  *
- * THE ONE REFUSAL A CALLER CANNOT REACH IS NOT HERE, and it is an
- * honest zero rather than an oversight. `patchEntity` answers a 404
- * from the write's own null as well as from the lookup, which is
- * the row going between the two — no ordinary sequence of calls
- * produces it, the in-memory store has no seam that deletes an
- * entity, and `EntityStore` declares neither an insert nor a
- * delete. The case that would close it is a store whose
- * `updateEntity` answers null for a row `findEntityById` had just
+ * THE SIX REGISTRY REFUSALS SPLIT THREE WAYS BY WHO RAISES THEM,
+ * and saying so is half of what the file is for. ONE is the
+ * SCHEMA's, raised before any function ran: a key the patch does
+ * not declare, of which `nameNorm` is the one that matters. THREE
+ * are this MODULE's, raised because neither a schema nor a
+ * constraint could hold them: a name carrying nothing that
+ * identifies a subject, a subject aliased to itself, and one
+ * aliased into another registry. And TWO are the DATABASE's,
+ * translated rather than repeated: the unique key answering a
+ * rename as a 409, and the alias foreign key answering an id no
+ * entity carries as a 422. The 404 sits across all three, being a
+ * fact about a row rather than about a rule.
+ *
+ * THE GATE'S REFUSALS ARE A FOURTH KIND AND THEY ANSWER ONE
+ * SENTENCE BETWEEN THEM. `refuseRuling` in
+ * `src/approvals/ruling.ts` separates `no-such-ruling` from
+ * `not-on-this-parent` so that a gate can act differently on them,
+ * and what a caller reads is the same 404 either way — the
+ * containment rule rather than a shortcut, and why the containment
+ * section asserts those two sentences are EQUAL where the gate's
+ * own section asserts that the unknown-SUBJECT 404 and the
+ * unknown-intention one are not.
+ *
+ * THREE REFUSALS A CALLER CANNOT REACH ARE NOT HERE, and they are
+ * honest zeros rather than oversights. `patchEntity` answers a 404
+ * from the write's own null as well as from the lookup, and
+ * `approveEntityResearch` answers one from `approvePoolRow`'s —
+ * both being the row going between the read and the write, which no
+ * ordinary sequence of calls produces: the in-memory store has no
+ * seam that deletes an entity or an intention, and `EntityStore`
+ * declares neither an insert nor a delete. The third is the gate's
+ * `already-ruled`, which `RULING_ACTS` puts out of a
+ * ratification's reach altogether, so the plain `Error` behind it
+ * guards against that roster moving rather than describing a
+ * branch any request takes. Closing the first two wants a store
+ * whose writer answers null for a row its own lookup had just
  * returned.
  *
  * THE READ-BEFORE-WRITE ORDERING IS COUNTED AND NOT ASSERTED. No
  * status can say whether the lookup happened before the write, so
- * two sections wrap the planted store in a tally and read WHICH
- * methods a refused call reached. Both take the same tally over the
- * call that succeeds, in the same case: a wrapper that had stopped
- * counting reports zero for the refusal and zero for the control.
+ * four sections wrap the planted store in a tally and read WHICH
+ * methods a refused call reached. Each takes the same tally over
+ * the call that succeeds, in the same case: a wrapper that had
+ * stopped counting reports zero for the refusal and zero for the
+ * control.
+ *
+ * WHAT THE APPROVAL DOES NOT WRITE NEEDS THE WHOLE STORE AND NOT
+ * THAT TALLY, which is why a second wrapper exists. The tally is
+ * over the SIX methods the service declares, so `setEntityResearch`
+ * cannot be named through it at all — and a claim that a table was
+ * left alone has to be able to name the thing that would have
+ * written it. A `Proxy` over the whole store records every reached
+ * name in call ORDER, the reached list is asserted EQUAL to the
+ * three calls the gate should have made, and the seam is asserted
+ * PRESENT on the store before it is asserted un-reached. Without
+ * that presence half a misspelt name passes as a writer nothing
+ * called, which is what the near miss beside it is asserted absent
+ * for.
  *
  * THAT A NAME REDUCING TO NOTHING IS REFUSED BEFORE THE SUBJECT IS
  * READ AT ALL. It is a fact about the request alone, so the refusal
@@ -112,23 +165,29 @@
  * one worth insisting on here, because two of these refusals really
  * do keep one — the library error behind an empty key, and the
  * `StoreRefusal` behind a duplicate — and neither may carry a
- * submitted value out with it.
+ * submitted value out with it. The gate's two keep none at all,
+ * which the same section asserts rather than leaves to be read off
+ * a zero that would look the same either way.
  *
  * THE NEEDLES ARE CHOSEN SO A ZERO CANNOT BE AN ACCIDENT. A name
  * has to be one no stack frame, no constraint name and no path
  * could contain, so the colliding subject is planted under a
- * sentinel spelling rather than under a readable one, and the ids
- * every alias case submits are seven digits long.
+ * sentinel spelling rather than under a readable one, and every id
+ * this file submits — an intention's as much as an alias's — is
+ * seven digits long, a stack carrying line and column numbers a
+ * three-digit one would match by accident.
  *
  * THE GRID BELOW WAS MEASURED RATHER THAN PREDICTED, over these
- * twenty-four cases, twice, with the two runs agreeing member for
- * member on every leg — and once more against HEAD's sixteen-case
- * copy of this file with the identical list, so every figure here
- * is a SET diff rather than a comparison against a sentence. One
- * rule patched at a time, the file restored between legs, and
- * `git status --short -uall` left naming no file but these.
+ * thirty-two cases, twice, with the two runs agreeing member for
+ * member on every one of thirty-one legs — and once more against
+ * HEAD's twenty-four-case copy of this file with the identical
+ * list, so every figure here is a SET diff rather than a comparison
+ * against a sentence. One rule patched at a time, the file restored
+ * between legs, and `git status --short -uall` left naming no file
+ * but these.
  *
- * NINE CARRIED-IN LEGS HELD BYTE-IDENTICAL SETS. Dropping
+ * TWENTY-ONE CARRIED-IN LEGS HELD BYTE-IDENTICAL SETS, which is
+ * every one of them but the whole-half control. Dropping
  * `.strict()` reddens 2, the two undeclared-key cases. Moving the
  * reduction below the lookup reddens 1, the tally case alone, which
  * is what that case is for. The three alias rules separate cleanly:
@@ -142,46 +201,56 @@
  * Dropping the unique-violation translation reddens 2, the 409 case
  * and the name containment case. Paging research without resolving
  * the subject reddens 2, both cases in the first section about that
- * page. Reading the subject a SECOND time reddens 2, both tally
- * cases, which is what says a tally is an exact count rather than a
- * presence check.
+ * page. Reading the subject a SECOND time reddens 2, both registry
+ * tally cases, which is what says a tally is an exact count rather
+ * than a presence check.
  *
- * FOUR MOVED, EACH BY THE NEW CASES THAT TOUCH ITS OWN SUBJECT, AND
- * NO SET LOST A MEMBER. Answering the display half AS the key and
- * answering ONE CONSTANT for every name each go 6 to 7, gaining the
- * name-rewrite case and nothing else — and their red sets are
- * IDENTICAL on both sides, told apart only by the assertion that
- * fails inside each. They are the two whole-half controls over one
- * equality, and no case here can separate them: what does is
+ * AND THE SECOND GROUP'S SEVEN HELD AT WHAT THEY BOUGHT:
+ * `getEntity` following the pointer 2, `null` read as an absent
+ * member 1, the page re-sorted after the store ordered it 1, the
+ * total taken off the page 2, a payload MERGED rather than replaced
+ * 2, the projection widened by one member 1, and the research
+ * ordered by the id alone 2. Answering the display half AS the key
+ * and answering ONE CONSTANT for every name hold at 7 apiece with
+ * IDENTICAL red sets, told apart only by the assertion that fails
+ * inside each; what separates them is
  * `tests/lib/entity-name-norm.test.ts`, whose subject is the
  * reduction rather than a service that calls it. Answering the row
- * as it stood BEFORE the write goes 9 to 14, gaining exactly the
- * five new cases that patch; the get and the two research cases do
- * not patch, and that is why they are not in it.
+ * as it stood BEFORE the write holds at 14, and planting
+ * {@link ALIASED} at its defaults at 4.
  *
- * AND THE WHOLE-HALF CONTROL GOES 15 TO 23 OF 24, gaining all eight
- * new cases and losing none. Planting no registry at all still
- * leaves exactly one case standing — `refuses though research is
- * planted under the id` — the only case here whose subject is an
- * ABSENCE and which therefore never needed a row. That survivor SET
- * is the coverage statement; the 23 is not.
+ * EXACTLY ONE CARRIED-IN LEG MOVED, and it gained the eight new
+ * cases and lost none: planting no registry at all goes 23 of 24 to
+ * 31 of 32. Its survivor is the single case it always was —
+ * `refuses though research is planted under the id`, the only case
+ * here whose subject is an ABSENCE and which therefore never needed
+ * a row. That survivor SET is the coverage statement; the 31 is not.
  *
- * THE SEVEN LEGS THE SECOND HALF BOUGHT, READ BY NAME. `getEntity`
- * following the pointer reddens 2, the get and the clear, both of
- * which address an alias directly. `null` read as an absent member
- * reddens 1, the clear alone, that being the only case submitting a
- * falsy-but-present value. The page re-sorted by the service after
- * the store ordered it reddens 1, and the total taken off the page
- * rather than off the collection reddens 2. A payload MERGED rather
- * than replaced reddens 2, both payload cases, the empty one
- * included — which is what says `{}` is a value here and not an
- * absence. The projection widened by one member reddens 1, the get
- * alone, and it is the key-SET assertion that reports rather than
- * the whole-row comparison above it. Ordering the research by the
- * id alone reddens 2 rather than the order case alone: the
- * page-past-the-end case's own control reads the OLDEST pass one
- * row from the end, and a different order puts a different row
- * there.
+ * EIGHT LEGS WENT FROM ZERO TO LIVE, which is what the third group
+ * is FOR: every one of them reddened NOTHING at HEAD. Approving
+ * without the parent check reddens 3, the two cross-entity cases
+ * and the approval containment case — that last one because the
+ * call ANSWERS, and the helper that extracts a refusal raises when
+ * it does. Ruling BEFORE the refusal is decided reddens 3, those
+ * two cross-entity cases and the unknown-intention tally, which is
+ * the ordering claim no status could make. Reading the intention
+ * before the subject reddens 2, the unknown-subject tally and the
+ * reached list. Answering the row as it stood before the ruling and
+ * leaving the status where it stood each redden the SAME 6, told
+ * apart only by the assertion that fails inside each. Re-dating
+ * every approval in the store reddens 2, the idempotence case and
+ * the closed one. Applying rather than ratifying reddens 1, the
+ * closed case alone. Reading a null parent as a match reddens 1,
+ * the case about the intention that names no subject.
+ *
+ * ONE LEG HAS NO ANCHOR AT HEAD AT ALL, which is a different claim
+ * from a zero: planting no intentions reddens 8 here and could not
+ * run there, the seam call it patches not existing in that copy. Of
+ * the eight, seven are the third group's own sections and the
+ * eighth is the approval containment case — so the gate's red set
+ * under its own whole-half control is exactly the gate, with all
+ * twenty-four registry cases surviving untouched. That is the
+ * reading the eight-case count is not.
  *
  * ONE FIGURE IS A ZERO ON BOTH SIDES AND IT IS A NO-OP RATHER THAN
  * A GAP. Building the patch with explicit `undefined` members
@@ -190,20 +259,13 @@
  * two spellings are one request to it. What would separate them is
  * an implementation deriving its `SET` clause from `Object.keys`,
  * which is `./db-store.ts`'s to answer and not this file's.
- *
- * AND ONE LEG COULD NOT RUN AT HEAD AT ALL, which is a different
- * claim from a zero. Planting {@link ALIASED} at its DEFAULTS — no
- * pointer, no payload — has no anchor in the refusal-only revision,
- * that row not existing there; here it reddens 4, the get and the
- * three cases that patch it. It is the fixture leg for the second
- * half, and it says the non-default row buys every reading taken
- * against it.
  */
 import type { EntitiesServiceStore } from './service.js';
 import type { FieldError } from '../../lib/errors/index.js';
 import type {
   MemoryDomainEntity,
   MemoryEntityResearch,
+  MemoryResearchPoolRow,
   MemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
 import type { StoreWindow } from '../http/schemas.js';
@@ -222,6 +284,7 @@ import {
 import { normalizeEntityName } from '../lib/entity-name-norm.js';
 
 import {
+  approveEntityResearch,
   getEntity,
   listEntityResearch,
   patchEntity,
@@ -386,6 +449,62 @@ const SECOND_ID = 7002833;
  */
 const THIRD_ID = 7000800;
 
+/**
+ * The intention every approval case rules on: open, pending, and
+ * raised about {@link KUBE}.
+ */
+const OPEN_INTENTION = 6001822;
+
+/**
+ * A second open intention on the same subject.
+ *
+ * The idempotence case's CONTROL and nothing else: ruling on it
+ * after the same row has been ruled on twice is what says the clock
+ * moved between the two answers that agreed.
+ */
+const SECOND_INTENTION = 6002833;
+
+/**
+ * An intention raised about {@link MESH} rather than
+ * {@link KUBE}.
+ */
+const OTHERS_INTENTION = 6003844;
+
+/**
+ * An intention naming no subject at all.
+ *
+ * `research_pool.entity_id` is nullable — an intention can be raised
+ * from a finding whose subject nothing has attributed yet — so a row
+ * on NO entity is an ordinary stored state and is refused by the
+ * same comparison a row on somebody else's is.
+ */
+const ORPHAN_INTENTION = 6004855;
+
+/**
+ * An intention already ruled on AND already closed.
+ *
+ * The one row here planted with both stamps, which is what makes
+ * the closed reading possible at all: a projection answering a
+ * constant `null` for the closing stamp satisfies every other row
+ * in this fixture.
+ */
+const CLOSED_INTENTION = 6005866;
+
+/** An id no intention carries, in either registry. */
+const MISSING_INTENTION = 6666777;
+
+/** When every planted intention was raised. */
+const QUEUED_AT = '2026-02-01T00:00:00.000Z';
+
+/** When {@link CLOSED_INTENTION} was ruled in favour of. */
+const RULED_AT = '2026-02-02T00:00:00.000Z';
+
+/** When it was closed, which is what `closedAt` reads. */
+const CLOSED_AT = '2026-02-03T00:00:00.000Z';
+
+/** The terms every planted intention would be searched under. */
+const INTENDED_TERMS: readonly string[] = ['kubernetes releases'];
+
 /** The window every research read below is taken through. */
 const WIDE_WINDOW: StoreWindow = { limit: 50, offset: 0 };
 
@@ -493,6 +612,88 @@ const ORPHAN_RESEARCH: readonly MemoryEntityResearch[] = [
 ];
 
 /**
+ * Builds one open intention for `setDomainPool`.
+ *
+ * @param id - The row's own id, which an approval names.
+ * @param entityId - The subject it is about, or null when it names
+ *   none.
+ * @returns The row to plant: pending, unapproved and unclosed,
+ *   which is the state every intention starts in and the one a
+ *   ruling has somewhere to move it from.
+ */
+function queued(
+  id: number,
+  entityId: number | null,
+): MemoryResearchPoolRow {
+  return {
+    id,
+    entityId,
+    findingId: null,
+    status: 'pending',
+    searchTerms: INTENDED_TERMS,
+    createdAt: new Date(QUEUED_AT),
+    approvedAt: null,
+    researchedAt: null,
+  };
+}
+
+/**
+ * {@link CLOSED_INTENTION} as planted: ruled on and then closed.
+ *
+ * Written out rather than built through {@link queued}, which
+ * exists to plant the one state every other row here starts in and
+ * would have to grow three parameters used once to reach this one.
+ * Its status is `done` rather than `approved`, so a ruling moving
+ * the column to the approved member is visible as a MOVE.
+ */
+const CLOSED_ROW: MemoryResearchPoolRow = {
+  id: CLOSED_INTENTION,
+  entityId: KUBE,
+  findingId: null,
+  status: 'done',
+  searchTerms: INTENDED_TERMS,
+  createdAt: new Date(QUEUED_AT),
+  approvedAt: new Date(RULED_AT),
+  researchedAt: new Date(CLOSED_AT),
+};
+
+/**
+ * The intentions queued under {@link RADAR}.
+ *
+ * FIVE ROWS FOR FIVE STATES, and the seam is keyed by the DOMAIN
+ * rather than by the subject — which is what lets the fourth of
+ * them name no subject at all. Two are open intentions of the
+ * addressed subject, one belongs to a sibling, one belongs to
+ * nobody, and one is already closed.
+ */
+const RADAR_POOL: readonly MemoryResearchPoolRow[] = [
+  queued(OPEN_INTENTION, KUBE),
+  queued(SECOND_INTENTION, KUBE),
+  queued(OTHERS_INTENTION, MESH),
+  queued(ORPHAN_INTENTION, null),
+  CLOSED_ROW,
+];
+
+/**
+ * A clock answering a NEW instant on every reading.
+ *
+ * The idempotence case's instrument: a second ruling has to answer
+ * the FIRST one's instant, and against the wall clock two readings
+ * taken in the same millisecond agree whatever the module does.
+ *
+ * @returns The clock, one second on per reading.
+ */
+function steppingClock(): () => Date {
+  let step = 0;
+
+  return (): Date => {
+    step += 1;
+
+    return new Date(Date.UTC(2026, 3, 1, 0, 0, step));
+  };
+}
+
+/**
  * The two registries and the research hanging off one of them.
  *
  * BOTH DOMAINS ARE PLANTED FOR EVERY CASE, refusals included, so
@@ -500,10 +701,20 @@ const ORPHAN_RESEARCH: readonly MemoryEntityResearch[] = [
  * stopped reading the subject's own domain answers differently on
  * the mirror pair and nowhere else.
  *
+ * THE POOL IS PLANTED FOR EVERY CASE TOO, refusals and reads
+ * alike, so a case about the registry that had started ruling on
+ * something would be visible as a moved status rather than as a row
+ * nobody had planted.
+ *
+ * @param now - The clock the store stamps from, for the one case
+ *   about an instant. Absent everywhere else, where the wall clock
+ *   is right: a ruling is asserted by kind rather than by moment.
  * @returns The planted store.
  */
-async function plantRegistries(): Promise<MemoryResearchStore> {
-  const store = createMemoryResearchStore();
+async function plantRegistries(
+  now?: () => Date,
+): Promise<MemoryResearchStore> {
+  const store = createMemoryResearchStore({ now });
   const domain = await store.insertDomain({
     slug: RADAR,
     name: 'Radar',
@@ -518,6 +729,7 @@ async function plantRegistries(): Promise<MemoryResearchStore> {
   store.setDomainEntities(domain.id, RADAR_ENTITIES);
   store.setDomainEntities(sibling.id, SIBLING_ENTITIES);
   store.setEntityResearch(KUBE, KUBE_RESEARCH);
+  store.setDomainPool(domain.id, RADAR_POOL);
 
   return store;
 }
@@ -535,6 +747,12 @@ interface CallCounts {
 
   /** Reads of how many passes it holds. */
   countEntityResearch: number;
+
+  /** Lookups of one queued intention by its own id. */
+  findPoolRowById: number;
+
+  /** Rulings given. */
+  approvePoolRow: number;
 }
 
 /** A tally with every member at zero. */
@@ -543,10 +761,12 @@ const NO_CALLS: CallCounts = {
   updateEntity: 0,
   listEntityResearch: 0,
   countEntityResearch: 0,
+  findPoolRowById: 0,
+  approvePoolRow: 0,
 };
 
 /**
- * The four-method port with a tally beside it.
+ * The six-method port with a tally beside it.
  *
  * A COUNTING WRAPPER RATHER THAN A STUB: every call is forwarded to
  * the planted store, so a case reading the tally is reading a call
@@ -582,9 +802,89 @@ function countingStore(store: MemoryResearchStore): {
 
       return store.countEntityResearch(entityId);
     },
+    findPoolRowById(poolId) {
+      calls.findPoolRowById += 1;
+
+      return store.findPoolRowById(poolId);
+    },
+    approvePoolRow(poolId) {
+      calls.approvePoolRow += 1;
+
+      return store.approvePoolRow(poolId);
+    },
   };
 
   return { counted, calls };
+}
+
+/**
+ * Wraps the WHOLE store so that every method reached through it is
+ * recorded, in call order.
+ *
+ * NOT THE SAME READING AS {@link countingStore}, and neither
+ * subsumes the other. That one is the narrow port the service
+ * declares, so a method outside the six cannot even be named
+ * through it — which is exactly what a claim about a table this
+ * surface must not write needs to be able to name. This one is
+ * every method and every seam, so the reached list can be held
+ * against a writer roster and a call the service should never have
+ * made ANSWERS rather than dying.
+ *
+ * @param store - The store to wrap.
+ * @param calls - What every reached method name is pushed onto.
+ * @returns A store answering exactly as the wrapped one does.
+ */
+function recordingStore(
+  store: MemoryResearchStore,
+  calls: string[],
+): MemoryResearchStore {
+  return new Proxy(store, {
+    get(target, key): unknown {
+      const member = Reflect.get(target, key) as unknown;
+
+      if (typeof member !== 'function') {
+        return member;
+      }
+
+      const method = member as (...args: unknown[]) => unknown;
+
+      return (...args: unknown[]): unknown => {
+        calls.push(String(key));
+
+        return Reflect.apply(method, target, args);
+      };
+    },
+  });
+}
+
+/**
+ * @param store - Where the intention is read.
+ * @param id - The intention's own id.
+ * @returns Its stored status, or null when no row carries the id.
+ */
+async function poolStatusOf(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<string | null> {
+  const row = await store.findPoolRowById(id);
+
+  return row === null
+    ? null
+    : row.status;
+}
+
+/**
+ * @param at - A ruling's instant.
+ * @returns Its milliseconds.
+ * @throws When there is none. A default would let a case comparing
+ *   two instants compare two zeros and pass.
+ */
+function instantOf(at: Date | null): number {
+  if (at === null) {
+    throw new Error('expected a ruling to carry an instant');
+  }
+
+  return at.getTime();
 }
 
 /**
@@ -1194,6 +1494,71 @@ describe('what a refusal carries', () => {
 
     expect(found).toEqual(needles.map(() => [true, true, true]));
   });
+
+  it('quotes neither the intention id nor the subject\'s own', async () => {
+    // The two approval refusals a caller can reach, each searched
+    // for both ids it could recognise: the one it submitted in the
+    // body and the one it addressed in the path. The two answer the
+    // same sentence on purpose, so a leak through either would be a
+    // caller learning which of them it had got wrong.
+    const store = await plantRegistries();
+
+    // The two refusals have to be about the INTENTION rather than
+    // about the subject, which no containment count can say for
+    // itself: the addressed subject resolves, and the other row
+    // really is planted under the sibling it names. Without this
+    // pair the case passes over a store holding no registry and no
+    // queue at all, every needle then being absent for the wrong
+    // reason.
+    const addressed = await getEntity(store, KUBE);
+    const sibling = await store.findPoolRowById(OTHERS_INTENTION);
+
+    expect(addressed.id).toBe(KUBE);
+    expect(sibling?.entityId).toBe(MESH);
+
+    const unknown = await refusalFrom(
+      () => approveEntityResearch(store, KUBE, {
+        poolId: MISSING_INTENTION,
+      }),
+    );
+    const others = await refusalFrom(
+      () => approveEntityResearch(store, KUBE, {
+        poolId: OTHERS_INTENTION,
+      }),
+    );
+    const subject = String(KUBE);
+
+    expect(leaksIn(unknown, String(MISSING_INTENTION)))
+      .toEqual([0, 0, 0]);
+    expect(leaksIn(unknown, subject)).toEqual([0, 0, 0]);
+    expect(leaksIn(others, String(OTHERS_INTENTION)))
+      .toEqual([0, 0, 0]);
+    expect(leaksIn(others, subject)).toEqual([0, 0, 0]);
+
+    // The two answer ONE sentence, which is what makes those counts
+    // a containment reading rather than merely two of them: a
+    // caller able to tell `no such intention` from `not this
+    // subject's` has been told that a row it does not own exists.
+    expect(unknown.message).toBe(others.message);
+
+    // Neither keeps a cause at all, both being decisions this gate
+    // takes about a row it read rather than refusals it translates.
+    expect(unknown.cause).toBeUndefined();
+    expect(others.cause).toBeUndefined();
+
+    // The control, as above and for the same reason.
+    const needles = [
+      String(MISSING_INTENTION),
+      String(OTHERS_INTENTION),
+      subject,
+    ];
+    const planted = leakingRefusal(needles);
+    const found = needles.map(
+      (needle) => leaksIn(planted, needle).map((count) => count > 0),
+    );
+
+    expect(found).toEqual(needles.map(() => [true, true, true]));
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1492,5 +1857,335 @@ describe('what has been found out about a subject', () => {
 
     expect(none.rows).toEqual([]);
     expect(none.total).toBe(0);
+  });
+});
+
+// -------------------------------------------------------------------------
+// An intention raised about another subject
+// -------------------------------------------------------------------------
+
+describe('an intention raised about another subject', () => {
+  it('refuses it rather than approving it', async () => {
+    // `findPoolRowById` is UNSCOPED, so the row is read and then
+    // judged: the whole containment rule lives in this comparison
+    // and in nothing the store did. A 404 rather than a 403,
+    // because a caller is not entitled to learn that somebody
+    // else's intention exists.
+    const store = await plantRegistries();
+    const refusal = await refusalFrom(
+      () => approveEntityResearch(store, KUBE, {
+        poolId: OTHERS_INTENTION,
+      }),
+    );
+
+    expect(refusal).toBeInstanceOf(NotFoundError);
+    expect(refusal.code).toBe('NOT_FOUND');
+    expect(refusal.statusCode).toBe(404);
+    expect(refusal.details).toBeUndefined();
+
+    // RATHER THAN APPROVING IT, which no assertion on the status
+    // could say: the row stands exactly where it was planted.
+    const stood = await store.findPoolRowById(OTHERS_INTENTION);
+
+    expect(stood?.status).toBe('pending');
+    expect(stood?.approvedAt).toBeNull();
+
+    // The control, inside the case and varied along the one axis
+    // under test: the same call with an intention raised about the
+    // ADDRESSED subject. A gate refusing everything passes the
+    // assertions above and fails this one.
+    const ruling = await approveEntityResearch(store, KUBE, {
+      poolId: OPEN_INTENTION,
+    });
+
+    expect(ruling.id).toBe(OPEN_INTENTION);
+    expect(ruling.status).toBe('approved');
+  });
+
+  it('refuses an intention that names no subject at all', async () => {
+    // `research_pool.entity_id` is nullable, so this is an ordinary
+    // stored state rather than a broken row — and it is on NO
+    // entity, which is not the addressed one. A comparison written
+    // as `!== null && !== parent` would approve it.
+    const store = await plantRegistries();
+    const refusal = await refusalFrom(
+      () => approveEntityResearch(store, KUBE, {
+        poolId: ORPHAN_INTENTION,
+      }),
+    );
+
+    expect(refusal).toBeInstanceOf(NotFoundError);
+    expect(refusal.statusCode).toBe(404);
+
+    const stood = await store.findPoolRowById(ORPHAN_INTENTION);
+
+    expect(stood?.entityId).toBeNull();
+    expect(stood?.status).toBe('pending');
+    expect(stood?.approvedAt).toBeNull();
+
+    // The control, varied along this row's own axis: the same call
+    // for a row differing from it only in naming the subject.
+    const ruling = await approveEntityResearch(store, KUBE, {
+      poolId: OPEN_INTENTION,
+    });
+
+    expect(ruling.status).toBe('approved');
+  });
+});
+
+// -------------------------------------------------------------------------
+// An id no intention carries
+// -------------------------------------------------------------------------
+
+describe('an id no intention carries', () => {
+  it('refuses without reaching the writer', async () => {
+    // The ordering claim, which no assertion on the status can
+    // make: a gate that ruled first and looked afterwards would
+    // answer the same 404 off the write's own null. Counted rather
+    // than asserted absent, with the same tally taken over an id
+    // that resolves — a wrapper that had stopped counting reports
+    // zero for the refusal and zero for the control.
+    const store = await plantRegistries();
+    const refused = countingStore(store);
+    const refusal = await refusalFrom(
+      () => approveEntityResearch(refused.counted, KUBE, {
+        poolId: MISSING_INTENTION,
+      }),
+    );
+
+    expect(refusal).toBeInstanceOf(NotFoundError);
+    expect(refusal.statusCode).toBe(404);
+    expect(refused.calls).toEqual({
+      ...NO_CALLS,
+      findEntityById: 1,
+      findPoolRowById: 1,
+    });
+
+    const answered = countingStore(store);
+    const ruling = await approveEntityResearch(answered.counted, KUBE, {
+      poolId: OPEN_INTENTION,
+    });
+
+    expect(ruling.id).toBe(OPEN_INTENTION);
+    expect(answered.calls).toEqual({
+      ...NO_CALLS,
+      findEntityById: 1,
+      findPoolRowById: 1,
+      approvePoolRow: 1,
+    });
+  });
+});
+
+// -------------------------------------------------------------------------
+// An approval addressed to no subject
+// -------------------------------------------------------------------------
+
+describe('an approval addressed to no subject', () => {
+  it('refuses before the queue is read at all', async () => {
+    // The subject is resolved first, so an id nothing carries costs
+    // one lookup and never reaches the queue — read directly here,
+    // where a status assertion would pass over a gate that had read
+    // somebody's intention before noticing.
+    const store = await plantRegistries();
+    const refused = countingStore(store);
+    const refusal = await refusalFrom(
+      () => approveEntityResearch(refused.counted, MISSING_ENTITY, {
+        poolId: OPEN_INTENTION,
+      }),
+    );
+
+    expect(refusal).toBeInstanceOf(NotFoundError);
+    expect(refusal.statusCode).toBe(404);
+    expect(refused.calls).toEqual({ ...NO_CALLS, findEntityById: 1 });
+
+    // And the named intention was left alone, which is the half a
+    // tally over a narrow port cannot state about a row.
+    const stood = await store.findPoolRowById(OPEN_INTENTION);
+
+    expect(stood?.status).toBe('pending');
+    expect(stood?.approvedAt).toBeNull();
+
+    // The two 404s this call can answer are about different things,
+    // and only the sentence says which: no subject at all, against
+    // no intention of a subject that is there.
+    const other = await refusalFrom(
+      () => approveEntityResearch(store, KUBE, {
+        poolId: MISSING_INTENTION,
+      }),
+    );
+
+    expect(refusal.message).not.toBe(other.message);
+
+    // The control, varied along the one axis under test: the same
+    // body against a subject that resolves, reaching all three.
+    const answered = countingStore(store);
+    const ruling = await approveEntityResearch(answered.counted, KUBE, {
+      poolId: OPEN_INTENTION,
+    });
+
+    expect(ruling.status).toBe('approved');
+    expect(answered.calls).toEqual({
+      ...NO_CALLS,
+      findEntityById: 1,
+      findPoolRowById: 1,
+      approvePoolRow: 1,
+    });
+  });
+});
+
+// -------------------------------------------------------------------------
+// A second ruling on one intention
+// -------------------------------------------------------------------------
+
+describe('a second ruling on one intention', () => {
+  it('answers the first ruling\'s instant', async () => {
+    // `coalesce(approved_at, now())` under both implementations, so
+    // ruling twice keeps the first instant rather than re-dating a
+    // search already paid for. Taken against a clock that moves on
+    // every reading: against the wall clock two rulings in the same
+    // millisecond agree whatever the gate does.
+    const store = await plantRegistries(steppingClock());
+    const first = await approveEntityResearch(store, KUBE, {
+      poolId: OPEN_INTENTION,
+    });
+    const again = await approveEntityResearch(store, KUBE, {
+      poolId: OPEN_INTENTION,
+    });
+
+    expect(first.approvedAt).toBeInstanceOf(Date);
+    expect(again.approvedAt).toEqual(first.approvedAt);
+    expect(again.id).toBe(OPEN_INTENTION);
+    expect(again.status).toBe('approved');
+    expect(again.closedAt).toBeNull();
+
+    // The stored row agrees, which is what says the second answer
+    // was read off the row rather than rebuilt from the first.
+    const stored = await store.findPoolRowById(OPEN_INTENTION);
+
+    expect(stored?.approvedAt).toEqual(first.approvedAt);
+
+    // The control, inside the case: the clock DID move between the
+    // two answers that agreed. A store stamping one constant passes
+    // every assertion above and fails this one.
+    const other = await approveEntityResearch(store, KUBE, {
+      poolId: SECOND_INTENTION,
+    });
+
+    expect(instantOf(other.approvedAt))
+      .toBeGreaterThan(instantOf(first.approvedAt));
+  });
+});
+
+// -------------------------------------------------------------------------
+// An intention already closed
+// -------------------------------------------------------------------------
+
+describe('an intention already closed', () => {
+  it('ratifies it without refusing', async () => {
+    // `RULING_ACTS` records that ratifying twice is a no-op where
+    // applying twice is refused, so a closed row is no refusal
+    // here. Its status MOVES to the approved member and its two
+    // stamps stand, which is the whole of what this write does.
+    const store = await plantRegistries();
+    const ruling = await approveEntityResearch(store, KUBE, {
+      poolId: CLOSED_INTENTION,
+    });
+
+    expect(ruling).toEqual({
+      id: CLOSED_INTENTION,
+      status: 'approved',
+      approvedAt: new Date(RULED_AT),
+      closedAt: new Date(CLOSED_AT),
+    });
+
+    // The projection, asserted as a key SET rather than left to the
+    // comparison above. A ruling answering one member MORE than
+    // `Ruling` declares reddens here and nowhere else.
+    expect(Object.keys(ruling).sort()).toEqual([
+      'approvedAt',
+      'closedAt',
+      'id',
+      'status',
+    ]);
+
+    // `closedAt` is `research_pool.researched_at` under another
+    // name, and the row it was read from still carries both.
+    const stored = await store.findPoolRowById(CLOSED_INTENTION);
+
+    expect(stored?.researchedAt).toEqual(new Date(CLOSED_AT));
+    expect(stored?.approvedAt).toEqual(new Date(RULED_AT));
+    expect(stored?.status).toBe('approved');
+
+    // The control, varied along the one axis under test: the same
+    // call against an OPEN intention of the same subject. A
+    // projection answering a constant for the closing stamp passes
+    // everything above and fails here.
+    const open = await approveEntityResearch(store, KUBE, {
+      poolId: OPEN_INTENTION,
+    });
+
+    expect(open.closedAt).toBeNull();
+    expect(open.status).toBe('approved');
+  });
+});
+
+// -------------------------------------------------------------------------
+// What an approval writes
+// -------------------------------------------------------------------------
+
+describe('what an approval writes', () => {
+  it('rules on the intention and touches nothing else', async () => {
+    // The read-first law read at RUN TIME rather than off the port
+    // type: every method the gate reached, in order, over the WHOLE
+    // store rather than over the six the service declares. A call
+    // this gate should never make answers here instead of dying for
+    // want of a name.
+    const store = await plantRegistries();
+    const before = await store.listEntityResearch(KUBE, WIDE_WINDOW);
+    const calls: string[] = [];
+    const recorded = recordingStore(store, calls);
+    const ruling = await approveEntityResearch(recorded, KUBE, {
+      poolId: OPEN_INTENTION,
+    });
+
+    expect(calls).toEqual([
+      'findEntityById',
+      'findPoolRowById',
+      'approvePoolRow',
+    ]);
+
+    // The seam that writes `entity_research` is PRESENT on the
+    // store and was not reached. Without the presence half a
+    // misspelt name passes as a writer nothing called, which is
+    // what the near-miss beside it is asserted absent for.
+    const research = 'setEntityResearch';
+
+    expect(Object.keys(store)).toContain(research);
+    expect(Object.keys(store)).not.toContain('setEntityResearsh');
+    expect(calls).not.toContain(research);
+
+    // And the table itself stands, read back through the port.
+    const after = await store.listEntityResearch(KUBE, WIDE_WINDOW);
+
+    expect(after).toEqual(before);
+    expect(await store.countEntityResearch(KUBE))
+      .toBe(KUBE_RESEARCH.length);
+
+    // `status` moves to the approved member and to no other, on the
+    // ruled row ALONE: every sibling intention stands where it was
+    // planted, the closed one included.
+    expect(ruling.status).toBe('approved');
+    expect(await poolStatusOf(store, OPEN_INTENTION)).toBe('approved');
+    expect(await poolStatusOf(store, SECOND_INTENTION)).toBe('pending');
+    expect(await poolStatusOf(store, OTHERS_INTENTION)).toBe('pending');
+    expect(await poolStatusOf(store, ORPHAN_INTENTION)).toBe('pending');
+    expect(await poolStatusOf(store, CLOSED_INTENTION)).toBe('done');
+
+    // And the terms the ruling was given to are the terms that were
+    // planted: an approval rewriting what it approved would be a
+    // ruling on something nobody was shown.
+    const stored = await store.findPoolRowById(OPEN_INTENTION);
+
+    expect(stored?.searchTerms).toEqual(INTENDED_TERMS);
   });
 });
