@@ -2406,6 +2406,15 @@ beside `paginationQuerySchema`, with `toTimeWindow` translating a
 parsed pair into what a store port takes exactly as `toStoreWindow`
 translates a parsed page.
 
+What it translates them INTO says which side each bound closes:
+`sinceInclusive` and `untilExclusive`, rather than the two words the
+wire uses. `since` and `until` do not carry their own inclusivity,
+and a store writing `<= until` is a bug no type could report — a
+member called `untilExclusive` is read by whoever writes the
+predicate, which is where the mistake would otherwise be made. An
+absent bound arrives as `null` rather than as a missing key, so a
+store branches on one shape.
+
 Two groups read that vocabulary — the findings list and the spend
 summary — and neither declares a second spelling of it. No
 `?from`/`?to`, no `?days`, and no bare `?date`. This is the
@@ -2423,10 +2432,24 @@ and no member of either answer says it happened.
 The two are different questions and a route may read both. The
 findings list does: `?since`/`?until` decide which findings are in
 the collection, and `?page`/`?perPage` decide which slice of it comes
-back. A route reading both EXTENDS `paginationQuerySchema` rather
-than respelling it, the way `GET /connectors` extends it for `?kind`,
-so the default, the cap and the strictness are inherited and an
-undeclared parameter is still a `422` naming `query`.
+back. A route reading both COMPOSES the two declarations rather than
+respelling either, the way `GET /connectors` extends the page schema
+for its `?kind`, so the default, the cap and the strictness are
+inherited and an undeclared parameter is still a `422` naming
+`query`.
+
+The composition has a DIRECTION, and it is not the one that reads
+naturally. `since` before `until` is a check on the window OBJECT,
+and measured against this tree's zod, `.extend()` carries such a
+check OUTWARDS and not inwards:
+`timeWindowQuerySchema.extend(paginationQuerySchema.shape)` refuses
+an inverted window and
+`paginationQuerySchema.extend(timeWindowQuerySchema.shape)` accepts
+one. Both spellings type-check, both answer every other request
+identically, and only one of them refuses — so a list route reading
+a window extends FROM the window schema, and
+`src/http/schemas.test.ts` sends an inverted window through the
+composed query rather than through the window schema alone.
 
 `GET /spend/summary` reads the window and no page at all, which puts
 it in the small unpaginated class `GET /domains/:slug/categories`
@@ -2461,6 +2484,11 @@ answers an empty result; an inverted one is a mistake and says so.
 `recency` on the findings list — and never a column name, never a
 direction, and never a comma-separated list of either. A key outside
 the tuple is a `422` naming the parameter and the accepted keys.
+
+The tuple states its own default by its ORDER: `sortQuerySchema`
+defaults an absent `?sort` to the FIRST member, so a route names its
+default ordering once rather than in a tuple and again in a default
+that could come to disagree with it.
 
 The keys name ORDERINGS rather than columns, and that is the whole
 point of the spelling. `score` is three keys deep: score descending

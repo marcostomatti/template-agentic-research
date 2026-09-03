@@ -1,16 +1,26 @@
 /**
  * @packageDocumentation
- * How every wave-1 route reads its ADDRESS: the slug that names a
- * domain, the id that names everything else, and the `?page` /
- * `?perPage` window a list is read through. Three schemas declared
- * once, so `:slug` means the same thing on `/domains/:slug` as it
- * does on `/domains/:slug/personas`, and no list route invents a
- * pagination vocabulary of its own.
+ * How a route reads everything that is not its BODY: the slug that
+ * names a domain, the id that names everything else, the `?page` /
+ * `?perPage` window a list is read through, the `?since` / `?until`
+ * window a collection over time is narrowed by, and the `?sort` key
+ * an ordering is asked for by. Each vocabulary declared once, so
+ * `:slug` means the same thing on `/domains/:slug` as it does on
+ * `/domains/:slug/personas`, and no route invents a second spelling
+ * of a page, a window or an order.
+ *
+ * Two shapes here are QUERY vocabularies and not query schemas. A
+ * route composes them — `timeWindowQuerySchema` extended with
+ * `paginationQuerySchema.shape` and `sortQuerySchema(keys).shape`
+ * — rather than parsing against one whole, because a collection
+ * decides for itself which of the three it reads. What none of them
+ * decides is what a page, a window or an order MEANS.
  *
  * Nothing here parses a BODY. A body's shape belongs to the resource
  * that owns it — `src/domains/settings-payload.ts`,
- * `src/settings/payload.ts`, `src/taxonomy/seed-format.ts` — and what
- * all four resource groups genuinely share is only the address.
+ * `src/settings/payload.ts`, `src/taxonomy/seed-format.ts` — and
+ * what the resource groups genuinely share is only the address and
+ * the way a collection is narrowed.
  *
  * Nothing here THROWS either. These are schemas, not parsers:
  * `src/http/validation.ts` is what turns a failed parse into a
@@ -223,4 +233,237 @@ export interface StoreWindow {
  */
 export function toStoreWindow(query: PaginationQuery): StoreWindow {
   return { limit: query.perPage, offset: (query.page - 1) * query.perPage };
+}
+
+/**
+ * The stamp a `?since` or `?until` carries, and the `Date` it
+ * becomes.
+ *
+ * ISO-8601 WITH A ZONE, which is the narrowing worth the argument.
+ * Measured under the zod 4.5.1 in this tree,
+ * `z.iso.datetime({ offset: true })` accepts `2026-01-02T03:04:05Z`
+ * and `2026-01-02T03:04:05+02:00`, and refuses the zone-less
+ * `2026-01-02T03:04:05`, the date alone `2026-01-02`, and the
+ * calendar-impossible `2026-02-31T00:00:00Z`. So a bound names an
+ * instant, and a day that does not exist is a refusal here rather
+ * than the 3rd of March arrived at through `Date`'s own rollover.
+ *
+ * `local: true` is deliberately not passed. A zone-less stamp is a
+ * wall-clock reading whose meaning is the SERVER's zone, and that
+ * is a silent per-deployment difference in which rows a window
+ * holds: `new Date('2026-01-02T03:04:05')` measured here answers
+ * `2026-01-02T02:04:05.000Z`, and would answer something else on a
+ * host set to another offset. It is the same fault
+ * `GET /spend/summary` buckets explicitly at UTC to avoid.
+ *
+ * The format is parsed FIRST and the `Date` constructed second,
+ * which is what `z.coerce.date()` would not do: that schema is
+ * `new Date(value)` over anything, and measured here it accepts
+ * `'2026'`, the bare number `1767225845000` and `'March 3 2026'`.
+ * A window bound is a parameter a person types, so the accepted set
+ * has to be a format rather than whatever `Date` can be talked
+ * into.
+ */
+const timeStampSchema = z.iso.datetime({ offset: true })
+  .transform((value) => new Date(value));
+
+/**
+ * The parameter an inverted window is refused against.
+ *
+ * One field rather than both, because two details would say the
+ * same thing twice about one pair, and `since` rather than `until`
+ * because the refusal is stated that way round in
+ * `docs/architecture/08-http-api.md`: a `since` at or after its
+ * `until`.
+ */
+const WINDOW_ORDER_FIELD = 'since';
+
+/**
+ * What the ordering refusal is worded as.
+ *
+ * This repo's own sentence, carrying neither bound. It does not
+ * reach the wire through `./validation.ts`, whose vocabulary is
+ * keyed on the issue CODE and answers `custom` with a fixed
+ * message of its own — but `zodToValidationError` in
+ * `lib/errors/handler.ts` copies `issue.message` verbatim for any
+ * raw `ZodError` that reaches `errorHandler`, so a message written
+ * out of the submitted stamps would be a leak waiting on one
+ * handler calling `.parse()`.
+ */
+const INVERTED_WINDOW_MESSAGE = 'since must be before until';
+
+/**
+ * Whether a parsed pair of bounds names a window at all.
+ *
+ * @param window - The parsed members, either or both absent.
+ * @returns `true` unless both bounds are present and `since` is at
+ *   or after `until`. A half-bounded or unbounded window is
+ *   ordered by construction, there being nothing for it to
+ *   contradict.
+ *
+ * @remarks
+ * Strictly before, so an EMPTY window is the one thing an operator
+ * cannot ask for by accident: equal bounds hold no row under
+ * half-open semantics, and a caller that sent the same stamp twice
+ * meant a day rather than nothing.
+ */
+function isOrderedWindow(window: {
+  readonly since?: Date;
+  readonly until?: Date;
+}): boolean {
+  if (window.since === undefined || window.until === undefined) {
+    return true;
+  }
+
+  return window.since.getTime() < window.until.getTime();
+}
+
+/**
+ * The `?since` / `?until` window the findings list and the spend
+ * summary are read through, and the only time vocabulary either
+ * accepts. No `?from`/`?to`, no `?days`, no bare `?date`.
+ *
+ * Both members are optional and neither carries a default, because
+ * an absent bound is a real state rather than a missing one: a
+ * window open at one end is what a caller asking for everything
+ * since a stamp means, and {@link toTimeWindow} carries that
+ * openness to the store as a `null` instead of inventing an
+ * endpoint here.
+ *
+ * A ROUTE EXTENDS THIS SCHEMA, IT DOES NOT EXTEND INTO IT, and the
+ * direction is load-bearing rather than stylistic. The ordering
+ * refusal is a check on the OBJECT, and measured under this tree's
+ * zod, `timeWindowQuerySchema.extend(paginationQuerySchema.shape)`
+ * carries that check onto the extended schema while
+ * `paginationQuerySchema.extend(timeWindowQuerySchema.shape)`
+ * silently drops it and ACCEPTS an inverted window. Both spellings
+ * type-check, both answer every other case identically, and only
+ * one of them refuses. So a list route reading a window composes
+ * from here outwards, and `src/http/schemas.test.ts` holds an
+ * inverted window through that composition rather than through
+ * this schema alone.
+ *
+ * Strict, like `paginationQuerySchema`, and the two strictnesses
+ * are the same claim about opting in: a `?since` sent to a route
+ * that declares no window is a `422` naming `query` rather than a
+ * filter quietly dropped, which is the difference between a caller
+ * being told its narrowing was ignored and a caller reading an
+ * unnarrowed page as the answer to it.
+ */
+export const timeWindowQuerySchema = z.object({
+  since: timeStampSchema.optional(),
+  until: timeStampSchema.optional(),
+})
+  .strict()
+  .refine(isOrderedWindow, {
+    path: [WINDOW_ORDER_FIELD],
+    message: INVERTED_WINDOW_MESSAGE,
+  });
+
+/**
+ * A parsed window: either bound, both, or neither.
+ */
+export type TimeWindowQuery = z.infer<typeof timeWindowQuerySchema>;
+
+/**
+ * The window in the vocabulary a store port takes: half-open, and
+ * saying so in its member NAMES.
+ *
+ * A separate shape from {@link TimeWindowQuery} on the same terms
+ * {@link StoreWindow} is separate from {@link PaginationQuery} —
+ * one is what a caller asked for and the other is what SQL is
+ * handed. The renaming does more work here, though. `since` and
+ * `until` are two words that do not say which side they close, and
+ * a store writing `<= untilExclusive` is a bug no type could
+ * report; a member called `untilExclusive` is read by whoever
+ * writes the predicate, which is where the mistake would be made.
+ *
+ * Both members are always present and `null` is what unbounded
+ * looks like. An absent key and a key holding `undefined` are two
+ * spellings of one state, and a store branching on `!== null` over
+ * a required member cannot meet a third.
+ */
+export interface TimeWindow {
+  /** The lower bound. A row stamped exactly here is IN. */
+  readonly sinceInclusive: Date | null;
+  /** The upper bound. A row stamped exactly here is OUT. */
+  readonly untilExclusive: Date | null;
+}
+
+/**
+ * Translates a parsed `?since` / `?until` pair into the half-open
+ * bounds a store port takes.
+ *
+ * @param query - A window that has already been through
+ *   {@link timeWindowQuerySchema}, or a query that extended it.
+ *   Either bound may be absent; if both are present the schema has
+ *   already established that `since` is strictly before `until`, so
+ *   there is no ordering guard here.
+ * @returns The same window as `[sinceInclusive, untilExclusive)`,
+ *   with an absent bound answered as `null`.
+ *
+ * @remarks
+ * The whole of the translation, for the reason
+ * {@link toStoreWindow} is the whole of the other one: two surfaces
+ * each writing `query.since ?? null` is one chance to write
+ * `?? new Date(0)` and answer a window nobody asked for. That it is
+ * currently a rename is the point — the store ports never see the
+ * wire's spelling, so the day a bound needs normalising there is
+ * one place it happens.
+ */
+export function toTimeWindow(query: TimeWindowQuery): TimeWindow {
+  return {
+    sinceInclusive: query.since ?? null,
+    untilExclusive: query.until ?? null,
+  };
+}
+
+/**
+ * The `?sort` a list route reads, over the ordering keys THAT
+ * route declares.
+ *
+ * A function rather than a schema, because there is no shared set
+ * of orderings to declare: the findings list offers `score` and
+ * `recency`, and a later collection will offer neither. What IS
+ * shared is the vocabulary — one parameter called `sort`, holding
+ * one member of a written-out tuple — and that is what this
+ * builder fixes.
+ *
+ * A KEY NAMES AN ORDERING, NEVER A COLUMN, and the tuple is what
+ * makes that true rather than a convention. `score` on the findings
+ * list is three keys deep, and the whole of it lives behind that
+ * one word. A route accepting a column name would be accepting an
+ * order no index answers; one accepting a direction beside the key
+ * would be putting a second authority on an order this repository
+ * has settled once, in `compareFindings`.
+ *
+ * The FIRST member is the default, so the tuple states the default
+ * ordering by its own order and no route repeats it. A key outside
+ * the tuple is `invalid_value` naming `sort` and carrying the
+ * accepted options in zod's own message — which
+ * `./validation.ts` does not copy, so what a caller reads is this
+ * repo's fixed sentence for that code.
+ *
+ * @param keys - The orderings this route offers, most-default
+ *   first. A non-empty tuple, so `keys[0]` is a key rather than
+ *   possibly nothing.
+ * @returns A strict object schema over one optional `sort`,
+ *   defaulted to `keys[0]`, for a route to `.extend()` into its own
+ *   query schema.
+ *
+ * @example
+ * ```ts
+ * const SORT_KEYS = ['score', 'recency'] as const;
+ *
+ * const findingListQuerySchema = timeWindowQuerySchema
+ *   .extend(paginationQuerySchema.shape)
+ *   .extend(sortQuerySchema(SORT_KEYS).shape);
+ * ```
+ */
+export function sortQuerySchema<Key extends string>(
+  keys: readonly [Key, ...Key[]],
+) {
+  return z.object({
+    sort: z.enum(keys).default(keys[0]),
+  }).strict();
 }

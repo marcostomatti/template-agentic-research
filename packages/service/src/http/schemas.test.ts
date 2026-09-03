@@ -1,9 +1,11 @@
 /**
  * `slugParamSchema`, `resourceIdParamSchema`, `paginationQuerySchema`
- * and `toStoreWindow` — everything a wave-1 route reads its address
- * through, before it reads a body.
+ * and `toStoreWindow` — everything a route reads its address
+ * through, before it reads a body — and `timeWindowQuerySchema`,
+ * `sortQuerySchema` and `toTimeWindow` beside them, which is how a
+ * collection is narrowed and ordered once it has been addressed.
  *
- * Five claims, and each one is a promise a route makes to a caller
+ * Nine claims, and each one is a promise a route makes to a caller
  * that only ever sees a status and an envelope. That a domain is
  * addressed by a slug the app can also build a link from, so the two
  * ends of the eventual API swap agree about which strings are
@@ -16,10 +18,19 @@
  * often. And that a refusal names the parameter that caused it, which
  * is the whole of what a detail is allowed to say.
  *
- * Every table here carries BOTH outcomes, and a guard per table
- * asserts it. A block of nothing but refusals is fully green against
- * a schema that refuses everything, and a block of nothing but
- * accepts is fully green against one that accepts everything; the
+ * The four the window and the sort add are the same kind of promise.
+ * That a bound is an instant rather than a wall-clock reading, so two
+ * deployments narrowing by one stamp hold the same rows. That an
+ * inverted or empty window is a refusal rather than a swap or a
+ * clamp, on the argument the over-cap `perPage` already loses. That
+ * an ordering is asked for by a declared key and never by a column
+ * name. And that a narrowing sent to a route which declares none is
+ * a refusal rather than a filter quietly dropped.
+ *
+ * Every wave-1 table here carries BOTH outcomes, and a guard per
+ * table asserts it. A block of nothing but refusals is fully green
+ * against a schema that refuses everything, and a block of nothing
+ * but accepts is fully green against one that accepts everything; the
  * accepted rows and the refused rows are each other's control, and
  * the set-equality guards are what stop a later edit from deleting
  * one side. The two boundary pairs are guarded the same way and for
@@ -27,50 +38,105 @@
  * so `perPage` 200 sits beside 201, and the largest safe integer sits
  * beside a value two above it.
  *
+ * The window and sort table is refusals only, and carries its control
+ * INSIDE each case rather than beside it: every row states the same
+ * request with its own axis put right, which has to parse. That is
+ * the same argument in the shape the section needs — a table of
+ * accepts could not be a control for a row refused by a DIFFERENT
+ * schema, which two of these rows are, and an axis-wise control can.
+ * Each row also submits a sentinel and counts it to zero in the
+ * serialised refusal, against a planted envelope that has to find
+ * every one of them.
+ *
  * Expected values are written down rather than imported. The cap, the
  * two defaults and the safe-integer bound appear here as literals, so
  * this file pins them; importing them would only assert that the
  * module agrees with itself.
  *
- * Mutation grid, measured over the 52 cases in this file with
+ * Mutation grid, measured over the 76 cases in this file with
  * `--reporter=json` and confirmed by a second full pass. Nine legs on
- * the module, each isolating one claim, and the two slug legs are
- * each other's control: a pattern accepting everything reddens the 7
- * refused slug cases and nothing else, one accepting nothing reddens
- * the 5 accepted cases and nothing else. Dropping `.positive()` from
- * the id schema reddens exactly its 3 `too_small` cases, and dropping
- * `.int()` exactly its 2 others — the fraction and the id above the
- * safe bound — which is what says the two checks are pinned
- * separately rather than as one. Raising the cap to 1000 reddens the
- * one case past it; removing `.strict()` reddens the one misspelt
- * parameter; lowering the default `perPage` to 25 reddens 3, the two
- * accepted rows that expect 50 and the translation case built on one.
- * Turning `(page - 1) * perPage` into `page * perPage` reddens all 5
- * `toStoreWindow` cases.
+ * the address half, each isolating one claim, and the two slug legs
+ * are each other's control: a pattern accepting everything reddens
+ * the 7 refused slug cases and nothing else, one accepting nothing
+ * reddens the 5 accepted cases and nothing else. Dropping
+ * `.positive()` from the id schema reddens exactly its 3 `too_small`
+ * cases, and dropping `.int()` exactly its 2 others — the fraction
+ * and the id above the safe bound — which is what says the two
+ * checks are pinned separately rather than as one. Raising the cap to
+ * 1000 reddens the one case past it; lowering the default `perPage`
+ * to 25 reddens 3, the two accepted rows that expect 50 and the
+ * translation case built on one. Turning `(page - 1) * perPage` into
+ * `page * perPage` reddens all 5 `toStoreWindow` cases.
  *
- * The ninth leg is the one worth reading rather than counting.
- * Swapping `limit` and `offset` reddens 4 of those 5 and leaves
+ * Removing `.strict()` from `paginationQuerySchema` reddens 3, and
+ * that leg is worth reading rather than counting: one is the misspelt
+ * parameter it was written for, and the other two are the window
+ * section's undeclared-bound row and its containment sibling. The
+ * page schema's strictness is what refuses a `?since` sent to a route
+ * declaring no window, so the two halves of this file are pinned to
+ * one decision rather than to two that agree.
+ *
+ * The ninth address leg is the other one to read rather than count.
+ * Swapping `limit` and `offset` reddens 4 of the 5 and leaves
  * `translates the second page` green — page 2 at 50 per page has
  * `limit` and `offset` both 50, so the row cannot see the swap at
  * all. A window table made only of such rows would prove nothing
  * about which member is which, which is why the first page and the
  * deep small window are in it.
  *
- * What no module mutation reaches: the four table guards, which read
- * only the tables beside them. They are aimed at a later edit rather
- * than at the module — an accepted or refused side deleted whole, a
- * cap left with no row on one side of it, a refusal class dropped.
+ * Nine more legs cover the window and the sort. Dropping the ordering
+ * refinement reddens 6, the three ordering rows and their three
+ * containment siblings. Turning its `<` into `<=` reddens exactly 2,
+ * the equal-bounds row and its sibling — which is what says `at`
+ * is pinned separately from `after`, a distinction one inverted row
+ * would have collapsed. Naming `until` in the issue path instead of
+ * `since` reddens the 3 field assertions and no containment case.
+ * Widening `sortQuerySchema` from `z.enum(keys)` to a free string
+ * reddens the 2 sort cases. And a TEST-side leg composing the list
+ * query the other way round — `paginationQuerySchema` extended
+ * with the window's shape — reddens the composed row alone, which
+ * is the whole of what reports that `.extend()` carries an object
+ * refinement outwards and not inwards.
+ *
+ * Replacing `z.iso.datetime` with `z.coerce.date()` reddens 1 and not
+ * 2, and the case that stays green is the point: a `Date` coercion
+ * still refuses `sentinel-not-a-stamp`, just with a different code,
+ * so only the row asserting the code moves. A containment count is
+ * blind to which rule did the refusing, which is why the two live in
+ * separate cases.
+ *
+ * The last three legs are the positive controls' own proof, and they
+ * are what stops this section resting on a schema that refuses
+ * everything. A window schema refusing every HALF-bounded window
+ * reddens the two one-bound controls (and row one's own refusal,
+ * which then carries a second detail); one refusing every ORDERED
+ * window reddens the three two-bound controls and no refusal case at
+ * all; and a sort tuple accepting neither declared key reddens the
+ * sort control alone. Between them every control in the table is
+ * shown live.
+ *
+ * What no module mutation reaches: the table guards, which read only
+ * the tables beside them — an accepted or refused side deleted
+ * whole, a cap left with no row on one side of it, a refusal class
+ * dropped, a sentinel that stopped being distinct from its
+ * neighbours, and the planted envelope that keeps every containment
+ * zero honest.
  */
-import type { ZodSafeParseResult } from 'zod';
+import type { ZodSafeParseResult, ZodType } from 'zod';
 
 import { describe, expect, it } from 'vitest';
+
+import { ValidationError } from '../../lib/errors/index.js';
 
 import {
   paginationQuerySchema,
   resourceIdParamSchema,
   slugParamSchema,
+  sortQuerySchema,
+  timeWindowQuerySchema,
   toStoreWindow,
 } from './schemas.js';
+import { parseQuery } from './validation.js';
 
 /**
  * The `perPage` ceiling, written down rather than imported, so a
@@ -541,4 +607,360 @@ describe('toStoreWindow', () => {
 
     expect(window).toStrictEqual({ limit: 50, offset: 0 });
   });
+});
+
+// ---------------------------------------------------------------------------
+// timeWindowQuerySchema and sortQuerySchema — what they refuse
+// ---------------------------------------------------------------------------
+
+/**
+ * The orderings a findings list declares, as the tuple a route
+ * hands {@link sortQuerySchema}. Written out here rather than
+ * imported from a route that does not exist yet, which is also what
+ * makes it a caller-supplied tuple in the test as it is in life.
+ */
+const SORT_KEYS = ['score', 'recency'] as const;
+
+/** The `?sort` vocabulary those two keys open. */
+const sortSchema = sortQuerySchema(SORT_KEYS);
+
+/**
+ * The query a findings list is read through: the window, extended
+ * with the page and the sort.
+ *
+ * COMPOSED IN THIS DIRECTION ON PURPOSE. The ordering check is a
+ * refinement on the window OBJECT, and `.extend()` carries it only
+ * outwards — measured against this tree's zod, the reverse
+ * spelling `paginationQuerySchema.extend(timeWindowQuerySchema
+ * .shape)` type-checks, answers every other row here identically,
+ * and ACCEPTS an inverted window. The last row of the table below
+ * is the whole of what reports that, and it is aimed at a later
+ * route composing the other way round rather than at anything in
+ * `./schemas.ts`.
+ */
+const findingListQuerySchema = timeWindowQuerySchema
+  .extend(paginationQuerySchema.shape)
+  .extend(sortSchema.shape);
+
+/**
+ * A stamp that is not one, submitted where a bound belongs.
+ *
+ * Nothing about it is date-shaped, deliberately. A near-miss like
+ * `2026-13-01` would share long runs with the real stamps beside
+ * it, and a containment count is a substring search — so the two
+ * would have to be read together rather than one row at a time.
+ */
+const SENTINEL_STAMP = 'sentinel-not-a-stamp';
+
+/** A sort key no route declares, submitted as one. */
+const SENTINEL_SORT_KEY = 'sentinel_sort_key';
+
+/** The `since` of an inverted window, submitted as a bound. */
+const SENTINEL_AFTER = '2099-11-22T13:14:15Z';
+
+/**
+ * The earlier of the two instants the ordering rows are built from.
+ *
+ * NOT a sentinel and deliberately not in the roster below: it is
+ * the `until` of one inverted window, the `until` of another, and
+ * the `since` of two controls, so a count against it could not say
+ * which row had leaked it. Each ordering row keeps its own needle
+ * on the `since` it alone submits.
+ */
+const EARLY_STAMP = '1999-03-04T05:06:07Z';
+
+/** Both bounds of an empty window, submitted as the same instant. */
+const SENTINEL_EQUAL = '2044-05-06T07:08:09Z';
+
+/** A bound submitted to a route that declares no window at all. */
+const SENTINEL_UNDECLARED = '2031-06-07T08:09:10Z';
+
+/** The `since` of an inverted window sent through a composed query. */
+const SENTINEL_COMPOSED = '2098-10-09T08:07:06Z';
+
+/**
+ * Every string the rows below submit. None is a substring of
+ * another — asserted rather than asserted about, since a needle
+ * contained in a second needle would make one row's zero
+ * satisfiable by the other's absence.
+ */
+const WINDOW_SENTINELS = [
+  SENTINEL_STAMP,
+  SENTINEL_SORT_KEY,
+  SENTINEL_AFTER,
+  SENTINEL_EQUAL,
+  SENTINEL_UNDECLARED,
+  SENTINEL_COMPOSED,
+];
+
+/**
+ * One refused query, what it is refused WITH, and the request that
+ * differs from it only along the axis under test.
+ */
+interface WindowRefusalCase {
+  /** What makes this row different from every other. */
+  readonly label: string;
+
+  /** The schema the refused query is parsed against. */
+  readonly schema: ZodType;
+
+  /** The query, carrying {@link WindowRefusalCase.needle}. */
+  readonly query: Query;
+
+  /**
+   * The parameter this row varies, and the member its control has
+   * to come back carrying. Not always the field a detail names: a
+   * bound sent to a schema that declares no window is a fault
+   * against the query OBJECT, so the axis is `since` and the field
+   * is the root.
+   */
+  readonly axis: string;
+
+  /** The dotted path the detail names. */
+  readonly field: string;
+
+  /** The issue code the detail carries. */
+  readonly code: string;
+
+  /** The submitted string the refusal must not carry back. */
+  readonly needle: string;
+
+  /**
+   * The same request with the axis put right, which has to parse.
+   *
+   * The positive control, in the case rather than beside it: every
+   * assertion above it passes against a schema that refuses
+   * everything, and this is the one that does not.
+   */
+  readonly control: {
+    readonly schema: ZodType;
+    readonly query: Query;
+  };
+}
+
+/**
+ * The four refusal classes this section is for, plus the two rows
+ * that separate claims a single row would collapse.
+ *
+ * `at or after` is two facts. An inverted window is refused by any
+ * comparison at all, while an EMPTY one — the same instant sent
+ * twice — is refused only by the strict `<` the module carries, so
+ * a table without that row stays green against a rule that accepts
+ * a window holding nothing.
+ *
+ * The last row is the composition claim rather than a schema claim.
+ * It sends the same inverted window as the second row through the
+ * query a list route actually parses, which is the only place the
+ * `.extend()` direction can be reported.
+ */
+const WINDOW_REFUSAL_CASES: readonly WindowRefusalCase[] = [
+  {
+    label: 'a bound that is not a stamp',
+    schema: timeWindowQuerySchema,
+    query: { since: SENTINEL_STAMP },
+    axis: 'since', field: 'since', code: 'invalid_format',
+    needle: SENTINEL_STAMP,
+    control: {
+      schema: timeWindowQuerySchema,
+      query: { since: '2026-01-02T03:04:05Z' },
+    },
+  },
+  {
+    label: 'a since after its until',
+    schema: timeWindowQuerySchema,
+    query: { since: SENTINEL_AFTER, until: EARLY_STAMP },
+    axis: 'since', field: 'since', code: 'custom',
+    needle: SENTINEL_AFTER,
+    control: {
+      schema: timeWindowQuerySchema,
+      query: { since: EARLY_STAMP, until: SENTINEL_AFTER },
+    },
+  },
+  {
+    label: 'a since exactly at its until',
+    schema: timeWindowQuerySchema,
+    query: { since: SENTINEL_EQUAL, until: SENTINEL_EQUAL },
+    axis: 'since', field: 'since', code: 'custom',
+    needle: SENTINEL_EQUAL,
+    control: {
+      schema: timeWindowQuerySchema,
+      query: { since: SENTINEL_EQUAL, until: '2044-05-06T07:08:10Z' },
+    },
+  },
+  {
+    label: 'a sort key outside the declared tuple',
+    schema: sortSchema,
+    query: { sort: SENTINEL_SORT_KEY },
+    axis: 'sort', field: 'sort', code: 'invalid_value',
+    needle: SENTINEL_SORT_KEY,
+    control: { schema: sortSchema, query: { sort: 'recency' } },
+  },
+  {
+    label: 'a bound beside a page on a route declaring no window',
+    schema: paginationQuerySchema,
+    query: { page: '2', since: SENTINEL_UNDECLARED },
+    axis: 'since', field: 'query', code: 'unrecognized_keys',
+    needle: SENTINEL_UNDECLARED,
+    control: {
+      schema: timeWindowQuerySchema,
+      query: { since: SENTINEL_UNDECLARED },
+    },
+  },
+  {
+    label: 'an inverted window through a composed list query',
+    schema: findingListQuerySchema,
+    query: {
+      page: '2', since: SENTINEL_COMPOSED, until: EARLY_STAMP,
+    },
+    axis: 'since', field: 'since', code: 'custom',
+    needle: SENTINEL_COMPOSED,
+    control: {
+      schema: findingListQuerySchema,
+      query: {
+        page: '2', since: EARLY_STAMP, until: SENTINEL_COMPOSED,
+      },
+    },
+  },
+];
+
+/**
+ * Runs a parse that has to be refused, and answers the refusal.
+ *
+ * @param run - The parse.
+ * @returns The `ValidationError` it threw.
+ * @throws Error - When the parse ANSWERED, naming that rather than
+ *   failing on a property of `undefined` three lines later.
+ */
+function validationErrorFrom(run: () => unknown): ValidationError {
+  try {
+    run();
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      return err;
+    }
+
+    throw err;
+  }
+
+  throw new Error('expected a refusal, and the parse answered');
+}
+
+/**
+ * The two facts a caller reads off each detail: where the fault is
+ * and what kind it is.
+ *
+ * `message` is deliberately not among them, on the rule the wave-1
+ * half of this file already states — it is the member that would
+ * carry submitted content if anything did, and the containment
+ * assertion below reads the whole serialised refusal rather than
+ * trusting a field-by-field list.
+ *
+ * @param err - The refusal.
+ * @returns One `{ field, code }` per detail, in the order raised.
+ */
+function detailsOf(err: ValidationError): { field: string; code: string }[] {
+  return (err.details ?? []).map((detail) => ({
+    field: detail.field,
+    code: detail.code ?? '',
+  }));
+}
+
+/**
+ * How many times `needle` occurs in `haystack`.
+ *
+ * @param haystack - The text searched.
+ * @param needle - The string looked for.
+ * @returns The count, `0` when it is absent.
+ */
+function countOccurrences(haystack: string, needle: string): number {
+  return haystack.split(needle).length - 1;
+}
+
+describe('what a window or a sort refuses', () => {
+  it('labels every row distinctly', () => {
+    const labels = WINDOW_REFUSAL_CASES.map((row) => row.label);
+
+    expect(labels.length).toBe(new Set(labels).size);
+  });
+
+  it('submits each sentinel through one row and one channel', () => {
+    const needles = WINDOW_REFUSAL_CASES.map((row) => row.needle);
+
+    expect([...needles].sort()).toEqual([...WINDOW_SENTINELS].sort());
+  });
+
+  it('keeps no sentinel inside another', () => {
+    const contained = WINDOW_SENTINELS.filter((needle) => WINDOW_SENTINELS
+      .some((other) => other !== needle && other.includes(needle)));
+
+    expect(contained).toEqual([]);
+  });
+
+  it('covers every refusal class the window vocabulary has', () => {
+    const codes = WINDOW_REFUSAL_CASES.map((row) => row.code);
+
+    expect([...new Set(codes)].sort()).toEqual([
+      'custom', 'invalid_format', 'invalid_value', 'unrecognized_keys',
+    ]);
+  });
+
+  it('refuses against a named parameter and against the root', () => {
+    const fields = WINDOW_REFUSAL_CASES.map((row) => row.field);
+
+    expect([...new Set(fields)].sort()).toEqual(['query', 'since', 'sort']);
+  });
+
+  it('would find a sentinel a refusal did carry', () => {
+    // The planted control on every zero below. A count over an
+    // envelope this module did not build has to be non-zero for
+    // each needle, or a zero says nothing about containment and
+    // everything about the search.
+    const planted = JSON.stringify({
+      code: 'VALIDATION_ERROR',
+      message: `Nothing matches ${SENTINEL_STAMP}`,
+      details: [
+        {
+          field: `sort.${SENTINEL_SORT_KEY}`,
+          message: `${SENTINEL_AFTER} is after ${SENTINEL_COMPOSED}`,
+          code: `${SENTINEL_EQUAL}:${SENTINEL_UNDECLARED}`,
+        },
+      ],
+    });
+    const found = WINDOW_SENTINELS.map((needle) => countOccurrences(
+      planted,
+      needle,
+    ));
+
+    expect(found).toEqual(WINDOW_SENTINELS.map(() => 1));
+  });
+
+  for (const row of WINDOW_REFUSAL_CASES) {
+    it(`refuses ${row.label}`, () => {
+      const err = validationErrorFrom(() => parseQuery(row.schema, row.query));
+
+      expect(detailsOf(err)).toEqual([{ field: row.field, code: row.code }]);
+    });
+
+    it(`answers ${row.label} without quoting it`, () => {
+      const err = validationErrorFrom(() => parseQuery(row.schema, row.query));
+      const answered = JSON.stringify(err.toJSON());
+
+      // Counted rather than asserted absent: the planted control
+      // above has shown this number can be something other than 0.
+      expect(countOccurrences(answered, row.needle)).toBe(0);
+
+      // The envelope was built at all — an empty string satisfies
+      // the count above and nothing else here would report it.
+      expect(answered.length).toBeGreaterThan(0);
+    });
+
+    it(`accepts ${row.label} put right`, () => {
+      // The positive control, varied along this row's own axis.
+      // Every assertion above passes against a schema that refuses
+      // everything; this is the one that does not.
+      const parsed = parseQuery(row.control.schema, row.control.query);
+
+      expect(Object.keys(parsed as object)).toContain(row.axis);
+    });
+  }
 });
