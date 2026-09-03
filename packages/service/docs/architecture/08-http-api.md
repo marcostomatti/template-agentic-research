@@ -2717,29 +2717,36 @@ that does not add up to the ledger it claims to summarise.
 
 ## Findings
 
-### A finding is met in its domain and read by its id
+### A finding is met in its domain and addressed by its id
 
 | Method and path | Answers |
 | --- | --- |
 | `GET /domains/:slug/findings` | `200` with one page of the domain's findings, in the ordering `?sort` names, plus `meta`. `404` for an unknown slug, `422` for a segment that is not a slug, for an unparseable or inverted window, for a `?sort` outside the two declared keys, and for the pagination faults every list route answers. |
 | `GET /findings/:id` | `200` with the finding, its sightings, its rulings newest first and its entity's research. `404` for an unknown id, `422` for a segment that is not one. Reads no query at all. |
+| `PATCH /findings/:id/verdict` | `200` with the appended `finding_labels` row. `404` for an unknown id, `422` for a segment that is not one, for a body that is not `{ verdict, note? }`, for an undeclared key in it, and for a verdict outside the owning domain's ladder. |
 
-`src/findings/routes.ts` declares both and decides neither: each
-handler reads the address, takes the query apart, calls the matching
-function in `src/findings/service.ts` and chooses a status.
+`src/findings/routes.ts` declares all three and decides none: each
+handler reads the address, takes apart the query or hands on the body
+it was given, calls the matching function in
+`src/findings/service.ts` or `src/findings/verdict-service.ts`, and
+chooses a status.
 
 The collection hangs off `/domains/:slug` because a finding is what a
 domain's criteria produced, and a caller holding a slug should not
-have to look an id up to read one. The single get addresses
-`/findings/:id` instead, for the reason a topic is written by id: the
-row carries its own `domain_id`, no rule on this table spans a
-domain, and repeating the slug would let a request name a domain the
-row does not belong to.
+have to look an id up to read one. The single get and the ruling
+address `/findings/:id` instead, for the reason a topic is written by
+id: the row carries its own `domain_id`, no rule on this table spans
+a domain, and repeating the slug would let a request name a domain
+the row does not belong to. The ruling is where that would cost most,
+since the ladder it is judged against is read off `domain_id` and a
+slug in the path would be a second answer to a question the row has
+already settled.
 
-Neither read can answer `409`. Nothing on either decides on stored
-state beyond whether the domain and the finding are there, so the
-refusals available to them are the `404` about the address and the
-`422` about the request and nothing else.
+None of the three can answer `409`. Neither read decides on stored
+state beyond whether the domain and the finding are there, and the
+ruling has no conflicting state to refuse — `A second ruling` below
+is why — so the refusals available to this group are the `404` about
+the address and the `422` about the request and nothing else.
 
 ### The reads and the ruling are two modules on one router
 
@@ -2758,6 +2765,11 @@ rather than the submitted value, and the append that makes the
 sequence the record — is argued once under `Verdict vocabulary`
 above, because it is a fact about the column rather than about this
 route.
+
+What the three sub-sections at the foot of this group add is what the
+ROUTE does under each of them: which row the ladder is read off, how
+a client tells the two `422`s apart, and what a second ruling on one
+finding answers.
 
 ### Two narrowings and a window, and none of them refuses a value
 
@@ -2869,3 +2881,97 @@ than the head of it. The first row is the verdict in force, and the
 ruling a later one replaced is still a true statement about the
 moment it was made under the ladder in force then —
 `A ruling is appended` above is where that is argued.
+
+### The ladder is the owning domain's, and no segment names it
+
+`PATCH /findings/:id/verdict` addresses a FINDING, so the domain
+whose ladder judges the ruling is `findings.domain_id` on the row
+that id resolved to. A caller neither names it nor can get it wrong:
+there is no spelling of this request that would judge one domain's
+finding against another's vocabulary, and `DomainStore` carries a
+by-id read for this lookup and for no other on the surface.
+
+`The accepted set is read per request` above is where that set being
+a per-domain setting is argued, and it is argued about the column. On
+this route it shows as an ORDER, and none of the three reads in it
+can be issued together, each answer being the next question's
+argument. The body is parsed first, so a malformed ruling is a `422`
+whether or not the finding exists and costs no read at all; the
+finding is resolved next; the domain is read off the row it answered;
+and only then does the ladder decide whether the append happens.
+
+The body is `{ verdict, note? }` and strict. `verdict` carries no
+value rule in the schema at all — not an enum, not a length — and
+that absence is the subject rather than an omission: the accepted set
+is not knowable until a row has been read, so a rule here would
+either name some other domain's ladder or refuse one particular
+non-member under a different code from every other. `note` is
+optional and its absence is a NULL, there being no writer but a
+person on this route.
+
+A domain that has gone by the time the second read runs is the same
+`404` as a finding that is not there, and that is a statement about
+the schema rather than a convenience. `findings.domain_id` is NOT
+NULL and cascades, so a domain that went between the two reads took
+this finding with it: by the time the caller reads the answer, no
+finding carries the id, which is exactly what the refusal says.
+
+### The refusal names the ladder, and never the ruling refused
+
+A verdict outside the vocabulary is a `422` whose one detail names
+`verdict` and carries the accepted set. `The refusal names the
+accepted set` above argues why that direction is the safe one. What
+this route adds is that the refusal is the SERVICE's rather than a
+schema's, and that the two `422`s a caller can get here are
+distinguishable.
+
+The code is `verdict_outside_vocabulary`, declared in
+`src/findings/verdict-service.ts` rather than mapped from a schema
+issue. No schema raised it because none could: the accepted set is a
+row this request had to be resolved before it could be read. So a
+client branching on the code learns that its ruling was refused by
+the DOMAIN, where the other `422` on this route — a malformed body,
+an undeclared key, a segment that is not an id — says the REQUEST was
+the wrong shape. That is the one distinction between them, and it is
+the one a caller acts on differently: the first is fixed by sending a
+verdict the ladder holds, the second by sending a different request.
+
+The set is rendered with `JSON.stringify` rather than joined, which
+is not formatting. It quotes each member, so a verdict carrying a
+comma or a space is still readable as one member; and it escapes
+every control character it meets, so a ladder an operator stored with
+a raw NUL or a lone surrogate in it reaches the wire and the log line
+as an escape. `Two surfaces cut at one cap` above reaches the same
+discipline through a mask, and one detail built from a constant and
+an array does not need the second pass.
+
+One thing the containment claim does not cover is worth meeting here
+rather than discovering. A submitted string that happens to be a
+SUBSTRING of a declared verdict comes back inside that member.
+Nothing copied it — the sentence is a constant of the module's own
+with the stored ladder appended — so it is a coincidence of what the
+domain declared rather than an echo, and the case that counts
+occurrences uses a sentinel no vocabulary here contains a piece of,
+so its zero is a reading of the refusal rather than of the fixture.
+
+### A second ruling is a `200`, because the table appends
+
+`A ruling is appended` above argues the column: `finding_labels`
+carries no unique key, so the sequence is the record. What that means
+at this route is that there is nothing here to conflict with. A
+second ruling on one finding — the SAME verdict included — is a `200`
+and a second row, never a `409` and never a silent no-op, which is
+why the `409` is unavailable across all three routes of this group
+and not only across the two reads.
+
+What comes back is the row the append STORED, read back rather than
+rebuilt from the body. Its `id` and its `labelled_at` are the two
+members no request carried, which is what makes the answer a reading
+of the write: a body assembled from the parsed input would agree with
+this one on every member a caller submitted, and those two are where
+the difference is.
+
+The route answers one row and never the list. What it did is one act,
+and what the finding now stands at is a question about the finding —
+`GET /findings/:id` is where the sequence is read, newest first and
+whole.

@@ -111,10 +111,14 @@
  * `ctx.requireAuth` is `tests/api/wiring.test.ts`'s claim, and
  * what a refusal may CONTAIN across the whole surface is
  * `tests/api/request-echo.test.ts`'s — the containment reading
- * below is scoped to the channels these two routes open. The
- * ruling that appends a `finding_labels` row is not on this
- * router at all yet, and `./routes.ts` records the absence as a
- * property of the store it is handed.
+ * below is scoped to the channels these two GETs open. The ruling
+ * that appends a `finding_labels` row IS on this router now, and
+ * NO case in this file reads it: every envelope, every count and
+ * every containment window below is about the two reads, so a
+ * regression in `PATCH /findings/:id/verdict` would leave this
+ * file green. Those cases are owed, and until they land the only
+ * readings of that route are `./verdict-service.test.ts`'s, taken
+ * over direct calls with no server.
  *
  * MUTATION GRID, taken by mutating one file one edit at a time and
  * reading the failed `fullName` SET off a `--reporter=json` run
@@ -173,6 +177,7 @@ import type {
   FindingSort,
   InsertFindingLabelInput,
 } from './store.js';
+import type { VerdictServiceStore } from './verdict-service.js';
 import type {
   MemoryDomainFinding,
   MemoryEntityResearch,
@@ -920,17 +925,25 @@ interface RecordedRead {
  * `meta.total` was counted through a different narrowing describes
  * a different collection from the page beside it.
  *
+ * THE RULING'S TWO METHODS ARE FORWARDED AND NOT RECORDED, which
+ * is what the router's own store type now asks for. Nothing in
+ * this file reads a PATCH through a recording port — the ruling
+ * hands the body on unparsed, so there is no rebuilt value object
+ * for a log to be the only reading of. They are here to satisfy
+ * `VerdictServiceStore`, and a case that wants them recorded adds
+ * a log beside the two above rather than a second wrapper.
+ *
  * @param store - Where the calls go.
  * @returns The port to build a router over, and the two logs.
  */
 function recordingStore(store: MemoryResearchStore): {
-  recorded: FindingsServiceStore;
+  recorded: FindingsServiceStore & VerdictServiceStore;
   reads: RecordedRead[];
   counts: FindingFilter[];
 } {
   const reads: RecordedRead[] = [];
   const counts: FindingFilter[] = [];
-  const recorded: FindingsServiceStore = {
+  const recorded: FindingsServiceStore & VerdictServiceStore = {
     findDomainBySlug: (slug) => store.findDomainBySlug(slug),
     listFindings(domainId, filter, sort, window) {
       reads.push({ domainId, filter, sort, window });
@@ -946,6 +959,8 @@ function recordingStore(store: MemoryResearchStore): {
     listFindingSightings: (id) => store.listFindingSightings(id),
     listFindingLabels: (id) => store.listFindingLabels(id),
     listFindingResearch: (id) => store.listFindingResearch(id),
+    findDomainById: (id) => store.findDomainById(id),
+    insertFindingLabel: (input) => store.insertFindingLabel(input),
   };
 
   return { recorded, reads, counts };
@@ -1056,13 +1071,23 @@ function advancingClock(): () => Date {
  *
  * A FRESH router and a fresh app per call, so no case can be
  * reached by state another one left. No clock is supplied to the
- * router, because it takes none: nothing on either route reads the
- * present.
+ * router, because it takes none: nothing on any of its three
+ * routes reads the present, a ruling's `labelledAt` being the
+ * store's own stamp.
  *
- * @param store - What the router acts against.
+ * `express.json()` is mounted here for the same reason
+ * `applyMiddleware` mounts it in the deployment: the router sets
+ * up no body parsing of its own, so without it the ruling's body
+ * would reach the service as `undefined`.
+ *
+ * @param store - What the router acts against. The router's own
+ *   intersection rather than either half, so the app this returns
+ *   carries all three routes.
  * @returns The Express app, with the router mounted at `/`.
  */
-function buildFindingsApp(store: FindingsServiceStore): Application {
+function buildFindingsApp(
+  store: FindingsServiceStore & VerdictServiceStore,
+): Application {
   const app = express();
 
   app.use(express.json());

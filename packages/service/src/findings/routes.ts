@@ -1,44 +1,54 @@
 /**
  * @packageDocumentation
- * The HTTP surface over `src/findings/service.ts`: TWO routes, and
- * nothing in them that decides anything.
+ * The HTTP surface over `src/findings/service.ts` and
+ * `src/findings/verdict-service.ts`: THREE routes, and nothing in
+ * them that decides anything.
  *
- * `GET /domains/:slug/findings` is {@link listFindings} and
- * `GET /findings/:id` is {@link getFinding}. What a handler adds
- * over the call it wraps is an address to read, a query to take
- * apart, a status to choose and an envelope to write — so a change
- * to what the findings surface NARROWS, ORDERS or EMBEDS belongs
- * one file over, and the cases that pin those rules still need no
- * server.
+ * `GET /domains/:slug/findings` is {@link listFindings},
+ * `GET /findings/:id` is {@link getFinding}, and
+ * `PATCH /findings/:id/verdict` is {@link recordVerdict}. What a
+ * handler adds over the call it wraps is an address to read, a
+ * query or a body to hand on, a status to choose and an envelope
+ * to write — so a change to what the findings surface NARROWS,
+ * ORDERS, EMBEDS or ACCEPTS belongs one file over, and the cases
+ * that pin those rules still need no server.
  *
- * READ-ONLY IS STRUCTURAL AND NOT OBSERVED HERE. This file
- * registers `get` and no other verb, and the store it is handed is
- * {@link FindingsServiceStore} — six reads, and no writer of any of
- * the four findings tables anywhere on it. So a re-score button
- * cannot be added to this router by a small edit: there would be
- * nothing for it to call. `Read-first` in
- * `docs/architecture/08-http-api.md` states that rule once for the
- * whole wave, and names the small edit it exists to stop.
+ * READ-FIRST IS STRUCTURAL AND NOT OBSERVED HERE. The store this
+ * file is handed is the intersection of the two narrowed ports its
+ * two service modules declare, and across the four findings tables
+ * it carries exactly ONE writer: the append onto `finding_labels`.
+ * Nothing on it writes `findings.score` or `score_version`, and
+ * nothing on it reaches a sighting or a research row except to read
+ * one. So a re-score button cannot be added to this router by a
+ * small edit — there would be nothing for it to call. `Read-first`
+ * in `docs/architecture/08-http-api.md` states that rule once for
+ * the whole wave, and names the small edit it exists to stop.
  *
- * THE RULING IS NOT ON THIS ROUTER YET AND WILL BE. The prefix
- * table in that same document lists `PATCH /findings/:id/verdict`
- * under this builder, and its rules live in `./verdict-service.ts`
- * beside the two reads' own module. It is absent here rather than
- * elsewhere, and the absence is visible in the OPTIONS type: the
- * store below cannot reach `insertFindingLabel`, so declaring the
- * route means widening what this router asks for, which is a change
- * a reader sees rather than one that hides in a handler.
+ * THE RULING IS HERE AND IS SERVED BY A SECOND MODULE.
+ * `PATCH /findings/:id/verdict` is declared below beside the two
+ * reads, and every rule it keeps lives in `./verdict-service.ts`:
+ * the ladder read per request off the OWNING domain's row, the
+ * refusal that names that ladder and never the string a caller
+ * sent, and the append that leaves the ruling it replaced readable.
+ * The widening that admitted it is visible in the OPTIONS type
+ * rather than hidden in a handler — this router asks for
+ * `insertFindingLabel` and for `findDomainById`, which is a change
+ * a reader sees.
  *
- * TWO PATH SHAPES, BECAUSE A FINDING IS MET IN ITS DOMAIN AND READ
- * BY ITS ID. The collection hangs off `/domains/:slug`, since a
- * finding is what a domain's criteria produced and a caller holding
- * a slug should not have to look an id up to read one. The single
- * get addresses `/findings/:id` instead: the row carries its own
- * `domainId`, no rule on this table spans a domain, and repeating
- * the slug in the path would let a request name a domain the row
- * does not belong to, a disagreement this router would then have to
- * answer for. `docs/architecture/08-http-api.md` records that split
- * beside the rest of the surface.
+ * TWO PATH SHAPES, BECAUSE A FINDING IS MET IN ITS DOMAIN AND
+ * ADDRESSED BY ITS ID. The collection hangs off `/domains/:slug`,
+ * since a finding is what a domain's criteria produced and a caller
+ * holding a slug should not have to look an id up to read one. The
+ * single get and the ruling address `/findings/:id` instead: the
+ * row carries its own `domainId`, no rule on this table spans a
+ * domain, and repeating the slug in the path would let a request
+ * name a domain the row does not belong to, a disagreement this
+ * router would then have to answer for. The ruling is where that
+ * would cost most — the ladder it is judged against is read off
+ * `domainId`, so a slug in the path would be a second answer to a
+ * question the row has already settled.
+ * `docs/architecture/08-http-api.md` records that split beside the
+ * rest of the surface.
  *
  * THE QUERY IS PARSED ONCE AND SPLIT THREE WAYS. One
  * `findingListQuerySchema` parse answers for the window over time,
@@ -68,6 +78,15 @@
  * surface will not serve is the half a caller can fix without
  * knowing anything about what is stored.
  *
+ * THE ADDRESS IS CHECKED BEFORE THE PAYLOAD ON THE PATCH, which is
+ * the other half of that rule and the ordering every sibling router
+ * keeps. {@link recordVerdict} is handed an id this file has
+ * already narrowed, so a `PATCH /findings/abc/verdict` carrying a
+ * malformed body is answered about the segment. Below that the
+ * service parses the body BEFORE it resolves the finding, so a
+ * malformed ruling on a finding nobody has is a 422 about the body
+ * rather than a 404 about the row.
+ *
  * NO HANDLER HERE CARRIES A TRY/CATCH AND NONE CALLS `next(err)`.
  * `createService` registers `errorHandler` from `lib/errors` LAST,
  * and under Express 5 a bare `throw` inside an `async` handler
@@ -90,6 +109,12 @@
  * `src/findings/service.ts` records why this surface masks where
  * the failures queue and the documents list do not.
  *
+ * THE RULING ANSWERS ON THE SAME TERMS, and what it answers is the
+ * row the append STORED rather than the body rebuilt around an id.
+ * Its `id` and its `labelledAt` are the two members no request
+ * carried, which is what makes the response a reading of the write
+ * rather than an echo of the request.
+ *
  * PATHS ARE ROOT-ABSOLUTE AND THIS ROUTER MOUNTS AT `/`, which is
  * the surface-wide rule: the string below is the string on the
  * wire, which is what keeps a path seen in a log greppable in this
@@ -98,12 +123,16 @@
  * in `docs/architecture/08-http-api.md`, which records the `/auth`
  * mount as the deliberate exception.
  *
- * No body parsing is set up here, and neither route below reads a
- * body at all: a `GET` carrying one is answered exactly as one that
- * did not.
+ * No body parsing is set up here. `applyMiddleware` installs
+ * `express.json()` on the app before any router is mounted, so
+ * `req.body` is already a parsed value — or `undefined` for a
+ * request that sent no body, which `verdictBodySchema` refuses like
+ * any other bad shape. Neither GET reads a body at all: one
+ * carrying a body is answered exactly as one that did not.
  */
 import type { FindingsServiceStore } from './service.js';
 import type { FindingFilter } from './store.js';
+import type { VerdictServiceStore } from './verdict-service.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -123,6 +152,7 @@ import {
   getFinding,
   listFindings,
 } from './service.js';
+import { recordVerdict } from './verdict-service.js';
 
 /**
  * The `:slug` segment, as an object schema over `req.params`.
@@ -161,25 +191,38 @@ const findingAddressSchema = z
 /** Everything {@link buildFindingsRouter} needs. */
 export interface FindingsRouterOptions {
   /**
-   * Where the domain is resolved and its findings are read.
+   * Where the domain is resolved, its findings are read and a
+   * ruling is appended.
    *
-   * `FindingsServiceStore` and not either port whole: it is the
-   * intersection of the two `Pick`s `src/findings/service.ts`
-   * declares, so this router asks for the six reads that module
-   * reaches and `tests/helpers/memory-research-store.ts` can stand
-   * behind it with no database up.
+   * THE INTERSECTION OF TWO NARROWED PORTS AND NOT EITHER PORT
+   * WHOLE. `FindingsServiceStore` is the seven methods
+   * `src/findings/service.ts` reaches and `VerdictServiceStore` is
+   * the three `./verdict-service.ts` does, overlapping on
+   * `findFindingById` alone: nine methods, of which two are
+   * `DomainStore`'s and seven are every method `FindingStore`
+   * declares. `tests/helpers/memory-research-store.ts` stands
+   * behind all nine with no database up.
    *
-   * `insertFindingLabel` IS THE ONE `FindingStore` METHOD ABSENT,
-   * and the absence is this router's read-only claim written as a
-   * type rather than as a promise. No handler below could append a
-   * ruling, re-score a finding or reach a `findings` row even by
-   * accident, there being nothing on the store to call.
+   * THAT THE UNION IS THE WHOLE PORT IS NOT THE SAME AS EITHER
+   * MODULE HOLDING IT, which is what the split buys. The reads are
+   * handed a store with no writer on it and the ruling is handed
+   * one with no list read, so neither can reach the other's half by
+   * a later edit; only this declaration, which a reader sees, puts
+   * the two in one place.
    *
-   * NO CLOCK SITS BESIDE IT. Nothing on either route reads the
-   * present: a finding's `createdAt` is what the scoring pass
-   * stamped, and the window is a window over stored rows.
+   * `insertFindingLabel` IS THE ONE WRITER AMONG THEM, and its
+   * being the only one is this router's read-first claim written as
+   * a type rather than as a promise. No handler below could
+   * re-score a finding, re-file a sighting or write a research row
+   * even by accident, there being nothing on the store to call.
+   *
+   * NO CLOCK SITS BESIDE IT. Nothing on any of the three routes
+   * reads the present: a finding's `createdAt` is what the scoring
+   * pass stamped, the window is a window over stored rows, and a
+   * ruling's `labelledAt` is defaulted by the column rather than
+   * supplied here.
    */
-  readonly store: FindingsServiceStore;
+  readonly store: FindingsServiceStore & VerdictServiceStore;
 }
 
 /**
@@ -265,6 +308,14 @@ function readId(params: unknown): number {
  *   finding carries the id, `422` for a segment that is not one.
  *   Reads no query at all, so there is no window to get wrong: the
  *   three lists are embedded whole rather than paged.
+ * - `PATCH /findings/:id/verdict` — one operator ruling, appended.
+ *   `200` with `{ success: true, data }` carrying the stored
+ *   `finding_labels` row. `404` when no finding carries the id,
+ *   `422` for a segment that is not one, for a body that is not
+ *   `{ verdict, note? }`, for an undeclared key in it, and for a
+ *   verdict outside the owning domain's ladder — that last under a
+ *   code of the service's own, naming `verdict` and carrying the
+ *   accepted set and nothing the caller sent.
  *
  * THE TWO NARROWINGS REFUSE NO VALUE, which is the port's decision
  * rather than this router's. `?verdict` and `?category` are strings
@@ -276,12 +327,15 @@ function readId(params: unknown): number {
  * exist — which would be a claim about the taxonomy in force at the
  * moment of the request rather than about the rows.
  *
- * NEVER `409`. Neither route decides on stored state beyond whether
- * the domain and the finding are there, so the only refusals either
- * can answer are the `404` about the address and the `422` about
- * the request.
+ * NEVER `409`, ON ANY OF THE THREE. Neither read decides on stored
+ * state beyond whether the domain and the finding are there, and
+ * the ruling has no conflicting state to refuse: `finding_labels`
+ * carries no unique key, so a second ruling — the same verdict
+ * included — is a second row rather than a collision. The only
+ * refusals this router can answer are the `404` about the address
+ * and the `422` about the request.
  *
- * Both of them can also answer `401` with
+ * All three can also answer `401` with
  * `{ error: 'Unauthorized' }` — the guard's own body, in neither
  * envelope — because `src/index.ts` mounts this router behind
  * `ctx.requireAuth`. `docs/architecture/08-http-api.md` tabulates
@@ -297,9 +351,12 @@ export function buildFindingsRouter(
    *
    * One page of what a domain's criteria produced.
    *
-   * **Side effects:** none, and none reachable. All three port
-   * methods behind this handler are reads, and no method on the
-   * store it holds can write the tables they read.
+   * **Side effects:** none, and none reachable from here. All
+   * three port methods behind this handler are reads, and the one
+   * writer on the store below is `insertFindingLabel`, which
+   * {@link listFindings} does not name and cannot call — the
+   * narrowing is in `FindingsServiceStore` rather than in this
+   * handler's discipline.
    *
    * The query is parsed before anything else, so an inverted window
    * or an over-cap `?perPage` costs no read and is answered about
@@ -379,6 +436,50 @@ export function buildFindingsRouter(
     const detail = await getFinding(options.store, readId(req.params));
 
     res.status(200).json(ok(detail));
+  });
+
+  /**
+   * PATCH /findings/:id/verdict
+   *
+   * One operator ruling on one finding.
+   *
+   * **Side effects:** appends one `finding_labels` row, or none.
+   * Every refusal {@link recordVerdict} raises is raised before
+   * the insert, so a request that is turned away leaves the table
+   * exactly as it found it. This is the ONE write reachable from
+   * this router, and it is reachable from this handler alone.
+   *
+   * `PATCH` AND NOT `POST`, because the addressed resource is the
+   * FINDING and what the request changes about it is the verdict
+   * in force. That the table records the act rather than replacing
+   * the earlier one is a fact about `finding_labels` rather than
+   * about the verb, and `A ruling is appended` in
+   * `docs/architecture/08-http-api.md` is where it is argued.
+   *
+   * `200` AND NOT `201`, on the same reading. The appended row is
+   * not a resource this surface addresses: there is no
+   * `/findings/:id/verdict/:labelId` to answer a `Location` for,
+   * and the sequence is read back through
+   * `GET /findings/:id`, whose `labels` carries it newest first.
+   *
+   * THE BODY IS HANDED ON UNPARSED. `verdictBodySchema` belongs to
+   * {@link recordVerdict}, so one parse serves this route and the
+   * MCP tool over the same act, and a handler cannot come to
+   * disagree with the operation about what a ruling is. What this
+   * file narrows is the ADDRESS and nothing else.
+   *
+   * NOTHING HERE READS THE VOCABULARY, compares a verdict against
+   * it or composes the refusal. All three are the service's, which
+   * is what keeps the accepted set read per request off the owning
+   * domain's row rather than decided twice; the 422 it raises
+   * reaches the wire through `errorHandler` carrying that set and
+   * nothing the caller submitted.
+   */
+  router.patch('/findings/:id/verdict', async (req, res) => {
+    const id = readId(req.params);
+    const label = await recordVerdict(options.store, id, req.body);
+
+    res.status(200).json(ok(label));
   });
 
   return router;
