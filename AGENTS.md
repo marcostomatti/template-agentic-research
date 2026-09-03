@@ -518,13 +518,21 @@ reading).
   probe. Read each control's file SET individually.
 - One of those four controls IS dead here, and the tell is the file SET
   rather than the count: the origin HOST needle has no legitimate near
-  neighbour in this tree at all. The other three do discriminate
-  (prefix-without-lookbehind: 15 hits, 1 third-party;
-  note-app-without-scheme: 33 across 16;
-  path-segment-without-slashes: 27 across 3). So say which zeros are backed
-  by a live control and which rest on the planted sample ALONE — a blanket
-  "the controls proved the guards discriminate" is false of the host needle
-  every time.
+  neighbour in this tree at all. The other three do discriminate, and
+  their counts are SNAPSHOTS that grow with the tree rather than
+  properties of the guards — re-derive them. Measured at 780 tracked
+  files: prefix-without-lookbehind 15 hits / 1 third-party,
+  note-app-without-scheme 33 across 16, path-segment-without-slashes 27
+  across 3. Re-measured at 1038, after phase 6's export and renderer
+  modules landed: 15 / 1 UNCHANGED, then 162 hits across 44 files and
+  202 across 16. Only the first is stable, so a stage holding either of
+  the others against a quoted figure reports a correct control as a
+  regression. Mind the shape too — a `git grep` figure counts LINES
+  while a `findForbiddenMatches` probe counts one record per HIT (150
+  and 187 lines respectively for those two). So say which zeros are
+  backed by a live control and which rest on the planted sample ALONE
+  — a blanket "the controls proved the guards discriminate" is false
+  of the host needle every time.
 - The `packages/ui` bucket is a SEPARATE probe from `findForbiddenMatches`
   and needs its OWN fragment-built planted control, taken from
   `packages/ui/eslint.config.mjs`'s `BANNED_SOURCE_SCOPE` and
