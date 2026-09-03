@@ -2714,3 +2714,158 @@ is null rather than dropping those calls or attributing them
 somewhere. Calls that belong to no domain still belong to the
 deployment, and an aggregate that silently omits them is a total
 that does not add up to the ledger it claims to summarise.
+
+## Findings
+
+### A finding is met in its domain and read by its id
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /domains/:slug/findings` | `200` with one page of the domain's findings, in the ordering `?sort` names, plus `meta`. `404` for an unknown slug, `422` for a segment that is not a slug, for an unparseable or inverted window, for a `?sort` outside the two declared keys, and for the pagination faults every list route answers. |
+| `GET /findings/:id` | `200` with the finding, its sightings, its rulings newest first and its entity's research. `404` for an unknown id, `422` for a segment that is not one. Reads no query at all. |
+
+`src/findings/routes.ts` declares both and decides neither: each
+handler reads the address, takes the query apart, calls the matching
+function in `src/findings/service.ts` and chooses a status.
+
+The collection hangs off `/domains/:slug` because a finding is what a
+domain's criteria produced, and a caller holding a slug should not
+have to look an id up to read one. The single get addresses
+`/findings/:id` instead, for the reason a topic is written by id: the
+row carries its own `domain_id`, no rule on this table spans a
+domain, and repeating the slug would let a request name a domain the
+row does not belong to.
+
+Neither read can answer `409`. Nothing on either decides on stored
+state beyond whether the domain and the finding are there, so the
+refusals available to them are the `404` about the address and the
+`422` about the request and nothing else.
+
+### The reads and the ruling are two modules on one router
+
+`PATCH /findings/:id/verdict` belongs to this router and is addressed
+the same way, but it is not served by the same module. The two reads
+are `src/findings/service.ts` and the ruling is
+`src/findings/verdict-service.ts`, so the store the reads are handed
+does not name the one method that appends a `finding_labels` row, and
+no handler serving them could append one by mistake or by a later
+edit. `Read-first` above states why that is a type rather than an
+observance.
+
+That split is what lets the two be read separately. What a verdict IS
+— the set it is judged against, the refusal that names that set
+rather than the submitted value, and the append that makes the
+sequence the record — is argued once under `Verdict vocabulary`
+above, because it is a fact about the column rather than about this
+route.
+
+### Two narrowings and a window, and none of them refuses a value
+
+`GET /domains/:slug/findings` reads `?verdict`, `?category`,
+`?since`, `?until`, `?sort`, `?page` and `?perPage`, and no other
+parameter. Its schema composes the three shared declarations rather
+than respelling any of them, so the 50-row default, the 200 cap, the
+ISO-8601 stamp format, the half-open bounds and the
+first-member-is-the-default rule are all inherited — and the
+composition extends FROM the window schema, for the reason
+`A window narrows what is counted` above measures.
+
+The two narrowings accept any string and refuse none. A `?verdict` no
+label carries and a `?category` the domain never declared are each
+`200` with an empty `data`, not a `404` and not a `422`. Either could
+be a value that was legitimate when the rows were written: a domain
+is free to retire a verdict from its ladder, and the rows stored
+under the retired one still answer to it. A refusal would make this
+answer depend on the settings and the taxonomy in force at the moment
+of the request rather than on the rows.
+
+`?verdict` matches the LATEST ruling and not any. A finding judged
+one way and then re-judged another is in the page for the second
+verdict and out of the page for the first, because the first is no
+longer in force. A finding nobody has judged matches no verdict at
+all, which follows rather than being decided — there is no latest row
+to read one off — so this parameter cannot ask for the findings
+nobody has ruled on, and no spelling of it here can.
+
+The count is taken through the SAME filter as the page, so
+`meta.total` describes the collection the page came out of. A total
+counted without the narrowings would tell a caller filtering by one
+verdict how many findings the domain holds altogether, and every page
+of that filter would then be read against a number about something
+else.
+
+### The order is `compareFindings`, and it is checked from two sides
+
+`?sort=score` is score descending with an absent score sorted LAST
+rather than lowest, then `created_at` descending, then `id`
+descending. `?sort=recency` is that same order with the score key
+dropped. Both are `compareFindings` in `src/lib/digest-assemble.ts`,
+which the digest selection and every renderer already agree on — the
+keys and what they mean are stated once under `A sort is a declared
+key` above and are not re-argued here.
+
+What this group adds is that the SQL and the library are held against
+each other rather than trusted to match.
+`src/findings/service.test.ts` reads a page out of the store and
+compares it against `orderFindings` over the same rows, so one order
+is checked from two sides rather than two orders being free to
+disagree. The recency expectation is derived by neutralising the
+score in the input to the SAME library rather than by writing a
+second comparator in the test: a comparator written out beside the
+one it copies is a third authority, and it goes stale silently.
+
+The store spells `DESC NULLS LAST` on every descending key, which is
+not decoration. `findings_domain_id_score_created_at_idx` is declared
+that way, a Postgres pathkey carries its nulls ordering, and the
+planner matches it literally — so a store writing a bare `DESC`
+cannot use the index even on a `NOT NULL` column, and nothing in the
+answer would say the read had degraded to a sort.
+
+### A category is a member of `fields`, and no column links the two
+
+No foreign key joins a finding to a category. `?category` reads the
+member of the `fields` payload that `FINDING_CATEGORY_FIELD` names —
+the string `category` — and matches it against nothing else. It is a
+jsonb read rather than a join, and it is the same member `ar-digest`
+files a finding under when it lays a section out. The two agreeing is
+what makes the API's filing and the digest's one act rather than two.
+
+The one place they could part is worth naming rather than leaving to
+be met. The digest matches the member as its own sanitiser REDUCED
+it, while this filter reads the column. For any key an operator
+actually declared the two are the same string, a reduction leaving an
+ordinary key as it stands. A stored value the sanitiser would edit is
+a finding filed under a key no domain declares, which both surfaces
+already answer the same way: the digest's undeclared section, and an
+empty page here.
+
+### The single get embeds three collections and pages none of them
+
+`GET /findings/:id` answers `finding`, `sightings`, `labels` and
+`research` — four members rather than a flattened row, because the
+three lists are about different tables and a reader has to be able to
+tell an empty one from a finding that has none. All three can be
+empty at once, and each empty one is an ordinary state: a finding
+nobody has judged, one no feed has cited again, and one attributed to
+no entity.
+
+`research` is resolved through the finding's own `entity_id` inside
+the port, so nothing on this route reads that member, branches on its
+nullability or addresses a second surface. An unattributed finding
+answers an empty list. Those rows are `ar-research`'s to write and no
+method behind this route touches them, which is
+`A workflow is not reachable from here` above applied to the one read
+on this surface that embeds a table somebody else fills.
+
+None of the three takes a window. They are embedded in one finding's
+answer rather than paged, so there is no `?page` for a caller to send
+and no total for one to be read against — which is a decision rather
+than an omission, and the place a cap would go if one is ever wanted
+is beside a count in `src/findings/service.ts` rather than as a
+silent limit inside an implementation.
+
+`labels` arrives NEWEST FIRST and carries the whole sequence rather
+than the head of it. The first row is the verdict in force, and the
+ruling a later one replaced is still a true statement about the
+moment it was made under the ladder in force then —
+`A ruling is appended` above is where that is argued.
