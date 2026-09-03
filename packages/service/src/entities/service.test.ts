@@ -1,15 +1,27 @@
 /**
  * `src/entities/service.ts` — what the registry surface REFUSES,
- * and what each refusal is careful not to say. Driven over
+ * what each refusal is careful not to say, and what a call that is
+ * not refused ANSWERS. Driven over
  * `tests/helpers/memory-research-store.ts`, so every claim here is
  * answered with no database anywhere.
  *
- * SEVEN SECTIONS AND SIXTEEN CASES, AND THE FILE IS ABOUT REFUSALS.
- * What a patch STORES — a recomputed key the caller never sent, a
- * payload replaced whole, a pointer set and cleared — is the next
- * task's, and the successful calls below are here as CONTROLS
- * rather than as coverage of it. Where one reads a stored member it
- * reads the one member its own refusal is about.
+ * TWELVE SECTIONS AND TWENTY-FOUR CASES, IN TWO HALVES. The first
+ * seven sections are about refusals; the five below them read what
+ * a call answers — a row read whole, a key recomputed from a name
+ * the caller spelled, a payload replaced, a pointer set and
+ * cleared, and a page of passes. The successful calls inside a
+ * refusal case stay CONTROLS rather than coverage of any of that,
+ * and each still reads the one member its own refusal is about.
+ *
+ * THE SECOND HALF IS WHAT MAKES SEVEN LEGS LIVE AT ALL. Run against
+ * `git show HEAD:./service.test.ts` with the identical leg list,
+ * seven mutations reddened NOTHING over the refusal-only revision
+ * and redden one or two cases apiece here: `getEntity` following an
+ * alias, `null` read as an absent member, the page re-sorted after
+ * the store ordered it, the total taken off the page, the store
+ * MERGING a payload, the projection widened by a member, and the
+ * research order by the id alone. No refusal can report any of
+ * them, every one being a fact about an answer.
  *
  * EVERY REFUSAL CASE CARRIES ITS OWN CONTROL, VARIED ALONG THAT
  * ROW'S OWN AXIS. A service refusing everything passes a refusal
@@ -27,6 +39,16 @@
  * the subject's registry from one that reads a constant. Both
  * domains therefore hold a subject reducing to `kubernetes`, and
  * the collision section's key is held in one of them alone.
+ *
+ * TWO ROWS ARE PLANTED FOR THE SECOND HALF ALONE, and each is a
+ * discrimination rather than a subject. {@link ALIASED} is the one
+ * row here with nothing at its default, which is what separates a
+ * function answering a constant `null` and a constant `{}` from one
+ * answering what was stored — and its payload carries a member a
+ * replacement has to be seen REMOVING. The third planted pass
+ * carries the NEWEST stamp and the LOWEST id, so the stamp key and
+ * the id tiebreak beneath it disagree, and newest-first is then
+ * none of the four orders a three-row page could reach by accident.
  *
  * THE SIX REFUSALS SPLIT THREE WAYS BY WHO RAISES THEM, and saying
  * so is half of what the file is for. ONE is the SCHEMA's, raised
@@ -99,49 +121,83 @@
  * every alias case submits are seven digits long.
  *
  * THE GRID BELOW WAS MEASURED RATHER THAN PREDICTED, over these
- * sixteen cases, twice, with the two runs agreeing member for member
- * on every leg. Each figure is a red SET read by name and not a
- * count: one rule patched at a time, the file restored between legs,
- * and `git status --short -uall` left naming no file but these two.
+ * twenty-four cases, twice, with the two runs agreeing member for
+ * member on every leg — and once more against HEAD's sixteen-case
+ * copy of this file with the identical list, so every figure here
+ * is a SET diff rather than a comparison against a sentence. One
+ * rule patched at a time, the file restored between legs, and
+ * `git status --short -uall` left naming no file but these.
  *
- * Dropping `.strict()` reddens 2, the two undeclared-key cases and
- * nothing else. Answering the display half AS the key — the
- * reduction gone — reddens 6, the widest leg here, reaching four
- * sections: both name cases, both collision cases, the `nameNorm`
- * case whose control reads the computed key, and the name half of
- * the containment section. Moving the reduction below the lookup
- * reddens 1, the tally case alone, which is what that case is for.
- *
- * The three alias rules separate cleanly. Dropping the self rule
- * reddens 2, the self case and the alias containment case; dropping
- * the cross-domain rule reddens 3, both cross-domain cases and that
- * same containment case; dropping the foreign-key translation
- * reddens 2, the unknown-alias case and it again. Comparing every
- * alias against ONE FIXED DOMAIN reddens 2 rather than the mirror
- * case alone — it also takes the outward case's control, the same
- * target proposed from its own registry, which is the second thing
- * that control is there for.
- *
+ * NINE CARRIED-IN LEGS HELD BYTE-IDENTICAL SETS. Dropping
+ * `.strict()` reddens 2, the two undeclared-key cases. Moving the
+ * reduction below the lookup reddens 1, the tally case alone, which
+ * is what that case is for. The three alias rules separate cleanly:
+ * dropping the self rule reddens 2, the self case and the alias
+ * containment case; dropping the cross-domain rule reddens 3, both
+ * cross-domain cases and that same containment case; dropping the
+ * foreign-key translation reddens 2, the unknown-alias case and it
+ * again. Comparing every alias against ONE FIXED DOMAIN reddens 2
+ * rather than the mirror case alone — it also takes the outward
+ * case's control, the same target proposed from its own registry.
  * Dropping the unique-violation translation reddens 2, the 409 case
  * and the name containment case. Paging research without resolving
- * the subject reddens 2, both cases in the first section that are
- * about that page. Reading the subject a SECOND time reddens 2, both
- * tally cases — which is what says a tally is an exact count rather
- * than a presence check.
+ * the subject reddens 2, both cases in the first section about that
+ * page. Reading the subject a SECOND time reddens 2, both tally
+ * cases, which is what says a tally is an exact count rather than a
+ * presence check.
  *
- * ONE FIGURE IS A ZERO AND IT IS A NO-OP RATHER THAN A GAP. Building
- * the patch with explicit `undefined` members instead of leaving an
- * absent one out reddens NOTHING, because the in-memory port reads
- * every member with `=== undefined` and the two spellings are one
- * request to it. What would separate them is an implementation
- * deriving its `SET` clause from `Object.keys`, which is
- * `./db-store.ts`'s to answer and not this file's.
+ * FOUR MOVED, EACH BY THE NEW CASES THAT TOUCH ITS OWN SUBJECT, AND
+ * NO SET LOST A MEMBER. Answering the display half AS the key and
+ * answering ONE CONSTANT for every name each go 6 to 7, gaining the
+ * name-rewrite case and nothing else — and their red sets are
+ * IDENTICAL on both sides, told apart only by the assertion that
+ * fails inside each. They are the two whole-half controls over one
+ * equality, and no case here can separate them: what does is
+ * `tests/lib/entity-name-norm.test.ts`, whose subject is the
+ * reduction rather than a service that calls it. Answering the row
+ * as it stood BEFORE the write goes 9 to 14, gaining exactly the
+ * five new cases that patch; the get and the two research cases do
+ * not patch, and that is why they are not in it.
  *
- * AND THE WHOLE-HALF CONTROL REDDENS 15 OF 16. Planting no registry
- * at all leaves exactly one case standing — `refuses though research
- * is planted under the id` — the only case here whose subject is an
+ * AND THE WHOLE-HALF CONTROL GOES 15 TO 23 OF 24, gaining all eight
+ * new cases and losing none. Planting no registry at all still
+ * leaves exactly one case standing — `refuses though research is
+ * planted under the id` — the only case here whose subject is an
  * ABSENCE and which therefore never needed a row. That survivor SET
- * is the coverage statement; the 15 is not.
+ * is the coverage statement; the 23 is not.
+ *
+ * THE SEVEN LEGS THE SECOND HALF BOUGHT, READ BY NAME. `getEntity`
+ * following the pointer reddens 2, the get and the clear, both of
+ * which address an alias directly. `null` read as an absent member
+ * reddens 1, the clear alone, that being the only case submitting a
+ * falsy-but-present value. The page re-sorted by the service after
+ * the store ordered it reddens 1, and the total taken off the page
+ * rather than off the collection reddens 2. A payload MERGED rather
+ * than replaced reddens 2, both payload cases, the empty one
+ * included — which is what says `{}` is a value here and not an
+ * absence. The projection widened by one member reddens 1, the get
+ * alone, and it is the key-SET assertion that reports rather than
+ * the whole-row comparison above it. Ordering the research by the
+ * id alone reddens 2 rather than the order case alone: the
+ * page-past-the-end case's own control reads the OLDEST pass one
+ * row from the end, and a different order puts a different row
+ * there.
+ *
+ * ONE FIGURE IS A ZERO ON BOTH SIDES AND IT IS A NO-OP RATHER THAN
+ * A GAP. Building the patch with explicit `undefined` members
+ * instead of leaving an absent one out reddens NOTHING, because the
+ * in-memory port reads every member with `=== undefined` and the
+ * two spellings are one request to it. What would separate them is
+ * an implementation deriving its `SET` clause from `Object.keys`,
+ * which is `./db-store.ts`'s to answer and not this file's.
+ *
+ * AND ONE LEG COULD NOT RUN AT HEAD AT ALL, which is a different
+ * claim from a zero. Planting {@link ALIASED} at its DEFAULTS — no
+ * pointer, no payload — has no anchor in the refusal-only revision,
+ * that row not existing there; here it reddens 4, the get and the
+ * three cases that patch it. It is the fixture leg for the second
+ * half, and it says the non-default row buys every reading taken
+ * against it.
  */
 import type { EntitiesServiceStore } from './service.js';
 import type { FieldError } from '../../lib/errors/index.js';
@@ -206,6 +262,20 @@ const MESH = 4102744;
  */
 const TAKEN = 4103755;
 
+/**
+ * A fourth subject of {@link RADAR}, and the one row here planted
+ * with nothing at its default.
+ *
+ * EVERY OTHER SUBJECT ALIASES NOTHING AND HOLDS NO ATTRIBUTES, so
+ * a function answering a constant `null` and a constant `{}` reads
+ * exactly like one answering what was stored. This row is what the
+ * read, the replacement and the clear are all taken against: its
+ * pointer is set so that clearing it has somewhere to come from,
+ * and its payload carries a member a replacement has to be seen
+ * REMOVING.
+ */
+const ALIASED = 4104788;
+
 /** A subject of {@link SIBLING} reducing to {@link KUBE}'s key. */
 const ELSEWHERE = 4201766;
 
@@ -236,6 +306,31 @@ const TAKEN_NAME = 'ZZ Sentinel Subject';
  */
 const TAKEN_KEY = normalizeEntityName(TAKEN_NAME);
 
+/** The display half {@link ALIASED} is planted under. */
+const ALIASED_NAME = 'Pod Autoscaler';
+
+/**
+ * The key half it is planted under.
+ *
+ * Written out rather than reduced, unlike {@link TAKEN_KEY}: no
+ * case renames onto this key, so the seam stands in for a writer
+ * here exactly as it does for every other planted subject.
+ */
+const ALIASED_KEY = 'pod autoscaler';
+
+/**
+ * The payload {@link ALIASED} is planted holding.
+ *
+ * TWO MEMBERS, because a replacement is only visible as one where
+ * the new payload drops something: a merge answers both members
+ * and a replacement answers one, and over a row that started empty
+ * the two are the same bytes.
+ */
+const ALIASED_ATTRIBUTES = { tier: 'platform', owner: 'sre' };
+
+/** What the replacement stores in its place, one member short. */
+const REPLACEMENT_ATTRIBUTES = { tier: 'edge' };
+
 /**
  * A name whose key is free in both registries.
  *
@@ -265,6 +360,32 @@ const EMPTY_NAME = '*** --- ***';
 /** The same name with one thing in it that identifies a subject. */
 const REDUCIBLE_NAME = '*** a --- ***';
 
+/**
+ * The pass recorded first, and the OLDEST of the three.
+ *
+ * The three ids are named rather than left as literals because the
+ * order this file reads is written OUT: deriving it in the case
+ * would put a second comparator here for an order the store has
+ * already settled.
+ */
+const FIRST_ID = 7001811;
+
+/** The pass recorded second, and the one holding the HIGHEST id. */
+const SECOND_ID = 7002833;
+
+/**
+ * The newest pass, and the one holding the LOWEST id.
+ *
+ * THE ARRANGEMENT IS THE POINT. Newest first answers
+ * `[THIRD_ID, SECOND_ID, FIRST_ID]`, which is none of the orders a
+ * page could reach by accident: not the planted order, not its
+ * reverse, and neither direction of the id. Those four are
+ * asserted UNEQUAL in the same case that reads the order, so a
+ * three-row page cannot agree with the expectation for a reason
+ * the fixture handed it.
+ */
+const THIRD_ID = 7000800;
+
 /** The window every research read below is taken through. */
 const WIDE_WINDOW: StoreWindow = { limit: 50, offset: 0 };
 
@@ -273,6 +394,15 @@ const FIRST_PASS = '2026-03-01T00:00:00.000Z';
 
 /** When the second was. */
 const SECOND_PASS = '2026-03-02T00:00:00.000Z';
+
+/**
+ * When the third was, which is the NEWEST of the three.
+ *
+ * Its row carries the LOWEST id, so the stamp key and the id
+ * tiebreak beneath it disagree — which is what stops a page
+ * ordered by the id alone from reproducing the right answer.
+ */
+const THIRD_PASS = '2026-03-03T00:00:00.000Z';
 
 /**
  * Builds one row for `setDomainEntities`.
@@ -295,11 +425,29 @@ function registered(
   return { id, name, nameNorm, aliasOf: null, attributes: {} };
 }
 
+/**
+ * {@link ALIASED} as planted: pointing at {@link KUBE} and holding
+ * {@link ALIASED_ATTRIBUTES}.
+ *
+ * Written out rather than built through {@link registered}, which
+ * exists to plant the two states every refusal case starts from —
+ * no pointer and no payload — and would have to grow two
+ * parameters used once to reach this one.
+ */
+const ALIASED_ROW: MemoryDomainEntity = {
+  id: ALIASED,
+  name: ALIASED_NAME,
+  nameNorm: ALIASED_KEY,
+  aliasOf: KUBE,
+  attributes: ALIASED_ATTRIBUTES,
+};
+
 /** The subjects {@link RADAR}'s registry holds. */
 const RADAR_ENTITIES: readonly MemoryDomainEntity[] = [
   registered(KUBE, 'Kubernetes', 'kubernetes'),
   registered(MESH, 'Service Mesh', 'service mesh'),
   registered(TAKEN, TAKEN_NAME, TAKEN_KEY),
+  ALIASED_ROW,
 ];
 
 /** The subjects {@link SIBLING}'s registry holds. */
@@ -311,14 +459,21 @@ const SIBLING_ENTITIES: readonly MemoryDomainEntity[] = [
 /** What has been found out about {@link KUBE}. */
 const KUBE_RESEARCH: readonly MemoryEntityResearch[] = [
   {
-    id: 7001811,
+    id: FIRST_ID,
     runId: 5100822,
     summary: 'A first pass',
     payload: { depth: 1 },
     researchedAt: new Date(FIRST_PASS),
   },
   {
-    id: 7002833,
+    id: THIRD_ID,
+    runId: 5100822,
+    summary: 'A third pass',
+    payload: { depth: 3 },
+    researchedAt: new Date(THIRD_PASS),
+  },
+  {
+    id: SECOND_ID,
     runId: null,
     summary: null,
     payload: { depth: 2 },
@@ -1038,5 +1193,304 @@ describe('what a refusal carries', () => {
     );
 
     expect(found).toEqual(needles.map(() => [true, true, true]));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// One subject read whole
+// ---------------------------------------------------------------------------
+
+describe('one subject read whole', () => {
+  it('answers every column of the stored row', async () => {
+    // Taken against the row planted with nothing at its default,
+    // which is what makes the answer readable at all: a function
+    // answering a constant `null` and a constant `{}` satisfies a
+    // get taken against any other subject here.
+    const store = await plantRegistries();
+    const answered = await getEntity(store, ALIASED);
+    const sibling = await getEntity(store, KUBE);
+
+    expect(answered).toEqual({
+      id: ALIASED,
+      domainId: sibling.domainId,
+      name: ALIASED_NAME,
+      nameNorm: ALIASED_KEY,
+      aliasOf: KUBE,
+      attributes: ALIASED_ATTRIBUTES,
+    });
+
+    // The projection, asserted as a key SET rather than left to
+    // the comparison above. A record answering one member MORE
+    // than `EntityRecord` declares reddens here and nowhere else,
+    // which is the reading no assertion over expected members can
+    // make.
+    expect(Object.keys(answered).sort()).toEqual([
+      'aliasOf',
+      'attributes',
+      'domainId',
+      'id',
+      'name',
+      'nameNorm',
+    ]);
+
+    // The pointer is answered AS IT STANDS rather than followed. A
+    // service resolving an alias would answer the target's row
+    // under the addressed id, and a caller that asked about an
+    // alias is entitled to learn that it is one.
+    expect(answered.id).not.toBe(sibling.id);
+    expect(answered.nameNorm).not.toBe(sibling.nameNorm);
+
+    // The control, varied along the one axis under test: a subject
+    // that is its own and holds nothing. A function answering one
+    // row whatever it is asked passes everything above and fails
+    // these two.
+    expect(sibling.aliasOf).toBeNull();
+    expect(sibling.attributes).toEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A name rewritten
+// ---------------------------------------------------------------------------
+
+describe('a name rewritten', () => {
+  it('answers a key the request never carried', async () => {
+    const store = await plantRegistries();
+    const body = { name: FREE_NAME };
+    const answered = await patchEntity(store, KUBE, body);
+
+    // The request is held to ONE key in the same case that reads
+    // the second one back, so the claim is that the key half was
+    // computed rather than that it agreed with something sent.
+    expect(Object.keys(body)).toEqual(['name']);
+    expect(answered.name).toBe(FREE_NAME);
+    expect(answered.nameNorm).toBe(normalizeEntityName(FREE_NAME));
+
+    // The reduction MOVED the name rather than passing it through,
+    // which is what separates a service computing the key from one
+    // storing the display half in both columns.
+    expect(answered.nameNorm).not.toBe(FREE_NAME);
+
+    // Read back through the port rather than compared member by
+    // member: a service answering an object rebuilt out of the
+    // body satisfies every assertion above, the key being the one
+    // member no request carried and this being where it comes
+    // from.
+    expect(await store.findEntityById(KUBE)).toEqual(answered);
+
+    // The pair moved and the rest of the row did not.
+    expect(answered.aliasOf).toBeNull();
+    expect(answered.attributes).toEqual({});
+
+    // The control against a reduction answering ONE CONSTANT: a
+    // second name, in this same case, whose key differs from the
+    // first. A function answering the same key for every argument
+    // passes everything above and fails here.
+    const again = await patchEntity(store, KUBE, {
+      name: SHOUTED_NAME,
+    });
+
+    expect(again.nameNorm).toBe('kubernetes');
+    expect(again.nameNorm).not.toBe(answered.nameNorm);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A payload replaced
+// ---------------------------------------------------------------------------
+
+describe('a payload replaced', () => {
+  it('replaces the payload whole rather than merging', async () => {
+    // Taken against the one row planted holding attributes, and
+    // the replacement drops a member the stored payload carries: a
+    // merge answers both and a replacement answers one, which is
+    // the whole difference and is invisible over a row that
+    // started empty.
+    const store = await plantRegistries();
+    const answered = await patchEntity(store, ALIASED, {
+      attributes: REPLACEMENT_ATTRIBUTES,
+    });
+
+    expect(answered.attributes).toEqual(REPLACEMENT_ATTRIBUTES);
+    expect(await store.findEntityById(ALIASED)).toEqual(answered);
+
+    // Named rather than implied: the member the stored payload
+    // carried and the replacement did not is GONE.
+    expect(Object.keys(answered.attributes as object)).toEqual([
+      'tier',
+    ]);
+
+    // And nothing else on the row moved, which is what says a
+    // payload was replaced rather than a subject.
+    expect(answered.name).toBe(ALIASED_NAME);
+    expect(answered.nameNorm).toBe(ALIASED_KEY);
+    expect(answered.aliasOf).toBe(KUBE);
+  });
+
+  it('clears every attribute when handed an empty one', async () => {
+    // `{}` is a VALUE rather than an absence, so it clears the
+    // payload whole, and the row it is taken against is the one
+    // that starts with something to clear.
+    const store = await plantRegistries();
+    const cleared = await patchEntity(store, ALIASED, {
+      attributes: {},
+    });
+
+    expect(cleared.attributes).toEqual({});
+    expect(await store.findEntityById(ALIASED)).toEqual(cleared);
+
+    // The control, varied along the one axis under test: the same
+    // patch with the member left OUT, against a registry planted
+    // fresh. A service reading `{}` as an absent member leaves the
+    // planted payload standing, so it answers this one and the one
+    // above identically — and only the pair separates them.
+    const fresh = await plantRegistries();
+    const absent = await patchEntity(fresh, ALIASED, {
+      name: ALIASED_NAME,
+    });
+
+    expect(absent.attributes).toEqual(ALIASED_ATTRIBUTES);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A pointer set and cleared
+// ---------------------------------------------------------------------------
+
+describe('a pointer set and cleared', () => {
+  it('points a subject at a sibling of its registry', async () => {
+    const store = await plantRegistries();
+    const answered = await patchEntity(store, KUBE, {
+      aliasOf: MESH,
+    });
+
+    expect(answered.aliasOf).toBe(MESH);
+    expect(await store.findEntityById(KUBE)).toEqual(answered);
+
+    // The TARGET was not written to, which no assertion on the
+    // answer could say: a store aiming the two rows at each other
+    // answers the same row above.
+    const target = await getEntity(store, MESH);
+
+    expect(target.aliasOf).toBeNull();
+
+    // And the pointer moved alone.
+    expect(answered.name).toBe('Kubernetes');
+    expect(answered.nameNorm).toBe('kubernetes');
+    expect(answered.attributes).toEqual({});
+  });
+
+  it('clears the pointer back to null', async () => {
+    // Taken against the one row planted already pointing
+    // somewhere, since a clear applied to a null pointer answers
+    // null whatever it does.
+    const store = await plantRegistries();
+    const before = await getEntity(store, ALIASED);
+
+    expect(before.aliasOf).toBe(KUBE);
+
+    const cleared = await patchEntity(store, ALIASED, {
+      aliasOf: null,
+    });
+
+    expect(cleared.aliasOf).toBeNull();
+    expect(await store.findEntityById(ALIASED)).toEqual(cleared);
+
+    // The control, varied along the one axis under test: the same
+    // patch with the member left OUT, against a registry planted
+    // fresh. `null` and an absent member are two requests — one
+    // clears the pointer and one leaves it — so a service reading
+    // them as one passes the assertions above.
+    const fresh = await plantRegistries();
+    const absent = await patchEntity(fresh, ALIASED, {
+      name: ALIASED_NAME,
+    });
+
+    expect(absent.aliasOf).toBe(KUBE);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What has been found out about a subject
+// ---------------------------------------------------------------------------
+
+describe('what has been found out about a subject', () => {
+  it('answers the passes newest first', async () => {
+    // The order is the STORE's and this module deliberately does
+    // not re-sort, so what is read here is that the page comes
+    // back as it was handed over.
+    const store = await plantRegistries();
+    const page = await listEntityResearch(store, KUBE, WIDE_WINDOW);
+    const answered = page.rows.map((row) => row.id);
+
+    expect(answered).toEqual([THIRD_ID, SECOND_ID, FIRST_ID]);
+    expect(page.total).toBe(KUBE_RESEARCH.length);
+
+    // The four orders the answer is NOT, asserted in the same
+    // case. Without them a three-row page agrees with its
+    // expectation for a reason the fixture handed it rather than
+    // because anything ordered anything.
+    const planted = KUBE_RESEARCH.map((row) => row.id);
+
+    expect(answered).not.toEqual(planted);
+    expect(answered).not.toEqual([...planted].reverse());
+    expect(answered).not.toEqual(
+      [...answered].sort((left, right) => left - right),
+    );
+    expect(answered).not.toEqual(
+      [...answered].sort((left, right) => right - left),
+    );
+
+    // A window narrower than the collection, which is what says
+    // the page is a WINDOW at all: the first two rows of that same
+    // order, then the third, with a total that goes on describing
+    // the whole collection rather than the part answered.
+    const head = await listEntityResearch(store, KUBE, {
+      limit: 2,
+      offset: 0,
+    });
+    const tail = await listEntityResearch(store, KUBE, {
+      limit: 2,
+      offset: 2,
+    });
+
+    expect(head.rows.map((row) => row.id))
+      .toEqual([THIRD_ID, SECOND_ID]);
+    expect(tail.rows.map((row) => row.id)).toEqual([FIRST_ID]);
+    expect(head.total).toBe(KUBE_RESEARCH.length);
+    expect(tail.total).toBe(KUBE_RESEARCH.length);
+  });
+
+  it('answers an empty page past the end', async () => {
+    // Neither a refusal nor a 404: the subject is there and the
+    // window simply selected nothing.
+    const store = await plantRegistries();
+    const page = await listEntityResearch(store, KUBE, {
+      limit: 50,
+      offset: KUBE_RESEARCH.length,
+    });
+
+    expect(page.rows).toEqual([]);
+    expect(page.total).toBe(KUBE_RESEARCH.length);
+
+    // The control, varied along the one axis under test: the same
+    // window one row earlier, which answers the oldest pass. A
+    // page answering nothing for every offset passes the
+    // assertions above and fails this one.
+    const last = await listEntityResearch(store, KUBE, {
+      limit: 50,
+      offset: KUBE_RESEARCH.length - 1,
+    });
+
+    expect(last.rows.map((row) => row.id)).toEqual([FIRST_ID]);
+    expect(last.total).toBe(KUBE_RESEARCH.length);
+
+    // And the state this one must not be confused with: a subject
+    // nothing has researched answers the same empty list, and its
+    // total is what tells the two apart.
+    const none = await listEntityResearch(store, MESH, WIDE_WINDOW);
+
+    expect(none.rows).toEqual([]);
+    expect(none.total).toBe(0);
   });
 });
