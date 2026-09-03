@@ -373,6 +373,55 @@ export const documents = pgTable('documents', {
    * static-SQL invariant suite greps for that name.
    */
   index('documents_source_parse_status_idx').on(table.sourceId, table.parseStatus),
+
+  /**
+   * What the corpus debug page stands on. `GET
+   * /domains/:slug/documents` narrows to one domain and orders
+   * `captured_at DESC NULLS LAST, id DESC NULLS LAST` — this index is
+   * those three columns in that order, so a page is a range scan over
+   * the domain's newest entries rather than a sort of its whole
+   * corpus.
+   *
+   * A different reader from the index above rather than a widening of
+   * it, and the two are not interchangeable in either direction. That
+   * one leads on `source_id`, which this page does not filter on at
+   * all, and every source-less document — an ingested file, a pasted
+   * body — carries a NULL there while sitting in the middle of this
+   * page.
+   *
+   * Both descending keys carry `NULLS LAST` though neither column is
+   * nullable, and the reader's ORDER BY has to spell it too.
+   * `findings_domain_id_score_created_at_idx` in `./findings.ts` gives
+   * that argument in full with the measurement behind it: a pathkey
+   * carries its nulls ordering and the planner matches it literally,
+   * so a bare `DESC` on either key puts a `Sort` above this scan and
+   * nothing reports it.
+   *
+   * `id` is in the key because `captured_at` defaults to `now()`,
+   * which is the TRANSACTION's start time, so a batch capture writes
+   * rows tying to the microsecond, and a page boundary landing inside
+   * that tie would show a document twice or skip it.
+   *
+   * The parse-status filter is deliberately NOT in the key. The page
+   * carries both statuses by default, so a filtered read is the
+   * exception rather than the shape to build for, and putting the
+   * column ahead of `captured_at` would order every entry by a value
+   * the common read does not restrict. What that costs is the filtered
+   * page walking the domain's entries in this order and discarding the
+   * rows that do not match.
+   *
+   * The read is not covered: `body` and `parse_error` are fetched off
+   * the heap, so the index narrows which rows are visited and not what
+   * is read from each of them.
+   *
+   * Named for the reader rather than derived from its columns, for the
+   * reason the index above gives.
+   */
+  index('documents_domain_id_captured_at_idx').on(
+    table.domainId,
+    table.capturedAt.desc(),
+    table.id.desc(),
+  ),
 ]);
 
 /**

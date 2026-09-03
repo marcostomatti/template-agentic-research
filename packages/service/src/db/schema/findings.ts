@@ -24,7 +24,7 @@
  * seen, and `finding_labels` after it records what an operator made of
  * one — the module's only rows a person writes.
  */
-import { bigint, bigserial, integer, jsonb, numeric, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, index, integer, jsonb, numeric, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 import { documents } from './documents.js';
 import { domains } from './domains.js';
@@ -243,7 +243,76 @@ export const findings = pgTable('findings', {
    */
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow()
     .notNull(),
-});
+}, (table) => [
+  /**
+   * What the digest-order page stands on. `GET
+   * /domains/:slug/findings` narrows to one domain and orders `score
+   * DESC NULLS LAST, created_at DESC NULLS LAST, id DESC NULLS LAST` —
+   * this index is those four columns in that order, so a page is a
+   * range scan over one domain's leading entries rather than a sort of
+   * every finding it has ever made. Why every key carries the
+   * qualifier, and not only the nullable one, is the next paragraph.
+   *
+   * The qualifiers are the half that has to be spelled out, and on
+   * BOTH sides. Postgres reads a bare `DESC` as NULLS FIRST, so an
+   * index declared without `NULLS LAST` orders the unscored findings
+   * ahead of every scored one — the reverse of what the page shows.
+   * That order is `compareFindings` in `src/lib/digest-assemble.ts`,
+   * where an absent score sorts LAST rather than lowest for the reason
+   * `score` above gives at length: a finding nothing has read is not a
+   * finding read and found worthless. This index is that comparator
+   * expressed in SQL, so the two are one rule checked from two sides
+   * rather than two orders free to disagree.
+   *
+   * The reader's own ORDER BY has to spell `DESC NULLS LAST` on every
+   * one of the three descending keys and not only on the nullable one.
+   * A pathkey carries its nulls ordering and the planner matches it
+   * literally: measured against Postgres 16 over this exact key, a
+   * query writing `score DESC NULLS LAST, created_at DESC, id DESC`
+   * falls back to an `Incremental Sort` whose only presorted key is
+   * `score`, and one writing a bare `DESC` throughout falls back to a
+   * full `Sort` over a bitmap scan. That `created_at` and `id` are NOT
+   * NULL does not save either spelling — nothing in the planner reads
+   * the constraint to decide the two are equivalent — and a plan that
+   * falls back reports nothing, which is the same silence the
+   * partial-index note on `documents_source_parse_status_idx` in
+   * `./documents.ts` is about.
+   *
+   * So `NULLS LAST` on the two NOT NULL keys is a declaration rather
+   * than a preference about rows that cannot occur. It is also
+   * drizzle's own default for a descending index column: `.desc()`
+   * renders `DESC NULLS LAST`, where Postgres's default for that same
+   * word is NULLS FIRST, and no spelling the builder offers emits a
+   * bare `DESC` at all.
+   *
+   * `id` is in the key for the reason the comparator's own tiebreak
+   * gives. `created_at` defaults to `now()`, which is the
+   * TRANSACTION's start time, so findings written by one pass tie to
+   * the microsecond, and a page boundary falling inside that tie would
+   * show a row twice or skip it entirely.
+   *
+   * Two honest limits. The read is not covered: the page fetches
+   * `fields`, `document_id` and `entity_id` off the heap, so the index
+   * says which rows to visit and not what is read from each of them.
+   * And the category filter is not in it at all — a finding's category
+   * is a member of `fields`, matched as `fields->>'category'`, which a
+   * b-tree over these four columns cannot narrow — so a filtered page
+   * walks the domain's entries in this order and discards what does
+   * not match.
+   *
+   * Named for the reader rather than derived from its columns, the way
+   * `documents_source_parse_status_idx` in `./documents.ts` is: an
+   * index found in the generated SQL, or in a plan, says which query
+   * it was added for, and the static-SQL invariant suite greps for
+   * that name.
+   */
+  index('findings_domain_id_score_created_at_idx').on(
+    table.domainId,
+    table.score.desc().nullsLast(),
+    table.createdAt.desc(),
+    table.id.desc(),
+  ),
+]);
 
 /**
  * `finding_sightings` — where a finding has been seen: one row per
@@ -574,4 +643,53 @@ export const findingLabels = pgTable('finding_labels', {
    */
   labelledAt: timestamp('labelled_at', { withTimezone: true }).defaultNow()
     .notNull(),
-});
+}, (table) => [
+  /**
+   * What the latest-verdict lookup stands on. A finding's verdict is
+   * the newest row here and nothing else — the table has no unique
+   * key, so re-judging APPENDS — and both readers that need one order
+   * `labelled_at DESC NULLS LAST, id DESC NULLS LAST` within a
+   * finding. `GET /findings/:id` reads one finding's labels newest
+   * first, and the verdict filter behind `GET /domains/:slug/findings`
+   * resolves a page's current verdicts with a `DISTINCT ON
+   * (finding_id)` subquery ordered the same way. This index is those
+   * three columns in that order.
+   *
+   * The subquery is what makes it load-bearing rather than merely
+   * helpful. `DISTINCT ON` takes the first row of each group under its
+   * own ORDER BY, so without an index matching that order Postgres
+   * sorts every label in the table to answer a filter over one page of
+   * findings.
+   *
+   * Both descending keys carry `NULLS LAST` though neither column is
+   * nullable, and the reader's ORDER BY has to spell it too.
+   * `findings_domain_id_score_created_at_idx` above gives that
+   * argument in full with the measurement behind it: a pathkey carries
+   * its nulls ordering and the planner matches it literally, so a bare
+   * `DESC` on either key puts a `Sort` above this scan and nothing
+   * reports it.
+   *
+   * `id` is in the key for the reason `labelled_at` above states in
+   * full: `now()` is the TRANSACTION's start time, so two labels
+   * written in one transaction carry the same stamp to the microsecond
+   * and `id` is the only thing separating them. For a lookup whose
+   * whole answer is the FIRST row, that is the difference between a
+   * verdict and a coin flip.
+   *
+   * The read is not covered: `verdict` and `note` are fetched off the
+   * heap. Adding `verdict` to the key would not repair that and would
+   * break the lookup, since what the subquery has to match is an order
+   * by stamp.
+   *
+   * Named for the reader rather than derived from its columns, the way
+   * `documents_source_parse_status_idx` in `./documents.ts` is: an
+   * index found in the generated SQL, or in a plan, says which query
+   * it was added for, and the static-SQL invariant suite greps for
+   * that name.
+   */
+  index('finding_labels_finding_id_labelled_at_idx').on(
+    table.findingId,
+    table.labelledAt.desc(),
+    table.id.desc(),
+  ),
+]);
