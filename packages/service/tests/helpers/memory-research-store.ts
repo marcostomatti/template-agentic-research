@@ -1,15 +1,16 @@
 /**
  * @packageDocumentation
  * The in-memory dataset every research store port is driven through
- * in the isolated suite. All ten halves are here — the domains
+ * in the isolated suite. All eleven halves are here — the domains
  * half, the taxonomy half with categories and terms together, the
  * personas beside them, the topics the dispatcher comes for, the
  * sources it reads and the review queue over what they captured, the
  * connectors the deployment reaches other services through, the
  * export subscriptions that pair the two, the operator settings it
  * is configured by, the findings a pass made with the sightings,
- * rulings and research that hang off them, and the corpus one domain
- * has captured whatever feed it arrived through.
+ * rulings and research that hang off them, the corpus one domain has
+ * captured whatever feed it arrived through, and the registry of
+ * subjects it tracks with the intentions queued against them.
  *
  * ONE DATASET RATHER THAN SEVEN FAKES, which is why this file is not
  * named for any one of the ports it satisfies. `src/domains/store.ts`
@@ -569,6 +570,110 @@
  * this port is called, which is why the filter's member is the union
  * where the record's is `string`.
  *
+ * THE ENTITIES HALF WRITES TWO TABLES AND PLANTS THREE, WHICH IS THE
+ * WIDEST SHAPE HERE THAT INSERTS NOTHING AT ALL. `EntityStore`
+ * declares six readers and two writers, and neither writer is an
+ * insert: `updateEntity` rewrites a registry row and `approvePoolRow`
+ * stamps an intention. So `entities`, `entity_research` and
+ * `research_pool` all arrive through seams, and two of the three are
+ * then written in place.
+ *
+ * IT READS `entity_research` THROUGH THE SEAM THE FINDINGS HALF
+ * ALREADY PLANTS, which is why there is no sixth seam over that
+ * table. {@link MemoryResearchStore.setEntityResearch} is keyed by
+ * the subject, and the subject is what both readers resolve through
+ * — the findings half through a finding's own `entity_id`, this one
+ * through the path. One table, one seam and two projections: this
+ * half's record omits `entity_id` where that one keeps it.
+ *
+ * AND IT ORDERS THAT TABLE AGAIN RATHER THAN SHARING THE ORDER,
+ * which is the decision {@link orderedDocuments} takes beside
+ * {@link failuresOf} over `documents`. Both readers promise
+ * `researched_at DESC, id DESC`, and that they agree is the column's
+ * doing rather than a helper's — so each ordering is expressed where
+ * its own reader's cases can falsify it.
+ *
+ * ITS UNIQUE KEY AND ITS FOREIGN KEY BOTH SIT ON THE REGISTRY WRITE,
+ * AND ONE CALL CAN REACH BOTH, which is the shape the term, persona
+ * and topic halves each said they did not have.
+ * `entities_domain_id_name_norm_unique` refuses a rename landing on a
+ * key another subject in this domain already holds, and
+ * `entities_alias_of_entities_id_fk` refuses an `aliasOf` naming an
+ * id no entity carries. Both are members of one `EntityPatch`, so a
+ * request can carry both faults at once and the order between them is
+ * observable. It is written key first and foreign key second, on the
+ * relation the category half MEASURED between a unique index and an
+ * end-of-statement check rather than on any reading of this table.
+ *
+ * TWO RULES THIS HALF DOES NOT HOLD, AND NEITHER IS AN OMISSION. A
+ * row pointing at itself and a row pointing into another domain are
+ * both storable — `entities.alias_of` in
+ * `src/db/schema/entities.ts` says so in as many words — so
+ * `src/entities/service.ts` refuses what the column stores and this
+ * file goes on refusing only what Postgres does. The empty
+ * `name_norm` is guarded by nothing here either: no CHECK forbids it,
+ * and what keeps it unreachable is `normalizeEntityName` throwing one
+ * layer up.
+ *
+ * `research_pool` CARRIES TWO CHECKS AND THEY ARE HELD IN DIFFERENT
+ * PLACES, which is the one split in this file between a rule a TYPE
+ * carries and a rule a call raises. `research_pool_status_check`
+ * reads a single column, so {@link MemoryResearchPoolRow} declares
+ * that member as the union and a plant outside the tuple does not
+ * compile — the way `MemoryDomainDocument.parseStatus` holds
+ * `documents_parse_status_check` one table over.
+ * `research_pool_approval_check` holds TWO columns against each
+ * other, which no type here can say, so the seam raises it: a row
+ * carrying `researched_at` and no `approved_at` is refused as a
+ * `check-violation` naming that constraint.
+ *
+ * THE SEAM IS WHERE THAT CHECK IS REACHED BECAUSE NO METHOD CAN
+ * REACH IT. {@link EntityStore.approvePoolRow} only ever moves
+ * `approved_at` from null to an instant, so it cannot produce the
+ * refused state from either side, and nothing on this port writes
+ * `researched_at` at all. A seam storing that state anyway would let
+ * a case be written against a row the database will not hold, which
+ * is the one thing this file exists to rule out — so the plant
+ * refuses the batch WHOLE, leaving the previous plant standing,
+ * rather than writing the rows that passed.
+ *
+ * THE APPROVAL IS IDEMPOTENT, AND THE SECOND CALL IS THE READING
+ * THAT SAYS SO. `approvePoolRow` writes the approved status and
+ * `coalesce(approved_at, now())`, member for member with
+ * `approveById` in `scripts/approve.ts`, so a second ruling keeps the
+ * FIRST ruling's instant rather than re-dating a search already paid
+ * for. Nothing is asked of the row's state: an id naming a closed row
+ * moves its status back to approved without moving the stamp, exactly
+ * as the constraint permits.
+ *
+ * THERE IS NO ENTITY COUNTER AND NO POOL COUNTER, which is where this
+ * half departs from every half above that inserts. Both tables carry
+ * a `bigserial` in the database and no method here reaches it: the
+ * ids are the fixture's own, as they are for `findings`, so the
+ * id-burn fidelity the inserting halves owe has no subject.
+ *
+ * AND A DOMAIN TAKES ITS ENTITIES, THEIR RESEARCH AND ITS POOL ROWS
+ * WITH IT, over three tables and by two different routes.
+ * `entities.domain_id` cascades and `entity_research.entity_id`
+ * cascades onto the entities, so the research goes two levels down
+ * the way a finding's sightings do; `research_pool.domain_id`
+ * cascades directly, so an intention naming NO subject goes with the
+ * rest rather than being left behind. There is no guarded entity
+ * delete to be careful of reusing: `EntityStore` declares no delete
+ * at all, and retiring a subject is the alias pointer.
+ *
+ * WHAT IT DOES NOT REFUSE IS A CROSS-DOMAIN CITATION, AND THAT IS
+ * THIS FILE'S SIXTH KNOWN DIVERGENCE. `research_pool.entity_id` and
+ * `findings.entity_id` are both `ON DELETE no action`, so a
+ * deployment REFUSES the delete of a domain whose entities are still
+ * named by another domain's intentions or findings, the
+ * end-of-statement check finding rows outside the cascade's reach.
+ * Every seam here takes an id rather than a row, so that state is
+ * plantable and this store takes the delete. One case pins it rather
+ * than leaving it to be discovered, and
+ * `tests/live/api-wave3.live.test.ts` is where the refusal is
+ * discharged.
+ *
  * THE SETTINGS HALF REFUSES NOTHING, AND THAT IS A MEASUREMENT
  * RATHER THAN A SIMPLIFICATION. `operator_settings` carries two
  * mechanisms and neither is reachable through the port: a second
@@ -711,7 +816,10 @@ import type {
 } from '../../src/connectors/store.js';
 import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type { OperatorSettings } from '../../src/db/schema/settings.js';
-import type { DocumentParseStatus } from '../../src/db/schema/values.js';
+import type {
+  DocumentParseStatus,
+  ResearchPoolStatus,
+} from '../../src/db/schema/values.js';
 import type {
   DocumentFilter,
   DocumentRecord,
@@ -724,6 +832,13 @@ import type {
   DomainStore,
   InsertDomainInput,
 } from '../../src/domains/store.js';
+import type {
+  EntityPatch,
+  EntityRecord,
+  EntityResearchRecord,
+  EntityStore,
+  ResearchPoolRecord,
+} from '../../src/entities/store.js';
 import type {
   FindingFilter,
   FindingLabelRecord,
@@ -1051,7 +1166,150 @@ export interface MemoryEntityResearch {
 }
 
 /**
- * All ten research ports over one dataset, plus the eight seams a
+ * One planted `entities` row, as the entities half reads it.
+ *
+ * {@link EntityRecord} minus its `domainId`, which is the argument
+ * {@link MemoryResearchStore.setDomainEntities} is planting under, on
+ * the reasoning {@link MemoryDomainFinding} gives.
+ *
+ * PLANTED AND THEN WRITTEN, which is a shape no other planted row
+ * here has. `FindingStore` reads what it is given and appends to a
+ * different table; {@link EntityStore.updateEntity} rewrites THIS
+ * row, so a case plants the registry and then edits it through the
+ * port. What no method can do is add one or remove one, `EntityStore`
+ * declaring neither an insert nor a delete — so the seam is the whole
+ * of how a subject arrives and how it goes.
+ *
+ * NO STAMP, BECAUSE THE TABLE CARRIES NONE. `entities` has no
+ * `created_at` and no `updated_at`, so this is the one planted shape
+ * in this file with no `Date` to copy on the way in — the copy that
+ * matters here is the `attributes` payload instead.
+ */
+export interface MemoryDomainEntity {
+  /**
+   * `entities.id`, and the key both writers take.
+   *
+   * The fixture's own rather than a sequence's, for the reason
+   * {@link MemoryDomainFinding.id} is: nothing here inserts an
+   * entity, so a case says which row it means and the store never
+   * chooses.
+   */
+  readonly id: number;
+
+  /** `entities.name`: the subject's name as a person reads it. */
+  readonly name: string;
+
+  /**
+   * `entities.name_norm`: the same name reduced to the key the
+   * registry matches on, and the half of the pair
+   * `entities_domain_id_name_norm_unique` is declared over.
+   *
+   * Planted rather than computed, and that is the seam standing in
+   * for a writer rather than a second definition of the reduction.
+   * `normalizeEntityName` in `src/lib/entity-name-norm.ts` is the one
+   * definition, `src/entities/service.ts` is where it is called, and
+   * nothing below this line reduces a name at all — so a fixture
+   * planting a key no spelling reduces to is a fixture saying so
+   * rather than a store agreeing with it.
+   */
+  readonly nameNorm: string;
+
+  /**
+   * The subject this row turned out to be, or null when the row IS
+   * its own subject.
+   *
+   * A self-alias and an alias into another domain are both plantable
+   * here, because both are storable in the database: the two rules
+   * that refuse them are `src/entities/service.ts`'s and are held
+   * above this port.
+   */
+  readonly aliasOf: number | null;
+
+  /**
+   * Whatever the domain records about the subject beyond its name.
+   *
+   * `unknown` for the reason {@link EntityRecord.attributes} is, and
+   * copied on the way in and on the way out for the reason every
+   * `jsonb` payload here is: a caller writing through the object it
+   * planted would be writing into stored state.
+   */
+  readonly attributes: unknown;
+}
+
+/**
+ * One planted `research_pool` row: an intention queued at the gate.
+ *
+ * {@link ResearchPoolRecord} WHOLE rather than a member short, which
+ * is what separates this shape from every other planted row here.
+ * The domain is the seam's key and that record carries no `domainId`
+ * to drop, so there is nothing to omit — and every remaining member
+ * has to be plantable, the two stamps included, because the state
+ * `research_pool_approval_check` refuses is a pair of them and a case
+ * about that check has to be able to propose it.
+ *
+ * ITS `status` IS THE UNION WHERE THE RECORD'S IS `string`, which is
+ * how `research_pool_status_check` is held here:
+ * {@link MemoryDomainDocument.parseStatus} holds its own table's
+ * CHECK the same way, and a plant outside `RESEARCH_POOL_STATUSES`
+ * does not compile rather than being refused at run time. The record
+ * widens it back, because that is what a SELECT answers.
+ *
+ * PLANTED AND THEN WRITTEN, as {@link MemoryDomainEntity} is:
+ * {@link EntityStore.approvePoolRow} rewrites the status and the
+ * approval stamp of a row this seam supplied.
+ */
+export interface MemoryResearchPoolRow {
+  /** `research_pool.id`: the id an approval names and the tiebreak. */
+  readonly id: number;
+
+  /**
+   * The subject this intention is about, or null when it names none.
+   *
+   * The null is an ordinary state and it is one a case has to be able
+   * to plant: a row naming no subject appears in NO subject's page,
+   * and it still goes with its domain, which is the pair of claims
+   * that separates the pool's cascade from the registry's.
+   */
+  readonly entityId: number | null;
+
+  /** The finding that raised it, or null when nothing did. */
+  readonly findingId: number | null;
+
+  /** Where the row stands at the gate. See the interface TSDoc. */
+  readonly status: ResearchPoolStatus;
+
+  /** The exact terms the search would be issued with. */
+  readonly searchTerms: readonly string[];
+
+  /**
+   * When the intention was raised: the queue's first key, ascending,
+   * with {@link MemoryResearchPoolRow.id} breaking the tie `now()`
+   * makes inevitable. Copied on the way in.
+   */
+  readonly createdAt: Date;
+
+  /**
+   * When a person ruled in favour, or null while nobody has.
+   *
+   * Plantable so that a case can put a row on either side of the
+   * idempotence: an approval already given is what the second ruling
+   * has to keep. Copied on the way in.
+   */
+  readonly approvedAt: Date | null;
+
+  /**
+   * When the intention was closed, or null while it is open.
+   *
+   * The member `research_pool_approval_check` holds against the one
+   * above it, and the reason this shape is refusable at all: an
+   * instant here beside a null approval is the state the seam throws
+   * over. Copied on the way in.
+   */
+  readonly researchedAt: Date | null;
+}
+
+/**
+ * All eleven research ports over one dataset, plus the ten seams a
  * case needs that no port declares.
  *
  * EVERY ONE OF THEM WHOLE rather than a `Pick` of it. The category
@@ -1060,9 +1318,9 @@ export interface MemoryEntityResearch {
  * than a gap papered over with stubs; all twelve taxonomy methods,
  * all six persona ones, all seven topic ones, all nine source ones,
  * all seven connector ones, all seven subscription ones, both
- * settings ones, all seven finding ones and both document ones are
- * here now, so a caller wanting any of the ten ports entire can be
- * handed this store.
+ * settings ones, all seven finding ones, both document ones and all
+ * eight entity ones are here now, so a caller wanting any of the
+ * eleven ports entire can be handed this store.
  *
  * `TopicStore` was the first member from outside wave 1 and
  * `SourceStore` is the second, and both join this file rather than
@@ -1112,6 +1370,17 @@ export interface MemoryEntityResearch {
  * corpus page answers no failures queue and holds no source's
  * delete.
  *
+ * `EntityStore` IS THE SEVENTH AND NEEDS THE FIRST REASON REACHING
+ * ITS FURTHEST YET. `entities.domain_id` cascades, so a domain
+ * deleted through `DomainStore` has to take its registry; the
+ * research hanging off those entities cascades onto them; and
+ * `research_pool.domain_id` cascades directly, so the intentions go
+ * too whether or not they name a subject. It also reads a table
+ * ANOTHER half plants — `entity_research`, keyed by the subject — so
+ * an entities fake standing alone could not be handed the rows the
+ * findings half already supplies, and two fakes over that table
+ * would agree with each other until a case deleted a domain.
+ *
  * Nothing in `src/` is handed a {@link MemoryResearchStore} — a
  * service takes the port — so the seams below cannot become a way for
  * the code under test to route around them.
@@ -1126,7 +1395,8 @@ export interface MemoryResearchStore extends
   ConnectorStore,
   SubscriptionStore,
   FindingStore,
-  DocumentStore {
+  DocumentStore,
+  EntityStore {
   /**
    * Plants what a domain has ACCUMULATED, for the delete guard to
    * read back through {@link DomainStore.countDomainDependents}.
@@ -1364,17 +1634,23 @@ export interface MemoryResearchStore extends
 
   /**
    * Plants what research has recorded about one entity, for
-   * {@link FindingStore.listFindingResearch} to answer from.
+   * {@link FindingStore.listFindingResearch} and for
+   * {@link EntityStore.listEntityResearch} to answer from.
    *
-   * KEYED BY THE ENTITY AND READ THROUGH A FINDING, which is the one
-   * seam here whose key differs from the id its read takes.
+   * ONE SEAM AND TWO READERS, which is why no entities seam over this
+   * table exists. The entities half reads it by the KEY it is planted
+   * under, and the findings half reaches the same rows through a
+   * finding's own `entity_id` — so this is the one seam here whose
+   * key differs from the id ONE of its reads takes, and
    * {@link MemoryEntityResearch} carries what that costs a case: a
    * finding has to be attributed before any planted research is
-   * reachable at all.
+   * reachable through it.
    *
    * @param entityId - The subject the research is about. Need not
-   *   name anything: no port here stores an entity, so an id is all
-   *   there is to plant under until `EntityStore` lands.
+   *   name a planted entity: both readers answer about an id rather
+   *   than about a row, so research is plantable ahead of the
+   *   registry — which is also what leaves it standing when a domain
+   *   delete removes entities it was never hung off.
    * @param research - What to record, WHOLE. A second call replaces
    *   the first, on the terms
    *   {@link MemoryResearchStore.setDomainFindings} states, and each
@@ -1422,6 +1698,82 @@ export interface MemoryResearchStore extends
   setDomainDocuments(
     domainId: number,
     documents: readonly MemoryDomainDocument[],
+  ): void;
+
+  /**
+   * Plants the `entities` rows one domain's registry holds, for the
+   * six reads and the registry write to work over.
+   *
+   * NO PORT INSERTS AN ENTITY AND NONE DELETES ONE, which
+   * `src/entities/store.ts` states as the shape of its write surface
+   * rather than as an omission: the two writers rewrite a subject and
+   * stamp an intention, and neither adds a row. Nothing in the tree
+   * writes an `entities` row at all today — no workflow inserts one
+   * and `scripts/approve.ts` reads the registry through joins — so
+   * this seam is not standing in for a writer the ports merely lack,
+   * it is standing in for one the repository has yet to grow.
+   *
+   * IT PLANTS ROWS AND THEN A METHOD REWRITES THEM, which is where
+   * this seam differs from every other one here.
+   * {@link EntityStore.updateEntity} edits what was planted, so a
+   * second call to this seam REPLACES what a patch has written as
+   * readily as what a previous plant did.
+   *
+   * @param domainId - The domain whose registry these are. Need not
+   *   name a stored domain: the rows are plantable ahead of it, and
+   *   every read below answers about an id rather than about a
+   *   domain.
+   * @param entities - What to record, WHOLE. A second call replaces
+   *   the first rather than appending to it — the same whole-unit
+   *   rule {@link MemoryResearchStore.setDomainFindings} states, for
+   *   the same reason: under an append there is no way to express a
+   *   registry going back to none. Each row's `attributes` payload is
+   *   copied on the way in.
+   */
+  setDomainEntities(
+    domainId: number,
+    entities: readonly MemoryDomainEntity[],
+  ): void;
+
+  /**
+   * Plants the `research_pool` rows queued under one domain, for the
+   * three reads and the approval to work over.
+   *
+   * KEYED BY THE DOMAIN AND NOT BY THE SUBJECT, which is the one
+   * thing about this seam a reader would predict the other way round.
+   * `research_pool.entity_id` is NULLABLE — an intention can be
+   * raised from a finding whose subject nothing has attributed yet —
+   * so a subject-keyed seam would have no key to plant those rows
+   * under at all — exactly as
+   * {@link MemoryResearchStore.setSourceDocuments} has none for a
+   * document that came through no feed. The domain is also what the
+   * cascade follows, `research_pool.domain_id` being the column that
+   * carries it.
+   *
+   * IT IS THE ONE SEAM HERE THAT CAN REFUSE. Every row is held
+   * against `research_pool_approval_check` before any is stored, so a
+   * row carrying `researched_at` and no `approved_at` throws a
+   * {@link StoreRefusal} and the batch lands nowhere. The module
+   * header carries why the check has to be reached from here rather
+   * than through a method, and why the refusal is over the WHOLE
+   * batch.
+   *
+   * @param domainId - The domain the intentions were raised under.
+   *   Need not name a stored domain, for the reason the seam above
+   *   gives.
+   * @param rows - What to record, WHOLE. A second call replaces the
+   *   first rather than appending to it, on the terms
+   *   {@link MemoryResearchStore.setDomainFindings} states. Each
+   *   row's `createdAt`, `approvedAt` and `researchedAt` is copied on
+   *   the way in, and so is its `searchTerms` list.
+   * @throws A `check-violation` {@link StoreRefusal} naming
+   *   `research_pool_approval_check` when any row states that it was
+   *   closed without stating that it was approved. Nothing is stored
+   *   when it does.
+   */
+  setDomainPool(
+    domainId: number,
+    rows: readonly MemoryResearchPoolRow[],
   ): void;
 }
 
@@ -1652,12 +2004,13 @@ const SUBSCRIPTION_CONNECTOR_FK
  * It is the half's whole refusal surface. `findings`,
  * `finding_sightings` and `entity_research` are all PLANTED here
  * rather than written, so no key onto any of them is reachable
- * through a method, and `research_pool_finding_id_findings_id_fk` —
- * the one `ON DELETE no action` key onto `findings.id` — is left
- * unimitated for the reason
- * `source_config_proposals_source_id_sources_id_fk` is: no port
- * writes a pool row and no seam plants one, so there is no dataset
- * this store can be in where it would fire.
+ * through a method. `research_pool_finding_id_findings_id_fk` — the
+ * one `ON DELETE no action` key onto `findings.id` — is left
+ * unimitated for a reason that has since narrowed: the entities half
+ * plants pool rows, so a row citing a finding is reachable, and what
+ * keeps the key from firing is the CASCADE rather than the absence
+ * of a row. Only a citation crossing two domains would reach it, and
+ * the module header carries that as the sixth known divergence.
  */
 const FINDING_LABEL_FINDING_FK = 'finding_labels_finding_id_findings_id_fk';
 
@@ -1674,6 +2027,52 @@ const FINDING_LABEL_FINDING_FK = 'finding_labels_finding_id_findings_id_fk';
  * one place the two are stated to part.
  */
 const FINDING_CATEGORY_FIELD = 'category';
+
+/**
+ * The natural key on `entities`, spelled as
+ * `src/db/schema/entities.ts` spells it.
+ *
+ * Over the PAIR rather than over the name alone, so two domains are
+ * free to track unrelated subjects under one key and only a rename
+ * inside a domain can collide. The registry write is the one call
+ * that reaches it: nothing here inserts an entity.
+ */
+const ENTITY_NAME_NORM_UNIQUE = 'entities_domain_id_name_norm_unique';
+
+/**
+ * The self-referencing foreign key on `entities.alias_of`.
+ *
+ * Unlike {@link CATEGORY_PARENT_FK}, which sits on the same kind of
+ * column, this name stands for ONE rule here: the refusal of a WRITE
+ * naming an id no entity carries. The other rule that name carries in
+ * a deployment — a subject aliases still point at holding its own
+ * delete — is unreachable, `EntityStore` declaring no delete at all.
+ */
+const ENTITY_ALIAS_FK = 'entities_alias_of_entities_id_fk';
+
+/**
+ * The CHECK on `research_pool` holding its two stamps against each
+ * other, and the fourth CHECK this file imitates.
+ *
+ * The only one reached from a SEAM rather than from a method, and the
+ * module header carries why: the approval write moves `approved_at`
+ * from null to an instant and nothing on the port writes
+ * `researched_at`, so no call can propose the state this refuses.
+ */
+const POOL_APPROVAL_CHECK = 'research_pool_approval_check';
+
+/**
+ * The status {@link EntityStore.approvePoolRow} writes.
+ *
+ * Annotated against {@link ResearchPoolStatus} rather than left a
+ * bare literal, for the reason `APPROVED_STATUS` in
+ * `scripts/approve.ts` records: the member belongs to
+ * `RESEARCH_POOL_STATUSES`, the tuple `research_pool_status_check` is
+ * generated from, so renaming it there fails this file's compile
+ * instead of leaving a fake that writes a status the database would
+ * refuse.
+ */
+const POOL_APPROVED_STATUS: ResearchPoolStatus = 'approved';
 
 /** Three zeros: what a domain nothing points at has accumulated. */
 const NO_DEPENDENTS: DomainDependentCounts = {
@@ -2188,6 +2587,116 @@ function researchOf(
 }
 
 /**
+ * A planted entity whose `attributes` payload belongs to nobody
+ * else.
+ *
+ * One member rather than {@link copyPlantedFinding}'s two, and no
+ * stamp at all: `entities` carries neither `created_at` nor
+ * `updated_at`, so the payload is the whole of what a caller could
+ * otherwise write through.
+ *
+ * @param row - The row a seam or a patch is storing.
+ * @returns A copy safe to store.
+ */
+function copyPlantedEntity(row: MemoryDomainEntity): MemoryDomainEntity {
+  return { ...row, attributes: copyJsonDocument(row.attributes) };
+}
+
+/**
+ * The port's projection of one planted entity.
+ *
+ * The domain arrives as the KEY the row was planted under rather than
+ * off the row, which is what {@link MemoryDomainEntity} omits it for
+ * — and it is on the ANSWER because `PATCH /entities/:id` carries no
+ * slug, so this member is the only thing that says whose registry was
+ * edited.
+ *
+ * @param domainId - The domain the row was planted under.
+ * @param row - The stored entity.
+ * @returns The five members {@link EntityRecord} declares beyond its
+ *   key, its payload copied.
+ */
+function entityOf(domainId: number, row: MemoryDomainEntity): EntityRecord {
+  return {
+    id: row.id,
+    domainId,
+    name: row.name,
+    nameNorm: row.nameNorm,
+    aliasOf: row.aliasOf,
+    attributes: copyJsonDocument(row.attributes),
+  };
+}
+
+/**
+ * A planted pool row whose three stamps and whose term list belong to
+ * nobody else.
+ *
+ * FOUR MEMBERS, THE WIDEST COPY IN THIS FILE. Two of the stamps are
+ * nullable and a null stays a null, which matters more here than
+ * anywhere above: the pair of them IS the state
+ * {@link POOL_APPROVAL_CHECK} reads, so a copy turning either into
+ * something else would move the row across the rule. `searchTerms` is
+ * a list of strings and is copied one level, on the terms
+ * `topics.search_terms` is: there is nothing below it.
+ *
+ * @param row - The row a seam or an approval is storing.
+ * @returns A copy safe to store.
+ */
+function copyPlantedPoolRow(
+  row: MemoryResearchPoolRow,
+): MemoryResearchPoolRow {
+  return {
+    ...row,
+    searchTerms: [...row.searchTerms],
+    createdAt: copyInstant(row.createdAt),
+    approvedAt: row.approvedAt === null
+      ? null
+      : copyInstant(row.approvedAt),
+    researchedAt: row.researchedAt === null
+      ? null
+      : copyInstant(row.researchedAt),
+  };
+}
+
+/**
+ * The port's projection of one planted pool row.
+ *
+ * WHOLE RATHER THAN NARROWED, {@link ResearchPoolRecord} carrying no
+ * `domainId` for this to drop — so the projection is a copy plus the
+ * widening of `status` back to the `string` a SELECT answers.
+ *
+ * @param row - The stored intention.
+ * @returns A copy safe to hand across the port.
+ */
+function poolRowOf(row: MemoryResearchPoolRow): ResearchPoolRecord {
+  return copyPlantedPoolRow(row);
+}
+
+/**
+ * The entities half's projection of one planted research row.
+ *
+ * `entityId` IS DROPPED, WHERE {@link researchOf} ANSWERS IT. Two
+ * ports read `entity_research` and each takes the same rule from a
+ * different end: the entity is the PATH on
+ * `GET /entities/:id/research`, so answering it back would echo the
+ * request, while a caller of `listFindingResearch` named a finding
+ * and the entity is what the port resolved.
+ *
+ * @param row - The stored research.
+ * @returns The five members {@link EntityResearchRecord} declares,
+ *   its payload and its stamp copied.
+ */
+function entityResearchOf(row: MemoryEntityResearch): EntityResearchRecord {
+  return {
+    id: row.id,
+    runId: row.runId,
+    summary: row.summary,
+    payload: copyJsonDocument(row.payload),
+    researchedAt: copyInstant(row.researchedAt),
+  };
+}
+
+/**
  * The text `fields->>'category'` answers over one payload.
  *
  * THE COLUMN READ RATHER THAN THE DIGEST'S, which is the one place
@@ -2291,6 +2800,14 @@ export function createMemoryResearchStore(
   const findingSightings = new Map<number, MemoryFindingSighting[]>();
   const entityResearch = new Map<number, MemoryEntityResearch[]>();
   const findingLabels = new Map<number, FindingLabelRecord>();
+
+  // The entities half's two collections, BOTH keyed by the domain
+  // that holds them and both planted before either writer can reach
+  // them. `entity_research` is not among them: that table is planted
+  // by the findings half above, keyed by the subject, and this half
+  // reads the same rows through a projection of its own.
+  const domainEntities = new Map<number, MemoryDomainEntity[]>();
+  const domainPool = new Map<number, MemoryResearchPoolRow[]>();
   let nextDomainId = 1;
   let nextCategoryId = 1;
   let nextTermId = 1;
@@ -3517,12 +4034,14 @@ export function createMemoryResearchStore(
    * `FindingStore` declares no delete at all.
    *
    * IT IS NOT REFUSED BY THE `NO ACTION` ON
-   * `research_pool.finding_id`, and that is unreachability rather
-   * than a decision. No port here writes a pool row and no seam
-   * plants one, so there is no dataset this store can be in where
-   * that key would fire — the reasoning
-   * `source_config_proposals_source_id_sources_id_fk` is left
-   * unimitated on.
+   * `research_pool.finding_id`, AND THAT WAS UNREACHABILITY UNTIL
+   * THE ENTITIES HALF LANDED. A seam now plants pool rows, so a row
+   * citing a finding is a state this store can be in: within one
+   * domain both go in the same statement and nothing is left citing
+   * anything, and ACROSS two domains a deployment refuses the delete
+   * where this store takes it. That is the sixth known divergence,
+   * stated in the module header beside the same two columns'
+   * `entity_id` half.
    *
    * @param domainId - The domain being removed.
    */
@@ -3642,6 +4161,308 @@ export function createMemoryResearchStore(
    */
   function dropDocumentsOf(domainId: number): void {
     domainDocuments.delete(domainId);
+  }
+
+  /**
+   * The planted entity carrying one id, and the domain it was
+   * planted under.
+   *
+   * {@link plantedFinding}'s shape for {@link plantedFinding}'s
+   * reason: the seam is keyed by domain and every read here is
+   * addressed by the row's own id, so the domain has to be recovered
+   * from the key rather than from the row.
+   *
+   * @param id - The entity to look for.
+   * @returns The domain and the stored row, or null when nothing
+   *   carries the id.
+   */
+  function plantedEntity(
+    id: number,
+  ): { domainId: number; row: MemoryDomainEntity } | null {
+    for (const [domainId, planted] of domainEntities) {
+      const row = planted.find((held) => held.id === id);
+
+      if (row !== undefined) {
+        return { domainId, row };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Rewrites one stored entity in place.
+   *
+   * IN PLACE RATHER THAN THROUGH THE SEAM, because the seam replaces
+   * a whole registry and a patch replaces one subject. The row is
+   * already this store's own copy, so nothing is copied again here.
+   *
+   * @param domainId - The domain the row sits under, as
+   *   {@link plantedEntity} recovered it.
+   * @param row - What the row becomes.
+   */
+  function replaceEntity(domainId: number, row: MemoryDomainEntity): void {
+    const planted = domainEntities.get(domainId);
+
+    if (planted === undefined) {
+      return;
+    }
+
+    const at = planted.findIndex((held) => held.id === row.id);
+
+    if (at >= 0) {
+      planted[at] = row;
+    }
+  }
+
+  /**
+   * @param domainId - The registry to look within.
+   * @param nameNorm - The key to look for.
+   * @param exceptId - The row being renamed, which is not in conflict
+   *   with itself — the clause a store forgets and then refuses a
+   *   rename that changed only the display half.
+   * @returns The other row holding that key, or undefined. At most
+   *   one can, which is what `entities_domain_id_name_norm_unique`
+   *   guarantees within a domain and says nothing about across two.
+   */
+  function entityByNameNorm(
+    domainId: number,
+    nameNorm: string,
+    exceptId: number,
+  ): MemoryDomainEntity | undefined {
+    return (domainEntities.get(domainId) ?? []).find(
+      (row) => row.nameNorm === nameNorm && row.id !== exceptId,
+    );
+  }
+
+  /**
+   * Refuses an `aliasOf` naming an id no entity carries.
+   *
+   * ACROSS EVERY DOMAIN, because the column is: the foreign key is
+   * onto `entities.id` alone, so an alias into another registry is
+   * satisfied by it. That such a pointer is not a merge anybody meant
+   * is `src/entities/service.ts`'s rule and not this one's.
+   *
+   * @param aliasOf - What the patch proposes, or null to clear.
+   * @throws A `foreign-key-violation` {@link StoreRefusal} naming
+   *   {@link ENTITY_ALIAS_FK}.
+   */
+  function guardAliasTarget(aliasOf: number | null): void {
+    if (aliasOf !== null && plantedEntity(aliasOf) === null) {
+      throw new StoreRefusal({
+        reason: 'foreign-key-violation',
+        constraint: ENTITY_ALIAS_FK,
+      });
+    }
+  }
+
+  /**
+   * One subject's research, newest first: `researched_at` descending
+   * with `id` descending breaking a tie, as
+   * {@link EntityStore.listEntityResearch} promises.
+   *
+   * THE SAME PAIR {@link orderedResearch} ORDERS BY OVER THE SAME
+   * TABLE, EXPRESSED AGAIN, which is the decision
+   * {@link orderedDocuments} takes beside {@link failuresOf}. The two
+   * readers agree because the column does, and a helper serving both
+   * would make one reader's ordering unfalsifiable from the other's
+   * cases.
+   *
+   * @param entityId - The subject to read about.
+   * @returns Its research in that order, possibly empty. A fresh
+   *   array, so the sort never reaches the planted list.
+   */
+  function orderedEntityResearch(entityId: number): EntityResearchRecord[] {
+    return (entityResearch.get(entityId) ?? [])
+      .map(entityResearchOf)
+      .sort((left, right) => {
+        const byMoment = right.researchedAt.getTime()
+          - left.researchedAt.getTime();
+
+        if (byMoment !== 0) {
+          return byMoment;
+        }
+
+        return right.id - left.id;
+      });
+  }
+
+  /**
+   * Every planted intention naming one subject, across every domain.
+   *
+   * ACROSS EVERY DOMAIN, because the seam's key is the domain and the
+   * question is about the subject. A row carrying a null `entityId`
+   * matches no subject at all, the parameter being a number, which is
+   * how an intention naming nobody stays out of every page here.
+   *
+   * @param entityId - The subject to look for.
+   * @returns The stored rows, unordered.
+   */
+  function poolRowsFor(entityId: number): MemoryResearchPoolRow[] {
+    const held: MemoryResearchPoolRow[] = [];
+
+    for (const planted of domainPool.values()) {
+      for (const row of planted) {
+        if (row.entityId === entityId) {
+          held.push(row);
+        }
+      }
+    }
+
+    return held;
+  }
+
+  /**
+   * One subject's intentions, oldest first: `created_at` ascending
+   * with `id` ascending breaking a tie, as
+   * {@link EntityStore.listEntityPool} promises.
+   *
+   * ASCENDING WHERE EVERY OTHER COLLECTION HERE DESCENDS, and that is
+   * the one place this file imitates a QUEUE rather than a page:
+   * `listPending` in `scripts/approve.ts` orders the same way, and a
+   * queue worked top-down empties where a newest-first one buries
+   * whatever has waited longest.
+   *
+   * @param entityId - The subject to read.
+   * @returns Its intentions in that order, possibly empty.
+   */
+  function orderedPool(entityId: number): ResearchPoolRecord[] {
+    return poolRowsFor(entityId)
+      .map(poolRowOf)
+      .sort((left, right) => {
+        const byRaised = left.createdAt.getTime() - right.createdAt.getTime();
+
+        if (byRaised !== 0) {
+          return byRaised;
+        }
+
+        return left.id - right.id;
+      });
+  }
+
+  /**
+   * The planted intention carrying one id, and the domain it was
+   * raised under.
+   *
+   * @param id - The intention to look for.
+   * @returns The domain and the stored row, or null when nothing
+   *   carries the id.
+   */
+  function plantedPoolRow(
+    id: number,
+  ): { domainId: number; row: MemoryResearchPoolRow } | null {
+    for (const [domainId, planted] of domainPool) {
+      const row = planted.find((held) => held.id === id);
+
+      if (row !== undefined) {
+        return { domainId, row };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Rewrites one stored intention in place, on
+   * {@link replaceEntity}'s terms.
+   *
+   * @param domainId - The domain the row sits under.
+   * @param row - What the row becomes.
+   */
+  function replacePoolRow(
+    domainId: number,
+    row: MemoryResearchPoolRow,
+  ): void {
+    const planted = domainPool.get(domainId);
+
+    if (planted === undefined) {
+      return;
+    }
+
+    const at = planted.findIndex((held) => held.id === row.id);
+
+    if (at >= 0) {
+      planted[at] = row;
+    }
+  }
+
+  /**
+   * Refuses a planted intention that states it was closed without
+   * stating that it was approved.
+   *
+   * `research_pool_approval_check` READ FROM THE ONE SIDE A CALL CAN
+   * PROPOSE IT. The constraint bites both ways in a deployment —
+   * stamping `researched_at` on a row nobody approved, and clearing
+   * `approved_at` on a row already closed — and only the first is
+   * reachable here, because nothing on this port writes either column
+   * to null. The status is not consulted, exactly as the constraint
+   * does not consult it: a row stating `done` with neither stamp set
+   * is storable and is stored.
+   *
+   * @param row - The row a seam is about to store.
+   * @throws A `check-violation` {@link StoreRefusal} naming
+   *   {@link POOL_APPROVAL_CHECK}.
+   */
+  function guardPoolApproval(row: MemoryResearchPoolRow): void {
+    if (row.researchedAt !== null && row.approvedAt === null) {
+      throw new StoreRefusal({
+        reason: 'check-violation',
+        constraint: POOL_APPROVAL_CHECK,
+      });
+    }
+  }
+
+  /**
+   * Removes every entity of one domain, and its research with it, as
+   * `ON DELETE CASCADE` does.
+   *
+   * TWO LEVELS DOWN, which is {@link dropFindingsOf}'s reach over a
+   * different pair of tables. `entities.domain_id` cascades and
+   * `entity_research.entity_id` cascades onto the entities, so one
+   * statement takes both.
+   *
+   * IT REACHES ONLY THE RESEARCH PLANTED UNDER A ROW THAT IS THERE,
+   * and that is the seam's key rather than a shortcut.
+   * {@link MemoryResearchStore.setEntityResearch} takes an id and not
+   * a row, so research planted under an id no entity carries has
+   * nothing to cascade from and survives — which is the state the
+   * findings half's own fixture is in, no entity row backing the
+   * subject its findings name.
+   *
+   * IT IS NOT REFUSED BY THE `NO ACTION` ON `research_pool.entity_id`
+   * OR ON `findings.entity_id` WITHIN ONE DOMAIN, because the rows
+   * that would hold it are removed by the same statement — the
+   * cascade's own reach, which is the care `deleteDomain` below takes
+   * over `categories.parent_id` by not reusing its guarded delete.
+   * ACROSS two domains they are not, and this store takes a delete a
+   * deployment refuses: the module header carries that as the sixth
+   * known divergence.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropEntitiesOf(domainId: number): void {
+    for (const row of domainEntities.get(domainId) ?? []) {
+      entityResearch.delete(row.id);
+    }
+
+    domainEntities.delete(domainId);
+  }
+
+  /**
+   * Removes every intention raised under one domain, as
+   * `ON DELETE CASCADE` does.
+   *
+   * ONE LEVEL AND ONE TABLE, AND IT DOES NOT GO THROUGH THE ENTITIES.
+   * `research_pool.domain_id` is the cascading column, so a row
+   * naming NO subject goes with the rest rather than being left
+   * behind — which a cascade written through
+   * {@link dropEntitiesOf} could not do, there being no subject to
+   * follow.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropPoolOf(domainId: number): void {
+    domainPool.delete(domainId);
   }
 
   return {
@@ -3848,6 +4669,24 @@ export function createMemoryResearchStore(
      * are needed and neither is redundant, which one case reads from
      * each side.
      *
+     * ITS ENTITIES GO IN THAT SAME PLACE AND TAKE THEIR RESEARCH
+     * WITH THEM, and ITS INTENTIONS GO BY A ROUTE OF THEIR OWN.
+     * `entities.domain_id` cascades and `entity_research.entity_id`
+     * cascades onto the entities, which is {@link dropFindingsOf}'s
+     * two levels over a different pair of tables. `research_pool`
+     * does NOT arrive through the entities: its own `domain_id`
+     * cascades, so an intention naming no subject goes with the rest
+     * rather than being left behind, and that is why the two lines
+     * below are two claims and neither is redundant.
+     *
+     * NEITHER IS REFUSED WITHIN ONE DOMAIN, though both
+     * `research_pool.entity_id` and `findings.entity_id` are
+     * `ON DELETE no action`: the rows that would hold the delete are
+     * removed by the same statement, which is the care taken with
+     * `categories.parent_id` above. ACROSS two domains they would be,
+     * and this store takes the delete — the sixth known divergence,
+     * stated in the module header and pinned by a case.
+     *
      * IT DOES NOT MOVE THE PLANTED DEPENDENT COUNTS OF ANY OTHER
      * DOMAIN, and dropping the topics does not move them at all:
      * {@link MemoryResearchStore.setDomainDependents} records what
@@ -3862,6 +4701,8 @@ export function createMemoryResearchStore(
       dropSubscriptionsOf(id);
       dropFindingsOf(id);
       dropDocumentsOf(id);
+      dropEntitiesOf(id);
+      dropPoolOf(id);
 
       for (const [categoryId, row] of categories) {
         if (row.domainId === id) {
@@ -5707,6 +6548,223 @@ export function createMemoryResearchStore(
       ).length;
     },
 
+    /**
+     * One subject by its own id, or null.
+     *
+     * WHERE EVERY ENTITY ROUTE ENTERS, the path carrying an id rather
+     * than a slug. The domain comes off the seam's key and reaches
+     * the answer, which is what lets a service refuse an alias
+     * pointing into another registry without a second read.
+     */
+    async findEntityById(id: number): Promise<EntityRecord | null> {
+      const held = plantedEntity(id);
+
+      return held === null
+        ? null
+        : entityOf(held.domainId, held.row);
+    },
+
+    /**
+     * Rewrites the supplied members of one subject. THE HALF'S FIRST
+     * WRITE.
+     *
+     * THE NAME MOVES AS A PAIR OR NOT AT ALL, which is
+     * `EntityNamePatch`'s doing rather than a rule checked here: a
+     * patch carrying one half is not a request this method can be
+     * handed. Nothing below reduces a name, and
+     * `src/lib/entity-name-norm.ts` stays the single definition.
+     *
+     * `attributes` REPLACES THE STORED PAYLOAD WHOLE and is never
+     * merged into it, so `{}` clears every attribute — the same
+     * whole-unit rule `DomainPatch` states for `settings`, and the
+     * only shape under which removing a member is expressible.
+     *
+     * THE KEY IS CHECKED BEFORE THE FOREIGN KEY, and this is the one
+     * half here where a single call can reach both: `name` and
+     * `aliasOf` are both patchable, so a rename onto a taken key
+     * BESIDE an alias naming nothing is a request that carries two
+     * faults. The order is the relation the category half MEASURED
+     * between a unique index and an end-of-statement check, argued
+     * across rather than measured on this table.
+     *
+     * A ROW IS NOT IN CONFLICT WITH ITSELF. The comparison excludes
+     * the row being written, so a rename that moves only the display
+     * half — or one that rewrites both to what they already were — is
+     * stored rather than refused.
+     */
+    async updateEntity(
+      id: number,
+      patch: EntityPatch,
+    ): Promise<EntityRecord | null> {
+      const held = plantedEntity(id);
+
+      if (held === null) {
+        return null;
+      }
+
+      const next: MemoryDomainEntity = {
+        id: held.row.id,
+        name: patch.name === undefined
+          ? held.row.name
+          : patch.name.display,
+        nameNorm: patch.name === undefined
+          ? held.row.nameNorm
+          : patch.name.norm,
+        aliasOf: patch.aliasOf === undefined
+          ? held.row.aliasOf
+          : patch.aliasOf,
+        attributes: patch.attributes === undefined
+          ? held.row.attributes
+          : patch.attributes,
+      };
+
+      if (entityByNameNorm(held.domainId, next.nameNorm, id) !== undefined) {
+        throw new StoreRefusal({
+          reason: 'unique-violation',
+          constraint: ENTITY_NAME_NORM_UNIQUE,
+        });
+      }
+
+      guardAliasTarget(next.aliasOf);
+      replaceEntity(held.domainId, copyPlantedEntity(next));
+
+      return entityOf(held.domainId, next);
+    },
+
+    /**
+     * One window of what has been found out about a subject, newest
+     * first.
+     *
+     * READS A TABLE THIS PORT DOES NOT WRITE. `entity_research` is
+     * `ar-research`'s, and every row here arrived through
+     * {@link MemoryResearchStore.setEntityResearch} — the seam the
+     * findings half plants through as well, one table read two ways.
+     *
+     * AN ID NO ENTITY CARRIES ANSWERS AN EMPTY LIST rather than
+     * failing, and so does a window past the end: neither is a
+     * failure to read, and nothing points at a row that is not there.
+     * Summaries come back AS STORED.
+     */
+    async listEntityResearch(
+      entityId: number,
+      window: StoreWindow,
+    ): Promise<readonly EntityResearchRecord[]> {
+      return orderedEntityResearch(entityId)
+        .slice(window.offset, window.offset + window.limit);
+    },
+
+    /**
+     * How many passes have been recorded about a subject, ignoring
+     * any window.
+     *
+     * Separate from the list rather than answered beside it, for the
+     * reason `EntityStore` gives: a page's total describes the
+     * collection and not the page.
+     */
+    async countEntityResearch(entityId: number): Promise<number> {
+      return (entityResearch.get(entityId) ?? []).length;
+    },
+
+    /**
+     * One window of the intentions queued against a subject, oldest
+     * first.
+     *
+     * NOT NARROWED TO `pending`, which is where this differs from the
+     * CLI listing it shares an order with: a subject's own queue is a
+     * history of what was ever asked about it, and an approved or
+     * closed row is the part a reader is most likely checking for.
+     *
+     * A ROW NAMING NO SUBJECT APPEARS IN NO PAGE HERE, `entityId`
+     * being nullable and the parameter a number.
+     *
+     * NO ROUTE ON THIS WAVE CALLS IT, per `src/entities/store.ts`.
+     */
+    async listEntityPool(
+      entityId: number,
+      window: StoreWindow,
+    ): Promise<readonly ResearchPoolRecord[]> {
+      return orderedPool(entityId)
+        .slice(window.offset, window.offset + window.limit);
+    },
+
+    /**
+     * How many intentions stand against a subject, in any state and
+     * ignoring any window.
+     *
+     * Selecting the same rows the list does — one
+     * {@link poolRowsFor} behind both — which is what keeps a page's
+     * total describing the page's own collection here rather than by
+     * coincidence.
+     *
+     * NO ROUTE ON THIS WAVE CALLS IT either.
+     */
+    async countEntityPool(entityId: number): Promise<number> {
+      return poolRowsFor(entityId).length;
+    },
+
+    /**
+     * One intention by its own id, whatever subject it names.
+     *
+     * UNSCOPED ON PURPOSE, AND THAT IS WHAT MAKES THE CONTAINMENT
+     * RULE DECIDABLE ONE LAYER UP. A read scoped to the entity would
+     * answer null for `no such row` and for `not this subject's row`
+     * alike, which are a `404` for different reasons and only one of
+     * which is honest.
+     */
+    async findPoolRowById(id: number): Promise<ResearchPoolRecord | null> {
+      const held = plantedPoolRow(id);
+
+      return held === null
+        ? null
+        : poolRowOf(held.row);
+    },
+
+    /**
+     * Rules in favour of one intention. THE HALF'S SECOND AND LAST
+     * WRITE.
+     *
+     * IDEMPOTENT BY CONSTRUCTION. `approved_at` is written the way
+     * `coalesce(approved_at, now())` writes it, so a second ruling
+     * keeps the FIRST one's instant rather than re-dating a search
+     * already paid for — `approveById` in `scripts/approve.ts` writes
+     * the same pair the same way, and the two are one gate with two
+     * clients.
+     *
+     * NOTHING IS ASKED OF THE ROW'S STATE. An id naming a row already
+     * closed moves its status back to approved without moving the
+     * stamp, and `research_pool_approval_check` permits that: it
+     * holds the two timestamps against each other and never consults
+     * the status. Whether a closed row may be ratified at all is
+     * `RULING_ACTS` in `src/approvals/ruling.ts`, one layer up.
+     *
+     * IT RATIFIES AND NEVER RESEARCHES. Two columns of one row move
+     * and nothing else does: no `entity_research` row is written, and
+     * `researched_at` is not touched from here at all — which is why
+     * this write cannot reach the CHECK from either side.
+     *
+     * THE STAMP IS READ OFF THE CLOCK, which stands in for the
+     * server's `now()`. That is the transaction's start time in a
+     * deployment, so approvals written together tie to the
+     * microsecond with `id` breaking the tie.
+     */
+    async approvePoolRow(id: number): Promise<ResearchPoolRecord | null> {
+      const held = plantedPoolRow(id);
+
+      if (held === null) {
+        return null;
+      }
+
+      const ruled: MemoryResearchPoolRow = {
+        ...held.row,
+        status: POOL_APPROVED_STATUS,
+        approvedAt: held.row.approvedAt ?? stamp(),
+      };
+
+      replacePoolRow(held.domainId, ruled);
+
+      return poolRowOf(ruled);
+    },
+
     setDomainDependents(
       domainId: number,
       counts: Partial<DomainDependentCounts>,
@@ -5768,6 +6826,33 @@ export function createMemoryResearchStore(
       // and the list itself is rebuilt, so pushing onto what was
       // planted does not plant a further document.
       domainDocuments.set(domainId, documents.map(copyPlantedCorpusDocument));
+    },
+
+    setDomainEntities(
+      domainId: number,
+      entities: readonly MemoryDomainEntity[],
+    ): void {
+      // Copied on the way in, row by row, so a caller that goes on
+      // writing into a planted `attributes` does not move stored
+      // state — and the list itself is rebuilt, so pushing onto what
+      // was planted does not plant a further subject.
+      domainEntities.set(domainId, entities.map(copyPlantedEntity));
+    },
+
+    setDomainPool(
+      domainId: number,
+      rows: readonly MemoryResearchPoolRow[],
+    ): void {
+      // Every row held against the CHECK BEFORE any is stored, so a
+      // batch carrying one impossible state lands nowhere and the
+      // previous plant is left standing. A guard applied row by row
+      // as it stored would leave the collection half written, which
+      // is a state one statement cannot produce.
+      for (const row of rows) {
+        guardPoolApproval(row);
+      }
+
+      domainPool.set(domainId, rows.map(copyPlantedPoolRow));
     },
   };
 }
