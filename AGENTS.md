@@ -852,15 +852,19 @@ red package never masks another and a single run gives the whole picture.
   SET off the per-case glyph lines or the ` FAIL ` lines, which the
   section header's own `Failed Tests N` cross-checks.
 - Two refinements to the figures above, both measured at a much larger
-  suite. The pass-glyph 31 is the one number in this file that is NOT a
-  snapshot: it held at 31 with the fan-out grown to 2709 vitest cases,
+  suite. The pass-glyph total is not a function of VITEST suite size: it
+  held at 31 across fan-outs grown to 2709 and then 5783 vitest cases,
   because vitest's default reporter contributes exactly ZERO of them
-  — 27 come from `@ar/web test:` (Playwright's per-test lines) and 2
+  — 27 came from `@ar/web test:` (Playwright's per-test lines) and 2
   apiece from the `@ar/ui` and `@ar/web` pretest vite builds. Decompose it
-  BY PREFIX rather than quoting the total, and do not "re-derive" a correct
-  31 as though it tracked suite size. It held again at 5783 cases, which
-  confirms it tracks the non-vitest members alone (27 Playwright + 2 + 2
-  vite) and not suite size. And that package-scope `other` bucket is
+  BY PREFIX rather than quoting the total. But it is not INVARIANT either,
+  and the claim this file used to make — that 31 is the one number
+  here that is not a snapshot — is FALSE: the total tracks the
+  PLAYWRIGHT case count, which the q15 wave moved from 27 to 146. The same
+  decomposition measured 150 at `ee338e3` (146 Playwright + 2 + 2 vite).
+  So re-derive it from the PREFIXES every time and carry the RULE rather
+  than the figure: vitest contributes none, so the total moves only when
+  a NON-vitest member does. And that package-scope `other` bucket is
   assertable by MEMBERSHIP exactly as the fan-out's own unprefixed bucket
   is — but it is NOT invariant at nine, and the clause that only the pino
   and summary buckets scale is false. It is N+8, where N is the workflow
