@@ -63,16 +63,19 @@
  * what to do about it — a control that silently did nothing would be
  * worse than one that is not there.
  *
- * The reason has narrowed twice and the sentence is worth keeping
- * accurate. There IS a write seam (`../../data/api.ts`'s
+ * The reason has narrowed three times and the sentence is worth
+ * keeping accurate. There IS a write seam (`../../data/api.ts`'s
  * `saveConnector` and `saveExportSubscriptions`, reached through
  * `../../data/hooks.ts` like every read), and the first of those now
  * has a caller: editing a connector is offered, at the sub-route the
- * card and the row menu both open, by
- * `./ConnectorEditorModal.tsx`. What this page still offers nothing
- * for is the connection test, the duplicate, and the delivery toggle
- * — the third of which is a write this seam already carries, and the
- * toggle list that would call it is what is missing.
+ * card and the row menu both open, by `./ConnectorEditorModal.tsx`.
+ * That editor is where the connection test landed too, as a reading
+ * of the configuration in front of the operator rather than as a
+ * card-level control — `./connectionTest.ts` says why a test of the
+ * stored row would answer about the wrong payload. What this page
+ * still offers nothing for is the duplicate and the delivery toggle
+ * — the second of which is a write this seam already carries, and
+ * the toggle list that would call it is what is missing.
  *
  * That is also why the deliveries are rows rather than the spec's
  * `DecoratedToggleList`. The stored `enabled` flag is drawn as a

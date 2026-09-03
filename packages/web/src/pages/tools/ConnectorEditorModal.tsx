@@ -106,6 +106,74 @@
  * behind would be drawn over an emptied config as though it were
  * stored.
  *
+ * ## The connection test reads the DRAFT
+ *
+ * `./connectionTest.ts` takes a kind and a config rather than a whole
+ * row, which is what lets the control below the fields run it over
+ * what the operator has in front of them instead of over what is
+ * stored. A reading of the stored row would answer about a
+ * configuration this screen is not showing, which on the one surface
+ * whose job is repairing one would be the wrong subject.
+ *
+ * It contacts nothing — that module argues the reading at length
+ * — so the button carries a sentence saying what it does read,
+ * bound to it with `aria-describedby`, and both outcomes lead with
+ * the same thing. An operator who presses a control called `Test
+ * connection` and is told only that it passed has been told the
+ * service is up, which is the one claim this shell must never make.
+ *
+ * Nothing gates the press. A draft can be refused by
+ * `validateConnectorDraft` and still be worth testing — reading
+ * an address is exactly what an operator does while a name is still
+ * colliding — and the two readings answer different questions.
+ *
+ * ## Two outcomes, two channels
+ *
+ * A refusal is a sentence that has to be read before it is worth
+ * acting on, and the footer's status slot truncates. So it goes to a
+ * floating `Toast tone="danger"`, which is where this library puts a
+ * reading that has to survive being looked away from.
+ *
+ * A success goes to that slot instead, through the frame's own
+ * `footerStatus` prop. `REACHED_SENTENCE` is longer than the line and
+ * is written front-loaded for it: an operator who reads only
+ * `Nothing was contacted:` has still been told the true thing. A
+ * `title` carries the whole of it to a pointer, and
+ * `ModalFooterStatus` is a live region, so the announcement is whole
+ * whatever the line does.
+ *
+ * ## One toast, and the two things that take it away
+ *
+ * One per modal rather than one per press: a second press replaces
+ * the reading in it, so the last answer is the only one on screen and
+ * a stack of stale refusals cannot build up behind the dialog.
+ *
+ * Persistent here means no timer and no auto-dismiss — `Toast`'s
+ * own transient lifecycle is deferred in that library, and a
+ * controlled one is what this surface wants anyway. Exactly two
+ * things take a reading away: the dismiss, and any edit. `writeRow`
+ * clears the outcome, because a refusal naming the very field an
+ * operator has just repaired is a sentence about a payload that is no
+ * longer on screen. The same clearing empties the footer, so neither
+ * channel can report a reading of a draft that has since moved.
+ *
+ * The role is the library's `role="status"` overridden to `alert`,
+ * and it is the one place this file argues with `@ar/ui`. The toast
+ * is INSERTED along with its content — it does not exist before
+ * the press — and an inserted polite region is announced
+ * unreliably where an alert is what the role is specified for. It is
+ * named as well, because the frame's own save-failure banner is an
+ * alert too and a spec has to be able to tell them apart.
+ *
+ * ## The dismiss puts focus back
+ *
+ * `Toast`'s dismiss button unmounts itself, so activating it would
+ * drop focus onto the document body — inside a Radix focus trap,
+ * which is the worst place to leave a keyboard. The handler moves
+ * focus to the button that raised the toast before the state that
+ * renders it is cleared, which is also the control an operator would
+ * reach for next.
+ *
  * ## Two reads, no slug, and only one of them holds the body back
  *
  * `useConnector` takes no domain slug and neither does
@@ -159,20 +227,23 @@
  * renders falls to the Playwright specs.
  */
 
+import type { ConnectionTestOutcome } from './connectionTest';
 import type { ConnectorField, ConnectorFieldRole } from './editor';
 import type { EditorDraft } from '../../components/editorDraft';
 import type { Connector } from '../../data/types';
 
 import {
   Banner,
+  Button,
   Divider,
   EmptyState,
   FormField,
   Select,
   Skeleton,
   TextInput,
+  Toast,
 } from '@ar/ui';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 
 import {
@@ -188,6 +259,7 @@ import {
 } from '../../data/hooks';
 
 import { CONNECTOR_KIND_FACETS } from './cards';
+import { testConnection } from './connectionTest';
 import {
   connectorFieldValue,
   connectorFields,
@@ -253,6 +325,24 @@ const FIELD_HINTS: Readonly<Record<ConnectorFieldRole, string>> = {
 const REFUSED_TITLE = 'This connector cannot be saved yet';
 const REFUSED_REGION_LABEL = 'Why this connector cannot be saved';
 
+/** What the connection test's control is called, here and in the specs. */
+const TEST_LABEL = 'Test connection';
+
+/**
+ * What the test says about itself before anybody presses it.
+ *
+ * Bound to the button with `aria-describedby`, and the header says
+ * why it is there: the control is named for the gesture in the
+ * operator's own words, and this is where the honesty about what the
+ * gesture does lives. It leads with the reading and ends with the
+ * absence, so the two clauses sit in the order they matter.
+ */
+const TEST_DESCRIPTION = 'Reads the configuration above for an '
+  + 'address this deployment could reach. Contacts nothing.';
+
+/** What names the region a refused reading is announced in. */
+const TEST_REFUSED_REGION_LABEL = 'Connection test result';
+
 /**
  * Geometry the kind row is drawn on.
  *
@@ -273,6 +363,18 @@ const ROW_LABEL_CLASS = 'text-[13px] font-semibold text-fg1';
  * the margin are all restated rather than inherited from the column.
  */
 const ROW_DESCRIPTION_CLASS = 'm-0 mt-0.5 text-xs text-fg3';
+
+/**
+ * Geometry and treatment the connection test's own sentence takes.
+ *
+ * The kind row's lead is a label with a description beneath it; this
+ * row's lead is the sentence alone, so it takes that row's flexing
+ * width and the small treatment without the `mt-0.5` that spaces one
+ * under a label. `tokens.css` puts a direct rule on `p`, so the size,
+ * the colour and the margin are restated rather than inherited.
+ */
+const TEST_DESCRIPTION_CLASS = 'm-0 min-w-[12rem] flex-1 text-xs '
+  + 'text-fg3';
 
 /**
  * Where the branch fields' typed text starts: nowhere, so every
@@ -327,6 +429,14 @@ export const ConnectorEditorModal = () => {
     EMPTY_EDITOR_DRAFT,
   );
 
+  // The whole outcome rather than one of its sentences, because which
+  // CHANNEL a reading goes to is what the discriminant decides. It is
+  // held here rather than in the body because the footer is the
+  // frame's and the frame is rendered from here.
+  const [tested, setTested] = useState<ConnectionTestOutcome | undefined>(
+    undefined,
+  );
+
   const loaded = connectorRead.data;
 
   // Normalised BEFORE it becomes the holder's source, per the header:
@@ -355,12 +465,27 @@ export const ConnectorEditorModal = () => {
     ? []
     : validateConnectorDraft(edited, connectors);
 
+  // The two channels, split off the one discriminant. A reading is in
+  // exactly one of them, and `undefined` on both sides is the state
+  // before any press and after any edit — see the header.
+  const reachedSentence = tested !== undefined && tested.reached
+    ? tested.sentence
+    : undefined;
+
+  const refusedSentence = tested !== undefined && !tested.reached
+    ? tested.sentence
+    : undefined;
+
   // Based off the DERIVED holder rather than the state updater's
   // argument: before the first edit the state is still the empty
   // holder, and a write against that one would be dropped. The movers
   // answer a WHOLE row and `withDraftValues` takes a partial, which a
   // whole row satisfies — so nothing here reconstructs one.
   const writeRow = (next: Connector) => {
+    // Any edit makes the last reading one of a payload that is no
+    // longer on screen, which is the header's rule about what takes a
+    // toast away. Every mover on this surface funnels through here.
+    setTested(undefined);
     setHeld(withDraftValues(draft, next));
   };
 
@@ -375,6 +500,13 @@ export const ConnectorEditorModal = () => {
       draft={draft}
       saving={save.isPending}
       saveError={save.error}
+      // The frame's slot reports the unsaved sentence unless somebody
+      // has something else to say. `title` is what carries a sentence
+      // wider than the line to a pointer; the live region announces
+      // it whole either way.
+      footerStatus={reachedSentence === undefined
+        ? undefined
+        : <span title={reachedSentence}>{reachedSentence}</span>}
       onSave={(close) => {
         if (edited === undefined || faults.length > 0) {
           return;
@@ -395,6 +527,20 @@ export const ConnectorEditorModal = () => {
         failed={connectorRead.isError}
         edited={edited}
         faults={faults}
+        refusal={refusedSentence}
+        onTest={() => {
+          if (edited === undefined) {
+            return;
+          }
+
+          // Over the DRAFT, which is the whole point of the control:
+          // the kind and the config as the operator has them, not as
+          // the row that was loaded carries them.
+          setTested(testConnection(edited.kind, edited.config));
+        }}
+        onDismissTest={() => {
+          setTested(undefined);
+        }}
         onNameChange={(name) => {
           if (edited === undefined) {
             return;
@@ -438,6 +584,19 @@ interface ConnectorEditorBodyProps {
   readonly edited: Connector | undefined;
   /** One sentence per fault, in form order; empty when savable. */
   readonly faults: readonly string[];
+  /**
+   * What the last connection test refused for, or `undefined` where
+   * it reached or where none has been taken.
+   *
+   * A sentence rather than the outcome: the success went to the
+   * frame's footer before this component was reached, so the only
+   * reading left down here is the refusing one.
+   */
+  readonly refusal: string | undefined;
+  /** Read the draft's configuration and report what it says. */
+  readonly onTest: () => void;
+  /** Take a refused reading off the screen. */
+  readonly onDismissTest: () => void;
   /** Report the name moving, exactly as typed. */
   readonly onNameChange: (name: string) => void;
   /**
@@ -477,6 +636,9 @@ const ConnectorEditorBody = ({
   failed,
   edited,
   faults,
+  refusal,
+  onTest,
+  onDismissTest,
   onNameChange,
   onKindChange,
   onFieldChange,
@@ -484,6 +646,11 @@ const ConnectorEditorBody = ({
   // Above the early returns, so the hook order does not depend on
   // which state the read is in.
   const nameId = useId();
+  const testHintId = useId();
+
+  // The control the toast is raised from, so its dismiss can put
+  // focus back rather than dropping it on the document body.
+  const testRef = useRef<HTMLButtonElement>(null);
   const [typed, setTyped] = useState(EMPTY_TYPED);
 
   if (failed) {
@@ -592,6 +759,52 @@ const ConnectorEditorBody = ({
           }}
         />
       ))}
+
+      <div className={ROW_CLASS}>
+        {/*
+          Bound to the control rather than left beside it: what the
+          press does is not derivable from a label reading `Test
+          connection`, and a description an operator cannot reach is
+          the same as none.
+        */}
+        <p id={testHintId} className={TEST_DESCRIPTION_CLASS}>
+          {TEST_DESCRIPTION}
+        </p>
+
+        <Button
+          ref={testRef}
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
+          aria-describedby={testHintId}
+          onClick={onTest}
+        >
+          {TEST_LABEL}
+        </Button>
+      </div>
+
+      {refusal !== undefined && (
+        /*
+          One toast per modal, and the role is the library's own
+          overridden — the header carries both readings. Named
+          because the frame's save-failure banner is an alert too.
+        */
+        <Toast
+          floating
+          tone="danger"
+          role="alert"
+          aria-label={TEST_REFUSED_REGION_LABEL}
+          onClose={() => {
+            // Focus moves BEFORE the state that renders this button
+            // is cleared, so nothing is ever focused on a node React
+            // is about to unmount.
+            testRef.current?.focus();
+            onDismissTest();
+          }}
+        >
+          {refusal}
+        </Toast>
+      )}
     </div>
   );
 };

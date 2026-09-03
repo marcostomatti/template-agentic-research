@@ -9,11 +9,12 @@
  * a node environment, so a decision living in a `.tsx` is reachable by
  * no test in this package at all.
  *
- * Written a task ahead of the control that offers it. Nothing on the
- * surface runs any of this yet — `./ConnectorEditorModal.tsx` grows
- * the action, and it will run it over the DRAFT rather than over the
- * row the read answered, so what an operator is told is about the
- * configuration in front of them.
+ * `./ConnectorEditorModal.tsx` is what offers it, on a control below
+ * that editor's per-kind fields, and it runs this over the DRAFT
+ * rather than over the row the read answered — so what an operator
+ * is told is about the configuration in front of them. A refusal goes
+ * to a dismissable toast and a success to the modal's footer, for the
+ * reason {@link REACHED_SENTENCE} is written the way it is.
  *
  * ## A reading of the stored configuration, not of a live service
  *
@@ -135,12 +136,17 @@
  * ## A fresh outcome per call
  *
  * {@link testConnection} builds a new record every time, including
- * for the success, and that is load-bearing rather than tidy: the
- * modal holds the last outcome in state and raises a toast from it,
- * so a shared constant would make a second press of the button set
- * state to the identical reference, skip the render and leave the
- * operator looking at nothing. Every mover in `../` answers fresh for
- * the same family of reason.
+ * for the success, so a caller holding the last outcome in state can
+ * always tell two readings apart. The modal does not lean on that: it
+ * clears the outcome on a dismiss and on every edit, so a second
+ * press arrives at a state change whatever the record's identity is.
+ * A caller that compared references instead would quietly skip the
+ * render for the second of two identical readings and leave an
+ * operator looking at nothing, and that is a trap worth not laying.
+ *
+ * Nothing here freezes what it answers either, so a shared record
+ * would be one every caller could reach into. Every mover in `../`
+ * answers fresh for the same family of reason.
  *
  * No array is answered anywhere here, so the two array-ownership
  * stances the sibling modules declare do not arise.

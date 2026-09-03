@@ -452,10 +452,10 @@ describe('testConnection successes', () => {
   });
 
   it('answers a fresh outcome per call', () => {
-    // The modal holds the last outcome in state and raises a toast
-    // from it, so a shared record would make a second press set state
-    // to the identical reference, skip the render and leave the
-    // operator looking at nothing.
+    // A caller holding the last outcome in state has to be able to
+    // tell two readings apart; the modal clears rather than compares,
+    // but a caller that compared references would quietly skip the
+    // render for the second of two identical readings.
     // Arrange
     const config = addressed('llm', DIALLABLE_ADDRESS);
 

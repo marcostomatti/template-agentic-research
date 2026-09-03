@@ -99,6 +99,26 @@
  * HTTP a double submit is already refused here rather than in five
  * editors separately.
  *
+ * ## The footer's status slot has a default, not a monopoly
+ *
+ * `describeUnsaved` is what that slot says when nobody else has
+ * anything to say, which is nearly always. An editor that DOES —
+ * `../pages/tools/ConnectorEditorModal.tsx` reports what its
+ * connection test read there — passes `footerStatus` and stands in
+ * the slot for as long as its own reading is current.
+ *
+ * The two readings take turns rather than sharing the line, because
+ * the slot truncates: two sentences in it would leave both
+ * ellipsised. Which one wins is not arbitrary either. The unsaved
+ * sentence is derivable from the draft on any render and comes back
+ * the moment the caller stops passing one, so the slot goes to the
+ * reading that would otherwise be lost.
+ *
+ * `ModalFooterStatus` is `aria-live="polite"`, so whatever stands
+ * there is announced whole when it changes, however narrow the line
+ * is. Reading truthfully once TRUNCATED is the caller's problem, and
+ * `../pages/tools/connectionTest.ts` says how it solved it.
+ *
  * ## The eyebrow, and where a failure is reported
  *
  * The eyebrow is the surface's own title derived from the PATH,
@@ -212,6 +232,16 @@ export interface EditorModalProps<T extends object> {
    */
   readonly saveError: Error | null;
   /**
+   * What the footer's status slot says instead of the unsaved
+   * sentence.
+   *
+   * Absent for every editor with nothing of its own to report, which
+   * is the common case: the frame then derives the slot from the
+   * draft. See the header on why the two readings take turns, and on
+   * what a caller owes a sentence that outgrows the line.
+   */
+  readonly footerStatus?: ReactNode;
+  /**
    * How wide the panel is, forwarded to the library's own variant.
    *
    * The editors differ by more than a token: a term list in three
@@ -246,6 +276,7 @@ export const EditorModal = <T extends object>({
   onSave,
   saving,
   saveError,
+  footerStatus,
   size,
   children,
 }: EditorModalProps<T>) => {
@@ -268,7 +299,7 @@ export const EditorModal = <T extends object>({
         ? undefined
         : getSurface(surfaceId).title}
       title={title}
-      footerStatus={describeUnsaved(draft)}
+      footerStatus={footerStatus ?? describeUnsaved(draft)}
       footer={(
         <>
           <Button variant="ghost" onClick={close}>
