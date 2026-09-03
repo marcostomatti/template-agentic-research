@@ -1,0 +1,18 @@
+# The repo-root `.gitignore` excludes `visual/` UNANCHORED, so that one
+# entry matches every directory of that name at any depth. Two of them
+# exist under this package and only one of them should be ignored.
+#
+# `packages/web/visual/` is where `playwright.visual.config.ts` writes
+# its screenshot baselines, and being caught by that entry is the whole
+# reason the path is spelled the way it is: the set is per-machine and
+# must never be tracked. Restated here so this file reads on its own.
+visual/
+
+# `packages/web/tests/visual/` is the screenshot SUITE's source, and it
+# was being swallowed by the same entry — which is a silent failure
+# rather than a loud one: `lint`, `check-types` and `playwright test`
+# all read the specs off disk whatever git thinks, so every gate stays
+# green while `git add -A` stages nothing and the commit comes out
+# empty. The negation has to come after the line above; within one
+# ignore file the LAST matching pattern wins.
+!tests/visual/
