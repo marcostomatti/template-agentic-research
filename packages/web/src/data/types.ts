@@ -3,11 +3,12 @@
  * The shapes the fixture data layer speaks, mirroring schema v2.
  *
  * Every interface below names the `packages/service/src/db/schema`
- * table it stands for. The app has no backend yet — q15 swaps the
- * accessors in `./api.ts` for real requests — so the value of writing
- * these against the stored schema rather than against whatever each
- * page happens to render is that the swap changes one module. A page
- * built on an invented shape would have to be rewritten instead.
+ * table it stands for. The app has no backend yet — a later wave
+ * swaps the accessors in `./api.ts` for real requests — so the value
+ * of writing these against the stored schema rather than against
+ * whatever each page happens to render is that the swap changes one
+ * module. A page built on an invented shape would have to be
+ * rewritten instead.
  *
  * These are REDECLARATIONS, not imports. `@ar/web` does not depend on
  * `@ar/service` and should not: the two are joined by HTTP, not by a
@@ -27,7 +28,7 @@
  *   into "the fixture author forgot".
  * - A `timestamp with time zone` is an {@link IsoTimestamp}, because a
  *   string is what a JSON API hands back and what the fixtures are
- *   standing in for. A `Date` here would be a shape the q15 swap could
+ *   standing in for. A `Date` here would be a shape the API swap could
  *   never produce.
  * - Ids are `number`, mirroring the schema's `bigserial` columns read
  *   in drizzle's `number` mode, and rows reference each other by id
@@ -355,9 +356,9 @@ export interface Finding {
    * finding here because every surface in this shell wants exactly one
    * — the digest's status badge and its verdict filter — and carrying
    * the label table to serve that would be a join the fixture layer
-   * exists to avoid. The q15 API has to answer the same way, so this
-   * is a claim about the finding endpoint's payload, not a shortcut
-   * the swap can drop.
+   * exists to avoid. The API has to answer the same way, so this is a
+   * claim about the finding endpoint's payload, not a shortcut the
+   * swap can drop.
    *
    * Deliberately `string` and not a union. The vocabulary is
    * per-domain ({@link DomainSettings.verdictVocabulary}), the schema
@@ -690,7 +691,7 @@ export interface DigestDefaults {
  * - `digest` is defaults for an `export_subscriptions` row.
  * - `notificationChannels` toggles the channel registry above.
  *
- * So this is the one type here the q15 swap cannot satisfy by pointing
+ * So this is the one type here the API swap cannot satisfy by pointing
  * at an existing endpoint — it needs somewhere to persist first, and
  * where that lands is a schema decision rather than a UI one. The
  * settings surface saves through `./api.ts`'s `saveSettings` into the

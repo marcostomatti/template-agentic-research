@@ -190,7 +190,7 @@ export const Sidebar = ({ collapsed }: SidebarProps) => {
       {spend.data !== undefined && (
         // Rendered only once the read has resolved. The fixture accessor
         // settles on a microtask, so this is a single frame today and a
-        // real gap after the q15 swap — which is the point of going
+        // real gap after the API swap — which is the point of going
         // through the cache hook rather than reading the fixture here.
         <SidebarWeekSummary
           status={spend.data.status}

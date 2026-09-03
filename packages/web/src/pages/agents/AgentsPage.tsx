@@ -27,9 +27,9 @@
  * played is a fact about a RUN — a join through `runs` and `llm_calls`
  * — and neither table is modelled in this shell's fixture layer at
  * all. Drawing a plausible date beside three real fields would be the
- * quiet mistake: it would read as a column that exists, and q15 would
- * meet an endpoint with nothing to answer it. The field arrives when
- * the run tables do.
+ * quiet mistake: it would read as a column that exists, and the API
+ * swap would meet an endpoint with nothing to answer it. The field
+ * arrives when the run tables do.
  *
  * Nothing stands in for it either: the card passes `EntityCard` no
  * `meta` slot at all, so no rule is drawn under an absence. A card

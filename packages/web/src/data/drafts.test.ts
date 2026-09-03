@@ -95,7 +95,7 @@ describe('applyDrafts', () => {
     // The resource unions are compile-time only. Nothing in this
     // module switches on the value, so a resource it has never heard
     // of is a key that misses rather than a case table falling off its
-    // end — which is what a q15 endpoint naming a resource this app
+    // end — which is what an API endpoint naming a resource this app
     // does not know would reach, and what a plain JS caller reaches
     // today. Driving it needs the double cast: the literal types do
     // not overlap, so a single `as` is refused.

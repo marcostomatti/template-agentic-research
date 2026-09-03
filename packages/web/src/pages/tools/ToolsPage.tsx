@@ -306,7 +306,7 @@ interface ConnectorsBodyProps {
    *
    * Unreachable against the fixtures — `fetchConnectors` takes no
    * argument and resolves from memory — and kept anyway, because the
-   * q15 swap makes it an HTTP call that can fail. Without this branch
+   * API swap makes it an HTTP call that can fail. Without this branch
    * that failure would render as a deployment with no connectors
    * configured, which is a different and much more alarming statement.
    */

@@ -17,7 +17,7 @@
  * rather than sending a page off to import it directly.
  *
  * Pages call the hooks below and nothing else. `./api.ts` is what they
- * read THROUGH — it is imported here and by no page — so the q15 swap
+ * read THROUGH — it is imported here and by no page — so the API swap
  * from fixtures to endpoints still touches one module, and this one
  * inherits the change without an edit. A page importing an accessor
  * directly would render the same today and lose its loading and error
@@ -563,7 +563,7 @@ export function useFindings(
  *
  * A separate read from {@link useFindings} rather than a field on it,
  * for the reason `./digest.ts` keeps the tables apart: the page
- * performs the join a q15 endpoint would otherwise have to invent a
+ * performs the join an API endpoint would otherwise have to invent a
  * flattened row shape for.
  *
  * @param domainSlug - The `:domainSlug` route param.

@@ -14,7 +14,7 @@
  * written across two files that nothing holds in step.
  *
  * The two are scoped DIFFERENTLY, which is the fact most likely to be
- * got wrong by a page or by the q15 swap:
+ * got wrong by a page or by the API swap:
  *
  * - Connectors are DEPLOYMENT-level. There is no `domain_id` on the
  *   table, so {@link listConnectors} takes no domain and `./api.ts`
@@ -80,9 +80,9 @@
  * stores nothing of the sort: `connectors` has four columns and none
  * of them is a timestamp, and `llm_calls` — the one table that records
  * calls going out — carries no connector reference to aggregate over.
- * So a last-used reading is a schema decision q15 has to make before
- * an endpoint can answer it, and the honest stand-in the stored
- * columns support is the subscription join
+ * So a last-used reading is a schema decision a later wave has to
+ * make before an endpoint can answer it, and the honest stand-in the
+ * stored columns support is the subscription join
  * {@link summarizeExportSubscriptions} returns: what a destination
  * receives, and when it is next due.
  *
@@ -166,7 +166,7 @@ export type ConnectorStatus = 'ready' | 'unconfigured';
  *
  * The subscription plus the connector it delivers through, resolved.
  * Assembled here rather than in the page because it is the shape the
- * q15 endpoint has to answer with: a page resolving destinations
+ * API endpoint has to answer with: a page resolving destinations
  * itself would need every connector shipped to it in order to render
  * a domain's deliveries, and would have to invent its own answer for a
  * reference nothing resolves.
@@ -580,7 +580,7 @@ export function getConnector(id: number): Connector {
  *
  * The lookup a RUN makes — a workflow needs the endpoint of the llm
  * connector it was configured to use, by name — and so the one the
- * q15 endpoint has to answer as well as the id lookup above. Kept here
+ * API endpoint has to answer as well as the id lookup above. Kept here
  * rather than left to each caller's `find` over
  * {@link listConnectors} so that the composite key is written once:
  * see {@link kindNameKey} for what goes wrong when it is not.
@@ -663,7 +663,7 @@ export function getExportSubscription(id: number): ExportSubscription {
  *
  * The join this module exists to answer, and the reason both tables
  * live in one file: the page maps over these and renders a row each,
- * so the resolution stays here and the q15 swap replaces one accessor
+ * so the resolution stays here and the API swap replaces one accessor
  * rather than a page.
  *
  * Resolves through {@link getConnector} and so THROWS on a dangling

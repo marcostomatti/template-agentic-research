@@ -461,12 +461,12 @@ export function missingDomainLabel(slug: string): string {
  * guaranteed to be among them.
  *
  * The stored preference and the domain list are two independent
- * reads: the fixtures pin them into agreement, and q15 makes them two
- * endpoints that can disagree the moment a domain is deleted. When
- * they do, the stored slug is listed as itself and labelled for what
- * it is, rather than being silently replaced by the first domain in
- * the deployment — see the header on what `Select` does with a value
- * its options do not carry.
+ * reads: the fixtures pin them into agreement, and the API swap makes
+ * them two endpoints that can disagree the moment a domain is
+ * deleted. When they do, the stored slug is listed as itself and
+ * labelled for what it is, rather than being silently replaced by the
+ * first domain in the deployment — see the header on what `Select`
+ * does with a value its options do not carry.
  *
  * @param domains - The deployment's domains, in switcher order.
  * @param selectedSlug - The preference currently in effect.

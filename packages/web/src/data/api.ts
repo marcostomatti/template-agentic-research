@@ -1,8 +1,8 @@
 /**
  * @packageDocumentation
  * The accessor barrel — the one module in this app that answers "where
- * does the data come from", and the one module q15 replaces when the
- * answer stops being a fixture.
+ * does the data come from", and the one module the API swap replaces
+ * when the answer stops being a fixture.
  *
  * Everything above this line reaches its data through it.
  * `./hooks.ts` wraps each READ below in `useCache` and each WRITE in a
@@ -34,7 +34,7 @@
  * consumer is a cache hook — a rejected promise is an error state a
  * page can render, while a synchronous throw out of a query function
  * reaches the render as an exception and takes the shell down with the
- * page. Any q15 endpoint answering 404 arrives the same way, so the
+ * page. Any API endpoint answering 404 arrives the same way, so the
  * pages meet the same shape before and after.
  *
  * SLUG-SCOPED, over a fixture layer keyed on `domains.id`. The URL
@@ -370,7 +370,7 @@ import { getSpendSummary } from './spend';
  * domain-scoped ones (via {@link deliverForDomain}), so there is
  * exactly one place the app's synchronous fixtures become the
  * asynchronous reads a page is written against — and exactly one
- * function q15 rewrites into an HTTP call.
+ * function the API swap rewrites into an HTTP call.
  *
  * `async` is load-bearing rather than stylistic. A `read` that throws
  * — which is how an unknown domain, a dangling connector reference or

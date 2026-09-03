@@ -59,7 +59,7 @@
  *
  * Inventing a fixture column instead would have been the quiet
  * mistake: it would read as a schema decision already taken, and the
- * q15 swap would meet an endpoint with nothing to answer it. What this
+ * API swap would meet an endpoint with nothing to answer it. What this
  * shape says instead is that the decision is still open — a
  * `categories.enabled` column, or a suspension list under the domain's
  * settings — and that the shell is ready for either.

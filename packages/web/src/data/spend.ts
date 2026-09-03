@@ -152,12 +152,12 @@ const TOKENS_USED_THIS_WEEK = 1_042_800;
  * at the share the pill exists to announce, so handing the line
  * itself to the healthy side would announce it one token late.
  *
- * Where this reading lives after q15 is q15's call. `SpendSummary`
- * carries `status` because `GET /spend/summary` is expected to answer
- * it, and the day the ceiling becomes a stored value the reading has
- * to move to whoever stores it — an app deriving a pill from a
- * budget it cannot see is the same shape as this fixture, just
- * further from the data.
+ * Where this reading lives after the API swap is that wave's call.
+ * `SpendSummary` carries `status` because `GET /spend/summary` is
+ * expected to answer it, and the day the ceiling becomes a stored
+ * value the reading has to move to whoever stores it — an app
+ * deriving a pill from a budget it cannot see is the same shape as
+ * this fixture, just further from the data.
  *
  * @param spend - The week's usage and its ceiling.
  * @returns Its reading. Total: every pair of numbers has exactly one,

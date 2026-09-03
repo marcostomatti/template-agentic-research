@@ -93,12 +93,12 @@
  *
  * ## This is a placeholder, not a stand-in
  *
- * Its neighbour `./PageHead` exists to be PROMOTED — q15 moves it into
- * `@ar/ui/molecules`, which is why that file imports nothing from this
- * app. This one existed to be REPLACED, surface by surface, as each
- * real modal was written, and now has been; there was never anything
- * here for a component library to take, since every line of it reads
- * the router.
+ * Its neighbour `./PageHead` exists to be PROMOTED — a later wave
+ * moves it into `@ar/ui/molecules`, which is why that file imports
+ * nothing from this app. This one existed to be REPLACED, surface by
+ * surface, as each real modal was written, and now has been; there was
+ * never anything here for a component library to take, since every
+ * line of it reads the router.
  *
  * Nothing in this file is reachable from the unit suite, which is
  * node-only and collects `.ts` alone. Its bindings are proven by a

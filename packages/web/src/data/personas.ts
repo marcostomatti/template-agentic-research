@@ -210,7 +210,7 @@ export function getPersona(id: number): Persona {
  * Look a persona up by the natural key the table is upserted on.
  *
  * The lookup a RUN makes — a workflow fetches the text for the role it
- * is about to play — and so the one the q15 endpoint has to answer as
+ * is about to play — and so the one the API endpoint has to answer as
  * well as the id lookup above. Kept here rather than left to each
  * caller's `find` over {@link listPersonas} so that the composite key
  * is written once: see {@link roleKey} for what goes wrong when it is

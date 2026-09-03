@@ -38,13 +38,14 @@
  *
  * ## Promoting one is out of scope for this wave
  *
- * The UI spec names ONE `@ar/ui` deliverable for q15 and it is
- * `EntityCard`. A second promotion is a second story matrix, a
- * second visual baseline to seed against a suite that fails a run it
- * has to create one for, and a second component contract guessed
- * from a single call site — this one. `../../AGENTS.md` records the
- * same restraint about `PageHead`, which is a stand-in that stays a
- * stand-in for exactly that reason.
+ * The UI spec named ONE `@ar/ui` deliverable for this wave and it was
+ * `EntityCard`, which landed in `molecules`. A second promotion is a
+ * second story matrix, a second visual baseline to seed against a
+ * suite that fails a run it has to create one for, and a second
+ * component contract guessed from a single call site — this one.
+ * `../../AGENTS.md` records what that restraint left standing:
+ * `PageHead` is still a stand-in waiting to be promoted, and this row
+ * is not waiting for anything.
  *
  * What a promotion would have to take over, on the day it happens:
  *

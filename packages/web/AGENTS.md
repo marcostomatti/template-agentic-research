@@ -18,7 +18,7 @@ package.
 | `src/main.tsx` | The browser entry, and the only module here that touches the DOM directly: `StrictMode` > `QueryProvider` (`@ar/ui/cache`) > `RouterProvider`. The cache sits ABOVE the router deliberately — it holds one query client for the life of the tab, so navigating between surfaces, or across the two bases, leaves the cache standing rather than starting every read cold. |
 | `src/app-shell/` | The persistent chrome. `nav.ts` is nav-as-data and the single table the route surfaces derive from; `AppLayout.tsx` is the layout route and the sole owner of the sidebar collapse flag; `Sidebar.tsx` and `Topbar.tsx` fill its slots; `theme.ts` splits a pure resolver from the hook that writes `data-theme`. |
 | `src/routes/` | `paths.ts` (the surface table and the two-base path arithmetic), `router.tsx` (the route tree as DATA plus a `createAppRouter` factory), `DomainGuard.tsx`, `useSearchParamState.ts`. |
-| `src/data/` | The fixture data layer and the q15 swap seam. See below. |
+| `src/data/` | The fixture data layer and the API swap seam. See below. |
 | `src/pages/` | One directory per surface, plus `index.ts` — the surface-id to component registry the router reads. Each page keeps its pure helpers beside it as `.ts` (`rows.ts`, `cards.ts`, `fields.ts`), which is where colocated tests can reach them. |
 | `src/components/` | App-local stand-ins for `@ar/ui` components that do not exist yet, the shared list-page skeleton, the frame the editor modals are built in (`EditorModal.tsx`), the JSON fallback an editor offers for a shape no fixed template covers (`JsonEditor.tsx`), the pressable-badge filter row the sources toolbar uses in place of a count-carrying `Select` (`FilterBadgeRow.tsx`), and the pure `.ts` modules they share (`editorDraft.ts` for the draft a modal holds, `jsonDraft.ts` for the JSON fallback's parse, format and refusal sentences). See below. |
 | `src/test-support/` | Helpers shared by colocated tests only. No app module imports it and the vitest include collects no non-`*.test.ts` file, so it ships in no bundle. |
@@ -82,7 +82,7 @@ point branches on which of the two is live:
 ## The fixture data layer
 
 `src/data/` is the whole of the app's data access, and it is built to
-be replaced: the q15 wave deletes the fixture modules and re-points
+be replaced: a later wave deletes the fixture modules and re-points
 one file at HTTP endpoints, and nothing else under `src/` moves.
 
 ### The seam is `api.ts`
@@ -101,7 +101,7 @@ one costs something today to buy it.
   inside an `async` function. A cache hook can render a rejected
   promise as an error state; a synchronous throw out of a query
   function reaches the render as an exception and takes the shell down
-  with the page. A 404 from a q15 endpoint arrives the same way, so
+  with the page. A 404 from an API endpoint arrives the same way, so
   the pages meet one shape before and after.
 - **Slug-scoped.** The URL carries `:domainSlug` while every fixture
   accessor takes a numeric domain id, and this barrel is the single
@@ -159,10 +159,10 @@ mechanically, so the conventions below ARE the drift-detection:
   slugs are the natural keys URLs and accessors use.
 - A type that mirrors nothing says so in capitals — `Settings` and
   `SpendSummary` both carry `MIRRORS NO TABLE` — and names what each
-  member WOULD be stored against. That is what tells q15 which types
-  need a schema decision before an endpoint can exist. A control the
-  schema has no column for is marked `MIRRORS NO COLUMN` the same way,
-  with the open decision named.
+  member WOULD be stored against. That is what tells the API swap
+  which types need a schema decision before an endpoint can exist. A
+  control the schema has no column for is marked `MIRRORS NO COLUMN`
+  the same way, with the open decision named.
 - Fixture CONTENT is transcribed from the service seeds under
   `packages/service/data/` (`domains.json`, `categories.json`,
   `terms.json`, `personas.json`). Transcribed, not imported, so the
@@ -250,7 +250,8 @@ compose now that theirs has landed.
 ## `@ar/ui` constraints this app is built around
 
 Each of these was measured against the library as shipped, and none of
-them may be "fixed" by editing `@ar/ui` — component gaps belong to q15.
+them may be "fixed" by editing `@ar/ui` from here — a component gap is
+closed by a promotion of its own, on a wave that owns `packages/ui`.
 They are here because every one of them is invisible to `lint`,
 `check-types` and the unit suite.
 

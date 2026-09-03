@@ -17,7 +17,7 @@
  * happens in the data layer, so the page has no join to perform and no
  * partial state to guard against. What that costs is worth naming — a
  * card cannot show a term until the editor modal loads them — and what
- * it buys is that the q15 endpoint answers a card with one response
+ * it buys is that the API endpoint answers a card with one response
  * rather than shipping every term of every category to be counted in
  * a browser.
  *
@@ -31,15 +31,16 @@
  *
  * The search this surface will eventually want is over TERMS, not
  * over categories — `end of life`, which bucket is it in — and terms
- * arrive with the editor modal in q15. Adding a category filter now
- * would be the wrong control in the right place.
+ * are loaded by `./LexiconEditorModal.tsx`, not by this grid. Adding
+ * a category filter here would be the wrong control in the right
+ * place.
  *
  * ## The switch stores nothing
  *
  * `categories` has no enabled column, so the toggle is a delta held
  * for the life of the tab and written nowhere. `./cards.ts` documents
- * what that means and which schema decision q15 has to take; this file
- * owns the state and hands each card the reading of it.
+ * what that means and which schema decision a later wave has to take;
+ * this file owns the state and hands each card the reading of it.
  *
  * ## The grid track is the library's, and the page picks it
  *

@@ -24,8 +24,8 @@
  * any slug; it is the domain-scoped PAGE reads that have no answer, and
  * saying so is theirs. A check here would also have to consult the
  * domain list, which is a synchronous fixture today and an HTTP read
- * after q15 — it would have to be rewritten as a loader the moment it
- * became true.
+ * after the API swap — it would have to be rewritten as a loader the
+ * moment it became true.
  *
  * This lives beside `./router.tsx` rather than inside it because a file
  * that DEFINES a component may only EXPORT components, and the router is

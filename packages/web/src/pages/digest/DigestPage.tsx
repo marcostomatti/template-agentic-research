@@ -14,8 +14,8 @@
  * from, the source that fetched that document, and the taxonomy bucket
  * its subject was matched under. Those are four tables in the schema
  * and four reads through `../../data/hooks`, and this page performs the
- * join — the arrangement `../../data/digest.ts` documents, so that a
- * q15 endpoint answers with the tables it has rather than a flattened
+ * join — the arrangement `../../data/digest.ts` documents, so that an
+ * API endpoint answers with the tables it has rather than a flattened
  * row shape invented for this component.
  *
  * The join itself lives in `./rows`, not here: it is pure, and the node

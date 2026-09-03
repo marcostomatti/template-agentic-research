@@ -12,8 +12,8 @@
  *
  * ## Why this one is not a stand-in
  *
- * Its neighbour `./PageHead` exists in order to be DELETED — q15
- * promotes it into `@ar/ui/molecules` — which is why that file
+ * Its neighbour `./PageHead` exists in order to be DELETED — a later
+ * wave promotes it into `@ar/ui/molecules` — which is why that file
  * imports nothing from this app. This one is the opposite and stays
  * for good: it composes the router's `Outlet`, which no component
  * library can take without taking a router with it.

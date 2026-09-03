@@ -12,9 +12,9 @@
  * those tables already hold — a failing source, a subscription that
  * ran), and no users table at all (this deployment is one operator on
  * one machine, with nothing to authenticate against). So each fixture
- * below says what it WOULD be read from, and q15 needs a decision
- * about where each one comes from before it can point an endpoint at
- * it.
+ * below says what it WOULD be read from, and a later wave needs a
+ * decision about where each one comes from before it can point an
+ * endpoint at it.
  *
  * Typed against `@ar/ui`'s exported prop types rather than
  * redeclared, which is the opposite of what `./types.ts` does and for
@@ -202,9 +202,9 @@ export const SEARCH_SUGGESTIONS: readonly SearchSuggestion[] = Object.freeze(
  * exports its relative-time ladder only as the `FormattedRelativeTime`
  * COMPONENT — which cannot be passed into a string prop — so there is
  * nothing to derive a chip with here. Each chip is anchored to the
- * stamp it stands for in the comment beside it; when q15 gives
- * notifications a real source, the instant comes back on the wire and
- * the chip becomes a render like every other relative time.
+ * stamp it stands for in the comment beside it; when a later wave
+ * gives notifications a real source, the instant comes back on the
+ * wire and the chip becomes a render like every other relative time.
  *
  * `icon` is left off everywhere: the four level defaults are already
  * four distinct glyphs, and an override that only restates the level

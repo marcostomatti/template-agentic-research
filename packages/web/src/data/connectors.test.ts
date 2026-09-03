@@ -723,7 +723,7 @@ describe('getExportSubscription', () => {
 describe('summarizeExportSubscriptions', () => {
   it('resolves every destination for the seeded domain', () => {
     // The join this module exists to answer: the page maps over these
-    // and renders a row each, so the resolution stays here and the q15
+    // and renders a row each, so the resolution stays here and the API
     // swap replaces one accessor rather than a page.
     // Arrange
     const seededId = getDomain(DEFAULT_DOMAIN_SLUG).id;
