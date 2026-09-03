@@ -55,13 +55,15 @@
  * masking to cover it is a change to that document first and to
  * this module second.
  *
- * THE CAP IS A MODULE CONSTANT AND NOT A QUERY PARAMETER, so no
- * caller can ask for the whole of a stored payload and no route can
- * be talked into serving one. {@link BODY_CODE_POINT_CAP} carries
- * the arithmetic. What travels beside the cut body is the STORED
- * byte length rather than the answered one, which is what lets a
- * reader tell a cut body from a short one and how much was
- * withheld.
+ * THE CAP IS SHARED RATHER THAN THIS MODULE'S OWN, and it is a
+ * constant rather than a query parameter, so no caller can ask for
+ * the whole of a stored payload and no route can be talked into
+ * serving one. {@link BODY_CODE_POINT_CAP} is declared in
+ * `src/http/control-bytes.ts` beside the two passes and forwarded
+ * from here; it carries the arithmetic. What travels beside the cut
+ * body is the STORED byte length rather than the answered one,
+ * which is what lets a reader tell a cut body from a short one and
+ * how much was withheld.
  *
  * THE WINDOW ARRIVES ALREADY DERIVED, exactly as `./service.ts`
  * argues for the list beside this one. `?page` and `?perPage` are
@@ -87,7 +89,11 @@ import type { SourceFailureRecord, SourceStore } from './store.js';
 import type { StoreWindow } from '../http/schemas.js';
 
 import { NotFoundError } from '../../lib/errors/index.js';
-import { maskControlBytes, takeCodePoints } from '../http/control-bytes.js';
+import {
+  BODY_CODE_POINT_CAP,
+  maskControlBytes,
+  takeCodePoints,
+} from '../http/control-bytes.js';
 
 /**
  * Exactly the port methods {@link listSourceFailures} reaches.
@@ -115,33 +121,25 @@ export type SourceFailuresServiceStore = Pick<
 >;
 
 /**
- * How many CODE POINTS of a stored body this surface will answer.
+ * The cap this surface cuts a stored body at, forwarded rather
+ * than declared.
  *
- * A DLQ holds the payloads that broke a parser, and the payload
- * that broke one by being enormous is exactly the row a review
- * surface would otherwise fetch whole. So the cap is on the route
- * from its first commit rather than added the day somebody meets a
- * body that needs it.
+ * `src/http/control-bytes.ts` holds the number, beside the two
+ * passes it is spent on, because more than one surface answers
+ * stored untrusted text and two literals that agree today are two
+ * caps. The whole of the argument — the arithmetic that bounds a
+ * page, why it counts code points, and why it is a constant rather
+ * than a query parameter — lives with the declaration.
  *
- * The arithmetic, because a per-row cap alone does not bound a
- * response. A page carries at most `MAX_PER_PAGE` rows — 200, in
- * `src/http/schemas.ts` — and masking is expansive at worst six
- * characters out of one, so a page of bodies made entirely of
- * control bytes answers about 200 * 4096 * 6 characters. Large, and
- * BOUNDED, which is the property being bought. A body of ordinary
- * text expands by nothing at all.
- *
- * Code points rather than characters or bytes, because that is what
- * `takeCodePoints` counts and what makes the cut incapable of
- * splitting an astral pair. A body of astral characters therefore
- * answers up to twice this many UTF-16 units, and up to four times
- * this many bytes.
- *
- * EXPORTED SO ITS OWN CASES CAN DERIVE FROM IT. A test transcribing
- * the number would stay green against a cap that had moved, which
- * is the one change to this constant worth reporting.
+ * Forwarded rather than merely imported so the queue's own cases
+ * can go on deriving their fixtures from the surface they are
+ * about, and so `./failures-routes.ts` can name the cap it says it
+ * does not choose. `src/http/control-bytes.test.ts` holds this
+ * binding against the declaration and reads both modules for a
+ * second declaration, which is what makes it one cap rather than
+ * two that happen to agree.
  */
-export const BODY_CODE_POINT_CAP = 4096;
+export { BODY_CODE_POINT_CAP };
 
 /**
  * What a caller is told when no source carries the id it named.
