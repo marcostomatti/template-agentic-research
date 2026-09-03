@@ -307,6 +307,27 @@ export interface DomainStore {
   findDomainBySlug(slug: string): Promise<DomainRecord | null>;
 
   /**
+   * Looks a domain up by its surrogate key. The entry point for a
+   * request that never named a slug at all.
+   *
+   * THE SLUG LOOKUP ABOVE CANNOT SERVE THIS, and the difference is
+   * which resource a path addresses. `PATCH /findings/:id/verdict`
+   * names a finding, and the domain whose settings decide that
+   * ruling is reached through the finding's own `domain_id` rather
+   * than through a segment a caller supplied. A caller cannot name
+   * that domain and cannot get it wrong.
+   *
+   * @param id - The {@link DomainRecord.id} another read already
+   *   returned, normally `FindingRecord.domainId`.
+   * @returns The row, or null when no domain carries that id. Null
+   *   is reachable even after a read that produced the id, since
+   *   the domain may go in between and take the row that named it;
+   *   it is a fact for the service to decide from rather than a
+   *   refusal.
+   */
+  findDomainById(id: number): Promise<DomainRecord | null>;
+
+  /**
    * Inserts a domain, stamping `created_at` and `updated_at`.
    *
    * @param input - The complete row, minus its id and timestamps.

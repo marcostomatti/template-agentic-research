@@ -3329,6 +3329,22 @@ export function createMemoryResearchStore(
     },
 
     /**
+     * One domain by its surrogate key, or null.
+     *
+     * The map is keyed by id, so this is the direct read the slug
+     * lookup above has to scan for. Copied on the way out on the
+     * same terms: a caller writing into an answered `settings`
+     * payload must not move what the next read answers.
+     */
+    async findDomainById(id: number): Promise<DomainRecord | null> {
+      const row = domains.get(id);
+
+      return row === undefined
+        ? null
+        : copyDomain(row);
+    },
+
+    /**
      * Inserts a domain, stamping both timestamps off the clock.
      *
      * The id is taken from the counter BEFORE the slug is checked,
