@@ -4,14 +4,29 @@
  * `tests/helpers/memory-research-store.ts`, so every claim here is
  * answered with no database anywhere.
  *
- * FOUR SECTIONS AND TWELVE CASES, ALL OF THEM ABOUT A REFUSAL OR
- * ITS CONTROL. What a page CARRIES — the masking, the cut,
- * `bodyBytes`, `bodyTruncated`, and a page holding both parse
- * statuses — is the next task's, and nothing here asserts a body
- * at all. The three refusals this surface can raise are the whole
- * subject: a slug no domain carries, a `parseStatus` outside
- * `DOCUMENT_PARSE_STATUSES`, and a `perPage` above the cap
- * `src/http/schemas.ts` declares.
+ * SEVEN SECTIONS AND SEVENTEEN CASES, IN TWO HALVES. The first
+ * four sections are the three refusals this surface can raise and
+ * their controls: a slug no domain carries, a `parseStatus`
+ * outside `DOCUMENT_PARSE_STATUSES`, and a `perPage` above the cap
+ * `src/http/schemas.ts` declares. The last three are what a page
+ * CARRIES — which rows a narrowing keeps, what the masking takes
+ * out of a stored body and a stored error, and where the cap cuts.
+ *
+ * NO CASE HERE READS THE PAGE'S ORDER, and every reading over more
+ * than one row sorts by id first. `capturedAt` descending with
+ * `id` descending is `DocumentStore.listDocuments`'s promise and
+ * `tests/helpers/memory-research-store.test.ts` is where it is
+ * held, so a case about what a body answers cannot fail for an
+ * ordering reason and an ordering that broke is reported in one
+ * place rather than in two files disagreeing about which.
+ *
+ * NOTHING HERE READS `url`, WHICH IS AN HONEST ZERO RATHER THAN AN
+ * OVERSIGHT. `CorpusDocument.url` is answered AS STORED — a
+ * narrower promise than the two members beside it, and one
+ * `src/documents/service.ts` records deliberately — so a masking
+ * pass widened to cover it would redden nothing in this file. The
+ * case that would close it is a planted row whose `url` carries a
+ * control byte, asserted answered unchanged.
  *
  * ONLY THE FIRST OF THE THREE IS THIS MODULE'S OWN, and saying so
  * is half of what the file is for. `listDocuments` raises exactly
@@ -48,11 +63,21 @@
  * scoping reading as well and a store that had stopped taking the
  * domain answers five rows where three are asserted. Both parse
  * statuses are planted in each, so a status narrowing has
- * something to leave out on either side. And one document in each
- * carries a NULL `sourceId` — an ingested file, which the
- * failures queue beside this collection structurally cannot hold
- * — so the corpus page is being read over rows that are its own
- * rather than over the queue's.
+ * something to leave out on either side. The failure planted in
+ * each carries a parse error holding two control characters, so
+ * the narrowed page's masking is read off the same rows the
+ * refusal sections page. And one document in each carries a NULL
+ * `sourceId` — an ingested file, which the failures queue beside
+ * this collection structurally cannot hold — so the corpus page is
+ * being read over rows that are its own rather than over the
+ * queue's.
+ *
+ * THE THREE BODY SECTIONS BRING A FIXTURE OF THEIR OWN, planted
+ * through {@link plantCorpus}, which replaces that corpus and
+ * leaves the second domain standing. A cap fixture is four
+ * thousand characters long and a masked one is unreadable by eye,
+ * so carrying either in the base plant would make every count in
+ * the refusal sections depend on a row nothing there is about.
  *
  * THAT A SLUG NAMING NO DOMAIN IS A 404 RATHER THAN AN EMPTY PAGE.
  * That distinction is the whole reason `listDocuments` reads the
@@ -83,31 +108,92 @@
  * composed from a row it had just read would be the leak this rule
  * exists to close.
  *
+ * THAT A DEFAULT PAGE IS BOTH HALVES AND A NARROWED ONE IS THE
+ * ROWS IT NAMES, read as MEMBERSHIP where the partition case
+ * above reads it as counts. The two are different claims and the
+ * grid says so: inverting the store's narrowing still partitions
+ * the corpus and leaves that case green, and narrowing the default
+ * page to the parsed half leaves the sums it reads intact. What
+ * reports either is a page held row by row against the plant.
+ *
+ * THAT THE MASKING IS RE-READ RATHER THAN ASSERTED ABSENT.
+ * {@link unsafeCodePoints} compares CODE POINTS numerically and
+ * shares nothing with the class `src/http/control-bytes.ts` masks
+ * by, so it cannot agree with a masking regex however wrong that
+ * regex is; every zero it answers is taken beside a positive from
+ * the same function in the same case, over the STORED string the
+ * answer was built from. A valid astral pair planted beside the
+ * lone surrogate is what says only a surrogate standing on its own
+ * is masked, which is the `u` flag on that class and nothing else.
+ *
+ * THAT THE CAP IS BRACKETED ON THE ROW AS WELL AS ON THE QUERY. A
+ * body at {@link BODY_CODE_POINT_CAP} and a body one code point
+ * past it are planted together, and the longer one answers the
+ * shorter one's text — the sharpest available spelling of a cut
+ * that takes exactly the overshoot. Both bodies are derived from
+ * the exported constant rather than transcribed, and both are
+ * marked at the ends, since a body of one repeated character
+ * equals every slice of itself of the same length.
+ *
+ * THAT `bodyBytes` IS THE STORED LENGTH, held apart from two
+ * numbers it is easy to answer instead. The long body's tail is
+ * NOT ASCII, so its stored bytes exceed its stored code points and
+ * both exceed the bytes of what the cut answers — three numbers
+ * rather than the two an ASCII fixture can tell apart, and a
+ * second derivation of the right one written out as arithmetic
+ * beside the `Buffer.byteLength` the module itself calls.
+ *
  * Mutation grid, run WHOLE over this file TWICE with
  * `--reporter=json` and read as the failed case SET rather than as
- * a count. The two runs agreed member for member on all NINE legs,
- * which is what separates a measurement from a bad capture. Seven
- * mutate `./service.ts` and two mutate
- * `tests/helpers/memory-research-store.ts`.
+ * a count. The two runs agreed member for member on all EIGHTEEN
+ * legs, which is what separates a measurement from a bad capture.
+ * Fourteen mutate `./service.ts` and four mutate
+ * `tests/helpers/memory-research-store.ts`. Every leg was then run
+ * a SECOND time against HEAD's copy of this file — the store being
+ * a superset, the older cases never reaching the new plants — so
+ * each figure carries the set it had before the body sections
+ * existed and every move below is attributed by NAME rather than
+ * compared as a number. Nothing was lost on any leg.
  *
- * Comparing the resolved row against `undefined` so the 404 branch
- * never fires reddens 4: the three cases of the first section that
- * refuse, plus the containment case that goes through it. Issuing
- * the two reads above the lookup reddens exactly 1, the counting
- * case, every status assertion being green either way. Composing
- * the submitted slug into the refusal message reddens 1. Extending
- * the composed schema with a `perPage` ceiling of its OWN reddens 3
- * — the bracketing case, the boundary case, and the containment
- * case whose refusal stops being raised. Making that schema loose
- * reddens 1, the undeclared-key case alone. Handing the count read
- * an empty filter reddens 1, and dropping the store's own narrowing
- * predicate reddens the same 1. Planting nothing reddens 4.
+ * SIX CARRIED-IN LEGS HELD THEIR SETS EXACTLY. Comparing the
+ * resolved row against `undefined` so the 404 branch never fires
+ * reddens 4: the three cases of the first section that refuse,
+ * plus the containment case that goes through it. Issuing the two
+ * reads above the lookup reddens 1, the counting case, every
+ * status assertion being green either way. Composing the submitted
+ * slug into the refusal message reddens 1. Extending the composed
+ * schema with a `perPage` ceiling of its OWN reddens 3 — the
+ * bracketing case, the boundary case, and the containment case
+ * whose refusal stops being raised. Making that schema loose
+ * reddens 1, the undeclared-key case alone. Swapping the enum for
+ * `z.string()` reddens 2 and not 3, and the case it leaves green
+ * is the honest limit rather than a gap: a looser type still
+ * accepts both members of the tuple, so the case that parses each
+ * of them cannot tell the two schemas apart.
  *
- * SWAPPING THE ENUM FOR `z.string()` REDDENS 2 AND NOT 3, and the
- * case it leaves green is the honest limit rather than a gap. A
- * looser type still accepts both members of the tuple, so the case
- * that parses each of them cannot tell the two schemas apart; what
- * reports is the refusal case and the containment case beside it.
+ * THE CEILING LEG NEEDS A CEILING THAT DIFFERS, which is the one
+ * place the leg's spelling changes its answer. A second `perPage`
+ * declared with the SAME bounds reddens ZERO — it agrees with the
+ * shared one in every request — so the 3 above is measured with
+ * the composed ceiling raised. That zero is the state the
+ * bracketing case exists to catch the day either number moves, and
+ * a grid run with the agreeing spelling records the case as dead.
+ *
+ * THREE CARRIED-IN LEGS MOVED, EACH BY A NEW CASE READING AN OLD
+ * ROUTE. Handing the count read an empty filter reddens 2 where it
+ * read 1, and dropping the store's own narrowing predicate the
+ * same 2, the added member of each being the narrowed page, which
+ * reads its own total. Planting nothing reddens 9 where it read 4,
+ * the five added members being the five body cases, every one of
+ * which plants.
+ *
+ * THE PLANT-NOTHING SURVIVORS ARE THE COVERAGE STATEMENT RATHER
+ * THAN ITS COUNT. Eight of seventeen stay green, and every one is
+ * a case that needs no planted row to make its point: the five
+ * boundary parses, the two service refusals that refuse before
+ * reading anything, and the containment case over those boundary
+ * refusals. A survivor that could not be explained that way would
+ * be a case asserting something it does not mean.
  *
  * THE STORE'S NARROWING LEG READ 0 BEFORE THE PARTITION
  * ASSERTIONS EXISTED, and that zero was the case's shape rather
@@ -116,17 +202,32 @@
  * derivations agree with each other while both are wrong. What
  * reports is that the two halves PARTITION the corpus — they sum
  * to it and neither is the whole of it — which is a reading no
- * single narrowed page can make and which says nothing about WHICH
- * rows land on either side.
+ * single narrowed page can make.
  *
- * THE WHOLE-HALF CONTROL IS THE PLANT-NOTHING LEG AND ITS
- * SURVIVORS ARE THE COVERAGE STATEMENT RATHER THAN ITS COUNT.
- * Eight of twelve stay green, and every one of them is a case that
- * needs no planted row to make its point: the five boundary
- * parses, the two service refusals that refuse before reading
- * anything, and the containment case over those boundary refusals.
- * A survivor that could not be explained that way would be a case
- * asserting something it does not mean.
+ * SEVEN LEGS READ 0 AT HEAD AND REPORT HERE, which is what the
+ * body sections bought and the sharpest thing this file can say
+ * about them. Taking `bodyBytes` off the CUT text reddens 2, and
+ * pinning `bodyTruncated` to false reddens the same 2, both cap
+ * cases. Composing the two passes the other way round reddens 1,
+ * and on the FLAG rather than on the body: masking is idempotent,
+ * so a body masked before the cut answers the same text and a
+ * `kept` that no longer equals the stored row, which is
+ * `bodyTruncated` true for a body nothing was taken from.
+ * Answering `parseError` unmasked reddens 1 and answering the body
+ * unmasked reddens 1, on different cases. Narrowing the DEFAULT
+ * page to the `ok` half reddens 5. And inverting the store's
+ * narrowing reddens 1, the narrowed page alone — the partition
+ * case beside it stays green, an inverted filter still
+ * partitioning the corpus, which is exactly the gap membership was
+ * written to close.
+ *
+ * TWO LEGS READ 0 ON BOTH SIDES AND ARE RECORDED RATHER THAN
+ * WIDENED AWAY. Cutting by UTF-16 unit instead of by code point
+ * reddens nothing, no body planted here straddling an astral pair:
+ * that rule is `takeCodePoints`'s own and is held in
+ * `src/http/control-bytes.test.ts`, and planting it here would be
+ * a second authority for one function. Masking `url` as well
+ * reddens nothing, for the reason the header gives above.
  */
 import type {
   CorpusDocument,
@@ -153,6 +254,7 @@ import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
 import { DOCUMENT_PARSE_STATUSES } from '../db/schema/values.js';
+import { BODY_CODE_POINT_CAP } from '../http/control-bytes.js';
 import { paginationQuerySchema, toStoreWindow } from '../http/schemas.js';
 import { parseQuery } from '../http/validation.js';
 
@@ -234,6 +336,31 @@ const SHARED_CAP = 200;
  */
 const [OK_STATUS, FAILED_STATUS] = DOCUMENT_PARSE_STATUSES;
 
+/** Builds one character from its code point. */
+const charFrom = String.fromCharCode;
+
+/** An ESC, which lets stored text rewrite a terminal. */
+const ESC = charFrom(0x1b);
+
+/** A DEL, which `JSON.stringify` passes through as itself. */
+const DEL = charFrom(0x7f);
+
+/**
+ * The parse error the planted failure carries.
+ *
+ * IT HOLDS TWO CONTROL CHARACTERS, which is what makes the failed
+ * page's masking readable off the file's own base fixture rather
+ * than off a corpus planted for it. A message built out of the
+ * bytes that broke a parser is the likeliest stored string on this
+ * surface to carry one: the two here are the pair
+ * `JSON.stringify` would pass through raw, so a response built
+ * from an unmasked error carries them onto the wire intact.
+ */
+const FAILED_ERROR = `unexpected${ESC}end of${DEL}input`;
+
+/** What {@link FAILED_ERROR} must answer as. */
+const MASKED_FAILED_ERROR = 'unexpected\\u001bend of\\u007finput';
+
 /** When the oldest planted document was captured. */
 const FIRST_CAPTURE = '2026-03-01T00:00:00.000Z';
 
@@ -280,8 +407,9 @@ const EVERY_DOCUMENT: DocumentFilter = {};
  * failures queue beside this collection has no key to hold. And
  * their three stamps are distinct, so the page's order is a
  * function of the fixture rather than of the order they were
- * planted in — what that order IS is the next task's subject, and
- * every assertion here reads a membership or a count.
+ * planted in — what that order IS belongs to
+ * `tests/helpers/memory-research-store.test.ts`, and every
+ * assertion in this file reads a membership or a count.
  */
 const PLANTED_DOCUMENTS: readonly MemoryDomainDocument[] = [
   {
@@ -308,7 +436,7 @@ const PLANTED_DOCUMENTS: readonly MemoryDomainDocument[] = [
     url: 'https://example.test/three',
     body: 'a payload that would not parse',
     parseStatus: FAILED_STATUS,
-    parseError: 'unexpected token',
+    parseError: FAILED_ERROR,
     capturedAt: new Date(THIRD_CAPTURE),
   },
 ];
@@ -324,6 +452,24 @@ const PLANTED_COUNT = PLANTED_DOCUMENTS.length;
 const PLANTED_IDS: readonly number[] = PLANTED_DOCUMENTS.map(
   (row) => row.id,
 );
+
+/**
+ * The ids of the planted documents on each side of
+ * `documents_parse_status_check`.
+ *
+ * DERIVED FROM THE FIXTURE rather than written out, so a row that
+ * changed sides moves both rosters and no case is left asserting
+ * about a split the plant no longer has. Both are non-empty, and
+ * the case that narrows says so rather than assuming it.
+ */
+const FAILED_IDS: readonly number[] = PLANTED_DOCUMENTS
+  .filter((row) => row.parseStatus === FAILED_STATUS)
+  .map((row) => row.id);
+
+/** The other side of it, on the same terms. */
+const PARSED_IDS: readonly number[] = PLANTED_DOCUMENTS
+  .filter((row) => row.parseStatus === OK_STATUS)
+  .map((row) => row.id);
 
 /**
  * The two documents {@link plantDocuments} gives {@link SIBLING}.
@@ -418,6 +564,63 @@ async function plantDocuments(): Promise<PlantedCorpus> {
   store.setDomainDocuments(sibling.id, SIBLING_DOCUMENTS);
 
   return { store, domainId: domain.id, siblingId: sibling.id };
+}
+
+/** What a case planting a BODY says about the row it plants. */
+interface PlantedBody {
+  /** `documents.id`, which every reading below sorts by. */
+  readonly id: number;
+
+  /** The stored text, unmasked and uncut. */
+  readonly body: string;
+}
+
+/**
+ * One planted document whose only interesting member is its body.
+ *
+ * @param row - The id and the stored text.
+ * @returns A parsed capture that came through no feed and carries
+ *   no error and no url — every member the body sections do not
+ *   read set to the state that says they do not read it.
+ */
+function capturedDocument(row: PlantedBody): MemoryDomainDocument {
+  return {
+    id: row.id,
+    sourceId: null,
+    url: null,
+    body: row.body,
+    parseStatus: OK_STATUS,
+    parseError: null,
+    capturedAt: new Date(FIRST_CAPTURE),
+  };
+}
+
+/**
+ * Replaces {@link RADAR}'s corpus with rows of a case's own,
+ * leaving the rest of the fixture standing.
+ *
+ * REPLACED RATHER THAN PLANTED INTO A BARE STORE, so the sibling
+ * domain goes on holding documents of its own and every page read
+ * through this is a scoping reading too: a store that had stopped
+ * taking the domain answers rows no case here asserts.
+ *
+ * The base corpus discriminates along the axes the refusal
+ * sections narrow on. The body sections narrow on what a stored
+ * string HOLDS, which is a different fixture rather than a wider
+ * one — a cap fixture carried by every case would make each count
+ * in this file depend on a body four thousand characters long.
+ *
+ * @param documents - What {@link RADAR} holds instead.
+ * @returns The store, its other domain untouched.
+ */
+async function plantCorpus(
+  documents: readonly MemoryDomainDocument[],
+): Promise<MemoryResearchStore> {
+  const { store, domainId } = await plantDocuments();
+
+  store.setDomainDocuments(domainId, documents);
+
+  return store;
 }
 
 /** How many times each read this function issues was issued. */
@@ -623,11 +826,73 @@ function leaksIn(err: AppError, needle: string): number[] {
  * @param rows - The page a read answered.
  * @returns The ids in it, ASCENDING, for a membership reading that
  *   says nothing about the order a page came back in. What that
- *   order is belongs to the next task, and reading it here would
- *   make a refusal case able to fail for an ordering reason.
+ *   order is belongs to the store's own file, and reading it here
+ *   would make a case about a refusal or a body able to fail for
+ *   an ordering reason.
  */
 function idsOf(rows: readonly CorpusDocument[]): number[] {
   return [...rows].map((row) => row.id).sort((left, right) => left - right);
+}
+
+/** The two members every status reading below is taken over. */
+interface StatusRow {
+  /** `documents.id`. */
+  readonly id: number;
+
+  /** Which side of the check the row sits on. */
+  readonly parseStatus: string;
+}
+
+/**
+ * @param rows - A page, or the rows a page was planted from.
+ * @returns One `{ id, parseStatus }` per row, ASCENDING BY ID for
+ *   {@link idsOf}'s reason: what the page's order IS belongs to
+ *   `DocumentStore.listDocuments` and is held in the store's own
+ *   file, so a case about which rows a page carries must not be
+ *   able to fail for an ordering reason.
+ *
+ * @remarks
+ * Structural rather than typed to either shape, so a planted
+ * {@link MemoryDomainDocument} and an answered
+ * {@link CorpusDocument} go through one reader and the comparison
+ * is between two renderings of one fact.
+ */
+function statusesById(rows: readonly StatusRow[]): StatusRow[] {
+  return [...rows]
+    .map((row) => ({ id: row.id, parseStatus: row.parseStatus }))
+    .sort((left, right) => left.id - right.id);
+}
+
+/**
+ * Every code point a response must not carry raw: C0, DEL, C1 and
+ * both surrogate ranges.
+ *
+ * @param text - The text to read, decoded rather than scanned as
+ *   UTF-16 units: `[...text]` walks CODE POINTS, so a valid astral
+ *   pair arrives as one element above U+FFFF and only a surrogate
+ *   standing on its own is ever in the range below.
+ * @returns The offending code points in the order they occur, so a
+ *   zero can be read against a known positive taken by this same
+ *   function in the same case.
+ *
+ * @remarks
+ * A SECOND READER RATHER THAN THE MODULE'S OWN CLASS. Numeric
+ * comparisons rather than a pattern, so this cannot agree with a
+ * masking regex however wrong that regex is — the whole value of
+ * re-reading an output is that the reader shares nothing with
+ * whatever wrote it. `src/sources/failures-service.test.ts` keeps
+ * the same reader over the same two members of the same table,
+ * spelled again rather than shared for the reason every refusal
+ * message on this surface is: two collections agreeing about a
+ * mask because one imported the other's test helper would leave
+ * neither able to report the day the other moved.
+ */
+function unsafeCodePoints(text: string): number[] {
+  return [...text]
+    .map((character) => character.codePointAt(0) ?? 0)
+    .filter((code) => code <= 0x1f
+      || (code >= 0x7f && code <= 0x9f)
+      || (code >= 0xd800 && code <= 0xdfff));
 }
 
 /**
@@ -824,10 +1089,10 @@ describe('a parse status outside the tuple', () => {
   it('drives the store with each declared member', async () => {
     // What ties the tuple to the port: every status the schema
     // takes is a narrowing `DocumentStore` accepts, driven end to
-    // end over the planted rows. WHICH rows each answers is the
-    // next task's subject, so this reads a total against the port
-    // asked the same question directly — two derivations of one
-    // narrowing rather than a number written out here.
+    // end over the planted rows. WHICH rows each answers is
+    // `what a page carries` below, so this reads a total against
+    // the port asked the same question directly — two derivations
+    // of one narrowing rather than a number written out here.
     const { store, domainId } = await plantDocuments();
     const halves = await Promise.all(DOCUMENT_PARSE_STATUSES.map(
       async (status) => ({
@@ -848,7 +1113,7 @@ describe('a parse status outside the tuple', () => {
     // true for every row satisfies them together; what it cannot
     // satisfy is a PARTITION. The two halves sum to the corpus and
     // neither is the whole of it — a shape rather than a list of
-    // ids, WHICH rows land on each side being the next task's.
+    // ids, WHICH rows land on each side being read below.
     const whole = await pageOf(store, RADAR, {});
     const totals = halves.map((half) => half.page.total);
 
@@ -1031,5 +1296,325 @@ describe('what a refusal carries', () => {
     expect(refusals.map(
       (refusal) => detailsOf(refusal.details as FieldError[] | undefined),
     ).map((details) => details.length)).toEqual([1, 1]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a page carries
+// ---------------------------------------------------------------------------
+
+describe('what a page carries', () => {
+  it('carries both parse statuses when nothing narrows', async () => {
+    // A failed document is IN the corpus rather than behind a
+    // flag, so the default page is the whole of it. Read ROW BY
+    // ROW rather than as a total: a page quietly serving the `ok`
+    // half alone still answers a total that adds up against a
+    // count taken through the same predicate, which is the shape
+    // the partition case above exists to work around.
+    const { store } = await plantDocuments();
+    const page = await pageOf(store, RADAR, {});
+
+    expect(statusesById(page.rows))
+      .toEqual(statusesById(PLANTED_DOCUMENTS));
+    expect(page.total).toBe(PLANTED_COUNT);
+
+    // Both members of the tuple are really on it, stated against
+    // `DOCUMENT_PARSE_STATUSES` rather than against two literals —
+    // and the FIXTURE is asserted able to report that in the same
+    // case, since a page holding one status is green against a
+    // corpus that only ever held one.
+    const onPage = new Set(page.rows.map((row) => row.parseStatus));
+
+    expect(onPage).toEqual(new Set(DOCUMENT_PARSE_STATUSES));
+    expect(new Set(PLANTED_DOCUMENTS.map((row) => row.parseStatus)))
+      .toEqual(onPage);
+
+    // And the sibling answers its own rows, both statuses again,
+    // over ids this page does not hold: the reading stays a
+    // scoping one, so a store that had stopped taking the domain
+    // answers five rows where three are asserted.
+    const sibling = await pageOf(store, SIBLING, {});
+
+    expect(statusesById(sibling.rows))
+      .toEqual(statusesById(SIBLING_DOCUMENTS));
+    expect(idsOf(sibling.rows)).not.toEqual(idsOf(page.rows));
+  });
+
+  it('narrows to failures and masks the error each carries', async () => {
+    // Two claims over one page and neither is the other's. WHICH
+    // rows a narrowing keeps — the partition case above reads the
+    // two halves as counts and says nothing about membership — and
+    // what the masking does to the member a failed row is the most
+    // likely of any to carry a control byte in.
+    const { store } = await plantDocuments();
+    const page = await pageOf(store, RADAR, {
+      parseStatus: FAILED_STATUS,
+    });
+
+    expect(idsOf(page.rows)).toEqual([...FAILED_IDS]);
+    expect(page.total).toBe(FAILED_IDS.length);
+    expect(page.rows.map((row) => row.parseStatus))
+      .toEqual(FAILED_IDS.map(() => FAILED_STATUS));
+    expect(page.rows.map((row) => row.parseError))
+      .toEqual(FAILED_IDS.map(() => MASKED_FAILED_ERROR));
+
+    // Re-read rather than asserted absent, and against a positive
+    // taken by the same reader in the same case: the STORED error
+    // carries exactly the two code points and the answered one
+    // carries neither. A search that could only ever answer
+    // nothing reports a masked error and an unmasked one alike.
+    const [failed] = page.rows;
+
+    expect(unsafeCodePoints(failed?.parseError ?? '')).toEqual([]);
+    expect(unsafeCodePoints(FAILED_ERROR)).toEqual([0x1b, 0x7f]);
+
+    // The complement, which is what makes `only failures` a
+    // reading rather than a page that happened to be short: the
+    // other half is really there, this page left it out, and every
+    // row of it carries no error for the mask to have written.
+    const parsed = await pageOf(store, RADAR, {
+      parseStatus: OK_STATUS,
+    });
+
+    expect(idsOf(parsed.rows)).toEqual([...PARSED_IDS]);
+    expect(parsed.rows.map((row) => row.parseError))
+      .toEqual(PARSED_IDS.map(() => null));
+    expect(PARSED_IDS.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the masking takes out
+// ---------------------------------------------------------------------------
+
+/** A NUL, which silences a diff and a grep of whatever holds it. */
+const NUL = charFrom(0x00);
+
+/**
+ * A high surrogate standing on its own.
+ *
+ * A STORED BODY CAN CARRY ONE: a truncating writer, a bad
+ * transcode or a parser that gave up mid-character each leave one
+ * behind, and it is the one character class that cannot be
+ * serialized as itself.
+ */
+const LONE_SURROGATE = charFrom(0xd800);
+
+/**
+ * One astral character, as its two UTF-16 halves.
+ *
+ * Built from code units rather than written as itself, so this
+ * file carries no character a reviewer's editor renders
+ * differently from the next one's.
+ */
+const ASTRAL_PAIR = charFrom(0xd83d, 0xde00);
+
+/** A stored body carrying a C0 control, a lone half and a pair. */
+const CONTROL_BODY =
+  `a page${NUL}holding${LONE_SURROGATE}and${ASTRAL_PAIR}`;
+
+/** What {@link CONTROL_BODY} must answer as. */
+const MASKED_CONTROL_BODY =
+  `a page\\u0000holding\\ud800and${ASTRAL_PAIR}`;
+
+describe('what the masking takes out', () => {
+  it('answers a NUL and a lone surrogate as their escapes', async () => {
+    const store = await plantCorpus([capturedDocument({
+      id: 401,
+      body: CONTROL_BODY,
+    })]);
+    const page = await pageOf(store, RADAR, {});
+    const [answered] = page.rows;
+
+    expect(answered?.body).toBe(MASKED_CONTROL_BODY);
+
+    // Re-read through {@link unsafeCodePoints}, which shares
+    // nothing with the class the module masks by: the stored body
+    // carries exactly the two code points and the answered one
+    // carries neither. Both readings taken in the same case, so
+    // the zero is held against a known positive.
+    expect(unsafeCodePoints(answered?.body ?? '')).toEqual([]);
+    expect(unsafeCodePoints(CONTROL_BODY)).toEqual([0x00, 0xd800]);
+
+    // The valid pair beside them is UNTOUCHED, which is what says
+    // only a surrogate standing on its own is masked. That rests
+    // on the `u` flag on the module's class: dropped, this
+    // character answers as two escapes while every assertion above
+    // goes on holding, so the pair is asserted present AND its
+    // escaped spelling asserted absent.
+    expect(answered?.body.includes(ASTRAL_PAIR)).toBe(true);
+    expect(answered?.body.includes('\\ud83d')).toBe(false);
+
+    // Nothing was cut, and `bodyBytes` is the STORED length rather
+    // than the answered one. Masking is expansive — two characters
+    // became twelve — so the two numbers disagree here, which is
+    // what makes the member a reading rather than a coincidence of
+    // a body with nothing in it to mask.
+    expect(answered?.bodyTruncated).toBe(false);
+    expect(answered?.bodyBytes)
+      .toBe(Buffer.byteLength(CONTROL_BODY, 'utf8'));
+    expect(answered?.bodyBytes)
+      .not.toBe(Buffer.byteLength(answered?.body ?? '', 'utf8'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the cap keeps and what it cuts
+// ---------------------------------------------------------------------------
+
+/** How many code points past the cap the long body runs. */
+const OVERSHOOT = 64;
+
+/** What the front of every body in this section carries. */
+const HEAD_MARK = 'head-of-the-corpus';
+
+/** What its tail carries, which the cut has to take. */
+const TAIL_MARK = 'tail-of-the-corpus';
+
+/**
+ * A body of exactly {@link BODY_CODE_POINT_CAP} code points.
+ *
+ * MARKED AT BOTH ENDS rather than a run of one character, and that
+ * is what makes the boundary readable: a uniform body equals every
+ * slice of itself of the same length, so a cut written as `>=`
+ * rather than `>` would take a character nothing could see going.
+ */
+const AT_CAP_BODY = HEAD_MARK
+  + 'x'.repeat(BODY_CODE_POINT_CAP - HEAD_MARK.length - TAIL_MARK.length)
+  + TAIL_MARK;
+
+/**
+ * The same body with one more code point on the end.
+ *
+ * ONE PAST, so the pair below differs in exactly the axis under
+ * test — and what the cut answers for it is {@link AT_CAP_BODY}
+ * itself, which is the sharpest available spelling of the cut
+ * taking exactly the overshoot and nothing else.
+ */
+const ONE_PAST_CAP_BODY = AT_CAP_BODY + 'x';
+
+/** A character UTF-8 spends two bytes on. */
+const TWO_BYTE_CHAR = charFrom(0x00e9);
+
+/** How many of those sit past the cap in the long body. */
+const WIDE_RUN = OVERSHOOT - TAIL_MARK.length;
+
+/**
+ * A body {@link OVERSHOOT} code points past the cap, whose tail is
+ * not ASCII.
+ *
+ * THREE NUMBERS THAT MUST NOT BE CONFUSED, which is what the wide
+ * tail buys and what an ASCII fixture cannot say. Its stored BYTES
+ * exceed its stored CODE POINTS, and both exceed the bytes of what
+ * the cut answers — so a `bodyBytes` taken off the cut text and a
+ * `bodyBytes` counting stored characters are two different wrong
+ * answers, and neither of them is the right one.
+ *
+ * {@link TAIL_MARK} falls wholly past the cap, so what the answer
+ * keeps and what it drops are each readable by a mark rather than
+ * by a length.
+ */
+const PAST_CAP_BODY = HEAD_MARK
+  + 'x'.repeat(BODY_CODE_POINT_CAP - HEAD_MARK.length)
+  + TAIL_MARK
+  + TWO_BYTE_CHAR.repeat(WIDE_RUN);
+
+describe('what the cap keeps and what it cuts', () => {
+  it('answers a body at the cap whole and cuts the next', async () => {
+    // The bracket rather than the boundary alone: a service that
+    // never cut anything passes an at-cap row on its own, and a
+    // service that cut everything passes a past-cap row on its
+    // own. The two rows differ by ONE code point.
+    const store = await plantCorpus([
+      capturedDocument({ id: 411, body: AT_CAP_BODY }),
+      capturedDocument({ id: 412, body: ONE_PAST_CAP_BODY }),
+    ]);
+    const page = await pageOf(store, RADAR, {});
+    const answered = [...page.rows]
+      .sort((left, right) => left.id - right.id)
+      .map((row) => ({
+        id: row.id,
+        body: row.body,
+        bodyBytes: row.bodyBytes,
+        bodyTruncated: row.bodyTruncated,
+      }));
+
+    expect(answered).toEqual([
+      {
+        id: 411,
+        body: AT_CAP_BODY,
+        bodyBytes: BODY_CODE_POINT_CAP,
+        bodyTruncated: false,
+      },
+      {
+        id: 412,
+        body: AT_CAP_BODY,
+        bodyBytes: BODY_CODE_POINT_CAP + 1,
+        bodyTruncated: true,
+      },
+    ]);
+
+    // The two fixtures really sit where the case says, derived
+    // from the exported constant rather than transcribed: a cap
+    // that moved takes them with it instead of leaving this green
+    // against a number nobody re-read.
+    expect([...AT_CAP_BODY]).toHaveLength(BODY_CODE_POINT_CAP);
+    expect([...ONE_PAST_CAP_BODY])
+      .toHaveLength(BODY_CODE_POINT_CAP + 1);
+
+    // And the mark the boundary is read by is really on the end of
+    // the shorter one, so `>=` in place of `>` takes something a
+    // reader can name.
+    expect(AT_CAP_BODY.endsWith(TAIL_MARK)).toBe(true);
+  });
+
+  it('cuts a body past the cap and reports its stored bytes', async () => {
+    const store = await plantCorpus([capturedDocument({
+      id: 421,
+      body: PAST_CAP_BODY,
+    })]);
+    const page = await pageOf(store, RADAR, {});
+    const [answered] = page.rows;
+
+    expect([...answered?.body ?? '']).toHaveLength(BODY_CODE_POINT_CAP);
+    expect(answered?.bodyTruncated).toBe(true);
+
+    // The STORED byte length, and a second derivation of it that
+    // shares nothing with the call the module makes: the cap's
+    // worth of ASCII, the mark past it, and two bytes for each
+    // character of the wide tail.
+    const storedBytes = BODY_CODE_POINT_CAP
+      + TAIL_MARK.length
+      + (2 * WIDE_RUN);
+
+    expect(answered?.bodyBytes).toBe(storedBytes);
+    expect(answered?.bodyBytes)
+      .toBe(Buffer.byteLength(PAST_CAP_BODY, 'utf8'));
+
+    // The three numbers, held apart. Stored bytes exceed stored
+    // code points because the tail is not ASCII, and both exceed
+    // the bytes of what was answered — so `bodyBytes` taken off
+    // the cut text and `bodyBytes` counting stored characters are
+    // each a different wrong answer this reads as wrong.
+    expect(answered?.bodyBytes)
+      .toBeGreaterThan([...PAST_CAP_BODY].length);
+    expect([...PAST_CAP_BODY])
+      .toHaveLength(BODY_CODE_POINT_CAP + OVERSHOOT);
+    expect(answered?.bodyBytes)
+      .toBeGreaterThan(Buffer.byteLength(answered?.body ?? '', 'utf8'));
+
+    // What was KEPT is the front of the stored body. The two marks
+    // are what make that readable: a cut taking the tail answers
+    // the same length and the same flag and would differ from this
+    // in nothing else.
+    expect(answered?.body)
+      .toBe(PAST_CAP_BODY.slice(0, BODY_CODE_POINT_CAP));
+    expect(answered?.body.startsWith(HEAD_MARK)).toBe(true);
+    expect(answered?.body.includes(TAIL_MARK)).toBe(false);
+
+    // And the stored body really carries the mark the answer does
+    // not, so the `false` above is a reading rather than a needle
+    // that was never in the haystack.
+    expect(PAST_CAP_BODY.includes(TAIL_MARK)).toBe(true);
   });
 });
