@@ -675,15 +675,22 @@ Reading a run:
 - The `&&` short-circuits. A red vitest means Playwright never ran, so
   the ABSENCE of a Playwright section from a capture is not evidence
   that it passed. Read BOTH summaries.
-- This package is the ONLY source of the root fan-out's pass-glyph
+- This package is the only source of the fan-out's VARIABLE pass-glyph
   ticks, so growing THIS suite is what moves a figure the root
-  `AGENTS.md` discusses as invariant under vitest growth. Measured
+  `AGENTS.md` discusses as invariant under vitest growth. It is NOT the
+  only source outright, and a decomposition says so: measured at
+  `879429b`, the 150 split by prefix as `@ar/web test:` 146 (Playwright
+  per-case lines, every one carrying `[chromium]`), `@ar/web pretest:
+  @ar/ui build:` 2, and `@ar/ui pretest:` 2 — that last pair being
+  `@ar/ui`'s own script, which no run of this package emits. Measured
   across q15: 27 Playwright cases contributing a fan-out total of 31,
   then 146 contributing 150, the constant 4 being two vite build ticks
   apiece from the `@ar/ui` and `@ar/web` pretests. Decompose that total
   BY PREFIX rather than quoting it — the vitest reporter contributes
-  exactly zero of them, so the whole figure is this package's Playwright
-  count plus 4.
+  exactly zero of them, measured over 5561-, 1535-, 45- and 18-case
+  runs, so the whole figure is this package's Playwright count plus 4.
+  A package-scope `bun run test` here reads 148, exactly the `@ar/web`
+  top-level bucket, which is what reconciles the two scopes.
 - Both runners fail CLOSED on an empty suite — `vitest run` exits 1 on
   no matching files, and `playwright test` exits 1 with `No tests
   found` before the webServer even starts. Do not reach for

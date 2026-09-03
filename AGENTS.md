@@ -1108,13 +1108,20 @@ matching anything prints exactly the same five lines.
 - Un-TARGETED is not un-LINTABLE, and the gap between the two hides a real
   error nobody will ever be shown. The base config's markdown block DOES
   carry rules for a package-root `.md`: an explicit-path `bun x eslint -f
-  json AGENTS.md` from inside `packages/web` returned neither the
+  json AGENTS.md` from inside `packages/web` once returned neither the
   covered-and-clean shape NOR an ignore warning, but one severity-2
-  `markdown/fenced-code-language` naming a route-diagram fence —
-  pre-existing, confirmed by reading the merge-base blob. Run the
-  explicit-path form once on any package-root docs task: it is the ONLY
-  reading that exists, no fan-out line is evidence about the file, and a
-  fence or link fault introduced there is invisible forever.
+  `markdown/fenced-code-language` naming a route-diagram fence. That
+  example is HISTORICAL and no longer reproduces — the fence has since
+  been tagged, and at `ee338e3` and after, that file carries two fenced
+  blocks with a language apiece and the run answers the covered-and-clean
+  shape at exit 0. So the zero there needs the planted control the ROOT
+  file's own bullet below prescribes, and it passes it: appending a
+  languageless fence reds the same run at exit 1 naming
+  `markdown/fenced-code-language`, and restoring leaves the file
+  byte-identical. Run the explicit-path form once on any package-root
+  docs task: it is the ONLY reading that exists, no fan-out line is
+  evidence about the file, and a fence or link fault introduced there is
+  invisible forever.
 - The covered-and-clean shape has NO liveness of its own, and for the ROOT
   `AGENTS.md` it is a zero over an EMPTY rule surface: that file carries
   ZERO fenced code blocks, so the one markdown rule measured to fire here
