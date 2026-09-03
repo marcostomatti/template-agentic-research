@@ -2975,3 +2975,149 @@ The route answers one row and never the list. What it did is one act,
 and what the finding now stands at is a question about the finding —
 `GET /findings/:id` is where the sequence is read, newest first and
 whole.
+
+## Documents
+
+### A corpus is met in its domain, and there is no second address
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /domains/:slug/documents` | `200` with one page of the domain's corpus, `captured_at` descending with `id` descending breaking a tie, plus `meta`. `404` for an unknown slug, `422` for a segment that is not a slug, for a `?parseStatus` outside `DOCUMENT_PARSE_STATUSES`, and for the pagination faults every list route answers — an undeclared parameter among them, naming `query` rather than the parameter. Never `409`. |
+
+`buildDocumentsRouter` in `src/documents/routes.ts` declares that one
+route and decides nothing in it: the handler reads the address, takes
+the query apart into a filter and a window, calls `listDocuments` in
+`src/documents/service.ts`, and chooses a status.
+
+The collection hangs off `/domains/:slug` because a corpus is what a
+domain's polls brought in, and a caller holding a slug should not have
+to look an id up to read one. Nothing here addresses a single
+document: there is no `GET /documents/:id`, so the `/documents` prefix
+`The five prefixes wave 3 adds` above tabulates is claimed against the
+framework and the earlier waves rather than taken. What the claim buys
+is that the name stays free for the route that would want it, which is
+`A domain is addressed by slug` above applied to a table this wave
+does not address by id.
+
+The window is the ordinary one and departs from nothing above: `?page`
+and `?perPage` through `paginationQuerySchema`, defaulting to 50,
+refused above 200, and a page past the end answering an empty list. A
+domain that has captured nothing answers an empty list too, with a
+`200` — which is what tells it apart from a slug no domain carries,
+and what the lookup in front of both document reads exists for.
+
+### One route, one verb, and no writer on the store behind it
+
+This router registers `get` and no other verb, and the store it holds
+is the `Pick` pair `src/documents/service.ts` declares: one domain
+read, and the two methods `DocumentStore` has, both of them reads.
+There is no third method on that port left out of the narrowing — the
+port declares two — so read-only here is the whole port rather than a
+slice of one that keeps more.
+
+`Read-first` above states that law once for the wave and names the
+small edit it exists to stop. This is the group where that edit reads
+most like an improvement: a page showing a document whose parse failed
+is one line from offering to re-run it. What stops it is that there
+would be nothing on the store to call. Re-parsing is a pipeline
+operation with a cost and a dedupe question attached, and only the
+writer that saw a parse fail can record that it did — nothing reading
+a stored row later can work that out.
+
+`The queue under this prefix is read-only` above took the same shape
+one prefix over a wave earlier. Two routers now read `documents` and
+neither can write a row of it, which is the arrangement rather than a
+coincidence: `src/documents/store.ts` and `SourceStore` are two ports
+over one table, split by what each collection is for.
+
+### A failed document is in the default page, not behind a flag
+
+An absent `?parseStatus` is BOTH members of the set rather than
+neither, so the ordinary request over this collection answers a mixed
+page. There is no spelling here that widens, because nothing has been
+narrowed to widen back.
+
+That follows the column rather than this surface. A payload its
+contract rejects is STORED with its `parse_error` rather than dropped,
+the source's failure counter is bumped, and a run of rejections trips
+`sources.flagged` — fail-flag-keep, the rule
+`src/db/schema/documents.ts` records at `parse_status`. The row is the
+keep and the column is the flag, and a page that hid the flagged half
+would be answering about a corpus the pipeline does not have.
+
+The debug reading is what the default is for. An operator reaching for
+this collection is asking what the last poll brought in, and the rows
+worth seeing first are the ones every other reader has already put
+aside: what scores is what parsed, what a digest carries is what
+scored, and a default here that agreed with them would hide the
+disagreement precisely where somebody is looking for it. A flag would
+make finding those rows an extra request that has to be known about,
+which is the same thing as hiding them.
+
+Because the page carries both members, every row answers its own
+`parseStatus` as stored. A reader shown a mixed page is owed the
+column that says which of the two a row is, and it is answered on
+every row rather than only on a narrowed one.
+
+### `?parseStatus` is refused at the boundary, not paged empty
+
+A `?parseStatus` outside `DOCUMENT_PARSE_STATUSES` is a `422` naming
+the parameter, raised before the domain is resolved and before any
+document is read. It is not passed through to a page that would come
+back empty.
+
+That is the opposite of what `Connectors` above does with its `?kind`,
+and the two are worth reading together, because what separates them is
+what a value can MEAN rather than a preference about strictness. A
+connector kind is an open registry a deployment extends, so a kind no
+row carries is a question about the rows and an empty page answers it
+honestly. A parse status is a two-member CHECK constraint, so a third
+value is not a status the corpus happens to lack — it is a value the
+column cannot hold, and an empty page would answer it as though the
+corpus simply held none.
+
+Inside the tuple the rule flips back. `?parseStatus=failed` over a
+domain whose captures all parsed is a `200` with an empty `data`, on
+the terms `A page past the end is an empty list` above sets: a member
+of the set that no row carries is a fact about the rows, and a domain
+whose feeds are all healthy is not a failure to read.
+
+What reaches the port is a value object rebuilt member by member
+rather than the parsed query forwarded whole, so `?page` never crosses
+a boundary that has no use for it, and a parameter added to the wire
+reaches the store only when somebody adds it there too.
+
+### The body is masked and cut, and this router chooses neither
+
+Every row's `body` is answered cut to `BODY_CODE_POINT_CAP` code
+points and then masked, its `parseError` is answered masked and uncut,
+and `bodyBytes` and `bodyTruncated` travel beside them. The `url` is
+answered as stored, which is the narrower promise of the three and is
+recorded here rather than left to be discovered.
+
+Three sections above carry the arguments and this is the sentence that
+says which layer holds them. `Two surfaces cut at one cap` above is
+why the number is one binding rather than two; `The second reader is
+held to the masking` above is why this page masks what parsed as well
+as what failed; `bodyBytes` above is why the length answered is the
+STORED one and why the cut is by code point rather than by UTF-16
+unit.
+
+What belongs to this group is the ORDER of the two passes and the one
+member left out of them. The cut runs on the stored text and the
+masking on what the cut answered: masking first would let a single
+control byte spend six of the cap's budget, and would let the cut land
+in the middle of an escape the masking had just written. `parseError`
+is masked and never cut, because it is a sentence a writer in this
+system composed rather than a payload somebody else sent, and cutting
+one would take the end of the sentence that names the fault — where
+cutting a body takes the end of somebody else's document, which is
+what the cap is for.
+
+Neither pass is in the router. `src/documents/service.ts` runs both
+before any row reaches a handler, so nothing on this route trims a
+string it was given or escapes a byte it was handed, and a handler
+that did either would be a second rule nobody would notice drifting
+from the first. `The failures queue` above says the same of the review
+surface, which is the other reader of the same two passes over the
+same table.
