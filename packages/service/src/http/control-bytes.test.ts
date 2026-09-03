@@ -14,7 +14,7 @@
  * than about either pass: that `BODY_CODE_POINT_CAP` is ONE binding
  * and not two literals that agree. The value the failures service
  * forwards is held against the declaration, and both module sources
- * are read for a second declaration @@ the equality alone is
+ * are read for a second declaration — the equality alone is
  * satisfied by a re-declared literal, and the source reading alone
  * would be satisfied by a module that had stopped importing it.
  *
@@ -59,6 +59,22 @@
  * shape roster, the prefix check, the changed-against-unchanged
  * split — which is what says those read the table rather than the
  * rule, and would report a case list that had quietly gone empty.
+ *
+ * One further reading is what those three cap cases CANNOT report,
+ * and it is measured rather than assumed: editing the declared
+ * VALUE reddens none of them, at any value. All three derive their
+ * fixtures from the constant, which is what exporting it is for —
+ * and what makes a value edit no evidence at all that the
+ * promotion is live. Measured over `bun run test src/sources
+ * src/http`, 628 cases: 2048 reddens 0, 4097 reddens 1 and 8
+ * reddens 6, every red in the failures queue and none in this
+ * file. The 4097 red is a PARITY accident rather than a cap
+ * reading — the astral fixture stops straddling a pair, so that
+ * case's own naive-slice control is what refuses. The 8 reds are
+ * the reading that does report: six failures-queue cases carry
+ * body fixtures written as literals rather than derived, so they
+ * see this module's number through the service importing it. What
+ * reports a SECOND declaration is the source read, not a value.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
