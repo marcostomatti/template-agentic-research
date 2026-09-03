@@ -375,10 +375,11 @@ const MAIL_TARGET_ID = exportTargetId('mail-drafts');
  *
  * The set covers four of the five `ExportFormat` members. The
  * fifth, `notion_md`, is left UNSUBSCRIBED on purpose: the tools
- * surface renders a toggle per format rather than a row per
- * subscription, so a format nothing subscribes to is the OFF state
- * that list has to render, and a fixture set covering every member
- * would leave it unrehearsed.
+ * surface names the formats a domain receives nothing under in one
+ * sentence under its toggle list, and a fixture set covering every
+ * member would leave that sentence unrehearsed. A sentence rather
+ * than an OFF toggle because subscribing to a new format is an
+ * insert, which the write seam cannot perform.
  *
  * Two pairs make the natural key
  * `export_subscriptions_domain_id_format_connector_id_unique` the
