@@ -1,6 +1,6 @@
 # AGENTS — @ar/web
 
-The web app: Vite + React 19 + react-router v7 over `@ar/ui`. It runs
+The web app: Vite + React 19 + react-router v8 over `@ar/ui`. It runs
 with `bun run dev` against NO backend — every surface is fixture-backed
 end to end (no database, no `@ar/service`, no network), which is what
 makes the shell demonstrable before the API exists, and what the data
@@ -77,7 +77,7 @@ point branches on which of the two is live:
   matched route, where path-relative would climb one segment and land
   on a path no route declares.
 - `domainBase` THROWS on a slug that is not one lowercase path
-  segment, and the chrome calls it on every render. react-router v7
+  segment, and the chrome calls it on every render. react-router
   cannot constrain a path parameter with a regex, so `/d/Bad/digest`
   MATCHES the pattern and would take the whole shell down instead of
   rendering not-found. `DomainGuard` is the route element that catches

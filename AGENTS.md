@@ -9,7 +9,7 @@ expose/export results over multiple formats/protocols (MCP, Markdown, RSS, …).
 | Path | Package | What it is |
 |---|---|---|
 | `packages/ui` | `@ar/ui` | Component library (CVA + Tailwind 4 + Radix), Storybook workbench, visual regression harness. Vendored fork of the `components-library` template. |
-| `packages/web` | `@ar/web` | The web app (Vite + React 19 + react-router v7), consumes `@ar/ui`. Fixture-backed: the shell and all six surfaces run with no backend. Its own `AGENTS.md` carries the two route bases, the API swap seam and the two-runner test seam. |
+| `packages/web` | `@ar/web` | The web app (Vite + React 19 + react-router v8), consumes `@ar/ui`. Fixture-backed: the shell, all six surfaces and the seven modal sub-routes run with no backend, writes included — an editor's save lands in a session draft store that lives for the tab and is deleted with the fixture modules. Its own `AGENTS.md` carries the two route bases, the API swap seam, and the test seam's two runners and two Playwright configs. |
 | `packages/service` | `@ar/service` | Express + MCP service (drizzle/Postgres), vendored fork of the `template-service-express` template. Future home of the research pipeline stack (workflows, sources, exports). |
 | `tools/ralph` | — | The agent task loop (`bun run ralph plan|start|usage` from the repo root). Plans/trackers live in `.plans/`. |
 

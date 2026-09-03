@@ -24,7 +24,7 @@
  * rail resolves the base on every render, a malformed slug that MATCHED
  * `/d/:domainSlug` would throw through the chrome rather than render a
  * not-found page. The route tree is where that has to be caught —
- * react-router v7 has no pattern-level param constraint, so the check
+ * react-router has no pattern-level param constraint, so the check
  * belongs in the route element or a loader.
  *
  * ## The brand block

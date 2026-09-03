@@ -10,7 +10,7 @@
  * mistyped domain address takes the whole shell down instead of
  * rendering a page.
  *
- * react-router v7 cannot express the constraint on the pattern — a path
+ * react-router cannot express the constraint on the pattern — a path
  * pattern carries no regex — so it has to live in the route element,
  * which is what this is.
  *
