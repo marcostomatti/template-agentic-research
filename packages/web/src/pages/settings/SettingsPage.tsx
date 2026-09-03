@@ -1,13 +1,8 @@
 /**
  * @packageDocumentation
  * The settings surface: the preferences that belong to the operator
- * rather than to any one research domain, and the one screen in this
- * shell that saves nothing — for as long as that stays true. The seam
- * grew somewhere to put them since this was written
- * (`../../data/api.ts`'s `saveSettings`, over a singleton slot in
- * `../../data/drafts.ts`); what has not happened yet is this page
- * calling it, so every sentence below about a change being lost is
- * still an accurate reading of what an operator meets here.
+ * rather than to any one research domain, and the one surface here
+ * whose save is a page action rather than a modal's footer.
  *
  * ## Why it is not a list page
  *
@@ -35,40 +30,62 @@
  * sections need the settings alone, and the operator section needs
  * neither.
  *
- * ## The controls are live, and the page says they are not saved
+ * ## The controls are live, and a save keeps them for one tab
  *
- * `Settings` mirrors no table. There is no column, no endpoint, and a
- * schema decision still open behind every control here — so the
- * choice was never between a live control and a disabled one. A
+ * `Settings` still mirrors no table: no column, no HTTP endpoint, and
+ * a schema decision still open behind every control here. What there
+ * is instead is the write seam — `../../data/api.ts`'s `saveSettings`
+ * over the singleton slot in `../../data/drafts.ts`, reached through
+ * `useSaveSettings` like every other write in this app — and what it
+ * stores it stores for the LIFE OF THE TAB. A saved preference
+ * survives a domain switch, a walk to another surface and back, and
+ * every re-read in between; it is gone on reload, because that store
+ * is module state and touches no storage at all.
+ *
+ * The banner above the column says exactly that, and it is not
+ * decoration — it is the difference between a save that forgets and
+ * one that forgets silently. `./fields.ts` owns the delta, the
+ * payload and the argument behind both.
+ *
+ * The controls could not have been drawn any other way in any case. A
  * `Select` cannot be disabled at all (`SelectProps` carries no such
  * prop and spreads nothing onto its trigger), and a switch drawn
  * `disabled` costs the section the library's `disabled:opacity-50`,
  * which reads as a section that failed to load rather than one that is
  * up to date.
  *
- * What ships instead is the lexicon card's answer: a delta held for
- * the life of the tab, plus the sentence the lexicon did not need. The
- * banner above the column is not decoration — it is the difference
- * between a control that forgets and a control that forgets silently.
- * `./fields.ts` owns the delta and the argument behind it.
- *
- * The two operator fields are the exception, and the line is the value
- * set rather than the storage: a select and a switch can only take
- * values this deployment already knows, so a delta over one is a
- * complete reading of what it would do. A text box accepts anything,
- * and echoing back an address that no channel has validated and
- * nothing will keep is a fabrication rather than a reading. Those two
- * are `disabled` AND `readOnly` — the variant is the only way to
+ * The two operator fields are the exception, for the reason
+ * `./fields.ts` gives: the line is the VALUE SET rather than the
+ * storage. A select and a switch can only take values this deployment
+ * already knows, so a saved reading of one is a complete reading of
+ * what it would do. A text box accepts anything, and `Settings` names
+ * no member for an operator anyway — so there is nowhere in the
+ * payload for a name or an address to go, seam or no seam. Those two
+ * are `disabled` AND `readOnly`: the variant is the only way to
  * disable a `Field`, and `readOnly` is what says the value is not
  * being collected, independently of how the control looks.
  *
- * ## No save button
+ * ## The save button, and the two ways the chip clears
  *
- * A primary action in the head would be the one control on this page
- * that could not work at all. The unsaved chip beside the title
- * reports the state instead, and disappears the moment the operator
- * puts every control back where they found it — which is what the
- * delta's drop-on-equal rule is for.
+ * `PageHead`'s `action` slot carries it — the one control this
+ * surface leads with, and the first use of that slot in the app. It
+ * is live only while `./fields.ts` says there is something to send:
+ * a settled read to build the payload out of, a draft holding an
+ * override, and no save already in flight.
+ *
+ * The chip beside the title reports the unsaved delta, and it clears
+ * two ways. Putting every control back where they were empties the
+ * draft through the drop-on-equal rule, with no save at all; a save
+ * empties it here, in `mutate`'s own `onSuccess`. That callback runs
+ * AFTER the hook's — `../../data/hooks.ts` hands the invalidation
+ * promise back rather than firing it and moving on — so by the time
+ * the draft is dropped the settings read has already answered with
+ * the saved values, and no frame draws the ones it replaced.
+ *
+ * Nothing renders a save FAILURE, and that is a reading rather than
+ * an omission: `saveSettings` takes no slug, so it has nothing to
+ * refuse, and `../../data/api.ts` says outright that it cannot
+ * reject. A notice here would be one nothing could reach.
  *
  * Nothing in this file is reachable from the unit suite, which is
  * node-only and collects `.ts` alone. Its bindings are proven by a
@@ -88,6 +105,7 @@ import type { ReactNode } from 'react';
 
 import {
   Banner,
+  Button,
   EmptyState,
   Field,
   SectionCard,
@@ -99,7 +117,12 @@ import {
 import { useId, useState } from 'react';
 
 import { PageHead } from '../../components/PageHead';
-import { useDomains, useOperator, useSettings } from '../../data/hooks';
+import {
+  useDomains,
+  useOperator,
+  useSaveSettings,
+  useSettings,
+} from '../../data/hooks';
 import { NOTIFICATION_CHANNELS } from '../../data/settings';
 import { getSurface } from '../../routes/paths';
 
@@ -107,6 +130,7 @@ import {
   EMPTY_DRAFT,
   FORMAT_OPTIONS,
   cadenceOptions,
+  canSaveSettings,
   channelFacet,
   domainOptions,
   effectiveSettings,
@@ -123,14 +147,19 @@ import {
 const SURFACE_ID = 'settings';
 
 /** What the banner over the column says, and why it is there. */
-const UNSAVED_TITLE = 'Nothing on this page is saved';
-const UNSAVED_BODY
-  = 'This deployment has nowhere to keep operator preferences yet — they '
-  + 'belong to no domain, and the schema has no table for them. Changes '
-  + 'here last for this tab and are gone on reload.';
+const TAB_SAVE_TITLE = 'Saved for this tab only';
+const TAB_SAVE_BODY
+  = 'This deployment has no table for operator preferences yet — they '
+  + 'belong to no domain, and where they would live is still a schema '
+  + 'decision. A save here is kept in the tab and laid over every later '
+  + 'read of them: it survives a domain switch and a walk to another '
+  + 'surface, and it is gone on reload.';
 
 /** The chip beside the title while the operator has changed something. */
 const UNSAVED_CHIP = 'Unsaved';
+
+/** What the head's one control is called. */
+const SAVE_LABEL = 'Save preferences';
 
 /** How wide the selects on this page open. */
 const SELECT_PANEL_WIDTH = 260;
@@ -144,9 +173,13 @@ export const SettingsPage = () => {
   const settingsRead = useSettings();
   const domainsRead = useDomains();
   const operatorRead = useOperator();
+  // No slug, like the read it invalidates: an operator is a person and
+  // not a workspace, so a domain switch leaves both where they were.
+  const save = useSaveSettings();
 
-  // What the operator has changed and nothing can keep. Empty at
-  // mount, never seeded from a read — see `./fields.ts`.
+  // What the operator has changed and has not yet committed. Empty at
+  // mount and empty again after a save — see `./fields.ts` on why the
+  // saved half lives under `../../data/api.ts` rather than here.
   const [draft, setDraft] = useState<SettingsDraft>(EMPTY_DRAFT);
 
   // Named as consts before anything branches on them: `read.data` is
@@ -160,6 +193,29 @@ export const SettingsPage = () => {
     ? undefined
     : effectiveSettings(stored, draft);
 
+  /**
+   * Send the preference set the controls are drawn from.
+   *
+   * The guard NARROWS the payload rather than deciding anything: the
+   * button is already dead without a settled read, and
+   * `canSaveSettings` is where that decision lives.
+   */
+  const handleSave = () => {
+    if (settings === undefined) {
+      return;
+    }
+
+    save.mutate(settings, {
+      // On success alone, and only once the invalidated read has
+      // settled — see the header. Dropping the draft over stored
+      // values that had not caught up would draw the page back to
+      // what the save just replaced.
+      onSuccess: () => {
+        setDraft(EMPTY_DRAFT);
+      },
+    });
+  };
+
   return (
     // `AppShellContent` contributes the padding and the scrolling but
     // no vertical rhythm, so the column owns its own — the same gap
@@ -171,9 +227,18 @@ export const SettingsPage = () => {
         tags={isPristine(draft)
           ? undefined
           : <Tag tone="warning">{UNSAVED_CHIP}</Tag>}
+        action={(
+          <Button
+            variant="primary"
+            disabled={!canSaveSettings(settings, draft, save.isPending)}
+            onClick={handleSave}
+          >
+            {SAVE_LABEL}
+          </Button>
+        )}
       />
 
-      <Banner tone="warning" title={UNSAVED_TITLE}>{UNSAVED_BODY}</Banner>
+      <Banner tone="warning" title={TAB_SAVE_TITLE}>{TAB_SAVE_BODY}</Banner>
 
       <DefaultDomainSection
         failed={settingsRead.isError || domainsRead.isError}
@@ -529,11 +594,13 @@ interface OperatorSectionProps {
 /**
  * Who this deployment runs as.
  *
- * The two fields the UI spec asks this page for, and the two controls
- * on it that are genuinely inert — see the header on why a text box
- * is the one shape a tab-local delta would turn into a fabrication.
- * The values are the same stub the topbar's profile menu draws, read
- * through the same accessor, so the two cannot come to disagree.
+ * The two fields the UI spec asks this page for, and the only two
+ * controls on it the save above does not reach — see the header, and
+ * `./fields.ts` behind it, on why a value SET is a complete reading
+ * where free text is not, and on `Settings` naming no member either
+ * of these could be sent in. The values are the same stub the
+ * topbar's profile menu draws, read through the same accessor, so the
+ * two cannot come to disagree.
  *
  * @param props - Which state the read is in.
  * @returns The section.

@@ -1,34 +1,65 @@
 /**
  * @packageDocumentation
- * What the settings surface offers, and what an operator's changes to
- * it amount to while there is nowhere to put them.
+ * What the settings surface offers, what an operator's changes to it
+ * amount to, and what saving them records.
  *
- * ## The draft, and why there is one
+ * ## The draft, and what a save does with it
  *
  * `Settings` MIRRORS NO TABLE — `../../data/types.ts` says so on the
  * type and `../../data/settings.ts` says it again at length. Schema v2
  * keeps per-DOMAIN configuration in `domains.settings` and keeps
- * nothing per operator, so there is no column to write, no endpoint
- * for q15 to point at, and a schema decision still open behind every
- * control on this page.
+ * nothing per operator, so there is still no column to write and a
+ * schema decision still open behind every control on this page.
  *
- * The sources surface met the neighbouring case — a real column with
- * no endpoint — and answered it by shipping no control at all, drawing
- * the stored flag as a badge instead. This is the OTHER case, the one
- * the lexicon's category switch already settled: nothing stores these,
- * so a delta held for the life of the tab is not a lie about a stored
- * value, it is the only reading of the preference there is.
+ * What there IS now is a seam. `../../data/api.ts`'s `saveSettings`
+ * records the whole preference set into the singleton slot in
+ * `../../data/drafts.ts`, and `fetchSettings` lays it back over the
+ * fixture on every later read. So a save here is a real save for the
+ * LIFE OF THE TAB: it survives a domain switch, a walk to another
+ * surface and back, and every re-read in between, and it is gone on
+ * reload, because that store is module state and touches no storage
+ * at all. The page says both halves in a banner above the column — a
+ * save that forgets is a bad answer only while it is silent about
+ * forgetting.
  *
- * What that borrows from the lexicon is the shape; what it adds is
- * that here there IS a fixture value underneath, so the page has to
- * say out loud that a change does not survive a reload. It does, in a
- * banner above the column — a control that flips and forgets is a bad
- * answer only while it is silent about forgetting.
+ * That splits what used to be one thing into two, and every function
+ * below sits on one side of the split. STORED is the fixture with
+ * whatever this tab has already saved laid over it, and it is what
+ * the `with*` writers compare against. The DRAFT is the unsaved
+ * remainder: what the operator has moved since the last save and has
+ * not committed. `../../components/editorDraft.ts` draws the same line
+ * for every modal editor in this app; this module draws it for the
+ * one surface that has no modal to draw it in.
  *
- * A `Select` cannot be drawn any other way in any case: `SelectProps`
- * carries no `disabled` and spreads nothing onto its trigger, so the
- * choice on this surface was never between a live control and a dead
- * one — it was between a live control and no control.
+ * A save is a PUT of the WHOLE preference set, none of its members
+ * being independently addressable — so the payload is
+ * {@link effectiveSettings}, the same object the controls are drawn
+ * from. What an operator is looking at is what gets sent, with no
+ * second assembly step that could disagree with it.
+ *
+ * A `Select` could not have been drawn any other way in any case:
+ * `SelectProps` carries no `disabled` and spreads nothing onto its
+ * trigger, so the choice on this surface was never between a live
+ * control and a dead one — it was between a live control and no
+ * control.
+ *
+ * ## The two operator fields are outside all of this
+ *
+ * {@link SettingsDraft} declares four members and none of them names
+ * an operator, because `Settings` carries no such member either — so
+ * `saveSettings` has nowhere to put a name or an address, seam or no
+ * seam. That is the structural half; the other half is what makes it
+ * the right shape rather than a gap.
+ *
+ * The line is the VALUE SET and not the storage. A select and a switch
+ * can only take values this deployment already knows — a domain it
+ * carries, a format the union spells, a channel that exists — so a
+ * saved reading of one is a complete reading of what it would do. A
+ * text box accepts anything, and an address no channel has validated
+ * would be a fabrication rather than a reading whether it were kept
+ * for a tab or forever. `./SettingsPage.tsx` draws those two
+ * `disabled` and `readOnly` for that reason and states it again at the
+ * control.
  *
  * ## An override that agrees with what is stored is not an override
  *
@@ -42,7 +73,10 @@
  * that only ships what moved.
  *
  * It is also what makes {@link isPristine} a fact about the page
- * rather than about how many controls have been touched.
+ * rather than about how many controls have been touched, and through
+ * {@link canSaveSettings} it is what takes the save control away
+ * again: an operator who undoes their own change is offered no save,
+ * because there is nothing left for one to send.
  *
  * ## The vocabulary is the tools surface's
  *
@@ -156,6 +190,35 @@ function withoutOverride(
  */
 export function isPristine(draft: SettingsDraft): boolean {
   return Object.keys(draft).length === 0;
+}
+
+/**
+ * Whether the save control has anything to do.
+ *
+ * Three readings rather than one, because each refuses for a different
+ * reason and only the middle one is about the operator. There has to
+ * be a settled preference set for the payload to be built out of; the
+ * draft has to hold something the stored value does not already say;
+ * and a save already in flight must not be started a second time.
+ *
+ * The first is why this takes the possibly-absent value rather than a
+ * settled one — a page cannot send {@link effectiveSettings}' answer
+ * before there is a stored reading to lay the draft over. It NARROWS
+ * nothing for the caller: a `.tsx` still guards its own payload, and
+ * this decides only whether the control is offered.
+ *
+ * @param settings - The effective preferences, or undefined while the
+ * read behind them has not settled.
+ * @param draft - What the operator has changed since the last save.
+ * @param saving - Whether a save is already in flight.
+ * @returns Whether the save control should be live.
+ */
+export function canSaveSettings(
+  settings: Settings | undefined,
+  draft: SettingsDraft,
+  saving: boolean,
+): boolean {
+  return settings !== undefined && !isPristine(draft) && !saving;
 }
 
 /**

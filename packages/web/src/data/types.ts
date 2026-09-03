@@ -693,8 +693,9 @@ export interface DigestDefaults {
  * So this is the one type here the q15 swap cannot satisfy by pointing
  * at an existing endpoint — it needs somewhere to persist first, and
  * where that lands is a schema decision rather than a UI one. The
- * settings surface holds a change as a tab-local delta for that
- * reason, and says on the page that nothing there is saved.
+ * settings surface saves through `./api.ts`'s `saveSettings` into the
+ * tab-local store in `./drafts.ts` for that reason, and says on the
+ * page that what it keeps, it keeps for the life of the tab.
  */
 export interface Settings {
   /**

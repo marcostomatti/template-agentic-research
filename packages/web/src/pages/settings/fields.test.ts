@@ -17,6 +17,7 @@ import {
   EMPTY_DRAFT,
   FORMAT_OPTIONS,
   cadenceOptions,
+  canSaveSettings,
   channelFacet,
   domainOptions,
   effectiveSettings,
@@ -94,6 +95,40 @@ describe('isPristine', () => {
     expect(isPristine({ digestFormat: 'pdf' })).toBe(false);
     expect(isPristine({ digestIntervalSeconds: 60 })).toBe(false);
     expect(isPristine({ notificationChannels: { push: true } })).toBe(false);
+  });
+});
+
+describe('canSaveSettings', () => {
+  /** One override, for the cases that need something to send. */
+  const CHANGED = withDigestFormat(STORED, EMPTY_DRAFT, 'pdf');
+
+  it('refuses a save with nothing to send it from', () => {
+    // No settled read means no payload: `effectiveSettings` needs a
+    // stored reading to lay the draft over, and a save of the draft
+    // alone would be a preference set with three members missing.
+    expect(canSaveSettings(undefined, CHANGED, false)).toBe(false);
+  });
+
+  it('refuses a save of a draft that holds nothing', () => {
+    expect(canSaveSettings(STORED, EMPTY_DRAFT, false)).toBe(false);
+  });
+
+  it('refuses a second save while one is in flight', () => {
+    expect(canSaveSettings(STORED, CHANGED, true)).toBe(false);
+  });
+
+  it('offers the save once a settled read carries an override', () => {
+    expect(canSaveSettings(STORED, CHANGED, false)).toBe(true);
+  });
+
+  it('refuses again once the override is undone', () => {
+    // The drop-on-equal rule reaching the control: an operator who
+    // puts the select back is offered no save, because there is
+    // nothing left for one to send.
+    const undone = withDigestFormat(STORED, CHANGED, STORED.digest.format);
+
+    expect(isPristine(undone)).toBe(true);
+    expect(canSaveSettings(STORED, undone, false)).toBe(false);
   });
 });
 
