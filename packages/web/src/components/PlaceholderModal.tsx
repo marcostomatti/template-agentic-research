@@ -1,48 +1,43 @@
 /**
  * @packageDocumentation
- * What every modal sub-route renders until that surface's real modal
- * lands: the row the URL names, and nothing an operator can change.
+ * What every modal sub-route USED to render until that surface's real
+ * modal landed: the row the URL names, and nothing an operator can
+ * change.
  *
  * Five of the six surfaces open one of their rows over the list they
  * sit on — the digest at `:entityId`, the lexicon, sources, agents and
  * tools at `:entityId/edit`, and the sources again at
  * `:entityId/config` and `:entityId/failures` — and each address is
- * declared under both route bases. TWO of those fourteen
- * registrations render this component: the lexicon's two open
- * `../pages/lexicon/LexiconEditorModal`, the sources' `/edit` pair
- * opens `../pages/sources/SourceEditorModal`, its `/config` pair opens
- * `../pages/sources/SourceConfigApprovalModal` and its `/failures`
- * pair opens `../pages/sources/SourceFailuresModal`, the agents' two
- * open `../pages/agents/AgentEditorModal`, and the digest's two open
- * `../pages/digest/DigestDetailModal`, which is why the count here is
- * worth stating rather than implying.
+ * declared under both route bases. NONE of those fourteen
+ * registrations renders this component any more: the lexicon's two
+ * open `../pages/lexicon/LexiconEditorModal`, the sources' `/edit`
+ * pair opens `../pages/sources/SourceEditorModal`, its `/config` pair
+ * opens `../pages/sources/SourceConfigApprovalModal` and its
+ * `/failures` pair opens `../pages/sources/SourceFailuresModal`, the
+ * agents' two open `../pages/agents/AgentEditorModal`, the tools' two
+ * open `../pages/tools/ConnectorEditorModal`, and the digest's two
+ * open `../pages/digest/DigestDetailModal`.
  *
- * Both halves of it move, and separately. The NUMERATOR shrinks by two
- * with each surface after those; the DENOMINATOR grows by two with
- * each address a surface declares BEYOND its first, which were never
- * this element's to hold.
+ * The numerator ran down two at a time, one surface per landing,
+ * while the denominator grew by two with each address a surface
+ * declared BEYOND its first — those were never this element's to
+ * hold. It is at zero of fourteen, which is where it stops.
  *
- * That remaining set is the whole constraint on what this may say, and
- * the set is now the tools surface alone, waiting on an EDITOR. The
- * digest's read-only detail landed first and is what narrowed the set
- * to ONE KIND; the sources editor narrowed it to two surfaces of that
- * kind and the agents editor to one, while the sources approval and
- * failures list — neither of them an editor — left that narrowing
- * standing.
+ * So this component is unreachable, and everything below describes a
+ * shape rather than a screen anybody sees. It survives the last
+ * landing for two reasons that are not about rendering: it is still
+ * named by `../routes/router.tsx`, whose test asks whether ANY
+ * declared address opens it — a claim, where it used to be a ledger —
+ * and it is the file four landed modals cite for the relative-close
+ * reading below. Removing it is therefore a decision of its own and
+ * not a line in the commit that emptied it.
  *
- * A set of ONE is the state just before this component stops being
- * reachable at all. It is still a placeholder rather than a
- * tools-specific stand-in: the two registrations left are one
- * surface under two bases, and writing anything here that only the
- * connector editor could be true of would be describing the modal
- * that replaces it.
- *
- * There is still no footer here, and the reason has changed rather
- * than gone. A disabled `Save` would now be honest about both — but it
- * would state the shape of an editor this component has no draft
- * behind, which is a promise about behaviour rather than about an
- * address. The body says the one thing that stays true: the address is
- * live and nothing behind it is.
+ * There is no footer here, and the reason has changed rather than
+ * gone. A disabled `Save` would have been honest about the editors it
+ * stood for — but it would state the shape of an editor this
+ * component has no draft behind, which is a promise about behaviour
+ * rather than about an address. The body says the one thing that was
+ * always true of it: the address is live and nothing behind it is.
  *
  * ## Why `open` is a literal
  *
@@ -61,9 +56,9 @@
  *
  * Closing cannot flip a flag, so it navigates to the parent route.
  * That target is `..` rather than a built path, for the reason the
- * router's index redirect is relative too: one expression then serves
- * every registration this still renders, and no caller has to resolve
- * which base it is rendering under. `../components/EditorModal.tsx`
+ * router's index redirect is relative too: one expression served
+ * every registration this ever rendered, and no caller had to resolve
+ * which base it was rendering under. `../components/EditorModal.tsx`
  * spells the same expression out separately, for the reason its own
  * header gives about outliving this file.
  *
@@ -86,10 +81,9 @@
  * exactly as the topbar derives its heading — never from state, since
  * a back button and the domain switcher's base swap both change the
  * surface without passing through anything here. It named the
- * remaining registrations apart while they belonged to two different
- * surfaces; the two left are one surface under both bases, so what it
- * still does is put this dialog on the surface an operator is looking
- * at rather than leaving it unplaced.
+ * registrations apart while they belonged to different surfaces, and
+ * it is why nothing in this file ever had to be told which one it was
+ * standing in for.
  *
  * The title is passed for a second reason beyond naming the row:
  * `Modal` draws its header, and with it the close button and the
@@ -101,9 +95,10 @@
  *
  * Its neighbour `./PageHead` exists to be PROMOTED — q15 moves it into
  * `@ar/ui/molecules`, which is why that file imports nothing from this
- * app. This one exists to be REPLACED, surface by surface, as each
- * real modal is written; there is nothing here for a component library
- * to take, since every line of it reads the router.
+ * app. This one existed to be REPLACED, surface by surface, as each
+ * real modal was written, and now has been; there was never anything
+ * here for a component library to take, since every line of it reads
+ * the router.
  *
  * Nothing in this file is reachable from the unit suite, which is
  * node-only and collects `.ts` alone. Its bindings are proven by a
@@ -139,7 +134,10 @@ const CLOSE_OPTIONS = { relative: 'route' } as const;
 const UNKNOWN_ROW = 'unknown';
 
 /**
- * The stand-in modal every list surface's sub-route opens.
+ * The stand-in modal every list surface's sub-route used to open.
+ *
+ * Registered at no address as of the tools connector editor — see the
+ * header on why it survives that anyway.
  *
  * @returns The modal, naming the row from the URL, over a body with
  * nothing live in it.

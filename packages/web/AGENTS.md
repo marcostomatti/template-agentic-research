@@ -227,24 +227,25 @@ compose now that theirs has landed.
   than restating the props it passes through: a restated list accepts
   a newly added prop and silently drops it on the way down, which
   type-checks on both sides.
-- `src/components/PlaceholderModal.tsx` is the element behind TWO of
-  the fourteen modal registrations (seven addresses across two bases),
-  so it may only claim what is true of the tools editor. The lexicon's
-  two open `src/pages/lexicon/LexiconEditorModal.tsx`, the sources'
-  `/edit` pair opens `src/pages/sources/SourceEditorModal.tsx`, its
-  `/config` pair opens
+- `src/components/PlaceholderModal.tsx` is the element behind NONE of
+  the fourteen modal registrations (seven addresses across two bases).
+  The lexicon's two open `src/pages/lexicon/LexiconEditorModal.tsx`,
+  the sources' `/edit` pair opens
+  `src/pages/sources/SourceEditorModal.tsx`, its `/config` pair opens
   `src/pages/sources/SourceConfigApprovalModal.tsx` and its
   `/failures` pair opens
   `src/pages/sources/SourceFailuresModal.tsx`, the agents' two open
-  `src/pages/agents/AgentEditorModal.tsx`, and the digest's two open
-  `src/pages/digest/DigestDetailModal.tsx`. Both halves of the
-  fraction move and they move separately: the numerator shrinks by two
-  with each surface after them, the denominator grows by two with each
-  address a surface declares BEYOND its first. The digest's landing is
-  what narrowed the remaining set to ONE KIND — the placeholder no
-  longer has to be true of a read-only detail view as well as of an
-  editor — the sources editor narrowed it to two surfaces of that
-  kind, and the agents editor to one.
+  `src/pages/agents/AgentEditorModal.tsx`, the tools' two open
+  `src/pages/tools/ConnectorEditorModal.tsx`, and the digest's two
+  open `src/pages/digest/DigestDetailModal.tsx`. Both halves of the
+  fraction moved and they moved separately: the numerator shrank by
+  two with each surface, the denominator grew by two with each address
+  a surface declared BEYOND its first, and the tools connector editor
+  took the numerator to zero. The file survives that landing —
+  `src/routes/router.test.ts` now asks whether ANY declared address
+  opens it, a claim rather than a ledger, and four landed modals cite
+  it for the relative-close reading — so removing it is a decision of
+  its own.
 
 ## `@ar/ui` constraints this app is built around
 

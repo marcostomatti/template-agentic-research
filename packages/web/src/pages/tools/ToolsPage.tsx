@@ -55,20 +55,24 @@
  * narrow — `SectionCard` has an `action` slot for exactly that — and
  * not in the page head.
  *
- * ## No writes, and no controls that pretend otherwise
+ * ## No writes on the PAGE, and no controls that pretend otherwise
  *
- * The spec has this page editing connectors, testing a connection,
+ * The spec has this surface editing connectors, testing a connection,
  * duplicating a row, and toggling a delivery on and off. None of that
- * is offered here, and the sources surface already settled what to do
- * about it — a control that silently did nothing would be worse than
- * one that is not there.
+ * is offered by this file, and the sources surface already settled
+ * what to do about it — a control that silently did nothing would be
+ * worse than one that is not there.
  *
- * The reason has narrowed and the sentence is worth keeping accurate:
- * there IS a write seam now (`../../data/api.ts`'s `saveConnector` and
- * `saveExportSubscriptions`, reached through `../../data/hooks.ts`
- * like every read). What is missing is the editor modal and the toggle
- * list that would call it, so the controls stay absent for the same
- * reason and not for the old one.
+ * The reason has narrowed twice and the sentence is worth keeping
+ * accurate. There IS a write seam (`../../data/api.ts`'s
+ * `saveConnector` and `saveExportSubscriptions`, reached through
+ * `../../data/hooks.ts` like every read), and the first of those now
+ * has a caller: editing a connector is offered, at the sub-route the
+ * card and the row menu both open, by
+ * `./ConnectorEditorModal.tsx`. What this page still offers nothing
+ * for is the connection test, the duplicate, and the delivery toggle
+ * — the third of which is a write this seam already carries, and the
+ * toggle list that would call it is what is missing.
  *
  * That is also why the deliveries are rows rather than the spec's
  * `DecoratedToggleList`. The stored `enabled` flag is drawn as a

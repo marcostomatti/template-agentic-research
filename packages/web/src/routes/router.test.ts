@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { SINGLE_DOMAIN_BASE, SURFACES, withBase } from './paths';
 import {
   AGENT_EDITOR,
+  CONNECTOR_EDITOR,
   DIGEST_DETAIL,
   LEXICON_EDITOR,
   MODAL_PLACEHOLDER,
@@ -150,22 +151,6 @@ function addressOf(surfaceId: string, pattern: string): string {
 }
 
 /**
- * The registrations that still render the placeholder.
- *
- * A LEDGER, written out rather than derived: it is the list of what
- * this wave has not built yet, and a roster read back off the route
- * tree could only ever agree with whatever the tree currently says.
- * It shrinks as each real modal lands, and the partition test below
- * is what refuses a registration that leaves it without joining a
- * test that makes a claim about its element instead. The one
- * remaining is an EDITOR — the digest's read-only detail has landed,
- * so this roster no longer stands for two kinds of modal at once.
- */
-const PLACEHOLDER_ADDRESSES: readonly string[] = [
-  addressOf('tools', `${ENTITY_PARAM}/edit`),
-];
-
-/**
  * What each named ADDRESS renders, under both bases.
  *
  * Shared by the element tests so they drive the tree identically and
@@ -205,6 +190,18 @@ const MODAL_SUB_ROUTES = MODAL_SURFACES.flatMap(
     surface,
     pattern,
   })),
+);
+
+/**
+ * Every registration this file declares, as the rosters spell them.
+ *
+ * Derived from the hand-written table above rather than from the
+ * route tree, like everything else here: it is the list the claims
+ * below are checked to cover, so a roster read back off the thing
+ * under test could only ever agree with it.
+ */
+const ALL_ADDRESSES: readonly string[] = MODAL_SUB_ROUTES.map(
+  ({ surface, pattern }) => addressOf(surface.id, pattern),
 );
 
 /**
@@ -440,24 +437,26 @@ describe('the modal sub-routes', () => {
     expect(matched).toEqual(cases.map(({ at, chain }) => ({ at, chain })));
   });
 
-  it('opens the shared placeholder at every address still owed one', () => {
-    // `toBe`, not a render: matching says nothing about what sits behind
-    // the address, and the placeholder is one shared element across every
-    // registration and both bases — which is what makes identity askable
-    // here at all.
+  it('opens the shared placeholder at no address at all', () => {
+    // This was a LEDGER of the registrations still owed a real modal,
+    // and it has run down to none — the tools connector editor was the
+    // last one out of it. A roster that had simply emptied would assert
+    // this of nothing, so what is left is the claim the ledger was
+    // making all along, asked of EVERY declared address at once:
+    // nothing in either tree opens the stand-in.
     //
-    // This is a LEDGER of what has no real modal yet, so it shrinks as
-    // the editors land; a registration pointing somewhere else is
-    // reported here by the path it was driven with. The partition test
-    // below is what stops a surface leaving this list without joining
-    // one that makes a claim about it.
+    // `toBe` through identity, not a render: matching says nothing
+    // about what sits behind an address, and the placeholder being one
+    // shared element across both bases is what makes identity askable
+    // here at all. The non-emptiness of what is driven is asserted by
+    // `has at least one surface carrying a modal sub-route` above.
     // Arrange / Act
-    const opened = openedElements(PLACEHOLDER_ADDRESSES);
+    const opened = openedElements(ALL_ADDRESSES);
 
     // Assert
-    expect(opened.filter((row) => row.element !== MODAL_PLACEHOLDER))
+    expect(opened.filter((row) => row.element === MODAL_PLACEHOLDER))
       .toEqual([]);
-    expect(opened).toHaveLength(PLACEHOLDER_ADDRESSES.length * BASES.length);
+    expect(opened).toHaveLength(ALL_ADDRESSES.length * BASES.length);
   });
 
   it('opens the lexicon term editor at its own sub-route', () => {
@@ -531,7 +530,7 @@ describe('the modal sub-routes', () => {
   });
 
   it('opens the agents persona editor at its own sub-route', () => {
-    // The sixth real element, and the one that leaves the ledger
+    // The sixth real element, and the one that left the ledger
     // above naming a single surface. Driven exactly as its
     // neighbours are: the CLAIM differs, the reading does not.
     // Arrange / Act
@@ -549,12 +548,27 @@ describe('the modal sub-routes', () => {
     // The element that says the ledger is a PARTITION rather than a
     // shrinking list: this modal is not an editor, so its
     // registration could never have been satisfied by whatever the
-    // two remaining surfaces eventually open.
+    // surfaces still owed one eventually opened.
     // Arrange / Act
     const opened = openedElements([addressOf('digest', ENTITY_PARAM)]);
 
     // Assert
     expect(opened.filter((row) => row.element !== DIGEST_DETAIL))
+      .toEqual([]);
+    expect(opened).toHaveLength(BASES.length);
+  });
+
+  it('opens the tools connector editor at its own sub-route', () => {
+    // The seventh real element, and the one that empties the ledger
+    // above outright. Driven exactly as its neighbours are: the CLAIM
+    // differs, the reading does not.
+    // Arrange / Act
+    const opened = openedElements([
+      addressOf('tools', `${ENTITY_PARAM}/edit`),
+    ]);
+
+    // Assert
+    expect(opened.filter((row) => row.element !== CONNECTOR_EDITOR))
       .toEqual([]);
     expect(opened).toHaveLength(BASES.length);
   });
@@ -571,12 +585,12 @@ describe('the modal sub-routes', () => {
     // from the sources approval at all.
     // Arrange
     const claimed = [
-      ...PLACEHOLDER_ADDRESSES,
       addressOf('lexicon', `${ENTITY_PARAM}/edit`),
       addressOf('sources', `${ENTITY_PARAM}/edit`),
       addressOf('sources', `${ENTITY_PARAM}/config`),
       addressOf('sources', `${ENTITY_PARAM}/failures`),
       addressOf('agents', `${ENTITY_PARAM}/edit`),
+      addressOf('tools', `${ENTITY_PARAM}/edit`),
       addressOf('digest', ENTITY_PARAM),
     ];
     const declared = MODAL_SUB_ROUTES.map(

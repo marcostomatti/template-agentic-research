@@ -56,18 +56,17 @@
  * row in the table below rather than a branch in {@link surfaceRoute}
  * or a second factory. The other four still hold one apiece.
  *
- * The other half is in use as of the lexicon's editor: an entry carries
- * its ELEMENT beside its path, and those elements have stopped being
- * one shared placeholder. ONE surface still opens
- * {@link MODAL_PLACEHOLDER} — tools — while the lexicon opens
- * {@link LEXICON_EDITOR}, the digest opens {@link DIGEST_DETAIL}, the
- * agents open {@link AGENT_EDITOR} and the sources open
+ * The other half is now used by every entry: each carries its ELEMENT
+ * beside its path, and NONE of them is the shared placeholder any
+ * more. The lexicon opens {@link LEXICON_EDITOR}, the digest opens
+ * {@link DIGEST_DETAIL}, the agents open {@link AGENT_EDITOR}, the
+ * tools open {@link CONNECTOR_EDITOR}, and the sources open
  * {@link SOURCE_EDITOR}, {@link SOURCE_CONFIG_APPROVAL} and
  * {@link SOURCE_FAILURES} at their three addresses. That is what an
  * entry holding its own element was for: a surface's modal is not the
  * same modal as its neighbour's, any more than its second sub-route is
- * the same as its first, and the six that have landed are not even all
- * the same KIND of modal.
+ * the same as its first, and the seven that have landed are not even
+ * all the same KIND of modal.
  *
  * Each is a CHILD of its list route rather than a sibling, which is the
  * whole point of the shape: the list stays matched and stays rendered,
@@ -88,6 +87,12 @@
  * back through `getSurface`, so a key that drifts out of `SURFACES` is
  * a throw when this module loads rather than a sub-route that quietly
  * stops existing under both trees.
+ *
+ * {@link MODAL_PLACEHOLDER} is therefore registered nowhere. It is
+ * still exported — `./router.test.ts` asks whether any address opens
+ * it, which is a claim rather than a ledger now that the answer is
+ * none — and `../components/PlaceholderModal.tsx` is still the file
+ * four modals cite for the relative-close reading.
  *
  * ## The catch-all
  *
@@ -129,6 +134,7 @@ import {
 } from '../pages/sources/SourceConfigApprovalModal';
 import { SourceEditorModal } from '../pages/sources/SourceEditorModal';
 import { SourceFailuresModal } from '../pages/sources/SourceFailuresModal';
+import { ConnectorEditorModal } from '../pages/tools/ConnectorEditorModal';
 
 import { DomainGuard } from './DomainGuard';
 import {
@@ -230,16 +236,17 @@ export const SURFACE_PLACEHOLDER = (
  * read from the router — see `../components/PlaceholderModal`, which
  * lives over there for the reason `./DomainGuard.tsx` gives.
  *
- * It is reachable: every surface route above renders a real list page
- * now, and `ListPage` puts the trailing `Outlet` this arrives in at the
- * bottom of each one, so the row actions on those pages already open
- * it.
+ * It is no longer reached by anything. The tools editor was the last
+ * of the fourteen registrations to open it, so the numerator has run
+ * down to ZERO while the denominator stands at fourteen — seven
+ * addresses across two bases. Nothing in the table below names it.
  *
- * It stands at TWO of the fourteen registrations now — tools, across
- * both bases — and the count shrinks by two with each editor that
- * lands. The DENOMINATOR moves too, and separately: a surface's second
- * and third addresses are two more registrations apiece that were
- * never this element's to hold.
+ * It stays exported rather than deleted with the registration, and
+ * `./router.test.ts` reads it for a claim rather than for a ledger:
+ * that no declared address opens it. `../components/PlaceholderModal`
+ * is also the file four landed modals cite for the relative-close
+ * reading, which is a second reason its removal is a decision of its
+ * own rather than a line in this one.
  */
 export const MODAL_PLACEHOLDER = <PlaceholderModal />;
 
@@ -320,7 +327,7 @@ export const SOURCE_FAILURES = <SourceFailuresModal />;
 /**
  * The agents surface's persona editor, at its own sub-route.
  *
- * The sixth real element in the table below, and the one that leaves
+ * The sixth real element in the table below, and the one that left
  * {@link MODAL_PLACEHOLDER} standing for a single surface. It is an
  * editor like the lexicon's and the sources', over the smallest row
  * any of them edits — `../pages/agents/AgentEditorModal.tsx` carries
@@ -333,17 +340,33 @@ export const SOURCE_FAILURES = <SourceFailuresModal />;
 export const AGENT_EDITOR = <AgentEditorModal />;
 
 /**
+ * The tools surface's connector editor, at its own sub-route.
+ *
+ * The seventh real element in the table below, and the one that
+ * leaves {@link MODAL_PLACEHOLDER} behind no registration at all. It
+ * is an editor like three of the six before it, over the one row in
+ * this app that belongs to the installation rather than to a domain
+ * — `../pages/tools/ConnectorEditorModal.tsx` carries why that makes
+ * its read take no slug, and why a field holding a secret is drawn
+ * empty.
+ *
+ * Held as an ELEMENT for the reason its six neighbours are: one
+ * object across both trees, so identity stays askable.
+ */
+export const CONNECTOR_EDITOR = <ConnectorEditorModal />;
+
+/**
  * The modal sub-routes each list surface carries, keyed by surface id.
  *
  * A LIST per surface, so a row openable in more than one way costs a
  * row here rather than a shape change — see the header. The sources
- * hold THREE entries and the other four hold one apiece, and six of
- * the seven entries now name a real modal rather than
- * {@link MODAL_PLACEHOLDER}: the lexicon's editor, the sources editor,
- * the sources config approval, the sources failures list, the digest's
- * detail and the agents editor. A surface whose list is empty and a
- * surface with no key at all mean the same thing to
- * {@link surfaceRoute}.
+ * hold THREE entries and the other four hold one apiece, and ALL
+ * seven entries now name a real modal: the lexicon's editor, the
+ * sources editor, the sources config approval, the sources failures
+ * list, the digest's detail, the agents editor and the tools
+ * connector editor. {@link MODAL_PLACEHOLDER} is named by none of
+ * them. A surface whose list is empty and a surface with no key at
+ * all mean the same thing to {@link surfaceRoute}.
  *
  * Declared BELOW the elements rather than beside the other route
  * constants at the top because it names them: an entry holds what it
@@ -363,7 +386,7 @@ const MODAL_SUB_ROUTE_TABLE: ModalSubRouteTable = {
     { path: `${ENTITY_PARAM}/failures`, element: SOURCE_FAILURES },
   ],
   agents: [{ path: `${ENTITY_PARAM}/edit`, element: AGENT_EDITOR }],
-  tools: [{ path: `${ENTITY_PARAM}/edit`, element: MODAL_PLACEHOLDER }],
+  tools: [{ path: `${ENTITY_PARAM}/edit`, element: CONNECTOR_EDITOR }],
 };
 
 /**
