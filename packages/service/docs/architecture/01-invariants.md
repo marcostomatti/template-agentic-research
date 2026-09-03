@@ -21,7 +21,12 @@ build rules in `.specs/q03-port-phase-3-build-dispatch.md` §1 — the
 phase spec that lands the build system — and the origin-path row
 likewise, from the parity-harness constraints in
 `.specs/q06-port-phase-4-lib-wave.md`, the phase spec that lands the
-seam that row polices. The two auth rows come from outside it as
+seam that row polices. The renderer send-free row is the same shape
+again: the design fixes the executor half of that rule in its §4 and
+says nothing about the modules beside it, so the row comes from the
+definition of done in
+`.specs/q12-port-phase-6-research-digest.md`, the phase spec that
+lands the renderers. The two auth rows come from outside it as
 well, from the acceptance criteria in `.specs/q07-auth-basic.md` —
 an item scheduled beside the seven phases rather than inside them, so
 its cell in the phase column names the item rather than a number.
@@ -36,13 +41,14 @@ sentinel tests in both directions over a value the surface stores.
 | Invariant | Enforced by | Owning phase | Status |
 | --- | --- | --- | --- |
 | No workflow holds a send-capable node | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
-| A model node is fed a prepared chunk and nothing else | `tests/workflows/ar-ingest.test.ts`, driving the built body of the node that assembles a prompt and holding what it hands on to the framed halves, the four ids and the measurements — the half this row's phase and status are about; `tests/lib/chunk.test.ts`, landed in phase 4, for what a prepared chunk is before any workflow reaches for one | 5 | Implemented |
+| No module under `src/exports/` reaches a notification channel, a transport builtin, the global fetch, or the filesystem | `tests/invariants/exports-send-free.test.ts`, over the identifier roster, the code-versus-comment split and the walker in `tests/invariants/exports-send-free.ts`, which refuses to report a result at all when it read no module — and reads the comment half in the same run, where this directory's own sentences about the rule are the live control the code half's zero cannot have | 6 | Implemented |
+| A model node is fed a prepared chunk and nothing else | `tests/workflows/ar-ingest.test.ts`, driving the built body of the node that assembles a prompt and holding what it hands on to the framed halves, the four ids and the measurements — the half this row's phase and status are about; `tests/workflows/ar-research.test.ts`, landed in phase 6, holding the second such node to the same shape, where what is left behind is the subject, the terms and the document bodies and the offered documents survive as the ids the answer will be judged against; `tests/lib/chunk.test.ts`, landed in phase 4, for what a prepared chunk is before any workflow reaches for one | 5 | Implemented |
 | A prepared chunk is capped at 6000 characters, and there is no raw-body fallback | `tests/lib/chunk.test.ts`, driving `buildChunk` over assemblies each of which would overrun the cap, and holding what it refuses to a closed roster of reasons in both directions | 4 | Implemented |
-| Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 5 | Implemented |
+| Every model call carries a per-run ceiling, writes a ledger row, and never retries | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/`, holding every workflow that holds a model node to all three; `tests/workflows/ar-ingest.test.ts` and `tests/workflows/ar-research.test.ts`, driving each ceiling node against the bound its own body declares and holding it to emit nothing past that bound whatever arrived — which is the half a structural read of the source cannot ask about | 5 | Implemented |
 | Exactly one schedule trigger exists, and `ar-dispatch` holds it | `tests/invariants/workflows.test.ts`, over workflows built from `workflows/src/` | 3 | Implemented |
 | Building one tree twice writes byte-identical artifacts, and the git build stamp is the one value permitted to move with the checkout | `tests/build/build-workflows.test.ts`, spawning `scripts/build-workflows.ts` twice over a fixture source tree and holding the two output directories against each other | 3 | Implemented |
 | A library spliced into a Code node stands alone there — no value import, declaration-form exports only, no reliance on module scope | `scripts/build-workflows.ts`, refusing the first two through `assertSpliceable` in `scripts/workflow-markers.ts` and writing no artifact at all; `pretest` runs the build ahead of the default suite, and the third rule leaves nothing to refuse it on | 3 | Implemented |
-| Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
+| Nothing is recorded as researched without an approval, and the database is what says so | A CHECK constraint in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts`, with the opt-in `tests/live/research-approval.live.test.ts` watching a real database refuse the record for an intention nobody approved and leave both tables as it found them | 2 | Implemented |
 | No proposed configuration reaches a source row without a recorded approval | `source_config_proposals_approval_check`, the CHECK in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 5 | Implemented |
 | A category is a root or the child of a root, and nothing deeper | A trigger in the hand-written migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts`, with the opt-in `tests/live/schema.live.test.ts` watching a database refuse the write | 2 | Implemented |
 | Every document carries a hash, and no two carry the same one | The NOT NULL and UNIQUE pair on `documents.hash` in the generated migration under `drizzle/`, read by `tests/invariants/schema-sql.test.ts` | 2 | Implemented |
@@ -159,21 +165,50 @@ email export produces a draft and stops there. Reaching outward is a
 service-layer capability that arrives later, behind its own approval
 gate, so nothing in the executor needs the ability at all.
 
-The node-type scan is what keeps it that way. A node of one of the
-types it names, added to any workflow — deliberately, or carried in by
-a copied template — fails the suite before the workflow reaches an
-instance. The payoff is a review surface small enough to audit: one
-gate to read rather than every workflow, and a pipeline bug that stays
-a pipeline bug instead of becoming a delivery one.
+That sentence is two rules over two surfaces, and each has a scan of
+its own. The node-type scan keeps the workflow half that way: a node
+of one of the types it names, added to any workflow — deliberately,
+or carried in by a copied template — fails the suite before the
+workflow reaches an instance. The payoff is a review surface small
+enough to audit: one gate to read rather than every workflow, and a
+pipeline bug that stays a pipeline bug instead of becoming a delivery
+one.
 
-What `Implemented` means for this row is narrower than the heading
-above it. Nothing in a test can ask an instance what a node is able to
-do, so the scan holds a node's type against a roster carrying one
-entry per send route rather than one per vendor: a workflow reaching
-for a further vendor of a route already named is a miss, and the
-answer to one is an entry rather than a wider pattern.
+What `Implemented` means for the node-type row is narrower than the
+heading above it. Nothing in a test can ask an instance what a node is
+able to do, so the scan holds a node's type against a roster carrying
+one entry per send route rather than one per vendor: a workflow
+reaching for a further vendor of a route already named is a miss, and
+the answer to one is an entry rather than a wider pattern.
 `tests/invariants/workflow-rosters.ts` is where that set lives, and
 each entry states the route it stands for.
+
+The renderer half is a row of its own because the contract stating it
+cannot hold it. `ExportRenderer` has one method and it answers
+values, so there is nowhere in the shape for a dispatch call to live
+— for a renderer somebody has read. A module is free to import a
+transport, reach it inside the method it declares, and satisfy the
+interface exactly: the contract binds what comes back and never what
+was touched on the way. So the rule is stated over the directory
+instead, every module in it, including the ones nobody thought to
+look at and the ones that arrive later.
+`docs/architecture/05-exports.md` carries the contract and what each
+renderer does with it; what the register adds is why the property is
+worth a row.
+
+Its `Implemented` is a zero, and a zero is what a dead needle and an
+unwalked surface answer too. Two legs part them. The walk refuses to
+return a result at all when it read no module, so an empty answer
+cannot have come from an empty directory — the same refusal the
+containment scan on the auth rows makes, for the same reason. And the
+scan splits code from comment and reads both halves in one run: this
+directory argues its own rule, so its own sentences about a
+notification channel, a transport and the global fetch are hits in
+the comment half, pinned as a set. That is the live control the code
+half's zero cannot have, and it reaches three of the nine roster
+entries; the other six rest on planted samples in the suite alone,
+and `tests/invariants/exports-send-free.ts` says per entry which is
+which.
 
 ### Four separate properties bound what a run can spend
 
@@ -345,10 +380,14 @@ generated from it, and the static-SQL scan is a real tie between two
 tracked copies of one rule. A trigger is modelled nowhere, so it is
 hand-written, and that scan is then evidence about the file and about
 nothing else — a database the migration never reached reads exactly like
-one where the guard stands. That is why the depth row alone names a live
-file. Its `Implemented` still rests on the static scan, which the
-default suite runs; `tests/live/schema.live.test.ts` self-skips without
-`AR_LIVE_DATABASE_URL`, and the cell says opt-in for that reason.
+one where the guard stands. That is why the depth row names a live file
+where the hash row does not. Its `Implemented` still rests on the static
+scan, which the default suite runs; `tests/live/schema.live.test.ts`
+self-skips without `AR_LIVE_DATABASE_URL`, and the cell says opt-in for
+that reason. The approval row above names a live file for a reason of
+its own: its CHECK is generated, so the static scan is already a real
+tie, and what `tests/live/research-approval.live.test.ts` adds is a
+database refusing the record rather than a scan standing in for one.
 
 ### The three de-origination rows hold from the first commit
 

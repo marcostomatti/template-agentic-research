@@ -1,6 +1,6 @@
 /**
  * The null-vs-zero law, swept over every numeric member the Code
- * nodes of the three workflows this phase landed answer.
+ * nodes of the five workflows that take a reading answer.
  *
  * A measured zero is `0` and a quantity nobody measured is `null`,
  * and the difference is the whole of what a stored signal means: a
@@ -11,13 +11,13 @@
  * afterwards as though it had measured every document it never
  * looked at.
  *
- * `ar-ingest.test.ts`, `ar-capture.test.ts` and `ar-score.test.ts`
- * each assert the law where their own canvas states it, one member
- * at a time. What this file adds is the SWEEP: it drives every Code
- * node of all three artifacts twice and refuses any number it cannot
- * account for, so a member added later that defaults to zero fails
- * here naming itself rather than slipping past three suites that
- * were written before it existed.
+ * `ar-ingest.test.ts`, `ar-capture.test.ts`, `ar-score.test.ts`,
+ * `ar-research.test.ts` and `ar-digest.test.ts` each assert the law
+ * where their own canvas states it, one member at a time. What this
+ * file adds is the SWEEP: it drives every Code node of all five
+ * artifacts twice and refuses any number it cannot account for, so a
+ * member added later that defaults to zero fails here naming itself
+ * rather than slipping past five suites that all predate it.
  *
  * ## Two runs, because neither one alone says it
  *
@@ -59,6 +59,17 @@
  * against that too, which is the stronger reading and is taken
  * wherever it is available.
  *
+ * It is also the only law admitting a member that CARRIES numbers
+ * rather than being one, which is how `ar-digest`'s assembled
+ * briefing is registered: the finding numbers under it are the
+ * selection's own, and the per-section counts are readings of the
+ * rows that selection handed in. Those counts are 1 and 0 on any
+ * canvas small enough to write down, so the measuring planting
+ * arranges for both to have arrived by another route and says at
+ * its own site that it did. What a count MEANS where it is absent
+ * is asserted by hand below: this sweep reads a member, never a
+ * null inside one.
+ *
  * `vector` is the one exception the repo's own law names: a numeric
  * vector CANNOT hold `null`, every cell being a finite number by
  * construction, and absence is carried by a companion known flag
@@ -84,12 +95,12 @@
  *
  * ## ar-dispatch is outside the sweep, and that is measured
  *
- * The built tree holds four workflows and this sweep covers three.
- * The fourth is phase 3's dispatcher, whose one Code node takes no
+ * The built tree holds six workflows and this sweep covers five.
+ * The sixth is phase 3's dispatcher, whose one Code node takes no
  * reading at all: it spreads the claim row it was handed and adds a
  * target workflow id, so it has no numeric member of its own to
  * sweep. That is asserted below rather than asserted in this
- * paragraph, and the vacuity guard at the foot covers all four
+ * paragraph, and the vacuity guard at the foot covers all six
  * artifacts, so a Code node landing on any of them fails by name.
  *
  * No word in these fixtures is a term, a criterion or a category any
@@ -125,23 +136,36 @@ const AR_CAPTURE = codeNodes('ar-capture.json');
 /** `ar-score`, the deterministic scorer, and two. */
 const AR_SCORE = codeNodes('ar-score.json');
 
+/** `ar-research`, the approved-intention pass, and five. */
+const AR_RESEARCH = codeNodes('ar-research.json');
+
+/** `ar-digest`, the period the export path reports on, and three. */
+const AR_DIGEST = codeNodes('ar-digest.json');
+
 /** The dispatcher, driven once below to show it sweeps nothing. */
 const AR_DISPATCH = codeNodes('ar-dispatch.json');
 
 /** Every artifact the built tree holds, for the vacuity guard. */
-const BUILT = [AR_INGEST, AR_CAPTURE, AR_SCORE, AR_DISPATCH];
+const BUILT = [
+  AR_INGEST,
+  AR_CAPTURE,
+  AR_SCORE,
+  AR_RESEARCH,
+  AR_DIGEST,
+  AR_DISPATCH,
+];
 
 /**
  * Every node this file actually ran, as `<file>::<node>`.
  *
- * Held against the four artifacts' own Code-node rosters in the last
+ * Held against the six artifacts' own Code-node rosters in the last
  * case. A set rather than a counter, because what the guard is about
  * is WHICH nodes were driven and a count cannot tell one node driven
  * twice from two driven once.
  */
 const DRIVEN = new Set<string>();
 
-/** How a node is named across four artifacts that share node names. */
+/** How a node is named across six artifacts that share node names. */
 function siteOf(file: string, node: string): string {
   return `${file}::${node}`;
 }
@@ -380,7 +404,7 @@ const TERMS = [
     polarity: 'positive' },
 ];
 
-/** The role `Prepare Model Prompt` reads its system text from. */
+/** The role `ar-research` frames its prompt against. */
 const RESEARCHER = {
   id: 1,
   role: 'researcher',
@@ -665,6 +689,341 @@ const SCORE_VECTORS_LIT = payloadsOf(
   run(AR_SCORE, 'Compute Feature Vectors', SCORE_LIT),
 );
 
+/**
+ * The intention, the subject and the topic `ar-research` works on.
+ *
+ * The pool row is the ruling an operator gave, the entity is the
+ * subject it was given about, and the topic is the row the caller
+ * claimed — the only thing reaching that canvas a proposal can be
+ * clamped against.
+ */
+const POOL_ID = '77';
+const OTHER_POOL_ID = '78';
+const ENTITY_ID = '12';
+const TOPIC_ID = '9';
+const RESEARCH_ID = '500';
+
+/** The range the claimed topic states, in seconds. */
+const MIN_INTERVAL_SECONDS = 600;
+const MAX_INTERVAL_SECONDS = 86400;
+
+/** One document, as the drain aggregates one onto a candidate. */
+function offeredDocument(body: string): unknown {
+  return {
+    id: Number(DOCUMENT_ID),
+    url: `https://bulletins.example.invalid/${DOCUMENT_ID}`,
+    parse_status: 'ok',
+    body,
+  };
+}
+
+/** One intention, as `Drain Approved Intentions` answers one. */
+function drainedRow(
+  documents: readonly unknown[],
+): Record<string, unknown> {
+  return {
+    run_id: RUN_ID,
+    pool_id: POOL_ID,
+    domain_id: DOMAIN_ID,
+    entity_id: ENTITY_ID,
+    entity_name: 'Northern Basin Gauge',
+    search_terms: ['rainfall', 'gauge'],
+    documents,
+  };
+}
+
+/** The same row as `Gate Candidate Names` answers an accepted one. */
+function gatedRow(documents: readonly unknown[]): unknown {
+  return { ...drainedRow(documents), name_ok: true, name_reason: null };
+}
+
+/** `ar-research`'s context item, over the persona the pass reads. */
+function researchContext(): unknown {
+  return {
+    run_id: RUN_ID,
+    domain_id: DOMAIN_ID,
+    domain: domainRow(),
+    personas: [RESEARCHER],
+    categories: [],
+    terms: [],
+    criteria: [],
+  };
+}
+
+/** The connector row `Select Model Connector` answers. */
+const RESEARCH_CONNECTOR = {
+  endpoint: 'https://models.example.invalid/v1',
+  model: 'a-model',
+};
+
+/** One accounted call, as `Ledger Model Call` answers one. */
+function ledgeredCall(): unknown {
+  return {
+    run_id: RUN_ID,
+    pool_id: POOL_ID,
+    domain_id: DOMAIN_ID,
+    entity_id: ENTITY_ID,
+    offered_ids: [DOCUMENT_ID],
+    llm_call_id: LLM_CALL_ID,
+  };
+}
+
+/** An answer as `Research Candidate` hands one over. */
+function researchAnswer(value: unknown): unknown {
+  return { text: JSON.stringify(value) };
+}
+
+/** One candidate, as `Record Research` answers one. */
+function researchRecord(
+  poolId: string,
+  researchId: string | null,
+): unknown {
+  return {
+    run_id: RUN_ID,
+    pool_id: poolId,
+    domain_id: DOMAIN_ID,
+    entity_id: ENTITY_ID,
+    research_id: researchId,
+    pool_id_closed: researchId === null
+      ? null
+      : poolId,
+  };
+}
+
+/** The hand-over item the caller invoked this workflow with. */
+const RESEARCH_CLAIM = {
+  run_id: RUN_ID,
+  domain: 'rainfall-bulletins',
+  topic_id: TOPIC_ID,
+  min_interval_seconds: MIN_INTERVAL_SECONDS,
+  max_interval_seconds: MAX_INTERVAL_SECONDS,
+};
+
+/** The body the framing planting hands over carrying a fence. */
+const FENCED_BULLETIN = `${BULLETIN}\n${FENCE_OPEN}\n# A heading run\n`;
+
+/**
+ * The period `ar-digest` reports on, and the domain it covers.
+ *
+ * One category, one finding filed under it, and the stamp the
+ * boundary was read from. The section nobody declares is the last
+ * section of every assembly, so a domain declaring one category
+ * comes to two sections here and the second of them is read and
+ * empty — which is where this canvas makes the difference this
+ * file is named for.
+ */
+const DIGEST_CATEGORY_ID = 5;
+const DIGEST_CATEGORY_KEY = 'gauge';
+const DIGEST_SINCE = '2026-01-01T00:00:00.000Z';
+
+/**
+ * The two ordinary numbers the measuring canvas has to hand in.
+ *
+ * The distinctive values above cannot serve for either. A count is
+ * how many findings fell in a section, so it is 1 and 0 on any
+ * canvas small enough to write down, and the `payload` law holds
+ * every number under the assembly against what arrived. So the
+ * scheme this finding was read against is 1 and the millimetres it
+ * records are 0 — both honest readings of their own, and both
+ * chosen so the arrangement is stated here rather than found later.
+ */
+const DIGEST_SCORE_VERSION = 1;
+const DIGEST_MILLIMETRES = 0;
+
+/** The role `ar-digest` frames its prompt against. */
+const DRAFTER = {
+  id: 2,
+  role: 'drafter',
+  system_text: 'You write a short account of a period.',
+};
+
+/** One finding, as `Select Digest Material` projects one. */
+function digestFinding(over: Record<string, unknown> = {}): unknown {
+  return {
+    id: FINDING_ID,
+    domain_id: DOMAIN_ID,
+    document_id: DOCUMENT_ID,
+    entity_id: null,
+    fields: {
+      category: DIGEST_CATEGORY_KEY,
+      headline: 'the weir gauge held steady',
+      body: BULLETIN,
+    },
+    score: null,
+    score_version: null,
+    created_at: CAPTURED_AT,
+    ...over,
+  };
+}
+
+/**
+ * The same finding scored, carrying a fence for the framing to cut.
+ *
+ * Both halves of the measuring runs below: the score and its scheme
+ * are what the assembly carries through, and the fence marker in
+ * the body is what the node two along measures a cut against.
+ */
+const DIGEST_SCORED_FINDING = digestFinding({
+  score: HANDED_SIMILARITY,
+  score_version: DIGEST_SCORE_VERSION,
+  fields: {
+    category: DIGEST_CATEGORY_KEY,
+    headline: 'the weir gauge held steady',
+    millimetres: DIGEST_MILLIMETRES,
+    body: FENCED_BULLETIN,
+  },
+});
+
+/** The one item `Select Digest Material` answers, with overrides. */
+function digestSelection(over: Record<string, unknown> = {}): unknown {
+  return {
+    run_id: RUN_ID,
+    domain_id: DOMAIN_ID,
+    since: DIGEST_SINCE,
+    findings: [digestFinding()],
+    previous_errors: [],
+    ...over,
+  };
+}
+
+/** `ar-digest`'s context item, over the domain the pass covers. */
+function digestContext(over: Record<string, unknown> = {}): unknown {
+  return {
+    run_id: RUN_ID,
+    domain_id: DOMAIN_ID,
+    domain: domainRow({ settings: { findingsDisplayName: 'Bulletins' } }),
+    personas: [DRAFTER],
+    categories: [{
+      id: DIGEST_CATEGORY_ID,
+      key: DIGEST_CATEGORY_KEY,
+      name: 'Gauge readings',
+      parent_id: null,
+    }],
+    terms: [],
+    criteria: [],
+    ...over,
+  };
+}
+
+/**
+ * `ar-digest`'s three canvases, and what each node above answered.
+ *
+ * Driven here rather than hand-written, for the reason `ar-score`'s
+ * vectors are: the ceiling and the framing are put over what the
+ * assembly actually produced, which is the composition the canvas
+ * runs and the only arrangement where the value they carry is the
+ * one the library composed.
+ */
+const DIGEST_UNRESOLVED = {
+  input: [digestSelection({ findings: [] })],
+  nodes: {
+    'Load Domain Context': [digestContext({ domain: null, categories: [] })],
+  },
+};
+
+/** The same domain resolved, over a finding nobody ever scored. */
+const DIGEST_UNSCORED = {
+  input: [digestSelection()],
+  nodes: { 'Load Domain Context': [digestContext()] },
+};
+
+/** The same again, over the scored finding the fence rides on. */
+const DIGEST_SCORED = {
+  input: [digestSelection({ findings: [DIGEST_SCORED_FINDING] })],
+  nodes: { 'Load Domain Context': [digestContext()] },
+};
+
+/** The assembly an unscored period comes to, computed once. */
+const DIGEST_UNSCORED_ROWS = payloadsOf(
+  run(AR_DIGEST, 'Assemble Digest', DIGEST_UNSCORED),
+);
+
+/** The same, over the period whose one finding was scored. */
+const DIGEST_SCORED_ROWS = payloadsOf(
+  run(AR_DIGEST, 'Assemble Digest', DIGEST_SCORED),
+);
+
+/** The connector row `Select Model Connector` answers. */
+const DIGEST_CONNECTOR = {
+  run_id: RUN_ID,
+  endpoint: 'https://models.example.invalid/v1',
+  model: 'a-model',
+};
+
+/**
+ * The ceiling's canvas over one assembled period.
+ *
+ * One row and never two: `handedAt` answers the FIRST same-named
+ * member it finds, so a second assembly here would pin the carried
+ * value to whichever was written first whatever the node answered.
+ */
+function digestCeiling(
+  rows: readonly Record<string, unknown>[],
+): CodeNodeContext {
+  return { input: [DIGEST_CONNECTOR], nodes: { 'Assemble Digest': rows } };
+}
+
+/** The unscored period at the ceiling, and what it stages. */
+const DIGEST_CEILING_UNSCORED = digestCeiling(DIGEST_UNSCORED_ROWS);
+const DIGEST_UNSCORED_STAGED = payloadsOf(
+  run(AR_DIGEST, 'Apply Call Ceiling', DIGEST_CEILING_UNSCORED),
+);
+
+/** The scored period at the same node, and what it stages. */
+const DIGEST_CEILING_SCORED = digestCeiling(DIGEST_SCORED_ROWS);
+const DIGEST_SCORED_STAGED = payloadsOf(
+  run(AR_DIGEST, 'Apply Call Ceiling', DIGEST_CEILING_SCORED),
+);
+
+/** The framing's canvas over what the ceiling staged. */
+function digestPrompt(
+  rows: readonly Record<string, unknown>[],
+): CodeNodeContext {
+  return {
+    input: rows,
+    nodes: {
+      'Load Domain Context': [digestContext()],
+      'Select Digest Material': [digestSelection()],
+    },
+  };
+}
+
+/**
+ * The assembled value one item carries, refusing rather than casting.
+ *
+ * A cast would let a null through to fail several lines later as an
+ * absent member, which reports a shape fault as a wrong value.
+ */
+function digestAssembly(
+  payload: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const assembly = payload?.['briefing_payload'];
+
+  if (typeof assembly !== 'object' || assembly === null
+    || Array.isArray(assembly)) {
+    throw new Error(
+      '[null-vs-zero] the item carries no assembled briefing, so the '
+      + 'counts this reading is about are not there to be read',
+    );
+  }
+
+  return assembly as Record<string, unknown>;
+}
+
+/** Every section count of one assembly, in its own order. */
+function digestCounts(assembly: Record<string, unknown>): readonly unknown[] {
+  const sections = assembly['sections'];
+
+  if (!Array.isArray(sections)) {
+    throw new Error(
+      '[null-vs-zero] the assembly carries no list of sections, so '
+      + 'there are no counts to read the law off',
+    );
+  }
+
+  return sections.map((row) => (row as Record<string, unknown>)['count']);
+}
+
 // ---------------------------------------------------------------------------
 // One planting per Code node, and its measuring counterpart
 // ---------------------------------------------------------------------------
@@ -696,7 +1055,7 @@ const WRITTEN = {
   document_inserted: true,
 };
 
-/** Every Code node of the three workflows this phase landed. */
+/** Every Code node of the four workflows that take a reading. */
 const PLANTINGS: readonly Planting[] = [
   {
     suite: AR_INGEST,
@@ -951,6 +1310,106 @@ const PLANTINGS: readonly Planting[] = [
       nodes: { 'Load Domain Context': [scoreContext(TERMS, 'rainfall')] },
     },
   },
+  {
+    suite: AR_RESEARCH,
+    node: 'Gate Candidate Names',
+    leaves: 'an intention with no document behind it, so no id travels',
+    unmeasured: { input: [drainedRow([])] },
+    measuring: { input: [drainedRow([offeredDocument(BULLETIN)])] },
+  },
+  {
+    suite: AR_RESEARCH,
+    node: 'Apply Call Ceiling',
+    leaves: 'a staged intention carrying no document id to forward',
+    unmeasured: {
+      input: [RESEARCH_CONNECTOR],
+      nodes: { 'Gate Candidate Names': [gatedRow([])] },
+    },
+    measuring: {
+      input: [RESEARCH_CONNECTOR],
+      nodes: {
+        'Gate Candidate Names': [gatedRow([offeredDocument(BULLETIN)])],
+      },
+    },
+  },
+  {
+    suite: AR_RESEARCH,
+    node: 'Prepare Model Prompt',
+    leaves: 'a chunk carrying no fence and no active form to defang',
+    unmeasured: {
+      input: [drainedRow([offeredDocument(BULLETIN)])],
+      nodes: { 'Load Domain Context': [researchContext()] },
+    },
+    measuring: {
+      input: [drainedRow([offeredDocument(FENCED_BULLETIN)])],
+      nodes: { 'Load Domain Context': [researchContext()] },
+    },
+  },
+  {
+    suite: AR_RESEARCH,
+    node: 'Judge Research Answer',
+    leaves: 'an answer that is no document, so nothing was read out',
+    unmeasured: {
+      input: [ledgeredCall()],
+      nodes: { 'Research Candidate': [{ text: 'no document at all' }] },
+    },
+    measuring: {
+      input: [ledgeredCall()],
+      nodes: {
+        'Research Candidate': [researchAnswer({
+          summary: 'The gauge at the weir held steady all week.',
+          citations: [DOCUMENT_ID],
+          fields: { millimetres: POSTED_MILLIMETRES },
+        })],
+      },
+    },
+  },
+  {
+    suite: AR_RESEARCH,
+    node: 'Propose Next Run',
+    leaves: 'a pass that recorded every candidate it drained',
+    unmeasured: {
+      input: [researchRecord(POOL_ID, RESEARCH_ID)],
+      nodes: {
+        'Drain Approved Intentions': [{ pool_id: POOL_ID }],
+        'Execute Workflow Trigger': [RESEARCH_CLAIM],
+      },
+    },
+    measuring: {
+      input: [
+        researchRecord(POOL_ID, RESEARCH_ID),
+        researchRecord(OTHER_POOL_ID, null),
+      ],
+      nodes: {
+        'Drain Approved Intentions': [
+          { pool_id: POOL_ID },
+          { pool_id: OTHER_POOL_ID },
+        ],
+        'Execute Workflow Trigger': [RESEARCH_CLAIM],
+      },
+    },
+  },
+  {
+    suite: AR_DIGEST,
+    node: 'Assemble Digest',
+    leaves: 'a pass that resolved no domain, so no section was read',
+    unmeasured: DIGEST_UNRESOLVED,
+    measuring: DIGEST_SCORED,
+  },
+  {
+    suite: AR_DIGEST,
+    node: 'Apply Call Ceiling',
+    leaves: 'a staged period whose one finding nobody ever scored',
+    unmeasured: DIGEST_CEILING_UNSCORED,
+    measuring: DIGEST_CEILING_SCORED,
+  },
+  {
+    suite: AR_DIGEST,
+    node: 'Prepare Model Prompt',
+    leaves: 'a period carrying no fence marker for the framing to cut',
+    unmeasured: digestPrompt(DIGEST_UNSCORED_STAGED),
+    measuring: digestPrompt(DIGEST_SCORED_STAGED),
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -984,7 +1443,7 @@ interface NumericMember {
   readonly because: string;
 }
 
-/** Every numeric member the three swept artifacts answer. */
+/** Every numeric member the four swept artifacts answer. */
 const NUMERIC_MEMBERS: readonly NumericMember[] = [
   {
     workflow: 'ar-ingest.json',
@@ -1267,6 +1726,158 @@ const NUMERIC_MEMBERS: readonly NumericMember[] = [
     because: 'carried off the featurizer so a closing statement can '
       + 'say which generation this pass scored against',
   },
+  {
+    workflow: 'ar-research.json',
+    node: 'Gate Candidate Names',
+    member: 'documents',
+    law: 'payload',
+    because: 'the corpus rows the drain aggregated onto the candidate, '
+      + 'carried whole, so an id under them is a document\'s own',
+  },
+  {
+    workflow: 'ar-research.json',
+    node: 'Apply Call Ceiling',
+    member: 'documents',
+    law: 'payload',
+    because: 'carried unchanged off the gate, this node slicing the '
+      + 'batch by its bound and reading nothing inside a row',
+  },
+  {
+    workflow: 'ar-research.json',
+    node: 'Prepare Model Prompt',
+    member: 'prompt_chars',
+    law: 'reading',
+    because: 'the length of the framed pair this call would send, '
+      + 'measured off the two halves the frame composed',
+  },
+  {
+    workflow: 'ar-research.json',
+    node: 'Prepare Model Prompt',
+    member: 'est_tokens',
+    law: 'reading',
+    because: 'derived from that length by a pure function, so it is '
+      + 'answered wherever the length is',
+  },
+  {
+    workflow: 'ar-research.json',
+    node: 'Prepare Model Prompt',
+    member: 'fence_cuts',
+    law: 'reading',
+    because: 'how many fence markers were cut out of the untrusted '
+      + 'half, which a bulletin carrying none measures as 0',
+  },
+  {
+    workflow: 'ar-research.json',
+    node: 'Prepare Model Prompt',
+    member: 'forms_defanged',
+    law: 'reading',
+    because: 'how many active forms were defanged, counted over every '
+      + 'chunk whether or not it carried one',
+  },
+  {
+    workflow: 'ar-research.json',
+    node: 'Judge Research Answer',
+    member: 'research_payload',
+    law: 'payload',
+    because: 'the structured half of what the model answered, read out '
+      + 'of the JSON document it returned and computed by nothing here',
+  },
+  {
+    workflow: 'ar-research.json',
+    node: 'Propose Next Run',
+    member: 'proposed_seconds',
+    law: 'unmeasured',
+    because: 'a pass with nothing left behind proposed no gap at all, '
+      + 'where a 0 is a proposal to run the topic again immediately',
+  },
+  {
+    workflow: 'ar-research.json',
+    node: 'Propose Next Run',
+    member: 'gap_seconds',
+    law: 'unmeasured',
+    because: 'the clamped form of that proposal, absent for the same '
+      + 'reason, where a 0 is a due time the next tick claims',
+  },
+  {
+    workflow: 'ar-research.json',
+    node: 'Propose Next Run',
+    member: 'min_interval_seconds',
+    law: 'payload',
+    because: 'the floor the claim stated, carried as it was read so '
+      + 'the statement below writes against the range this clamped in',
+  },
+  {
+    workflow: 'ar-research.json',
+    node: 'Propose Next Run',
+    member: 'max_interval_seconds',
+    law: 'payload',
+    because: 'the ceiling beside it, carried the same way and derived '
+      + 'from nothing this node measured',
+  },
+  {
+    workflow: 'ar-research.json',
+    node: 'Propose Next Run',
+    member: 'candidates_drained',
+    law: 'reading',
+    because: 'how many intentions the drain answered, counted on every '
+      + 'pass and the count the withholding decision is made against',
+  },
+  {
+    workflow: 'ar-research.json',
+    node: 'Propose Next Run',
+    member: 'research_recorded',
+    law: 'reading',
+    because: 'how many of them a record was written for, which a pass '
+      + 'whose every answer was refused measures as a real 0',
+  },
+  {
+    workflow: 'ar-digest.json',
+    node: 'Assemble Digest',
+    member: 'briefing_payload',
+    law: 'payload',
+    because: 'the assembled value whole: the selected rows\' own '
+      + 'numbers beside counts of those same rows, and nothing else',
+  },
+  {
+    workflow: 'ar-digest.json',
+    node: 'Apply Call Ceiling',
+    member: 'briefing_payload',
+    law: 'payload',
+    because: 'carried unchanged off the assembly, this node reading '
+      + 'only the total inside it and answering the value or no item',
+  },
+  {
+    workflow: 'ar-digest.json',
+    node: 'Prepare Model Prompt',
+    member: 'prompt_chars',
+    law: 'reading',
+    because: 'the length of the framed pair this call would send, '
+      + 'measured off the two halves the frame composed',
+  },
+  {
+    workflow: 'ar-digest.json',
+    node: 'Prepare Model Prompt',
+    member: 'est_tokens',
+    law: 'reading',
+    because: 'derived from that length by a pure function, so it is '
+      + 'answered wherever the length is',
+  },
+  {
+    workflow: 'ar-digest.json',
+    node: 'Prepare Model Prompt',
+    member: 'fence_cuts',
+    law: 'reading',
+    because: 'how many fence markers were cut out of the composed '
+      + 'period, which one carrying none measures as 0',
+  },
+  {
+    workflow: 'ar-digest.json',
+    node: 'Prepare Model Prompt',
+    member: 'forms_defanged',
+    law: 'reading',
+    because: 'how many active forms the framing had left to defang, '
+      + 'which is 0 on this canvas because the assembly reduced first',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -1402,7 +2013,7 @@ describe('null-vs-zero — the roster is one', () => {
     expect(sites.length).toBe(new Set(sites).size);
   });
 
-  it('names only Code nodes the three swept artifacts hold', () => {
+  it('names only Code nodes the five swept artifacts hold', () => {
     const held = new Set(PLANTINGS.map(
       (planting) => siteOf(planting.suite.file, planting.node),
     ));
@@ -1421,11 +2032,16 @@ describe('null-vs-zero — the roster is one', () => {
       .toEqual(['payload', 'reading', 'unmeasured', 'vector']);
   });
 
-  it('covers the three this phase landed and no fourth', () => {
+  it('covers the five that take a reading and no sixth', () => {
     const swept = NUMERIC_MEMBERS.map((entry) => entry.workflow);
 
-    expect([...new Set(swept)].sort())
-      .toEqual(['ar-capture.json', 'ar-ingest.json', 'ar-score.json']);
+    expect([...new Set(swept)].sort()).toEqual([
+      'ar-capture.json',
+      'ar-digest.json',
+      'ar-ingest.json',
+      'ar-research.json',
+      'ar-score.json',
+    ]);
   });
 });
 
@@ -1742,6 +2358,19 @@ describe('null-vs-zero — one member, both readings, one node', () => {
     expect(typeof scored['score']).toBe('number');
     expect(scored['score_signals_measured']).toBe(1);
   });
+
+  it('reads a section read and empty as 0 and none read as null', () => {
+    const answers = answersFor(
+      plantingFor('ar-digest.json', 'Assemble Digest'),
+    );
+    const nothing = digestAssembly(answers.unmeasured[0]);
+    const period = digestAssembly(answers.measuring[0]);
+
+    expect(digestCounts(nothing)).toEqual([null]);
+    expect(nothing['total']).toBeNull();
+    expect(digestCounts(period)).toEqual([1, 0]);
+    expect(period['total']).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1795,7 +2424,7 @@ describe('null-vs-zero — every Code node in the tree was reached', () => {
   });
 
   it('has a built tree to be a guard over', () => {
-    expect(BUILT.length).toBe(4);
+    expect(BUILT.length).toBe(6);
     expect(held.length).toBeGreaterThan(PLANTINGS.length);
     expect(held).not.toContain(siteOf('ar-ingest.json', 'Extract Recordz'));
   });

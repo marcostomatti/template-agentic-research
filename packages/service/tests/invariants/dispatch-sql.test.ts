@@ -1072,17 +1072,19 @@ describe('ar-dispatch invariants — built tree', () => {
   // this file otherwise reads nothing of.
   //
   // `Invoke Target Workflow` hands each claimed unit to the workflow
-  // its kind routes to, and the two arrive one at a time: phase 5
-  // delivered `ar-ingest` for a claimed topic and `ar-digest` for a
-  // claimed subscription is phase 6's, so a tick now records
-  // successes and failures side by side. A unit routed at the second
-  // still fails — the id resolves and nothing on the instance
-  // answers to it. That is the accurate record rather than a fault
-  // to suppress, and what makes it a record at all is that the
-  // failure has somewhere to go. A node that fails and routes its
-  // failure nowhere drops the item, so the row `Open Run` opened for
-  // that unit keeps the status it was opened with and nothing ever
-  // closes it — a run left running for a dispatch that finished.
+  // its kind routes to, and the two arrived one at a time: phase 5
+  // delivered `ar-ingest` for a claimed topic and phase 6 delivered
+  // `ar-digest` for a claimed subscription, so for the length of that
+  // window one tick recorded successes and failures side by side. A
+  // unit still reaches this branch for narrower reasons — a kind
+  // `Plan Dispatch` has no entry for, a target a deployment never
+  // imported, a target that runs and raises. That is the accurate
+  // record rather than a fault to suppress, and what makes it a
+  // record at all is that the failure has somewhere to go. A node
+  // that fails and routes its failure nowhere drops the item, so the
+  // row `Open Run` opened for that unit keeps the status it was
+  // opened with and nothing ever closes it — a run left running for
+  // a dispatch that finished.
   //
   // Two things have to hold for the branch to exist and neither
   // implies the other, which is why both are in the record. The node

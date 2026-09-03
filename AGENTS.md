@@ -531,6 +531,22 @@ red package never masks another and a single run gives the whole picture.
   tests over PURE modules only, and every `.tsx` component plus the
   assembled app falls to the specs under `packages/web/tests/e2e/`. Read
   both summaries, not just the exit line.
+- A PARALLEL LEG's checkout STEALS port 5174 and reds `@ar/web test:` in
+  yours, in two shapes, and the second reads exactly like a real
+  regression. `packages/web`'s Playwright half runs `vite --host 127.0.0.1
+  --port 5174 --strictPort`, so with a sibling leg's own run live the port
+  is taken PROCESS-WIDE rather than per-directory: cases fail
+  `net::ERR_CONNECTION_REFUSED`, and one got an ordinary
+  `expect(locator).toBeVisible() failed / element(s) not found` because the
+  SIBLING's server answered the navigation, serving its mid-mutation
+  source. The vitest half stays green and only the Playwright summary reds,
+  so the `&&` chain's single `@ar/web test: Exited with code 1` line is the
+  whole signal. Attribute in one command before spending anything else:
+  `for p in $(lsof -nP -iTCP:5174 -sTCP:LISTEN -t); do ps -p $p -o args=;
+  done` prints the OTHER checkout's absolute path, and `git log $(git
+  merge-base main HEAD)..HEAD -- packages/web packages/ui` answering empty
+  closes it. Distinct from the `@ar/service` flake — different package,
+  DETERMINISTIC while the sibling runs, and no `socket hang up`.
 - Do NOT grep a `test:all` capture for `failed`/`FAIL`. A fully green run
   is ~3700 lines — over half of it the `@ar/ui` library build, printed
   TWICE now that `@ar/web`'s pretest builds it as well, and elided to the
@@ -1087,10 +1103,32 @@ therefore too late to write about. Expect the complementary-additions shape
 here: the recurring conflicts are `docs/architecture/` tables both sides
 appended rows to, which want both sides kept.
 
-That exit 0 is a ZERO-HIT reading, and every ready-made control for it in
-this repo is DEAD: each sibling remote head is already an ancestor of
-`origin/main`, so all three answer the same clean tree oid and prove
-nothing. The live control is SYNTHETIC and costs one command — two
+That exit 0 is a ZERO-HIT reading. A ready-made control is often DEAD here
+— a sibling remote head already an ancestor of `origin/main` answers the
+same clean tree oid and proves nothing — but do NOT take that as given: it
+is a SNAPSHOT, and one loop over `git for-each-ref refs/remotes/origin/`
+with `git merge-base --is-ancestor <ref> origin/main` found FIVE of 27
+heads that were not ancestors, two of them conflicting with HEAD at exit 1
+with the full shape (22 lines, 1231 bytes). The catch decides how such a
+control is REPORTED rather than whether it counts: `git fetch` does not
+prune, so a remote-tracking ref OUTLIVES its deleted branch, and both
+conflicting refs were exactly that (`git ls-remote --heads origin
+refs/heads/<b>` answered zero for each while every head still ON the remote
+merged clean). They are real commits and a valid instrument proof; they are
+NOT a claim about anything that can land, and saying so is the difference
+between a control and a false alarm in a PR body. Classify every candidate
+by `ls-remote` presence, never by the remote-tracking ref.
+
+A second corroboration is free, stronger than the exit code, and available
+to no grep of the capture: under a fast-forward the tree oid merge-tree
+WRITES equals `git rev-parse HEAD^{tree}`, which says the merge took
+nothing from the other side rather than merely that nothing collided. Pair
+it with `git merge-base --is-ancestor origin/main HEAD` at exit 0 and
+`git rev-list --left-right --count origin/main...HEAD` answering `0 <n>`.
+A clean answer is ONE line and 41 bytes, so print the byte count beside the
+exit code — that is what separates it from a run that produced nothing.
+
+The SYNTHETIC control costs one command — two
 throwaway commits off HEAD adding the same path with different blobs,
 built with `GIT_INDEX_FILE=/tmp/x` plus `git read-tree` /
 `update-index --cacheinfo` / `write-tree` / `commit-tree`, which writes no
@@ -1098,6 +1136,11 @@ ref, no index and no worktree byte (`git status --short -uall` at 0 bytes
 is the whole revert check, and the loose objects are unreferenced). It
 answers EXIT 1 with the tree oid on line 1, the conflict path list
 beneath it, a blank line, then the `Auto-merging` / `CONFLICT` narrative.
+Note it is an ADD/ADD conflict carrying stage 2 and stage 3 entries and NO
+stage 1, where a real content conflict carries all three per path — so a
+probe asserting three stage lines per conflicted path reports the
+prescribed control as malformed. The two legs cover different conflict
+kinds and neither subsumes the other.
 Pair it with the STRUCTURAL reading, which is stronger than merge-tree's
 zero and one command: `git merge-base --is-ancestor origin/main HEAD`
 exiting 0 says the merge is a FAST-FORWARD, under which no conflict is

@@ -290,6 +290,22 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'mechanismVersion * TERM_DIGEST_SPAN + termSetDigest(terms)',
     ],
   },
+  {
+    file: 'digest-assemble.ts',
+    ownText: [
+      'compareScores(toScore(left.score), toScore(right.score))',
+      'read.has(key) || inside.length > 0',
+      'held.set(key, [finding])',
+    ],
+  },
+  {
+    file: 'research-brief.ts',
+    ownText: [
+      'FENCE_STEM_RE.test(value)',
+      'id !== null && !offered.has(id)',
+      'id !== null && !citations.includes(id)',
+    ],
+  },
 ];
 
 /**

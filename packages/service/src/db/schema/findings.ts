@@ -432,9 +432,11 @@ export const findingSightings = pgTable('finding_sightings', {
  * it reaches the same one twice.
  *
  * Nothing writes these rows yet. The operator surfaces that produce
- * them, the API and the UI, arrive outside this port's phases;
- * `ar-digest`, phase 6, is what renders a finding beside the verdict
- * standing on it.
+ * them, the API and the UI, arrive outside this port's phases, and
+ * phase 6 did not close the reading half either: `ar-digest`'s
+ * selection joins no label, and `ExportFindingRow` in
+ * `src/exports/index.ts` carries no verdict member, so a digest lays
+ * a finding out without the judgement standing on it.
  */
 export const findingLabels = pgTable('finding_labels', {
   /** Surrogate key; see `domains.id` for why `number` mode. */

@@ -86,33 +86,36 @@ import {
 const BUILT_WORKFLOWS = loadBuiltWorkflows();
 
 // ---------------------------------------------------------------------------
-// What the phases that have landed expect that tree to hold
+// What the roster says that tree holds
 // ---------------------------------------------------------------------------
 
 /**
- * The workflows phases 3 and 5 have landed, by id and in the order
- * the read hands them back.
+ * Every workflow the roster table marks delivered, by id and in
+ * the order the read hands them back.
  *
  * Declared rather than derived, which is what leaves a case standing
  * on it with anything to say. `buildAll` writes one artifact per
  * source under the source's own name, so a roster read out of
  * `workflows/src/` would agree with the built tree by construction,
  * holding whatever the build wrote against whatever the build wrote.
- * What is written down here is what those phases say the tree is
- * for, taken off the roster table in `workflows/src/README.md`,
- * where the entries the later phases deliver are named too.
+ * What is written down here is what the roster table in
+ * `workflows/src/README.md` says the tree is for, read off its
+ * delivered-in column, which now marks every entry landed.
  *
  * A closed set that grows inside a phase rather than at the end of
- * one. That table's delivered-in column marks an entry landed as its
- * source arrives, and an id joins this list in the same commit as
- * the source it names, so an entry a phase has still to deliver is
- * missing here for exactly as long as its source is. Phase 5 read
- * that way from inside, its entries arriving one source at a time;
- * what phase 6 has still to deliver — `ar-research` and `ar-digest`
- * — reads that way now. What that buys is the equality below staying
- * a claim about the tree: a roster written ahead of the sources
- * would report a phase's own unfinished middle as a build that lost
- * an artifact.
+ * one, which is why this is named for what that table says rather
+ * than for the phases that filled it. Its delivered-in column marks
+ * an entry landed as its source arrives, and an id joins this list
+ * in the same commit as the source it names, so an entry a phase
+ * has still to deliver is missing here for exactly as long as its
+ * source is. Phase 5 read that way from inside, its entries
+ * arriving one source at a time, and phase 6 read the same way:
+ * `ar-research` joined this list in the commit that landed its
+ * source, and `ar-digest` joined it in the commit that landed its
+ * own — the entry that completed the set. What that buys is the
+ * equality below staying a claim about the tree: a roster written
+ * ahead of the sources would report a phase's own unfinished
+ * middle as a build that lost an artifact.
  *
  * By id and never by file name. That README's 1:1 rule is that a
  * workflow is one file called `<workflow-id>.json`, and the build
@@ -126,10 +129,12 @@ const BUILT_WORKFLOWS = loadBuiltWorkflows();
  * and the artifact an entry does name was built from a source under
  * `workflows/` — which that scan reads.
  */
-const PHASE_3_AND_5_WORKFLOW_IDS = [
+const DELIVERED_WORKFLOW_IDS = [
   'ar-capture',
+  'ar-digest',
   'ar-dispatch',
   'ar-ingest',
+  'ar-research',
   'ar-score',
 ] as const;
 
@@ -226,28 +231,28 @@ function withSendNodePlanted(workflow: BuiltWorkflow): BuiltWorkflow {
 }
 
 // ---------------------------------------------------------------------------
-// The one schedule trigger, and the webhook that is not one
+// The one schedule trigger, and the triggers that are not one
 // ---------------------------------------------------------------------------
 
 /**
  * The workflow the one schedule trigger belongs to, by id.
  *
- * Declared rather than read off {@link PHASE_3_AND_5_WORKFLOW_IDS},
+ * Declared rather than read off {@link DELIVERED_WORKFLOW_IDS},
  * which names this id among its entries and no longer names it
  * first. The two are separate claims that used to coincide, that
  * roster having held one workflow: it says which artifacts the build
  * is expected to produce, this says which one of them schedules.
  * `ar-ingest` parted them, `ar-capture` parted them further with a
- * trigger of its own that starts a run and sets no clock, `ar-score`
- * parted them again with another of the kind `ar-ingest` carries,
- * and the entries phase 6 has still to deliver part them further
- * again, none of those being a schedule — so the roster grows and
- * this stays a set of one, which is the property itself and is what
- * a value derived from a list that grew with it would stop
- * asserting.
+ * trigger of its own that starts a run and sets no clock,
+ * `ar-score` parted them again with another of the kind `ar-ingest`
+ * carries, and `ar-research` and `ar-digest` parted them further
+ * again with a third and a fourth of that kind, none of the four
+ * being a schedule — so the roster filled and this stayed a set of
+ * one, which is the property itself and is what a value derived
+ * from a list that grew with it would stop asserting.
  *
  * By id and never by file name, for the reason
- * {@link PHASE_3_AND_5_WORKFLOW_IDS} gives: a workflow is one file
+ * {@link DELIVERED_WORKFLOW_IDS} gives: a workflow is one file
  * called `<workflow-id>.json`, so a file name is a derivation and an
  * id is the thing to keep in step with the roster table in
  * `workflows/src/README.md`.
@@ -281,7 +286,7 @@ const WEBHOOK_TRIGGER_TYPE = 'n8n-nodes-base.webhook';
  *
  * Declared beside {@link SCHEDULE_TRIGGER_WORKFLOW_ID} and read the
  * same way, by id and never by file name, and kept apart from
- * {@link PHASE_3_AND_5_WORKFLOW_IDS} for the reason that one gives:
+ * {@link DELIVERED_WORKFLOW_IDS} for the reason that one gives:
  * a roster growing with every source that lands cannot also answer
  * which of its entries carries what. The two ids are what the case
  * below turns into a per-workflow expectation, and every entry the
@@ -292,6 +297,49 @@ const WEBHOOK_TRIGGER_TYPE = 'n8n-nodes-base.webhook';
  * to stay at one.
  */
 const WEBHOOK_TRIGGER_WORKFLOW_ID = 'ar-capture';
+
+/**
+ * The trigger type a workflow the dispatcher reaches is started by.
+ *
+ * Written out here rather than read off the artifacts that carry it,
+ * for the reason {@link WEBHOOK_TRIGGER_TYPE} gives about spelling a
+ * type twice: a type read off the tree would agree with the tree by
+ * construction, and the question the case below asks — whether what
+ * starts those workflows is a trigger deciding nothing about when a
+ * run happens — would be answering itself.
+ *
+ * Here rather than in `workflow-rosters.ts` for the reason that one
+ * gives too. {@link SCHEDULE_TRIGGER_TYPE} already argues this type,
+ * naming it the third of the legitimate triggers and the one whose
+ * false positive would spread rather than sit still: `ar-dispatch`
+ * invokes the others through an Execute Workflow node, so every
+ * workflow it calls carries one of these by design, and a matcher
+ * reading `has a trigger` as `has a schedule` would flag exactly the
+ * workflows the dispatcher exists to call. All that is asked of the
+ * string here is that {@link isScheduleTrigger} answer no to it.
+ */
+const EXECUTE_WORKFLOW_TRIGGER_TYPE = 'n8n-nodes-base.executeWorkflowTrigger';
+
+/**
+ * The workflows phase 6 landed, by id, each of them started by a
+ * call from another workflow rather than by anything of its own.
+ *
+ * Declared beside {@link WEBHOOK_TRIGGER_WORKFLOW_ID} and read the
+ * same way, by id and never by file name, and kept apart from
+ * {@link DELIVERED_WORKFLOW_IDS} for the reason that one gives: a
+ * roster saying which artifacts the build produces cannot also
+ * answer which of its entries carries what.
+ *
+ * Two entries where four artifacts carry that trigger, and the two
+ * are this phase's own. `ar-ingest` and `ar-score` carry it from
+ * phase 5 and are read by the per-workflow case the two ids above
+ * drive, whose schedule column covers every entry the roster
+ * names. What phase 6 added is two more workflows the dispatcher's
+ * chain reaches, which is two more subjects for the false positive
+ * that constant argues — so the case below asks about those two
+ * by name and reads the rest of the tree beside them.
+ */
+const PHASE_6_CALLED_WORKFLOW_IDS = ['ar-digest', 'ar-research'] as const;
 
 // ---------------------------------------------------------------------------
 // The retry guard in front of a model call
@@ -1086,12 +1134,11 @@ describe('workflow invariants — built tree', () => {
   });
 
   // Held as an ordered list rather than as two sets, for two
-  // reasons. `loadBuiltWorkflows` sorts, and
-  // `PHASE_3_AND_5_WORKFLOW_IDS` is written in that order. A
-  // comparison sorting both sides again would be answered by a read
-  // that never sorted at all, and a roster naming one id twice would
-  // come back as the same set as one naming it once. An array parts
-  // both.
+  // reasons. `loadBuiltWorkflows` sorts, and `DELIVERED_WORKFLOW_IDS`
+  // is written in that order. A comparison sorting both sides again
+  // would be answered by a read that never sorted at all, and a
+  // roster naming one id twice would come back as the same set as
+  // one naming it once. An array parts both.
   //
   // Equality and not containment, because what this exists to catch
   // is an artifact whose source is gone. The build writes one
@@ -1117,12 +1164,12 @@ describe('workflow invariants — built tree', () => {
   // over the reader's surface reads: a walk that reached no workflow
   // fails on the record list rather than passing through an
   // expectation nothing ran.
-  it('holds every workflow the phase-3 and phase-5 roster expects', () => {
+  it('holds every workflow the roster marks delivered', () => {
     const built = BUILT_WORKFLOWS.map((workflow) => ({
       file: workflow.file,
       hasNodes: workflow.nodes.length > 0,
     }));
-    const expected = PHASE_3_AND_5_WORKFLOW_IDS.map((id) => ({
+    const expected = DELIVERED_WORKFLOW_IDS.map((id) => ({
       file: `${id}.json`,
       hasNodes: true,
     }));
@@ -1359,16 +1406,15 @@ describe('workflow invariants — built tree', () => {
   // over it is the subject — that the planted type is the type an
   // artifact in the built tree is actually started by.
   //
-  // The expectation is derived from
-  // {@link PHASE_3_AND_5_WORKFLOW_IDS} and the two id constants
-  // rather than written out per file, so the roster stays the one
-  // place a workflow is named. Every entry beyond those two is
-  // expected to carry neither trigger, which is what makes this a
-  // claim about the whole tree instead of about whichever artifacts
-  // happen to be in it: `ar-score` joined with its row already
-  // written, and one landing with a trigger of either kind reddens
-  // here rather than passing under a count that happened to stay at
-  // one.
+  // The expectation is derived from {@link DELIVERED_WORKFLOW_IDS}
+  // and the two id constants rather than written out per file, so
+  // the roster stays the one place a workflow is named. Every entry
+  // beyond those two is expected to carry neither trigger, which is
+  // what makes this a claim about the whole tree instead of about
+  // whichever artifacts happen to be in it: `ar-score` joined with
+  // its row already written, and one landing with a trigger of
+  // either kind reddens here rather than passing under a count that
+  // happened to stay at one.
   //
   // What it rests on is the roster case above, which is what says
   // those ids are the artifacts the tree holds; a workflow missing
@@ -1410,7 +1456,7 @@ describe('workflow invariants — built tree', () => {
       };
 
       expect(control).toEqual({
-        perWorkflow: PHASE_3_AND_5_WORKFLOW_IDS.map((id) => ({
+        perWorkflow: DELIVERED_WORKFLOW_IDS.map((id) => ({
           file: `${id}.json`,
           webhooks: id === WEBHOOK_TRIGGER_WORKFLOW_ID
             ? 1
@@ -1420,6 +1466,85 @@ describe('workflow invariants — built tree', () => {
             : 0,
         })),
         theWebhookTypeIsAScheduleTrigger: false,
+      });
+    },
+  );
+
+  // The same not-counted-as-a-schedule reading over the two
+  // triggers phase 6 landed, and what asks for a reading of its own
+  // is which workflows they sit on. `ar-research` and `ar-digest`
+  // are both reached by the dispatcher's chain, so each carries the
+  // execute-workflow trigger `SCHEDULE_TRIGGER_TYPE` names as the
+  // false positive that spreads: a matcher reading `has a trigger`
+  // as `has a schedule` flags exactly the workflows the dispatcher
+  // exists to call, and a count that has to come out at one comes
+  // out at however many there are.
+  //
+  // So both triggers are asserted present, the way `ar-capture`'s
+  // webhook is. Each of the two carrying exactly one node of
+  // {@link EXECUTE_WORKFLOW_TRIGGER_TYPE}, held beside a schedule
+  // count of zero for that same artifact, is what leaves not
+  // counted as a schedule a claim with a subject rather than a
+  // count that stayed still.
+  //
+  // Four readings in one comparison, so a failure names which
+  // moved. The call counts say each of the two is started by
+  // another workflow. The schedule counts say neither picked one up
+  // on the way. The carrier list says `ar-dispatch` is still the
+  // only workflow holding a schedule at all, which is the flat case
+  // above restated here so a second one landing in a workflow this
+  // phase added prints beside the two that were to have none. And
+  // {@link isScheduleTrigger} is asked about the type directly,
+  // which is the not-counted half with no tree in front of it.
+  //
+  // That last reading is the one `workflow-rosters.test.ts` already
+  // makes, over an execute-workflow trigger planted as a node
+  // rather than over the ones the tree holds, and it is restated
+  // here for what the webhook case says it costs: nothing, and a
+  // failure naming the matcher and the artifacts in one comparison
+  // instead of sending a reader next door to find out which moved.
+  // What this adds over it is the subject — that the planted type
+  // is the type the two artifacts phase 6 landed are started by.
+  //
+  // The per-workflow half is read off the tree and narrowed to
+  // those two rather than mapped out of
+  // {@link PHASE_6_CALLED_WORKFLOW_IDS}, so an artifact the build
+  // did not produce comes back a record short rather than as a
+  // record composed from a roster that still names it. What it
+  // rests on is the roster case above, which is what says those ids
+  // are artifacts the tree holds.
+  //
+  // What it does not reach is the limit the cases above name: a
+  // trigger left `disabled` is in the artifact and on no clock, and
+  // neither a type nor a count over one parts that tree from a
+  // running one.
+  it(
+    'counts the two execute-workflow triggers phase 6 landed as no schedule',
+    () => {
+      const files = PHASE_6_CALLED_WORKFLOW_IDS.map((id) => `${id}.json`);
+      const landed = BUILT_WORKFLOWS
+        .filter((workflow) => files.includes(workflow.file));
+      const found = BUILT_WORKFLOWS.flatMap((workflow) => workflow.nodeTypes
+        .filter((type) => isScheduleTrigger(type))
+        .map(() => workflow.file));
+      const control = {
+        perWorkflow: landed.map((workflow) => ({
+          file: workflow.file,
+          calls: workflow.nodeTypes
+            .filter((type) => type === EXECUTE_WORKFLOW_TRIGGER_TYPE).length,
+          schedules: workflow.nodeTypes
+            .filter((type) => isScheduleTrigger(type)).length,
+        })),
+        scheduleCarriers: found,
+        theExecuteWorkflowTypeIsAScheduleTrigger: isScheduleTrigger(
+          EXECUTE_WORKFLOW_TRIGGER_TYPE,
+        ),
+      };
+
+      expect(control).toEqual({
+        perWorkflow: files.map((file) => ({ file, calls: 1, schedules: 0 })),
+        scheduleCarriers: [`${SCHEDULE_TRIGGER_WORKFLOW_ID}.json`],
+        theExecuteWorkflowTypeIsAScheduleTrigger: false,
       });
     },
   );
@@ -1439,8 +1564,8 @@ describe('workflow invariants — built tree', () => {
   // It ran across zero nodes for two phases.
   // `MODEL_NODE_TYPE_PREFIX` records why: phase 3 delivered
   // `ar-dispatch` alone, and the workflows that make model calls are
-  // `ar-ingest`, from phase 5, with `ar-research` and `ar-digest` to
-  // come in phase 6. Over that empty tree the half of the predicate
+  // `ar-ingest`, from phase 5, with `ar-research` and `ar-digest`
+  // landing in phase 6. Over that empty tree the half of the predicate
   // reading the retry setting was not merely unsatisfied, it never
   // ran at all — the matcher answered no for every node the tree
   // carried and the conjunction stopped there. Measured then:

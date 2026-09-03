@@ -22,6 +22,8 @@
  * one against each claimed row a tick goes on to dispatch, and phase 5
  * made it one opener of three: `ar-capture` and `ar-score` each insert
  * a row of their own, already closed, for a pass no tick scheduled.
+ * `ar-research` is the fourth, from phase 6, in that same already
+ * closed shape, for a pass its caller invoked rather than a tick.
  * Nothing has run any of them: those phases ship workflow sources, and
  * the stack that would import them arrives in phase 7.
  *
@@ -267,6 +269,17 @@ export const runs = pgTable('runs', {
    * one of those rows has the mode that workflow reschedules in
    * rather than the mode that set the time the pass fired against.
    *
+   * `ar-research` answers what the dispatcher's rows cannot. It
+   * inserts a row of its own, already closed, and reads the
+   * literal off the write rather than off the intent: `agent`
+   * where its clamped proposal actually moved a `topics` row, and
+   * `interval` where it moved none and the increment the claim
+   * already made stands. So the dispatcher's row and the research
+   * pass's are a pair, and reading the two together is what says
+   * which mode set that topic's next due time: `interval` on both
+   * is the increment standing, and `agent` on the second is the
+   * proposal having landed.
+   *
    * The other cost of the finer row is an absence. A tick claiming
    * nothing opens none at all, so this table records what a
    * dispatcher dispatched and never that one ran, and a stopped
@@ -340,12 +353,14 @@ export const runs = pgTable('runs', {
  * have written the row rather than against the rows. A ledger kept
  * only in a database has a second limit, that it is unreadable in
  * exactly the outage it would explain; the design this port draws
- * from answered that with a second copy on disk, and whether the
- * pairing is carried here is phase 6's to settle.
+ * from answered that with a second copy on disk, and phase 6 settled
+ * that the pairing is not carried: the three workflows that call a
+ * model write this row and nothing else, so that limit stands.
  *
  * `ar-ingest` writes these rows, from phase 5, one per call its model
- * node made; `ar-research` and `ar-digest` join it in phase 6. Nothing
- * has run any of them, for the reason the `runs` header above gives.
+ * node made, and `ar-research` and `ar-digest` joined it on the same
+ * terms from phase 6, one row per call apiece. Nothing has run any of
+ * them, for the reason the `runs` header above gives.
  */
 export const llmCalls = pgTable('llm_calls', {
   /** Surrogate key; see `domains.id` for why `number` mode. */
@@ -654,8 +669,10 @@ export const benchmarkCases = pgTable('benchmark_cases', {
  * `./scheduling.ts`, and the two answer different questions — a
  * subscription is what a domain wants delivered and how often, this
  * is what was produced. Which of the two a renderer reads from, this
- * row or the findings underneath it, is `ar-digest`'s to settle in
- * phase 6.
+ * row or the findings underneath it, was settled in phase 6 as BOTH:
+ * `ExportRenderInput` in `src/exports/index.ts` is handed this row and
+ * the findings the pass selected, the briefing saying what the period
+ * came to and the findings being what a format lays out.
  *
  * The divergence from the design this port draws from is the whole
  * shape rather than a column, so reading that design's table first
@@ -665,8 +682,10 @@ export const benchmarkCases = pgTable('benchmark_cases', {
  * Here the text is the point, the audio is not carried, and what
  * goes with that key is idempotence; see `generated_at` below.
  *
- * Nothing writes these rows yet. `ar-digest` is the workflow that
- * will, phase 6.
+ * `ar-digest` writes these rows, from phase 6, one per pass over a
+ * domain's period, storing the drafted prose as `body` and the
+ * assembly as `payload` in one statement. Nothing has run it, for the
+ * reason the `runs` header above gives.
  */
 export const briefings = pgTable('briefings', {
   /** Surrogate key; see `domains.id` for why `number` mode. */

@@ -319,9 +319,9 @@ export const FORBIDDEN_PATTERNS: readonly ForbiddenPattern[] = [
   },
   // Carries its scheme separator rather than matching the application
   // name alone: `obsidian_md` is a legitimate `ExportFormat` member in
-  // `src/exports/index.ts`, and phase 6 adds a renderer module named
-  // after it. A bare-name needle would flag the port's own export format
-  // on the day it lands.
+  // `src/exports/index.ts`, and phase 6 landed a renderer module named
+  // after it. A bare-name needle flags the port's own export format in
+  // both of those places.
   {
     id: 'vault-uri',
     description:
