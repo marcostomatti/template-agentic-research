@@ -307,7 +307,20 @@ reading).
   the `patternId`/path/line sets BOTH ways. Measured at the q06 wrap: 752
   files / 8 hits at the base against 803 / 8 at the tip, 0 added and 0
   removed. The totals agreeing is the weaker reading — a hit moving between
-  two files leaves the count unchanged.
+  two files leaves the count unchanged. The LINE-keyed set has the
+  complementary fault, and it MANUFACTURES a finding rather than hiding
+  one: a hit that merely moved down a file the branch edited for an
+  unrelated reason comes back as one ADDED plus one REMOVED. Measured at
+  the q15 wrap — a carried-in law statement at `packages/ui/AGENTS.md:107`
+  read 113 at the tip, exactly the six lines another commit on the same
+  branch added above it. So take a SECOND diff with the line number
+  DROPPED, as a COUNT per `(patternId, path)` rather than a membership
+  set, and settle any pair it leaves by comparing the two line STRINGS
+  for byte equality. An unmoved line number is not the converse evidence
+  either: this file's OWN hit stayed at line 216 across every edit that
+  branch made to it, this bullet included, because they all landed
+  beneath it. So `git log <base>..HEAD -- <path>` is what says whether a
+  hit's file was touched, and a stable line number says nothing at all.
 - NEVER print a `ForbiddenMatch` wholesale. The record carries `line`
   verbatim by design, so a probe that dumps matches seeds the banned string
   into terminal scrollback, the tool-result capture and any file the run is
