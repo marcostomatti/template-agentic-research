@@ -204,11 +204,12 @@ compose now that theirs has landed.
 - `EntityCard` had NO stand-in on purpose, and now needs none. An
   app-local card abstraction would have had to be unwound to land the
   promoted component, which is the opposite of what a stand-in is for
-  — so the card surfaces are refitted onto it one at a time, and the
-  ones that have not been reached yet still compose `Card` directly.
-  The lexicon grid was the first and the agents grid the second, so
-  the connector grid in `src/pages/tools/ToolsPage.tsx` is the one
-  card surface still composing `Card` itself.
+  — so the card surfaces were refitted onto it one at a time:
+  lexicon, then agents, then the connector grid in
+  `src/pages/tools/ToolsPage.tsx`. All three are refitted now, and
+  `Card` is imported nowhere under `src/` — so a new card surface
+  composes `EntityCard`, and reaching for `Card` is the thing to
+  explain rather than the default.
 - `src/components/FilterBadgeRow.tsx` is app-local for the opposite
   reason to `PageHead`: it is NOT waiting to be promoted. `@ar/ui`
   ships no `FilterBadge` (measured — zero occurrences under

@@ -6,9 +6,9 @@
  *
  * Five of the six surfaces take this shape — the digest and sources
  * list rows in a `Table`, the lexicon, agents and tools list cards in
- * a `Grid`. Settings is the one that does not: it is a single form
- * with no rows to filter and none to open, so it composes its own
- * column and never comes through here.
+ * an `EntityCardGrid`. Settings is the one that does not: it is a
+ * single form with no rows to filter and none to open, so it composes
+ * its own column and never comes through here.
  *
  * ## Why this one is not a stand-in
  *
@@ -48,9 +48,10 @@
  * it.
  *
  * This is the detached one, and the reason is that attached is not
- * available to every caller: three of the five list surfaces render a
- * `Grid` of cards, which has no frame to hand over. One skeleton all
- * five share is worth more than a presentation two of them could use.
+ * available to every caller: three of the five list surfaces render an
+ * `EntityCardGrid` of cards, which has no frame to hand over. One
+ * skeleton all five share is worth more than a presentation two of
+ * them could use.
  *
  * A surface with no filters passes no `controls` and gets no toolbar
  * at all — an empty bordered band reads as a control strip that
@@ -107,7 +108,8 @@ export interface ListPageProps extends PageHeadProps {
    */
   readonly controls?: ReactNode;
   /**
-   * What the surface lists — a `Table` of rows, or a `Grid` of cards.
+   * What the surface lists — a `Table` of rows, or an
+   * `EntityCardGrid` of cards.
    *
    * Rendered into the column directly rather than through a wrapper,
    * so a body of several elements stacks on the same rhythm as the

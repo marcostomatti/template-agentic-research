@@ -37,6 +37,11 @@
  * which costs this page the one thing it is uniquely able to show. The
  * reading lives on the delivery rows instead.
  *
+ * Nothing stands in for it either: the card passes `EntityCard` no
+ * `meta` slot at all, so no rule is drawn under an absence. A card
+ * whose bottom edge borders empty space reads as a field that failed
+ * to load rather than as one nothing has yet.
+ *
  * ## No toolbar
  *
  * `ListPage` renders no filter bar for a surface that passes no
@@ -73,15 +78,46 @@
  * library's `disabled:opacity-50` — five faded rows read as a section
  * that failed to load rather than as one that is up to date.
  *
- * The one gesture that works is offered, on the cards: a navigation to
- * this surface's editor sub-route.
+ * The one gesture that works is offered on the cards, and now twice
+ * over: the card itself opens this surface's editor sub-route, and
+ * the menu names the same navigation.
  *
- * ## The card is not a link
+ * ## The grid track is the library's, and the page picks it
  *
- * As on the lexicon and agents grids: a card carrying a menu cannot
- * also be a button without nesting one interactive control inside
- * another, and the click gesture arrives with the generic `EntityCard`
- * q15 promotes into `@ar/ui/molecules`.
+ * `EntityCardGrid` owns the track as a variant, so this page carries
+ * no grid-template class at all: it names which of the two minimums
+ * the connector grid takes and leaves the rest to `@ar/ui`. `lg` is
+ * the 340px the UI spec asks for here, and the wider of the two
+ * because a connector card carries a stored config block — a key and
+ * a value on one line, both clipped at the 300px the other grids take,
+ * would leave a card saying which keys are set and not what they are
+ * set to.
+ *
+ * Spelled rather than left to the variant's own default, for the
+ * reason the lexicon and agents headers give: it is a real choice,
+ * and both of those already name this grid as the one that takes the
+ * other track.
+ *
+ * ## The card opens, and the menu still works
+ *
+ * The UI spec has a card click open its editor, and `EntityCard` is
+ * how a card carrying a menu gets one without nesting an interactive
+ * control inside another: the TITLE is the button, an `absolute
+ * inset-0` child stretches its hit area over the whole card, and the
+ * `action` slot sits in a positioned layer above that overlay. One
+ * focusable open control per card, with the menu still reachable on
+ * its own.
+ *
+ * What it costs is where things may go. The overlay covers the badge
+ * row and the config block, so neither is selectable and nothing in
+ * either may be interactive — which is why the `RowContextAction` is
+ * passed as a SLOT rather than written into markup this page controls.
+ *
+ * The menu keeps its `Edit connector` item beside the gesture that
+ * now duplicates it: it is the same navigation, and an entry dropped
+ * because the card learned to open would read as one that was taken
+ * away. It is still the only action offered, for the reason the
+ * section above gives about the three the spec names.
  *
  * Nothing in this file is reachable from the unit suite, which is
  * node-only and collects `.ts` alone. Its bindings are proven by a
@@ -94,10 +130,10 @@ import type { Connector } from '../../data/types';
 
 import {
   Badge,
-  Card,
   EmptyState,
+  EntityCard,
+  EntityCardGrid,
   FormattedRelativeTime,
-  Grid,
   Icon,
   RowContextAction,
   SectionCard,
@@ -261,7 +297,10 @@ const ConnectorsBody = ({
   }
 
   return (
-    <Grid>
+    // `lg` is the 340px track — spelled rather than defaulted, per
+    // the page header on why a surface states which of the two it
+    // takes, and on why this is the grid that takes the wider one.
+    <EntityCardGrid min="lg">
       {connectors.map((connector) => (
         <ConnectorCard
           key={connector.id}
@@ -269,7 +308,7 @@ const ConnectorsBody = ({
           onEdit={onEdit}
         />
       ))}
-    </Grid>
+    </EntityCardGrid>
   );
 };
 
@@ -284,10 +323,22 @@ interface ConnectorCardProps {
 /**
  * One configured service, as a card.
  *
- * The name sets in the monospace face because it is a stored key
- * rather than a word this surface chose — the same treatment the
- * agents card gives a persona role — and it is the card's heading
- * because a connector's identity is its name within its kind.
+ * The name is the card's title because a connector's identity is its
+ * name within its kind. It gives up the monospace face this page's
+ * own heading gave it: `EntityCard` takes `title` as a string and
+ * draws it itself, and a page reaching past that to restyle one
+ * library heading would be this app choosing the library's typography
+ * for one surface, on the last of three grids meant to read alike.
+ * The agents card gave the same face up for the same reason. What it
+ * was saying is still said a few lines down, where a reader can act
+ * on it: the stored config sets key and value alike in monospace,
+ * which is where a token is actually compared.
+ *
+ * Everything an operator can DO with the connector is passed to
+ * `EntityCard` rather than rendered here — `onOpen` makes the title
+ * the open control, and `action` is the layer the card keeps above
+ * the overlay that gesture stretches. Everything they only READ goes
+ * in the badge row and the body, which the overlay covers.
  *
  * @param props - The connector and the gesture the card reports.
  * @returns The card.
@@ -297,47 +348,42 @@ const ConnectorCard = ({ connector, onEdit }: ConnectorCardProps) => {
   const status = connectorStatusFacet(classifyConnector(connector));
 
   return (
-    <Card
-      header={(
+    <EntityCard
+      title={connector.name}
+      // The open gesture. `EntityCard` derives the card's hover
+      // affordance from this being present, so there is no second
+      // thing to keep in step with it.
+      onOpen={() => onEdit(connector.id)}
+      badges={(
         <>
-          {/* The card is a section of the page, so its title is an
-              `h2` — cancelling the two element defaults `tokens.css`
-              gives one, and leaving weight and colour to it. */}
-          <h2
-            className="m-0 min-w-0 truncate font-mono text-base"
-            title={connector.name}
-          >
-            {connector.name}
-          </h2>
+          <Badge tone={kind.tone} size="sm">{kind.label}</Badge>
 
-          {/* One action, and it is the one that works. See the header
-              on the three the spec names and this round cannot
-              honour. */}
-          <RowContextAction
-            actions={[{
-              icon: 'square-pen',
-              title: 'Edit connector',
-              onClick: () => onEdit(connector.id),
-            }]}
-            entityType="connector"
-            entityName={connector.name}
-          />
+          <span className="ml-auto flex items-center gap-1.5 text-[12.5px] text-fg2">
+            {/* No `label`: the words beside it already ARE the status,
+                and naming the dot would announce them a second time. */}
+            <StatusIndicator tone={status.tone} />
+            {status.label}
+          </span>
         </>
       )}
+      // One action, and it is the one the card itself now performs.
+      // Kept because it is the same navigation under a name — see
+      // the page header on the three the spec names and this round
+      // cannot honour.
+      action={(
+        <RowContextAction
+          actions={[{
+            icon: 'square-pen',
+            title: 'Edit connector',
+            onClick: () => onEdit(connector.id),
+          }]}
+          entityType="connector"
+          entityName={connector.name}
+        />
+      )}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={kind.tone} size="sm">{kind.label}</Badge>
-
-        <span className="ml-auto flex items-center gap-1.5 text-[12.5px] text-fg2">
-          {/* No `label`: the words beside it already ARE the status,
-              and naming the dot would announce them a second time. */}
-          <StatusIndicator tone={status.tone} />
-          {status.label}
-        </span>
-      </div>
-
       <ConnectorConfig connector={connector} />
-    </Card>
+    </EntityCard>
   );
 };
 
@@ -354,6 +400,12 @@ interface ConnectorConfigProps {
  * config runs to: cards in a grid row stretch to the tallest, and
  * seven config blocks at seven different heights would read as seven
  * different kinds of thing.
+ *
+ * It is the card's BODY rather than its `meta` slot, though it draws
+ * the footer's own rule: `entityCardMeta` lays its children out as a
+ * wrapping ROW, and a key-and-value list read down a column is the
+ * one shape that layout cannot carry. Passing it there would also
+ * have drawn a second border over the one below.
  *
  * Values truncate with the whole string kept in a `title`, which is
  * the treatment the sources table gives an endpoint and for the same
