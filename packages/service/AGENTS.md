@@ -711,18 +711,26 @@ router over the memory store, mounts them on a bare express app and prints
 probe in one run — the 200s are the discriminating half, since an
 id-addressed 404 is exactly what an UNMOUNTED path answers too.
 
-`tests/api/wiring.test.ts` is bounded by the SHIPPED rate limiter and the
-ceiling is closer than the file reads: one `createService` serves every
-case, `lib/express` mounts its limiter app-wide at 100 requests a minute,
-and each table row costs TWO. A group of any size overruns it, and the
-failure presents as a `429` on whichever rows vitest happened to run last,
-i.e. as a flaky mount rather than as a limit. Read the headroom in the same
-run that adds rows — minimise `Number(res.headers['ratelimit-remaining'])`
-over the responses, which needs no extra request. The repair when it comes
-is a second service per describe, not a wider window. Note the limiter
-bounds a file PER `createService`, so a file that boots a service per
-capture window gets a fresh budget each time and this ceiling does not
-generalise to it.
+`tests/api/wiring.test.ts` is bounded by the SHIPPED rate limiter, and the
+repair this paragraph used to predict has landed: it boots ONE service per
+describe rather than one for the file. `lib/express` mounts its limiter
+app-wide at 100 requests a minute from a literal in `middleware.ts`, each
+limiter carries a store of its own, and each table row costs TWO — so the
+budget is per `createService`, and a describe that boots one starts from a
+fresh 100. Measured at that rework: three services spending 39, 41 and 5 of
+their own 100, against 82 of a single 100 before it, which is what a
+thirteen-route wave costing 26 did not fit into. The ceiling is now
+ENFORCED rather than recorded. The last case of each describe reads
+`Number(res.headers['ratelimit-remaining'])` off a real response — which
+needs no request the run was not already making — and holds
+`limit - remaining` against what that describe's own rows predict, while a
+case in `the route table` refuses a wave whose rows have outgrown the
+window. Adding rows to an EXISTING describe still spends that describe's
+budget, and a breach still presents as a `429` on whichever rows vitest ran
+last, i.e. as a flaky mount rather than as a limit. The same per-service
+rule is why a file that boots a service per capture window
+(`tests/api/request-echo.test.ts`) gets a fresh budget each time and has
+never had this ceiling at all.
 
 The other complement is booting it by hand, which is the only evidence a
 WIRING change has:
