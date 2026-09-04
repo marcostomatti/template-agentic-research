@@ -239,6 +239,20 @@ wanted in both places must be made in both repos.
   --show-current`: a correct branch under a wrong pwd is cwd and never a
   checkout, and no reading needs re-running. Use ABSOLUTE paths in any
   probe spanning more than one call.
+- `git status --short -uall` is the usual discriminator for that trap, and
+  it is BLIND whenever the mis-landed path is GITIGNORED — which is the
+  case for the file the loop writes on every run. Measured this session: a
+  `cd packages/service` persisted from an eslint call three calls earlier,
+  so a python heredoc opening the relative `progress.txt` wrote
+  `packages/service/progress.txt`, `packages/service/.gitignore:5` ignored
+  it, `git status --short -uall` printed ZERO BYTES, and the root file was
+  still its uncompacted self while every number the probe printed was
+  correct about the file it had actually written. The reading that catches
+  it is a `wc -c` (or an `ls -l`) on the ABSOLUTE path the edit was meant
+  for, in the SAME call as the edit — the counter-that-must-move rule,
+  aimed at the target rather than at its contents. Spell an absolute path
+  in any probe that writes, and never trust a clean `git status` as
+  evidence about an ignored file.
 - `.claude/worktrees/<name>/` holds FULL sibling checkouts of this repo,
   excluded at `.git/info/exclude`, so `git grep` and `git ls-files` never
   see them while a plain `grep -r` does (measured on one doc heading: 1
