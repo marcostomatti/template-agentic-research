@@ -47,8 +47,9 @@
  * THE LIST IS FILLED A WAVE AT A TIME, and every wave has now
  * landed: three modules holding twenty-seven entries between them,
  * twenty of them reads and seven the mutations the API spec names
- * among its safe ones. What is still outstanding is the server
- * rewrite that loops over this list, and the exposure invariant.
+ * among its safe ones. `src/mcp/server.ts` registers every one of
+ * them in one loop, so this literal is the whole of what a client
+ * is offered. What is still outstanding is the exposure invariant.
  * So a route this service serves that no entry names is an absence
  * somebody decided rather than one nobody has reached yet, and
  * `tests/invariants/mcp-exposure.test.ts` is where the exposed set

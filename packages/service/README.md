@@ -55,8 +55,12 @@ Two ways to combine them:
 - **Option 2 — one stack, two services (the wired default).** `createService`
   and `createMCP` run as two processes on their own ports; they run
   independently, and deployed unmodified they share an instance exposing two
-  ports. Tools live in `src/mcp/tools/` (see `echo.ts` for the 4-export
-  convention).
+  ports. Tools live in `src/mcp/tools/`: `registry.ts` holds the contract
+  and `MCP_TOOLS`, the written-out list `src/mcp/server.ts` registers in
+  one loop, and the wave modules beside it declare the entries. Each entry
+  carries the input schema its HTTP route already exports and calls the
+  same service function that route calls, so neither protocol decides
+  anything the other does not.
 
 ## What's wired
 
