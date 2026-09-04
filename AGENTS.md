@@ -507,9 +507,15 @@ reading).
   is live. Where it is a bare multi-fragment LABEL, the only unguarded form
   available is a LEADING FRAGMENT of it, and that form reproduces the
   `2 hits across the invariant's own two files` reading while the FULL
-  label reproduces `zero files anywhere`. Both are correct about different
-  probes and the DEAD verdict is the same either way, so SAY WHICH FORM a
-  control used — a bare "the host control is dead" sentence is
+  label reproduces `zero files anywhere` over the SCAN SURFACE, which is
+  the denominator that clause is about: measured at the q13 tip the full
+  label answers 0 over `collectScannedFiles` and ONE over `git ls-files`,
+  that one being the legitimate `NOTICE` attribution. The leading
+  fragment's own verdict moves with the fragment COUNT too, live across
+  439 files at one fragment and answering that same `NOTICE` line alone
+  at two. Both are correct about different probes and the DEAD verdict is
+  the same either way, so SAY WHICH FORM and WHICH DENOMINATOR a control
+  used — a bare "the host control is dead" sentence is
   unfalsifiable without it. The related claim that the invariant's own two
   files hit ALL the controls "by construction" is FALSE for the two needles
   with no false-positive fixture: both are assembled from fragments in
