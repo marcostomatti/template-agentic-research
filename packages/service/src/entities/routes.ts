@@ -210,6 +210,48 @@ const entityAddressSchema = z
   .object({ id: resourceIdParamSchema })
   .strict();
 
+/**
+ * What the MCP tool over `GET /entities/:id` is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so each entry in `src/mcp/tools/wave-3.ts`
+ * names one schema covering the whole request, spread from the
+ * pieces the route already parses rather than written again.
+ *
+ * The address is the whole of this request — the single get parses
+ * no query at all, and an undeclared parameter sent to it on the
+ * wire is IGNORED rather than refused — so the object carries that
+ * one member, spread from {@link entityAddressSchema}. The tool is
+ * therefore the stricter of the two faces of this route.
+ *
+ * The address const above stays private. Nothing here exports one,
+ * so the sibling routers claim that they agree by intent rather
+ * than by derivation is untouched by this pair.
+ */
+export const entityReadToolInputSchema = z.object({
+  ...entityAddressSchema.shape,
+}).strict();
+
+/**
+ * What the MCP tool over `GET /entities/:id/research` is called
+ * with.
+ *
+ * The address and the shared window, which is the whole of what
+ * this route reads: the collection declares no narrowing of its
+ * own, so there is nothing here beside `?page` and `?perPage`.
+ *
+ * SPREAD RATHER THAN EXTENDED, on the terms the documents list
+ * states one directory over: neither piece carries an object-level
+ * refinement, so a fresh object loses nothing. The cap travels
+ * with it, so a tool asking for more passes than the surface
+ * serves is refused by the bound the route is held to.
+ */
+export const entityResearchListToolInputSchema = z.object({
+  ...entityAddressSchema.shape,
+  ...paginationQuerySchema.shape,
+}).strict();
+
 /** Everything {@link buildEntitiesRouter} needs. */
 export interface EntitiesRouterOptions {
   /**

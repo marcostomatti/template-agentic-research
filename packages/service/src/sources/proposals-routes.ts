@@ -186,6 +186,39 @@ const sourceAddressSchema = z
   .object({ id: resourceIdParamSchema })
   .strict();
 
+/**
+ * What the MCP tool over `GET /sources/:id/pending-configs` is
+ * called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so the entry in `src/mcp/tools/wave-3.ts`
+ * names one schema covering the whole request, spread from the
+ * pieces this route already parses rather than written again.
+ *
+ * SPREAD RATHER THAN EXTENDED: neither piece carries an
+ * object-level refinement, so a fresh strict object loses nothing.
+ * The findings list and the spend summary are the two that compose
+ * the other way round, and each says why beside itself.
+ *
+ * THE QUEUE ONE TOOL READS IS THE QUEUE THE CLI DRAINS. Both this
+ * route and `scripts/approve.ts` select the pending rows in one
+ * order, so a model reading the backlog over MCP and an operator
+ * reading it from a terminal are told the same row is next.
+ *
+ * ONLY THE READ IS HERE. The approval beside it is a write, and
+ * `src/mcp/tools/wave-3.ts` takes it in its own task, with its own
+ * schema declared beside this one when it does.
+ *
+ * The address const above stays private. Nothing here exports one,
+ * so the three routers under this prefix claim that they agree by
+ * intent rather than by derivation is untouched by this schema.
+ */
+export const pendingConfigListToolInputSchema = z.object({
+  ...sourceAddressSchema.shape,
+  ...paginationQuerySchema.shape,
+}).strict();
+
 /** Everything {@link buildSourceProposalsRouter} needs. */
 export interface SourceProposalsRouterOptions {
   /**

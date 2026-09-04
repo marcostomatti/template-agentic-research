@@ -10,8 +10,8 @@
  * file and `tests/invariants/mcp-exposure.test.ts` away together.
  *
  * THREE CLAIMS ABOUT THE LIST, and they now read something:
- * `MCP_TOOLS` carries `./wave-1.ts` and `./wave-2.ts`, with the
- * wave-3 module still to land in its own task. That is worth
+ * `MCP_TOOLS` carries all three wave modules, with only the
+ * wave-3 MUTATIONS still to land in their own task. That is worth
  * stating because it was not true when this file was written — an
  * empty list satisfies all three, so a reader meeting three green
  * cases needs to know whether they read anything. The evidence is

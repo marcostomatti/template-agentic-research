@@ -147,6 +147,37 @@ import { documentListQuerySchema, listDocuments } from './service.js';
  */
 const domainAddressSchema = z.object({ slug: slugParamSchema }).strict();
 
+/**
+ * What the MCP tool over this router one route is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so the entry in `src/mcp/tools/wave-3.ts`
+ * names one schema covering the whole request, spread from the
+ * pieces this route already parses rather than written again.
+ *
+ * SPREAD RATHER THAN EXTENDED, which is the shape every group with
+ * no cross-field check uses and is safe here for that reason:
+ * {@link documentListQuerySchema} adds one optional narrowing to
+ * the shared page and carries no object-level refinement for a
+ * fresh object to lose. The findings list beside it composes the
+ * other way round, and its own comment says why.
+ *
+ * THE CAP AND THE PARSE STATUS TRAVEL WITH IT. `perPage` is the
+ * shared parameter, so a tool asking for more of the corpus than
+ * the surface serves is refused by the same bound the route is
+ * held to, and every body either protocol answers is masked and
+ * cut by `src/documents/service.ts`.
+ *
+ * The address const above stays private. Nothing here exports one,
+ * so the sibling routers claim that they agree by intent rather
+ * than by derivation is untouched by this schema.
+ */
+export const documentListToolInputSchema = z.object({
+  ...domainAddressSchema.shape,
+  ...documentListQuerySchema.shape,
+}).strict();
+
 /** Everything {@link buildDocumentsRouter} needs. */
 export interface DocumentsRouterOptions {
   /**

@@ -130,6 +130,35 @@ import {
   summariseSpend,
 } from './spend-service.js';
 
+/**
+ * What the MCP tool over this router one route is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES, which is the rule
+ * every `...ToolInputSchema` on this surface is composed under: an
+ * HTTP route parses its address and its query apart, and a tool is
+ * handed a single arguments object. This route has no address at
+ * all, so the whole of what it reads is {@link spendQuerySchema}
+ * and there is nothing to compose it with.
+ *
+ * SO IT IS THAT BINDING AND NOT A COPY OF IT. The sibling groups
+ * build a fresh strict object out of their pieces; doing that here
+ * would drop the object-level check {@link spendQuerySchema}
+ * inherits from `timeWindowQuerySchema`, zod carrying such a check
+ * outwards only — measured, the spread form accepts a `since`
+ * after its `until` while refusing every undeclared key exactly as
+ * the real schema does. A tool composed that way would take a
+ * window its own route refuses, and only that one request would
+ * ever say so. Aliasing instead makes the tool argument object the
+ * VERY object `parseQuery` is handed below, which is the strongest
+ * form the identity rule can take.
+ *
+ * IT IS DECLARED HERE ALL THE SAME, rather than left to
+ * `src/mcp/tools/wave-3.ts` to import from the service, so every
+ * entry in that module names one contract per ROUTE and reads the
+ * same way whether or not the route it mirrors has an address.
+ */
+export const spendSummaryToolInputSchema = spendQuerySchema;
+
 /** Everything {@link buildSpendRouter} needs. */
 export interface SpendRouterOptions {
   /**

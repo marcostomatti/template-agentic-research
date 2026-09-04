@@ -162,6 +162,49 @@ const runAddressSchema = z
   .object({ id: resourceIdParamSchema })
   .strict();
 
+/**
+ * What the MCP tool over `GET /runs` is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so each entry in `src/mcp/tools/wave-3.ts`
+ * names one schema covering the whole request, spread from the
+ * pieces the route already parses rather than written again. This
+ * collection has no address at all, so its whole request is the
+ * query and that is all this object holds.
+ *
+ * SPREAD RATHER THAN EXTENDED, on the terms the documents list
+ * states: {@link runListQuerySchema} adds one optional narrowing
+ * to the shared page and carries no object-level refinement for a
+ * fresh object to lose. The spend summary beside it does carry
+ * one, and its own comment says what that costs.
+ *
+ * AN ABSENT `domain` WIDENS ON THIS PROTOCOL TOO. There is no
+ * spelling here that asks for the domain-less ticks ALONE, exactly
+ * as there is none on the wire — the module header argues that
+ * once for both faces of the route.
+ */
+export const runListToolInputSchema = z.object({
+  ...runListQuerySchema.shape,
+}).strict();
+
+/**
+ * What the MCP tool over `GET /runs/:id` is called with.
+ *
+ * The address is the whole of this request — the single get parses
+ * no query at all, and an undeclared parameter sent to it on the
+ * wire is IGNORED rather than refused — so the object carries that
+ * one member, spread from {@link runAddressSchema}. The tool is
+ * therefore the stricter of the two faces of this route.
+ *
+ * The address const above stays private. Nothing here exports one,
+ * so the sibling routers claim that they agree by intent rather
+ * than by derivation is untouched by this pair.
+ */
+export const runReadToolInputSchema = z.object({
+  ...runAddressSchema.shape,
+}).strict();
+
 /** Everything {@link buildRunsRouter} needs. */
 export interface RunsRouterOptions {
   /**

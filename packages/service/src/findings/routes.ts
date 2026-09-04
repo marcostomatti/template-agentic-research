@@ -188,6 +188,49 @@ const findingAddressSchema = z
   .object({ id: resourceIdParamSchema })
   .strict();
 
+/**
+ * What the MCP tool over `GET /domains/:slug/findings` is called
+ * with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so the entry in `src/mcp/tools/wave-3.ts`
+ * names one schema covering the whole request, built from the
+ * pieces this route already parses rather than written again.
+ *
+ * EXTENDED FROM THE QUERY RATHER THAN SPREAD INTO A FRESH OBJECT,
+ * which is where this pair departs from every wave-1 and wave-2
+ * one, and the departure is load-bearing. `findingListQuerySchema`
+ * inherits the OBJECT-LEVEL check that refuses an inverted window,
+ * and zod carries such a check outwards only: a
+ * `z.object({ ...address.shape, ...query.shape }).strict()` was
+ * measured accepting a `since` after its `until` while refusing
+ * every undeclared key exactly as this does. So the spread form
+ * would give a tool a window its own route refuses, with nothing
+ * but that one request able to say so, and the direction of the
+ * composition is what keeps the two protocols answering alike.
+ *
+ * The address const above stays private. Nothing here exports one,
+ * so the sibling routers claim that they agree by intent rather
+ * than by derivation is untouched by this pair.
+ */
+export const findingListToolInputSchema = findingListQuerySchema
+  .extend(domainAddressSchema.shape);
+
+/**
+ * What the MCP tool over `GET /findings/:id` is called with.
+ *
+ * The address is the whole of this request — the single get parses
+ * no query at all, and an undeclared parameter sent to it on the
+ * wire is IGNORED rather than refused — so the object carries that
+ * one member, spread from {@link findingAddressSchema}. The tool is
+ * therefore the stricter of the two faces of this route, which is
+ * the same asymmetry the wave-2 `run-now` pair carries.
+ */
+export const findingReadToolInputSchema = z.object({
+  ...findingAddressSchema.shape,
+}).strict();
+
 /** Everything {@link buildFindingsRouter} needs. */
 export interface FindingsRouterOptions {
   /**
