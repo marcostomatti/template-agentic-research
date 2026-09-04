@@ -1,19 +1,26 @@
 /**
- * The findings, documents and registry stores driven against a real
- * Postgres, through the real migrations. The findings half: a domain
- * with five findings written in an order that is neither the digest
- * order nor its reverse, that order answered by a real `ORDER BY`
- * with an unscored finding last, the same order with the score key
- * gone, the verdict in force over a finding re-judged twice, a
- * ruling appended beside the one it followed, and the jsonb read
- * that files a finding under a category. The documents half: a
+ * The findings, documents, registry, passes and gate stores driven
+ * against a real Postgres, through the real migrations. The findings
+ * half: a domain with five findings written in an order that is
+ * neither the digest order nor its reverse, that order answered by a
+ * real `ORDER BY` with an unscored finding last, the same order with
+ * the score key gone, the verdict in force over a finding re-judged
+ * twice, a ruling appended beside the one it followed, and the jsonb
+ * read that files a finding under a category. The documents half: a
  * stored control byte answered as an escape, a body cut at the
  * shared cap, and the one member of the masked class a `text` column
  * cannot hold. The registry half: a rename whose key is recomputed
  * and whose old key is released, a colliding rename refused with its
  * SQLSTATE read apart from the reason this repository decided, an
  * alias refusing the delete of the subject it points at, and a
- * research stamp refused until an approval has landed.
+ * research stamp refused until an approval has landed. The passes
+ * half: a page holding a domain-scoped run beside a domain-less
+ * tick, a ledger cut at the cap with its whole count beside it, and
+ * a spend summary bucketed at UTC under a session whose zone is not.
+ * The gate half: an application refused until an approval has
+ * landed, and one transaction writing the approval, both feed
+ * columns and the closing stamp — or, when it fails halfway, none of
+ * them.
  * Self-skips when AR_LIVE_DATABASE_URL is unset — run via:
  *
  *   bun run stress:start && bun run test:live && bun run stress:stop
@@ -34,8 +41,10 @@
  * against a member that is not text, a `WHERE` that stopped
  * narrowing — each is reported here and nowhere else.
  *
- * THIRTEEN READINGS BELOW ARE THINGS AN IN-MEMORY MAP CANNOT DO,
+ * EVERY READING BELOW IS SOMETHING AN IN-MEMORY MAP CANNOT DO,
  * which is the same argument put sharply enough to be checkable.
+ * The number is deliberately not quoted: it moves with every case
+ * added, and a figure nobody re-derives reads as a claim.
  *
  * THE ORDER IS A REAL `ORDER BY` AND THE COMPARATOR IS A SECOND
  * DERIVATION OF IT. `findingOrder` in `src/findings/db-store.ts` is
@@ -236,8 +245,9 @@
  * NINETEEN MUTATIONS WERE RUN AGAINST THE FIRST NINE CASES and
  * TWELVE MORE AGAINST THE FOUR REGISTRY ONES, each leg twice, every
  * leg collecting the whole file it was measured against and every
- * red set identical across the two passes; none reddened nothing. Of the nineteen, twelve
- * patch `src/findings/db-store.ts`, two `src/documents/db-store.ts`
+ * red set identical across the two passes; none reddened nothing.
+ * Of the nineteen, twelve patch `src/findings/db-store.ts`, two
+ * `src/documents/db-store.ts`
  * and three `src/documents/service.ts`. The twelve patch five
  * modules: six `src/entities/db-store.ts`, two
  * `src/entities/service.ts`, one `src/lib/entity-name-norm.ts`, two
@@ -316,21 +326,198 @@
  * case was re-planted so that no row's id equals the id of the
  * domain carrying it, two sequences both restarting at one otherwise
  * agreeing. And this file's own `driverFields` reading the value it
- * caught rather than one link down reddens the two cases whose
- * refusal is a raw driver error, which is what says the `cause` walk
- * is load-bearing rather than decoration.
+ * caught rather than one link down reddens the two REGISTRY cases
+ * whose refusal is a raw driver error, which is what says the
+ * `cause` walk is load-bearing rather than decoration. It reaches a
+ * third case now that the gate half is here, and the grid below
+ * records the wider figure.
+ *
+ * TWENTY-ONE MORE WERE RUN AGAINST THE SIX PASSES-AND-GATE CASES,
+ * each leg twice, every leg collecting the whole file it was
+ * measured against and every red set identical across the two
+ * passes. Thirteen patch `src/runs/db-store.ts`, two
+ * `src/runs/service.ts`, five `src/sources/db-store.ts` and one this
+ * file itself. Twenty reddened; the twenty-first is an honest zero
+ * named below.
+ *
+ * FIFTEEN OF THEM REDDEN EXACTLY THE CASE THEY ARE NAMED FOR. The
+ * page: the domain equality dropped, the same equality widened to
+ * keep the tick, the `started_at` key dropped, and the `id` tiebreak
+ * reversed. The ledger: its two ordering keys reversed one at a
+ * time, and the run scope dropped from the page and from the count
+ * separately — two methods, two legs, neither standing in for the
+ * other. The summary: the day bucket taken at the session's zone
+ * rather than at the named one, the join made INNER, a null sum
+ * coerced to zero, the lower window bound dropped, and the domain
+ * narrowing dropped. And two on the service: the truncation
+ * comparison loosened to `>=`, and the answered length reported as
+ * the whole count.
+ *
+ * THE OTHER FIVE LAND ON TWO CASES EACH OR ON THREE, and every one
+ * of them is worth the spread. Issuing the three statements of
+ * `approveAndApplyProposal` OUTSIDE a transaction reddens the apply
+ * case AND the forced-failure one, which is the atomicity read from
+ * both of its sides: without the transaction the two stamps stop
+ * agreeing, and the approval statement 1 wrote survives the refusal
+ * statement 2 raises. Reversing the queue's ordering and dropping
+ * its status predicate reach the two cases that read the queue.
+ * Leaving the contract unwritten by the apply reddens the apply case
+ * and the second attempt the forced-failure one makes. And this
+ * file's own `driverFields` leg now reddens THREE rather than the
+ * two the registry paragraph above records, the added member being
+ * the gate case beneath it — a carried-in leg gaining exactly the
+ * new case that reads a raw driver refusal, which is predictable
+ * rather than drift.
+ *
+ * THE HONEST ZERO IS THE APPROVAL STAMP'S IDEMPOTENCE, and it is
+ * structural rather than a gap a case could close. Replacing
+ * `coalesce(approved_at, now())` with a bare `now()` reddens
+ * NOTHING here, because no row below is ruled on twice: the first
+ * ruling has no earlier stamp to keep, and the instant a re-date
+ * would write is the same transaction's `now()` either way. What
+ * could close it is a row this surface refuses to produce —
+ * applying twice is a `409` before the store is reached — so the
+ * zero belongs to `RULING_ACTS` rather than to this file.
  *
  * WHAT NO LEG HERE REACHES, said rather than left to be inferred.
  * The refusal the NUL case reads is the SERVER's, so nothing in this
  * package can be edited to stop it being raised; the same is true of
  * the driver's surrogate replacement, of `documents_hash_unique`, of
  * the per-domain scope of `entities_domain_id_name_norm_unique`, of
- * `research_pool_approval_check`, of the fact that a refused
+ * `research_pool_approval_check`, of
+ * `source_config_proposals_approval_check`, of `now()` being the
+ * transaction's start rather than the statement's, of a `bigint`
+ * sum arriving as text, of the fact that a refused
  * statement leaves both its tables as it found them, and of every
  * `ON DELETE` in the schema — the `alias_of` one this file now reads
  * included. Each is declared in a migration whose breakage fails
  * `applyMigrations` and takes the whole file down rather than
  * reddening a case.
+ *
+ * A NULL DOMAIN IS EXCLUDED BY THE COMPARISON AND NOT BY A BRANCH,
+ * which is three-valued logic rather than a rule this package
+ * keeps. `domain_id = $1` is UNKNOWN on a maintenance tick, so the
+ * tick is out of one domain's page for the same reason it is out of
+ * any other's — and it is IN the unfiltered one, which is the pair
+ * that says the widening is an absent predicate rather than a
+ * second query. A store holding rows in a map decides both of those
+ * with an `if`, so neither is a reading there.
+ *
+ * TWO PASSES OPENED BY ONE TICK TIE TO THE MICROSECOND, because
+ * `started_at` defaults to `now()` and `now()` is the TRANSACTION's
+ * start rather than the statement's. The pair below is planted the
+ * way a deployment makes it — two inserts inside one transaction,
+ * no stamp written by the fixture — and `id` is the only thing
+ * separating them afterwards. For a page with a boundary in it that
+ * is the difference between a row shown once and a row shown twice.
+ *
+ * THE LEDGER CUT IS READ BY MEMBERSHIP AND THE CAP IS NEVER
+ * TRANSCRIBED. The long pass carries `RUN_LEDGER_CAP` calls plus an
+ * overshoot, planted with ascending stamps so the ids ascend with
+ * them — the newest rows are then also the highest ids and which
+ * END the cut took is readable rather than inferred. A literal plant
+ * would go on reading as `past the cap` after the cap moved above
+ * it, answering nothing while staying green.
+ *
+ * THE TRUNCATION FLAG IS A COMPARISON AND IT IS LIVE ONLY WHERE THE
+ * TWO NUMBERS ARE EQUAL, so the short pass and the silent one are
+ * what pin it. `llmCallCount > ledger.length` and `>=` answer alike
+ * for the pass that overflowed and differently for the two that did
+ * not, which is why a case reading only the long ledger leaves the
+ * operator itself covered by nothing.
+ *
+ * A CALL NAMING NO PASS IS UNREACHABLE FROM A SCOPED READ, whatever
+ * id is asked for, `run_id = $1` being UNKNOWN on it — and the same
+ * row IS counted by the spend summary, which is the one method that
+ * sees it. Both halves are planted here, on both sides of the cut:
+ * the short pass's calls are stamped NEWER than every row of the
+ * long one, so an unscoped page would answer them at its head, and
+ * the unattributed call is stamped OLDER than all of them, so an
+ * unscoped COUNT is what reports it.
+ *
+ * THE DAY BUCKET IS `date_trunc` IN ITS THREE-ARGUMENT FORM AND THE
+ * ZONE IS NAMED, which is unreadable under a session already at
+ * UTC. So the spend case opens a connection of its own, moves its
+ * `TimeZone` to a zone that is not UTC, and takes every reading
+ * there. Two calls a millisecond either side of a UTC midnight land
+ * in TWO buckets under the named zone and in ONE under the
+ * session's, and the case counts both truncations over its own
+ * planted rows in the same connection — so the answer is held
+ * against what this server would otherwise have said rather than
+ * against a sentence.
+ *
+ * `Pool.totalCount` AT ONE IS WHAT MAKES THAT A MEASUREMENT. A
+ * session setting is per CONNECTION, so a pool that opened a second
+ * one would answer half the case at UTC while every assertion still
+ * read plausibly. The pool is ended in a `finally`, which is also
+ * the whole of the cleanup: the zone dies with the connection and
+ * nothing here touches a shared session.
+ *
+ * A SUM ARRIVES AS TEXT AND A SUM OVER NOTHING MEASURED STAYS NULL.
+ * `sum(integer)` is `bigint` in Postgres and the driver hands a
+ * bigint back as a STRING, where `count()` arrives a number — so
+ * the store owes a conversion behind one and none behind the other,
+ * and `Number('')` and `Number(null)` are both `0`, which is what a
+ * bare coercion would answer for a bucket in which nothing was
+ * measured. One planted call carries neither magnitude and one
+ * whole bucket is made of such calls, so the counted call and the
+ * null total are read side by side.
+ *
+ * THE JOIN IS LEFT AND THE PARTITION IS WHAT SAYS SO. The calls of
+ * a domain-less tick and the calls attributed to no pass at all
+ * both land in the null bucket, and an INNER join would drop only
+ * the second while every bucket it did answer stayed right. No
+ * per-bucket assertion can report that; the narrowed summaries
+ * adding up to the unnarrowed one can, and does.
+ *
+ * `source_config_proposals_approval_check` IS PROVEN IN BOTH
+ * DIRECTIONS AND THE REFUSAL COMES FIRST, the shape the other
+ * gate's case one file-half up already takes. A closing stamp on a
+ * row nobody approved is refused by the server, and the SAME stamp
+ * lands once an approval has been written — written the way
+ * `scripts/approve.ts` writes it, an approval without an
+ * application being the state that CLI leaves behind. Neither write
+ * is a port's: nothing on `SourceStore` stamps either column alone,
+ * so both arrive as the driver error drizzle wrapped and the case
+ * reads the SQLSTATE off `cause`.
+ *
+ * THE CHECK READS THE TWO STAMPS AND THE QUEUE READS THE STATUS,
+ * and the row that says so carries an approval with its status
+ * still `pending`. It is storable, the CLI makes it, and it is
+ * still in the queue afterwards — so the two rules are about
+ * different columns rather than two readings of one gate.
+ *
+ * ONE TRANSACTION IS READABLE FROM THE TWO STAMPS IT WROTE. `now()`
+ * is the transaction's start, so the approval and the application
+ * stamped by statements 1 and 3 of `approveAndApplyProposal` carry
+ * the IDENTICAL instant — which is the only evidence anywhere that
+ * the three statements were one transaction rather than three
+ * calls. The control that keeps it from being green over a server
+ * stamping one constant is a second proposal ruled on afterwards,
+ * whose own pair is later than the first's.
+ *
+ * THE TWO DOCUMENTS COME BACK AS THE COLUMN HOLDS THEM AND NOT AS
+ * THE FIXTURE WROTE THEM. jsonb normalises key order, so the
+ * arrangement this file plants is answered with its members in a
+ * different order while being the same value — and the source row
+ * afterwards carries THAT spelling. A comparison of the two
+ * renderings is what says the documents travelled through the
+ * server, where a member-by-member equality is equally green over
+ * an applier that copied the fixture's own object across.
+ *
+ * THE FORCED FAILURE IS A TEMP TABLE SHADOWING `sources` ON ONE
+ * DEDICATED CONNECTION, which is the only way to read the
+ * atomicity: every refusal the real schema can raise is out of that
+ * transaction's reach by construction, per the port. The shadow
+ * carries a COPY of the row and a CHECK refusing the write, so
+ * statement 1 lands on the REAL proposal, statement 2 is refused by
+ * the server, and the rollback takes the approval with it. What is
+ * read afterwards is that the proposal is unruled again and both
+ * source rows are as they were — the state the request can be made
+ * from a second time, which is what the port claims and nothing
+ * else here can check. The shadow dies with the pool: the temp
+ * schema leads the search path, so no statement of this file's
+ * outside that case can see it and nothing is left behind.
  *
  * THE HELPERS THROW RATHER THAN ASSERT, on the terms the sibling
  * live files state: a fixture that answered nothing leaves every
@@ -351,9 +538,19 @@ import type {
   FindingStore,
 } from '../../src/findings/store.js';
 import type { StoreWindow, TimeWindow } from '../../src/http/schemas.js';
+import type {
+  RunRecord,
+  RunStore,
+  SpendBucket,
+} from '../../src/runs/store.js';
+import type {
+  SourceConfigProposalRecord,
+  SourceRecord,
+  SourceStore,
+} from '../../src/sources/store.js';
 import type { Pool } from 'pg';
 
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 
 import {
@@ -361,7 +558,10 @@ import {
   entities,
   findingLabels,
   findings,
+  llmCalls,
   researchPool,
+  runs,
+  sourceConfigProposals,
 } from '../../src/db/schema.js';
 import { StoreRefusal } from '../../src/db/store-errors.js';
 import { createDbDocumentStore } from '../../src/documents/db-store.js';
@@ -379,6 +579,18 @@ import {
 } from '../../src/http/control-bytes.js';
 import { orderFindings } from '../../src/lib/digest-assemble.js';
 import { normalizeEntityName } from '../../src/lib/entity-name-norm.js';
+import { createDbRunStore } from '../../src/runs/db-store.js';
+import {
+  RUN_LEDGER_CAP,
+  getRun,
+  listRuns,
+} from '../../src/runs/service.js';
+import { summariseSpend } from '../../src/runs/spend-service.js';
+import { createDbSourceStore } from '../../src/sources/db-store.js';
+import {
+  approveSourceConfig,
+  listPendingConfigs,
+} from '../../src/sources/proposals-service.js';
 
 import {
   applyMigrations,
@@ -739,6 +951,192 @@ const FOREIGN_KEY_VIOLATION = '23503';
 const CHECK_VIOLATION = '23514';
 
 /**
+ * How every pass this file opens says it was scheduled.
+ *
+ * A `RUN_SCHEDULERS` member, and the column carries a CHECK
+ * generated from that tuple — so a value a reader invents is
+ * refused by the server before any assertion below it runs.
+ */
+const SCHEDULED_BY = 'interval';
+
+/** How every pass this file opens ended. */
+const RUN_STATUS = 'ok';
+
+/** The node the call just below a UTC midnight was made from. */
+const BEFORE_NODE = 'fetch';
+
+/** The node the call exactly at that midnight was made from. */
+const AFTER_NODE = 'reduce';
+
+/** The node every other call in the spend half was made from. */
+const OTHER_NODE = 'judge';
+
+/** The node the long pass ledgers every one of its calls under. */
+const LEDGER_NODE = 'summarise';
+
+/**
+ * Midnight UTC opening the first day the spend window spans, and
+ * the window's own inclusive lower bound.
+ *
+ * Built with `Date.UTC` and NEVER by parsing a stamp, on the terms
+ * {@link at} states: an expectation derived through the reader
+ * under test agrees with a reader that is wrong in the same way.
+ */
+const DAY_ONE = new Date(Date.UTC(2026, 8, 1));
+
+/** Midnight UTC opening the second day, and one call's instant. */
+const DAY_TWO = new Date(Date.UTC(2026, 8, 2));
+
+/** Midnight UTC opening the third: the window's EXCLUSIVE upper. */
+const DAY_THREE = new Date(Date.UTC(2026, 8, 3));
+
+/**
+ * One millisecond below {@link DAY_TWO}.
+ *
+ * THE TWO INSTANTS ARE ONE MILLISECOND APART AND ON DIFFERENT UTC
+ * DAYS, which is what makes the bucket a reading about the
+ * truncation rather than about the span: nothing but a day boundary
+ * separates them.
+ */
+const BEFORE_MIDNIGHT = new Date(DAY_TWO.getTime() - 1);
+
+/**
+ * A later instant on the SAME UTC day as {@link DAY_TWO}.
+ *
+ * The row that separates a truncation from a grouping by the raw
+ * instant: it joins that midnight's bucket rather than opening one.
+ */
+const LATER_ON_DAY_TWO = new Date(Date.UTC(2026, 8, 2, 11, 22, 33, 444));
+
+/** An instant below the window, so the narrowing has one to drop. */
+const BELOW_WINDOW = new Date(Date.UTC(2026, 7, 31, 12, 0, 0, 0));
+
+/**
+ * A session `TimeZone` that is NOT UTC.
+ *
+ * The spend half reads everything under this, because
+ * `date_trunc('day', ts, 'UTC')` and `date_trunc('day', ts)` answer
+ * ALIKE on a session already at UTC — so a store that named no zone
+ * would be green through every assertion there.
+ */
+const SESSION_ZONE = 'America/Sao_Paulo';
+
+/** How many calls past the cap the long pass carries. */
+const LEDGER_OVERSHOOT = 3;
+
+/** What every call of the long pass measured, in characters. */
+const LEDGER_CHARS = 10;
+
+/** And in tokens, which is arithmetic over the characters. */
+const LEDGER_TOKENS = 3;
+
+/** What the call below the midnight measured. */
+const BEFORE_CHARS = 100;
+
+/** And in tokens. */
+const BEFORE_TOKENS = 25;
+
+/** What the call at the midnight measured. */
+const AFTER_CHARS = 200;
+
+/** And in tokens. */
+const AFTER_TOKENS = 50;
+
+/** What the domain-less tick's one call measured. */
+const TICK_CHARS = 7;
+
+/** And in tokens. */
+const TICK_TOKENS = 1;
+
+/** What the call attributed to no pass at all measured. */
+const UNATTRIBUTED_CHARS = 3;
+
+/** And in tokens. */
+const UNATTRIBUTED_TOKENS = 1;
+
+/** The transport family every feed below is read through. */
+const FEED_KIND = 'rss';
+
+/** Where the feed the proposals are about says its payload is. */
+const FEED_ENDPOINT = 'https://feeds.example.com/radar.xml';
+
+/** A second feed, so a queue that stopped scoping is reported. */
+const OTHER_ENDPOINT = 'https://feeds.example.com/transit.xml';
+
+/**
+ * The arrangement a proposal offers, as its writer wrote it.
+ *
+ * VALID UNDER `parserConfigErrors` in `src/lib/parser-config.ts`,
+ * which nothing on this path consults — the approval is the gate
+ * and neither the port nor the applier is a second one. It is
+ * written valid anyway so that no case here rests on a fixture that
+ * would have been rejected upstream.
+ *
+ * ITS MEMBERS ARE IN AN ORDER jsonb DOES NOT KEEP, which is what
+ * makes the read-back a reading: the column answers its keys
+ * normalised, so the rendering that comes off the source row is not
+ * the rendering of this object.
+ */
+const PROPOSED_CONFIG = {
+  fields: {
+    title: { selector: 'h1' },
+    body: { selector: 'article' },
+  },
+  recordsPath: 'items',
+};
+
+/** The test that says the arrangement above still holds. */
+const PROPOSED_CONTRACT = { mustMatch: ['title'], sample: 3 };
+
+/** What proposed the row the gate case rules on. */
+const FIRST_PROPOSER = 'radar-config-model';
+
+/** What proposed the row beside it. */
+const SECOND_PROPOSER = 'radar-config-review';
+
+/** What proposed the row that stays in the queue. */
+const THIRD_PROPOSER = 'radar-config-fallback';
+
+/**
+ * The CHECK holding an application against an approval.
+ *
+ * Spelled in `src/db/schema/sources.ts`, so asserting it is a
+ * reading of the migration rather than of the driver.
+ */
+const PROPOSAL_APPROVAL_CHECK = 'source_config_proposals_approval_check';
+
+/**
+ * The CHECK a temp shadow of `sources` carries, and nothing else
+ * in this deployment does.
+ *
+ * Named rather than anonymous so the refusal below can be attributed
+ * to the shadow: a constraint name the real schema does not carry is
+ * what says the statement met the copy and not the table.
+ */
+const SHADOW_CHECK = 'wave3_shadow_refuses_apply';
+
+/** The node the call below the spend window was made from. */
+const OUTSIDE_NODE = 'backfill';
+
+/**
+ * What that call measured, distinct from every other magnitude
+ * here so a bucket carrying it would be visible in the totals.
+ */
+const OUTSIDE_CHARS = 900;
+
+/** And in tokens. */
+const OUTSIDE_TOKENS = 225;
+
+/** What proposed the arrangement for the second feed. */
+const OUTSIDE_PROPOSER = 'transit-config-model';
+
+/** When a terminal operator ruled in favour, in the CLI's shape. */
+const AGREED_AT = at(50);
+
+/** When the arrangement was recorded as written onto the feed. */
+const WRITTEN_AT = at(55);
+
+/**
  * The value a live read was supposed to answer.
  *
  * @param value - Whatever the read answered.
@@ -789,6 +1187,16 @@ function idsOf(
   rows: readonly { readonly id: number }[],
 ): readonly number[] {
   return rows.map((row) => row.id);
+}
+
+/**
+ * How many calls a spend summary counted altogether.
+ *
+ * @param buckets - Whatever the summary answered.
+ * @returns The sum of their `calls`.
+ */
+function callsIn(buckets: readonly SpendBucket[]): number {
+  return buckets.reduce((total, bucket) => total + bucket.calls, 0);
 }
 
 /**
@@ -964,6 +1372,8 @@ describeLivePg('wave-3 stores (live Postgres)', () => {
   const findingStore: FindingStore = createDbFindingStore(() => db);
   const documentStore: DocumentStore = createDbDocumentStore(() => db);
   const entityStore: EntityStore = createDbEntityStore(() => db);
+  const runStore: RunStore = createDbRunStore(() => db);
+  const sourceStore: SourceStore = createDbSourceStore(() => db);
 
   // What `src/documents/service.ts` takes: one `DomainStore` method
   // and the two `DocumentStore` reads. Spread rather than wrapped,
@@ -972,6 +1382,13 @@ describeLivePg('wave-3 stores (live Postgres)', () => {
   // through — which is what makes the masked answer and the stored
   // row two readings of one connection rather than of two fixtures.
   const corpusStore = { ...domainStore, ...documentStore };
+
+  // What `src/runs/service.ts` and `src/runs/spend-service.ts` take
+  // between them: one `DomainStore` method and all six `RunStore`
+  // reads. One object for both, no two ports here declaring a
+  // method under the same name, so the page, the ledger and the
+  // summary are three readings of one connection.
+  const passStore = { ...domainStore, ...runStore };
 
   beforeAll(async () => {
     pool = createLivePool();
@@ -1273,6 +1690,160 @@ describeLivePg('wave-3 stores (live Postgres)', () => {
     );
   }
 
+  /**
+   * Opens one pass, straight through drizzle, and reads it back
+   * through the port.
+   *
+   * NOT THROUGH A PORT, BECAUSE `RunStore` HAS NO WRITER AT ALL.
+   * Six methods, all six reads, and there is no seventh — so a
+   * fixture standing a pass up has to reach the table itself, and
+   * that is the read-first law demonstrated rather than described.
+   *
+   * @param domainId - Whose pass it was, or null for a maintenance
+   *   tick belonging to no domain. Null is an ordinary state here
+   *   rather than a row that failed to resolve.
+   * @param startedAt - When it opened, written explicitly so an
+   *   ordering is the fixture's rather than the clock's.
+   * @returns The stored row, as the port answers it.
+   * @throws Error When the insert returned no row.
+   */
+  async function plantRun(
+    domainId: number | null,
+    startedAt: Date,
+  ): Promise<RunRecord> {
+    const written = await db.insert(runs)
+      .values({
+        domainId,
+        startedAt,
+        status: RUN_STATUS,
+        counts: {},
+        scheduledBy: SCHEDULED_BY,
+      })
+      .returning({ id: runs.id });
+    const id = oneRow(written, 'the insert of a pass').id;
+
+    return present(
+      await runStore.findRunById(id),
+      `findRunById after planting run ${id}`,
+    );
+  }
+
+  /**
+   * Ledgers one model call, straight through drizzle.
+   *
+   * NOT THROUGH A PORT FOR THE SAME REASON, one table over: nothing
+   * on `RunStore` appends to `llm_calls`, which is what the surface
+   * answering what each call cost is one line away from offering to
+   * do and deliberately does not.
+   *
+   * @param runId - The pass it was made inside, or null for a call
+   *   made inside none. A null here is reachable only from the
+   *   spend summary, `run_id = $1` being UNKNOWN on such a row.
+   * @param node - Which step made it.
+   * @param calledAt - When, written explicitly.
+   * @param promptChars - What it measured, or null for a call
+   *   nobody measured.
+   * @param estTokens - The arithmetic over that, or null.
+   * @returns Its `llm_calls.id`.
+   * @throws Error When the insert returned no row.
+   */
+  async function plantCall(
+    runId: number | null,
+    node: string,
+    calledAt: Date,
+    promptChars: number | null,
+    estTokens: number | null,
+  ): Promise<number> {
+    const written = await db.insert(llmCalls)
+      .values({
+        runId,
+        node,
+        model: null,
+        promptChars,
+        estTokens,
+        calledAt,
+      })
+      .returning({ id: llmCalls.id });
+
+    return oneRow(written, `the insert of a ${node} call`).id;
+  }
+
+  /**
+   * Writes one feed, with the empty arrangement every case here
+   * starts it at.
+   *
+   * THROUGH THE PORT, unlike every other plant in this file, and
+   * the difference is the point: `SourceStore` declares four
+   * writers where the wave-3 ports declare three between them, so a
+   * feed is standable-up without reaching a table.
+   *
+   * THE EMPTY ARRANGEMENT IS WHAT THE APPLY CASE MEASURES FROM. A
+   * source planted with the documents already on it would leave the
+   * write below indistinguishable from no write at all.
+   *
+   * @param domainId - The domain whose research it supplies.
+   * @param endpoint - Where its payload is.
+   * @returns The stored row, as the database answered it.
+   */
+  async function plantSource(
+    domainId: number,
+    endpoint: string,
+  ): Promise<SourceRecord> {
+    return await sourceStore.insertSource({
+      domainId,
+      kind: FEED_KIND,
+      endpoint,
+      parserConfig: {},
+      contract: {},
+      enabled: true,
+    });
+  }
+
+  /**
+   * Proposes one arrangement, straight through drizzle, and reads
+   * it back through the port.
+   *
+   * NOT THROUGH A PORT, BECAUSE THE PORT HAS NO INSERT.
+   * `SourceStore` reads this table three ways and writes it once,
+   * and the write is the ruling the cases below are about — so a
+   * fixture standing a queue up has to reach the table itself.
+   * `src/sources/config-proposer.ts` is what proposes one in a
+   * deployment, and it is a workflow rather than a route.
+   *
+   * Neither timestamp is given a value, which is the open state
+   * every proposal starts in and the one side of
+   * `source_config_proposals_approval_check` that permits both
+   * being NULL.
+   *
+   * @param domainId - The domain the feed belongs to.
+   * @param sourceId - The feed the arrangement is for.
+   * @param proposedBy - What proposed it. Provenance and nothing
+   *   addressable, per the column.
+   * @returns The stored row, as the port answers it.
+   * @throws Error When the insert returned no row.
+   */
+  async function plantProposal(
+    domainId: number,
+    sourceId: number,
+    proposedBy: string,
+  ): Promise<SourceConfigProposalRecord> {
+    const written = await db.insert(sourceConfigProposals)
+      .values({
+        domainId,
+        sourceId,
+        parserConfig: PROPOSED_CONFIG,
+        contract: PROPOSED_CONTRACT,
+        proposedBy,
+      })
+      .returning({ id: sourceConfigProposals.id });
+    const id = oneRow(written, `the proposal from ${proposedBy}`).id;
+
+    return present(
+      await sourceStore.findProposalById(id),
+      `findProposalById after planting proposal ${id}`,
+    );
+  }
+
   it('meets an empty database in every case', async () => {
     // The precondition every case below rests on, taken as a reading
     // rather than left to a comment: each of them plants everything
@@ -1295,6 +1866,18 @@ describeLivePg('wave-3 stores (live Postgres)', () => {
     expect(await documentStore.countDocuments(1, {})).toBe(0);
     expect(await documentStore.listDocuments(1, {}, WHOLE))
       .toStrictEqual([]);
+    expect(await runStore.countRuns({})).toBe(0);
+    expect(await runStore.listRuns({}, WHOLE)).toStrictEqual([]);
+    expect(await runStore.findRunById(1)).toBeNull();
+    expect(await runStore.listRunLedger(1, RUN_LEDGER_CAP))
+      .toStrictEqual([]);
+    expect(await runStore.countRunLedger(1)).toBe(0);
+    expect(await runStore.summariseSpend({}, UNBOUNDED))
+      .toStrictEqual([]);
+    expect(await sourceStore.countPendingProposals(1)).toBe(0);
+    expect(await sourceStore.listPendingProposals(1, WHOLE))
+      .toStrictEqual([]);
+    expect(await sourceStore.findProposalById(1)).toBeNull();
   });
 
   it('orders a page the way a digest orders one', async () => {
@@ -2416,6 +2999,775 @@ describeLivePg('wave-3 stores (live Postgres)', () => {
     const laterAt = present(later.approvedAt, 'the second ruling stamp');
 
     expect(laterAt.getTime()).toBeGreaterThan(agreedAt.getTime());
+  });
+
+  it('lists every pass and narrows to one domain', async () => {
+    const domain = await plantDomain(RADAR, RADAR_NAME);
+    const other = await plantDomain(TRANSIT, TRANSIT_NAME);
+
+    // THE TICK IS PLANTED FIRST, which is what keeps every pass's
+    // domain id different from its own id: `resetTables` restarts
+    // both sequences at one, so a projection answering a pass its
+    // OWN id as its domain is green through a fixture planted the
+    // other way round.
+    const tick = await plantRun(null, MIDDLE);
+    const late = await plantRun(domain.id, LATE);
+    const early = await plantRun(domain.id, EARLY);
+    const outside = await plantRun(other.id, LATE);
+
+    expect(tick.domainId).toBeNull();
+    expect(late.domainId).toBe(domain.id);
+    expect(outside.domainId).toBe(other.id);
+    expect(late.id).not.toBe(late.domainId);
+    expect(early.id).not.toBe(early.domainId);
+    expect(outside.id).not.toBe(outside.domainId);
+
+    const everything = await listRuns(passStore, undefined, WHOLE);
+    const answered = idsOf(everything.rows);
+
+    // `started_at` descending with `id` descending under it. The
+    // two passes stamped alike are planted low-id-first, so the
+    // tiebreak REVERSES the plant order rather than agreeing with
+    // it; and the pass stamped in the middle carries a LOWER id
+    // than the one stamped earliest, so the stamp key and the id
+    // key beneath it answer different rows.
+    expect(everything.total).toBe(4);
+    expect(answered).toStrictEqual([
+      outside.id,
+      late.id,
+      tick.id,
+      early.id,
+    ]);
+
+    // The vacuity guards: the answer is none of the four orders a
+    // read that forgot to order, or ordered by identity alone,
+    // would have produced.
+    const plantOrder = [tick.id, late.id, early.id, outside.id];
+
+    expect(answered).not.toStrictEqual(plantOrder);
+    expect(answered).not.toStrictEqual([...plantOrder].reverse());
+    expect(answered).not.toStrictEqual([...answered].sort((l, r) => l - r));
+    expect(answered).not.toStrictEqual([...answered].sort((l, r) => r - l));
+
+    const tiedStamp = outside.startedAt.toISOString();
+
+    expect(late.startedAt.toISOString()).toBe(tiedStamp);
+    expect(outside.id).toBeGreaterThan(late.id);
+    expect(answered.indexOf(outside.id) + 1)
+      .toBe(answered.indexOf(late.id));
+
+    // A NULL DOMAIN IS EXCLUDED BY THE COMPARISON AND NOT BY A
+    // BRANCH. `domain_id = $1` is UNKNOWN on the tick, so it is out
+    // of this page for the same reason it is out of any other
+    // domain's — and it was IN the page above, which is the pair
+    // that says the widening is an absent predicate rather than a
+    // second query. The other domain's pass is stamped at the same
+    // instant as this domain's newest, so a `WHERE` that stopped
+    // narrowing puts a row of exactly the right shape at the head.
+    const scoped = await listRuns(passStore, RADAR, WHOLE);
+
+    expect(scoped.total).toBe(2);
+    expect(idsOf(scoped.rows)).toStrictEqual([late.id, early.id]);
+    expect(idsOf(scoped.rows)).not.toContain(tick.id);
+    expect(idsOf(scoped.rows)).not.toContain(outside.id);
+
+    // TWO PASSES OPENED BY ONE TICK TIE TO THE MICROSECOND, because
+    // `started_at` defaults to `now()` and `now()` is the
+    // TRANSACTION's start rather than the statement's. Planted the
+    // way a deployment makes such a tie — two inserts inside one
+    // transaction, no stamp written here — rather than by writing
+    // one instant twice, and no in-memory store can be made to
+    // produce it.
+    await db.transaction(async (tx) => {
+      const opening = {
+        domainId: domain.id,
+        status: RUN_STATUS,
+        counts: {},
+        scheduledBy: SCHEDULED_BY,
+      };
+
+      await tx.insert(runs).values(opening);
+      await tx.insert(runs).values(opening);
+    });
+
+    const opened = await listRuns(passStore, RADAR, WHOLE);
+    const planted = [late.id, early.id];
+    const tied = opened.rows.filter((row) => !planted.includes(row.id));
+    const newer = oneRow(tied, 'the newer of the tied passes');
+    const older = oneRow(tied.slice(-1), 'the older of the tied passes');
+
+    expect(opened.total).toBe(4);
+    expect(tied).toHaveLength(2);
+    expect(newer.startedAt.toISOString())
+      .toBe(older.startedAt.toISOString());
+
+    // And `id` is what separated them: the two sit adjacent
+    // wherever the clock put the pair, the stamp key grouping them
+    // and the tiebreak ordering them.
+    const order = idsOf(opened.rows);
+
+    expect(newer.id).toBeGreaterThan(older.id);
+    expect(order.indexOf(newer.id) + 1).toBe(order.indexOf(older.id));
+  });
+
+  it('cuts a long ledger and reports the whole count', async () => {
+    const domain = await plantDomain(RADAR, RADAR_NAME);
+    const long = await plantRun(domain.id, EARLY);
+    const brief = await plantRun(domain.id, MIDDLE);
+    const silent = await plantRun(domain.id, LATE);
+
+    // THE CAP IS DERIVED AND NEVER TRANSCRIBED, which is what
+    // exporting it is for: a literal plant goes on reading as `past
+    // the cap` after the cap moves above it, and the case then
+    // answers nothing while staying green. The stamps ascend with
+    // the ids, so which END the cut took is readable as a
+    // membership rather than inferred from an order.
+    const ledgered = RUN_LEDGER_CAP + LEDGER_OVERSHOOT;
+    const bulk = Array.from(
+      { length: ledgered },
+      (_, index) => ({
+        runId: long.id,
+        node: LEDGER_NODE,
+        model: null,
+        promptChars: LEDGER_CHARS,
+        estTokens: LEDGER_TOKENS,
+        calledAt: new Date(DAY_ONE.getTime() + index * 1000),
+      }),
+    );
+
+    await db.insert(llmCalls).values(bulk);
+
+    // THE SCOPE CONTROLS SIT ON BOTH SIDES OF THE CUT, without
+    // which an unscoped read answers the right page for the
+    // fixture's reasons. This one is BELOW every row above and is
+    // attributed to no pass at all, so it is unreachable from any
+    // scoped page — `run_id = $1` is UNKNOWN on it — and it is the
+    // COUNT that would report a read that stopped scoping.
+    const loose = await plantCall(
+      null,
+      LEDGER_NODE,
+      BELOW_WINDOW,
+      UNATTRIBUTED_CHARS,
+      UNATTRIBUTED_TOKENS,
+    );
+
+    // And these are ABOVE it, on a pass of the same domain: two
+    // calls ledgered inside ONE transaction, which is how
+    // `called_at` ties in a deployment. An unscoped page would
+    // answer them at the long pass's head.
+    await db.transaction(async (tx) => {
+      await tx.insert(llmCalls).values({
+        runId: brief.id,
+        node: BEFORE_NODE,
+        model: null,
+        promptChars: LEDGER_CHARS,
+        estTokens: LEDGER_TOKENS,
+      });
+      await tx.insert(llmCalls).values({
+        runId: brief.id,
+        node: AFTER_NODE,
+        model: null,
+        promptChars: LEDGER_CHARS,
+        estTokens: LEDGER_TOKENS,
+      });
+    });
+
+    const detail = await getRun(passStore, long.id);
+    const answered = idsOf(detail.ledger);
+    const head = oneRow(detail.ledger, 'the head of the long ledger');
+    const tail = oneRow(detail.ledger.slice(-1), 'its oldest kept row');
+
+    expect(detail.run.id).toBe(long.id);
+    expect(detail.llmCallCount).toBe(ledgered);
+    expect(detail.ledger).toHaveLength(RUN_LEDGER_CAP);
+    expect(detail.ledgerTruncated).toBe(true);
+
+    // NEWEST FIRST, SO THE CUT DROPPED THE OLDEST END. The kept ids
+    // are a contiguous run ending at the newest, which says the cut
+    // took the head of an ordering rather than an arbitrary subset
+    // a read that forgot to order would have cut.
+    expect(head.id - tail.id).toBe(RUN_LEDGER_CAP - 1);
+    expect(answered).toStrictEqual([...answered].sort((l, r) => r - l));
+    expect(head.calledAt.getTime())
+      .toBeGreaterThan(tail.calledAt.getTime());
+    expect(answered).not.toContain(tail.id - 1);
+    expect(answered).not.toContain(loose);
+    expect([...new Set(detail.ledger.map((row) => row.node))])
+      .toStrictEqual([LEDGER_NODE]);
+
+    // THE TRUNCATION FLAG IS LIVE ONLY WHERE THE TWO NUMBERS ARE
+    // EQUAL: `llmCallCount > ledger.length` and `>=` answer alike
+    // for the pass above and differently for these two, so a case
+    // reading only a long ledger leaves the comparison itself
+    // covered by nothing.
+    const short = await getRun(passStore, brief.id);
+    const newer = oneRow(short.ledger, 'the newer of the tied calls');
+    const older = oneRow(short.ledger.slice(-1), 'the older of them');
+
+    expect(short.llmCallCount).toBe(2);
+    expect(short.ledger).toHaveLength(2);
+    expect(short.ledgerTruncated).toBe(false);
+    expect(newer.calledAt.toISOString())
+      .toBe(older.calledAt.toISOString());
+    expect(newer.id).toBeGreaterThan(older.id);
+
+    // The scope control is genuinely above the cut, asserted rather
+    // than assumed: these calls carry the server's clock and the
+    // long pass's carry the fixture's.
+    expect(newer.calledAt.getTime())
+      .toBeGreaterThan(head.calledAt.getTime());
+
+    const quiet = await getRun(passStore, silent.id);
+
+    expect(quiet.ledger).toStrictEqual([]);
+    expect(quiet.llmCallCount).toBe(0);
+    expect(quiet.ledgerTruncated).toBe(false);
+
+    // THE THREE COUNTS FALL SHORT OF THE TABLE BY EXACTLY ONE, and
+    // that one is the call attributed to no pass. It is a partition
+    // no single scoped read can report: every count above is
+    // correct under a read that had stopped scoping too.
+    const counted = await runStore.countRunLedger(long.id)
+      + await runStore.countRunLedger(brief.id)
+      + await runStore.countRunLedger(silent.id);
+    const held = await db.select({ id: llmCalls.id }).from(llmCalls);
+
+    expect(counted).toBe(ledgered + 2);
+    expect(held).toHaveLength(ledgered + 3);
+    expect(idsOf(held)).toContain(loose);
+  });
+
+  it('buckets the ledger by UTC day and not by session', async () => {
+    const domain = await plantDomain(RADAR, RADAR_NAME);
+    const other = await plantDomain(TRANSIT, TRANSIT_NAME);
+    const radarPass = await plantRun(domain.id, EARLY);
+    const transitPass = await plantRun(other.id, EARLY);
+    const tick = await plantRun(null, EARLY);
+
+    // The two straddling calls, one millisecond apart and on
+    // different UTC days. Nothing but a day boundary separates
+    // them, which is what makes the buckets below a reading about
+    // the truncation rather than about the span.
+    await plantCall(
+      radarPass.id,
+      BEFORE_NODE,
+      BEFORE_MIDNIGHT,
+      BEFORE_CHARS,
+      BEFORE_TOKENS,
+    );
+    await plantCall(
+      radarPass.id,
+      AFTER_NODE,
+      DAY_TWO,
+      AFTER_CHARS,
+      AFTER_TOKENS,
+    );
+
+    // A third call LATER on the second day, which separates a
+    // truncation from a grouping by the raw instant: it joins that
+    // midnight's bucket rather than opening one of its own. Nobody
+    // measured it, so it is counted and not summed.
+    await plantCall(radarPass.id, OTHER_NODE, LATER_ON_DAY_TWO, null, null);
+
+    // The scope control's one call, and it is the bucket in which
+    // NOTHING was measured — `sum()` over that answers NULL rather
+    // than the zero a bare coercion would give.
+    await plantCall(
+      transitPass.id,
+      OTHER_NODE,
+      LATER_ON_DAY_TWO,
+      null,
+      null,
+    );
+
+    // The two rows the join has to keep: a pass belonging to no
+    // domain, and a call belonging to no pass. Both land in the
+    // null bucket, and an INNER join would drop only the second
+    // while every bucket it did answer stayed right.
+    await plantCall(
+      tick.id,
+      OTHER_NODE,
+      LATER_ON_DAY_TWO,
+      TICK_CHARS,
+      TICK_TOKENS,
+    );
+    await plantCall(
+      null,
+      OTHER_NODE,
+      LATER_ON_DAY_TWO,
+      UNATTRIBUTED_CHARS,
+      UNATTRIBUTED_TOKENS,
+    );
+
+    // And one below the window, so the narrowing has a row to drop.
+    await plantCall(
+      radarPass.id,
+      OUTSIDE_NODE,
+      BELOW_WINDOW,
+      OUTSIDE_CHARS,
+      OUTSIDE_TOKENS,
+    );
+
+    const zonedPool = createLivePool();
+
+    try {
+      const zonedDb = createLiveDb(zonedPool);
+
+      // THE SESSION MOVES OFF UTC, which is the whole of what makes
+      // this case a reading about the zone the store NAMES: the
+      // two-argument `date_trunc` reads whatever `TimeZone` the
+      // session carries, so on a session already at UTC a store
+      // naming no zone answers every line below correctly.
+      await zonedDb.execute(
+        sql`select set_config('TimeZone', ${SESSION_ZONE}, false)`,
+      );
+
+      const setting = await zonedDb.execute(
+        sql`select current_setting('TimeZone') as zone`,
+      );
+
+      expect(oneRow(setting.rows, 'the session zone')['zone'])
+        .toBe(SESSION_ZONE);
+
+      const zonedStore = {
+        ...createDbDomainStore(() => zonedDb),
+        ...createDbRunStore(() => zonedDb),
+      };
+      const summary = await summariseSpend(
+        zonedStore,
+        () => DAY_THREE,
+        { since: DAY_ONE, until: DAY_THREE },
+      );
+
+      expect(summary.window.sinceInclusive).toStrictEqual(DAY_ONE);
+      expect(summary.window.untilExclusive).toStrictEqual(DAY_THREE);
+
+      // One assertion reads the order, the two UTC midnights, the
+      // null bucket the join kept, the counted-but-unmeasured call
+      // and the sum over nothing measured. `day` DESCENDING, then
+      // `domain_id` ASCENDING with the null bucket last.
+      expect(summary.buckets).toStrictEqual([
+        {
+          domainId: domain.id,
+          day: DAY_TWO,
+          calls: 2,
+          promptChars: AFTER_CHARS,
+          estTokens: AFTER_TOKENS,
+        },
+        {
+          domainId: other.id,
+          day: DAY_TWO,
+          calls: 1,
+          promptChars: null,
+          estTokens: null,
+        },
+        {
+          domainId: null,
+          day: DAY_TWO,
+          calls: 2,
+          promptChars: TICK_CHARS + UNATTRIBUTED_CHARS,
+          estTokens: TICK_TOKENS + UNATTRIBUTED_TOKENS,
+        },
+        {
+          domainId: domain.id,
+          day: DAY_ONE,
+          calls: 1,
+          promptChars: BEFORE_CHARS,
+          estTokens: BEFORE_TOKENS,
+        },
+      ]);
+
+      // AND THE SESSION WOULD HAVE SAID SOMETHING ELSE, counted in
+      // this connection over these two planted rows. The named zone
+      // puts them on two days and the session's puts them on one,
+      // so the buckets above are held against what this server
+      // would otherwise have answered rather than against a
+      // sentence about zones.
+      const rival = await zonedDb.execute(sql`
+        select
+          count(distinct date_trunc('day', called_at, 'UTC')) as named,
+          count(distinct date_trunc('day', called_at)) as sessioned
+        from llm_calls
+        where node in (${BEFORE_NODE}, ${AFTER_NODE})
+      `);
+      const truncations = oneRow(rival.rows, 'the two truncations');
+
+      expect(Number(truncations['named'])).toBe(2);
+      expect(Number(truncations['sessioned'])).toBe(1);
+
+      // THE PARTITION IS WHAT CATCHES AN INNER JOIN. Each narrowed
+      // summary is correct under one; only the three adding up to
+      // the unnarrowed total says the rows belonging to nobody were
+      // kept.
+      const scoped = await summariseSpend(
+        zonedStore,
+        () => DAY_THREE,
+        { since: DAY_ONE, until: DAY_THREE, domain: RADAR },
+      );
+      const elsewhere = await summariseSpend(
+        zonedStore,
+        () => DAY_THREE,
+        { since: DAY_ONE, until: DAY_THREE, domain: TRANSIT },
+      );
+      const nobody = summary.buckets.filter(
+        (bucket) => bucket.domainId === null,
+      );
+
+      expect(callsIn(summary.buckets)).toBe(6);
+      expect(callsIn(scoped.buckets)).toBe(3);
+      expect(callsIn(elsewhere.buckets)).toBe(1);
+      expect(callsIn(nobody)).toBe(2);
+      expect(callsIn(scoped.buckets)
+        + callsIn(elsewhere.buckets)
+        + callsIn(nobody)).toBe(callsIn(summary.buckets));
+
+      // The narrowing drops the domain-less rows by the comparison
+      // rather than by a branch, exactly as the page above does.
+      expect(scoped.buckets.map((bucket) => bucket.domainId))
+        .toStrictEqual([domain.id, domain.id]);
+
+      // The window is half-open and the call below it is out, which
+      // is what says the span narrows at all: its magnitudes are
+      // distinct from every other call's, so a bucket carrying them
+      // would be visible in the totals above.
+      const measured = summary.buckets.map(
+        (bucket) => bucket.promptChars,
+      );
+
+      expect(measured).not.toContain(OUTSIDE_CHARS);
+
+      // EVERY STATEMENT ABOVE RAN ON ONE CONNECTION. A session
+      // setting is per connection, so a pool that had opened a
+      // second one would have answered half this case at UTC while
+      // every assertion still read plausibly.
+      expect(zonedPool.totalCount).toBe(1);
+    } finally {
+      await zonedPool.end();
+    }
+  });
+
+  it('refuses an applied stamp until an approval lands', async () => {
+    const domain = await plantDomain(RADAR, RADAR_NAME);
+    const feed = await plantSource(domain.id, FEED_ENDPOINT);
+    const subject = await plantProposal(domain.id, feed.id, FIRST_PROPOSER);
+    const beside = await plantProposal(domain.id, feed.id, SECOND_PROPOSER);
+
+    // The state the case found, read through the port before
+    // anything is written. A proposal nobody has ruled on carries
+    // neither stamp, which is the open state the CHECK permits and
+    // the one both directions below are measured from.
+    expect(subject.status).toBe(PENDING_STATUS);
+    expect(subject.approvedAt).toBeNull();
+    expect(subject.appliedAt).toBeNull();
+    expect(subject.sourceId).toBe(feed.id);
+
+    // DIRECTION ONE: A CLOSING STAMP ON AN UNAPPROVED ROW IS
+    // REFUSED BY THE SERVER. Written straight through drizzle
+    // because no port writes it — `SourceStore` stamps the two
+    // columns together inside one transaction and never one alone,
+    // so this state is unreachable from every method it declares
+    // and what arrives is the driver error drizzle wrapped.
+    const raised = await raisedBy(
+      () => db.update(sourceConfigProposals)
+        .set({ appliedAt: WRITTEN_AT })
+        .where(eq(sourceConfigProposals.id, subject.id)),
+      'the application stamp on an unapproved proposal',
+    );
+    const fields = driverFields(raised);
+
+    expect(raised).not.toBeInstanceOf(StoreRefusal);
+    expect(fields.code).toBe(CHECK_VIOLATION);
+    expect(fields.constraint).toBe(PROPOSAL_APPROVAL_CHECK);
+
+    // BOTH TABLES ARE AS THE CASE FOUND THEM, taken before any
+    // accepting control issues a write of its own: the refusal is a
+    // statement failing rather than a session, so the proposal is
+    // still open, the proposal beside it untouched and the feed
+    // both of them name unchanged.
+    expect(await sourceStore.findProposalById(subject.id))
+      .toStrictEqual(subject);
+    expect(await sourceStore.findProposalById(beside.id))
+      .toStrictEqual(beside);
+    expect(await sourceStore.findSourceById(feed.id)).toStrictEqual(feed);
+
+    // DIRECTION TWO: THE SAME STAMP AFTER AN APPROVAL. Written the
+    // way `scripts/approve.ts` writes one — an approval with no
+    // application is the state that CLI deliberately leaves behind,
+    // so this is the row a terminal operator makes rather than a
+    // shape invented for the case.
+    await db.update(sourceConfigProposals)
+      .set({ approvedAt: AGREED_AT })
+      .where(eq(sourceConfigProposals.id, subject.id));
+    await db.update(sourceConfigProposals)
+      .set({ appliedAt: WRITTEN_AT })
+      .where(eq(sourceConfigProposals.id, subject.id));
+
+    const closed = present(
+      await sourceStore.findProposalById(subject.id),
+      'findProposalById after the accepted stamp',
+    );
+
+    expect(closed.approvedAt).toStrictEqual(AGREED_AT);
+    expect(closed.appliedAt).toStrictEqual(WRITTEN_AT);
+
+    // THE CHECK READS THE TWO STAMPS AND THE QUEUE READS THE
+    // STATUS, and this row is what says the two rules are about
+    // different columns rather than two readings of one gate: it is
+    // approved and applied, its status never moved, and it is still
+    // in the queue an operator is shown.
+    const queue = await listPendingConfigs(sourceStore, feed.id, WHOLE);
+
+    expect(closed.status).toBe(PENDING_STATUS);
+    expect(queue.total).toBe(2);
+    expect(idsOf(queue.rows)).toStrictEqual([subject.id, beside.id]);
+
+    // And the approval alone is not an application: the row beside
+    // it takes an approval and still refuses nothing, which is the
+    // accepting half of the pair — without it the refusal above is
+    // satisfied by a column that refuses every write there is.
+    await db.update(sourceConfigProposals)
+      .set({ approvedAt: AGREED_AT })
+      .where(eq(sourceConfigProposals.id, beside.id));
+
+    expect(present(
+      await sourceStore.findProposalById(beside.id),
+      'the proposal ruled on but not applied',
+    ).appliedAt).toBeNull();
+  });
+
+  it('approves and applies in one transaction', async () => {
+    const domain = await plantDomain(RADAR, RADAR_NAME);
+    const feed = await plantSource(domain.id, FEED_ENDPOINT);
+    const other = await plantSource(domain.id, OTHER_ENDPOINT);
+    const first = await plantProposal(domain.id, feed.id, FIRST_PROPOSER);
+    const elsewhere = await plantProposal(
+      domain.id,
+      other.id,
+      OUTSIDE_PROPOSER,
+    );
+
+    // Two proposals written inside ONE transaction tie on
+    // `proposed_at` to the microsecond, `now()` being the
+    // transaction's start. A tie spanning a page boundary would let
+    // two pages disagree about which row they hold, with nothing in
+    // either response saying so, and `id` ASCENDING closes it —
+    // ascending so the tiebreak reads the same direction as the
+    // sort.
+    const tied = await db.transaction(async (tx) => {
+      const values = {
+        domainId: domain.id,
+        sourceId: feed.id,
+        parserConfig: PROPOSED_CONFIG,
+        contract: PROPOSED_CONTRACT,
+      };
+      const opened = await tx.insert(sourceConfigProposals)
+        .values({ ...values, proposedBy: SECOND_PROPOSER })
+        .returning({ id: sourceConfigProposals.id });
+      const closed = await tx.insert(sourceConfigProposals)
+        .values({ ...values, proposedBy: THIRD_PROPOSER })
+        .returning({ id: sourceConfigProposals.id });
+
+      return [
+        oneRow(opened, 'the first of the tied proposals').id,
+        oneRow(closed, 'the second of the tied proposals').id,
+      ];
+    });
+    const tiedEarly = oneRow(tied, 'the lower of the tied ids');
+    const tiedLate = oneRow(tied.slice(-1), 'the higher of them');
+    const queue = await listPendingConfigs(sourceStore, feed.id, WHOLE);
+    const head = oneRow(queue.rows, 'the head of the queue');
+    const middle = oneRow(queue.rows.slice(1), 'its second row');
+    const tail = oneRow(queue.rows.slice(-1), 'its last row');
+
+    // OLDEST FIRST, because a gate is about what has been waiting
+    // longest — the opposite of the failures queue one table over
+    // and the right way round for the same reason.
+    expect(queue.total).toBe(3);
+    expect(idsOf(queue.rows))
+      .toStrictEqual([first.id, tiedEarly, tiedLate]);
+    expect(head.proposedAt.getTime())
+      .toBeLessThan(middle.proposedAt.getTime());
+    expect(middle.proposedAt.toISOString())
+      .toBe(tail.proposedAt.toISOString());
+    expect(middle.id).toBeLessThan(tail.id);
+
+    // The scope: the other feed's proposal is in neither this
+    // queue's page nor its count, so a read that stopped narrowing
+    // answers a row of exactly the right shape here.
+    const outside = await listPendingConfigs(sourceStore, other.id, WHOLE);
+
+    expect(outside.total).toBe(1);
+    expect(idsOf(outside.rows)).toStrictEqual([elsewhere.id]);
+    expect(idsOf(queue.rows)).not.toContain(elsewhere.id);
+
+    // THE RULING THE ROUTE GIVES, taken through the service
+    // `POST /sources/:id/approve-config` calls.
+    const ruling = await approveSourceConfig(
+      sourceStore,
+      feed.id,
+      { proposalId: first.id },
+    );
+    const agreedAt = present(ruling.approvedAt, 'the approval stamp');
+    const writtenAt = present(ruling.closedAt, 'the application stamp');
+
+    expect(ruling.id).toBe(first.id);
+    expect(ruling.status).toBe(APPROVED_STATUS);
+
+    // ONE TRANSACTION IS READABLE FROM THE TWO STAMPS IT WROTE.
+    // `now()` is the transaction's start, so the approval statement
+    // 1 wrote and the application statement 3 wrote carry the
+    // IDENTICAL instant — which is the only evidence anywhere that
+    // the three statements were one transaction rather than three
+    // calls, and something no in-memory store can be made to
+    // produce. The control keeping it from being green over a
+    // server stamping one constant is the plant's own stamp, made
+    // in an earlier transaction and strictly older.
+    expect(writtenAt.toISOString()).toBe(agreedAt.toISOString());
+    expect(agreedAt.getTime())
+      .toBeGreaterThan(head.proposedAt.getTime());
+
+    const applied = present(
+      await sourceStore.findSourceById(feed.id),
+      'findSourceById after the ruling',
+    );
+    const stored = present(
+      await sourceStore.findProposalById(first.id),
+      'findProposalById after the ruling',
+    );
+
+    // THE TWO DOCUMENTS COME BACK AS THE COLUMN HOLDS THEM AND NOT
+    // AS THE FIXTURE WROTE THEM. jsonb normalises key order, so the
+    // arrangement planted here is answered with its members in a
+    // different order while being the same value — and the feed
+    // afterwards carries THAT spelling. A structural equality is
+    // equally green over an applier that copied this file's own
+    // object across; the two renderings are what say the documents
+    // travelled through the server.
+    expect(applied.parserConfig).toStrictEqual(PROPOSED_CONFIG);
+    expect(applied.contract).toStrictEqual(PROPOSED_CONTRACT);
+    expect(JSON.stringify(applied.parserConfig))
+      .toBe(JSON.stringify(stored.parserConfig));
+    expect(JSON.stringify(applied.parserConfig))
+      .not.toBe(JSON.stringify(PROPOSED_CONFIG));
+    expect(JSON.stringify(applied.contract))
+      .not.toBe(JSON.stringify(PROPOSED_CONTRACT));
+
+    // AND NO OTHER COLUMN MOVED, which is a whole-row diff and
+    // nothing weaker: the feed as it stands, with the two written
+    // columns put back to the empty arrangement it was planted
+    // with, is the row this case planted.
+    expect({ ...applied, parserConfig: {}, contract: {} })
+      .toStrictEqual(feed);
+    expect(await sourceStore.findSourceById(other.id)).toStrictEqual(other);
+
+    // The proposal afterwards carries what the ruling reported, and
+    // the queue is one row shorter: the status moved, so the gate's
+    // own backlog is what an operator is still owed.
+    const after = await listPendingConfigs(sourceStore, feed.id, WHOLE);
+
+    expect(stored.status).toBe(APPROVED_STATUS);
+    expect(stored.approvedAt).toStrictEqual(agreedAt);
+    expect(stored.appliedAt).toStrictEqual(writtenAt);
+    expect(after.total).toBe(2);
+    expect(idsOf(after.rows)).toStrictEqual([tiedEarly, tiedLate]);
+
+    // A second ruling, on a second row, stamps its own pair the
+    // same way — the equality above is a property of the write
+    // rather than of the row it landed on.
+    const again = await approveSourceConfig(
+      sourceStore,
+      feed.id,
+      { proposalId: tiedEarly },
+    );
+    const laterAgreed = present(again.approvedAt, 'the second approval');
+    const laterWritten = present(again.closedAt, 'its application');
+
+    expect(laterWritten.toISOString()).toBe(laterAgreed.toISOString());
+    expect(laterAgreed.getTime())
+      .toBeGreaterThanOrEqual(agreedAt.getTime());
+  });
+
+  it('leaves both tables as found when an apply fails', async () => {
+    const domain = await plantDomain(RADAR, RADAR_NAME);
+    const feed = await plantSource(domain.id, FEED_ENDPOINT);
+    const subject = await plantProposal(domain.id, feed.id, FIRST_PROPOSER);
+    const shadowPool = createLivePool();
+
+    try {
+      const shadowDb = createLiveDb(shadowPool);
+
+      // A TEMP TABLE SHADOWING `sources` ON THIS CONNECTION ALONE,
+      // which is the only way to read the atomicity: every refusal
+      // the real schema can raise is out of that transaction's
+      // reach by construction, per the port. The temp schema leads
+      // the search path, so the store's second statement meets this
+      // copy — carrying the same row and a CHECK refusing the write
+      // — while its first and third meet the REAL proposal.
+      await shadowDb.execute(sql`
+        create temp table sources as
+          select * from public.sources where id = ${feed.id}
+      `);
+      await shadowDb.execute(sql.raw(
+        `alter table sources add constraint ${SHADOW_CHECK} `
+        + 'check (parser_config = jsonb_build_object())',
+      ));
+
+      const shadowStore = createDbSourceStore(() => shadowDb);
+      const refusal = await refusalFrom(
+        () => shadowStore.approveAndApplyProposal(subject.id),
+      );
+
+      // The constraint name is what attributes the refusal: no
+      // table in this deployment carries it, so the statement met
+      // the copy rather than the table.
+      expect(refusal.reason).toBe('check-violation');
+      expect(refusal.constraint).toBe(SHADOW_CHECK);
+
+      const shadowRow = await shadowDb.execute(sql`
+        select parser_config from sources where id = ${feed.id}
+      `);
+
+      expect(oneRow(shadowRow.rows, 'the shadow row')['parser_config'])
+        .toStrictEqual({});
+
+      // EVERY STATEMENT ABOVE RAN ON ONE CONNECTION. A temp table
+      // is per connection, so a pool that had opened a second one
+      // would have run the store against the REAL table and this
+      // case would have read an approval that landed.
+      expect(shadowPool.totalCount).toBe(1);
+    } finally {
+      await shadowPool.end();
+    }
+
+    // THE ROLLBACK TOOK THE APPROVAL WITH IT. Statement 1 stamped
+    // the real proposal and statement 2 was refused, so what is
+    // left is the row this case planted — unruled, its status
+    // unmoved, and the feed it names untouched. That is the state
+    // the request can be made from a second time, which is what the
+    // port claims and what nothing else here can check.
+    expect(await sourceStore.findProposalById(subject.id))
+      .toStrictEqual(subject);
+    expect(await sourceStore.findSourceById(feed.id)).toStrictEqual(feed);
+
+    // And it IS made a second time, which is the control saying the
+    // refusal was about the shadow rather than about approvals: the
+    // same request through the same service over the real table
+    // lands, and the arrangement reaches the feed.
+    const ruling = await approveSourceConfig(
+      sourceStore,
+      feed.id,
+      { proposalId: subject.id },
+    );
+    const applied = present(
+      await sourceStore.findSourceById(feed.id),
+      'findSourceById after the second attempt',
+    );
+
+    expect(ruling.status).toBe(APPROVED_STATUS);
+    expect(ruling.approvedAt).not.toBeNull();
+    expect(ruling.closedAt).not.toBeNull();
+    expect(applied.parserConfig).toStrictEqual(PROPOSED_CONFIG);
+    expect(applied.contract).toStrictEqual(PROPOSED_CONTRACT);
   });
 
 });
