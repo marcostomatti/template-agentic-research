@@ -858,15 +858,18 @@ red package never masks another and a single run gives the whole picture.
   SET off the per-case glyph lines or the ` FAIL ` lines, which the
   section header's own `Failed Tests N` cross-checks.
 - Two refinements to the figures above, both measured at a much larger
-  suite. The pass-glyph 31 is the one number in this file that is NOT a
-  snapshot: it held at 31 with the fan-out grown to 2709 vitest cases,
-  because vitest's default reporter contributes exactly ZERO of them
-  — 27 come from `@ar/web test:` (Playwright's per-test lines) and 2
-  apiece from the `@ar/ui` and `@ar/web` pretest vite builds. Decompose it
-  BY PREFIX rather than quoting the total, and do not "re-derive" a correct
-  31 as though it tracked suite size. It held again at 5783 cases, which
-  confirms it tracks the non-vitest members alone (27 Playwright + 2 + 2
-  vite) and not suite size. And that package-scope `other` bucket is
+  suite. The pass-glyph total tracks the NON-VITEST members alone and not
+  suite size, because vitest's default reporter contributes exactly ZERO of
+  them — the count is whatever `@ar/web test:` contributes (Playwright's
+  per-test lines) plus 2 apiece from the `@ar/ui` and `@ar/web` pretest vite
+  builds. Decompose it BY PREFIX rather than quoting the total: the two vite
+  halves hold at 2 each, and the Playwright half moves with that suite. It
+  read 31 (27 + 2 + 2) at both 2709 and 5783 vitest cases, which is why this
+  file once called 31 invariant, and 150 (146 + 2 + 2) at the q13 tip with
+  `@ar/service` at 5930 passing cases contributing none of them. So the
+  DECOMPOSITION is the law and every figure in it is a snapshot: re-derive
+  the PARTS, and a total quoted without them cannot say which half moved.
+  And that package-scope `other` bucket is
   assertable by MEMBERSHIP exactly as the fan-out's own unprefixed bucket
   is — but it is NOT invariant at nine, and the clause that only the pino
   and summary buckets scale is false. It is N+8, where N is the workflow
