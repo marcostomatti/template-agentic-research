@@ -553,6 +553,30 @@ reading).
   against the real tree — six hits across five files, and one
   case-insensitive-only — which is the opposite of the five-needle bucket,
   whose origin-HOST control this file records as dead.
+- `findForbiddenMatches` compiles every needle with the flags `gi`, so the
+  five-needle bucket has NO case-sensitive mode at all and the case split
+  above is a fact about the `packages/ui` bucket ALONE. A case-sensitive
+  reading of the five is a DERIVED probe recompiling the exported `source`
+  strings with `g`, which is worth running and worth LABELLING as derived
+  — reporting it as `the invariant read` overstates what ran.
+- A control figure is only comparable against the DENOMINATOR it was taken
+  over, and the two here differ by more than 3x: `collectScannedFiles`
+  answered 325 package-relative paths at the q13 tip against 1089 tracked
+  files, and the five needles answer 0 over the scan surface and ONE over
+  `git ls-files` (the legitimate `NOTICE` attribution, which sits outside
+  the scan surface BY DESIGN). So a recorded `zero anywhere` for any
+  five-needle control is a scan-surface reading, and a sweep task told to
+  work over `git ls-files` reproduces 1 and reads it as a regression unless
+  it measures BOTH. Take the pair in one probe; it is two loops.
+- `git cat-file --batch` is the ONE-SPAWN base side of a merge-base hit-set
+  diff (against one spawn per tracked file) and it has an alignment trap
+  that misattributes every later blob silently: it emits exactly one record
+  per INPUT LINE including the two-field missing-object form, so a parser
+  that `continue`s on a non-blob record WITHOUT advancing its own index
+  shifts every subsequent body onto the wrong path. Key the bodies on a
+  counter incremented on EVERY record, and assert the record count equals
+  the `git ls-tree` path count in the same probe — the numbers still look
+  plausible when it is wrong.
 - Derive those two needles from the declaration's ARRAY form and assert the
   FRAGMENT COUNT, never the needle's length: both are `['a', 'b'].join('-')`
   here rather than the `+`-concatenation a parser reaches for, so collecting
@@ -1038,6 +1062,93 @@ red package never masks another and a single run gives the whole picture.
   variant capture owes `git status --short -uall` plus
   `git rev-parse HEAD` by hand instead. A variant run is correspondingly
   cheaper than the full suite rather than mysteriously faster.
+- The pretest stamp line's REAL spelling is `<N> built, stamped <sha>,
+  settings from <origin>` and every quotation of it above is a PREFIX, so a
+  classifier anchoring `stamped (\S+)$` reports a correct line as
+  UNACCOUNTED — landing precisely on the pretest block, which is the one
+  bucket asserted by membership rather than counted. It is one
+  `console.log` in `scripts/build-workflows.ts` whose second half is a `+`
+  concatenation, which is why a grep for the recorded phrase finds the line
+  and a line-anchored match does not. Parse it as
+  `^(\d+) built, stamped ([^,]+), settings from (.+)$`, which keeps the sha
+  reading and buys the settings ORIGIN free. Build any planted control for
+  a capture classifier from the RECORDED spelling on purpose: the plant
+  coming back unaccounted under the corrected rule is what proves a
+  recorded spelling stale, where a plant built from the tree's own line
+  agrees with everything and says nothing.
+- The gate-helper histogram above names THREE helpers and reaches the
+  `tests/live/` roster ALONE, so it predicts under half the package-scope
+  skips and the rest read as unexplained. There is a FOURTH —
+  `describePortParity` in `tests/helpers/port-parity.ts`, gated on
+  `AR_PORT_PARITY_ORIGIN` — and it owns the MAJORITY: measured at the q13
+  tip, 26 skipped files decompose as 9 `describeLivePg` + 1
+  `describeLiveOllama` + 1 `describeLiveN8n` + 15 `describePortParity`.
+  Its companion bare-`.skip` sweep must run over the ROSTER FILES and never
+  over the helpers: the `describe.skip` legitimately lives inside
+  `port-parity.ts`'s own ternary, so grepping the helper reports the gate
+  as hardcoded.
+- The closed-loopback-port control generalises to all FOUR gate helpers,
+  including the two whose gate is not a URL, and none of them needs the
+  service its suite is gated on. Measured, all four flipping `1 skipped` to
+  `1 failed` on one file apiece: `AR_N8N_URL` and `AR_OLLAMA_URL` at
+  `http://127.0.0.1:9`, `AR_LIVE_DATABASE_URL` at
+  `postgres://ar:x@127.0.0.1:9/ar_live` (which needs no `stress:start` and
+  reaches no cluster), and `AR_PORT_PARITY_ORIGIN` at a NONEXISTENT
+  directory — so the parity half's ternary is provable without locating
+  the origin checkout and with no resolved path entering any file. Assert
+  the armed target really is absent or closed in the SAME command; an
+  accidental hit is a control that proved the opposite of what it reads as.
+- The `--reporter=verbose` per-case regex above must make the trailing
+  ` <n>ms` OPTIONAL: a line carries its duration only when the case RAN, so
+  a regex REQUIRING it silently drops every SKIPPED line and the damage
+  lands precisely on the ran-union-skipped roster equality, which then
+  reports the env-gated files as missing from the capture rather than as
+  skipped. Glyphs measured under vitest 4.1.11: pass is U+2713 and skip is
+  U+2193. Grouping those lines by FILE is the only thing that can hold
+  `Test Files N skipped` against a roster as a SET, and two cross-checks
+  make the classification a reading rather than a guess, both free in the
+  same parse: files carrying BOTH glyphs must be ZERO (a partially-skipped
+  file classifies silently as ran), and the pass-glyph-carrying FILE count
+  must equal the `Test Files` `passed` segment.
+- A `test:<variant>` capture's non-case envelope is exactly TEN lines and
+  the package-scope N+8 rule does NOT reach it, the variant running no
+  `pretest` at all: the ten are the six invariants (the `$` echo, the
+  ` RUN  v` banner and four blanks) plus FOUR summary lines (`Test Files`,
+  `Tests`, `Start at`, `Duration`). Every remaining line is a per-case
+  glyph line, which is what makes `no unexplained line` a measurement on a
+  variant run — read with `splitlines`, since the naive newline split puts
+  its phantom trailing element in exactly that bucket and answers 11.
+- A background `bun run test` launched as `<cmd> > f 2>&1; echo EXIT=$? >
+  f.exit` reports the WRAPPER's status in the task notification, so a RED
+  suite arrives announced as `exit code 0`. Read the `.exit` file, never
+  the notification's summary — measured on a run whose notification said 0
+  and whose file said 1, with `Test Files 1 failed | 154 passed` in the
+  capture.
+- A capture directory can hold a `.txt` and its `.exit` from DIFFERENT
+  runs, and the pair then reports a red run's verdict against a green run's
+  output: measured, a `ct.exit` reading `EXIT=2` beside a `ct.txt` whose
+  three package lines all read `Exited with code 0`, because the same
+  filename was reused for a later run whose exit went to `ct2.exit`. The
+  tell is free and is the MTIME ORDERING — a `.txt` NEWER than its own
+  `.exit` cannot be that run's capture. Check it before quoting anybody
+  else's captures, including an earlier task's in the same plan, and write
+  per-run unique filenames. `rm -f` on both is necessary and not
+  sufficient: it does not stop a LATER run from overwriting one.
+- A STALE gitignored `packages/ui/dist/` reds `@ar/web check-types` with
+  TS2305 `Module '"@ar/ui"' has no exported member 'X'`, a DIFFERENT shape
+  from the `import/no-unresolved` one recorded above for the same cause:
+  the module RESOLVES and the symbol is simply not in the built `.d.ts`,
+  `@ar/ui`'s exports map pointing `types` at `./dist/index.d.ts`. The
+  repair is a rebuild and nothing else, so the gate ORDER matters —
+  `@ar/web`'s `pretest` runs `bun run --filter '@ar/ui' build`, which means
+  `test:all` silently regenerates the artifact `check-types:all` just
+  failed on (same command, no tracked change, exit 2 then exit 0). On any
+  tree whose `@ar/ui` dist may be stale (a fresh clone, a worktree, a
+  rebase onto a leg that touched `packages/ui`), run `test:all` FIRST or
+  build `@ar/ui` by hand. Grepping `dist/index.d.ts` for a SYMBOL is a dead
+  reading in both directions — it is a six-line re-export barrel naming no
+  component whether or not the build is current; ask the whole type surface
+  (`grep -rl '<Symbol>' dist --include='*.d.ts'`) or read the barrel CHAIN.
 - `bun run test:live` reds are TWO populations and only one is the
   carried-in ledger row. The second is live-only ARITY ASSERTIONS, which
   nothing in `test:all` can reach, `tests/live/` being
@@ -1148,6 +1259,31 @@ matching anything prints exactly the same five lines.
   (`git status --short -uall -- <path>` plus `git diff HEAD --name-only --
   <path>`) — trivially empty on a clean tree, which is exactly when a
   reader forgets it was part of the claim.
+- A `zero commits touch <dir>` claim is NOT answered by the changed-set
+  bucket above, and the two are different questions. `git diff <base>..HEAD`
+  is a TREE-to-TREE comparison, so a path CREATED AND DELETED inside the
+  range sits in neither tree and is absent from the bucket AND from the
+  pathspec form, while every commit that touched it is real (measured in a
+  throwaway repo: both diff forms answered EMPTY where `git log --oneline
+  <range> -- <path>` answered 2 commits). So the bucket is the PATH reading
+  and only a per-commit walk is the COMMIT one; they can agree without
+  either being the other's control, so run both and say which carried the
+  claim. The per-COMMIT top-level partition needs no pathspec, so it cannot
+  inherit a pathspec fault: bucket each commit's own
+  `git show --name-only --format= -z` paths by first segment (first TWO
+  under `packages/`), then hold the bucket SUM against
+  `git rev-list --count <range>` — equal is what says every commit was
+  classified, so a commit touching nothing any bucket names is NAMED rather
+  than silently absent.
+- `git ls-files --error-unmatch` gives such a claim a THIRD control the
+  fabricated-sibling one cannot: a nonexistent file UNDER a real tracked
+  prefix. `packages/webx` exits 1 for the trivial reason, where
+  `packages/web/zz-no-such-file.ts` exits 1 though its whole directory is
+  tracked — which is what says the pathspec resolves to FILES and not to a
+  directory prefix that merely exists — and the bare prefix exits 0 by
+  matching the tracked files beneath it. The three exits (0, 1, 1) are
+  three different claims, and only the pair of 1s says the mechanism
+  discriminates.
 - An explicit-path `-f json` run and the SCRIPT's own pathspec answer
   DIFFERENT questions, and a gate-coverage claim owes BOTH. The explicit
   run proves ESLint does not IGNORE the file and says nothing about
@@ -1265,6 +1401,29 @@ matching anything prints exactly the same five lines.
   Filtering `git ls-files` through `isScannable` then closes the loop for
   free: the trio is in NEITHER the tracked nor the scanned set, which is a
   stronger statement than the ignores alone.
+- That `--root <throwaway repo>` liveness control has TWO failure modes
+  which each read as a RESULT rather than as a broken probe, and both land
+  precisely on the exit code the control is read by. A RELATIVE script path
+  under a moved cwd answers `error: Module not found` at EXIT 1, identical
+  at `$?` to the caught plant the control exists to produce. And a plant
+  written by `python3 -c "..." VAR="$D"` is never written at all: an
+  assignment placed AFTER the `-c` argument is an ARGV member and not an
+  env prefix, so python raises `KeyError` while the gate answers
+  `OK, 1 file(s) scanned` at exit 0, which reads exactly like a scanner
+  that had stopped scanning. Three one-line closes, all needed: spell the
+  gate by ABSOLUTE path, put the assignment BEFORE the command, and assert
+  the plant is TRACKED (`git ls-files` naming BOTH files) before reading
+  any verdict — then read the exit-1 output TEXT rather than `$?`. The
+  throwaway also needs a SECOND, CLEAN tracked file or the NEGATIVE half
+  cannot exist: the gate refuses a zero-file scan by design, so after the
+  `git rm` of the plant a one-file repo cannot answer exit 0 for the right
+  reason. The in-band reading is the OK line's own count.
+- The `isScannable` scanned-count delta is a NET figure, so a plan whose
+  stages DELETE files makes it smaller than the added-file count and a task
+  predicting `the count moved by the files I added` reports the difference
+  as missing coverage. Measured across one wave: 1038 to 1090 is +52 net,
+  decomposing as 54 ADDED and 2 REMOVED. Report ADDED and REMOVED as SETS
+  beside the net.
 - `.github/**` joins package-root `AGENTS.md` in the read-by-no-fan-out-gate
   set, for a different reason: ESLint here has no YAML plugin at all, so
   `lint:all` never opens a `.yml` whatever the ignore patterns say, and
@@ -1283,6 +1442,45 @@ matching anything prints exactly the same five lines.
   this repo's own manifest, which a bump in `packages/` silently falsifies.
   Sweep `.claude/` explicitly; a `git ls-files packages/` denominator will
   never reach it.
+- A tsconfig `include` can name a glob that resolves to NOTHING and neither
+  fan-out says so: `packages/service/tsconfig.json` includes `*.mjs` while
+  `allowJs` is unset, so TypeScript drops the extension and that package's
+  own `eslint.config.mjs` is type-checked by nothing despite being named in
+  the include. The attribution is READ-ONLY and needs no config edit —
+  `bun x tsc --noEmit --listFilesOnly --allowJs` gained exactly 4 files
+  (that config plus the three root `.mjs` modules it imports) over the
+  default run's 403, and the sibling `*.ts` glob resolving 2 package-root
+  files (`drizzle.config.ts`, `vitest.config.ts`) is the positive control
+  saying the glob MECHANISM works and only the extension is dropped. That
+  file is also un-TARGETED by the lint script's pathspec, so a change to it
+  has only `gate:control-bytes` and an explicit-path
+  `bun x eslint <it> -f json` behind it.
+- The `workflows/` real-but-excluded control pays a THIRD way: it is IN the
+  lint script's own pathspec and OUT of tsconfig's `include`, so one path
+  shows the two gates' scopes genuinely DIFFER rather than merely that tsc
+  excludes something. Measured at the q13 tip: 7 tracked files on disk, 13
+  `workflows/` entries in the eslint `-f json` read list, 0 in tsc's read
+  list by ABSOLUTE package-root prefix, and 7 by the naive substring test
+  (all of them `tests/workflows`, which IS in the include). Report all four
+  numbers — the substring figure is what shows the prefix form is
+  load-bearing rather than pedantry.
+- A changed-set membership reading must split the DELETED half out or every
+  deletion reads as a missing member: `git diff --name-only <base>..HEAD`
+  lists paths that no longer exist and both gates correctly never list
+  them. Derive the set with `--name-status -z` (handling the three-field R
+  record) or `--diff-filter`, then assert the deleted paths ABSENT from
+  both read lists as a control in its own right — it is free, and it is
+  the one member of the changed set whose absence is the correct answer.
+- A gate-coverage probe taking its package root from
+  `os.path.abspath('.')` reports EVERY owed file as MISSING and the
+  real-but-excluded control's subject as EMPTY, which reads as a
+  catastrophic gate failure rather than as the Bash-tool cwd trap recorded
+  above: one call ending `cd <repo root> && ...` reset the persisted cwd,
+  so `os.path.relpath` produced repo-relative keys against a
+  package-relative changed set (89 of 89 MISSING) with every number still
+  plausible. Pin the package root as an ABSOLUTE LITERAL, drive git with
+  `-C <root>`, and assert in-probe that no `relpath` result starts with two
+  dots — it costs nothing and fires before the first verdict is printed.
 - The ROOT `AGENTS.md` is the exception to all of the above: the root leaf
   config ignores `packages/**`, but repo-root markdown IS in `eslint .`'s
   target set, so an explicit-path `bun x eslint -f json AGENTS.md` returns
@@ -1446,6 +1644,18 @@ zero and one command: `git merge-base --is-ancestor origin/main HEAD`
 exiting 0 says the merge is a FAST-FORWARD, under which no conflict is
 possible at all.
 
+**That fast-forward corroboration is UNAVAILABLE on a branch BEHIND main**,
+and reaching for it reports a correct clean merge as broken. Where
+`git merge-base --is-ancestor origin/main HEAD` exits 1 the merged tree oid
+does NOT equal `HEAD^{tree}`. What replaces it is a whole-tree diff against
+the merged oid: it must differ from HEAD by exactly the OTHER side's changed
+paths and from `origin/main` by exactly your own (measured 1 and 105). And
+where the two sides' changed-path sets are DISJOINT (`comm -12` over the two
+`--name-only` sets is empty) the LINE-ARITHMETIC reading has no subject at
+all — no blob was three-way merged — so the honest delivery says so rather
+than running it over a path only one side touched. Spot-check one path per
+side through `git rev-parse <merged-oid>:<path>` against all three blobs.
+
 **Pick PR pre-flight controls by a number you have SEEN, never by a
 branch looking historical.** Two dead-control traps, both measured. A
 MERGED PR is not a valid control for the
@@ -1462,6 +1672,15 @@ misreading: `mergeable` is computed lazily and `UNKNOWN` beside a present
 merge ref is healthy, and `mergeStateStatus` reads `UNSTABLE` while a
 check is pending, settling to `CLEAN` — neither is `DIRTY`, which is the
 one that means a conflict.
+
+**The `gh pr list --head <branch>` pre-flight HAS a cheap live control**,
+which is what the dead-control note above leaves missing: the same command
+with `--state open` and NO head filter must return some other branch's PR.
+That separates `[]` meaning no PR exists from `[]` meaning the filter is
+broken, where a MERGED PR cannot serve. Pair it with
+`git ls-remote --heads origin` for the branch, which answers nothing when it
+was never pushed — two independent reasons for the same `[]`, and a body
+claiming no hosted green owes both.
 
 **A conflicting PR dispatches NO workflow at all**, so `no checks reported`
 on a fresh PR is a MERGE-STATE reading and not a trigger or changed-path
@@ -1481,6 +1700,40 @@ tag. `git tag --list 'v*' | sort -V | tail` plus
 `git log -1 --format='%h %s' <tag>` is the check, and an honest close-out
 row states what is TRUE at the commit (built, gates green at `<sha>`, PR
 and tag pending) rather than a number the push task will discover.
+
+**A close-out's gate captures routinely PREDATE HEAD by a commit**, and the
+gap is closed per GATE by which files each one can OPEN rather than by
+re-running the battery: `check-types` and `test` cannot open a markdown
+file, so their captures cover a docs-only HEAD's code exactly, while `lint`
+DOES reach repo-root markdown and is the one gate worth re-running. The
+reading that surfaces the gap at all is the `pretest` stamp line inside the
+test capture, whose sha is the tree the artifacts were built from; without
+it a close-out silently reports a battery against the wrong commit. Say
+which sha each row was taken at rather than quoting one for all three.
+
+**Two markdown faults bite close-out prose specifically**, and no width
+check, link sweep or gate reports either. A bare vertical bar inside a TABLE
+CELL (quoting a vitest summary such as `9 passed | 2 skipped`) splits the
+cell silently and the row renders with an extra column — assert every row's
+pipe count equals the header's in the same probe that writes it. And a code
+span WRAPPING across a newline is safe only where the break is a WORD
+boundary: CommonMark turns the newline into a space, so breaking
+mid-identifier at a dot or an underscore renders a space INTO the name. The
+check is one line — a line whose BACKTICK COUNT IS ODD has a span crossing
+the newline, and it is a fault only when that line ends in an identifier
+character.
+
+**Appending a close-out section to a ralph plan must write BOTH**
+`PLAN-<stub>.md` and `PLAN_TRACKER-<stub>.md`, or the two stop being
+byte-identical apart from checkbox state and a wrap-up session reading
+either one may miss it. It is safe: `findNextTask` in
+`tools/ralph/utils/tracker.ts` matches only `^- \[ \] ` and
+`^- \[BLOCKED\] `, so headings, tables and plain `- ` bullets are ignored,
+and nothing in the loop parses a `# Stage:` heading at all. Prove it rather
+than assuming — import `findNextTask` under bun and drive it over the
+edited tracker; it must still name the same open task at the same line
+number. Verify the pair with
+`diff <(sed 's/^- \[x\]/- [ ]/' <tracker>) <plan>` at zero lines.
 
 **A PR-opening task's own verification is `gh pr checks`**, and it can
 find a defect no local gate could — run it rather than treating the

@@ -323,6 +323,111 @@ held by nothing. Read it before adding a node.
   the third, reading the rows ADJACENT to the insert point as a set.
   Repair by stating the discharge as a measurement — every path in the
   column existence-checked with a fabricated sibling asserted absent.
+- **Three rosters here are keyed on a FILESYSTEM LISTING, so adding a
+  module reds a test in a file nobody edited.** `src/sources/index.test.ts`
+  holds `NON_ADAPTER_MODULES` (every non-adapter entry, each with a REASON
+  SENTENCE) against `readdirSync` of its own directory;
+  `tests/build/lib-splice.test.ts` holds `SPLICED_LIBRARIES` against
+  `src/lib`; `tests/invariants/workflow-dist.ts` holds one over
+  `workflows/src`. None is reachable from `lint` or `check-types`, all
+  three are green until a `bun run test`, and each fails naming the FILE
+  rather than the roster — so a task adding a module owes a full package
+  run before it can call itself done. Predict it with
+  `git grep -ln readdirSync -- src tests` BEFORE creating the file. A
+  missing `NON_ADAPTER_MODULES` row reds TWO cases, which is the cheap
+  liveness leg for the edit; its TSDoc enumerates the buckets, so check
+  whether the new module falls under a sentence already there before
+  adding one, and avoid apostrophes in the reason
+  (`@stylistic/quotes` has no `avoidEscape`). `tests/invariants/` itself
+  has no such roster, so an invariant file reds nothing on arrival.
+- **Every library under `src/lib/` puts its TOP-LEVEL names, private ones
+  included, into the SAME scope as any other library spliced into the same
+  Code node.** A duplicate `const` is a `SyntaxError` on that node's first
+  execution and a duplicate `function` is a silent last-one-wins, and
+  nothing in the build, the splice roster or either fan-out reports it.
+  Scan before naming anything: a column-anchored
+  `^(?:export )?(?:function|const|let|var|class)\s+(\w+)` over the
+  directory found 14 names already shared, `asText` across NINE libraries.
+  Prefix a new library's top-level names, and check the intersection
+  against the library most likely to be spliced BESIDE it rather than
+  against the whole directory. Related, and undocumented in the splice
+  test's own header: no `ownText` roster entry may carry a STRING LITERAL,
+  because the entries are matched against the shipped SOURCE and against
+  the TRANSPILED body and bun's transpiler re-quotes single to double —
+  regex literals and identifier-only expressions are what survive.
+- **Every `src/*/store.ts` exports TYPES ONLY** — nine port modules, zero
+  `const`, and the only imports are `import type`. So a VALUE a port's
+  vocabulary needs (a sort-key tuple for `sortQuerySchema`, a roster, a
+  cap) cannot live beside the type that names it and belongs in the group's
+  `service.ts` or `routes.ts`: declare the port's side as a union type and
+  let the tuple in the service be what the schema factory is handed, with
+  the tuple's FIRST member and the union's first line stating one default
+  rather than two. The same rule is why a port declaring a row by hand
+  imports no drizzle — which leaves those hand-written records pinned by
+  NOTHING, closable with a throwaway `src/<group>/zz-tmp-pin.ts` asserting
+  `[Row] extends [Rec]` against `typeof <table>.$inferSelect` and one
+  deliberately-wrong shape as `false`, run under the PACKAGE gate
+  `bun x tsc --noEmit` and then removed. A deliberately COLUMN-SCOPED
+  record is `true` in ONE direction only; a whole-table record is true in
+  both and owes a RENAME leg as well as a nullability one; and an
+  AGGREGATE record (a GROUP BY result) has no `$inferSelect` counterpart
+  and is pinned by nothing at `check-types` at all.
+- **Which group exports its list query schema is a decision, not a
+  style.** A group with a NARROWING to declare exports it from
+  `service.ts` (`findingListQuerySchema`, `documentListQuerySchema`) so a
+  service test can drive the BOUNDARY refusals; a collection with no filter
+  takes the shared `paginationQuerySchema` in the router instead, since a
+  group-local schema over nothing but `?page` and `?perPage` would be a
+  second declaration of the cap and the default. Where a schema IS composed,
+  extend FROM the schema carrying the cross-field check: zod 4 carries an
+  object-level refinement OUTWARDS ONLY, so `a.extend(b.shape)` keeps `a`'s
+  `.refine()` and the reverse silently DROPS it while type-checking and
+  answering every other request identically.
+- **The MCP seam.** `src/mcp/server.ts` calls `createMCP` at module scope,
+  so importing it BOOTS a server and binds a port — no test can read the
+  tool list through it, and the only reading available is a throwaway
+  package-root probe that COPIES the registration expression over
+  `InMemoryTransport`. `src/mcp/tools/registry.ts` is the half that CAN be
+  imported (type-only imports plus one zod type). A wave module filling
+  `MCP_TOOLS` is a VALUE import in `registry.ts` and a type-only import
+  back, so there is no runtime cycle — but a shared answer helper must
+  live in a THIRD file and never in `registry.ts`, where a value import
+  back would close one. Every tool input schema is declared per exposed
+  ROUTE, in the route module, spread from the pieces that route parses;
+  exporting a router's PRIVATE address const instead falsifies the
+  `identical const is private` sentence a dozen route modules carry, so
+  export a DERIVED schema that spreads it.
+- **Every descending ORDER BY key in a db-store must spell
+  `desc nulls last`, as a `sql` template per key.** Neither `asc` nor
+  `desc` from `drizzle-orm` can express it and no helper exists, while
+  drizzle's INDEX column builder `.desc()` renders `DESC NULLS LAST` — the
+  opposite of Postgres's own default for that word. The planner matches a
+  pathkey LITERALLY, so a store writing bare `DESC` cannot use the index,
+  and NOT NULL does not make the qualifier moot (measured on PG 16: fully
+  qualified plans as a bare `Index Only Scan`, bare `DESC` on the NOT NULL
+  keys degrades to an `Incremental Sort`, bare throughout to a full
+  `Sort`). Ascending keys take NO qualifier — `NULLS LAST` is already the
+  `ASC` default — so a store carrying both orders looks inconsistent and
+  owes a sentence saying why.
+- **A db-store's SQL is readable END TO END without a database**, and the
+  claims its header makes are pinned by nothing without it: `check-types`
+  is BLIND to a store projecting MORE columns than its record declares
+  (excess-property checking fires only on a fresh object literal, which a
+  query builder's result never is). Drive the REAL module through
+  `drizzle(fakeClient, { schema })` where `fakeClient` is
+  `{ query(config, params) { ... } }` recording `config.text` and
+  returning one plausible row. Write the probe at the PACKAGE ROOT, not in
+  `/tmp`: every bare specifier in a `/tmp` probe resolves from `/tmp`, and
+  under the isolated linker that finds the wrong copy and names the wrong
+  subject. Two complements, neither substitutable — `PREPARE s1 AS <the
+  rendered statement>` against the running live cluster says every
+  statement is valid against the REAL schema and
+  `pg_prepared_statements.parameter_types` says what Postgres inferred for
+  each `$n`; and a `CREATE TEMP TABLE` shadowing the real one on ONE
+  dedicated connection says what the store ANSWERS, which is the only
+  reading of the DECODED values (`sum()` arrives as a STRING where
+  `count()` arrives as a number). See the `drizzle-recording-client-probe`
+  and `pg-temp-table-shadow-probe` skills.
 
 ## Operator control plane
 
