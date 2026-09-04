@@ -87,10 +87,13 @@ handlers carry no try/catch at all: `createService` registers
 `errorHandler` as the last middleware, and under Express 5 a bare
 `throw` inside an `async` handler reaches it with no `next(err)`.
 
-Wave 3 exposes those same service functions as MCP tools and reads
-`err.code` rather than an HTTP status, which is why the code is the
-part that has to mean something and the status is the part that
-merely has to be right.
+Wave 3 exposes some of those same service functions as MCP tools,
+and a raise reaches a tool's caller as its message alone — no
+status, and no `code` either. So the status stays the part that
+merely has to be right, `code` is what an HTTP client discriminates
+on, and the message is the one part both protocols carry.
+`docs/architecture/09-mcp.md` carries what a raise becomes on that
+crossing.
 
 ### The asymmetry between them is deliberate and cheaper than the fix
 
@@ -646,8 +649,11 @@ ordinary request rather than a special case of one.
 `src/domains/routes.ts` declares all five and decides none of them:
 each handler reads the address, derives the window, calls the
 matching function in `src/domains/service.ts` and chooses a status.
-Wave 3 exposes those same functions as MCP tools, so a rule that
-lived in a handler would be a rule that surface could not reach.
+Wave 3 exposes the two reads among them as MCP tools, so a rule
+that lived in a handler would be a rule that surface could not
+reach; the other three are off it, and `The banned surfaces` and
+`The deliberate absences` in `docs/architecture/09-mcp.md` say which
+is which.
 
 ### A create answers `201` and carries no `Location` header
 

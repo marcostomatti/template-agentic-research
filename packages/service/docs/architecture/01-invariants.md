@@ -34,7 +34,11 @@ The request-echo row is that
 shape again, drawn from the binding constraints in
 `.specs/q08-api-wave-1.md`, and the connector-secret row likewise, from
 the constraints section of `.specs/q11-api-wave-2.md`, which asks for
-sentinel tests in both directions over a value the surface stores.
+sentinel tests in both directions over a value the surface stores. The
+MCP exposure row is the last of them, drawn from the constraints in
+`.specs/q13-api-wave-3-mcp.md`, which asks for a test that would fail if
+a tool were registered over a banned surface, an omission nothing
+asserts being one the next contributor undoes.
 
 ## The register
 
@@ -61,6 +65,7 @@ sentinel tests in both directions over a value the surface stores.
 | No file under `src/` or `lib/` outside `src/auth/` and `src/db/schema/auth.ts` names a password hash or a session-token hash | `tests/invariants/auth-containment.test.ts`, over the identifier roster and the walker in `tests/invariants/auth-containment.ts`, which refuses to report a result at all when it read no files | q07 | Implemented |
 | No request body content reaches a response body or a log line through a validation detail | `tests/api/request-echo.test.ts`, submitting one sentinel through every write route the service mounts as a field value, as an unrecognized key, as an open-record key and as a query parameter, and counting it in each answer and in everything the process wrote — with a third boot mounting a route that leaks the same sentinel through every channel this surface is forbidden to leak through, as the control on the count | q08 | Implemented |
 | No stored connector secret reaches a response body, a log line or an error detail | `tests/api/connector-secret.test.ts`, booting the assembled service over a sentinel credential written through `POST /connectors`, rotated through `PATCH /connectors/:id`, read back through `GET /connectors` and submitted once more to a create the store refuses, and counting it in every answer and in everything the process wrote — with a second boot whose route reads the stored config back and leaks it to the console, to stderr and into what it answers, as the control on both counts | q11 | Implemented |
+| No MCP tool names a banned surface, and every route the routers declare is exposed by a tool, banned, or written out as a deliberate absence carrying its reason | `tests/invariants/mcp-exposure.test.ts`, holding `MCP_TOOLS` against the labels the sixteen research routers and the framework control plane declare — the banned classifier driven over a plant of each of its two families with a fabricated near miss beside it, the three rosters held pairwise disjoint so the covering cannot be satisfied by a label sitting in two of them, and every exposed route paired with an `inputSchema` held `Object.is`-identical to the binding its own route module exports | q13 | Implemented |
 
 ## Reading the register
 

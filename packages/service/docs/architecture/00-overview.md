@@ -181,6 +181,7 @@ to it has a single row to keep true.
 | Scheduling | `workflows/src/ar-dispatch.json`, and the schedule state in `src/db/` | `docs/architecture/06-scheduling.md` |
 | Auth | `src/auth/`, `src/db/schema/auth.ts` | `docs/architecture/07-auth.md` |
 | HTTP API | `src/http/`, `src/domains/`, `src/taxonomy/`, `src/personas/`, `src/settings/`, `src/topics/`, `src/connectors/`, `src/subscriptions/`, and the HTTP half of `src/sources/` | `docs/architecture/08-http-api.md` |
+| MCP | `src/mcp/` | `docs/architecture/09-mcp.md` |
 
 A document in the right-hand column arrives with the phase that delivers
 its behaviour, so a name there can be a reservation rather than a file:
