@@ -98,11 +98,12 @@ import {
 /**
  * Exactly the port methods {@link listSourceFailures} reaches.
  *
- * SIX OF THE NINE `SourceStore` METHODS ARE ABSENT, and the absence
- * is this module's read-only claim written as a type. Every write
- * on that port — the insert, the update, the delete — and every
- * read about the `sources` row itself belongs to `./service.ts`,
- * and a queue handed the whole port would be claiming to need them.
+ * TEN OF THE THIRTEEN `SourceStore` METHODS ARE ABSENT, and the
+ * absence is this module's read-only claim written as a type. Every
+ * write on that port — the insert, the update, the delete and the
+ * config approval — and every read about the `sources` row itself
+ * belongs to `./service.ts` or to `./proposals-service.ts`, and a
+ * queue handed the whole port would be claiming to need them.
  *
  * `findSourceById` is here and is not a document read: it is what
  * turns an id naming nothing into a 404 rather than into an empty

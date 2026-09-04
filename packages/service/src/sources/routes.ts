@@ -192,12 +192,14 @@ export interface SourcesRouterOptions {
    * `tests/helpers/memory-research-store.ts` can stand behind it
    * with no database up.
    *
-   * It names SIX of the nine source methods, and the three it
+   * It names SIX of the thirteen source methods, and the seven it
    * leaves out are the containment this file is handed rather than
-   * one it enforces: `listSourceFailures` and `countSourceFailures`
-   * belong to the failures router, so no handler below could serve
-   * that queue even by accident, and `findSourceById` is absent
-   * because nothing on this router decides on a stored member.
+   * one it enforces. `listSourceFailures` and `countSourceFailures`
+   * belong to the failures router and the four proposal methods to
+   * the proposals router, so no handler below could serve that
+   * queue or rule on a config even by accident. `findSourceById` is
+   * absent because nothing on this router decides on a stored
+   * member.
    *
    * NO CLOCK SITS BESIDE IT, unlike `TopicsRouterOptions`. Nothing
    * on this group reads the present: `sources` carries no

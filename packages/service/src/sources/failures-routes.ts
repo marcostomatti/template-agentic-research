@@ -133,11 +133,13 @@ export interface SourceFailuresRouterOptions {
    * `tests/helpers/memory-research-store.ts` can stand behind it
    * with no database up.
    *
-   * SIX OF THE NINE PORT METHODS ARE ABSENT, and the absence is
-   * this router's read-only claim written as a type rather than as
-   * a promise. Every write on `SourceStore` belongs to the router
-   * beside this one, so no handler here could reach a `documents`
-   * row or a `sources` one even by accident.
+   * TEN OF THE THIRTEEN PORT METHODS ARE ABSENT, and the absence
+   * is this router's read-only claim written as a type rather than
+   * as a promise. Every write on `SourceStore` belongs to a router
+   * beside this one — the three `sources` writes to `./routes.ts`
+   * and the config approval to `./proposals-routes.ts` — so no
+   * handler here could reach a `documents` row, a `sources` one or
+   * the approval gate even by accident.
    *
    * NO CLOCK SITS BESIDE IT. Nothing on this route reads the
    * present: a capture instant is what the pipeline stamped, and

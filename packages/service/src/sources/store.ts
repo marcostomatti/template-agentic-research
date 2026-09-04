@@ -52,6 +52,16 @@
  * the database rejects is a second contract, agreeing right up until
  * the deployment that does not.
  *
+ * A REFUSAL IS NOT THE SAME AS A FAULT, and
+ * {@link SourceStore.approveAndApplyProposal} is the one method here
+ * where the difference is legible. The rule above is about what this
+ * port answers a REQUEST with. An implementation asserting that its
+ * own previous statement did what it says — that the row it approved
+ * one statement ago reads as approved — is making a claim about
+ * itself and not about the caller, and reaching that assertion means
+ * the implementation is broken rather than the request. It is a 500,
+ * it is not a `StoreRefusal`, and nothing catches it by reason.
+ *
  * `sources` CARRIES NO UNIQUE KEY AT ALL, SO A DUPLICATE ENDPOINT IS
  * STORABLE. Read off the generated SQL rather than off the schema
  * module: the table's whole constraint set is a primary key, one
@@ -126,9 +136,17 @@
  * database anyway. That refusal reaches `./service.ts` as an
  * ordinary `foreign-key-violation` `StoreRefusal`, which is why
  * {@link SourceStore.deleteSource} declares the throw rather than
- * promising that a zero count means the delete will land. The
- * proposals half of this surface is deferred to q13 with the two
- * routes that read it, and the count belongs with them.
+ * promising that a zero count means the delete will land.
+ *
+ * The proposals half of this surface has since landed — the four
+ * methods at the foot of {@link SourceStore} read that table and
+ * rule on it — and the count deliberately did not come with it.
+ * {@link SourceDependentCounts} is what a refusal REPORTS, so
+ * widening it would change the body of a `409` no route on this
+ * wave asked for, and a third number would say the delete is about
+ * to take a proposal when what a proposal does is refuse the
+ * delete. The third key still arrives unannounced, exactly as
+ * {@link SourceStore.deleteSource} says it does.
  *
  * A SOURCE STILL GOES WITH ITS DOMAIN, and the asymmetry is not a
  * contradiction. `sources.domain_id` cascades, as do the domain
@@ -142,8 +160,8 @@
  * deleting one of its sources is refused, and the difference is what
  * each act means.
  *
- * NO METHOD HERE WRITES A `documents` ROW. Two of the nine read that
- * table — {@link SourceStore.listSourceFailures} and
+ * NO METHOD HERE WRITES A `documents` ROW. Two of the thirteen read
+ * that table — {@link SourceStore.listSourceFailures} and
  * {@link SourceStore.countSourceFailures}, which back the review
  * queue behind `GET /sources/:id/failures` — and there is no third
  * one that writes. Nor does the parse-status aggregate on
@@ -171,6 +189,21 @@
  * on the record: it is the only thing saying which domain an
  * addressed row belongs to, for a rule or a log line that has to
  * know.
+ *
+ * A PROPOSAL IS MET AT ITS SOURCE AND RULED ON BY ITS OWN ID, which
+ * is the same split one table over.
+ * {@link SourceStore.listPendingProposals} and the count beside it
+ * take a {@link SourceRecord.id}, because
+ * `GET /sources/:id/pending-configs` is where the queue is addressed
+ * from. {@link SourceStore.findProposalById} and
+ * {@link SourceStore.approveAndApplyProposal} take a
+ * {@link SourceConfigProposalRecord.id}, because
+ * `POST /sources/:id/approve-config` names the row it rules on in
+ * its BODY and the two may disagree — a mistyped id, a stale queue,
+ * a caller trying one number after another. A read scoped to the
+ * source could not tell those apart from an id that names nothing,
+ * and {@link SourceStore.findProposalById} argues why that
+ * difference is worth an unscoped read.
  *
  * THE PIPELINE-OWNED COLUMNS ARE ON THE RECORD AND ON NO INPUT TYPE.
  * `cursor`, `consecutiveFailures`, `lastSuccessAt`, `lastFailureAt`
@@ -504,6 +537,251 @@ export interface SourceDependentCounts {
 }
 
 /**
+ * One `source_config_proposals` row, whole — every column the table
+ * declares, in the order it declares them.
+ *
+ * WHAT THE ROW IS: an arrangement for reading one feed that a model
+ * proposed and nobody has acted on yet. `sources.parser_config` and
+ * `sources.contract` say how a source is read and what a correct
+ * reading of it looks like, and the write that moves those two
+ * columns is the one every later pass inherits — so a proposal
+ * lands here as a row and only an approval moves it across.
+ * `src/db/schema/sources.ts` argues the gate at the table.
+ *
+ * WHOLE RATHER THAN COLUMN-SCOPED, which keeps
+ * {@link SourceFailureRecord} the only trimmed record on this port
+ * and is not a default taken for want of a reason. The gate is an
+ * approval OF THESE TWO DOCUMENTS: an operator rules on exactly what
+ * will be written rather than on an account of what a model would
+ * answer if it were asked again, so a record describing the payloads
+ * instead of carrying them would make the ruling a ruling about
+ * something else. `ResearchPoolRecord.searchTerms` in
+ * `src/entities/store.ts` makes the same argument over the other
+ * gate's payload.
+ *
+ * ONE QUEUE WITH TWO CLIENTS, and this record is the row both of
+ * them read. `listPendingProposals` in `scripts/approve.ts` selects
+ * the table whole, so the CLI and this port answer one shape rather
+ * than two views a reader has to reconcile.
+ * {@link SourceStore.listPendingProposals} carries the rest of that
+ * claim, and says which parts of it are the queue and which are the
+ * client.
+ *
+ * FOUR OF THESE MEMBERS ARE THE RULING, AND THE PROJECTION IS
+ * DECLARED ELSEWHERE. `describeRuling` in `src/approvals/ruling.ts`
+ * reads `id`, `status`, `approvedAt` and `appliedAt` and answers the
+ * four-member `Ruling` both approval routes answer with — this row
+ * being the `StoredProposalRuling` half of its input, where a
+ * `research_pool` row is the other. It satisfies that input
+ * STRUCTURALLY rather than by extending it: this port imports
+ * nothing but its window type, and the type-check at the service's
+ * own call site is what holds the two together.
+ *
+ * FOUR MORE ARE THE APPLIER'S INPUT, on the same terms.
+ * `ApprovedProposal` in `./config-proposer.ts` is a `Pick` over
+ * `id`, `approvedAt`, `parserConfig` and `contract`, so a row read
+ * through this port can be handed straight to
+ * `proposalToSourceUpdate` with nothing copied out and no second
+ * shape in between.
+ *
+ * NOTHING HERE RECORDS AN EDIT. There is no `updated_at` on the
+ * table, so a writer that rewrites `parserConfig` after
+ * `approvedAt` is stamped changes what was approved without the
+ * approval moving, and neither the schema nor this record notices.
+ * The column says so itself; it is stated here because this is the
+ * shape an approval is read through.
+ */
+export interface SourceConfigProposalRecord {
+  /**
+   * `source_config_proposals.id`, and the id a ruling names.
+   *
+   * The one member a caller SUBMITS: the body of
+   * `POST /sources/:id/approve-config` carries it, where every
+   * other member here is answered rather than asked for.
+   */
+  readonly id: number;
+
+  /**
+   * The domain whose source this proposal is about.
+   *
+   * Carried because this record answers its table whole, and read
+   * by nothing on this surface: the queue is scoped by source, the
+   * containment check below is over
+   * {@link SourceConfigProposalRecord.sourceId}, and the applier
+   * writes one `sources` row by id. It is redundant against that
+   * member too — the same domain is reached through
+   * `sources.domain_id` — and the column exists so that deleting a
+   * domain cascades to these rows inside the statement that
+   * cascades to its sources, which is a fact about the delete
+   * rather than about this read.
+   *
+   * `ResearchPoolRecord` in `src/entities/store.ts` DROPS its
+   * `domainId` for the reason this one keeps it, and the two are
+   * not in conflict: that record is a deliberate slice of its
+   * table and this one is not.
+   */
+  readonly domainId: number;
+
+  /**
+   * The source this proposal is for, and the member the
+   * containment check reads.
+   *
+   * {@link SourceStore.findProposalById} is unscoped, so this is
+   * what `./proposals-service.ts` holds against the source in the
+   * path before it rules on anything. A proposal naming another
+   * source is a `404` and never a `409`, the ordering
+   * `src/approvals/ruling.ts` argues for.
+   *
+   * NOT NULL, where the other gate's parent is nullable. A
+   * `research_pool` row may name no subject at all; a proposed
+   * `parser_config` is an arrangement for reading one particular
+   * feed, so a row naming no source is a proposal with nothing to
+   * apply it to. `on no source` is therefore a state the
+   * containment check never meets here.
+   */
+  readonly sourceId: number;
+
+  /**
+   * The `parser_config` being proposed: what an approval writes
+   * onto `sources.parser_config`.
+   *
+   * `unknown`, matching the column, which carries no `$type` for
+   * the reason {@link SourceRecord.parserConfig} records — what a
+   * parser config holds differs by `kind`, so one interface across
+   * all four would describe none of them accurately.
+   *
+   * AS STORED AND UNREAD. Nothing on this port validates it.
+   * `parserConfigErrors` in `src/lib/parser-config.ts` is what says
+   * whether a config is well-formed, and an operator reading the
+   * queue is who that answer is for: a malformed proposal is
+   * storable, says something true about what was asked, and is one
+   * to reject rather than one the table should refuse. What makes a
+   * bad one merely wrong rather than dangerous is that the parse
+   * engine performs the operations a config implements and
+   * evaluates nothing it finds in one.
+   *
+   * Empty is a complete value and the column's default: a model
+   * asked for an arrangement and answering with nothing usable.
+   */
+  readonly parserConfig: unknown;
+
+  /**
+   * The `contract` being proposed, and the other half of one
+   * answer: what an approval writes onto `sources.contract`.
+   *
+   * `unknown` and as stored, on the terms above. Proposed together
+   * with the config and approved together, because the two describe
+   * one arrangement from both ends — an extraction rule approved
+   * without the test that says it still holds leaves nothing to
+   * notice the day the source's shape drifts, which is the failure
+   * the propose path exists to answer in the first place.
+   *
+   * Empty is a complete value and inherits the target column's
+   * cost: where a contract declares nothing, nothing is rejected
+   * and nothing is counted, so a source whose shape has drifted
+   * reads exactly like one that is still working.
+   */
+  readonly contract: unknown;
+
+  /**
+   * What proposed this — the `connectors.name` of the model
+   * endpoint that was asked, or whatever else a writer named
+   * itself as.
+   *
+   * Provenance and nothing addressable. Nothing checks that the
+   * name resolves, nothing is dispatched from it, and a row may
+   * name a connector that never existed; the column carries the
+   * whole of that argument. It is on the record because an operator
+   * ruling on a queue is deciding partly on who proposed what.
+   *
+   * NOT NULL, which is not the same as non-empty: an empty string
+   * is a writer that did not say.
+   */
+  readonly proposedBy: string;
+
+  /**
+   * Where the row stands in the gate, as stored.
+   *
+   * `string` rather than the `ResearchPoolStatus` union, which is
+   * what a SELECT actually answers: the tuple is a CHECK in the
+   * database rather than a union in the type system, so a row
+   * written before a member was removed still reads back.
+   * `ResearchPoolRecord.status` in `src/entities/store.ts` and
+   * `Ruling.status` in `src/approvals/ruling.ts` take the same view
+   * of the same column and record the same reason.
+   *
+   * THE COLUMN IS THE ACCOUNT OF THE ROW AND NOT THE GATE. Nothing
+   * refuses a transition and a writer may set any member at any
+   * time, `done` on a row nobody approved included.
+   * `source_config_proposals_approval_check` never consults it — it
+   * holds the two timestamps against each other and nothing else —
+   * so a row may state a status its stamps do not support, and
+   * `proposalToSourceUpdate` in `./config-proposer.ts` deliberately
+   * reads the stamp rather than this member.
+   */
+  readonly status: string;
+
+  /**
+   * When the proposal was made. The proposing IS the insert, so
+   * there is no window in which a row exists and nothing has been
+   * proposed.
+   *
+   * What the queue is ordered by, oldest first, with
+   * {@link SourceConfigProposalRecord.id} breaking the tie `now()`
+   * makes inevitable — argued at
+   * {@link SourceStore.listPendingProposals}.
+   */
+  readonly proposedAt: Date;
+
+  /**
+   * When a person ruled in favour, or null while nobody has — the
+   * state every row starts in and the one an apply step passes
+   * over.
+   *
+   * THE ONE MEMBER THE APPLIER READS. `proposalToSourceUpdate` in
+   * `./config-proposer.ts` refuses a row carrying null here, and
+   * consults nothing else: not the status, which may disagree with
+   * it, and not the source row, which cannot say who agreed to
+   * what. That refusal is the whole of what stands between an
+   * unruled proposal and the two columns every later pass reads,
+   * because `source_config_proposals_approval_check` constrains
+   * this row's own timestamps and says nothing about `sources`.
+   *
+   * Written `coalesce(approved_at, now())`, so a second ruling
+   * answers the FIRST one's time. A client reading an instant older
+   * than the request it just made has found the idempotence rather
+   * than a fault.
+   */
+  readonly approvedAt: Date | null;
+
+  /**
+   * When the approved documents were written onto the source row,
+   * and null while they have not been.
+   *
+   * THE CLOSING STAMP, which is what `describeRuling` in
+   * `src/approvals/ruling.ts` reads it as: the same fact
+   * `research_pool.researched_at` records for the other gate, under
+   * a column name of its own, translated once there and nowhere
+   * else.
+   *
+   * It cannot be read back off the source. `sources.parser_config`
+   * holds whatever it holds now — an operator may have edited it
+   * since, a later proposal may have overwritten it, and two
+   * proposals may have been identical — so only this member says
+   * that THIS row is the one that was written, and when.
+   *
+   * A non-null here requires a non-null above, under
+   * `source_config_proposals_approval_check`, and the rule bites
+   * from both directions: an application cannot be recorded without
+   * the approval, and an approval cannot be withdrawn from a config
+   * already written. That is why
+   * {@link SourceStore.approveAndApplyProposal} stamps the two in
+   * the order it does.
+   */
+  readonly appliedAt: Date | null;
+}
+
+/**
  * What {@link SourceStore.insertSource} is handed: a complete source,
  * minus the id the write stamps and minus the five columns the
  * pipeline owns.
@@ -616,28 +894,38 @@ export interface SourcePatch {
 /**
  * Every database operation the sources surface performs.
  *
- * Nine methods and no escape hatch: there is no `query`, no exposed
- * connection and no transaction handle, so an implementation is
- * substitutable by anything that can hold rows. That closure is what
- * makes the in-memory implementation a genuine second implementation
- * rather than a stub covering the easy calls.
+ * Thirteen methods and no escape hatch: there is no `query`, no
+ * exposed connection and no transaction handle, so an
+ * implementation is substitutable by anything that can hold rows.
+ * That closure is what makes the in-memory implementation a genuine
+ * second implementation rather than a stub covering the easy calls.
  *
  * Every method is asynchronous, including the ones an in-memory
  * implementation could answer synchronously. The port is shaped by
  * the caller that has to await a database, and a synchronous member
  * would be one drizzle could not satisfy.
  *
- * SIX ORDINARY METHODS, A GUARD, AND TWO READS OVER ANOTHER TABLE,
- * which is the split worth reading this interface by. Six are the
- * resource operations every port in this service declares — a
- * windowed list, its count, a lookup, an insert, a patch and a
- * delete. {@link SourceStore.countSourceDependents} is the delete
- * guard, the shape `DomainStore` also carries. The last two read
- * `documents` rather than `sources`, and they are here rather than
- * on a port of their own because the queue they back is addressed as
- * a source's — `GET /sources/:id/failures` — and because a port that
- * could read those rows without writing them is the point, per the
- * module header.
+ * SIX ORDINARY METHODS, A GUARD, TWO READS OVER ANOTHER TABLE AND A
+ * GATE OVER A THIRD, which is the split worth reading this
+ * interface by. Six are the resource operations every port in this
+ * service declares — a windowed list, its count, a lookup, an
+ * insert, a patch and a delete.
+ * {@link SourceStore.countSourceDependents} is the delete guard,
+ * the shape `DomainStore` also carries. Two read `documents` rather
+ * than `sources`, and they are here rather than on a port of their
+ * own because the queue they back is addressed as a source's —
+ * `GET /sources/:id/failures` — and because a port that could read
+ * those rows without writing them is the point, per the module
+ * header.
+ *
+ * The last four are `source_config_proposals`, and they are here on
+ * the same terms: `GET /sources/:id/pending-configs` and
+ * `POST /sources/:id/approve-config` address a source, so a port of
+ * their own would be one addressed the same way over rows the same
+ * service reads. They are also the one place this port writes
+ * anything but a `sources` row.
+ * {@link SourceStore.approveAndApplyProposal} writes both tables at
+ * once, and says why that has to be one transaction.
  *
  * NO METHOD RESOLVES A DOMAIN, AND NONE DELETES ONE. `:slug` becomes
  * a domain row through `DomainStore.findDomainBySlug` in
@@ -947,4 +1235,269 @@ export interface SourceStore {
    *   An id no source carries answers `0`.
    */
   countSourceFailures(sourceId: number): Promise<number>;
+
+  /**
+   * Reads one window of a source's PENDING config proposals,
+   * ordered by {@link SourceConfigProposalRecord.proposedAt}
+   * ascending with {@link SourceConfigProposalRecord.id} ascending
+   * breaking a tie.
+   *
+   * ONE QUEUE WITH TWO CLIENTS. The predicate and both ordering
+   * keys are `listPendingProposals` in `scripts/approve.ts` member
+   * for member: `status` equal to the `pending` member of
+   * `RESEARCH_POOL_STATUSES` in `src/db/schema/values.ts`, then
+   * `proposed_at` ascending, then `id` ascending. That is not a
+   * coincidence to be preserved by hand but the substance of the
+   * arrangement — the CLI and this route are two ways to reach one
+   * backlog, so an operator who rules from a terminal and one who
+   * rules from the API have to be looking at the same next row.
+   * Two queues that happen to agree today would drift the first
+   * time either was edited, and nothing anywhere would report it.
+   *
+   * WHAT DIFFERS IS THE CLIENT AND NOT THE QUEUE, and saying which
+   * is which is what keeps `member for member` a claim somebody can
+   * check. That function is addressed at no source: it reads every
+   * pending proposal in the deployment under a `limit` that is a
+   * ceiling on an undrained backlog rather than a page, because a
+   * terminal listing has no cursor to page with. This one is
+   * addressed as `GET /sources/:id/pending-configs`, so it is
+   * scoped to one feed and takes a `window` that pages. Two clients
+   * reading one queue must agree about WHICH ROW IS NEXT; they need
+   * not agree about how much of it either can see at once.
+   *
+   * OLDEST FIRST, BECAUSE THE QUEUE IS WORKED FROM THE TOP, which
+   * is the opposite of {@link SourceStore.listSourceFailures} one
+   * table over and is the right way round for the same reason. A
+   * failure queue is about what broke most recently; a gate is
+   * about what has been waiting longest. `source_config_proposals`
+   * carries no unique key over `source_id`, deliberately, so a feed
+   * that has been failing every pass collects several pending
+   * proposals — and the oldest is the one whose absence of a ruling
+   * has cost the most passes. `source_config_proposals.proposed_at`
+   * names this order at the column.
+   *
+   * THE TIEBREAK IS NOT OPTIONAL. `now()` is the TRANSACTION's start
+   * time, so several proposals written in one pass tie to the
+   * microsecond and timestamptz stores nothing finer. A tie
+   * spanning a page boundary lets two pages disagree about which
+   * row they hold — one row shown twice and another shown never,
+   * with nothing in either response saying so. `id` ascending
+   * closes it, ascending so the tiebreak reads the same direction
+   * as the sort.
+   *
+   * PENDING ONLY, AND THE FILTER IS THIS METHOD'S RATHER THAN A
+   * CALLER'S. There is no status parameter, so the queue cannot be
+   * asked for approved or applied rows and this port cannot become
+   * a way to page the gate's history — the containment
+   * {@link SourceStore.listSourceFailures} states for `failed`,
+   * met again here. What an operator is owed is what is waiting on
+   * them. `source_config_proposals_source_id_status_idx` over
+   * (`source_id`, `status`) is what serves it.
+   *
+   * @param sourceId - The {@link SourceRecord.id} a read already
+   *   returned. Proposals carry `source_id`, so this is the key
+   *   available.
+   * @param window - `limit` and `offset`, as `toStoreWindow` in
+   *   `src/http/schemas.ts` derived them from `?page`/`?perPage`,
+   *   already validated.
+   * @returns The rows in that window, possibly empty. A source with
+   *   nothing pending, a source whose proposals have all been ruled
+   *   on, a window past the end and an id no source carries are all
+   *   an empty list rather than an error. Both proposed documents
+   *   come back AS STORED, unread and uncut: the queue is what an
+   *   approval is given from, so answering an account of them
+   *   instead would make the ruling a ruling about something else.
+   */
+  listPendingProposals(
+    sourceId: number,
+    window: StoreWindow,
+  ): Promise<readonly SourceConfigProposalRecord[]>;
+
+  /**
+   * Counts one source's pending config proposals, ignoring any
+   * window.
+   *
+   * The same read as {@link SourceStore.listPendingProposals}
+   * without the window, and separate from it for the reason
+   * {@link SourceStore.countSources} gives: a page's total
+   * describes the collection and not the page.
+   *
+   * COUNTS THE QUEUE AND NOT THE TABLE. The predicate is the same
+   * one, so this is how many proposals are waiting on a ruling
+   * rather than how many have ever been made for the feed. A source
+   * carrying fifty applied proposals and nothing pending answers
+   * `0`, which is the honest number for a backlog: what is closed
+   * is not waiting on anybody.
+   *
+   * @param sourceId - The {@link SourceRecord.id} to count within.
+   * @returns How many pending rows `source_config_proposals` holds
+   *   for it. An id no source carries answers `0`, which is correct
+   *   rather than a special case: nothing points at a row that is
+   *   not there.
+   */
+  countPendingProposals(sourceId: number): Promise<number>;
+
+  /**
+   * Reads one proposal by its own id, whatever source it names.
+   *
+   * UNSCOPED ON PURPOSE, AND THAT IS WHAT MAKES THE CONTAINMENT
+   * RULE DECIDABLE. `POST /sources/:id/approve-config` carries a
+   * `proposalId` in its body and a source in its path, and the two
+   * may disagree — a mistyped id, a stale queue, or a caller trying
+   * one number after another. A read scoped to the source would
+   * answer null for both `no such row` and `not this source's row`,
+   * which are a `404` for different reasons and only one of which
+   * is honest. So this answers the row, and `./proposals-service.ts`
+   * holds {@link SourceConfigProposalRecord.sourceId} against the
+   * addressed source and refuses `not-on-this-parent` before it
+   * looks at anything else — the ordering `src/approvals/ruling.ts`
+   * argues, which is what stops a `409` disclosing that a row the
+   * caller does not own exists and has already been applied.
+   * `EntityStore.findPoolRowById` in `src/entities/store.ts` is the
+   * same method over the other gate, for the same reason.
+   *
+   * ANY STATUS, NOT ONLY A PENDING ONE, which is what separates
+   * this from {@link SourceStore.listPendingProposals} beyond the
+   * window. The refusal a service owes an already-applied proposal
+   * is decidable only from a read that can see one:
+   * {@link SourceConfigProposalRecord.appliedAt} is the closing
+   * stamp `describeRuling` in `src/approvals/ruling.ts` reads, and
+   * a read that filtered the row out would leave `already-ruled`
+   * indistinguishable from `no-such-ruling`.
+   *
+   * @param id - The {@link SourceConfigProposalRecord.id} the body
+   *   named.
+   * @returns The row, or null when no proposal carries that id. The
+   *   row may name any source; whose it is, is the caller's
+   *   question and not this method's.
+   */
+  findProposalById(id: number): Promise<SourceConfigProposalRecord | null>;
+
+  /**
+   * Records that a person ruled in favour of one proposal AND
+   * writes the two documents onto its source: `approved_at`, then
+   * the source's `parser_config` and `contract`, then `applied_at`.
+   *
+   * THE PORT'S FOURTH WRITER AND THE ONLY ONE THAT TOUCHES TWO
+   * TABLES. The other three — {@link SourceStore.insertSource},
+   * {@link SourceStore.updateSource} and
+   * {@link SourceStore.deleteSource} — each write one `sources`
+   * row and nothing else.
+   *
+   * ONE TRANSACTION, BECAUSE THE APPROVAL AND THE SOURCE WRITE ARE
+   * ONE DECISION. They are not two operations a caller sequences;
+   * they are the two halves of what an operator did, and neither
+   * half is a state anybody meant on its own.
+   *
+   * An approval recorded with the source unwritten leaves a gate
+   * saying a config was agreed while every later pass still reads
+   * the feed the old way, with `applied_at` NULL and no writer left
+   * to finish the job — the proposal reads exactly like one nobody
+   * has got to yet.
+   *
+   * A source written with `applied_at` unstamped is the worse half.
+   * `sources.parser_config` holds whatever it holds and cannot say
+   * which proposal put it there, so the only account of why the two
+   * columns hold what they hold is gone, and a later apply writes
+   * them again as though the first had never happened. The column
+   * carries that argument itself:
+   * {@link SourceConfigProposalRecord.appliedAt} is the only thing
+   * that says THIS row is the one that was written.
+   *
+   * So a failure anywhere in the middle leaves the source untouched
+   * and the proposal unruled, which is the state the request can be
+   * made from again.
+   *
+   * THREE STATEMENTS, AND THEIR ORDER IS PART OF THE CONTRACT
+   * RATHER THAN AN IMPLEMENTATION'S TASTE.
+   *
+   * 1. Stamp `approved_at` as `coalesce(approved_at, now())` and
+   *    move `status` to the approved member, returning the row.
+   * 2. Derive the two source columns from THAT returned row through
+   *    `proposalToSourceUpdate` in `./config-proposer.ts`, and
+   *    UPDATE the source it names.
+   * 3. Stamp `applied_at` as `coalesce(applied_at, now())`, and
+   *    answer the row.
+   *
+   * Neither swap is available.
+   * `source_config_proposals_approval_check` refuses an
+   * `applied_at` on a row carrying no `approved_at`, so stamping
+   * the two the other way round is refused by the server
+   * mid-transaction; and the derivation reads `approved_at`, so it
+   * cannot run before the row carries one.
+   *
+   * THE DERIVATION GOES THROUGH ONE FUNCTION, and that is the point
+   * of naming it here. An implementation reading `parserConfig` and
+   * `contract` off the row directly would be a second applier, and
+   * the refusal standing between an unruled proposal and the two
+   * columns every later pass reads would then be restated once per
+   * implementation instead of being one function both go through.
+   * `proposalToSourceUpdate` also answers the SET clause itself, so
+   * nothing an implementation spreads can widen what an approval
+   * authorizes.
+   *
+   * Reaching that function's refusal from HERE would mean the
+   * statement above it did not do what it says: the row was
+   * approved one statement earlier. It is a fault rather than a
+   * refusal of the request, so it is not a `StoreRefusal` and no
+   * service catches it — the module header carries that
+   * distinction. Driving it with an unapproved row is a claim about
+   * `./config-proposer.ts` and is tested there.
+   *
+   * IDEMPOTENT ON BOTH STAMPS. `coalesce` on each, so a second
+   * ruling keeps the first one's instants rather than re-dating an
+   * approval already given or an application already made.
+   * `approveProposalById` in `scripts/approve.ts` writes
+   * `approved_at` the same way, and the two are one gate with two
+   * clients — though only one of them applies: that function
+   * deliberately leaves `applied_at` alone, so the CLI rules and
+   * this method rules and writes.
+   *
+   * NOTHING IS ASKED OF THE ROW'S STATE, exactly as
+   * `EntityStore.approvePoolRow` in `src/entities/store.ts` states
+   * for the other gate. Whether an already-applied proposal may be
+   * applied again is `RULING_ACTS` in `src/approvals/ruling.ts`,
+   * decided one layer up, and the two acts answer differently:
+   * ratifying twice is a no-op where applying twice is refused, so
+   * `./proposals-service.ts` reads the row through
+   * {@link SourceStore.findProposalById} and answers a `409` before
+   * this is called.
+   *
+   * NOTHING VALIDATES THE DOCUMENTS EITHER. A malformed
+   * `parser_config` somebody approved anyway is written, because
+   * the approval IS the gate and this is not a second one — the
+   * argument `./config-proposer.ts` makes where it declines to
+   * validate on the way in.
+   *
+   * THE SOURCE CANNOT HAVE GONE.
+   * `source_config_proposals_source_id_sources_id_fk` emits
+   * `ON DELETE no action`, so a source a proposal names cannot be
+   * deleted while the proposal is there. Statement 2 therefore
+   * matches a row by construction, and an implementation finding
+   * none has found a database that has stopped holding its own
+   * keys rather than a race to handle.
+   *
+   * @param id - The {@link SourceConfigProposalRecord.id} to rule
+   *   on, as {@link SourceStore.findProposalById} already resolved
+   *   and the service already held against the addressed source.
+   *   This method re-checks neither.
+   * @returns The row as it stands after both stamps, or null when
+   *   no row carries that id. An id that never existed and one
+   *   deleted since it was read are indistinguishable here, and
+   *   both say the same thing: there was nothing to rule on. The
+   *   four members `describeRuling` reads are on the answer, so a
+   *   service can project the ruling without a second read.
+   *
+   * @remarks
+   * No refusal this port declares is reachable from here, and that
+   * is worth saying rather than leaving to be inferred from a
+   * missing `@throws`. `kind` is not written, so
+   * `sources_kind_check` is out of reach; the status written is a
+   * member of the tuple its own CHECK is generated from; and the
+   * approval check is satisfied by the order above. A `StoreRefusal`
+   * out of this method would be a fault in the implementation.
+   */
+  approveAndApplyProposal(
+    id: number,
+  ): Promise<SourceConfigProposalRecord | null>;
 }

@@ -88,9 +88,10 @@
  * because `UNION ALL` promises no order without an `ORDER BY`.
  *
  * NOTHING HERE WRITES A `documents` ROW, and the absence is the
- * read-only rule rather than a description of it. Three of the nine
- * methods touch that table — the aggregate above, the queue and
- * its count — and none is an insert, an update or a delete.
+ * read-only rule rather than a description of it. Three of the
+ * thirteen methods touch that table — the aggregate above, the
+ * queue and its count — and none is an insert, an update or a
+ * delete.
  *
  * BOTH PROJECTIONS ARE COLUMN-SCOPED, and for different reasons.
  * {@link SOURCE_COLUMNS} names all twelve of the table's columns, so
