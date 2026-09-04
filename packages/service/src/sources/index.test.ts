@@ -278,6 +278,15 @@ const NON_ADAPTER_MODULES = [
       + 'fetch, which is why listing is no member of the contract',
   },
   {
+    module: 'proposals-routes.ts',
+    reason:
+      'the two HTTP routes the parser-config gate is reached '
+      + 'through, declaring an address, a window, a status and an '
+      + 'envelope and no rule of its own: it fronts no source, '
+      + 'declares no member of the contract, and never constructs '
+      + 'an adapter',
+  },
+  {
     module: 'proposals-service.ts',
     reason:
       'the rules behind the HTTP half of the parser-config gate, '

@@ -540,28 +540,38 @@ listing that reads like a misfile.
 
 `GET /sources/:id/pending-configs` and
 `POST /sources/:id/approve-config` are in the parent spec's sources
-list and are NOT in this wave. They read and rule on
-`source_config_proposals`, and they move to q13, the approvals wave,
-where they land beside the entity approvals over `research_pool`.
+list and were NOT in wave 2. They read and rule on
+`source_config_proposals`, and they moved to q13, the approvals
+wave, where they landed beside the entity approvals over
+`research_pool`. The deferral is closed rather than pending: both
+paths are in the wave-3 table below, served by
+`buildSourceProposalsRouter` in `src/sources/proposals-routes.ts`.
 
-The reason they were carved out has expired and the deferral stands on
-a second one that has not. The table was still moving when this wave
-was planned — it arrived on leg A with q09, so a route planned against
-it here would have targeted a schema somebody else was landing — and
-it is in the tree now. What has not changed is that an approval gate
-is one vocabulary and this repository has two subjects on it:
-`scripts/approve.ts` already rules on `source_config_proposals` and on
-`research_pool` from one CLI, and the HTTP half should arrive as one
-surface answering for both rather than as half a surface here and the
-other half two waves later.
+The reason they were carved out of wave 2 had already expired when
+that wave was written, and the deferral stood on a second one that
+had not. The table was still moving when wave 2 was planned — it
+arrived on leg A with q09, so a route planned against it there would
+have targeted a schema somebody else was landing — and it was in the
+tree before those routes landed. What had not changed is that an
+approval gate is one vocabulary and this repository has two subjects
+on it: `scripts/approve.ts` rules on `source_config_proposals` and
+on `research_pool` from one CLI, and the HTTP half was to arrive as
+one surface answering for both rather than as half a surface in wave
+2 and the other half two waves later.
 
-So the pair is scheduled rather than missing, and this is the sentence
-that says so. The same note sits beside the approval gate itself in
+That is what arrived. `src/approvals/ruling.ts` is the one
+vocabulary both gates answer in, and the pair landed in the same
+wave as `POST /entities/:id/approve-research`, which is the other
+subject — so neither gate had to settle the subject word for itself,
+and neither can drift into answering differently about the same act.
+`The approval vocabulary` below is where that is argued.
+
+The same note sits beside the approval gate itself in
 `docs/architecture/04-sources.md`, under `The HTTP half of this gate
-is scheduled`, so a reader who reaches the gate from the pipeline
+landed with q13`, so a reader who reaches the gate from the pipeline
 side is not left to conclude that the API forgot it. The `Sources`
-group below repeats it a third time, where a reader looking up the
-four routes would otherwise find six expected and four listed.
+group below carries it a third time, where a reader looking that
+group up meets the pair under a router of its own.
 
 ### The five prefixes wave 3 adds, and the two it borrows
 
@@ -1901,26 +1911,55 @@ would be a button that hides that nothing was fixed. `enabled` is
 the column the schema provides for retiring a feed, and it IS
 patchable.
 
-### The pending-config pair is not on this router, and q13 takes it
+### The pending-config pair is a router of its own under this prefix
 
-`GET /sources/:id/pending-configs` and
-`POST /sources/:id/approve-config` are in the parent spec's sources
-list and are not among the four routes above. They read and rule on
-`source_config_proposals`, and they move to q13, the approvals wave,
-where they land beside the entity approvals over `research_pool`.
+| Method and path | Answers |
+| --- | --- |
+| `GET /sources/:id/pending-configs` | `200` with one page of the arrangements proposed for the feed and not yet ruled on, `proposed_at` ascending with `id` ascending breaking a tie, plus `meta`. Each row is the proposal as stored. `404` for an unknown id, `422` for a segment that is not one and for the pagination faults every list route answers. Never `409`. |
+| `POST /sources/:id/approve-config` | `200` with the four-member ruling. `404` for an unknown source id, and for a `proposalId` naming nothing or naming a proposal queued against another feed — one sentence for both. `409` when that proposal has already been applied. `422` for a segment that is not an id, for a body that is not `{ proposalId }`, and for an undeclared key in it. |
 
-`The paths wave 2 defers` above carries the whole argument, and the
-same note sits beside the approval gate itself in
-`docs/architecture/04-sources.md`. In short: the reason they were
-carved out has expired — the table arrived on leg A with q09 and is
-in the tree — and the deferral stands on the reason that has not,
-which is that an approval gate is one vocabulary with two subjects
-and `scripts/approve.ts` already rules on both from one CLI. The
-HTTP half should arrive as one surface answering for both rather
-than as half a surface here and the other half two waves later.
+`buildSourceProposalsRouter` in `src/sources/proposals-routes.ts` is
+the whole of it: one `get`, one `post`, and a store that is the
+five-method `Pick` `src/sources/proposals-service.ts` declares, of
+which exactly one writes. So this prefix carries three routers — the
+two `sources` writes above, the read-only failures queue, and this
+pair — and the split is by subject rather than by path, exactly as
+`src/sources/store.ts` splits the port all three narrow.
 
-So this group is four routes rather than six on purpose, and this is
-the sentence that says so.
+The queue is the CLI's queue. The predicate and both ordering keys
+are `SourceStore.listPendingProposals`, which is
+`listPendingProposals` in `scripts/approve.ts` for the part that
+decides which row is next, so a backlog worked from a terminal and
+one worked from this route are one backlog rather than two that
+agree today. `The pending queue is the CLI's queue` below argues it,
+including why oldest-first inverts every other list on this surface.
+
+The rows come back AS STORED, which is where this queue departs from
+the failures one under the same prefix. That one cuts and masks a
+captured body because nobody chose the text; here the whole point of
+the page is that a person rules on the exact two documents a
+proposer answered, so an account of either would make the ruling a
+ruling about something else.
+
+The approval writes two tables or neither.
+`SourceStore.approveAndApplyProposal` stamps the ruling on the
+proposal, derives the feed's `parser_config` and `contract` from the
+row it just stamped, and stamps the application, in one transaction.
+Neither the router nor `src/sources/proposals-service.ts` derives
+those two columns: `proposalToSourceUpdate` in
+`src/sources/config-proposer.ts` is the one function every writer
+goes through, and `docs/architecture/04-sources.md` is where the gap
+it stands in is argued.
+
+This is the one approval gate on this surface that answers `409`.
+Ratifying an intention twice is a no-op and applying a proposal
+twice is not, because the first application already wrote both
+documents onto the feed. `RULING_ACTS` in `src/approvals/ruling.ts`
+declares the difference, and `An approval is idempotent` below is
+where the other subject's answer is argued.
+
+So the group is seven paths across three routers, and the pair wave
+2 named as deferred is the last two of them.
 
 ## Connectors
 
