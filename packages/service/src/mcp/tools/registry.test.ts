@@ -4,20 +4,21 @@
  * WHAT THIS FILE COVERS THAT NOTHING ELSE CAN is that the list is
  * readable at all. `src/mcp/server.ts` calls `createMCP` at module
  * scope, so a case importing it boots a server and binds a port;
- * `./registry.ts` is the half that imports types and one zod type
- * and nothing else, and every reading below rests on that. An
- * import added there that reaches a transport takes this file and
- * `tests/invariants/mcp-exposure.test.ts` away together.
+ * `./registry.ts` is the half that imports types, one zod type and
+ * the wave lists it composes, and every reading below rests on
+ * that. An import added there that reaches a transport takes this
+ * file and `tests/invariants/mcp-exposure.test.ts` away together.
  *
- * THREE CLAIMS ABOUT THE LIST, and at this commit all three are
- * true of nothing: `MCP_TOOLS` is empty until the wave modules
- * beside it land, each in its own task. That is stated rather than
- * hidden, because an empty list satisfies every one of them and a
- * reader meeting three green cases would otherwise take them for
- * evidence. The evidence is in the FABRICATED samples, which is
- * where the same three checks are shown to report and shown not to
- * report everything — and the checks are the same functions in both
- * places rather than a claim restated per sample.
+ * THREE CLAIMS ABOUT THE LIST, and they now read something:
+ * `MCP_TOOLS` carries `./wave-1.ts`, with the wave-2 and wave-3
+ * modules still to land in their own tasks. That is worth stating
+ * because it was not true when this file was written — an empty
+ * list satisfies all three, so a reader meeting three green cases
+ * needs to know whether they read anything. The evidence is still
+ * in the FABRICATED samples, which is where the same three checks
+ * are shown to report and shown not to report everything, and the
+ * checks are the same functions in both places rather than a claim
+ * restated per sample.
  *
  * THE SAMPLES ARE A PAIR AND BOTH HALVES ARE LOAD-BEARING. The
  * clean one holds two well-formed entries, so a check that had
@@ -69,12 +70,13 @@
  *
  * TWO OF THOSE NINE ARE ABOUT THE LIST AND THE ROSTER RATHER THAN
  * THE SHAPE, and the first is the only leg that can report on an
- * empty registry at all. Planting two identical faulty entries in
- * `MCP_TOOLS` reddens exactly the three cases about it, which is
- * what says those three read that binding rather than a list of
- * their own. Adding a verb to `MCP_ROUTE_METHODS` that no router
- * registers reddens 2: the derived per-verb case, and the near miss
- * that refuses it.
+ * empty registry at all — measured when it was one, and unchanged
+ * as a reading now that it is not. Planting two identical faulty
+ * entries in `MCP_TOOLS` reddens exactly the three cases about it,
+ * which is what says those three read that binding rather than a
+ * list of their own. Adding a verb to `MCP_ROUTE_METHODS` that no
+ * router registers reddens 2: the derived per-verb case, and the
+ * near miss that refuses it.
  *
  * ONE READS ZERO AND IS RECORDED AS ONE. Writing the alternation out
  * instead of deriving it from the roster is behaviourally identical
@@ -88,8 +90,8 @@
  * global pattern advances its own `lastIndex` between `.test()`
  * calls. Nothing else in this file would have reported it.
  *
- * FOUR MUTATE THIS FILE'S OWN CHECKS, which is where three of the
- * four claims live while the registry is empty. Each of
+ * FOUR MUTATE THIS FILE'S OWN CHECKS, which is where the samples
+ * that make three of the four claims discriminating live. Each of
  * {@link duplicateNames} and {@link malformedRoutes} returning
  * nothing reddens exactly its own fabricated-sample case, and
  * {@link blankDescriptions} returning nothing and losing its
@@ -359,9 +361,9 @@ describe('the contract every entry satisfies', () => {
 });
 
 describe('the registry as it stands', () => {
-  // Empty at this commit, so the first assertion is true of nothing
-  // and the second is the whole of the reading: a check reporting
-  // everything answers two names here.
+  // The first assertion reads wave 1's entries; the second is what
+  // says the check still discriminates, since a check reporting
+  // everything answers two names over the clean sample.
   it('holds no two entries under one name', () => {
     expect(duplicateNames(MCP_TOOLS)).toEqual([]);
     expect(duplicateNames(CLEAN_SAMPLE)).toEqual([]);

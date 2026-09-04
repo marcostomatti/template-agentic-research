@@ -14,13 +14,19 @@
  *
  * THE BODY IS NOT PARSED HERE, and the asymmetry with the address is
  * the whole shape of this file. `createDomain` and `patchDomain`
- * take an `unknown` and parse it themselves, because wave 3 exposes
- * those same functions as MCP tools and a body validated by the
- * router would leave that caller validating against a second schema
- * nobody would notice drifting. What a router owns instead is what
- * only HTTP has: the `:slug` in the path, the `?page`/`?perPage`
- * window and the `?cascade` confirmation. None of those three is a
- * vocabulary an MCP tool would spell.
+ * take an `unknown` and parse it themselves, because an operation
+ * owns its own input contract: a body validated by the router would
+ * leave a second caller validating against a schema nobody would
+ * notice drifting. What a router owns instead is the SPELLING only
+ * HTTP has — the `:slug` in a path, and the `?page`/`?perPage`
+ * window and the `?cascade` confirmation in a query string.
+ *
+ * A TOOL IS HANDED THE SAME FACTS IN ONE OBJECT, which is why the
+ * two tool-input schemas below exist and why the spelling is the
+ * only thing that is HTTP alone. The wave-1 MCP module reads this
+ * group and writes none of it: the API spec names term edits alone
+ * among its safe mutations, and `?cascade` confirms a delete no
+ * protocol but this one reaches.
  *
  * THE ADDRESS IS CHECKED BEFORE THE PAYLOAD. {@link readSlug} runs
  * ahead of the service call that would parse the body, so a `PATCH`
@@ -138,6 +144,40 @@ const domainAddressSchema = z.object({ slug: slugParamSchema }).strict();
  */
 const domainDeleteQuerySchema = z.object({
   cascade: z.literal(CASCADE_CONFIRMATION).optional(),
+}).strict();
+
+/**
+ * What the MCP tool over `GET /domains` is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so every entry in `src/mcp/tools/wave-1.ts`
+ * names one schema covering the whole request. This route's whole
+ * request is the shared window, so that is all this object holds.
+ *
+ * SPREAD RATHER THAN RESTATED, which is why it is declared here
+ * and not in the tool module: a parameter added to
+ * `paginationQuerySchema` joins the tool with nothing edited
+ * beside it, where a copy that agreed today would be a second
+ * authority nothing compares.
+ *
+ * The address consts above stay private. Nothing here exports one,
+ * so the sibling routers' claim that the three agree by intent
+ * rather than by derivation is untouched by this pair.
+ */
+export const domainListToolInputSchema = z.object({
+  ...paginationQuerySchema.shape,
+}).strict();
+
+/**
+ * What the MCP tool over `GET /domains/:slug` is called with.
+ *
+ * The address is the whole of this request, so the object carries
+ * that one member — spread from {@link domainAddressSchema}, which
+ * keeps the two in step without making the const importable.
+ */
+export const domainReadToolInputSchema = z.object({
+  ...domainAddressSchema.shape,
 }).strict();
 
 /** Everything {@link buildDomainsRouter} needs. */

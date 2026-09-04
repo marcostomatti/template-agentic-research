@@ -16,10 +16,13 @@
  * calls `createMCP` at module scope, so importing THAT module boots
  * a server and binds a port, which is why no test can read the tool
  * list through it. This module is the half a test can read: type
- * imports and one zod type, no transport, no store construction, no
- * `createMCP`. `./registry.test.ts` and the exposure invariant both
- * rest on that, and a value import added here that reaches a server
- * takes away both readings at once.
+ * imports, one zod type, and the wave lists {@link MCP_TOOLS} is
+ * composed of — no transport, no store construction, no
+ * `createMCP`. Those wave modules keep the same rule from their own
+ * side, which is what makes the composition safe to import.
+ * `./registry.test.ts` and the exposure invariant both rest on
+ * that, and a value import added here that reaches a server takes
+ * away both readings at once.
  *
  * A ROUTE IS A LABEL, and it is the same label
  * `tests/api/wiring.test.ts` builds off a router's own `stack`: the
@@ -41,15 +44,15 @@
  * surface: a narrower parameter is assignable here, and the
  * intersection is the widest thing any entry could ask for.
  *
- * THE LIST IS EMPTY AT THIS COMMIT, and that is a schedule rather
- * than a decision. The wave modules beside this file register the
- * read tools and the mutations, each in its own task, and the
- * server rewrite that loops over this list lands after them. Until
- * they do, the three claims `./registry.test.ts` makes about
- * {@link MCP_TOOLS} are true of nothing, and every reading in that
- * file with evidence in it is driven over a fabricated sample. The
- * header there says so rather than leaving an empty list to read as
- * a surface somebody decided to expose nothing on.
+ * THE LIST IS FILLED A WAVE AT A TIME, which is a schedule rather
+ * than a decision. `./wave-1.ts` has landed and holds the eight
+ * entries over the wave-1 surface; the wave-2 and wave-3 modules
+ * beside it follow in their own tasks, and the server rewrite that
+ * loops over this list lands after them. So a route this service
+ * serves that no entry names is not yet an absence anybody decided,
+ * and only `tests/invariants/mcp-exposure.test.ts` — once every
+ * wave is in — can hold the exposed set against the banned one and
+ * say which is which.
  */
 
 import type { ConnectorStore } from '../../connectors/store.js';
@@ -65,6 +68,8 @@ import type { SubscriptionStore } from '../../subscriptions/store.js';
 import type { TaxonomyStore } from '../../taxonomy/store.js';
 import type { TopicStore } from '../../topics/store.js';
 import type { ZodType } from 'zod';
+
+import { WAVE_1_TOOLS } from './wave-1.js';
 
 /**
  * The verbs a route label may name, spelled as a router's `stack`
@@ -287,9 +292,11 @@ export interface McpToolEntry {
 /**
  * Every tool this service exposes.
  *
- * EMPTY AT THIS COMMIT. The wave modules beside this file are what
- * fill it, each in its own task, and the header says why an empty
- * list here is a schedule rather than a decision.
+ * COMPOSED FROM THE WAVE MODULES, one spread each, so a tool is
+ * declared beside the routes it mirrors and this literal stays a
+ * list of lists. `./wave-1.ts` is the only one landed; the header
+ * says why the other two arriving later is a schedule rather than a
+ * decision.
  *
  * REGISTERED STATICALLY, never by reading the directory, on the
  * rule `EXPORT_RENDERERS` and `SOURCE_ADAPTERS` both state for
@@ -305,4 +312,4 @@ export interface McpToolEntry {
  * `tests/invariants/mcp-exposure.test.ts`, which holds it against
  * the routers' own declarations in both directions.
  */
-export const MCP_TOOLS: readonly McpToolEntry[] = [];
+export const MCP_TOOLS: readonly McpToolEntry[] = [...WAVE_1_TOOLS];
