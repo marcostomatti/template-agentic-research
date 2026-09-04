@@ -21,15 +21,17 @@
  * different subject — that every mounted route sits behind the auth
  * guard — so the two files share a vocabulary and nothing else.
  *
- * DECLARED, NOT MOUNTED, and at this commit the two are different
- * numbers. Sixteen routers are built below; `src/index.ts` mounts
- * ten of them and the wave-3 wiring stage lands the other six. What
- * a tool reaches is a service function rather than a mount — a
- * handler calls the same function the route handler calls, with no
- * express in between — so the surface a tool COULD name is what the
- * routers declare. Reading the mounted set instead would go green
- * over a router that had been unmounted, which is a wiring fault
- * and not an exposure one.
+ * DECLARED, NOT MOUNTED, and the two sets are free to differ: a
+ * router can be built and not yet mounted, or mounted and later
+ * taken down. Sixteen routers are built below, and how many of them
+ * `src/index.ts` mounts is deliberately not a number this file
+ * carries — `tests/api/wiring.test.ts` is where the mounted set is
+ * held honest. What a tool reaches is a service function rather than
+ * a mount — a handler calls the same function the route handler
+ * calls, with no express in between — so the surface a tool COULD
+ * name is what the routers declare. Reading the mounted set instead
+ * would go green over a router that had been unmounted, which is a
+ * wiring fault and not an exposure one.
  *
  * THE CONTROL PLANE IS WALKED FOR ITS LABELS. "Anything under
  * /_control" stays a sentence until the routes it covers are read
@@ -343,13 +345,13 @@ function labelsOf(router: Router, prefix: string): string[] {
  * Built over one in-memory store rather than a wired service: a
  * router factory registers its routes at construction and reads
  * nothing, so what this answers is the routers' own declaration and
- * not a fact about a running deployment. Ten of the sixteen are
- * mounted in `src/index.ts` at this commit and the wave-3 wiring
- * stage lands the other six; see the header for why that difference
- * is the point rather than a gap.
+ * not a fact about a running deployment. Which of them
+ * `src/index.ts` mounts is a separate question, asked in
+ * `tests/api/wiring.test.ts`; see the header for why the two sets
+ * being free to differ is the point rather than a gap.
  *
  * @returns One entry per router, in the order `src/index.ts` mounts
- *   the ones it has.
+ *   them.
  */
 function buildResearchRouters(): readonly DeclaredRouter[] {
   const store = createMemoryResearchStore();
