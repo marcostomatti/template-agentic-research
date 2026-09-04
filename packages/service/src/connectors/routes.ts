@@ -52,8 +52,9 @@
  * them, and every record reaching a handler below has already been
  * through it — the list, and the rows the create and the patch
  * answer with. A mask applied here would be applied on the HTTP
- * path alone, and wave 3 exposes those same service functions as
- * MCP tools.
+ * path alone, and `src/mcp/tools/wave-2.ts` reaches
+ * {@link listConnectors} for exactly that reason: the read is on
+ * both protocols and the masking is on neither of them.
  *
  * NOTHING HERE MERGES A CONFIG EITHER. A `config` a patch supplies
  * REPLACES the stored document whole, which is the store's rule
@@ -213,6 +214,31 @@ const connectorAddressSchema = z.object({ id: resourceIdParamSchema })
 const connectorListQuerySchema = paginationQuerySchema.extend({
   kind: z.enum(CONNECTOR_KINDS).optional(),
 });
+
+/**
+ * What the MCP tool over `GET /connectors` is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES, except that this
+ * route is met at the root and has no address at all — so the
+ * whole request is the query, and the spread is
+ * {@link connectorListQuerySchema} entire rather than a window
+ * plus a filter assembled again here.
+ *
+ * SPREAD RATHER THAN RESTATED, which is why it is declared beside
+ * that const and not in the tool module: a parameter added to
+ * either schema it is built from joins the tool with nothing
+ * edited, where a copy that agreed today would be a second
+ * authority nothing compares. `CONNECTOR_KINDS` is therefore the
+ * filter's vocabulary on both protocols, and the column's.
+ *
+ * WHAT IT ANSWERS IS MASKED, and by the same layer. The tool calls
+ * {@link listConnectors}, which is the single place `./secrets.ts`
+ * is applied, so the write-only rule reaches this protocol without
+ * a second application of it anywhere.
+ */
+export const connectorListToolInputSchema = z.object({
+  ...connectorListQuerySchema.shape,
+}).strict();
 
 /** Everything {@link buildConnectorsRouter} needs. */
 export interface ConnectorsRouterOptions {

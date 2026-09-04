@@ -64,7 +64,6 @@
 import type {
   McpToolContext,
   McpToolEntry,
-  McpToolResult,
 } from './registry.js';
 
 import {
@@ -98,28 +97,7 @@ import {
   patchTerm,
 } from '../../taxonomy/terms-service.js';
 
-/**
- * How a tool answers with a payload.
- *
- * ONE TEXT BLOCK CARRYING THE ENVELOPE THE ROUTE WOULD HAVE SENT,
- * serialised the way `res.json` serialises it — so a `Date` is the
- * same ISO string on both protocols and a client reading a tool
- * result is reading the documented response body. The envelope's
- * `success` member is kept rather than unwrapped: it costs one key
- * and it means the two answers are one shape rather than two that
- * happen to agree about the data.
- *
- * Indented, because the consumer is a model reading text rather
- * than a parser counting bytes.
- *
- * @param payload - The envelope to answer with.
- * @returns The single block a client renders.
- */
-function textResult(payload: unknown): McpToolResult {
-  return {
-    content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
-  };
-}
+import { textResult } from './text-result.js';
 
 /**
  * The tools this wave registers.

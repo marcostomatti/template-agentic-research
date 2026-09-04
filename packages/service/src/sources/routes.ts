@@ -43,11 +43,15 @@
  * THE BODY IS NOT PARSED HERE, exactly as in the wave-1 routers
  * and for the same reason. {@link createSource} and
  * {@link patchSource} take an `unknown` and parse it themselves,
- * because wave 3 exposes those same functions as MCP tools and a
- * body validated by the router would leave that caller validating
- * against a second schema nobody would notice drifting. That is
- * also what keeps the `openPaths` argument — the two prefixes
- * below which a key is the operator's own — in the service that
+ * because a body contract belongs to the operation rather than to
+ * whichever caller reached it, and a body validated by the router
+ * would leave a second caller validating against a second schema
+ * nobody would notice drifting. Neither write is on the MCP
+ * surface — the spec's safe list names the two run-now verbs and
+ * the term edits — so this is a rule about where the contract
+ * lives and not a prediction about who calls it. That is also
+ * what keeps the `openPaths` argument — the two prefixes below
+ * which a key is the operator's own — in the service that
  * declares the schemas rather than in a handler.
  *
  * THIS LIST ROUTE IS PAGINATED, which is where it follows
@@ -181,6 +185,26 @@ const domainAddressSchema = z.object({ slug: slugParamSchema }).strict();
  * take, narrowed at the boundary rather than inside the rules.
  */
 const sourceAddressSchema = z.object({ id: resourceIdParamSchema }).strict();
+
+/**
+ * What the MCP tool over this group's one read is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so every entry in `src/mcp/tools/wave-2.ts`
+ * names one schema covering the whole request, spread from the
+ * pieces this route already parses rather than written again.
+ *
+ * ONLY THE READ IS SPREAD. The create and the two writes below are
+ * not on that protocol: the spec's safe list names the run-now
+ * pair and the term edits, and a feed's `parser_config` is
+ * configuration a research pass is scored by. The address consts
+ * above stay private either way.
+ */
+export const sourceListToolInputSchema = z.object({
+  ...domainAddressSchema.shape,
+  ...paginationQuerySchema.shape,
+}).strict();
 
 /** Everything {@link buildSourcesRouter} needs. */
 export interface SourcesRouterOptions {

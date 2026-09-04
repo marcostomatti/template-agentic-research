@@ -10,15 +10,15 @@
  * file and `tests/invariants/mcp-exposure.test.ts` away together.
  *
  * THREE CLAIMS ABOUT THE LIST, and they now read something:
- * `MCP_TOOLS` carries `./wave-1.ts`, with the wave-2 and wave-3
- * modules still to land in their own tasks. That is worth stating
- * because it was not true when this file was written — an empty
- * list satisfies all three, so a reader meeting three green cases
- * needs to know whether they read anything. The evidence is still
- * in the FABRICATED samples, which is where the same three checks
- * are shown to report and shown not to report everything, and the
- * checks are the same functions in both places rather than a claim
- * restated per sample.
+ * `MCP_TOOLS` carries `./wave-1.ts` and `./wave-2.ts`, with the
+ * wave-3 module still to land in its own task. That is worth
+ * stating because it was not true when this file was written — an
+ * empty list satisfies all three, so a reader meeting three green
+ * cases needs to know whether they read anything. The evidence is
+ * still in the FABRICATED samples, which is where the same three
+ * checks are shown to report and shown not to report everything,
+ * and the checks are the same functions in both places rather than
+ * a claim restated per sample.
  *
  * THE SAMPLES ARE A PAIR AND BOTH HALVES ARE LOAD-BEARING. The
  * clean one holds two well-formed entries, so a check that had
@@ -229,9 +229,11 @@ const SECOND_SAMPLE = sampleEntry(
  * Two well-formed entries, which every check must answer nothing
  * about.
  *
- * The control on the three cases about {@link MCP_TOOLS}: that list
- * is empty, so its zeros are satisfied by a check reporting
- * everything, and this sample is what refuses that reading.
+ * The control on the three cases about {@link MCP_TOOLS}: their
+ * zeros are satisfied by a check reporting everything — which is
+ * how they read when that list was empty and is still how they
+ * would read if a check stopped discriminating — and this sample is
+ * what refuses that reading.
  */
 const CLEAN_SAMPLE: readonly McpToolEntry[] = [FIRST_SAMPLE, SECOND_SAMPLE];
 

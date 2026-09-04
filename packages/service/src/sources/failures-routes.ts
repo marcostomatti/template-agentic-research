@@ -122,6 +122,26 @@ import { listSourceFailures } from './failures-service.js';
  */
 const sourceAddressSchema = z.object({ id: resourceIdParamSchema }).strict();
 
+/**
+ * What the MCP tool over this router's one route is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so the entry in `src/mcp/tools/wave-2.ts`
+ * names one schema covering the whole request, spread from the
+ * pieces this route already parses rather than written again.
+ *
+ * THE CAP TRAVELS WITH IT. `perPage` is the shared parameter, so a
+ * tool asking for more of the queue than the surface serves is
+ * refused by the same bound the route is held to, and the bodies
+ * it reads back are cut and masked by
+ * `src/sources/failures-service.ts` on either protocol.
+ */
+export const sourceFailureListToolInputSchema = z.object({
+  ...sourceAddressSchema.shape,
+  ...paginationQuerySchema.shape,
+}).strict();
+
 /** Everything {@link buildSourceFailuresRouter} needs. */
 export interface SourceFailuresRouterOptions {
   /**

@@ -45,14 +45,14 @@
  * intersection is the widest thing any entry could ask for.
  *
  * THE LIST IS FILLED A WAVE AT A TIME, which is a schedule rather
- * than a decision. `./wave-1.ts` has landed and holds the eight
- * entries over the wave-1 surface; the wave-2 and wave-3 modules
- * beside it follow in their own tasks, and the server rewrite that
- * loops over this list lands after them. So a route this service
- * serves that no entry names is not yet an absence anybody decided,
- * and only `tests/invariants/mcp-exposure.test.ts` — once every
- * wave is in — can hold the exposed set against the banned one and
- * say which is which.
+ * than a decision. `./wave-1.ts` and `./wave-2.ts` have landed and
+ * hold fifteen entries between them; the wave-3 module beside them
+ * follows in its own task, and the server rewrite that loops over
+ * this list lands after it. So a route this service serves that no
+ * entry names is not yet an absence anybody decided, and only
+ * `tests/invariants/mcp-exposure.test.ts` — once every wave is in
+ * — can hold the exposed set against the banned one and say which
+ * is which.
  */
 
 import type { ConnectorStore } from '../../connectors/store.js';
@@ -70,6 +70,7 @@ import type { TopicStore } from '../../topics/store.js';
 import type { ZodType } from 'zod';
 
 import { WAVE_1_TOOLS } from './wave-1.js';
+import { WAVE_2_TOOLS } from './wave-2.js';
 
 /**
  * The verbs a route label may name, spelled as a router's `stack`
@@ -179,11 +180,11 @@ export type McpToolStore =
  * than letting a handler reach `Date.now()` and make a window
  * nothing in a case can pin.
  *
- * NO ENTRY READS EITHER YET, {@link MCP_TOOLS} being empty. Both
- * members are here because the route table the wave modules are
- * written against names routes that require them, and a context
- * widened later would be a contract edit every wave module has to
- * be re-read against.
+ * BOTH ARE READ NOW. `./wave-1.ts` and the five reads of
+ * `./wave-2.ts` take `store`, and the two `run-now` entries beside
+ * them take `clock` — which is what the second member was declared
+ * ahead of, since a context widened later would be a contract edit
+ * every wave module has to be re-read against.
  */
 export interface McpToolContext {
   /** Every port, as one object; see {@link McpToolStore}. */
@@ -294,9 +295,9 @@ export interface McpToolEntry {
  *
  * COMPOSED FROM THE WAVE MODULES, one spread each, so a tool is
  * declared beside the routes it mirrors and this literal stays a
- * list of lists. `./wave-1.ts` is the only one landed; the header
- * says why the other two arriving later is a schedule rather than a
- * decision.
+ * list of lists. `./wave-1.ts` and `./wave-2.ts` are landed; the
+ * header says why the third arriving later is a schedule rather
+ * than a decision.
  *
  * REGISTERED STATICALLY, never by reading the directory, on the
  * rule `EXPORT_RENDERERS` and `SOURCE_ADAPTERS` both state for
@@ -312,4 +313,7 @@ export interface McpToolEntry {
  * `tests/invariants/mcp-exposure.test.ts`, which holds it against
  * the routers' own declarations in both directions.
  */
-export const MCP_TOOLS: readonly McpToolEntry[] = [...WAVE_1_TOOLS];
+export const MCP_TOOLS: readonly McpToolEntry[] = [
+  ...WAVE_1_TOOLS,
+  ...WAVE_2_TOOLS,
+];
