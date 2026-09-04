@@ -3353,3 +3353,235 @@ write. `closedAt` reads `research_pool.researched_at`, so a
 ratification answers `null` there by construction: the gate records
 that somebody agreed, and what closes the intention is the pass this
 surface never runs.
+
+## Runs and spend
+
+### Two routers under two prefixes, and one directory behind both
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /runs` | `200` with one page of the passes the service has made, `startedAt` descending with `id` descending breaking a tie, plus `meta`. `404` when a `?domain` was sent and no domain carries it, `422` for a `?domain` that could not be a slug and for the pagination faults every list route answers. |
+| `GET /runs/:id` | `200` with the pass, the newest `RUN_LEDGER_CAP` rows of its ledger, the full `llmCallCount` and a `ledgerTruncated` flag. `404` for an unknown id, `422` for a segment that is not one. Reads no query at all. |
+| `GET /spend/summary` | `200` with the resolved `window` and one bucket per domain per UTC day inside it. `404` when a `?domain` was sent and no domain carries it, `422` for a `?domain` that could not be a slug, for an unparseable or inverted window, for a span above the maximum, and for any undeclared parameter, `?page` included. |
+
+`buildRunsRouter` in `src/runs/routes.ts` declares the first two and
+`buildSpendRouter` in `src/runs/spend-routes.ts` declares the third,
+and neither decides anything: each handler takes a query apart or
+narrows a segment, calls the matching function in
+`src/runs/service.ts` or `src/runs/spend-service.ts`, and chooses a
+status.
+
+Two routers rather than one, in one directory rather than two.
+`The five prefixes wave 3 adds` above carries the arithmetic; what
+the split buys HERE is that the store each router is handed has no
+member for the other's read. The page and the single get reach five
+`RunStore` methods, the summary reaches the sixth, and no method is
+named by both — so the ledger cannot be paged through the summary's
+store or bucketed through the page's, by accident or by a later
+edit.
+
+Neither prefix is domain-scoped, which is where this group departs
+from every list the wave landed before it. A finding and a document
+are met in their domain because a caller holding a slug should not
+have to look an id up; a pass belongs to a domain or to NONE, so the
+collection is the deployment's and the domain narrows it. `/runs/:id`
+addresses the row by its own id under `A domain is addressed by slug`
+above, and `/spend/summary` addresses nothing at all, in the shape
+`/settings` already takes.
+
+`409` is available to none of the three, and neither is `204`.
+Nothing on these routes writes, and nothing on them decides on
+stored state beyond whether the domain and the run are there, so the
+only refusals they can answer are the `404` about an address or a
+narrowing and the `422` about a request. `Read-first` above states
+the law for the wave, and `RunStore` declares six methods of which
+all six are reads — so the claim is the port's shape rather than
+these routers' restraint.
+
+### The domain is a filter here, and there is no domain-less spelling
+
+`?domain=<slug>` is optional on both the page and the summary. Absent
+answers EVERY run and every call, the ones belonging to no domain
+included; present answers that domain's alone. There is no third
+request, and that absence is this wave's decision on the record
+rather than an omission for a later reader to find.
+
+`runs.domain_id` is nullable because a maintenance or cross-domain
+tick belongs to nobody, so the rows such a spelling would name do
+exist. What makes asking for them inexpressible is the TYPE of the
+narrowing: `RunFilter.domainId` is an optional `number` and never a
+`number | null`, so there is no value a caller could send that would
+mean the rows belonging to no domain — and both query schemas are
+`.strict()`, so a parameter invented to carry one is a `422` naming
+`query` rather than a filter silently ignored. A widened member would
+have shipped a third query nobody scoped.
+
+Reading the unattributed rows alone is therefore a subtraction the
+caller does: the unnarrowed answer less each domain's. That is what
+the summary's null bucket is for, and it is why the per-domain
+summaries do NOT sum to the unnarrowed one — the difference is the
+unattributed spend rather than a rounding of it.
+
+The narrowing splits its refusal in two, and the split is the
+`slugParamSchema` the parameter is held to. A value that could not be
+a slug is a `422` naming `domain`, raised before any store call; a
+well-shaped one no domain carries is a `404` raised after one. A
+request that never named a well-formed slug has not established that
+no domain carries it, which is `A validation detail names a field
+path` above applied to a narrowing rather than to a body.
+
+That `404` is not the one a `/domains/:slug` route answers, and the
+difference is worth stating: `/runs` exists for every deployment,
+including one that runs no domains at all, so what is missing is the
+narrowing rather than the collection. A domain that has run nothing
+answers `200` with an empty `data` under `A page past the end is an
+empty list` above.
+
+### The filter is built one file in, which inverts every other list
+
+Every other narrowing on this surface is rebuilt in the handler that
+read it. A `?kind`, a `?verdict` or a `?parseStatus` becomes the
+port's own value object there, because what a caller ASKED FOR and
+what a port NARROWS ON are different statements, and a parsed query
+forwarded whole would put `?page` on the far side of a boundary with
+no use for it.
+
+`?domain` cannot follow that rule. `RunFilter.domainId` is an ID, and
+the only thing that turns a slug into one is `findDomainBySlug` — a
+store call, which a handler has nowhere to make. So both handlers
+hand the slug on as the string it arrived as and the service builds
+the filter. The value object is still built once and in one place;
+that place is one file further in than it is anywhere else, and both
+routers say so where a reader looks.
+
+### The ledger is embedded, cut at one constant, and the cut is reported
+
+`GET /runs/:id` answers at most `RUN_LEDGER_CAP` calls — 200 of them
+— `calledAt` descending with `id` descending breaking a tie. The cap
+is a module constant in `src/runs/service.ts` rather than a query
+parameter, so no caller can ask for the whole of a long pass's ledger
+and no route can be talked into serving one: every model call the
+service makes lands in `llm_calls`, nothing prunes the table, and a
+pass that looped or ran for a day is exactly the row whose embedded
+ledger would otherwise be fetched whole.
+
+The list is CUT rather than paged, which is why two members travel
+beside it. `llmCallCount` is the FULL count and `ledgerTruncated`
+says whether the cap took anything, so a ledger of exactly 200 rows
+and the head of a longer one are distinguishable — which they would
+not be from the list alone. A client cannot compare a length against
+a cap it was never told, which is what `bodyBytes` above records one
+collection over, on the same reasoning.
+
+Newest-first is what makes this cut the useful one: what a long
+pass's ledger loses is its OLDEST end, and a reader opening a run is
+asking what it has been doing lately. There is no `?page` over the
+embedded list, no total for a window to be read against and no `meta`
+inside the answer — the ledger is part of one run's reading rather
+than a collection this surface addresses.
+
+A pass that called nothing answers `200` with an empty `ledger`,
+`llmCallCount` at zero and `ledgerTruncated` false. A tick that found
+no work to do ledgers nothing at all, which is an ordinary state
+rather than a failure to read.
+
+### The window defaults to 30 days and is refused above 92
+
+`GET /spend/summary` reads `?since` and `?until` in the vocabulary
+`One window vocabulary` above declares — ISO-8601, half-open,
+`sinceInclusive` and `untilExclusive` — and closes whatever the caller
+left open. Three spellings arrive and all three leave with two
+bounds: neither sent is the last `SPEND_DEFAULT_WINDOW_DAYS` days, an
+`until` alone closes below it by the same span, and a `since` alone
+closes at the clock. So an unbounded scan of `llm_calls` is
+unreachable from the wire.
+
+A resolved span wider than `SPEND_MAX_WINDOW_DAYS` — a quarter — is a
+`422` naming `since` under a code of the service's own, carrying the
+MAXIMUM rather than the span submitted, and raised before any store
+is asked anything. It is refused and not clamped, on the terms a
+`perPage` above the cap is refused by: clamping would answer a
+narrower window than the request named with no member of the answer
+saying so. A year is still askable, in four requests, the half-open
+bounds being what makes four adjacent quarters partition it rather
+than overlap on the seams.
+
+The ceiling exists because this is the one read on the surface with
+no page at all. Every other collection is bounded by `?perPage`; a
+summary is bounded by the SPAN it aggregates over, one bucket per
+domain per day, so the size of the body is a function of that number
+and of how many domains the deployment runs. `?page` and `?perPage`
+are undeclared here and, on a `.strict()` shape, a `422` naming
+`query` rather than parameters quietly ignored.
+
+The resolved window TRAVELS BACK, as `window` in the
+`sinceInclusive`/`untilExclusive` spelling. A request that sent no
+bounds is answered over a span the service chose, and a bare list of
+buckets would leave a reader inferring which one from the days that
+happen to carry calls — which says nothing at all about a window in
+which nothing was called. `window` is what stands in for `meta` here:
+the answer says which span it covers rather than which slice of a
+collection.
+
+A `?since` in the future with no `?until` is an empty summary and not
+a refusal. The clock closes such a window below its own lower bound,
+and under half-open semantics nothing can fall inside it, so an empty
+`buckets` is the truthful answer to a request for the calls made
+since an instant that has not arrived. It is not refused because the
+rule would depend on the clock rather than on the request, and the
+schema's ordering check is what makes it unreachable whenever both
+bounds were sent.
+
+### A count and two magnitudes, and no member of either is a total
+
+Each bucket is `{ domainId, day, calls, promptChars, estTokens }`.
+`The spend ledger` above argues why none of the three numbers is
+currency — there is no price, rate, amount or currency column on
+`llm_calls` for one to be answered from. What this route adds is that
+it composes no total either: no sum across buckets, no rate applied
+on the way out and no member a handler multiplied, so a consumer
+adding them up is doing arithmetic over a count and two magnitudes it
+can see.
+
+The authority on the second magnitude is the column's own comment,
+and it states it plainly: a total over this column does not reconcile
+with a bill. The `est_` is load-bearing — the value is arithmetic
+over `prompt_chars` rather than a count a provider reported, so the
+two are one reading expressed twice, and nothing stored says which
+estimator produced it. What the number IS good for is comparison, one
+run against another and one week against the week before, which is
+what the summary is read for.
+
+`promptChars` and `estTokens` are each nullable in a bucket as they
+are in a row, and a NULL means nothing measured that call rather than
+a call that sent nothing — zero being a real reading here. So a
+bucket may carry a non-zero `calls` beside a null magnitude, and the
+two disagreeing is information rather than a fault.
+
+A bucket exists because calls landed in it. There is no row for a day
+nothing was called on and none for a domain that made no calls, so a
+consumer filling a chart supplies its own zeroes for the gaps. An
+empty `buckets` is an ordinary answer, and three requests reach it: a
+window in which nothing was called, a domain that called nothing, and
+a deployment that has called nothing at all.
+
+### The day arrives as the instant a UTC day opens
+
+`The bucket is UTC` above argues the grouping. What a client reads is
+its consequence: `day` is a `Date` across the service and reaches the
+wire through `Date#toJSON`, so it arrives as `...T00:00:00.000Z` —
+the instant that opens the day at UTC, with the calendar written into
+the value rather than left to whoever reads it. Two deployments of
+one build, reading one ledger, answer the same string.
+
+The order is `day` descending then `domainId` ascending, with the
+null bucket last. Nothing on this router re-buckets, re-orders or
+truncates anything: a handler doing any of the three would be a
+second calendar for the one question where a default is a silent
+per-deployment difference in every number a widget shows.
+
+The null bucket is how the calls belonging to no domain are answered
+rather than dropped. Both `runs.domain_id` and `llm_calls.run_id` are
+nullable, so a call can reach no domain by two routes and both land
+there — which is what makes the buckets' `calls` add up to the number
+of calls the window holds.
