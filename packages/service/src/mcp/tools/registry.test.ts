@@ -41,9 +41,10 @@
  * carries the well-formed label it was derived from in the same
  * case, so a predicate answering true for everything and one
  * answering false for everything each redden here. Whether a label
- * names a route some router still declares is a different question
- * and a later one: `tests/invariants/mcp-exposure.test.ts` takes it
- * against the routers themselves, and this file is about the form.
+ * names a route some router still declares is a different question,
+ * and it is taken elsewhere: `tests/invariants/mcp-exposure.test.ts`
+ * reads it against the routers themselves, where this file is about
+ * the form alone.
  *
  * THE CONTEXT IS SATISFIED BY THE FIXTURE STORE, which is a reading
  * the type alone does not make. `McpToolStore` is an intersection

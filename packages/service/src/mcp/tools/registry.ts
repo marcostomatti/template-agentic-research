@@ -49,12 +49,13 @@
  * twenty of them reads and seven the mutations the API spec names
  * among its safe ones. `src/mcp/server.ts` registers every one of
  * them in one loop, so this literal is the whole of what a client
- * is offered. What is still outstanding is the exposure invariant.
- * So a route this service serves that no entry names is an absence
- * somebody decided rather than one nobody has reached yet, and
- * `tests/invariants/mcp-exposure.test.ts` is where the exposed set
- * is held against the banned one and against what the routers
- * declare, in both directions.
+ * is offered. A route this service serves that no entry names is
+ * now an absence somebody decided rather than one nobody has
+ * reached yet: `tests/invariants/mcp-exposure.test.ts` holds the
+ * exposed set against the banned one and against what the routers
+ * declare, in both directions, so every declared label is exposed,
+ * banned, or written out there with the reason it is off the
+ * surface.
  */
 
 import type { ConnectorStore } from '../../connectors/store.js';
