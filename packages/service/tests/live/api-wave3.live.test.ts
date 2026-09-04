@@ -1,14 +1,19 @@
 /**
- * The findings and documents stores driven against a real Postgres,
- * through the real migrations. The findings half: a domain with five
- * findings written in an order that is neither the digest order nor
- * its reverse, that order answered by a real `ORDER BY` with an
- * unscored finding last, the same order with the score key gone, the
- * verdict in force over a finding re-judged twice, a ruling appended
- * beside the one it followed, and the jsonb read that files a
- * finding under a category. The documents half: a stored control
- * byte answered as an escape, a body cut at the shared cap, and the
- * one member of the masked class a `text` column cannot hold.
+ * The findings, documents and registry stores driven against a real
+ * Postgres, through the real migrations. The findings half: a domain
+ * with five findings written in an order that is neither the digest
+ * order nor its reverse, that order answered by a real `ORDER BY`
+ * with an unscored finding last, the same order with the score key
+ * gone, the verdict in force over a finding re-judged twice, a
+ * ruling appended beside the one it followed, and the jsonb read
+ * that files a finding under a category. The documents half: a
+ * stored control byte answered as an escape, a body cut at the
+ * shared cap, and the one member of the masked class a `text` column
+ * cannot hold. The registry half: a rename whose key is recomputed
+ * and whose old key is released, a colliding rename refused with its
+ * SQLSTATE read apart from the reason this repository decided, an
+ * alias refusing the delete of the subject it points at, and a
+ * research stamp refused until an approval has landed.
  * Self-skips when AR_LIVE_DATABASE_URL is unset — run via:
  *
  *   bun run stress:start && bun run test:live && bun run stress:stop
@@ -29,8 +34,8 @@
  * against a member that is not text, a `WHERE` that stopped
  * narrowing — each is reported here and nowhere else.
  *
- * NINE READINGS BELOW ARE THINGS AN IN-MEMORY MAP CANNOT DO, which
- * is the same argument put sharply enough to be checkable.
+ * THIRTEEN READINGS BELOW ARE THINGS AN IN-MEMORY MAP CANNOT DO,
+ * which is the same argument put sharply enough to be checkable.
  *
  * THE ORDER IS A REAL `ORDER BY` AND THE COMPARATOR IS A SECOND
  * DERIVATION OF IT. `findingOrder` in `src/findings/db-store.ts` is
@@ -154,13 +159,69 @@
  * moves above it, and the case then answers nothing while staying
  * green.
  *
- * NO METHOD ON EITHER PORT WRITES A FINDING OR A DOCUMENT, which is
- * the read-first law stated structurally, so every fixture row below
- * a ruling is planted through drizzle directly. That is the plainest
- * demonstration of the containment there is, and it is the same
- * reason `tests/live/api-wave2.live.test.ts` reaches `documents`
- * itself. The one exception is `insertFindingLabel`, the single
- * write either port declares.
+ * A KEY IS RECOMPUTED AND NEVER SUBMITTED, and the index is what
+ * makes that a reading rather than a member comparison.
+ * `entities.name_norm` has no definition in the database at all —
+ * nothing computes it, no CHECK reaches it, and a writer reducing a
+ * name differently never fails, it silently misses. So what the
+ * registry half reads is the reduction ARRIVING AT THE INDEX: the
+ * rename releases the key the subject held, another subject takes
+ * it, and a re-spelling of one subject moves the display without
+ * moving the key it is matched on. A store comparing strings agrees
+ * with every one of those and can report none of them.
+ *
+ * THE SQLSTATE IS THE SERVER'S AND THE REASON IS THIS REPOSITORY'S,
+ * so the colliding rename reads them separately. `StoreRefusal`
+ * carries what `classifyPgError` DECIDED and `cause.code` carries
+ * what Postgres raised, so a classifier mapping the wrong code onto
+ * the right reason answers one and fails the other. The constraint
+ * NAME is a third reading and it is this repository's too — spelled
+ * in `src/db/schema/entities.ts`, which makes asserting it a reading
+ * of the migration rather than of the driver.
+ *
+ * THE UNIQUE KEY IS ON A PAIR, AND ONE REQUEST IS WHAT SAYS SO. The
+ * same rename is issued twice: refused inside one registry, and
+ * accepted from the other onto the key this one holds. Without the
+ * second, an index over `name_norm` alone passes every assertion
+ * about the refusal, and a fixture carrying one domain cannot tell a
+ * per-domain key from a store refusing a name wherever it appears.
+ *
+ * TWO REFUSALS BELOW ARE RAISED BY STATEMENTS NO PORT ISSUES, which
+ * is the read-first law met from the other side. Nothing here
+ * deletes an entity and nothing writes `research_pool.researched_at`
+ * — the entity port ratifies and never researches — so both arrive
+ * as the driver error drizzle wrapped rather than as a
+ * `StoreRefusal`, and each case reads the SQLSTATE off `cause`
+ * instead of a reason somebody chose. That is also what says both
+ * rules are the schema's: no module in this package can be edited to
+ * stop either being raised.
+ *
+ * THE APPROVAL GATE IS PROVEN IN BOTH DIRECTIONS AND THE REFUSAL
+ * COMES FIRST. `research_pool_approval_check` reads the two
+ * timestamps and never the status, so a closing stamp on a row
+ * nobody approved is refused, and the SAME stamp lands once the
+ * ruling `POST /entities/:id/approve-research` gives has written
+ * `approved_at`. Both tables are read back between the two and
+ * before any accepting control issues a write of its own, which is
+ * what says the refusal was a statement failing rather than a
+ * session: every reading after it goes through that connection.
+ *
+ * `coalesce(approved_at, now())` IS THE SERVER'S CLOCK AND TWO CALLS
+ * ARE TWO TRANSACTIONS, which is the whole of the idempotence and
+ * something no map can be made to produce. A second ruling answers
+ * the FIRST one's instant, and the control keeping that from being
+ * green over a server stamping one constant is a third intention
+ * ruled on afterwards carrying a later one.
+ *
+ * NO METHOD ON THESE PORTS WRITES A FINDING, A DOCUMENT, AN ENTITY
+ * OR A RESEARCH PASS, which is the read-first law stated
+ * structurally, so every fixture row below is planted through
+ * drizzle directly. That is the plainest demonstration of the
+ * containment there is, and it is the same reason
+ * `tests/live/api-wave2.live.test.ts` reaches `documents` itself.
+ * The exceptions are the three writes the three ports declare
+ * between them — `insertFindingLabel`, `updateEntity` and
+ * `approvePoolRow` — and the registry half drives the last two.
  *
  * EVERY CASE PLANTS EVERYTHING IT READS and `resetTables` in the
  * `beforeEach` empties the tables between them, so a row surviving
@@ -172,14 +233,26 @@
  * is reported here too.
  *
  *
- * NINETEEN MUTATIONS WERE RUN AGAINST THESE NINE CASES, each leg
- * twice, every leg collecting all nine and every red set identical
- * across the two passes. Twelve patch `src/findings/db-store.ts`,
- * two `src/documents/db-store.ts` and three
- * `src/documents/service.ts`; none reddened nothing. The figures are
- * a measurement over this case list and nothing else, so a task
- * adding a case here owes the legs its own cases can REACH rather
- * than inheriting any of them.
+ * NINETEEN MUTATIONS WERE RUN AGAINST THE FIRST NINE CASES and
+ * TWELVE MORE AGAINST THE FOUR REGISTRY ONES, each leg twice, every
+ * leg collecting the whole file it was measured against and every
+ * red set identical across the two passes; none reddened nothing. Of the nineteen, twelve
+ * patch `src/findings/db-store.ts`, two `src/documents/db-store.ts`
+ * and three `src/documents/service.ts`. The twelve patch five
+ * modules: six `src/entities/db-store.ts`, two
+ * `src/entities/service.ts`, one `src/lib/entity-name-norm.ts`, two
+ * `src/db/store-errors.ts` and one this file itself.
+ *
+ * THE NINETEEN FIGURES BELOW ARE QUOTED AS THEY WERE TAKEN, over the
+ * NINE-case file rather than this one, and only three of them were
+ * re-run at this tip: the findings scope leg, the score key losing
+ * its `NULLS LAST`, and masking before cutting. All three held
+ * member for member, so only the denominator moved — but a reader
+ * comparing any other numerator against a run of thirteen is
+ * comparing against a measurement nobody took. The figures are a
+ * measurement over a case list and nothing else, so a task adding a
+ * case here owes the legs its own cases can REACH rather than
+ * inheriting any of them.
  *
  * EVERY ORDERING LEG IS TOLD APART BY THE ASSERTION IT FAILS rather
  * than by its count, which is the shape a page read whole produces.
@@ -194,17 +267,18 @@
  * THE TWO VERDICT LEGS ARE TWO DIFFERENT WRONG ANSWERS AND ONE CASE.
  * Pushing the comparison inside the `DISTINCT ON` answers the
  * re-judged finding under every verdict it ever carried, and
- * ordering that subquery ascending answers it under its first — both
- * one of nine, and the middle ruling is what separates them from a
- * store that is merely right.
+ * ordering that subquery ascending answers it under its first — each
+ * reddening that one case, and the middle ruling is what separates
+ * them from a store that is merely right.
  *
  * THE SCOPE LEG IS THE BLUNTEST IN THE GRID AND ITS SET IS THE
  * COVERAGE READING. Dropping the domain equality from the findings
- * predicate reddens five of nine: every case that reads a page,
- * leaving the empty-database case and the two documents cases, which
- * is exactly the partition the second domain was planted to produce.
- * The corpus scope leg reddens one, there being one documents case
- * that plants a second domain at all.
+ * predicate reddens five of thirteen: every case that reads a page,
+ * leaving the empty-database case, the two documents cases and the
+ * four registry ones, which is exactly the partition the second
+ * domain was planted to produce. Re-run at this tip, where its five
+ * are the same five. The corpus scope leg reddens one, there being
+ * one documents case that plants a second domain at all.
  *
  * THE APPEND CASE IS PINNED BY THREE LEGS AND NO TWO OF THEM ARE THE
  * SAME CLAIM: deleting the row a repeat ruling would replace, having
@@ -220,13 +294,43 @@
  * mask — `maskControlBytes` is idempotent, so what a wrong order
  * moves is the flag and not the text.
  *
+ * THE REGISTRY HALF IS PINNED BY TWELVE, of which NINE redden
+ * exactly the case they are named for. The rename case: the
+ * reduction answering its argument unchanged, and the service
+ * handing the store the submitted spelling as the key. The collision
+ * case: dropping `refusing` from the patch so the driver error
+ * crosses raw, mapping 23505 onto a `check-violation`, and refusals
+ * carrying no constraint name — the second of those being what says
+ * the SQLSTATE and the reason are two readings rather than one. The
+ * alias case: ignoring the `aliasOf` member of a patch. The approval
+ * case: the ruling re-dating every approval, leaving the status
+ * where it found it, and reading instead of writing.
+ *
+ * THE OTHER THREE LAND ON A PAIR OF CASES EACH AND ALL THREE ARE
+ * WORTH THE PAIR. The store writing a patch's DISPLAY half into both
+ * columns reddens the rename case AND the collision one, the second
+ * because a key that is not the reduction stops colliding with
+ * anything — the same fact read from its other side. A projection
+ * answering an entity its OWN id as its registry reddens the two
+ * cases that read a domain id, and it read ZERO until the rename
+ * case was re-planted so that no row's id equals the id of the
+ * domain carrying it, two sequences both restarting at one otherwise
+ * agreeing. And this file's own `driverFields` reading the value it
+ * caught rather than one link down reddens the two cases whose
+ * refusal is a raw driver error, which is what says the `cause` walk
+ * is load-bearing rather than decoration.
+ *
  * WHAT NO LEG HERE REACHES, said rather than left to be inferred.
  * The refusal the NUL case reads is the SERVER's, so nothing in this
  * package can be edited to stop it being raised; the same is true of
- * the driver's surrogate replacement, of `documents_hash_unique` and
- * of every `ON DELETE` in the schema, each of which is declared in a
- * migration whose breakage fails `applyMigrations` and takes the
- * whole file down rather than reddening a case.
+ * the driver's surrogate replacement, of `documents_hash_unique`, of
+ * the per-domain scope of `entities_domain_id_name_norm_unique`, of
+ * `research_pool_approval_check`, of the fact that a refused
+ * statement leaves both its tables as it found them, and of every
+ * `ON DELETE` in the schema — the `alias_of` one this file now reads
+ * included. Each is declared in a migration whose breakage fails
+ * `applyMigrations` and takes the whole file down rather than
+ * reddening a case.
  *
  * THE HELPERS THROW RATHER THAN ASSERT, on the terms the sibling
  * live files state: a fixture that answered nothing leaves every
@@ -237,6 +341,11 @@
 import type { DocumentStore } from '../../src/documents/store.js';
 import type { DomainRecord, DomainStore } from '../../src/domains/store.js';
 import type {
+  EntityRecord,
+  EntityStore,
+  ResearchPoolRecord,
+} from '../../src/entities/store.js';
+import type {
   FindingFilter,
   FindingRecord,
   FindingStore,
@@ -244,18 +353,32 @@ import type {
 import type { StoreWindow, TimeWindow } from '../../src/http/schemas.js';
 import type { Pool } from 'pg';
 
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 
-import { documents, findingLabels, findings } from '../../src/db/schema.js';
+import {
+  documents,
+  entities,
+  findingLabels,
+  findings,
+  researchPool,
+} from '../../src/db/schema.js';
+import { StoreRefusal } from '../../src/db/store-errors.js';
 import { createDbDocumentStore } from '../../src/documents/db-store.js';
 import { listDocuments } from '../../src/documents/service.js';
 import { createDbDomainStore } from '../../src/domains/index.js';
+import { createDbEntityStore } from '../../src/entities/db-store.js';
+import {
+  approveEntityResearch,
+  patchEntity,
+} from '../../src/entities/service.js';
 import { createDbFindingStore } from '../../src/findings/db-store.js';
 import {
   BODY_CODE_POINT_CAP,
   maskControlBytes,
 } from '../../src/http/control-bytes.js';
 import { orderFindings } from '../../src/lib/digest-assemble.js';
+import { normalizeEntityName } from '../../src/lib/entity-name-norm.js';
 
 import {
   applyMigrations,
@@ -503,6 +626,119 @@ const PARSED = 'ok';
 const UNPARSED = 'failed';
 
 /**
+ * The subject the registry cases plant, as its writer spelled it.
+ *
+ * THE DISPLAY HALF KEEPS WHAT THE SOURCE WROTE, which is what makes
+ * the key below visibly not the lowercase of it: a hyphen is
+ * neither a letter, a digit nor a mark, so the reduction turns it
+ * into the one separator every run of such characters becomes.
+ */
+const FIRST_SPELLING = 'Vector-DB';
+
+/**
+ * A second spelling of the same subject, arriving later.
+ *
+ * One subject spelled two ways landing on one row is what the
+ * registry is for, and both of these reduce to {@link FIRST_KEY}.
+ */
+const SECOND_SPELLING = 'vector  db';
+
+/**
+ * What both of those reduce to, WRITTEN OUT rather than derived.
+ *
+ * The expectation is a literal this file chose, and the library
+ * agreeing with it is a second reading taken inside the case rather
+ * than the only one: an expectation computed through the function
+ * under test agrees with a reduction that is wrong in exactly the
+ * same way.
+ */
+const FIRST_KEY = 'vector db';
+
+/** What the rename case renames that subject to. */
+const RENAMED = 'Feature Store';
+
+/** A rival subject of the same registry, spelled its own way. */
+const RIVAL_SPELLING = 'feature-store';
+
+/** The key {@link RENAMED} and the rival both reduce to. */
+const RENAMED_KEY = 'feature store';
+
+/** The subject an alias points at, and the delete case deletes. */
+const TARGET_NAME = 'Ranking Model';
+
+/** Its key. */
+const TARGET_KEY = 'ranking model';
+
+/** The placeholder that turned out to be the subject above. */
+const PLACEHOLDER_NAME = 'the model (unnamed)';
+
+/** Its key: each run of brackets and spaces is one separator. */
+const PLACEHOLDER_KEY = 'the model unnamed';
+
+/** A subject nothing points at, and the accepting control. */
+const LOOSE_NAME = 'Retired Subject';
+
+/** Its key. */
+const LOOSE_KEY = 'retired subject';
+
+/** The subject the placeholder is re-pointed at before the drop. */
+const SUCCESSOR_NAME = 'Ranking Model v2';
+
+/** Its key. */
+const SUCCESSOR_KEY = 'ranking model v2';
+
+/**
+ * The terms an operator read before agreeing to a search.
+ *
+ * Stored when the intention is raised rather than composed when it
+ * is acted on, per `research_pool.search_terms`: approval is given
+ * to these strings, so what is planted is what was consented to.
+ */
+const POOL_TERMS = ['vector database', 'ann index'];
+
+/** The instant the refused and the accepted stamp both name. */
+const RESEARCHED_AT = at(45);
+
+/** The status every intention is raised under. */
+const PENDING_STATUS = 'pending';
+
+/** The status a ruling in favour writes. */
+const APPROVED_STATUS = 'approved';
+
+/**
+ * The unique key on `(entities.domain_id, entities.name_norm)`.
+ *
+ * Spelled in `src/db/schema/entities.ts`, so asserting it is a
+ * reading of the migration rather than of the driver: a name
+ * Postgres derived for itself would not be greppable here at all.
+ */
+const ENTITY_NAME_KEY = 'entities_domain_id_name_norm_unique';
+
+/** The self-referencing foreign key `alias_of` emits. */
+const ENTITY_ALIAS_FK = 'entities_alias_of_entities_id_fk';
+
+/** The CHECK holding a research stamp against an approval. */
+const POOL_APPROVAL_CHECK = 'research_pool_approval_check';
+
+/**
+ * The SQLSTATE a `unique_violation` arrives with.
+ *
+ * Read off the driver error the refusal kept on `cause` rather than
+ * off the refusal itself, and that split is the point:
+ * `StoreRefusal.reason` is what `classifyPgError` DECIDED, and this
+ * is what the server raised. `src/db/store-errors.ts` maps the two,
+ * and a mapping gone wrong answers the right reason from the wrong
+ * code.
+ */
+const UNIQUE_VIOLATION = '23505';
+
+/** The SQLSTATE a `foreign_key_violation` arrives with. */
+const FOREIGN_KEY_VIOLATION = '23503';
+
+/** The SQLSTATE a `check_violation` arrives with. */
+const CHECK_VIOLATION = '23514';
+
+/**
  * The value a live read was supposed to answer.
  *
  * @param value - Whatever the read answered.
@@ -570,6 +806,112 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 /**
+ * The fields a pg `DatabaseError` carries that a case here reads.
+ *
+ * Every one is optional and `unknown`, because the value being read
+ * is whatever a driver put on a `cause` rather than something this
+ * package built. Declared once, so the three cases reading a raw
+ * refusal do not each spell a view of their own.
+ */
+interface DriverFields {
+  /** The five-character SQLSTATE, as a STRING and never a number. */
+  readonly code?: unknown;
+
+  /** The constraint the mechanism named, where it named one. */
+  readonly constraint?: unknown;
+
+  /**
+   * The sentence the server wrote about the row, which carries the
+   * submitted values verbatim.
+   *
+   * The in-band positive control every containment zero here is
+   * read beside: a needle counted once in this and zero times in
+   * what a caller sees is a zero about a value that genuinely
+   * reached the server.
+   */
+  readonly detail?: unknown;
+}
+
+/**
+ * The refusal a live write through a port was supposed to raise.
+ *
+ * Throws on both of the shapes that are not one. A call that
+ * ANSWERED leaves every assertion below it about a refusal nobody
+ * built, and a thrown value that is not a `StoreRefusal` is the one
+ * thing every implementation of these ports promises never to raise
+ * — so rethrowing it here is what says a driver error crossed the
+ * port translated rather than raw.
+ *
+ * @param run - The call expected to be refused.
+ * @returns The refusal it raised.
+ * @throws Error When the call answered instead.
+ */
+async function refusalFrom(
+  run: () => Promise<unknown>,
+): Promise<StoreRefusal> {
+  try {
+    await run();
+  } catch (err) {
+    if (err instanceof StoreRefusal) {
+      return err;
+    }
+
+    throw err;
+  }
+
+  throw new Error(
+    '[wave3-live] expected a StoreRefusal and the call answered, so '
+    + 'the refusal asserted below was never raised at all.',
+  );
+}
+
+/**
+ * The raise a statement NO PORT ISSUES was supposed to make.
+ *
+ * The counterpart of {@link refusalFrom} for a write this package
+ * has no port for at all — a document insert, a delete of an
+ * entity, a research stamp. Nothing translates such a statement, so
+ * what arrives is the driver error drizzle wrapped and a case reads
+ * its SQLSTATE off `cause` rather than reading a reason somebody
+ * chose.
+ *
+ * @param run - The statement expected to be refused.
+ * @param what - What was being written, quoted back in the refusal.
+ * @returns Whatever it raised, still untyped.
+ * @throws Error When the statement was accepted instead.
+ */
+async function raisedBy(
+  run: () => Promise<unknown>,
+  what: string,
+): Promise<unknown> {
+  try {
+    await run();
+  } catch (err) {
+    return err;
+  }
+
+  throw new Error(
+    `[wave3-live] ${what} was accepted, so the refusal asserted `
+    + 'below was never raised at all.',
+  );
+}
+
+/**
+ * The driver fields under whatever a raise wrapped.
+ *
+ * One link down, which is where drizzle puts the pg error: the
+ * wrapper it throws carries no `code` of its own, so a case reading
+ * the value it caught would answer `undefined` for every refusal a
+ * drizzle statement can produce.
+ *
+ * @param raised - Whatever {@link raisedBy} answered.
+ * @returns The wrapped error, read through {@link DriverFields}.
+ */
+function driverFields(raised: unknown): DriverFields {
+  return (raised as { cause?: unknown }).cause as DriverFields;
+}
+
+/**
  * The five findings the subject domain carries, and the one the
  * scope control does.
  *
@@ -606,7 +948,7 @@ describeLivePg('wave-3 stores (live Postgres)', () => {
   let pool: Pool;
   let db: ReturnType<typeof createLiveDb>;
 
-  // All three stores are built before the pool exists, which is the
+  // All four stores are built before the pool exists, which is the
   // ordering the thunk in each of them is there for: `src/index.ts`
   // builds these same stores while `createService` is still
   // registering, and that is before the Postgres dependency has
@@ -621,6 +963,7 @@ describeLivePg('wave-3 stores (live Postgres)', () => {
   const domainStore: DomainStore = createDbDomainStore(() => db);
   const findingStore: FindingStore = createDbFindingStore(() => db);
   const documentStore: DocumentStore = createDbDocumentStore(() => db);
+  const entityStore: EntityStore = createDbEntityStore(() => db);
 
   // What `src/documents/service.ts` takes: one `DomainStore` method
   // and the two `DocumentStore` reads. Spread rather than wrapped,
@@ -850,6 +1193,84 @@ describeLivePg('wave-3 stores (live Postgres)', () => {
     ]);
 
     return { rows, total };
+  }
+
+  /**
+   * Writes one registry row, straight through drizzle, and reads it
+   * back through the port.
+   *
+   * NOT THROUGH A PORT, BECAUSE THE PORT HAS NO INSERT.
+   * `EntityStore` declares two writers and both are updates — a
+   * patch and a ratification — so a fixture standing a registry up
+   * has to reach the table itself. Nothing in this repository writes
+   * one of these rows yet, which is the state `entities` records
+   * rather than a gap this file found.
+   *
+   * THE KEY IS PASSED IN AND NEVER COMPUTED HERE, so no expectation
+   * below is derived through `normalizeEntityName`. A plant is free
+   * to store a key no spelling of its name reduces to, which is the
+   * silent miss that column warns about and exactly what a fixture
+   * has to be able to express.
+   *
+   * @param domainId - The registry this subject belongs to.
+   * @param name - Its display half, as a person reads it.
+   * @param nameNorm - Its key half, as the registry matches on it.
+   * @returns The stored row, as the port answers it.
+   * @throws Error When the insert returned no row.
+   */
+  async function plantEntity(
+    domainId: number,
+    name: string,
+    nameNorm: string,
+  ): Promise<EntityRecord> {
+    const written = await db.insert(entities)
+      .values({ domainId, name, nameNorm, aliasOf: null })
+      .returning({ id: entities.id });
+    const id = oneRow(written, `the insert of entity ${nameNorm}`).id;
+
+    return present(
+      await entityStore.findEntityById(id),
+      `findEntityById after planting entity ${id}`,
+    );
+  }
+
+  /**
+   * Raises one intention, straight through drizzle, and reads it
+   * back through the port.
+   *
+   * NOT THROUGH A PORT FOR THE SAME REASON, one table over:
+   * `EntityStore` ratifies and never raises, so the only write it
+   * declares over `research_pool` is the approval the case under it
+   * is about.
+   *
+   * Neither timestamp is given a value, which is the open state
+   * every intention starts in and the one side of
+   * `research_pool_approval_check` that permits both being NULL.
+   *
+   * @param domainId - The gate this row is queued at.
+   * @param entityId - The subject it is about.
+   * @returns The stored row, as the port answers it.
+   * @throws Error When the insert returned no row.
+   */
+  async function plantPoolRow(
+    domainId: number,
+    entityId: number,
+  ): Promise<ResearchPoolRecord> {
+    const written = await db.insert(researchPool)
+      .values({
+        domainId,
+        entityId,
+        findingId: null,
+        status: PENDING_STATUS,
+        searchTerms: [...POOL_TERMS],
+      })
+      .returning({ id: researchPool.id });
+    const id = oneRow(written, 'the insert of an intention').id;
+
+    return present(
+      await entityStore.findPoolRowById(id),
+      `findPoolRowById after planting intention ${id}`,
+    );
   }
 
   it('meets an empty database in every case', async () => {
@@ -1584,4 +2005,417 @@ describeLivePg('wave-3 stores (live Postgres)', () => {
       .not.toBe('A' + LONE_SURROGATE + 'Z');
     expect(maskControlBytes(back.body)).toBe(back.body);
   });
+  it('recomputes the key a rename matches on', async () => {
+    const domain = await plantDomain(RADAR, RADAR_NAME);
+    const other = await plantDomain(TRANSIT, TRANSIT_NAME);
+
+    // The fixture and the library agree, asserted rather than
+    // assumed. Every key this file carries is a literal it chose,
+    // and these three lines are what say the reduction under test
+    // answers the same thing — an expectation computed through
+    // `normalizeEntityName` agrees with a reduction that is wrong
+    // in exactly the same way.
+    expect(normalizeEntityName(FIRST_SPELLING)).toBe(FIRST_KEY);
+    expect(normalizeEntityName(SECOND_SPELLING)).toBe(FIRST_KEY);
+    expect(normalizeEntityName(RENAMED)).toBe(RENAMED_KEY);
+
+    // THE SCOPE CONTROL HOLDS THE KEY THE RENAME LANDS ON, in the
+    // other registry. The unique key is on the PAIR, so a key that
+    // lost its domain column refuses the rename below — and a
+    // fixture with one domain is green either way. Planted FIRST,
+    // which is what keeps every domain id below different from the
+    // id of the row carrying it: two sequences both restarting at
+    // one otherwise agree, and a projection answering an entity its
+    // own id as its registry is green through the case.
+    const outside = await plantEntity(other.id, RENAMED, RENAMED_KEY);
+    const subject = await plantEntity(
+      domain.id,
+      FIRST_SPELLING,
+      FIRST_KEY,
+    );
+
+    expect(subject.name).toBe(FIRST_SPELLING);
+    expect(subject.nameNorm).toBe(FIRST_KEY);
+    expect(subject.id).not.toBe(subject.domainId);
+    expect(outside.id).not.toBe(outside.domainId);
+
+    // The rename through the path a request takes: `patchEntity`
+    // reduces the submitted spelling and hands the store the PAIR,
+    // so the key is computed once and written beside the display.
+    const renamed = await patchEntity(entityStore, subject.id, {
+      name: RENAMED,
+    });
+
+    expect(renamed.name).toBe(RENAMED);
+    expect(renamed.nameNorm).toBe(RENAMED_KEY);
+
+    // THE KEY IS NOT ANYTHING THE REQUEST CARRIED, which is what
+    // recomputed means here: the submitted spelling does not
+    // contain it, so a writer copying the display into both columns
+    // is reported by this line rather than by a shape assertion.
+    expect(countOccurrences(RENAMED, RENAMED_KEY)).toBe(0);
+    expect(renamed.nameNorm).not.toBe(renamed.name);
+
+    // And the COLUMN holds it, read back through the store rather
+    // than off the row the write projected.
+    expect(await entityStore.findEntityById(subject.id))
+      .toStrictEqual(renamed);
+
+    // THE OLD KEY IS FREE, which only an index can say: the rename
+    // released it, so another subject takes it. A store writing the
+    // new key without moving the row would leave this refused.
+    const newcomer = await plantEntity(
+      domain.id,
+      FIRST_SPELLING,
+      FIRST_KEY,
+    );
+
+    expect(newcomer.nameNorm).toBe(FIRST_KEY);
+    expect(newcomer.id).not.toBe(subject.id);
+
+    // A RE-SPELLING MOVES THE DISPLAY AND NOT THE KEY, so it cannot
+    // collide with the row it is written onto — a row is not in
+    // conflict with itself, and this is the request saying the
+    // reduction is what the index compares rather than the
+    // spelling.
+    const respelled = await patchEntity(entityStore, newcomer.id, {
+      name: SECOND_SPELLING,
+    });
+
+    expect(respelled.name).toBe(SECOND_SPELLING);
+    expect(respelled.nameNorm).toBe(FIRST_KEY);
+    expect(respelled.id).toBe(newcomer.id);
+
+    // The scope from the accepting side: the other registry still
+    // holds the key this one was renamed onto, and neither row
+    // moved the other.
+    expect(await entityStore.findEntityById(outside.id))
+      .toStrictEqual(outside);
+    expect(outside.nameNorm).toBe(renamed.nameNorm);
+    expect(renamed.domainId).toBe(domain.id);
+    expect(outside.domainId).toBe(other.id);
+  });
+
+  it('refuses a rename onto a key the registry holds', async () => {
+    const domain = await plantDomain(RADAR, RADAR_NAME);
+    const other = await plantDomain(TRANSIT, TRANSIT_NAME);
+    const subject = await plantEntity(
+      domain.id,
+      FIRST_SPELLING,
+      FIRST_KEY,
+    );
+    const rival = await plantEntity(
+      domain.id,
+      RIVAL_SPELLING,
+      RENAMED_KEY,
+    );
+
+    // The scope control sits in the OTHER registry under the key
+    // the subject starts with, so the same rename is issued twice
+    // below: refused inside one domain and accepted across two.
+    const outside = await plantEntity(
+      other.id,
+      FIRST_SPELLING,
+      FIRST_KEY,
+    );
+
+    // Read BEFORE the refusal and before any accepting control, so
+    // the comparison below is against the state the case found
+    // rather than against what a later write left. Both readings a
+    // refusal case owes touch this row, which is what makes the
+    // order load-bearing rather than tidy.
+    const before = present(
+      await entityStore.findEntityById(subject.id),
+      'findEntityById before the refused rename',
+    );
+    const refusal = await refusalFrom(() => entityStore.updateEntity(
+      subject.id,
+      { name: { display: RENAMED, norm: RENAMED_KEY } },
+    ));
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe(ENTITY_NAME_KEY);
+
+    // THE SQLSTATE IS THE SERVER'S AND THE REASON IS THIS
+    // REPOSITORY'S, so the two are read separately: a classifier
+    // mapping the wrong code onto the right reason answers the line
+    // above and fails the line below.
+    const fields = refusal.cause as DriverFields;
+
+    expect(fields.code).toBe(UNIQUE_VIOLATION);
+
+    // NOTHING THE CALLER SUBMITTED IS ON THE REFUSAL, read beside a
+    // live positive control the same function takes over the same
+    // needle in the same case. The server spells
+    // `Key (domain_id, name_norm)=(...)` with the submitted key in
+    // it, and `errorHandler` logs an unhandled error together with
+    // its `cause`, so the zeros are about a value that genuinely
+    // reached the server. No in-memory store can supply that
+    // control: its refusals are built from a reason and a
+    // constraint name this repository chose, so there was never
+    // anything there to have leaked.
+    const carried = String(fields.detail);
+    const serialised = JSON.stringify(refusal);
+
+    expect(countOccurrences(carried, RENAMED_KEY)).toBe(1);
+    expect(countOccurrences(serialised, RENAMED_KEY)).toBe(0);
+    expect(countOccurrences(refusal.message, RENAMED_KEY)).toBe(0);
+
+    // THE REFUSAL WROTE NOTHING, and the connection is still usable
+    // — which is what says the statement failed rather than the
+    // session, since every accepting write below goes through it.
+    expect(await entityStore.findEntityById(subject.id))
+      .toStrictEqual(before);
+
+    // A ROW IS NOT IN CONFLICT WITH ITSELF: writing the rival its
+    // own key back over it is accepted, which is the control that
+    // keeps the refusal above from being satisfied by an update
+    // refusing every rename there is.
+    expect(present(
+      await entityStore.updateEntity(rival.id, {
+        name: { display: RIVAL_SPELLING, norm: RENAMED_KEY },
+      }),
+      'updateEntity writing a row its own key back',
+    )).toStrictEqual(rival);
+
+    // THE KEY IS PER REGISTRY, and this is the request that says
+    // so: the SAME rename, from a subject of the OTHER domain onto
+    // the key this one holds, LANDS. An index over `name_norm`
+    // alone would refuse it too, and every assertion above would
+    // still read correct.
+    const moved = present(
+      await entityStore.updateEntity(outside.id, {
+        name: { display: RENAMED, norm: RENAMED_KEY },
+      }),
+      'updateEntity renaming across registries onto a held key',
+    );
+
+    expect(moved.id).toBe(outside.id);
+    expect(moved.nameNorm).toBe(rival.nameNorm);
+    expect(moved.domainId).toBe(other.id);
+    expect(rival.domainId).toBe(domain.id);
+
+    // And the registry afterwards: the refused subject unmoved and
+    // the rival spelled as its own accepted write spelled it.
+    expect(present(
+      await entityStore.findEntityById(subject.id),
+      'the refused subject after the accepting controls',
+    ).nameNorm).toBe(FIRST_KEY);
+    expect(present(
+      await entityStore.findEntityById(rival.id),
+      'the rival after writing its own key back',
+    ).name).toBe(RIVAL_SPELLING);
+  });
+
+  it('refuses deleting an entity an alias points at', async () => {
+    const domain = await plantDomain(RADAR, RADAR_NAME);
+    const target = await plantEntity(domain.id, TARGET_NAME, TARGET_KEY);
+    const placeholder = await plantEntity(
+      domain.id,
+      PLACEHOLDER_NAME,
+      PLACEHOLDER_KEY,
+    );
+    const loose = await plantEntity(domain.id, LOOSE_NAME, LOOSE_KEY);
+
+    // The merge, written through the port rather than into the
+    // table: `aliasOf` is the one pointer `PATCH /entities/:id`
+    // sets, so the state the refusal below is about is the state
+    // that surface produces.
+    const aliased = present(
+      await entityStore.updateEntity(placeholder.id, {
+        aliasOf: target.id,
+      }),
+      'updateEntity pointing the placeholder at its subject',
+    );
+
+    expect(aliased.aliasOf).toBe(target.id);
+    expect(target.aliasOf).toBeNull();
+
+    // THE ACCEPTING CONTROL FIRST, so the refusal below is about
+    // the alias rather than about deletes: a subject nothing points
+    // at goes, through the same statement over the same table.
+    await db.delete(entities).where(eq(entities.id, loose.id));
+
+    expect(await entityStore.findEntityById(loose.id)).toBeNull();
+
+    // `alias_of` EMITS `ON DELETE no action`, so the subject an
+    // alias still names cannot go. No port declares a delete over
+    // this table at all, so nothing translates the refusal and what
+    // arrives is the driver error drizzle wrapped — which is also
+    // what says the rule is the schema's rather than one a module
+    // here could be edited out of.
+    const raised = await raisedBy(
+      () => db.delete(entities).where(eq(entities.id, target.id)),
+      `the delete of entity ${TARGET_KEY}`,
+    );
+    const fields = driverFields(raised);
+
+    expect(raised).not.toBeInstanceOf(StoreRefusal);
+    expect(fields.code).toBe(FOREIGN_KEY_VIOLATION);
+    expect(fields.constraint).toBe(ENTITY_ALIAS_FK);
+
+    // BOTH ROWS STAND. A cascade would have taken the placeholder
+    // with the subject it points at, discarding the one thing the
+    // pointer was worth keeping: when the subject was first seen,
+    // and under what it was first called.
+    expect(await entityStore.findEntityById(target.id))
+      .toStrictEqual(target);
+    expect(await entityStore.findEntityById(placeholder.id))
+      .toStrictEqual(aliased);
+
+    // AND THE WAY OUT IS A DECISION SOMEBODY MAKES. Clearing the
+    // pointer lets the delete land and leaves the placeholder
+    // standing as a subject of its own — which is exactly the row
+    // `ON DELETE SET NULL` would have written by itself, the
+    // difference being that a person wrote it.
+    expect(present(
+      await entityStore.updateEntity(placeholder.id, { aliasOf: null }),
+      'updateEntity clearing the alias back to null',
+    ).aliasOf).toBeNull();
+
+    await db.delete(entities).where(eq(entities.id, target.id));
+
+    expect(await entityStore.findEntityById(target.id)).toBeNull();
+    expect(present(
+      await entityStore.findEntityById(placeholder.id),
+      'the placeholder after its subject was deleted',
+    ).nameNorm).toBe(PLACEHOLDER_KEY);
+
+    // IT DOES NOT OBSTRUCT DROPPING THE WHOLE REGISTRY, which is
+    // the end-of-statement check the column's reasoning rests on:
+    // the cascade removes the alias and the subject it names inside
+    // ONE statement, so the constraint finds nothing orphaned.
+    const successor = await plantEntity(
+      domain.id,
+      SUCCESSOR_NAME,
+      SUCCESSOR_KEY,
+    );
+
+    expect(present(
+      await entityStore.updateEntity(placeholder.id, {
+        aliasOf: successor.id,
+      }),
+      'updateEntity re-pointing the placeholder',
+    ).aliasOf).toBe(successor.id);
+    expect(await domainStore.deleteDomain(domain.id)).toBe(true);
+    expect(await entityStore.findEntityById(successor.id)).toBeNull();
+    expect(await entityStore.findEntityById(placeholder.id)).toBeNull();
+  });
+
+  it('refuses a research stamp until an approval lands', async () => {
+    const domain = await plantDomain(RADAR, RADAR_NAME);
+    const subject = await plantEntity(
+      domain.id,
+      TARGET_NAME,
+      TARGET_KEY,
+    );
+    const intention = await plantPoolRow(domain.id, subject.id);
+    const second = await plantPoolRow(domain.id, subject.id);
+
+    // The state the case found, read through the port before
+    // anything is written. An intention nobody has ruled on carries
+    // neither timestamp, which is the open state the CHECK permits
+    // and the one both directions below are measured from.
+    const beforeEntity = present(
+      await entityStore.findEntityById(subject.id),
+      'findEntityById before the refused stamp',
+    );
+
+    expect(intention.status).toBe(PENDING_STATUS);
+    expect(intention.approvedAt).toBeNull();
+    expect(intention.researchedAt).toBeNull();
+    expect(intention.searchTerms).toStrictEqual(POOL_TERMS);
+
+    // DIRECTION ONE: A CLOSING STAMP ON AN UNAPPROVED ROW IS
+    // REFUSED BY THE SERVER. Written straight through drizzle
+    // because no port writes it — `EntityStore` ratifies and never
+    // researches, and `approvePoolRow` cannot reach this CHECK from
+    // either side, a write that only ever ADDS an approval being
+    // unable to produce a row closed without one.
+    const raised = await raisedBy(
+      () => db.update(researchPool)
+        .set({ researchedAt: RESEARCHED_AT })
+        .where(eq(researchPool.id, intention.id)),
+      'the research stamp on an unapproved intention',
+    );
+    const fields = driverFields(raised);
+
+    expect(raised).not.toBeInstanceOf(StoreRefusal);
+    expect(fields.code).toBe(CHECK_VIOLATION);
+    expect(fields.constraint).toBe(POOL_APPROVAL_CHECK);
+
+    // BOTH TABLES ARE AS THE CASE FOUND THEM, taken before any
+    // accepting control issues a write of its own: the refusal is a
+    // statement failing rather than a session, so the intention is
+    // still open, the intention beside it untouched and the subject
+    // both of them name unchanged.
+    expect(await entityStore.findPoolRowById(intention.id))
+      .toStrictEqual(intention);
+    expect(await entityStore.findPoolRowById(second.id))
+      .toStrictEqual(second);
+    expect(await entityStore.findEntityById(subject.id))
+      .toStrictEqual(beforeEntity);
+
+    // DIRECTION TWO: THE SAME STAMP AFTER AN APPROVAL. The ruling
+    // is the one `POST /entities/:id/approve-research` gives, taken
+    // through the service that route calls, and it writes the two
+    // columns `approvePoolRow` names and nothing else.
+    const ruling = await approveEntityResearch(entityStore, subject.id, {
+      poolId: intention.id,
+    });
+
+    expect(ruling.id).toBe(intention.id);
+    expect(ruling.status).toBe(APPROVED_STATUS);
+    expect(ruling.closedAt).toBeNull();
+
+    const agreedAt = present(ruling.approvedAt, 'the ruling stamp');
+
+    // The approval reached the addressed row and no other, so the
+    // intention beside it is still open and still refuses the stamp
+    // for the reason the first direction read.
+    expect(present(
+      await entityStore.findPoolRowById(second.id),
+      'the intention nobody ruled on',
+    ).approvedAt).toBeNull();
+
+    await db.update(researchPool)
+      .set({ researchedAt: RESEARCHED_AT })
+      .where(eq(researchPool.id, intention.id));
+
+    const closed = present(
+      await entityStore.findPoolRowById(intention.id),
+      'findPoolRowById after the accepted stamp',
+    );
+
+    expect(closed.researchedAt).toStrictEqual(RESEARCHED_AT);
+    expect(closed.approvedAt).toStrictEqual(agreedAt);
+    expect(closed.status).toBe(APPROVED_STATUS);
+
+    // THE APPROVAL INSTANT IS THE SERVER'S AND `coalesce` KEEPS THE
+    // FIRST ONE. Ruling again on a closed row is no refusal for a
+    // ratification, and the stamp it answers is the instant the
+    // first ruling settled on rather than this request's — a client
+    // reading an instant older than the call it just made has found
+    // the idempotence and not a fault.
+    const again = await approveEntityResearch(entityStore, subject.id, {
+      poolId: intention.id,
+    });
+
+    expect(again.approvedAt).toStrictEqual(agreedAt);
+    expect(again.closedAt).toStrictEqual(RESEARCHED_AT);
+
+    // And the control saying the clock MOVED between the two calls,
+    // without which the line above is equally green over a server
+    // stamping one constant: an intention ruled on afterwards
+    // carries a LATER instant. Two calls through this port are two
+    // transactions and `now()` is the transaction's start, which no
+    // in-memory store can be made to produce.
+    const later = await approveEntityResearch(entityStore, subject.id, {
+      poolId: second.id,
+    });
+    const laterAt = present(later.approvedAt, 'the second ruling stamp');
+
+    expect(laterAt.getTime()).toBeGreaterThan(agreedAt.getTime());
+  });
+
 });
