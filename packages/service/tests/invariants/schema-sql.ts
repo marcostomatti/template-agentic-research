@@ -264,8 +264,9 @@ export interface SchemaSqlAssertion {
  * both partial scheduling indexes, the CHECKs behind `sources.kind` and
  * `source_config_proposals.status`, the five holding the two auth
  * tables together — three unique keys, the session-to-user foreign key,
- * and the NOT NULL that bounds a session — and the CHECK that makes
- * `operator_settings` a singleton.
+ * and the NOT NULL that bounds a session — the CHECK that makes
+ * `operator_settings` a singleton, and the six read indexes the
+ * wave-3 API pages are served from.
  *
  * A chosen sample and not the whole schema, which is the whole reason
  * {@link EmptyMigrationFileError} exists: a migration truncated to
@@ -275,9 +276,11 @@ export interface SchemaSqlAssertion {
  * Every pattern pins what makes its constraint work, never its name
  * alone. A name-only match reads as present against a constraint
  * renamed onto a different predicate, an index that lost the `WHERE`
- * clause making it partial, and a trigger downgraded to `FOR EACH
- * STATEMENT` — which is handed a null `NEW` rather than an error, so
- * it admits every write it was attached to refuse.
+ * clause making it partial, an index whose key order or nulls
+ * ordering moved out from under the reader it was added for, and a
+ * trigger downgraded to `FOR EACH STATEMENT` — which is handed a
+ * null `NEW` rather than an error, so it admits every write it was
+ * attached to refuse.
  *
  * Every pattern is anchored to the start of a line, and that is the
  * one defence this scan has against the failure it is otherwise
@@ -521,6 +524,112 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
       'depends on an ORDER BY nobody wrote. Pins the bound as a ' +
       'literal, so a placeholder reaching the migration is a miss.',
     pattern: /^[ \t]*CONSTRAINT "operator_settings_singleton_check" CHECK \("operator_settings"\."id" = 1\)/m,
+  },
+  // The six read indexes the wave-3 API pages are served from, pinned
+  // as one group because what makes each of them work is the same
+  // thing: the exact key, in the exact order, carrying the exact
+  // nulls ordering the reader spells in its own ORDER BY.
+  //
+  // The qualifiers are in the patterns because losing one is silent
+  // everywhere else. drizzle renders a descending key as `DESC NULLS
+  // LAST`, which is the opposite of what the bare word means to
+  // Postgres, and the planner matches a pathkey's nulls ordering
+  // literally rather than reasoning about whether the column can hold
+  // a null at all. So an index whose qualifier moved is still
+  // created, still valid, and still used for something; the one thing
+  // that stops using it is the reader it was added for, which goes
+  // back to sorting rows it has already fetched. Measured on Postgres
+  // 16 with sequential scans off: the fully qualified page plans as
+  // an index only scan, and the same query writing a bare `DESC` on
+  // two NOT NULL keys puts an incremental sort above it.
+  //
+  // Column order is pinned one step earlier in the same argument. A
+  // b-tree serves a sort only from a prefix of its key, so two keys
+  // swapped is an index that answers a different query while
+  // carrying the name of this one.
+  //
+  // Every pattern runs to the statement terminator, which is what
+  // makes a WHERE added to any of them a miss rather than a match,
+  // for the reason the per-source `documents` index above gives at
+  // length.
+  //
+  // Measured rather than argued. Each of the six statements deleted
+  // from the generated migration in turn reddens exactly one case,
+  // the one named for the index that went, at 1 failed and 33 passed
+  // every time. Deletion is the weaker half though: a name-only
+  // pattern would report it identically. The three legs that reach
+  // what these patterns actually pin are dropping the `NULLS LAST`
+  // from the findings key on `score`, swapping the two trailing key
+  // columns of the documents index, and qualifying the `llm_calls`
+  // index with a WHERE, and each of those reddens that one entry and
+  // nothing else.
+  {
+    id: 'findings-domain-id-score-created-at-index',
+    description:
+      'Read index behind the findings page: one domain, score ' +
+      'descending with absence sorted last, then created_at and id ' +
+      'descending, which is the order the digest selection and every ' +
+      'renderer already agree on. Pins all four columns in order and ' +
+      'the NULLS LAST on each descending key, which is what the ' +
+      'ORDER BY reading through it has to spell too.',
+    pattern: /^[ \t]*CREATE INDEX "findings_domain_id_score_created_at_idx" ON "findings" USING btree \("domain_id","score" DESC NULLS LAST,"created_at" DESC NULLS LAST,"id" DESC NULLS LAST\);/m,
+  },
+  {
+    id: 'documents-domain-id-captured-at-index',
+    description:
+      'Read index behind the per-domain documents page: newest ' +
+      'first, with id breaking the tie a batch capture leaves when ' +
+      'every row takes the same transaction timestamp. A different ' +
+      'reader from the per-source index above rather than a widening ' +
+      'of it, which is why both are asserted: that key leads on ' +
+      'source_id, which this page does not filter on at all.',
+    pattern: /^[ \t]*CREATE INDEX "documents_domain_id_captured_at_idx" ON "documents" USING btree \("domain_id","captured_at" DESC NULLS LAST,"id" DESC NULLS LAST\);/m,
+  },
+  {
+    id: 'finding-labels-finding-id-labelled-at-index',
+    description:
+      'Read index behind the latest-verdict lookup: one finding, ' +
+      'labels newest first. finding_labels carries no unique key at ' +
+      'all, so re-judging appends and the first row under this order ' +
+      'IS the verdict, which is also how the DISTINCT ON subquery ' +
+      'behind the verdict filter resolves a whole page at once. Pins ' +
+      'id behind labelled_at, two labels written in one transaction ' +
+      'carrying the same stamp.',
+    pattern: /^[ \t]*CREATE INDEX "finding_labels_finding_id_labelled_at_idx" ON "finding_labels" USING btree \("finding_id","labelled_at" DESC NULLS LAST,"id" DESC NULLS LAST\);/m,
+  },
+  {
+    id: 'llm-calls-called-at-index',
+    description:
+      'Read index behind the spend window, which is what makes a ' +
+      'ledger nothing prunes readable at all: every model call the ' +
+      'service makes lands there, so an unbounded summary is a scan ' +
+      'that grows forever. One column, no direction because the ' +
+      'summary groups rather than orders, and the terminator pinned ' +
+      'behind it so a predicate qualifying this index is a miss.',
+    pattern: /^[ \t]*CREATE INDEX "llm_calls_called_at_idx" ON "llm_calls" USING btree \("called_at"\);/m,
+  },
+  {
+    id: 'runs-domain-id-started-at-index',
+    description:
+      'Read index behind the runs page, filtered or not. domain_id ' +
+      'is nullable and a b-tree stores nulls, so the runs belonging ' +
+      'to no domain sit inside this index rather than outside it, ' +
+      'which is what lets the unfiltered page read the whole table in ' +
+      'the same order. Pins the three columns and the NULLS LAST on ' +
+      'both descending keys.',
+    pattern: /^[ \t]*CREATE INDEX "runs_domain_id_started_at_idx" ON "runs" USING btree \("domain_id","started_at" DESC NULLS LAST,"id" DESC NULLS LAST\);/m,
+  },
+  {
+    id: 'source-config-proposals-source-id-status-index',
+    description:
+      'Read index behind the pending-config queue, which the HTTP ' +
+      'route and the approval CLI both read through: one queue with ' +
+      'two clients rather than two that happen to agree today. ' +
+      'Equality on both columns, so neither carries a direction, and ' +
+      'the terminator is pinned because a WHERE on the pending ' +
+      'status would serve these two readers and leave every other ' +
+      'status read on a sequential scan.',
+    pattern: /^[ \t]*CREATE INDEX "source_config_proposals_source_id_status_idx" ON "source_config_proposals" USING btree \("source_id","status"\);/m,
   },
 ];
 

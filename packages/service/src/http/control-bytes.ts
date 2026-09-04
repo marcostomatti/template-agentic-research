@@ -1,9 +1,22 @@
 /**
  * @packageDocumentation
- * Two functions the source failures queue serves a stored payload
- * through: one that replaces every character a response has no
- * business carrying raw, and one that shortens a string without
- * cutting a character in half.
+ * The two passes a stored payload makes before a response carries
+ * it, and the one number saying how much of it a response carries:
+ * a function that replaces every character a response has no
+ * business carrying raw, a function that shortens a string without
+ * cutting a character in half, and the cap the second is called
+ * with.
+ *
+ * ONE CAP FOR EVERY SURFACE THAT ANSWERS STORED TEXT, which is why
+ * {@link BODY_CODE_POINT_CAP} sits here beside the two passes
+ * rather than in the module of whichever route reached for it
+ * first. The failures queue is its one reader today and
+ * `docs/architecture/08-http-api.md` names the second. Two literals
+ * that agreed on the day they were written would be two caps, and
+ * the day one of them moved there would be nothing in either file
+ * to report that the other had not — a review surface and a debug
+ * surface answering different amounts of one stored body is
+ * precisely the drift nobody looks for.
  *
  * `GET /sources/:id/failures` answers `body` and `parse_error` from
  * documents a parser refused. That is the likeliest text in the
@@ -55,6 +68,43 @@
  * wrote — and cutting by code point is what stops the cap itself
  * from manufacturing a lone surrogate that was never stored.
  */
+
+/**
+ * How many CODE POINTS of a stored body a surface answering one
+ * will serve.
+ *
+ * A DLQ holds the payloads that broke a parser, and the payload
+ * that broke one by being enormous is exactly the row a review
+ * surface would otherwise fetch whole. So the cap is on a route
+ * from its first commit rather than added the day somebody meets a
+ * body that needs it.
+ *
+ * The arithmetic, because a per-row cap alone does not bound a
+ * response. A page carries at most `MAX_PER_PAGE` rows — 200, in
+ * `src/http/schemas.ts` — and masking is expansive at worst six
+ * characters out of one, so a page of bodies made entirely of
+ * control bytes answers about 200 * 4096 * 6 characters. Large, and
+ * BOUNDED, which is the property being bought. A body of ordinary
+ * text expands by nothing at all.
+ *
+ * Code points rather than characters or bytes, because that is what
+ * {@link takeCodePoints} counts and what makes the cut incapable of
+ * splitting an astral pair. A body of astral characters therefore
+ * answers up to twice this many UTF-16 units, and up to four times
+ * this many bytes.
+ *
+ * EXPORTED SO ITS OWN CASES CAN DERIVE FROM IT. A test transcribing
+ * the number would stay green against a cap that had moved, which
+ * is the one change to this constant worth reporting.
+ *
+ * IT IS A MODULE CONSTANT AND NOT A QUERY PARAMETER, so no caller
+ * can ask for the whole of a stored payload and no route can be
+ * talked into serving one. What travels beside a cut body is the
+ * STORED length rather than the answered one, which is what lets a
+ * reader tell a cut body from a short one and how much was
+ * withheld; each surface answering one owes that member of its own.
+ */
+export const BODY_CODE_POINT_CAP = 4096;
 
 /** Builds one character from its code point. */
 const charFrom = String.fromCharCode;

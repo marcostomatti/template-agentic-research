@@ -211,9 +211,10 @@ const CASE_SUFFIX = '.test.ts';
  * the other gate this directory touches — what a source's
  * arrangement will be, ruled on before it is written — which is
  * about a source rather than a reading of one. And the HTTP half
- * of the directory is about a `sources` ROW and the `documents`
- * captured through one: what the route group asks the database for,
- * which is a different subject from how a feed is read.
+ * of the directory is about a `sources` ROW, the `documents`
+ * captured through one and the `source_config_proposals` queued
+ * against one: what the route group asks the database for, which
+ * is a different subject from how a feed is read.
  *
  * Naming them is the cost of the guard and is meant to be paid: a
  * module that satisfies no contract and appears in no registry is
@@ -275,6 +276,24 @@ const NON_ADAPTER_MODULES = [
     reason:
       'the cursor-paged listing loop an adapter runs inside its own '
       + 'fetch, which is why listing is no member of the contract',
+  },
+  {
+    module: 'proposals-routes.ts',
+    reason:
+      'the two HTTP routes the parser-config gate is reached '
+      + 'through, declaring an address, a window, a status and an '
+      + 'envelope and no rule of its own: it fronts no source, '
+      + 'declares no member of the contract, and never constructs '
+      + 'an adapter',
+  },
+  {
+    module: 'proposals-service.ts',
+    reason:
+      'the rules behind the HTTP half of the parser-config gate, '
+      + 'whose subject is a source_config_proposals row rather than '
+      + 'a sources one: it pages what is waiting on a person and '
+      + 'rules on one proposal, fronts no source, and declares no '
+      + 'member of the contract',
   },
   {
     module: 'routes.ts',

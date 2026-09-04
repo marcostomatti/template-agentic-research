@@ -32,6 +32,18 @@
  *   take a clock beside the store, for the schedule verbs that write
  *   `next_run_at`. See `src/topics/`, `src/sources/`, `src/connectors/`,
  *   `src/subscriptions/` and the same doc.
+ * - The wave-3 HTTP surface — findings with the verdict ruling,
+ *   documents, entities with the research-approval gate, runs with the
+ *   spend summary beside them, and the source config-proposal gate wave
+ *   2 deferred to this one, as six more routers mounted the same way.
+ *   Four first segments are new (`/findings`, `/entities`, `/runs` and
+ *   `/spend`) and two are borrowed: `/domains/:slug` gains two more
+ *   collections and `/sources/:id` the proposal pair. There is no
+ *   `/documents` prefix — that group's one route hangs off the domain,
+ *   which is why the directory count and the prefix count differ. Only
+ *   `/spend/summary` takes the clock, and it READS the present where
+ *   the wave-2 pair write it. See `src/findings/`, `src/documents/`,
+ *   `src/entities/`, `src/runs/`, `src/sources/` and the same doc.
  */
 import type { AuthDeps } from './auth/index.js';
 import type { ServiceConfig } from '../lib/express/index.js';
@@ -51,7 +63,13 @@ import { buildConnectorsRouter } from './connectors/routes.js';
 import { createCronDependency } from './cron/index.js';
 import { createDbDependency } from './db/index.js';
 import { listUsers } from './db/users.js';
+import { createDbDocumentStore } from './documents/db-store.js';
+import { buildDocumentsRouter } from './documents/routes.js';
 import { buildDomainsRouter, createDbDomainStore } from './domains/index.js';
+import { createDbEntityStore } from './entities/db-store.js';
+import { buildEntitiesRouter } from './entities/routes.js';
+import { createDbFindingStore } from './findings/db-store.js';
+import { buildFindingsRouter } from './findings/routes.js';
 import {
   registerEmailChannel,
   registerPushChannel,
@@ -61,10 +79,14 @@ import { createDbPersonaStore } from './personas/db-store.js';
 import { buildPersonasRouter } from './personas/routes.js';
 import { createRedisDependency } from './redis/index.js';
 import { exampleRouter } from './routes/example.js';
+import { createDbRunStore } from './runs/db-store.js';
+import { buildRunsRouter } from './runs/routes.js';
+import { buildSpendRouter } from './runs/spend-routes.js';
 import { createDbSettingsStore } from './settings/db-store.js';
 import { buildSettingsRouter } from './settings/routes.js';
 import { createDbSourceStore } from './sources/db-store.js';
 import { buildSourceFailuresRouter } from './sources/failures-routes.js';
+import { buildSourceProposalsRouter } from './sources/proposals-routes.js';
 import { buildSourcesRouter } from './sources/routes.js';
 import { createDbSubscriptionStore } from './subscriptions/db-store.js';
 import { buildSubscriptionsRouter } from './subscriptions/routes.js';
@@ -132,10 +154,18 @@ const authStore = createDbAuthStore(() => dbDep.client);
  * `src/domains/store.ts` and its siblings. None of them holds state, so
  * building them separately costs nothing.
  *
- * The wave-2 four sit below the wave-1 four, in the order their routers
- * mount. There is no ninth: `createDbSourceStore` serves BOTH source
- * routers, the failures queue being a `Pick` of that same port rather
- * than a port of its own.
+ * Each wave sits below the one before it, in the order its routers
+ * mount. THERE ARE FEWER STORES THAN ROUTERS, and the shortfall is the
+ * ports that answer for more than one of them. `createDbSourceStore`
+ * serves all three routers `src/sources/` holds — the feeds, the
+ * failures queue and the config-proposal gate; `createDbTaxonomyStore`
+ * serves the categories and the terms; `createDbRunStore` serves the
+ * runs page and the spend summary; `createDbConnectorStore` serves the
+ * connectors and the export subscriptions that name one; and
+ * `createDbDomainStore` serves its own router plus every other one
+ * addressed by a `:slug`, which is most of them. A queue, a summary or
+ * a second collection over one table is a `Pick` of that table's port
+ * and never a port of its own.
  */
 const domainStore = createDbDomainStore(() => dbDep.client);
 const taxonomyStore = createDbTaxonomyStore(() => dbDep.client);
@@ -145,28 +175,33 @@ const topicStore = createDbTopicStore(() => dbDep.client);
 const sourceStore = createDbSourceStore(() => dbDep.client);
 const connectorStore = createDbConnectorStore(() => dbDep.client);
 const subscriptionStore = createDbSubscriptionStore(() => dbDep.client);
+const findingStore = createDbFindingStore(() => dbDep.client);
+const documentStore = createDbDocumentStore(() => dbDep.client);
+const entityStore = createDbEntityStore(() => dbDep.client);
+const runStore = createDbRunStore(() => dbDep.client);
 
 /**
- * The eight ports as one object, which is what most of the routers below
+ * Every port as one object, which is what most of the routers below
  * need.
  *
- * `CategoryServiceStore`, `PersonaServiceStore`, `SettingsServiceStore`,
- * `TopicServiceStore` and `SourceServiceStore` each intersect a `Pick` of
- * `DomainStore` with a `Pick` of their own port, because a route addressed
- * by `:slug` resolves the domain before it does anything else — and
- * `SubscriptionServiceStore` intersects THREE, a subscription naming a
- * connector as well as a domain. So a router spanning more than one port
- * needs one object carrying them all, and a spread is what builds it: no
- * two of the eight ports declare a method under the same name, so no
- * member of one shadows a member of another.
+ * MOST OF THEM SPAN MORE THAN ONE PORT, and each of those intersects a
+ * `Pick` of `DomainStore` with a `Pick` of its own, because a route
+ * addressed by `:slug` resolves the domain before it does anything else
+ * — with `SubscriptionServiceStore` intersecting THREE, a subscription
+ * naming a connector as well as a domain. So a router spanning more
+ * than one port needs one object carrying them all, and a spread is
+ * what builds it: no two ports declare a method under the same name, so
+ * no member of one shadows a member of another.
  *
- * ONE composition rather than six, handed to every router including the
- * four that reach a single port. Each router's own `store` type is what
- * narrows it to the methods that router may reach, and a type is a stronger
- * statement than the shape of the argument — it is checked rather than
- * conventional. `tests/helpers/memory-research-store.ts` is the same shape
- * from the other side: one implementation behind all eight ports, which is
- * what lets the suite drive every router here with no database up.
+ * ONE composition rather than one per router, handed to every mount
+ * below, including the ones reaching a single port — `domains`, `terms`,
+ * `connectors`, `entities`, the failures queue and the proposal gate.
+ * Each router's own `store` type is what narrows it to the methods that
+ * router may reach, and a type is a stronger statement than the shape of
+ * the argument — it is checked rather than conventional.
+ * `tests/helpers/memory-research-store.ts` is the same shape from the
+ * other side: one implementation behind every port here, which is what
+ * lets the suite drive every router with no database up.
  */
 const researchStore = {
   ...domainStore,
@@ -177,24 +212,38 @@ const researchStore = {
   ...sourceStore,
   ...connectorStore,
   ...subscriptionStore,
+  ...findingStore,
+  ...documentStore,
+  ...entityStore,
+  ...runStore,
 };
 
 /**
- * The present, for the two routers below whose schedule verbs write
- * `next_run_at`.
+ * The present, for the three routers below that take one.
  *
  * A thunk and not an instant: a router is built once, at boot, and then
  * answers for the life of the process, so a captured `Date` would freeze
- * every due time it ever writes at the moment of wiring. The session clock
- * below is a thunk for the same reason.
+ * every due time it ever writes — and every window it ever defaults — at
+ * the moment of wiring. The session clock below is a thunk for the same
+ * reason.
  *
- * ONE const rather than an inline `() => new Date()` at each of the two
- * mounts, because the two verbs answer the same present and a reader
- * should not have to compare two expressions to know it. It is not a
- * default being supplied: `TopicsRouterOptions.clock` and
- * `SubscriptionsRouterOptions.clock` are both REQUIRED, which is those
- * types refusing to let a caller mount a schedule verb without saying
- * which present it answers against. This is that call site.
+ * TWO OF THE THREE WRITE THE INSTANT AND THE THIRD ONLY READS IT.
+ * `POST /topics/:id/run-now`, `POST /topics/:id/pause` and
+ * `POST /exports/:id/run-now` stamp it into `next_run_at`, where
+ * `GET /spend/summary` uses it to close a window bound the caller left
+ * open and reaches no column at all. It does reach that caller, in
+ * `SpendSummary.window`, which is what lets a client see which span it
+ * was given rather than compare its answer against a constant nobody
+ * told it.
+ *
+ * ONE const rather than an inline `() => new Date()` at each of the
+ * three mounts, because the three answer the same present and a reader
+ * should not have to compare three expressions to know it. It is not a
+ * default being supplied: `TopicsRouterOptions.clock`,
+ * `SubscriptionsRouterOptions.clock` and `SpendRouterOptions.clock` are
+ * all REQUIRED, which is those types refusing to let a caller mount
+ * such a route without saying which present it answers against. This is
+ * that call site.
  */
 const clock = () => new Date();
 
@@ -380,5 +429,33 @@ await createService({
       store: researchStore,
       clock,
     }));
+
+    // The wave-3 HTTP surface, below the wave-2 mounts and guarded the
+    // same way. Six routers over four new ports and one carried one:
+    // the findings router, whose store type INTERSECTS the reads with
+    // the verdict ruling; documents; entities; the runs page; the
+    // spend summary beside it; and the config-proposal gate under
+    // `/sources/:id` that wave 2 deferred to this wave.
+    //
+    // Order among the six is presentational, as it is among the five
+    // above: every path these routers declare is distinct, and each
+    // route hanging off a borrowed prefix is a longer pattern than
+    // anything the router owning that prefix registers, so no mount
+    // can shadow another whichever way round they sit.
+    //
+    // The spend router is the third and last mount taking the clock,
+    // and the only one whose reading of it reaches no column.
+    app.use(ctx.requireAuth, buildFindingsRouter({ store: researchStore }));
+    app.use(ctx.requireAuth, buildDocumentsRouter({ store: researchStore }));
+    app.use(ctx.requireAuth, buildEntitiesRouter({ store: researchStore }));
+    app.use(ctx.requireAuth, buildRunsRouter({ store: researchStore }));
+    app.use(ctx.requireAuth, buildSpendRouter({
+      store: researchStore,
+      clock,
+    }));
+    app.use(
+      ctx.requireAuth,
+      buildSourceProposalsRouter({ store: researchStore }),
+    );
   },
 });

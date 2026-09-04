@@ -122,6 +122,26 @@ import { listSourceFailures } from './failures-service.js';
  */
 const sourceAddressSchema = z.object({ id: resourceIdParamSchema }).strict();
 
+/**
+ * What the MCP tool over this router's one route is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so the entry in `src/mcp/tools/wave-2.ts`
+ * names one schema covering the whole request, spread from the
+ * pieces this route already parses rather than written again.
+ *
+ * THE CAP TRAVELS WITH IT. `perPage` is the shared parameter, so a
+ * tool asking for more of the queue than the surface serves is
+ * refused by the same bound the route is held to, and the bodies
+ * it reads back are cut and masked by
+ * `src/sources/failures-service.ts` on either protocol.
+ */
+export const sourceFailureListToolInputSchema = z.object({
+  ...sourceAddressSchema.shape,
+  ...paginationQuerySchema.shape,
+}).strict();
+
 /** Everything {@link buildSourceFailuresRouter} needs. */
 export interface SourceFailuresRouterOptions {
   /**
@@ -133,11 +153,13 @@ export interface SourceFailuresRouterOptions {
    * `tests/helpers/memory-research-store.ts` can stand behind it
    * with no database up.
    *
-   * SIX OF THE NINE PORT METHODS ARE ABSENT, and the absence is
-   * this router's read-only claim written as a type rather than as
-   * a promise. Every write on `SourceStore` belongs to the router
-   * beside this one, so no handler here could reach a `documents`
-   * row or a `sources` one even by accident.
+   * TEN OF THE THIRTEEN PORT METHODS ARE ABSENT, and the absence
+   * is this router's read-only claim written as a type rather than
+   * as a promise. Every write on `SourceStore` belongs to a router
+   * beside this one — the three `sources` writes to `./routes.ts`
+   * and the config approval to `./proposals-routes.ts` — so no
+   * handler here could reach a `documents` row, a `sources` one or
+   * the approval gate even by accident.
    *
    * NO CLOCK SITS BESIDE IT. Nothing on this route reads the
    * present: a capture instant is what the pipeline stamped, and

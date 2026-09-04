@@ -27,11 +27,15 @@
  * THE BODY IS NOT PARSED HERE, exactly as in the two sibling
  * routers and for the same reason. {@link createPersona} and
  * {@link patchPersona} take an `unknown` and parse it themselves,
- * because wave 3 exposes those same functions as MCP tools and a
- * body validated by the router would leave that caller validating
- * against a second schema nobody would notice drifting. What a
- * router owns instead is what only HTTP has: the `:slug` and the
- * `:id` in the path, and the `?page`/`?perPage` window.
+ * because an operation owns its own input contract and a body
+ * validated by the router would leave a second caller validating
+ * against a schema nobody would notice drifting. What a router owns
+ * instead is the SPELLING only HTTP has: the `:slug` and the `:id`
+ * in a path, and the `?page`/`?perPage` window in a query string.
+ * The wave-1 MCP module is handed the same facts as members of one
+ * arguments object — see the tool-input schema below — and it reads
+ * this group without writing it, term edits being the only wave-1
+ * mutation the API spec names as safe.
  *
  * THIS LIST ROUTE IS PAGINATED, which is where it follows
  * `GET /domains` and `GET /categories/:id/terms` rather than
@@ -147,6 +151,24 @@ const domainAddressSchema = z.object({ slug: slugParamSchema }).strict();
  * take, narrowed at the boundary rather than inside the rules.
  */
 const personaAddressSchema = z.object({ id: resourceIdParamSchema }).strict();
+
+/**
+ * What the MCP tool over this group's one read is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so every entry in `src/mcp/tools/wave-1.ts`
+ * names one schema covering the whole request, spread from the
+ * pieces this route already parses rather than written again.
+ *
+ * The address consts above stay private. Nothing here exports one,
+ * so their claim that the three routers agree by intent rather than
+ * by derivation is untouched by this schema.
+ */
+export const personaListToolInputSchema = z.object({
+  ...domainAddressSchema.shape,
+  ...paginationQuerySchema.shape,
+}).strict();
 
 /** Everything {@link buildPersonasRouter} needs. */
 export interface PersonasRouterOptions {

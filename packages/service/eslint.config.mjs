@@ -20,7 +20,8 @@ export default [
     // exist and eslint-import-resolver-typescript calls it unresolved.
     // `tsc` substitutes the extension and resolves the same specifier,
     // so a green `check-types` is no evidence about this rule. Measured:
-    // dropping the entry reddens three imports in tests/mcp-echo.test.ts.
+    // dropping the entry reddens the three SDK value imports in
+    // tests/mcp/transport.test.ts (a type-only import does not report).
     rules: {
       'import/no-unresolved': ['error', { ignore: ['^bun:', '^@modelcontextprotocol/sdk/'] }],
     },
