@@ -1,11 +1,11 @@
 /**
- * `tests/helpers/memory-research-store.ts` in all eleven ports it
+ * `tests/helpers/memory-research-store.ts` in all twelve ports it
  * implements — the claims that make it a second implementation of
  * `DomainStore`, of `TaxonomyStore` WHOLE with categories and terms
  * together, of `PersonaStore`, of `TopicStore`, of `SourceStore`, of
  * `ConnectorStore`, of `SubscriptionStore`, of `SettingsStore`, of
- * `FindingStore`, of `DocumentStore` and of `EntityStore`, rather
- * than a bag that stores what it is handed.
+ * `FindingStore`, of `DocumentStore`, of `EntityStore` and of
+ * `RunStore`, rather than a bag that stores what it is handed.
  *
  * THAT IT REFUSES WHAT POSTGRES REFUSES. Every refusal case names
  * the `reason` a SQLSTATE classifies to and the constraint the
@@ -688,6 +688,64 @@
  * SECOND domain naming the first's subject and reads the delete
  * landing with the citation left dangling, and a sibling reads the
  * same key holding nothing when both rows go together.
+ *
+ * THE RUNS HALF ADDS NO MECHANISM A CALL CAN REACH, and it is the
+ * SECOND half here to add none rather than the first — the documents
+ * half got there with two methods and this one with six. `runs`
+ * carries `runs_status_check` and `runs_scheduled_by_check` where
+ * `documents` reached neither, and both read a SINGLE column, so
+ * {@link MemoryRun} declares those two members as the unions and
+ * neither has a case: a plant outside `RUN_STATUSES` or
+ * `RUN_SCHEDULERS` does not compile, exactly as
+ * `documents_parse_status_check` and `research_pool_status_check`
+ * have no case for their own tables' sake. There is no writer on this
+ * port at all, so no foreign key here is reachable from a call
+ * either, and this half throws nothing.
+ *
+ * THAT ITS TWO COLLECTIONS ARE PLANTED FLAT, which is a claim about
+ * two NULLABLE columns rather than about a seam's convenience.
+ * `runs.domain_id` and `llm_calls.run_id` are both nullable, so the
+ * subject of this half's load-bearing cases — a maintenance tick that
+ * belongs to no domain, and a call attributed to no pass — has no key
+ * to be planted under at all. Cases read both: the tick is IN the
+ * unfiltered page and in NONE of the narrowed ones, and the call
+ * naming no run is in NO ledger and in EVERY summary.
+ *
+ * THAT ITS TWO ORDERS RUN THE SAME WAY AND ARE EXPRESSED TWICE.
+ * `started_at DESC, id DESC` on the page and
+ * `called_at DESC, id DESC` on the ledger, each planted in the order
+ * its own tiebreak REVERSES and each with the extreme stamp on the
+ * extreme id the OTHER way, so an ordering by `id` alone disagrees
+ * with the answer rather than resembling it. The unfiltered page adds
+ * a reading neither narrowed one can make: its last tie is between
+ * two DOMAINS, so the tiebreak is a comparison across the collection
+ * rather than within a scope.
+ *
+ * THAT THE SPEND SUMMARY GROUPS ON TWO AXES AND COUNTS EVERY ROW. The
+ * day axis is read with a pair of calls ONE MILLISECOND apart across
+ * a UTC midnight, which nothing but the truncation can separate; the
+ * domain axis is read through the join, since `llm_calls` carries no
+ * domain of its own; and the coverage property is read as a
+ * PARTITION, the buckets' `calls` adding up to the whole ledger while
+ * the two domains' own summaries fall three calls short of it. Its
+ * two magnitudes are read on a bucket where one call was measured on
+ * both axes, one on the characters alone and one on neither, which is
+ * what separates a sum from a count and the two sums from each other.
+ *
+ * THAT ITS WINDOW IS HALF-OPEN OVER `called_at`, read with both
+ * bounds landing exactly ON a planted call. A separate case spans two
+ * EMPTY days, which is what says a bucket exists because calls landed
+ * in it rather than because a calendar has that day.
+ *
+ * THAT A DOMAIN TAKES ITS PASSES AND THEIR LEDGER AND LEAVES THE
+ * TICKS. Two levels, as the findings half's cascade is, with the
+ * survivals read in the same bodies: the tick and the second domain's
+ * pass stand, and so do the calls naming no run. A CROSS-DOMAIN
+ * RESULT is the file's SEVENTH known divergence and is pinned from
+ * both faces exactly as the sixth is — one case records research in a
+ * SECOND domain naming the first's run and reads the delete landing
+ * with the citation left dangling, and a sibling reads the same key
+ * holding nothing when both rows go together.
  *
  * Several cases carry a positive control in the same body rather
  * than in a sibling case, because each is asking a question a broken
@@ -1537,6 +1595,142 @@
  * insert redden one apiece, the second being the widening leg the
  * nobody's-side-effect case exists for.
  *
+ * THE RUNS HALF RE-RAN THE RECORDED SET AND ADDED FOUR CASCADE LEGS
+ * TO IT, and the reading it bought is that everything carried in
+ * reproduced its recorded figure. The file holds 541 cases, of which
+ * 40 are this half's. What was run is this half's OWN thirty-three
+ * legs plus TEN recorded ones, chosen by reading what the new cases
+ * CALL from outside the half: they reach `insertDomain`,
+ * `deleteDomain`, {@link MemoryResearchStore.setDomainEntities},
+ * {@link MemoryResearchStore.setEntityResearch} and
+ * {@link EntityStore.listEntityResearch}, and nothing else. That is
+ * the entities half's six widened by the four cascade legs its
+ * divergence pair reaches through the registry. Each of the ten was
+ * applied to the store and run TWICE, once against
+ * `git show HEAD:` of this file at 501 cases and once at the tip at
+ * 541, and what is read is the SET each run reddened.
+ *
+ * EVERY ONE OF THE TEN REPRODUCED ITS RECORDED FIGURE AT HEAD, which
+ * is what says these are the legs the prose names rather than ten new
+ * ones that happen to redden something: 6, 8, 4, 2, 4, 2, 1, 1 and 4
+ * for the nine the paragraphs above record, and each OUTSIDE set came
+ * back identical member for member. ONE of them needed the recorded
+ * SPELLING found rather than guessed, and the wrong spelling is the
+ * one a reader reaches for first: `a domain delete that removes no
+ * row` reddens 8 only when the row is LEFT while the return stays
+ * truthful, where answering `false` from the same method reddens 27
+ * at HEAD and 33 at the tip. Both sentences describe the same
+ * mutation in English and they are different legs; the second is
+ * recorded here as the reading that names this half's six cascade
+ * cases, since the six new members are exactly the ones asserting
+ * what the delete returned.
+ *
+ * THE RUNS HALF MOVED EXACTLY TWO OF THE TEN, BY ONE CASE EACH, and
+ * both moved through the same pair of cases. Leaving the entities
+ * standing went 4 to 5 and keeping their research while dropping them
+ * went 1 to 2, each gaining one member of the cross-domain divergence
+ * pair — the only cases here that plant in the entities half on
+ * purpose. The other eight are identical member for member: no runs
+ * case writes a category, a term, a persona, a topic or a source,
+ * reads a domain's dates or touches the operator's row.
+ *
+ * Its own thirty-three legs redden between 1 and 31, EVERY red one of
+ * them lands wholly inside the runs describes, and NONE reads zero.
+ * The whole grid was run TWICE over one tree and every leg's set came
+ * back identical member for member, which is what separates a
+ * measurement from a bad capture.
+ *
+ * Planting no pass reddens 31 and planting no call 22, and the two
+ * are this half's whole-half controls. Their SURVIVORS are the
+ * coverage statement rather than their counts. What survives the
+ * first is exactly the nine cases whose subject is a CALL rather than
+ * a pass — the four ledger reads, whose rows hang off a run ID rather
+ * than off a run, the two call-copy cases, the ledger rebuild, the
+ * absent-run bucket, and the empty-day window case, whose subject is
+ * which DAYS carry a bucket. What survives the second is exactly the
+ * eighteen whose subject is a run row. The first control was 29 until
+ * the divergence pair gained the state-before assertion this file
+ * requires, which took it to 31 and is the whole of why those two
+ * reads are there.
+ *
+ * The runs page's three ordering legs separate its two keys and TWO
+ * OF THEM ARE IDENTICAL: dropping the id tiebreak reddens 4, and
+ * dropping the stamp key and reversing the whole order redden the
+ * same 5, told apart only by the assertion that fails inside each.
+ * That the tiebreak leg reddens at all is the fixture's doing rather
+ * than the store's — `Array.prototype.sort` is stable, so the tied
+ * pair is planted in the order the tiebreak REVERSES, and the oldest
+ * pass is planted with the HIGHEST id so the two keys disagree on
+ * every pair it is in. The ledger's two legs are the same shape one
+ * table down and NEST rather than pairing: dropping its id tiebreak
+ * reddens 4 and reversing it 3, inside.
+ *
+ * The two filter legs redden 5 apiece and are DISJOINT, which is what
+ * says the page and the summary narrow through two predicates rather
+ * than one. Neither is satisfied by a page that merely looks
+ * plausible: both are read through a PARTITION, the two domains'
+ * counts plus the one tick being the whole table on the page and the
+ * two domains' summaries falling three calls short of the
+ * unfiltered one.
+ *
+ * THE SPEND LEGS ARE ELEVEN AND THE THREE SHARPEST ARE THE SMALLEST.
+ * Truncating the day in the process's own zone reddens 11, which is
+ * the leg the UTC claim rests on rather than any assertion naming it;
+ * attributing every call to nobody reddens 12 and joining INNER,
+ * dropping the unattributed calls, reddens 10, the two overlapping in
+ * seven. Counting the measured rows rather than the rows reddens 8.
+ * Losing the null-last rule from the bucket order reddens 2 and
+ * taking the oldest day first reddens 5, disjoint but for the
+ * ordering case itself.
+ *
+ * The two magnitude legs redden 2 apiece and are DISJOINT, which is
+ * the reading two sums over one bucket need: coalescing an unmeasured
+ * bucket to zero reddens the null case and the absent-run one, and
+ * summing either axis only when BOTH were recorded reddens the
+ * separately-summed case and the same absent-run one. A fixture whose
+ * every call carried both magnitudes could report neither.
+ *
+ * The two window legs redden the SAME 1, and that is a case covering
+ * two claims rather than a leg that says nothing: closing the upper
+ * bound and opening the lower each redden the one case that puts both
+ * bounds exactly ON a planted call, which is what a half-open window
+ * is read with. Recorded as two legs on one case rather than as one
+ * figure for both.
+ *
+ * Resolving a call whose run nothing stored as though it named a
+ * domain reddens 7, which is the leg the LEFT JOIN's third null rests
+ * on. It NESTS the separately-summed magnitude leg, both reaching the
+ * absent-run case.
+ *
+ * The three cascade legs read 6, 4 and 2 and NEST: leaving the runs
+ * standing reddens 6, dropping every run whatever domain it belongs
+ * to reddens 4 inside it, and dropping the runs while leaving their
+ * ledger reddens 2 inside that. The middle one is what the tick's
+ * survival is pinned by, and the two divergence cases are inside the
+ * first alone.
+ *
+ * The copy legs are one per DIRECTION and per collection, which is
+ * why they sit in six case bodies rather than four. Storing the rows
+ * a plant was handed reddens 2 and keeping the STAMPS off that same
+ * plant reddens 1 inside it; answering the payloads by reference
+ * reddens 1 and answering the stamps by reference reddens a different
+ * 1. The ledger's pair redden ONE CASE EACH and are DISJOINT, which
+ * they were not until the combined case was split in two — a claim
+ * with two directions in one body cannot be separated by any grid,
+ * and both legs read the same single case before the split.
+ *
+ * The two projection legs redden 1 and 3 and neither is a copy leg.
+ * Keeping `run_id` on the ledger's record reddens exactly 1, the
+ * key-set case, which is the only reading in this half that could
+ * report a member riding along. Dropping `errors` from the runs
+ * record reddens 3, the key-set case plus both payload-copy cases,
+ * since those read the member they are about.
+ *
+ * The two seam-replacement legs redden 1 apiece and are disjoint,
+ * appending rather than replacing being what makes a collection going
+ * back to empty inexpressible — which is the one thing each rebuild
+ * case is for.
+ *
  * THE ENTITIES HALF RE-RAN THE RECORDED SET RATHER THAN WIDENING IT,
  * and the reading it bought is that nothing carried in moved at all.
  * The file holds 501 cases, of which 48 are this half's. What was
@@ -1646,9 +1840,11 @@ import type {
   MemoryDomainEntity,
   MemoryDomainFinding,
   MemoryEntityResearch,
+  MemoryLlmCall,
   MemoryResearchPoolRow,
   MemoryResearchStore,
   MemorySourceDocument,
+  MemoryRun,
 } from './memory-research-store.js';
 import type {
   ConnectorRecord,
@@ -1674,7 +1870,13 @@ import type {
   FindingRecord,
   FindingSort,
 } from '../../src/findings/store.js';
+import type { TimeWindow } from '../../src/http/schemas.js';
 import type { PersonaRecord } from '../../src/personas/store.js';
+import type {
+  RunFilter,
+  RunRecord,
+  SpendBucket,
+} from '../../src/runs/store.js';
 import type {
   InsertSourceInput,
   SourceFailureRecord,
@@ -9202,8 +9404,20 @@ const OTHER_SUBJECT = 72;
  */
 const RETIRED = 'retired-key';
 
-/** A window with neither bound: every finding the domain has made. */
-const EVERY_INSTANT = { sinceInclusive: null, untilExclusive: null };
+/**
+ * A window with neither bound.
+ *
+ * ANNOTATED RATHER THAN INFERRED, and read by two halves: the
+ * findings page below and the spend summary at the foot. Without the
+ * annotation the type is the literal `{ sinceInclusive: null }` pair,
+ * so a helper defaulting to it takes a parameter no BOUNDED window
+ * can be handed — which reads as a bad argument rather than as a
+ * missing annotation.
+ */
+const EVERY_INSTANT: TimeWindow = {
+  sinceInclusive: null,
+  untilExclusive: null,
+};
 
 /**
  * The filter that narrows nothing, on the terms {@link EVERY_KIND}
@@ -12234,5 +12448,1241 @@ describe('the entity payload crossing the boundary', () => {
     store.setDomainPool(domain.id, []);
 
     expect(await poolPage(store, KUBE)).toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The runs half's fixture
+// ---------------------------------------------------------------------------
+
+/**
+ * The three instants the passes were opened across, and the one they
+ * finished at.
+ *
+ * SPELLED OUT RATHER THAN DERIVED FROM ONE ANOTHER, on the terms
+ * {@link MADE_T0} states, and kept clear of every other half's stamps:
+ * nothing else here plants a `runs` row, so these are read by this
+ * section alone.
+ */
+const STARTED_T0 = '2026-06-01T09:00:00.000Z';
+const STARTED_T1 = '2026-06-02T09:00:00.000Z';
+const STARTED_T2 = '2026-06-03T09:00:00.000Z';
+const FINISHED_AT = '2026-06-02T10:00:00.000Z';
+
+/**
+ * The three instants the ledger was written across, chosen so the
+ * summary's two axes are both readable off one fixture.
+ *
+ * `CALLED_T0` AND `CALLED_T1` STRADDLE A UTC MIDNIGHT one millisecond
+ * apart, which is what says the day bucket is a truncation rather
+ * than a rounding: a store bucketing in the process's own zone puts
+ * the pair together anywhere but UTC, and every count beside it still
+ * adds up.
+ *
+ * `CALLED_T2` LEAVES TWO WHOLE DAYS EMPTY behind it, which is what
+ * lets a case read that no bucket exists for a day nothing landed on.
+ * A contiguous run of days could not say it.
+ */
+const CALLED_T0 = '2026-06-10T23:59:59.999Z';
+const CALLED_T1 = '2026-06-11T00:00:00.000Z';
+const CALLED_T2 = '2026-06-14T09:00:00.000Z';
+
+/** The three UTC days those instants fall on, as bucket keys. */
+const DAY_BEFORE = Date.UTC(2026, 5, 10);
+const DAY_OF = Date.UTC(2026, 5, 11);
+const DAY_LATER = Date.UTC(2026, 5, 14);
+
+/**
+ * The five passes the runs fixture plants, named for what each is in
+ * the rules rather than for its id.
+ *
+ * The ids are the fixture's own, `RunStore` declaring no insert.
+ * `RUN_TIED_LOW` and `RUN_TIED_HIGH` carry ONE instant, so only `id`
+ * separates them, and they are planted LOW FIRST — a stable sort that
+ * lost the descending tiebreak answers them the wrong way round
+ * rather than reproducing the answer by accident. `RUN_OLDEST` is the
+ * HIGHEST id of the three and the OLDEST stamp, so the two keys
+ * disagree on every pair it is in and an ordering by `id` alone
+ * cannot look right.
+ *
+ * `RUN_TICK` NAMES NO DOMAIN and is the NEWEST of all five, so it
+ * heads the unfiltered page and appears in none of the narrowed ones.
+ * `RUN_ELSEWHERE` belongs to a second domain and ties with
+ * `RUN_OLDEST` on the stamp, which is what makes the unfiltered
+ * page's tiebreak a comparison across two domains rather than within
+ * one.
+ */
+const RUN_TIED_LOW = 121;
+const RUN_TIED_HIGH = 122;
+const RUN_OLDEST = 123;
+const RUN_TICK = 124;
+const RUN_ELSEWHERE = 125;
+
+/**
+ * The nine model calls the ledger fixture plants.
+ *
+ * THE THREE ON `RUN_TIED_HIGH` REPEAT THE RUNS FIXTURE'S SHAPE one
+ * table down: `CALL_TIED_LOW` and `CALL_TIED_HIGH` share `CALLED_T1`
+ * and are planted low first, and `CALL_OLDEST` is the highest id of
+ * the three with the oldest stamp.
+ *
+ * THE OTHER SIX ARE THE SUMMARY'S SUBJECTS. `CALL_UNMEASURED` records
+ * neither magnitude, `CALL_PART_MEASURED` records one of the two, and
+ * `CALL_ON_NOTHING` names no run at all — so a bucket can be read for
+ * a count that outruns its sums, for two sums taken separately, and
+ * for the two kinds of unattributed spend landing together.
+ */
+const CALL_TIED_LOW = 141;
+const CALL_TIED_HIGH = 142;
+const CALL_OLDEST = 143;
+const CALL_UNMEASURED = 144;
+const CALL_ON_TICK = 145;
+const CALL_PART_MEASURED = 146;
+const CALL_ON_NOTHING = 147;
+const CALL_ELSEWHERE_EARLY = 148;
+const CALL_ELSEWHERE = 149;
+
+/** How many calls the ledger fixture plants, all told. */
+const LEDGERED_CALLS = 9;
+
+/** The filter that narrows nothing, on {@link EVERY_KIND}'s terms. */
+const EVERY_RUN = {};
+
+/** A limit wide enough to read every call any case here plants. */
+const WHOLE_LEDGER = 50;
+
+/** What {@link madePass} defaults when a case is not about it. */
+type RunDefaults = Partial<Omit<MemoryRun, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setRuns}.
+ *
+ * A function rather than a constant, for the reason {@link planted}
+ * is one: the copy cases WRITE into the `counts` and `errors` they
+ * planted, which is the whole point of them.
+ *
+ * @param id - The pass's id, which is what `GET /runs/:id` and every
+ *   ledger read are addressed by.
+ * @param values - The seven members a case may care about.
+ *   `domainId` defaults to NULL, which is the state a case has to
+ *   name a domain to leave rather than the other way round, and
+ *   `finishedAt` defaults to null so an unfinished pass is the
+ *   cheaper fixture.
+ * @returns The row to plant.
+ */
+function madePass(id: number, values: RunDefaults = {}): MemoryRun {
+  return {
+    id,
+    domainId: values.domainId ?? null,
+    startedAt: values.startedAt ?? new Date(STARTED_T0),
+    finishedAt: values.finishedAt ?? null,
+    status: values.status ?? 'ok',
+    counts: values.counts ?? {},
+    errors: values.errors ?? [],
+    scheduledBy: values.scheduledBy ?? 'interval',
+  };
+}
+
+/** What {@link ledgered} defaults when a case is not about it. */
+type CallDefaults = Partial<Omit<MemoryLlmCall, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setLlmCalls}.
+ *
+ * @param id - The call's id, which is the ledger's tiebreak.
+ * @param values - The six members a case may care about. Both
+ *   magnitudes default to null, which is the unmeasured state, and
+ *   `runId` defaults to null on {@link madePass}'s reasoning: a case
+ *   that means a call to belong to a pass says so.
+ * @returns The row to plant.
+ */
+function ledgered(id: number, values: CallDefaults = {}): MemoryLlmCall {
+  return {
+    id,
+    runId: values.runId ?? null,
+    node: values.node ?? `node-${id}`,
+    model: values.model ?? null,
+    promptChars: values.promptChars ?? null,
+    estTokens: values.estTokens ?? null,
+    calledAt: values.calledAt ?? new Date(CALLED_T1),
+  };
+}
+
+/**
+ * Two domains, five passes across them and the ledger under four of
+ * those passes.
+ *
+ * PLANTED IN AN ORDER NO READ ANSWERS, on the terms
+ * {@link seedFindings} states, in both collections.
+ *
+ * @param store - The store to write to.
+ * @returns Both domains: the one three passes ran for, and the one
+ *   the fifth ran for.
+ */
+async function seedRuns(
+  store: MemoryResearchStore,
+): Promise<{ domain: DomainRecord; other: DomainRecord }> {
+  const domain = await store.insertDomain(domainInput(RADAR));
+  const other = await store.insertDomain(domainInput(TRANSIT));
+
+  store.setRuns([
+    madePass(RUN_TIED_LOW, {
+      counts: { findings: 4 },
+      domainId: domain.id,
+      finishedAt: new Date(FINISHED_AT),
+      startedAt: new Date(STARTED_T1),
+    }),
+    madePass(RUN_OLDEST, {
+      domainId: domain.id,
+      errors: [{ node: 'capture' }],
+      finishedAt: new Date(FINISHED_AT),
+      startedAt: new Date(STARTED_T0),
+      status: 'failed',
+    }),
+    madePass(RUN_TIED_HIGH, {
+      domainId: domain.id,
+      finishedAt: new Date(FINISHED_AT),
+      scheduledBy: 'agent',
+      startedAt: new Date(STARTED_T1),
+      status: 'partial',
+    }),
+    madePass(RUN_ELSEWHERE, {
+      domainId: other.id,
+      finishedAt: new Date(FINISHED_AT),
+      startedAt: new Date(STARTED_T0),
+    }),
+    madePass(RUN_TICK, {
+      scheduledBy: 'operator',
+      startedAt: new Date(STARTED_T2),
+      status: 'running',
+    }),
+  ]);
+
+  store.setLlmCalls([
+    ledgered(CALL_TIED_LOW, {
+      estTokens: 50,
+      promptChars: 200,
+      runId: RUN_TIED_HIGH,
+    }),
+    ledgered(CALL_OLDEST, {
+      calledAt: new Date(CALLED_T0),
+      estTokens: 25,
+      promptChars: 100,
+      runId: RUN_TIED_HIGH,
+    }),
+    ledgered(CALL_ELSEWHERE_EARLY, {
+      estTokens: 3,
+      promptChars: 7,
+      runId: RUN_ELSEWHERE,
+    }),
+    ledgered(CALL_ON_TICK, {
+      estTokens: 1,
+      promptChars: 10,
+      runId: RUN_TICK,
+    }),
+    ledgered(CALL_ON_NOTHING, {}),
+    ledgered(CALL_TIED_HIGH, {
+      estTokens: 75,
+      promptChars: 300,
+      runId: RUN_TIED_HIGH,
+    }),
+    ledgered(CALL_ELSEWHERE, {
+      calledAt: new Date(CALLED_T2),
+      runId: RUN_ELSEWHERE,
+    }),
+    ledgered(CALL_PART_MEASURED, { promptChars: 20, runId: RUN_TICK }),
+    ledgered(CALL_UNMEASURED, { runId: RUN_OLDEST }),
+  ]);
+
+  return { domain, other };
+}
+
+/**
+ * Reads one window of the passes the service has made.
+ *
+ * @param store - The store to read.
+ * @param filter - What to narrow to, nothing by default.
+ * @param window - How much to take, the whole collection by default.
+ * @returns The ids in the order they arrived.
+ */
+async function runsPage(
+  store: MemoryResearchStore,
+  filter: RunFilter = EVERY_RUN,
+  window = WHOLE_COLLECTION,
+): Promise<number[]> {
+  const page = await store.listRuns(filter, window);
+
+  return page.map((row) => row.id);
+}
+
+/**
+ * Reads the head of one pass's ledger.
+ *
+ * @param store - The store to read.
+ * @param runId - The pass to read within.
+ * @param limit - How many rows to take, the whole ledger by default.
+ * @returns The ids in the order they arrived.
+ */
+async function ledgerPage(
+  store: MemoryResearchStore,
+  runId: number,
+  limit = WHOLE_LEDGER,
+): Promise<number[]> {
+  const page = await store.listRunLedger(runId, limit);
+
+  return page.map((row) => row.id);
+}
+
+/**
+ * Reads a pass that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no run carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readRun(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<RunRecord> {
+  const row = await store.findRunById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored run under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * Names one bucket by the pair it is grouped on.
+ *
+ * The two axes and neither magnitude, so an ordering assertion reads
+ * as the grouping rather than as a wall of numbers.
+ *
+ * @param bucket - The bucket to name.
+ * @returns Its UTC day and its domain, the null spelled out.
+ */
+function bucketKey(bucket: SpendBucket): string {
+  return `${bucket.day.toISOString()}/${bucket.domainId ?? 'none'}`;
+}
+
+/**
+ * Reads the spend summary.
+ *
+ * @param store - The store to read.
+ * @param filter - What to narrow to, nothing by default.
+ * @param window - The span to summarise, unbounded by default.
+ * @returns The buckets in the order they arrived.
+ */
+async function spendPage(
+  store: MemoryResearchStore,
+  filter: RunFilter = EVERY_RUN,
+  window: TimeWindow = EVERY_INSTANT,
+): Promise<readonly SpendBucket[]> {
+  return store.summariseSpend(filter, window);
+}
+
+// ---------------------------------------------------------------------------
+// The runs page, its order and its one narrowing
+// ---------------------------------------------------------------------------
+
+describe('the runs page ordering', () => {
+  it('answers it newest first with id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const page = await runsPage(store, { domainId: domain.id });
+
+    // Planted in an order this answer is neither, so the ordering is
+    // told from the planted one and from id in either direction. The
+    // tied pair was planted LOW FIRST, which is what a stable sort
+    // with the tiebreak gone answers the wrong way round.
+    expect(page).toStrictEqual([RUN_TIED_HIGH, RUN_TIED_LOW, RUN_OLDEST]);
+
+    // The four orders it is NOT, written out: a small page agreeing
+    // with any of them would be reproducing the answer by accident.
+    expect(page).not.toStrictEqual([RUN_TIED_LOW, RUN_OLDEST, RUN_TIED_HIGH]);
+    expect(page).not.toStrictEqual([RUN_TIED_HIGH, RUN_OLDEST, RUN_TIED_LOW]);
+    expect(page).not.toStrictEqual([RUN_OLDEST, RUN_TIED_HIGH, RUN_TIED_LOW]);
+    expect(page).not.toStrictEqual([RUN_TIED_LOW, RUN_TIED_HIGH, RUN_OLDEST]);
+  });
+
+  it('breaks a tie across two domains on the unfiltered page', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    // The tick heads it, then the tied pair, then the two oldest — and
+    // those two belong to DIFFERENT domains, so the tiebreak here is a
+    // comparison the narrowed pages above cannot make.
+    expect(await runsPage(store)).toStrictEqual([
+      RUN_TICK,
+      RUN_TIED_HIGH,
+      RUN_TIED_LOW,
+      RUN_ELSEWHERE,
+      RUN_OLDEST,
+    ]);
+  });
+
+  it('windows the page and counts the whole either way', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const filter = { domainId: domain.id };
+
+    expect(
+      await runsPage(store, filter, { limit: 2, offset: 1 }),
+    ).toStrictEqual([RUN_TIED_LOW, RUN_OLDEST]);
+
+    // The window is not the count's to read, so a page past the end
+    // is empty beside a total that is not.
+    expect(
+      await runsPage(store, filter, { limit: 2, offset: 9 }),
+    ).toStrictEqual([]);
+    expect(await store.countRuns(filter)).toBe(3);
+  });
+
+  it('answers those rows whole', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const [newest] = await store.listRuns(
+      { domainId: domain.id },
+      WHOLE_COLLECTION,
+    );
+
+    // `runs` WHOLE and no member added: the eight columns the table
+    // declares, and no ninth riding along. A key set is what says so
+    // — `toMatchObject` passes over a record answering an extra one.
+    expect(Object.keys(newest ?? {}).sort()).toStrictEqual([
+      'counts',
+      'domainId',
+      'errors',
+      'finishedAt',
+      'id',
+      'scheduledBy',
+      'startedAt',
+      'status',
+    ]);
+    expect(newest).toMatchObject({
+      counts: {},
+      domainId: domain.id,
+      id: RUN_TIED_HIGH,
+      scheduledBy: 'agent',
+      status: 'partial',
+    });
+  });
+});
+
+describe('the runs page domain filter', () => {
+  it('answers every run including the tick when none is named', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    // Absent widens to the whole table rather than to the
+    // domain-scoped half of it, which is what keeps this page
+    // agreeing with `runs` about how much work the service has done.
+    expect(await runsPage(store)).toContain(RUN_TICK);
+    expect(await store.countRuns(EVERY_RUN)).toBe(5);
+  });
+
+  it('narrows to one domain and drops the tick with it', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+    const mine = await store.countRuns({ domainId: domain.id });
+    const theirs = await store.countRuns({ domainId: other.id });
+    const every = await store.countRuns(EVERY_RUN);
+
+    expect(await runsPage(store, { domainId: other.id })).toStrictEqual([
+      RUN_ELSEWHERE,
+    ]);
+    expect(await runsPage(store, { domainId: domain.id })).not.toContain(
+      RUN_TICK,
+    );
+
+    // A PARTITION reading rather than two narrowed pages: the two
+    // domains' counts plus the one tick are the whole table, so a
+    // filter that had stopped narrowing could not satisfy this even
+    // though each page above would still look plausible.
+    expect(mine).toBe(3);
+    expect(theirs).toBe(1);
+    expect(mine + theirs + 1).toBe(every);
+  });
+
+  it('answers an empty page and a zero for an unknown id', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const filter = { domainId: 9999 };
+
+    expect(await runsPage(store, filter)).toStrictEqual([]);
+    expect(await store.countRuns(filter)).toBe(0);
+
+    // Beside a control that says the store is not simply empty:
+    // nothing points at a row that is not there.
+    expect(await runsPage(store)).toHaveLength(5);
+  });
+});
+
+describe('one run read by its own id', () => {
+  it('answers a domain-scoped pass and a tick alike', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+
+    expect(await readRun(store, RUN_OLDEST)).toMatchObject({
+      domainId: domain.id,
+      status: 'failed',
+    });
+
+    // A null `domainId` is the ordinary reading for a maintenance
+    // tick rather than a row that failed to resolve, which is why the
+    // read takes no domain to scope itself by.
+    expect(await readRun(store, RUN_TICK)).toMatchObject({
+      domainId: null,
+      finishedAt: null,
+      scheduledBy: 'operator',
+      status: 'running',
+    });
+  });
+
+  it('answers null for an id no run carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    expect(await store.findRunById(9999)).toBeNull();
+    expect(await store.findRunById(RUN_TIED_LOW)).not.toBeNull();
+  });
+});
+
+describe('the ledger one run carries', () => {
+  it('answers its calls newest first with id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const page = await ledgerPage(store, RUN_TIED_HIGH);
+
+    // The runs fixture's shape one table down, and read the same way:
+    // the tied pair was planted low first, and the oldest call is the
+    // highest id of the three, so the two keys disagree on every pair
+    // it is in.
+    expect(page).toStrictEqual([CALL_TIED_HIGH, CALL_TIED_LOW, CALL_OLDEST]);
+    expect(page).not.toStrictEqual([
+      CALL_TIED_LOW,
+      CALL_OLDEST,
+      CALL_TIED_HIGH,
+    ]);
+    expect(page).not.toStrictEqual([
+      CALL_OLDEST,
+      CALL_TIED_HIGH,
+      CALL_TIED_LOW,
+    ]);
+  });
+
+  it('cuts at the limit its caller passes and counts the whole', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    // The cut drops the OLDEST end, which is what makes the order the
+    // contract rather than a presentation choice.
+    expect(await ledgerPage(store, RUN_TIED_HIGH, 2)).toStrictEqual([
+      CALL_TIED_HIGH,
+      CALL_TIED_LOW,
+    ]);
+
+    // And the full count is what makes that cut reportable: the
+    // service compares the two into a truncation flag, so a limit
+    // this method chose itself would answer a short list with nothing
+    // saying it was short.
+    expect(await store.countRunLedger(RUN_TIED_HIGH)).toBe(3);
+    expect(await ledgerPage(store, RUN_TIED_HIGH, 1)).toStrictEqual([
+      CALL_TIED_HIGH,
+    ]);
+  });
+
+  it('keeps a call naming no run out of every ledger', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    // Unreachable from every run id there is, both reads being
+    // addressed by one — the summary is the single method that sees
+    // these rows, which its own describes below read.
+    for (const runId of [RUN_TIED_HIGH, RUN_OLDEST, RUN_TICK, RUN_ELSEWHERE]) {
+      expect(await ledgerPage(store, runId)).not.toContain(CALL_ON_NOTHING);
+    }
+
+    // Beside the control that says the row IS stored: the ledgered
+    // calls a run does claim add up to one short of the fixture.
+    const claimed = await Promise.all([
+      store.countRunLedger(RUN_TIED_HIGH),
+      store.countRunLedger(RUN_OLDEST),
+      store.countRunLedger(RUN_TICK),
+      store.countRunLedger(RUN_ELSEWHERE),
+    ]);
+
+    expect(claimed).toStrictEqual([3, 1, 2, 2]);
+    expect(claimed.reduce((sum, held) => sum + held, 0)).toBe(
+      LEDGERED_CALLS - 1,
+    );
+  });
+
+  it('answers those calls one member short', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const [call] = await store.listRunLedger(RUN_TIED_HIGH, WHOLE_LEDGER);
+
+    // `run_id` is DROPPED where the sightings and the research put
+    // their own key back: the run is the PATH here, so a caller
+    // reading a run's ledger already holds it.
+    expect(Object.keys(call ?? {}).sort()).toStrictEqual([
+      'calledAt',
+      'estTokens',
+      'id',
+      'model',
+      'node',
+      'promptChars',
+    ]);
+    expect(call).toMatchObject({
+      estTokens: 75,
+      id: CALL_TIED_HIGH,
+      promptChars: 300,
+    });
+  });
+
+  it('answers an empty list and a zero either way it is empty', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+
+    store.setRuns([
+      madePass(RUN_TIED_LOW, { domainId: domain.id }),
+      madePass(RUN_OLDEST, { domainId: domain.id }),
+    ]);
+    store.setLlmCalls([]);
+
+    // A pass that called nothing and an id no run carries are one
+    // fact from these two methods' side, and the single read is what
+    // separates them.
+    expect(await ledgerPage(store, RUN_TIED_LOW)).toStrictEqual([]);
+    expect(await store.countRunLedger(RUN_TIED_LOW)).toBe(0);
+    expect(await ledgerPage(store, 9999)).toStrictEqual([]);
+    expect(await store.countRunLedger(9999)).toBe(0);
+    expect(await store.findRunById(RUN_TIED_LOW)).not.toBeNull();
+    expect(await store.findRunById(9999)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The spend summary: its two axes, its sums and its window
+// ---------------------------------------------------------------------------
+
+describe('the spend summary buckets', () => {
+  it('splits a pair one millisecond apart across a UTC midnight', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const mine = await spendPage(store, { domainId: domain.id });
+
+    // Both calls belong to ONE run and one domain, so the only thing
+    // that can separate them is the truncation — and they are one
+    // millisecond apart, so a store truncating in the process's own
+    // zone puts them together anywhere but UTC.
+    expect(mine.map(bucketKey)).toStrictEqual([
+      `${new Date(DAY_OF).toISOString()}/${domain.id}`,
+      `${new Date(DAY_BEFORE).toISOString()}/${domain.id}`,
+    ]);
+
+    // The day is the instant that OPENS the bucket rather than a
+    // label, which is what makes it comparable at all.
+    expect(mine.map((bucket) => bucket.day.getTime())).toStrictEqual([
+      DAY_OF,
+      DAY_BEFORE,
+    ]);
+  });
+
+  it('buckets the tick and the unrun call together under none', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const buckets = await spendPage(store);
+    const nobody = buckets.filter((bucket) => bucket.domainId === null);
+
+    // TWO KINDS OF UNATTRIBUTED CALL IN ONE BUCKET: two made during a
+    // tick that named no domain, and one naming no run at all. The
+    // record has no member that separates them, which is the honest
+    // limit of the property below it.
+    expect(nobody.map(bucketKey)).toStrictEqual([
+      `${new Date(DAY_OF).toISOString()}/none`,
+    ]);
+    expect(nobody.map((bucket) => bucket.calls)).toStrictEqual([3]);
+  });
+
+  it('orders the buckets newest day first with the null last', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+
+    // `day` descending, then `domainId` ASCENDING with the null
+    // bucket last. The middle day carries all three, which is what
+    // makes the ascending key readable rather than only the null
+    // rule: a store sorting the domains the other way would answer
+    // the same five buckets in a different array.
+    expect((await spendPage(store)).map(bucketKey)).toStrictEqual([
+      `${new Date(DAY_LATER).toISOString()}/${other.id}`,
+      `${new Date(DAY_OF).toISOString()}/${domain.id}`,
+      `${new Date(DAY_OF).toISOString()}/${other.id}`,
+      `${new Date(DAY_OF).toISOString()}/none`,
+      `${new Date(DAY_BEFORE).toISOString()}/${domain.id}`,
+    ]);
+  });
+
+  it('counts every call the window holds', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const buckets = await spendPage(store);
+    const counted = buckets.reduce((sum, bucket) => sum + bucket.calls, 0);
+
+    // The property a total taken from this summary rests on, and the
+    // one an INNER join would break silently: the buckets' `calls`
+    // add up to the number of calls in the window, the unattributed
+    // ones included.
+    expect(counted).toBe(LEDGERED_CALLS);
+    expect(buckets).toHaveLength(5);
+  });
+});
+
+describe('the spend summary magnitudes', () => {
+  it('sums the measured calls beside a count of them all', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const [busiest] = await spendPage(store, { domainId: domain.id });
+
+    // Three calls, two of them measured: `calls` counts ROWS and the
+    // sums cover the rows that recorded anything, so the two
+    // disagreeing is information rather than a fault — it says how
+    // much of the bucket was measured at all.
+    expect(busiest).toStrictEqual({
+      calls: 3,
+      day: new Date(DAY_OF),
+      domainId: domain.id,
+      estTokens: 125,
+      promptChars: 500,
+    });
+  });
+
+  it('answers null rather than zero where nothing was measured', async () => {
+    const store = createMemoryResearchStore();
+    const { other } = await seedRuns(store);
+    const theirs = await spendPage(store, { domainId: other.id });
+
+    // Zero is a real reading of a prompt that sent nothing, so a
+    // store coalescing an unmeasured bucket to it would report a day
+    // of calls that sent nothing — the same shape as a day nobody
+    // measured, with no member left to tell them apart.
+    expect(theirs.map((bucket) => bucket.promptChars)).toStrictEqual([
+      null,
+      7,
+    ]);
+    expect(theirs.map((bucket) => bucket.estTokens)).toStrictEqual([null, 3]);
+    expect(theirs.map((bucket) => bucket.calls)).toStrictEqual([1, 1]);
+  });
+
+  it('sums the two magnitudes separately', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const [nobody] = (await spendPage(store)).filter(
+      (bucket) => bucket.domainId === null,
+    );
+
+    // One call measured on BOTH axes, one on the characters alone and
+    // one on neither. A store summing either axis only when both were
+    // recorded would answer 10 here rather than 30, and every count
+    // beside it would still be right.
+    expect(nobody).toMatchObject({
+      calls: 3,
+      estTokens: 1,
+      promptChars: 30,
+    });
+  });
+});
+
+describe('the spend summary window', () => {
+  it('takes the lower bound and drops the upper', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+    const buckets = await spendPage(store, EVERY_RUN, {
+      sinceInclusive: new Date(CALLED_T1),
+      untilExclusive: new Date(CALLED_T2),
+    });
+
+    // Half-open, and both bounds sit exactly ON a planted call: the
+    // seven at the lower bound are IN and the one at the upper is
+    // OUT, so two adjacent windows do not both take the seam a caller
+    // paging through time crosses most often.
+    expect(buckets.map(bucketKey)).toStrictEqual([
+      `${new Date(DAY_OF).toISOString()}/${domain.id}`,
+      `${new Date(DAY_OF).toISOString()}/${other.id}`,
+      `${new Date(DAY_OF).toISOString()}/none`,
+    ]);
+    expect(
+      buckets.reduce((sum, bucket) => sum + bucket.calls, 0),
+    ).toBe(7);
+  });
+
+  it('answers no bucket for a day nothing landed on', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const days = (await spendPage(store, EVERY_RUN, {
+      sinceInclusive: new Date(Date.UTC(2026, 5, 10)),
+      untilExclusive: new Date(Date.UTC(2026, 5, 15)),
+    })).map((bucket) => bucket.day.getTime());
+
+    // A bucket exists because calls landed in it, so the two empty
+    // days inside this five-day span are absent rather than zeroed —
+    // a caller filling a chart supplies its own zeroes, and a store
+    // inventing them would be answering a calendar nobody named.
+    expect([...new Set(days)]).toStrictEqual([DAY_LATER, DAY_OF, DAY_BEFORE]);
+    expect(days).not.toContain(Date.UTC(2026, 5, 12));
+    expect(days).not.toContain(Date.UTC(2026, 5, 13));
+  });
+
+  it('answers an empty list for a window nothing was called in', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    expect(await spendPage(store, EVERY_RUN, {
+      sinceInclusive: new Date(Date.UTC(2026, 6, 1)),
+      untilExclusive: new Date(Date.UTC(2026, 6, 2)),
+    })).toStrictEqual([]);
+    expect(await spendPage(store)).toHaveLength(5);
+  });
+});
+
+describe('the spend summary domain filter', () => {
+  it('reaches the domain through the run and drops both nulls', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+    const calls = async (filter: RunFilter): Promise<number> => {
+      const buckets = await spendPage(store, filter);
+
+      return buckets.reduce((sum, bucket) => sum + bucket.calls, 0);
+    };
+    const mine = await calls({ domainId: domain.id });
+    const theirs = await calls({ domainId: other.id });
+
+    // `llm_calls` carries no domain of its own, so this narrowing is
+    // a join — and a PARTITION reading is what says so: the two
+    // domains' summaries do NOT sum to the unfiltered one, and the
+    // difference is exactly the unattributed spend rather than a
+    // rounding of it.
+    expect(mine).toBe(4);
+    expect(theirs).toBe(2);
+    expect(mine + theirs).toBe(LEDGERED_CALLS - 3);
+    expect(await calls(EVERY_RUN)).toBe(LEDGERED_CALLS);
+
+    // And an id no domain carries answers nothing rather than
+    // failing: nothing points at a row that is not there.
+    expect(await spendPage(store, { domainId: 9999 })).toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a domain delete reaches on this half, and what it does not
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its runs', () => {
+  it('takes its passes and leaves the tick and another standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+
+    // The state before, so the nulls below are a delete reaching them
+    // rather than reads that never answered.
+    expect(await store.countRuns(EVERY_RUN)).toBe(5);
+    expect(await readRun(store, RUN_TIED_LOW)).toMatchObject({
+      domainId: domain.id,
+    });
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    expect(await store.findRunById(RUN_TIED_LOW)).toBeNull();
+    expect(await store.findRunById(RUN_TIED_HIGH)).toBeNull();
+    expect(await store.findRunById(RUN_OLDEST)).toBeNull();
+
+    // The tick hangs off NO domain, so no domain delete reaches it,
+    // and the second domain's pass is standing — so this is a cascade
+    // reading the column off the row rather than a store that cleared
+    // whatever it held.
+    expect(await readRun(store, RUN_TICK)).toMatchObject({ domainId: null });
+    expect(await readRun(store, RUN_ELSEWHERE)).toMatchObject({
+      domainId: other.id,
+    });
+    expect(await runsPage(store)).toStrictEqual([RUN_TICK, RUN_ELSEWHERE]);
+  });
+
+  it('takes the ledger hanging off those passes', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+
+    // The state before, so the empties below are a delete reaching
+    // them rather than reads that never answered.
+    expect(await store.countRunLedger(RUN_TIED_HIGH)).toBe(3);
+    expect(await store.countRunLedger(RUN_OLDEST)).toBe(1);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // Two levels down: `runs.domain_id` cascades and
+    // `llm_calls.run_id` cascades onto the runs.
+    expect(await ledgerPage(store, RUN_TIED_HIGH)).toStrictEqual([]);
+    expect(await store.countRunLedger(RUN_TIED_HIGH)).toBe(0);
+    expect(await store.countRunLedger(RUN_OLDEST)).toBe(0);
+
+    // And the tick's own calls are standing beside them, which is
+    // what says the delete followed the domain rather than the table.
+    expect(await ledgerPage(store, RUN_TICK)).toStrictEqual([
+      CALL_PART_MEASURED,
+      CALL_ON_TICK,
+    ]);
+    expect(await ledgerPage(store, RUN_ELSEWHERE)).toHaveLength(2);
+  });
+
+  it('leaves a call that named no run at all', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const before = await spendPage(store);
+
+    expect(
+      before.reduce((sum, bucket) => sum + bucket.calls, 0),
+    ).toBe(LEDGERED_CALLS);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    const after = await spendPage(store);
+
+    // Four calls went with the three passes and five are left — the
+    // tick's two, the second domain's two, and the one hanging off
+    // nothing this store can delete.
+    expect(after.reduce((sum, bucket) => sum + bucket.calls, 0)).toBe(5);
+    expect(
+      after.filter((bucket) => bucket.domainId === null)
+        .map((bucket) => bucket.calls),
+    ).toStrictEqual([3]);
+  });
+
+  it('takes those passes out of the spend summary', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+
+    expect(await spendPage(store, { domainId: domain.id })).toHaveLength(2);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // The summary reaches a domain through its runs, so removing the
+    // runs is the whole of how a deleted domain's spend goes — there
+    // is no second line for `llm_calls` in the cascade and none is
+    // needed.
+    expect(await spendPage(store, { domainId: domain.id })).toStrictEqual([]);
+    expect(await spendPage(store, { domainId: other.id })).toHaveLength(2);
+  });
+});
+
+describe('the run delete a cross-domain result does not hold', () => {
+  it('takes a delete another domain research would refuse', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+    const subject = 151;
+
+    store.setDomainEntities(other.id, [registered(subject)]);
+    store.setEntityResearch(subject, [
+      { ...passOn(152, RESEARCHED_T0), runId: RUN_TIED_LOW },
+    ]);
+
+    // The state before, so the null below is a delete reaching the
+    // run rather than a read that never answered — without it every
+    // assertion here is an absence, and the case survives a control
+    // that plants no pass at all.
+    expect(await readRun(store, RUN_TIED_LOW)).toMatchObject({
+      domainId: domain.id,
+    });
+
+    // The file's SEVENTH known divergence, pinned rather than left to
+    // be discovered. `entity_research.run_id` is `ON DELETE no
+    // action`, so a deployment refuses this delete: the result
+    // recorded in the SECOND domain is outside the first's cascade and
+    // still names one of its runs at the end of the statement — the
+    // two-hop reading `src/db/schema/entities.ts` records as verified
+    // against a real Postgres.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findRunById(RUN_TIED_LOW)).toBeNull();
+
+    // And the citation is left dangling here, which is what says the
+    // divergence is a delete taken rather than a row cleaned up.
+    expect(await researchPage(store, subject)).toStrictEqual([152]);
+    expect(
+      (await store.listEntityResearch(subject, WHOLE_COLLECTION))
+        .map((row) => row.runId),
+    ).toStrictEqual([RUN_TIED_LOW]);
+  });
+
+  it('holds nothing when the result is in the same domain', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const subject = 153;
+
+    store.setDomainEntities(domain.id, [registered(subject)]);
+    store.setEntityResearch(subject, [
+      { ...passOn(154, RESEARCHED_T0), runId: RUN_TIED_LOW },
+    ]);
+
+    // The state before, on the terms the case above states.
+    expect(await readRun(store, RUN_TIED_LOW)).toMatchObject({
+      domainId: domain.id,
+    });
+    expect(await researchPage(store, subject)).toStrictEqual([154]);
+
+    // The control that makes the divergence above about the SECOND
+    // domain rather than about the key: a result inside one domain is
+    // removed by the same statement, which is why a deployment's
+    // end-of-statement check finds nothing to refuse.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await researchPage(store, subject)).toStrictEqual([]);
+    expect(await store.findRunById(RUN_TIED_LOW)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the runs half copies across the boundary
+// ---------------------------------------------------------------------------
+
+describe('the run payload crossing the boundary', () => {
+  it('does not store the payloads a plant was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const counts: Record<string, number> = { findings: 4 };
+    const errors: Record<string, unknown>[] = [{ node: 'capture' }];
+
+    store.setRuns([
+      madePass(RUN_TIED_LOW, { counts, domainId: domain.id, errors }),
+    ]);
+
+    counts.findings = 9;
+    errors.push({ node: 'parse' });
+
+    const stored = await readRun(store, RUN_TIED_LOW);
+
+    expect(stored.counts).toStrictEqual({ findings: 4 });
+    expect(stored.errors).toStrictEqual([{ node: 'capture' }]);
+  });
+
+  it('does not share the payloads it answers', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    store.setRuns([
+      madePass(RUN_TIED_LOW, {
+        counts: { findings: 4 },
+        domainId: domain.id,
+        errors: [{ node: 'capture' }],
+      }),
+    ]);
+
+    const answered = await readRun(store, RUN_TIED_LOW);
+
+    answered.counts.findings = 9;
+    (answered.errors as Record<string, unknown>[]).push({ node: 'parse' });
+
+    // The other direction, in its own case so the two are told apart
+    // by which one reddens — one seam and one projection, and a store
+    // keeping either lets a caller write into stored state through
+    // members the port declares `readonly`.
+    const again = await readRun(store, RUN_TIED_LOW);
+
+    expect(again.counts).toStrictEqual({ findings: 4 });
+    expect(again.errors).toStrictEqual([{ node: 'capture' }]);
+  });
+
+  it('does not store the stamps a plant was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const startedAt = new Date(STARTED_T1);
+    const finishedAt = new Date(FINISHED_AT);
+
+    store.setRuns([
+      madePass(RUN_TIED_LOW, { domainId: domain.id, finishedAt, startedAt }),
+    ]);
+
+    startedAt.setUTCFullYear(2030);
+    finishedAt.setUTCFullYear(2030);
+
+    const stored = await readRun(store, RUN_TIED_LOW);
+
+    expect(stored.startedAt.getTime()).toBe(Date.UTC(2026, 5, 2, 9));
+    expect(stored.finishedAt?.getTime()).toBe(Date.UTC(2026, 5, 2, 10));
+
+    // A null stays a null through the copy, `finished_at` being the
+    // one nullable stamp on the table and the branch that needs one.
+    store.setRuns([madePass(RUN_OLDEST, { domainId: domain.id })]);
+
+    expect((await readRun(store, RUN_OLDEST)).finishedAt).toBeNull();
+  });
+
+  it('does not share the stamps it answers', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    store.setRuns([
+      madePass(RUN_TIED_LOW, {
+        domainId: domain.id,
+        finishedAt: new Date(FINISHED_AT),
+        startedAt: new Date(STARTED_T1),
+      }),
+    ]);
+
+    const answered = await readRun(store, RUN_TIED_LOW);
+
+    answered.startedAt.setUTCFullYear(2031);
+    answered.finishedAt?.setUTCFullYear(2031);
+
+    // The other direction, in its own case body so the two are told
+    // apart by which one reddens — a claim with two directions that
+    // shares one case cannot be separated by any grid.
+    const again = await readRun(store, RUN_TIED_LOW);
+
+    expect(again.startedAt.getTime()).toBe(Date.UTC(2026, 5, 2, 9));
+    expect(again.finishedAt?.getTime()).toBe(Date.UTC(2026, 5, 2, 10));
+  });
+
+  it('does not store the stamp a call arrived with', async () => {
+    const store = createMemoryResearchStore();
+    const calledAt = new Date(CALLED_T2);
+
+    store.setRuns([madePass(RUN_TIED_LOW)]);
+    store.setLlmCalls([
+      ledgered(CALL_TIED_LOW, { calledAt, runId: RUN_TIED_LOW }),
+    ]);
+
+    calledAt.setUTCFullYear(2030);
+
+    const [stored] = await store.listRunLedger(RUN_TIED_LOW, WHOLE_LEDGER);
+
+    expect(stored?.calledAt.getTime()).toBe(Date.UTC(2026, 5, 14, 9));
+
+    // And the day bucket is taken off the STORED instant, so a caller
+    // that moved what it planted cannot move which day its spend
+    // lands on — the reading the ledger's own projection cannot make.
+    expect(
+      (await spendPage(store)).map((bucket) => bucket.day.getTime()),
+    ).toStrictEqual([DAY_LATER]);
+  });
+
+  it('does not share the stamp it answers', async () => {
+    const store = createMemoryResearchStore();
+
+    store.setRuns([madePass(RUN_TIED_LOW)]);
+    store.setLlmCalls([
+      ledgered(CALL_TIED_LOW, {
+        calledAt: new Date(CALLED_T2),
+        runId: RUN_TIED_LOW,
+      }),
+    ]);
+
+    const [answered] = await store.listRunLedger(RUN_TIED_LOW, WHOLE_LEDGER);
+
+    answered?.calledAt.setUTCFullYear(2031);
+
+    const [again] = await store.listRunLedger(RUN_TIED_LOW, WHOLE_LEDGER);
+
+    expect(again?.calledAt.getTime()).toBe(Date.UTC(2026, 5, 14, 9));
+  });
+
+  it('rebuilds the planted passes rather than holding them', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const rows = [madePass(RUN_TIED_LOW, { domainId: domain.id })];
+
+    store.setRuns(rows);
+
+    rows.push(madePass(RUN_OLDEST, { domainId: domain.id }));
+
+    // The seam copies row by row AND rebuilds the collection, so
+    // pushing onto what was planted does not plant a second pass.
+    expect(await store.findRunById(RUN_OLDEST)).toBeNull();
+
+    // A second call REPLACES rather than appends, which is the only
+    // shape under which a deployment going back to having run nothing
+    // is expressible at all.
+    store.setRuns([madePass(RUN_OLDEST, { domainId: domain.id })]);
+
+    expect(await runsPage(store)).toStrictEqual([RUN_OLDEST]);
+
+    store.setRuns([]);
+
+    expect(await runsPage(store)).toStrictEqual([]);
+    expect(await store.countRuns(EVERY_RUN)).toBe(0);
+  });
+
+  it('rebuilds the planted ledger rather than holding it', async () => {
+    const store = createMemoryResearchStore();
+    const rows = [ledgered(CALL_TIED_LOW, { runId: RUN_TIED_LOW })];
+
+    store.setRuns([madePass(RUN_TIED_LOW)]);
+    store.setLlmCalls(rows);
+
+    rows.push(ledgered(CALL_TIED_HIGH, { runId: RUN_TIED_LOW }));
+
+    expect(await ledgerPage(store, RUN_TIED_LOW)).toStrictEqual([
+      CALL_TIED_LOW,
+    ]);
+
+    store.setLlmCalls([]);
+
+    expect(await ledgerPage(store, RUN_TIED_LOW)).toStrictEqual([]);
+    expect(await store.countRunLedger(RUN_TIED_LOW)).toBe(0);
+    expect(await spendPage(store)).toStrictEqual([]);
+  });
+
+  it('buckets a call naming a run nothing stored under none', async () => {
+    const store = createMemoryResearchStore();
+
+    store.setRuns([]);
+    store.setLlmCalls([
+      ledgered(CALL_TIED_LOW, { promptChars: 5, runId: RUN_TIED_LOW }),
+    ]);
+
+    // A state `llm_calls_run_id_runs_id_fk` forbids and this seam can
+    // reach, answered the way a LEFT JOIN answers it rather than as a
+    // refusal this store invented. It is what makes the summary's
+    // coverage claim hold over a fixture the plant is free to build.
+    expect(await spendPage(store)).toStrictEqual([{
+      calls: 1,
+      day: new Date(DAY_OF),
+      domainId: null,
+      estTokens: null,
+      promptChars: 5,
+    }]);
+
+    // AND THE LEDGER STILL ANSWERS IT, which is the half a reader
+    // predicts the other way round: that read filters on `run_id`
+    // alone and joins to `runs` for nothing, so the row is under the
+    // id it names whether or not a pass carries it. Reading the
+    // ledger is not how a caller learns the run is gone —
+    // `findRunById` answering null is, one call earlier, and that is
+    // what `src/runs/service.ts` turns into a 404 before any of this
+    // is reached.
+    expect(await ledgerPage(store, RUN_TIED_LOW)).toStrictEqual([
+      CALL_TIED_LOW,
+    ]);
+    expect(await store.countRunLedger(RUN_TIED_LOW)).toBe(1);
+    expect(await store.findRunById(RUN_TIED_LOW)).toBeNull();
   });
 });

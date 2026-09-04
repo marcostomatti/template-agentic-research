@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  * The in-memory dataset every research store port is driven through
- * in the isolated suite. All eleven halves are here — the domains
+ * in the isolated suite. All twelve halves are here — the domains
  * half, the taxonomy half with categories and terms together, the
  * personas beside them, the topics the dispatcher comes for, the
  * sources it reads and the review queue over what they captured, the
@@ -9,8 +9,9 @@
  * export subscriptions that pair the two, the operator settings it
  * is configured by, the findings a pass made with the sightings,
  * rulings and research that hang off them, the corpus one domain has
- * captured whatever feed it arrived through, and the registry of
- * subjects it tracks with the intentions queued against them.
+ * captured whatever feed it arrived through, the registry of
+ * subjects it tracks with the intentions queued against them, and
+ * the passes it has made with the model calls each one ledgered.
  *
  * ONE DATASET RATHER THAN SEVEN FAKES, which is why this file is not
  * named for any one of the ports it satisfies. `src/domains/store.ts`
@@ -674,6 +675,114 @@
  * `tests/live/api-wave3.live.test.ts` is where the refusal is
  * discharged.
  *
+ * THE RUNS HALF WRITES NOTHING AND REFUSES NOTHING, WHICH IS THE
+ * DOCUMENTS HALF'S SHAPE OVER SIX METHODS AND TWO TABLES. `RunStore`
+ * declares six reads and no seventh, so there is no insert to burn an
+ * id on, no update, no delete, and no run counter. `runs` DOES carry
+ * two mechanisms where `documents` reached none, and both are single
+ * columns: {@link MemoryRun} declares `status` and `scheduledBy` as
+ * the unions `runs_status_check` and `runs_scheduled_by_check`
+ * enumerate, so a plant outside either tuple does not compile rather
+ * than being refused at run time. That is the split the entities half
+ * states between a rule a TYPE carries and a rule a call raises, with
+ * nothing left on this side of it: the half throws no
+ * {@link StoreRefusal} at all.
+ *
+ * AND IT IS THE ONE HALF HERE WHOSE PLANTS ARE FLAT. Every seam above
+ * is keyed by the column its rows hang off, and neither of this
+ * half's tables has one to be keyed by: `runs.domain_id` is NULLABLE
+ * because a maintenance or cross-domain tick belongs to no domain,
+ * and `llm_calls.run_id` is NULLABLE because a call may be attributed
+ * to no pass. A domain-keyed runs seam and a run-keyed ledger seam
+ * would each have no key for exactly the rows this half's most
+ * load-bearing claims are about, which is the trap
+ * {@link MemoryResearchStore.setSourceDocuments} meets one table over
+ * for a document that came through no feed. So the parent rides on
+ * the row and {@link dropRunsOf} reads it off there.
+ *
+ * ITS PAGE IS `started_at` DESCENDING WITH `id` DESCENDING, AND THE
+ * TIE THE SECOND KEY BREAKS IS THE SERVER'S OWN, the argument the
+ * corpus page makes over `captured_at`: the column defaults to
+ * `now()`, which is the TRANSACTION's start time, so passes opened
+ * together tie to the microsecond and a page boundary falling inside
+ * that tie would show one run twice and another never. The ledger's
+ * `called_at DESC, id DESC` is the same shape over the same kind of
+ * default, and it is expressed AGAIN rather than shared — the
+ * decision {@link orderedDocuments} takes beside {@link failuresOf},
+ * applied to two tables instead of one.
+ *
+ * ITS FILTER NARROWS AND ABSENT MEANS EVERY RUN, TICKS INCLUDED. That
+ * is not the corpus page's fail-flag-keep argument restated: there,
+ * absent means both members of a closed tuple, and here it means the
+ * whole table rather than the domain-scoped half of it. A filter
+ * quietly dropping the ticks would make the page disagree with `runs`
+ * about how much work the service has done, and the maintenance
+ * passes are exactly the rows a reader goes looking for after
+ * something stopped happening. There is no spelling that answers
+ * those rows ALONE, `RunFilter.domainId` being an optional `number`
+ * and never a `number | null`.
+ *
+ * ITS LEDGER IS CUT AT A LIMIT THE CALLER SUPPLIES, which is the one
+ * read here that is not a window. `listRunLedger` takes a positive
+ * `limit` and no offset, `countRunLedger` answers the full count, and
+ * `src/runs/service.ts` compares the two into a truncation flag — so
+ * a short list is never answered with nothing saying it was short.
+ * A call naming NO run is unreachable from either, both being
+ * addressed by a run id.
+ *
+ * ITS SUMMARY IS A `GROUP BY` OVER A `LEFT JOIN`, AND THE JOIN IS THE
+ * HALF A READER WOULD GET WRONG. Every call inside the window is
+ * counted, so the buckets' `calls` add up to the number of calls the
+ * window holds; a call whose run named no domain and a call naming no
+ * run at all both land in the bucket whose domain is null, and
+ * neither is separable from the other in the answer. An INNER join
+ * would drop the second kind silently, leaving a total taken from
+ * this summary under-reporting with every number beside it agreeing.
+ * {@link spendDomainOf} is where that is decided, and it answers null
+ * a THIRD way this store can reach and a deployment cannot: a call
+ * naming a run nothing stored.
+ *
+ * ITS DAY BUCKET IS UTC EXPLICITLY AND ITS SUMS ARE NULLABLE.
+ * {@link utcDayOf} reads the three UTC parts rather than truncating
+ * in whatever zone the process runs in, which is the same
+ * per-deployment difference `SpendBucket.day` says a session's
+ * `TimeZone` would make of `date_trunc`. And each magnitude sums the
+ * calls that recorded it while `calls` counts the rows — so a bucket
+ * where nothing was measured answers null rather than zero, zero
+ * being a real reading of a prompt that sent nothing, and the two
+ * sums are taken separately so a call measured on one axis alone
+ * contributes to one of them.
+ *
+ * NO MEMBER OF THAT SUMMARY IS CURRENCY, and `llm_calls` carries no
+ * column behind one. `est_tokens` is arithmetic over `prompt_chars`
+ * rather than a provider's report, per its own TSDoc in
+ * `src/db/schema/runs.ts`, so the two are one reading expressed twice
+ * and no total here reconciles with a bill.
+ *
+ * AND A DOMAIN TAKES ITS RUNS AND THEIR LEDGER WITH IT, OVER TWO
+ * LEVELS, LEAVING THE TICKS. `runs.domain_id` cascades and
+ * `llm_calls.run_id` cascades onto the runs, which is
+ * {@link dropFindingsOf}'s two levels over a different pair; a
+ * domain-less tick hangs off no domain, so no delete reaches it or
+ * its calls, and neither does anything reach a call naming no run.
+ * There is no guarded run delete to be careful of reusing:
+ * `RunStore` declares no delete at all.
+ *
+ * WHAT IT DOES NOT REFUSE IS A CROSS-DOMAIN RESEARCH CITATION, AND
+ * THAT IS THIS FILE'S SEVENTH KNOWN DIVERGENCE.
+ * `entity_research.run_id` is `ON DELETE no action`, and
+ * `src/db/schema/entities.ts` records the two-hop reading VERIFIED
+ * against a real Postgres: a result
+ * whose entity belongs to the run's own domain goes in the same
+ * statement and nothing is left orphaned, while a row pairing ONE
+ * domain's entity with ANOTHER domain's run holds that second domain
+ * open. {@link MemoryResearchStore.setEntityResearch} plants a
+ * `runId`, so the state is reachable here and this store takes the
+ * delete. One case pins it, and `tests/live/api-wave3.live.test.ts`
+ * is where the refusal is discharged. `briefings.run_id` is the same
+ * key and is left unimitated for `research_pool.finding_id`'s reason:
+ * no port here writes that table and no seam plants one.
+ *
  * THE SETTINGS HALF REFUSES NOTHING, AND THAT IS A MEASUREMENT
  * RATHER THAN A SIMPLIFICATION. `operator_settings` carries two
  * mechanisms and neither is reachable through the port: a second
@@ -819,6 +928,8 @@ import type { OperatorSettings } from '../../src/db/schema/settings.js';
 import type {
   DocumentParseStatus,
   ResearchPoolStatus,
+  RunScheduler,
+  RunStatus,
 } from '../../src/db/schema/values.js';
 import type {
   DocumentFilter,
@@ -849,13 +960,20 @@ import type {
   FindingStore,
   InsertFindingLabelInput,
 } from '../../src/findings/store.js';
-import type { StoreWindow } from '../../src/http/schemas.js';
+import type { StoreWindow, TimeWindow } from '../../src/http/schemas.js';
 import type {
   InsertPersonaInput,
   PersonaPatch,
   PersonaRecord,
   PersonaStore,
 } from '../../src/personas/store.js';
+import type {
+  LlmCallRecord,
+  RunFilter,
+  RunRecord,
+  RunStore,
+  SpendBucket,
+} from '../../src/runs/store.js';
 import type { SettingsStore } from '../../src/settings/store.js';
 import type {
   InsertSourceInput,
@@ -1309,8 +1427,174 @@ export interface MemoryResearchPoolRow {
 }
 
 /**
- * All eleven research ports over one dataset, plus the ten seams a
- * case needs that no port declares.
+ * One planted `runs` row: the service's own account of one pass.
+ *
+ * {@link RunRecord} WHOLE with no member added and none dropped,
+ * which is a shape only {@link MemoryResearchPoolRow} shares here.
+ * Every other planted row above omits the column its seam keys on,
+ * and this one has none to omit: `runs.domain_id` is NULLABLE, so a
+ * domain-keyed seam would have no key at all for the maintenance
+ * ticks, and {@link MemoryResearchStore.setRuns} is flat.
+ *
+ * ITS TWO SINGLE-COLUMN CHECKS ARE HELD BY THIS TYPE, exactly as
+ * {@link MemoryDomainDocument.parseStatus} and
+ * {@link MemoryResearchPoolRow.status} hold their own tables'.
+ * `status` and `scheduledBy` are the unions where {@link RunRecord}
+ * widens both back to `string`, so a plant outside `RUN_STATUSES`
+ * or `RUN_SCHEDULERS` does not compile rather than being refused at
+ * run time. Between them they are the whole of what `runs` would
+ * refuse this half, which is why nothing in it throws.
+ *
+ * PLANTED AND NEVER WRITTEN, which is the shape
+ * {@link MemoryDomainDocument} has and {@link MemoryDomainEntity}
+ * does not. `RunStore` declares six reads and no writer at all, so
+ * the seam is the whole of how a pass arrives and a domain delete is
+ * the whole of how one goes.
+ */
+export interface MemoryRun {
+  /**
+   * `runs.id`: the address of `GET /runs/:id`, the key the ledger
+   * hangs off, and the tiebreak on the page's order.
+   *
+   * The fixture's own rather than a sequence's, for the reason
+   * {@link MemoryDomainFinding.id} gives: nothing here inserts a
+   * run, so a case says which pass it means and the store never
+   * chooses. There is no runs counter below and no id-burn fidelity
+   * to owe.
+   */
+  readonly id: number;
+
+  /**
+   * Whose pass it was, or null for a tick that belongs to nobody.
+   *
+   * THE NULL IS AN ORDINARY STATE AND IT IS THE ONE A CASE MUST BE
+   * ABLE TO PLANT. A maintenance or cross-domain pass names no
+   * domain, it appears in the UNFILTERED page beside the rest, its
+   * calls land in the null spend bucket, and no domain delete
+   * reaches it — four claims that a domain-keyed seam could not
+   * hold the subject of.
+   */
+  readonly domainId: number | null;
+
+  /**
+   * When the pass began: the page's first key, descending, with
+   * {@link MemoryRun.id} breaking the tie `now()` makes inevitable.
+   * Copied on the way in.
+   */
+  readonly startedAt: Date;
+
+  /**
+   * When it stopped, or null while it is still going. Copied on the
+   * way in, and a null stays a null.
+   */
+  readonly finishedAt: Date | null;
+
+  /**
+   * What the pass came to. The union where {@link RunRecord.status}
+   * is `string`, per the interface TSDoc.
+   */
+  readonly status: RunStatus;
+
+  /**
+   * What it did, as one number per thing counted.
+   *
+   * Copied one level shallower than a `jsonb` payload of unknown
+   * depth, on the reasoning `topics.search_terms` is: the column
+   * carries a `$type` of `Record<string, number>`, so there is a
+   * declared depth to copy TO and a fresh object is the whole of it.
+   */
+  readonly counts: Record<string, number>;
+
+  /**
+   * What it could not do, as one entry per failure.
+   *
+   * `unknown` for the reason {@link RunRecord.errors} declares it so
+   * — the column carries no `$type`, the entries sharing no shape —
+   * and copied through the round trip every undeclared payload here
+   * takes.
+   */
+  readonly errors: unknown;
+
+  /**
+   * What asked for the pass. The union where
+   * {@link RunRecord.scheduledBy} is `string`.
+   */
+  readonly scheduledBy: RunScheduler;
+}
+
+/**
+ * One planted `llm_calls` row: one model call the ledger recorded.
+ *
+ * {@link LlmCallRecord} PLUS the `run_id` that record omits, which
+ * makes this the whole of the table and the only planted shape here
+ * that is WIDER than the record its reads answer. The record drops
+ * the column because the run is the PATH on `GET /runs/:id`; the
+ * plant cannot, because the column is nullable and a call attributed
+ * to no run has to be plantable.
+ *
+ * FLAT LIKE THE RUNS ABOVE AND FOR THE SAME REASON. A run-keyed seam
+ * would have no key for the unattributed calls at all — the trap
+ * {@link MemoryResearchStore.setSourceDocuments} meets over a
+ * document that came through no feed — and those calls are exactly
+ * what the summary's null bucket is claimed to hold.
+ */
+export interface MemoryLlmCall {
+  /**
+   * `llm_calls.id`, and the tiebreak on the ledger's order.
+   *
+   * The fixture's own, on {@link MemoryRun.id}'s terms.
+   */
+  readonly id: number;
+
+  /**
+   * The pass this call was made during, or null when none is named.
+   *
+   * A ROW CARRYING NULL IS IN NO LEDGER AND IN EVERY SUMMARY, which
+   * is the pair of claims this member exists to make plantable.
+   * {@link RunStore.listRunLedger} and
+   * {@link RunStore.countRunLedger} are both addressed by a run id,
+   * so neither can reach it; {@link RunStore.summariseSpend} covers
+   * every row of the ledger in its window, so it lands in the null
+   * bucket beside the calls of a domain-less tick.
+   */
+  readonly runId: number | null;
+
+  /** Which step of the pass made the call. */
+  readonly node: string;
+
+  /** Which model was asked, or null when nothing recorded one. */
+  readonly model: string | null;
+
+  /**
+   * How many characters the prompt ran to, or null when the call
+   * recorded no magnitude at all.
+   *
+   * The null is what makes the summary's own null answerable: a
+   * bucket whose calls all carry one is a sum, and a bucket where
+   * none does is null rather than zero.
+   */
+  readonly promptChars: number | null;
+
+  /**
+   * The estimated tokens, or null on the terms above.
+   *
+   * Plantable INDEPENDENTLY of the characters beside it, which is
+   * what lets a case say the two sums are taken separately: a call
+   * measured on one axis and not the other is an ordinary row.
+   */
+  readonly estTokens: number | null;
+
+  /**
+   * When the call was made: the ledger's first key, descending, and
+   * the column the spend window bounds and the day bucket truncates.
+   * Copied on the way in.
+   */
+  readonly calledAt: Date;
+}
+
+/**
+ * All twelve research ports over one dataset, plus the twelve seams
+ * a case needs that no port declares.
  *
  * EVERY ONE OF THEM WHOLE rather than a `Pick` of it. The category
  * half stood behind a narrowed alias while the term methods were
@@ -1318,9 +1602,9 @@ export interface MemoryResearchPoolRow {
  * than a gap papered over with stubs; all twelve taxonomy methods,
  * all six persona ones, all seven topic ones, all nine source ones,
  * all seven connector ones, all seven subscription ones, both
- * settings ones, all seven finding ones, both document ones and all
- * eight entity ones are here now, so a caller wanting any of the
- * eleven ports entire can be handed this store.
+ * settings ones, all seven finding ones, both document ones, all
+ * eight entity ones and all six run ones are here now, so a caller
+ * wanting any of the twelve ports entire can be handed this store.
  *
  * `TopicStore` was the first member from outside wave 1 and
  * `SourceStore` is the second, and both join this file rather than
@@ -1396,7 +1680,8 @@ export interface MemoryResearchStore extends
   SubscriptionStore,
   FindingStore,
   DocumentStore,
-  EntityStore {
+  EntityStore,
+  RunStore {
   /**
    * Plants what a domain has ACCUMULATED, for the delete guard to
    * read back through {@link DomainStore.countDomainDependents}.
@@ -1775,6 +2060,66 @@ export interface MemoryResearchStore extends
     domainId: number,
     rows: readonly MemoryResearchPoolRow[],
   ): void;
+
+  /**
+   * Plants the `runs` rows the service has made, for the page, the
+   * single lookup and the spend summary's join to answer from.
+   *
+   * FLAT WHERE EVERY OTHER SEAM HERE IS KEYED, and that is
+   * `runs.domain_id` being NULLABLE rather than a shape chosen for
+   * convenience. Every keyed seam above plants under the column its
+   * rows hang off; a domain-keyed seam here would have no key for the
+   * maintenance and cross-domain ticks, which are precisely the rows
+   * the unfiltered page and the null spend bucket are claimed to
+   * hold. So the domain rides on {@link MemoryRun.domainId} and the
+   * cascade reads it off the row — the trap
+   * {@link MemoryResearchStore.setSourceDocuments} meets from the
+   * other side, where a document with no `source_id` has no key on
+   * that seam at all.
+   *
+   * NO PORT WRITES A RUN, AND THAT IS WHAT THIS STANDS IN FOR.
+   * `RunStore` declares six reads and no seventh method, so there is
+   * no insert to burn an id on and no update to move a status; a pass
+   * is opened by `ar-dispatch` and this seam is the whole of how one
+   * arrives here. `src/runs/store.ts` carries why the absence is the
+   * read-only rule rather than an omission.
+   *
+   * @param rows - What to record, WHOLE. A second call replaces the
+   *   first rather than appending to it — the same whole-unit rule
+   *   {@link MemoryResearchStore.setDomainFindings} states, for the
+   *   same reason: under an append there is no way to express a
+   *   deployment going back to having run nothing. Each row's
+   *   `startedAt` and `finishedAt` is copied on the way in, and so
+   *   are its `counts` and `errors` payloads. A row may name a
+   *   domain nothing stored: every read below answers about an id
+   *   rather than about a domain, so a pass is plantable ahead of
+   *   the row it hangs off.
+   */
+  setRuns(rows: readonly MemoryRun[]): void;
+
+  /**
+   * Plants the `llm_calls` rows the ledger holds, for the per-run
+   * reads and the spend summary to answer from.
+   *
+   * FLAT FOR {@link MemoryResearchStore.setRuns}' REASON one table
+   * down: `llm_calls.run_id` is nullable, so a run-keyed seam would
+   * have no key for a call attributed to no pass, and that call is
+   * one of the two kinds the null spend bucket is claimed to count.
+   *
+   * ONE SEAM AND THREE READERS, two of them addressed by a run id
+   * and the third by nothing at all. A row carrying a null `runId` is
+   * therefore in NO ledger and in EVERY summary, which is a state
+   * only a flat plant can put this store in.
+   *
+   * @param rows - What to record, WHOLE, on the terms
+   *   {@link MemoryResearchStore.setRuns} states. Each row's
+   *   `calledAt` is copied on the way in. A row may name a run
+   *   nothing stored: the summary reads a call's domain through
+   *   whatever run it finds and answers the null bucket when it
+   *   finds none, which is what a `LEFT JOIN` does and what the
+   *   foreign key makes unreachable in a deployment.
+   */
+  setLlmCalls(rows: readonly MemoryLlmCall[]): void;
 }
 
 /** What {@link createMemoryResearchStore} may be handed. */
@@ -2697,6 +3042,152 @@ function entityResearchOf(row: MemoryEntityResearch): EntityResearchRecord {
 }
 
 /**
+ * A planted run whose mutable members belong to nobody else.
+ *
+ * FOUR MEMBERS, WHICH IS THE WIDEST COPY IN THIS FILE: two stamps
+ * and two `jsonb` payloads, where {@link copySource} takes four over
+ * two stamps and two documents and {@link copyPlantedFinding} takes
+ * two. `finishedAt` is nullable and `startedAt` is not, which is the
+ * branch a source's two nullable stamps also carry.
+ *
+ * THE TWO PAYLOADS ARE COPIED TO DIFFERENT DEPTHS, and that is each
+ * column's own declaration rather than an inconsistency. `counts`
+ * carries a `$type` of `Record<string, number>`, so a fresh object
+ * is the whole of it — `topics.search_terms`' argument for a list of
+ * strings — while `errors` carries no `$type` at all and takes the
+ * round trip every undeclared payload here takes.
+ *
+ * @param row - The run to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedRun(row: MemoryRun): MemoryRun {
+  return {
+    ...row,
+    startedAt: copyInstant(row.startedAt),
+    finishedAt: row.finishedAt === null
+      ? null
+      : copyInstant(row.finishedAt),
+    counts: { ...row.counts },
+    errors: copyJsonDocument(row.errors),
+  };
+}
+
+/**
+ * A planted model call whose `Date` belongs to nobody else.
+ *
+ * {@link copyPlantedSighting}'s shape: one stamp and nothing one
+ * level down, both magnitudes being numbers and both text members
+ * strings.
+ *
+ * @param row - The call to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedLlmCall(row: MemoryLlmCall): MemoryLlmCall {
+  return { ...row, calledAt: copyInstant(row.calledAt) };
+}
+
+/**
+ * The runs page's projection of one planted pass.
+ *
+ * EVERY MEMBER, like {@link documentOf} and unlike {@link failureOf}:
+ * {@link RunRecord} is the whole row, so this is a copy with fresh
+ * mutable members rather than a narrowing. What keeps it a
+ * projection anyway is that the two CHECK-bearing members widen —
+ * the record answers the `string` a SELECT gives where the plant
+ * carries a union.
+ *
+ * @param row - The stored run.
+ * @returns The eight members {@link RunRecord} declares, its stamps
+ *   and both payloads copied.
+ */
+function runOf(row: MemoryRun): RunRecord {
+  return {
+    id: row.id,
+    domainId: row.domainId,
+    startedAt: copyInstant(row.startedAt),
+    finishedAt: row.finishedAt === null
+      ? null
+      : copyInstant(row.finishedAt),
+    status: row.status,
+    counts: { ...row.counts },
+    errors: copyJsonDocument(row.errors),
+    scheduledBy: row.scheduledBy,
+  };
+}
+
+/**
+ * The ledger's projection of one planted model call.
+ *
+ * ONE MEMBER SHORT, which is the shape {@link sightingOf} and
+ * {@link entityResearchOf} have for the opposite reason. Those two
+ * are handed the omitted key and put it BACK; this one DROPS
+ * `run_id`, because {@link RunStore.listRunLedger} is addressed by
+ * the run and a caller reading a run's ledger already holds it.
+ *
+ * @param row - The stored call.
+ * @returns The six members {@link LlmCallRecord} declares, its stamp
+ *   copied.
+ */
+function llmCallOf(row: MemoryLlmCall): LlmCallRecord {
+  return {
+    id: row.id,
+    node: row.node,
+    model: row.model,
+    promptChars: row.promptChars,
+    estTokens: row.estTokens,
+    calledAt: copyInstant(row.calledAt),
+  };
+}
+
+/**
+ * Adds one call's magnitude into a bucket's running sum.
+ *
+ * NULL PLUS A NUMBER IS THAT NUMBER AND NULL PLUS NULL IS NULL,
+ * which is `sum()` over a nullable column written out: Postgres skips
+ * the nulls and answers null for a group in which every row was
+ * null. That is the behaviour {@link SpendBucket.promptChars}
+ * requires and the one a store coalescing to zero would lose — zero
+ * is a real reading, so a day of calls that sent nothing would become
+ * indistinguishable from a day nobody measured.
+ *
+ * @param carried - The sum so far, or null while no call on this axis
+ *   has recorded anything.
+ * @param added - This call's reading, or null when it recorded none.
+ * @returns The new sum, still null when both were.
+ */
+function addMagnitude(
+  carried: number | null,
+  added: number | null,
+): number | null {
+  if (added === null) {
+    return carried;
+  }
+
+  return (carried ?? 0) + added;
+}
+
+/**
+ * The instant that opens the UTC day one call falls on.
+ *
+ * `date_trunc('day', called_at AT TIME ZONE 'UTC')` written out, and
+ * UTC EXPLICITLY rather than by inheriting a zone. `Date.UTC` over
+ * the three UTC parts reads no local offset at all, where
+ * `setHours(0, 0, 0, 0)` would truncate in whatever zone the process
+ * happens to run in — the same silent per-deployment difference
+ * `SpendBucket.day` says a session's `TimeZone` setting would make.
+ *
+ * @param at - When the call was made.
+ * @returns Midnight UTC of that day, as the bucket's own key.
+ */
+function utcDayOf(at: Date): Date {
+  return new Date(Date.UTC(
+    at.getUTCFullYear(),
+    at.getUTCMonth(),
+    at.getUTCDate(),
+  ));
+}
+
+/**
  * The text `fields->>'category'` answers over one payload.
  *
  * THE COLUMN READ RATHER THAN THE DIGEST'S, which is the one place
@@ -2808,6 +3299,16 @@ export function createMemoryResearchStore(
   // reads the same rows through a projection of its own.
   const domainEntities = new Map<number, MemoryDomainEntity[]>();
   const domainPool = new Map<number, MemoryResearchPoolRow[]>();
+
+  // The runs half's two collections, BOTH keyed by their own id and
+  // NEITHER keyed by a parent. `runs.domain_id` and `llm_calls.run_id`
+  // are both nullable, so a parent-keyed seam would have no key at all
+  // for a maintenance tick or a call attributed to no pass — and those
+  // are the rows the unfiltered page and the summary's null bucket are
+  // claimed to hold. The domain and the run ride on the rows instead,
+  // and the cascade reads them off there.
+  const runs = new Map<number, MemoryRun>();
+  const llmCalls = new Map<number, MemoryLlmCall>();
   let nextDomainId = 1;
   let nextCategoryId = 1;
   let nextTermId = 1;
@@ -4465,6 +4966,278 @@ export function createMemoryResearchStore(
     domainPool.delete(domainId);
   }
 
+  /**
+   * Every stored run, as a fresh list.
+   *
+   * @returns The rows. A fresh array every call, so a caller
+   *   filtering, sorting or slicing what this answers cannot reach
+   *   the stored collection.
+   */
+  function runRows(): MemoryRun[] {
+    return [...runs.values()];
+  }
+
+  /**
+   * Whether one run stands under a filter.
+   *
+   * The predicate the page and the count BOTH read through, written
+   * once so that a page's `meta.total` cannot come to describe a
+   * different collection than the page — {@link matchesFindingFilter}
+   * and {@link matchesDocumentFilter}'s reason, two groups over.
+   *
+   * AN ABSENT MEMBER WIDENS TO EVERY RUN INCLUDING THE DOMAIN-LESS
+   * ONES, which is the whole of the unfiltered page. A named domain
+   * excludes them, and it does so BY THE COMPARISON rather than by a
+   * branch: `null === <a number>` is false, so a tick is out of one
+   * domain's page for the same reason it is out of another's.
+   *
+   * @param row - The run to judge.
+   * @param filter - What to narrow to.
+   * @returns Whether it belongs in the collection.
+   */
+  function matchesRunFilter(row: MemoryRun, filter: RunFilter): boolean {
+    return filter.domainId === undefined || row.domainId === filter.domainId;
+  }
+
+  /**
+   * The stored runs a filter selects, ordered newest first.
+   *
+   * `started_at` descending with `id` descending breaking a tie, as
+   * {@link RunStore.listRuns} promises. THE TIEBREAK IS NOT OPTIONAL
+   * AND THE TIE IS THE SERVER'S OWN: `started_at` defaults to
+   * `now()`, which is the TRANSACTION's start time, so passes opened
+   * together tie to the microsecond and a page boundary falling
+   * inside that tie would show one run twice and another never.
+   *
+   * @param filter - What to narrow to.
+   * @returns The rows in that order. A fresh array, so the sort
+   *   never reaches the stored collection.
+   */
+  function orderedRuns(filter: RunFilter): MemoryRun[] {
+    return runRows()
+      .filter((row) => matchesRunFilter(row, filter))
+      .sort((left, right) => {
+        const byStart = right.startedAt.getTime() - left.startedAt.getTime();
+
+        return byStart === 0
+          ? right.id - left.id
+          : byStart;
+      });
+  }
+
+  /**
+   * One run's model calls, newest first.
+   *
+   * `called_at` descending with `id` descending breaking a tie, as
+   * {@link RunStore.listRunLedger} promises, and expressed here
+   * rather than shared with {@link orderedRuns} above — the decision
+   * {@link orderedDocuments} takes beside {@link failuresOf} over one
+   * table, applied to two.
+   *
+   * A CALL NAMING NO RUN IS IN NO LEDGER, and that is this
+   * comparison rather than a guard: the parameter is a number and
+   * `null === <a number>` is false, so the unattributed calls are
+   * unreachable from every run id there is.
+   *
+   * @param runId - The run to read within.
+   * @returns Its calls in that order, possibly empty. A fresh array.
+   */
+  function orderedLedger(runId: number): MemoryLlmCall[] {
+    return [...llmCalls.values()]
+      .filter((row) => row.runId === runId)
+      .sort((left, right) => {
+        const byCall = right.calledAt.getTime() - left.calledAt.getTime();
+
+        return byCall === 0
+          ? right.id - left.id
+          : byCall;
+      });
+  }
+
+  /**
+   * Whose spend one call is, or null when it is nobody's.
+   *
+   * A `LEFT JOIN` TO `runs` WRITTEN OUT, and the two ways it answers
+   * null are the two kinds of unattributed call `src/runs/store.ts`
+   * says the bucket holds together: a call naming no run, and a call
+   * whose run named no domain. A join that DROPPED either would leave
+   * the buckets' `calls` adding up to less than the window holds,
+   * which is the one thing a total taken from the summary must not
+   * do.
+   *
+   * A THIRD WAY IT ANSWERS NULL IS UNREACHABLE IN A DEPLOYMENT and
+   * reachable here: a call naming a run nothing stored.
+   * `llm_calls_run_id_runs_id_fk` forbids that state, and the seam
+   * takes an id rather than a row, so this store answers what the
+   * left join would answer rather than inventing a refusal.
+   *
+   * @param row - The call to attribute.
+   * @returns The domain id, or null.
+   */
+  function spendDomainOf(row: MemoryLlmCall): number | null {
+    if (row.runId === null) {
+      return null;
+    }
+
+    return runs.get(row.runId)?.domainId ?? null;
+  }
+
+  /**
+   * Whether one call falls inside a spend window.
+   *
+   * THE WINDOW IS HALF-OPEN, `[sinceInclusive, untilExclusive)`, and
+   * the member names are what say which side each bound closes —
+   * {@link matchesFindingFilter}'s rule over `created_at`, applied to
+   * `called_at`. A store writing `<=` on the upper bound would let
+   * two adjacent windows both take the seam a caller paging through
+   * time crosses most often, and every number beside them would
+   * still add up.
+   *
+   * Neither bound is re-checked for order and either may be null:
+   * `RunStore.summariseSpend` records that `./spend-service.ts`
+   * defaults an absent window and refuses an inverted or over-wide
+   * one, so no request reaches here unbounded.
+   *
+   * @param row - The call to judge.
+   * @param window - The span to hold it against.
+   * @returns Whether it belongs in the summary.
+   */
+  function calledWithin(row: MemoryLlmCall, window: TimeWindow): boolean {
+    const made = row.calledAt.getTime();
+    const since = window.sinceInclusive;
+    const until = window.untilExclusive;
+
+    if (since !== null && made < since.getTime()) {
+      return false;
+    }
+
+    return until === null || made < until.getTime();
+  }
+
+  /**
+   * Where one bucket sorts against another.
+   *
+   * `day` DESCENDING, THEN `domainId` ASCENDING WITH THE NULL BUCKET
+   * LAST, as {@link RunStore.summariseSpend} promises. The order is
+   * contracted for the reason any listed answer needs one: two
+   * implementations free to emit their groups in whatever order the
+   * grouping produced would agree on every number and disagree on
+   * the array.
+   *
+   * THE NULL GOES LAST BY A BRANCH AND NOT BY ARITHMETIC, which is
+   * what the SQL spells `NULLS LAST` on an ascending key for. It is
+   * the one place on this half where a null sorts rather than
+   * filtering: the page's two descending keys are over NOT NULL
+   * columns.
+   *
+   * @param left - The first bucket.
+   * @param right - The second.
+   * @returns Negative when the first sorts earlier, positive when it
+   *   sorts later, zero for two buckets of one domain on one day —
+   *   which the grouping makes unreachable.
+   */
+  function compareSpendBuckets(left: SpendBucket, right: SpendBucket): number {
+    const byDay = right.day.getTime() - left.day.getTime();
+
+    if (byDay !== 0) {
+      return byDay;
+    }
+
+    if (left.domainId === right.domainId) {
+      return 0;
+    }
+
+    if (left.domainId === null) {
+      return 1;
+    }
+
+    return right.domainId === null
+      ? -1
+      : left.domainId - right.domainId;
+  }
+
+  /**
+   * Adds one call into the bucket it belongs to.
+   *
+   * A GROUP BY WRITTEN OUT, keyed by the day and the domain together
+   * so that a bucket exists only because calls landed in it — there
+   * is no row here for a day nothing was called on and none for a
+   * domain that made no calls, which is what
+   * {@link RunStore.summariseSpend} says a store must not invent.
+   *
+   * `calls` COUNTS ROWS AND THE TWO MAGNITUDES SUM THE MEASURED
+   * ONES, SEPARATELY. A call carrying neither is still a call that
+   * was made, and each sum stays null until a call records that axis
+   * — so a bucket nobody measured answers null rather than the zero
+   * a real reading of nothing sent would give, and a call measured on
+   * one axis alone contributes to one sum.
+   *
+   * @param into - The buckets accumulated so far, keyed by day and
+   *   domain.
+   * @param row - The call to add.
+   */
+  function addToBucket(
+    into: Map<string, SpendBucket>,
+    row: MemoryLlmCall,
+  ): void {
+    const day = utcDayOf(row.calledAt);
+    const domainId = spendDomainOf(row);
+    const key = `${day.getTime()}:${domainId ?? 'none'}`;
+    const held = into.get(key) ?? null;
+
+    into.set(key, {
+      domainId,
+      day,
+      calls: (held?.calls ?? 0) + 1,
+      promptChars: addMagnitude(held?.promptChars ?? null, row.promptChars),
+      estTokens: addMagnitude(held?.estTokens ?? null, row.estTokens),
+    });
+  }
+
+  /**
+   * Removes every run of one domain and the ledger under it, as
+   * `ON DELETE CASCADE` does at both levels.
+   *
+   * TWO LEVELS AND TWO TABLES. `runs.domain_id` cascades and
+   * `llm_calls.run_id` cascades onto the runs, which is
+   * {@link dropFindingsOf}'s shape over a different pair.
+   *
+   * IT READS THE DOMAIN OFF THE ROW RATHER THAN OFF A KEY, which is
+   * {@link MemoryResearchStore.setRuns} being flat, and the
+   * comparison is what leaves the domain-less ticks standing: a tick
+   * hangs off no domain, so no domain delete reaches it and its
+   * ledger survives with it. So do the calls naming no run at all,
+   * which hang off nothing this store can delete.
+   *
+   * TWO KEYS ONTO `runs.id` ARE LEFT UNIMITATED AND THEY ARE LEFT SO
+   * FOR DIFFERENT REASONS. `briefings.run_id` is `ON DELETE no
+   * action` and would refuse this delete in a deployment, and it goes
+   * unimitated for `research_pool.finding_id`'s reason: no port here
+   * writes that table and no seam plants one, so there is no dataset
+   * this store can be in where the key would fire.
+   * `entity_research.run_id` is the SAME `no action` key and IS
+   * reachable, {@link MemoryEntityResearch.runId} being plantable —
+   * that is this file's SEVENTH known divergence, stated in the
+   * module header and pinned by a case.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropRunsOf(domainId: number): void {
+    for (const [runId, row] of runs) {
+      if (row.domainId !== domainId) {
+        continue;
+      }
+
+      for (const [callId, call] of llmCalls) {
+        if (call.runId === runId) {
+          llmCalls.delete(callId);
+        }
+      }
+
+      runs.delete(runId);
+    }
+  }
+
   return {
     /** One window of the list, slug ascending. */
     async listDomains(window: StoreWindow): Promise<readonly DomainRecord[]> {
@@ -4703,6 +5476,7 @@ export function createMemoryResearchStore(
       dropDocumentsOf(id);
       dropEntitiesOf(id);
       dropPoolOf(id);
+      dropRunsOf(id);
 
       for (const [categoryId, row] of categories) {
         if (row.domainId === id) {
@@ -6765,6 +7539,162 @@ export function createMemoryResearchStore(
       return poolRowOf(ruled);
     },
 
+    /**
+     * One window of the passes the service has made, narrowed and
+     * ordered newest first.
+     *
+     * READS RUNS AND WRITES NONE — there is no insert, update or
+     * delete over that table anywhere on this port, so a pass is
+     * read-only structurally rather than by convention, exactly as
+     * the corpus page above is. Every row here arrived through
+     * {@link MemoryResearchStore.setRuns}.
+     *
+     * EVERY RUN BY DEFAULT, THE DOMAIN-LESS TICKS INCLUDED. A filter
+     * naming no domain widens to the whole table rather than to the
+     * domain-scoped half of it, which is what keeps this page
+     * agreeing with `runs` about how much work the service has done
+     * — and the maintenance passes are exactly the rows a reader
+     * goes looking for after something stopped happening.
+     *
+     * THERE IS NO SPELLING THAT ANSWERS THE TICKS ALONE, and that is
+     * `RunFilter.domainId` being an optional `number` rather than a
+     * decision taken here: there is no value a caller could send to
+     * mean the ones belonging to nobody.
+     */
+    async listRuns(
+      filter: RunFilter,
+      window: StoreWindow,
+    ): Promise<readonly RunRecord[]> {
+      return orderedRuns(filter)
+        .slice(window.offset, window.offset + window.limit)
+        .map(runOf);
+    },
+
+    /**
+     * How many runs the same filter selects, ignoring any window.
+     *
+     * The same predicate the page read through — one dataset and one
+     * {@link matchesRunFilter} behind both is what makes a page's
+     * `meta.total` describe the page's own collection here rather
+     * than by coincidence.
+     *
+     * A window past the end still counts the whole, and an id no
+     * domain carries counts zero. Neither is a special case: the
+     * window is not this method's to read, and nothing points at a
+     * row that is not there.
+     */
+    async countRuns(filter: RunFilter): Promise<number> {
+      return runRows().filter((row) => matchesRunFilter(row, filter)).length;
+    },
+
+    /**
+     * One pass by its own id, or null.
+     *
+     * WHERE EVERY `GET /runs/:id` REQUEST ENTERS, and it takes no
+     * domain: a domain is met by slug and everything else on this
+     * surface is written by its id. A null {@link RunRecord.domainId}
+     * on the answer is the ordinary reading for a maintenance tick
+     * rather than a row that failed to resolve.
+     */
+    async findRunById(id: number): Promise<RunRecord | null> {
+      const row = runs.get(id);
+
+      return row === undefined
+        ? null
+        : runOf(row);
+    },
+
+    /**
+     * The head of one run's ledger: its model calls newest first,
+     * cut at the limit its caller passes.
+     *
+     * THE LIMIT IS THE CALLER'S AND THE CUT IS NOT SILENT.
+     * `src/runs/service.ts` passes `RUN_LEDGER_CAP`, reads
+     * {@link RunStore.countRunLedger} beside this and answers a
+     * truncation flag from the two, so nothing here chooses a limit
+     * of its own — which would answer a short list with nothing
+     * saying it was short.
+     *
+     * NEWEST FIRST, SO THE CUT DROPS THE OLDEST END. That is why the
+     * order is the contract rather than a presentation choice: a read
+     * that forgot to order would cut an arbitrary subset and report
+     * the same count beside it.
+     *
+     * A CALL NAMING NO RUN IS UNREACHABLE HERE, whatever id is asked
+     * for. {@link RunStore.summariseSpend} is the one method that
+     * sees those rows.
+     */
+    async listRunLedger(
+      runId: number,
+      limit: number,
+    ): Promise<readonly LlmCallRecord[]> {
+      return orderedLedger(runId)
+        .slice(0, limit)
+        .map(llmCallOf);
+    },
+
+    /**
+     * How many calls one pass ledgered, ignoring any limit.
+     *
+     * THE FULL COUNT IS WHAT MAKES THE CUT REPORTABLE, per
+     * `src/runs/store.ts`: it is the number the service answers
+     * beside the capped list and compares against the cap.
+     *
+     * An id no run carries answers zero, and so does a pass that
+     * called nothing: the two are one fact from this method's side,
+     * and {@link RunStore.findRunById} is what separates them.
+     */
+    async countRunLedger(runId: number): Promise<number> {
+      return [...llmCalls.values()].filter(
+        (row) => row.runId === runId,
+      ).length;
+    },
+
+    /**
+     * The ledger inside one window, aggregated into one bucket per
+     * domain per UTC day.
+     *
+     * COUNTS AND MAGNITUDES, NEVER CURRENCY. `llm_calls` carries no
+     * price, rate or amount column, so there is nothing behind a cost
+     * for a bucket to answer and no member here is named for one.
+     *
+     * EVERY ROW IN THE WINDOW IS COUNTED, which is the property that
+     * stops a total taken from this summary under-reporting: the
+     * calls of a domain-less tick and the calls attributed to no run
+     * at all both land in the null bucket, so the buckets' `calls`
+     * add up to the number of calls the window holds.
+     * {@link spendDomainOf} is the `LEFT JOIN` that makes that so.
+     *
+     * NARROWING BY DOMAIN EXCLUDES BOTH KINDS, correctly: neither is
+     * that domain's. So the summaries of every domain do NOT sum to
+     * the unfiltered one, and the difference is the unattributed
+     * spend rather than a rounding of it.
+     *
+     * A BUCKET EXISTS BECAUSE CALLS LANDED IN IT. There is no row for
+     * a day nothing was called on and none for a domain that made no
+     * calls — a caller filling a chart supplies its own zeroes, and a
+     * store inventing empty buckets would be answering a calendar it
+     * was never told which of.
+     */
+    async summariseSpend(
+      filter: RunFilter,
+      window: TimeWindow,
+    ): Promise<readonly SpendBucket[]> {
+      const buckets = new Map<string, SpendBucket>();
+
+      for (const row of llmCalls.values()) {
+        const domainId = spendDomainOf(row);
+        const wanted = filter.domainId === undefined
+          || domainId === filter.domainId;
+
+        if (wanted && calledWithin(row, window)) {
+          addToBucket(buckets, row);
+        }
+      }
+
+      return [...buckets.values()].sort(compareSpendBuckets);
+    },
+
     setDomainDependents(
       domainId: number,
       counts: Partial<DomainDependentCounts>,
@@ -6853,6 +7783,31 @@ export function createMemoryResearchStore(
       }
 
       domainPool.set(domainId, rows.map(copyPlantedPoolRow));
+    },
+
+    setRuns(rows: readonly MemoryRun[]): void {
+      // Copied on the way in, row by row, so a caller that goes on
+      // moving a planted stamp or writing into a planted `counts`
+      // does not move stored state — and the collection is rebuilt
+      // rather than added to, so pushing onto what was planted does
+      // not plant a further pass.
+      runs.clear();
+
+      for (const row of rows) {
+        runs.set(row.id, copyPlantedRun(row));
+      }
+    },
+
+    setLlmCalls(rows: readonly MemoryLlmCall[]): void {
+      // Rebuilt on the terms the seam above states. Keyed by the
+      // call's own id, so a plant naming a run nothing stored is held
+      // rather than dropped: the summary answers it in the null
+      // bucket, which is what the left join would do.
+      llmCalls.clear();
+
+      for (const row of rows) {
+        llmCalls.set(row.id, copyPlantedLlmCall(row));
+      }
     },
   };
 }
