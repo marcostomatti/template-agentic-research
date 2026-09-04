@@ -47,9 +47,11 @@
  * whichever caller reached it, and a body validated by the router
  * would leave a second caller validating against a second schema
  * nobody would notice drifting. Neither write is on the MCP
- * surface — the spec's safe list names the two run-now verbs and
- * the term edits — so this is a rule about where the contract
- * lives and not a prediction about who calls it. That is also
+ * surface — the spec's safe list names no write over a `sources`
+ * row, the one act it does name under this prefix being the
+ * config approval `./proposals-routes.ts` serves — so this is a
+ * rule about where the contract lives and not a prediction about
+ * who calls it. That is also
  * what keeps the `openPaths` argument — the two prefixes below
  * which a key is the operator's own — in the service that
  * declares the schemas rather than in a handler.
@@ -196,9 +198,12 @@ const sourceAddressSchema = z.object({ id: resourceIdParamSchema }).strict();
  * pieces this route already parses rather than written again.
  *
  * ONLY THE READ IS SPREAD. The create and the two writes below are
- * not on that protocol: the spec's safe list names the run-now
- * pair and the term edits, and a feed's `parser_config` is
- * configuration a research pass is scored by. The address consts
+ * not on that protocol: a feed's `parser_config` is configuration
+ * a research pass is scored by, and the spec's safe list names no
+ * write over a `sources` row. What it does name under this prefix
+ * is the config APPROVAL, which is a ruling on a proposal somebody
+ * else raised rather than a payload a caller composed, and
+ * `./proposals-routes.ts` declares its schema. The address consts
  * above stay private either way.
  */
 export const sourceListToolInputSchema = z.object({

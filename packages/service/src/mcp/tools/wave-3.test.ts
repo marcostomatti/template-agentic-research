@@ -1,5 +1,5 @@
 /**
- * The wave-3 read tools, driven with no server and no database.
+ * The wave-3 tools, driven with no server and no database.
  *
  * THREE KINDS OF READING, and only one of them is about what a
  * handler does. The first is the SCHEMA IDENTITY: every entry
@@ -30,14 +30,14 @@
  * and reads a refusal, with the same two bounds the right way
  * round accepted beside it as its own control.
  *
- * THE THIRD IS THE NINE READS, EACH DRIVEN TWICE. Every tool is
- * asked one question it must answer with something and one it must
- * answer with nothing, IN THE SAME CASE — because an empty answer
- * is also what a tool that had stopped reading anything would give,
- * and a case holding only the empty half is satisfied by that. The
- * non-empty half is the in-case positive control for the empty one,
- * and the two are read off the same fixture through the same
- * handler.
+ * THE THIRD IS THE NINE READS, EACH DRIVEN TWICE. Every read tool
+ * is asked one question it must answer with something and one it
+ * must answer with nothing, IN THE SAME CASE — because an empty
+ * answer is also what a tool that had stopped reading anything
+ * would give, and a case holding only the empty half is satisfied
+ * by that. The non-empty half is the in-case positive control for
+ * the empty one, and the two are read off the same fixture through
+ * the same handler.
  *
  * AN EMPTY ANSWER IS NOT ALWAYS AN EMPTY PAGE, so what the pair is
  * differs by what the route answers and is worth saying rather than
@@ -67,11 +67,50 @@
  * THE CLOCK IS FIXED, which is what lets the spend window be
  * asserted at all: a handler reading `Date.now()` instead of
  * {@link McpToolContext.clock} would close its default window on an
- * instant no assertion here could have named.
+ * instant no assertion here could have named. The STORE reads the
+ * same instant, which is what lets an approval stamp be asserted:
+ * both gates write `coalesce(<column>, now())`.
  *
- * Mutation grid, measured over the twenty-three cases here with
+ * THE FOURTH IS THE THREE WRITES, AND EACH IS READ BACK OFF THE
+ * STORE RATHER THAN OUT OF ITS OWN ANSWER. A ruling is asserted as
+ * a whole-row diff against what was there before it, so a write
+ * that also moved a column nobody asked about is reported where a
+ * member-by-member reading would pass; and the answer is held
+ * against the row the store kept, so the two members no request
+ * carried are what make the response a reading of the write.
+ *
+ * THE VERDICT LADDER IS THE DOMAIN'S, AND TWO CASES SAY SO FROM
+ * OPPOSITE SIDES. {@link RADAR} declares a ladder carrying a member
+ * the default vocabulary has not and retiring one it has, so a
+ * service holding the constant refuses the accepted case and
+ * accepts the refused one. Neither case alone could tell the two
+ * apart, which is why the pair is written as a pair.
+ *
+ * THE REFUSAL NAMES WHAT MAY BE SAID AND NEVER WHAT WAS. The
+ * accepted set travels in the DETAIL rather than in the envelope
+ * sentence, so the case reads it there, holds every declared member
+ * against it, and counts the submitted verdict in all three
+ * channels a refusal can be read through — with the same function
+ * counting it once in the input, so the three zeros are a reading
+ * rather than a search over nothing planted.
+ *
+ * THE TWO GATES ANSWER ONE PROJECTION AND PART ON ONE THING. Both
+ * cases assert the answered member SET whole rather than the four
+ * members they expect, which is what reports a `Ruling` that grew a
+ * fifth; and a sibling case rules twice at each gate, where
+ * ratifying answers the first ruling again and applying is refused.
+ *
+ * Mutation grid, measured over the thirty-four cases here with
  * `--reporter=json` and read as the failed case SET rather than as
- * a count. Eighteen legs.
+ * a count. Thirty legs, the whole grid run TWICE with the two
+ * passes sets diffed member for member and nothing moving.
+ *
+ * THE EIGHTEEN CARRIED IN FROM THE READ-ONLY REVISION WERE RE-RUN
+ * AGAINST HEAD'S COPY OF THIS FILE AND AGAINST THE TIP, and every
+ * one of the eighteen sets is IDENTICAL on both sides — 18 of 18,
+ * member for member, nothing gained and nothing lost. That is the
+ * reading a figure comparison cannot give, and here it says the
+ * eleven cases this task added touch no route the reads own.
  *
  * FOUR ARE ABOUT THE PAIRING. Pointing one entry at a SIBLING
  * schema object reddens 2 — its own row and the distinctness case,
@@ -93,7 +132,7 @@
  * parse-status narrowing, reading the wall clock in place of
  * {@link McpToolContext.clock}, and answering `ok({ id })` in
  * place of the stored answer on each of the three single gets:
- * eleven legs, 1 of 23 apiece. The twelfth is the page `meta`,
+ * eleven legs, 1 of 34 apiece. The twelfth is the page `meta`,
  * answered with a `perPage` of the handler own choosing, which
  * reddens all 5 of the paginated cases — that leg is what says
  * every list echoes the window it was ASKED for.
@@ -106,34 +145,81 @@
  * nothing else — every other reading in this file is identical
  * under both spellings, which is exactly why that case exists.
  *
- * TWO TRAPS MET WHILE MEASURING, recorded so a re-run reproduces
+ * TWELVE ARE ABOUT THE THREE WRITES. Answering the ruling
+ * arguments rebuilt around an id rather than the stored row reddens
+ * the append case alone (1); a member-by-member comparison could
+ * not have reported it, every member asserted having come from the
+ * request, and what does is holding the answer against the store
+ * own read. Judging by {@link DEFAULT_VERDICT_VOCABULARY} in place
+ * of the domain row reddens 4 — the three verdict cases and the
+ * undeclared-key control beside them, whose accepted request sends
+ * the member only this domain declares.
+ *
+ * THE TWO REFUSAL LEGS ARE AN IDENTICAL PAIR LANDING ON ONE CASE,
+ * told apart only by the assertion that fails inside each:
+ * refusing with an EMPTY accepted set (1) reddens the reading that
+ * every declared member is named, and appending the SUBMITTED
+ * verdict to that set (1) reddens the containment count beside it.
+ * The case covers two claims and no fixture here can separate them,
+ * so the two figures are recorded as two legs on one case rather
+ * than as coverage of each other.
+ *
+ * DROPPING `.strict()` FROM ANY OF THE THREE TOOL INPUTS reddens
+ * the undeclared-key case (1 apiece, three legs). It is NOT a
+ * second guard over the service one: a non-strict zod object STRIPS
+ * the key rather than forwarding it, so the service is handed a
+ * clean body and the call succeeds — which is the opposite of what
+ * a reader would predict from the wave-2 note about a tool re-parse
+ * being free.
+ *
+ * ANSWERING `ok({ id })` FROM EITHER GATE reddens that gate own
+ * ruling case (1 apiece), and answering a FIFTH member from
+ * `Ruling` reddens BOTH (2) — which is the leg that says the
+ * member-SET assertion is doing work a `toMatchObject` over the
+ * four could not. Refusing no ruling at all reddens 2: the
+ * cross-parent case and the second-ruling one, which are the two
+ * whose subject is the shared gate rather than a projection.
+ *
+ * THE WHOLE-HALF CONTROL FOR THE WRITES HAS NO SURVIVORS. Handing
+ * each service the WHOLE parsed input rather than splitting the
+ * address off it reddens 8 of 8 write cases — every one of them
+ * reaches a service that really parses what it is handed, where a
+ * survivor would have been a case asserting something it does not
+ * mean.
+ *
+ * THREE TRAPS MET WHILE MEASURING, recorded so a re-run reproduces
  * the figures rather than a neighbour of them. The findings-slug
  * leg has an anchor that is NOT unique — `query.slug,` followed by
  * `filter,` is byte-identical in the findings handler and in the
  * documents one — so a leg anchored on that pair patches both and
  * reads 2 rather than 1; the figure above is taken with the sort
- * key included in the anchor. And the `meta` leg is DEAD when
- * spelled as a `page` of 1, every case here asking for the first
- * page: the mutation has to move a member no request sent the
- * value of.
+ * key included in the anchor. The `meta` leg is DEAD when spelled
+ * as a `page` of 1, every case here asking for the first page: the
+ * mutation has to move a member no request sent the value of. And
+ * the spend-schema leg needs a `z` import added in the same patch,
+ * `src/runs/spend-routes.ts` importing none — without it vitest
+ * collects nothing and the leg reads `0/0`, which a harness scoring
+ * `len(failed)` alone records as a clean zero.
  *
- * NOTHING HERE WRITES AND NO CASE READS A ROW BACK, which is a
- * property of the wave rather than of the file: every service
- * function these nine entries call is a read, and the three
- * mutations the spec names arrive in `./wave-3.ts` own next task.
- * The read-first claim itself is the ports and
- * `tests/invariants/api-read-first.test.ts`, not this file.
+ * THE READ-FIRST CLAIM IS NOT THIS FILE'S. Three of the four
+ * writers the wave-3 ports declare are reachable from here and the
+ * fourth, the entity rewrite, is reachable from nothing this file
+ * drives — but what makes that structural is the port types and
+ * `tests/invariants/api-read-first.test.ts`, not the absence of a
+ * case below.
  */
 import type {
   McpToolContext,
   McpToolEntry,
 } from './registry.js';
+import type { FieldError } from '../../../lib/errors/index.js';
 import type {
   MemoryDomainDocument,
   MemoryDomainEntity,
   MemoryDomainFinding,
   MemoryEntityResearch,
   MemoryLlmCall,
+  MemoryResearchPoolRow,
   MemoryResearchStore,
   MemoryRun,
   MemorySourceProposal,
@@ -142,20 +228,25 @@ import type { ZodType } from 'zod';
 
 import { describe, expect, it } from 'vitest';
 
-import { AppError } from '../../../lib/errors/index.js';
+import { AppError, ValidationError } from '../../../lib/errors/index.js';
 import {
   createMemoryResearchStore,
 } from '../../../tests/helpers/memory-research-store.js';
 import {
+  DEFAULT_VERDICT_VOCABULARY,
+} from '../../db/schema/values.js';
+import {
   documentListToolInputSchema,
 } from '../../documents/routes.js';
 import {
+  entityApproveResearchToolInputSchema,
   entityReadToolInputSchema,
   entityResearchListToolInputSchema,
 } from '../../entities/routes.js';
 import {
   findingListToolInputSchema,
   findingReadToolInputSchema,
+  findingVerdictToolInputSchema,
 } from '../../findings/routes.js';
 import {
   runListToolInputSchema,
@@ -166,6 +257,7 @@ import {
 } from '../../runs/spend-routes.js';
 import {
   pendingConfigListToolInputSchema,
+  sourceApproveConfigToolInputSchema,
 } from '../../sources/proposals-routes.js';
 
 import { MCP_TOOLS } from './registry.js';
@@ -200,6 +292,45 @@ const MISSING_SLUG = 'zznosuchdomainzz';
  * report a leak the refusal never made.
  */
 const MISSING_ID = 9900001;
+
+/**
+ * An argument no tool on this wave declares, so a refusal has a
+ * subject a case can count.
+ */
+const SENTINEL = 'zzsentinelzz';
+
+/**
+ * The verdict ladder {@link RADAR} declares, and is judged by.
+ *
+ * NOT the default vocabulary, and that is the point of it. One
+ * member is absent from the default and one member of the default
+ * is absent from here, so a service holding the constant instead of
+ * reading the domain row answers BOTH of the verdict cases below
+ * the wrong way round.
+ */
+const LADDER: readonly string[] = ['watch', 'neutral', 'interested'];
+
+/** The member of that ladder the default vocabulary has not. */
+const DOMAIN_ONLY_VERDICT = 'watch';
+
+/** A member of the default vocabulary this domain has retired. */
+const RETIRED_VERDICT = 'avoid';
+
+/**
+ * A verdict no ladder anywhere carries.
+ *
+ * Chosen so that no member of {@link LADDER} contains a piece of it
+ * and it contains a piece of none: the refusal renders the ACCEPTED
+ * SET, so a needle sharing letters with a declared verdict would
+ * come back inside that member and read as an echo.
+ */
+const OUTSIDE_VERDICT = 'zzunrankedzz';
+
+/** The research intention queued about {@link KUBE_ENTITY}. */
+const QUEUED_INTENTION = 7900001;
+
+/** A second one, queued about {@link BARE_ENTITY}. */
+const OTHER_INTENTION = 7900002;
 
 /** The subject carrying both of its optional members. */
 const ALIAS_ENTITY = 7100003;
@@ -304,6 +435,15 @@ const DECLARED_SCHEMAS: readonly SchemaPairing[] = [
   { name: 'runs.list', schema: runListToolInputSchema },
   { name: 'runs.get', schema: runReadToolInputSchema },
   { name: 'spend.summary', schema: spendSummaryToolInputSchema },
+  { name: 'findings.verdict', schema: findingVerdictToolInputSchema },
+  {
+    name: 'entities.approve-research',
+    schema: entityApproveResearchToolInputSchema,
+  },
+  {
+    name: 'sources.approve-config',
+    schema: sourceApproveConfigToolInputSchema,
+  },
 ];
 
 /**
@@ -385,6 +525,68 @@ async function refusalFrom(run: () => Promise<unknown>): Promise<AppError> {
   }
 
   throw new Error('expected a refusal, and the call answered');
+}
+
+/**
+ * How many times one needle appears in one haystack.
+ *
+ * @param haystack - The rendered channel.
+ * @param needle - What to look for.
+ * @returns The count, overlapping occurrences included.
+ */
+function countOccurrences(haystack: string, needle: string): number {
+  let found = 0;
+  let at = haystack.indexOf(needle);
+
+  while (at !== -1) {
+    found += 1;
+    at = haystack.indexOf(needle, at + 1);
+  }
+
+  return found;
+}
+
+/**
+ * A refusal rendered as the three channels a caller can read.
+ *
+ * @param err - The refusal.
+ * @returns The message, the details and the cause, separately — a
+ *   joined blob would hide which one leaked, and a stack repeats
+ *   the message it was raised with.
+ */
+function channelsOf(err: AppError): readonly string[] {
+  const cause = err.cause;
+  const rendered = cause instanceof Error
+    ? `${cause.name} ${cause.message} ${cause.stack ?? ''}`
+    : String(cause ?? '');
+
+  return [err.message, JSON.stringify(err.details ?? []), rendered];
+}
+
+/** One fault a refusal named, as this file reads it. */
+interface NamedFault {
+  /** The field path the detail carries. */
+  readonly field: string;
+
+  /**
+   * The token it was refused under.
+   *
+   * Optional exactly as `FieldError` declares it, so a detail
+   * raised without one is comparable rather than a type fault.
+   */
+  readonly code?: string;
+}
+
+/**
+ * The `{ field, code }` pairs one refusal named.
+ *
+ * @param err - The refusal.
+ * @returns One pair per detail, in the order they were raised.
+ */
+function faultsOf(err: AppError): readonly NamedFault[] {
+  const details = (err.details ?? []) as readonly FieldError[];
+
+  return details.map((one) => ({ field: one.field, code: one.code }));
 }
 
 /** The rows an answered page carries. */
@@ -487,20 +689,39 @@ interface PlantedSurface {
  * collections a single get embeds and one carrying none; two
  * documents, one of each parse status; three registry subjects, of
  * which one carries both optional members, one carries neither and
- * one holds the research; two feeds, one with a queue and one whose
+ * one holds the research; two queued research intentions, one about
+ * each of two subjects; two feeds, one with a queue and one whose
  * only proposal is applied; and two passes, one that spent and one
  * belonging to no domain that spent nothing.
+ *
+ * {@link RADAR} DECLARES ITS OWN VERDICT LADDER, which the second
+ * registry does not. That is what makes the two verdict cases
+ * readings rather than restatements of the default: the ladder here
+ * carries a member the default has not and has retired one the
+ * default carries, so a ruling judged against the constant is
+ * refused where it should land and accepted where it should not.
+ *
+ * THE STORE READS THE SAME FIXED INSTANT THE CONTEXT DOES, which
+ * is what lets an approval stamp be asserted at all: both gates
+ * write `coalesce(<column>, now())`, and `now()` here is the clock
+ * this fixture handed in rather than the wall.
+ *
+ * THE SECOND INTENTION IS THE CROSS-PARENT CONTROL. Every ruling
+ * below names a row in its body and a parent in its address, so a
+ * fixture holding one queued row per gate could not tell a gate
+ * that compares the two from one that ratifies whatever it is
+ * handed.
  *
  * @returns The store, a context over it, and the three feed ids,
  *   which are addresses a request cannot be composed without.
  */
 async function plantSurface(): Promise<PlantedSurface> {
-  const store = createMemoryResearchStore();
+  const store = createMemoryResearchStore({ now: () => FIXED_NOW });
   const context: McpToolContext = { store, clock: () => FIXED_NOW };
   const radar = await store.insertDomain({
     slug: RADAR,
     name: 'Radar',
-    settings: {},
+    settings: { verdictVocabulary: [...LADDER] },
   });
   const atlas = await store.insertDomain({
     slug: ATLAS,
@@ -561,6 +782,28 @@ async function plantSurface(): Promise<PlantedSurface> {
       summary: null,
       payload: { depth: 2 },
       researchedAt: new Date(Date.UTC(2026, 2, 2, 2)),
+    },
+  ];
+  const pool: readonly MemoryResearchPoolRow[] = [
+    {
+      id: QUEUED_INTENTION,
+      entityId: KUBE_ENTITY,
+      findingId: JUDGED_FINDING,
+      status: 'pending',
+      searchTerms: ['kubernetes'],
+      createdAt: new Date(Date.UTC(2026, 1, 1)),
+      approvedAt: null,
+      researchedAt: null,
+    },
+    {
+      id: OTHER_INTENTION,
+      entityId: BARE_ENTITY,
+      findingId: null,
+      status: 'pending',
+      searchTerms: ['service mesh'],
+      createdAt: new Date(Date.UTC(2026, 1, 2)),
+      approvedAt: null,
+      researchedAt: null,
     },
   ];
   const runs: readonly MemoryRun[] = [
@@ -641,6 +884,7 @@ async function plantSurface(): Promise<PlantedSurface> {
     }),
   ]);
   store.setEntityResearch(KUBE_ENTITY, research);
+  store.setDomainPool(radar.id, pool);
   store.setFindingSightings(JUDGED_FINDING, [{
     id: 7800001,
     sourceId: feed.id,
@@ -1152,5 +1396,352 @@ describe('the spend read, driven', () => {
     expect(quiet.buckets).toEqual([]);
     expect(fieldsOf(quiet.window).sinceInclusive).toBe(QUIET_SINCE);
     expect(fieldsOf(quiet.window).untilExclusive).toBe(QUIET_UNTIL);
+  });
+});
+
+describe('the verdict write, driven', () => {
+  it('appends one ruling and answers the row it stored', async () => {
+    const planted = await plantSurface();
+    const entry = toolNamed('findings.verdict');
+    const before = await planted.store.listFindingLabels(JUDGED_FINDING);
+    const answered = await answerOf(entry, planted.context, {
+      id: JUDGED_FINDING,
+      note: 'read it again',
+      verdict: DOMAIN_ONLY_VERDICT,
+    });
+    const after = await planted.store.listFindingLabels(JUDGED_FINDING);
+    const stored = JSON.parse(JSON.stringify(after)) as readonly unknown[];
+
+    // The ladder came off the DOMAIN row rather than out of the
+    // shared constant: this verdict is a member of one and not of
+    // the other, so a service holding the default refuses here.
+    expect(DEFAULT_VERDICT_VOCABULARY).not.toContain(DOMAIN_ONLY_VERDICT);
+    expect(answered.success).toBe(true);
+
+    // APPENDED and not written over. The two planted rulings are
+    // still readable beneath the new one, newest first, which is
+    // the sequence an operator changing their mind leaves.
+    expect(before).toHaveLength(2);
+    expect(after.map((row) => row.verdict))
+      .toEqual([DOMAIN_ONLY_VERDICT, 'interested', 'neutral']);
+
+    // The answer is the STORED row and not the arguments rebuilt
+    // around an id: `id` and `labelledAt` are the two members no
+    // request carried, and the second is the fixture instant.
+    expect(answered.data).toEqual(stored[0]);
+    expect(fieldsOf(answered.data).labelledAt)
+      .toBe(FIXED_NOW.toISOString());
+    expect(fieldsOf(answered.data).note).toBe('read it again');
+  });
+
+  it('refuses a verdict outside the ladder, naming it', async () => {
+    const planted = await plantSurface();
+    const entry = toolNamed('findings.verdict');
+    const input = { id: JUDGED_FINDING, verdict: OUTSIDE_VERDICT };
+    const err = await refusalFrom(async () => answerOf(
+      entry,
+      planted.context,
+      input,
+    ));
+    const detailed = JSON.stringify(err.details ?? []);
+    const unnamed = LADDER.filter((one) => !detailed.includes(one));
+
+    expect(err).toBeInstanceOf(ValidationError);
+    expect(faultsOf(err)).toEqual([
+      { field: 'verdict', code: 'verdict_outside_vocabulary' },
+    ]);
+
+    // The ACCEPTED SET is what a caller is told, whole — and it
+    // travels in the DETAIL rather than in the envelope sentence,
+    // which is the framework own `Validation failed` on every 422
+    // this surface answers. So the refusal says what may be said
+    // rather than what was, and it says it where a client reads a
+    // field fault.
+    expect(err.message).toBe('Validation failed');
+    expect(LADDER.length).toBeGreaterThan(0);
+    expect(unnamed).toEqual([]);
+
+    // And nothing the caller sent is, in any of the three channels
+    // a refusal can be read through. The needle is in the input by
+    // construction and counted by the same function, so the zeros
+    // are a reading rather than a search over nothing planted.
+    const sent = JSON.stringify(input);
+
+    expect(countOccurrences(sent, OUTSIDE_VERDICT)).toBe(1);
+    expect(channelsOf(err).map((one) => (
+      countOccurrences(one, OUTSIDE_VERDICT)
+    ))).toEqual([0, 0, 0]);
+
+    // Read the state BEFORE the accepting control writes: the two
+    // touch one finding, and the control own append would
+    // otherwise be what this assertion sees.
+    const held = await planted.store.listFindingLabels(JUDGED_FINDING);
+
+    expect(held).toHaveLength(2);
+
+    // The control, varied along this row own axis: a verdict the
+    // ladder does carry is appended by the same call.
+    const answered = await answerOf(entry, planted.context, {
+      id: JUDGED_FINDING,
+      verdict: DOMAIN_ONLY_VERDICT,
+    });
+
+    expect(answered.success).toBe(true);
+  });
+
+  it('judges by the domain ladder and not the default', async () => {
+    const planted = await plantSurface();
+    const entry = toolNamed('findings.verdict');
+    const err = await refusalFrom(async () => answerOf(
+      entry,
+      planted.context,
+      { id: JUDGED_FINDING, verdict: RETIRED_VERDICT },
+    ));
+
+    // The cross reading, and the only one that separates a per-row
+    // ladder from the shared constant: a verdict the DEFAULT
+    // carries and this domain has retired is refused here.
+    expect(err).toBeInstanceOf(ValidationError);
+    expect(DEFAULT_VERDICT_VOCABULARY).toContain(RETIRED_VERDICT);
+    expect(LADDER).not.toContain(RETIRED_VERDICT);
+
+    // The other half of it, in the same case: the member only this
+    // domain declares is accepted by the same call.
+    const answered = await answerOf(entry, planted.context, {
+      id: JUDGED_FINDING,
+      verdict: DOMAIN_ONLY_VERDICT,
+    });
+
+    expect(answered.success).toBe(true);
+  });
+});
+
+describe('the two approval gates, driven', () => {
+  it('ratifies one intention and answers the ruling', async () => {
+    const planted = await plantSurface();
+    const store = planted.store;
+    const entry = toolNamed('entities.approve-research');
+    const before = await store.findPoolRowById(QUEUED_INTENTION);
+    const sibling = await store.findPoolRowById(OTHER_INTENTION);
+    const answered = await answerOf(entry, planted.context, {
+      id: KUBE_ENTITY,
+      poolId: QUEUED_INTENTION,
+    });
+    const ruling = fieldsOf(answered.data);
+    const after = await store.findPoolRowById(QUEUED_INTENTION);
+
+    expect(before?.approvedAt).toBeNull();
+    expect(answered.success).toBe(true);
+
+    // The projection whole, as a KEY SET. A member added to
+    // `Ruling` would pass every assertion beneath this one, which
+    // is what a `toMatchObject` over the four cannot report.
+    expect(Object.keys(ruling).sort())
+      .toEqual(['approvedAt', 'closedAt', 'id', 'status']);
+    expect(ruling.id).toBe(QUEUED_INTENTION);
+    expect(ruling.status).toBe('approved');
+    expect(ruling.approvedAt).toBe(FIXED_NOW.toISOString());
+
+    // `closedAt` reads `research_pool.researched_at`, and
+    // ratifying writes no research at all — which is the whole of
+    // what this gate does and the half the other one adds to.
+    expect(ruling.closedAt).toBeNull();
+
+    // The whole row, spread: a member-by-member reading would pass
+    // over a write that also moved the terms or the finding.
+    expect(after).toEqual({
+      ...before,
+      approvedAt: FIXED_NOW,
+      status: 'approved',
+    });
+    expect(await store.findPoolRowById(OTHER_INTENTION)).toEqual(sibling);
+  });
+
+  it('applies one proposal and answers the ruling', async () => {
+    const planted = await plantSurface();
+    const store = planted.store;
+    const entry = toolNamed('sources.approve-config');
+    const feed = await store.findSourceById(planted.feedId);
+    const proposal = await store.findProposalById(EARLY_PROPOSAL);
+    const answered = await answerOf(entry, planted.context, {
+      id: planted.feedId,
+      proposalId: EARLY_PROPOSAL,
+    });
+    const ruling = fieldsOf(answered.data);
+    const after = await store.findSourceById(planted.feedId);
+
+    expect(feed?.parserConfig).toEqual({});
+    expect(answered.success).toBe(true);
+
+    // The SAME projection the other gate answers, member for
+    // member, which is what one vocabulary over two subjects buys
+    // and what nothing but this pair of cases can report.
+    expect(Object.keys(ruling).sort())
+      .toEqual(['approvedAt', 'closedAt', 'id', 'status']);
+    expect(ruling.id).toBe(EARLY_PROPOSAL);
+    expect(ruling.status).toBe('approved');
+    expect(ruling.approvedAt).toBe(FIXED_NOW.toISOString());
+
+    // And where it differs: `closedAt` is `applied_at` here, and
+    // it is NOT null, applying being the half ratifying omits.
+    expect(ruling.closedAt).toBe(FIXED_NOW.toISOString());
+
+    // The two documents landed on the feed verbatim, which is a
+    // side effect no envelope this tool answers could show.
+    expect(after).toEqual({
+      ...feed,
+      contract: proposal?.contract,
+      parserConfig: proposal?.parserConfig,
+    });
+  });
+
+  it('refuses a ruling given about another parent', async () => {
+    const planted = await plantSurface();
+    const store = planted.store;
+    const ratify = toolNamed('entities.approve-research');
+    const apply = toolNamed('sources.approve-config');
+    const strayIntention = await refusalFrom(async () => answerOf(
+      ratify,
+      planted.context,
+      { id: BARE_ENTITY, poolId: QUEUED_INTENTION },
+    ));
+    const strayProposal = await refusalFrom(async () => answerOf(
+      apply,
+      planted.context,
+      { id: planted.drainedFeedId, proposalId: EARLY_PROPOSAL },
+    ));
+
+    // A `404` and not a `422`: the fault is a relation between two
+    // stored rows rather than anything about the arguments, which
+    // is why no schema either tool declares could hold it.
+    expect(strayIntention).toBeInstanceOf(AppError);
+    expect(strayIntention).not.toBeInstanceOf(ValidationError);
+    expect(strayProposal).toBeInstanceOf(AppError);
+    expect(strayProposal).not.toBeInstanceOf(ValidationError);
+
+    // Both state reads come BEFORE the accepting controls, which
+    // rule on the very rows these two refusals were about.
+    const intention = await store.findPoolRowById(QUEUED_INTENTION);
+    const feed = await store.findSourceById(planted.feedId);
+
+    expect(intention?.approvedAt).toBeNull();
+    expect(feed?.parserConfig).toEqual({});
+
+    // The controls, varied along each row own axis: the same two
+    // rows, addressed from the parent they were raised under.
+    const ratified = await answerOf(ratify, planted.context, {
+      id: KUBE_ENTITY,
+      poolId: QUEUED_INTENTION,
+    });
+    const applied = await answerOf(apply, planted.context, {
+      id: planted.feedId,
+      proposalId: EARLY_PROPOSAL,
+    });
+
+    expect(ratified.success).toBe(true);
+    expect(applied.success).toBe(true);
+  });
+
+  it('answers a second ruling differently at each gate', async () => {
+    const planted = await plantSurface();
+    const ratify = toolNamed('entities.approve-research');
+    const apply = toolNamed('sources.approve-config');
+    const intention = { id: KUBE_ENTITY, poolId: QUEUED_INTENTION };
+    const proposal = {
+      id: planted.feedId,
+      proposalId: EARLY_PROPOSAL,
+    };
+    const first = await answerOf(ratify, planted.context, intention);
+    const again = await answerOf(ratify, planted.context, intention);
+
+    // Ratifying twice answers the FIRST ruling rather than
+    // refusing, the write being `coalesce(approved_at, now())` and
+    // nothing else having happened.
+    expect(first.success).toBe(true);
+    expect(again.data).toEqual(first.data);
+
+    // Applying twice is refused, because a second application
+    // would write the two documents onto the feed again. That is
+    // `RULING_ACTS` rather than a rule either handler keeps, and
+    // it is the one place the two gates part.
+    const applied = await answerOf(apply, planted.context, proposal);
+    const err = await refusalFrom(async () => answerOf(
+      apply,
+      planted.context,
+      proposal,
+    ));
+
+    expect(applied.success).toBe(true);
+    expect(err).toBeInstanceOf(AppError);
+    expect(err).not.toBeInstanceOf(ValidationError);
+  });
+});
+
+describe('what the three writes refuse', () => {
+  it('refuses an argument no write declares', async () => {
+    const planted = await plantSurface();
+    const inputs: readonly Record<string, unknown>[] = [
+      {
+        id: JUDGED_FINDING,
+        verdict: DOMAIN_ONLY_VERDICT,
+        [SENTINEL]: 'x',
+      },
+      { id: KUBE_ENTITY, poolId: QUEUED_INTENTION, [SENTINEL]: 'x' },
+      {
+        id: planted.feedId,
+        proposalId: EARLY_PROPOSAL,
+        [SENTINEL]: 'x',
+      },
+    ];
+    const names = [
+      'findings.verdict',
+      'entities.approve-research',
+      'sources.approve-config',
+    ];
+    const refused = await Promise.all(names.map(async (name, at) => (
+      refusalFrom(async () => answerOf(
+        toolNamed(name),
+        planted.context,
+        inputs[at],
+      ))
+    )));
+
+    // `body` and not `query`: a tool is handed one object, which
+    // is the root name `parseBody` gives it, and it is the one
+    // place a tool refusal reads differently from its route.
+    expect(refused.map(faultsOf)).toEqual([
+      [{ field: 'body', code: 'unrecognized_keys' }],
+      [{ field: 'body', code: 'unrecognized_keys' }],
+      [{ field: 'body', code: 'unrecognized_keys' }],
+    ]);
+
+    // The needles are in the inputs by construction, counted by
+    // the same function, so the zeros beneath them are a reading.
+    expect(inputs.map((one) => (
+      countOccurrences(JSON.stringify(one), SENTINEL)
+    ))).toEqual([1, 1, 1]);
+    expect(refused.flatMap(channelsOf).map((one) => (
+      countOccurrences(one, SENTINEL)
+    ))).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+    // Read the state BEFORE the accepting control: this case and
+    // the control below touch the same three rows.
+    const labels = await planted.store.listFindingLabels(JUDGED_FINDING);
+    const queued = await planted.store.findPoolRowById(QUEUED_INTENTION);
+
+    expect(labels).toHaveLength(2);
+    expect(queued?.approvedAt).toBeNull();
+
+    // The control, varied along each row own axis: the same three
+    // requests without the undeclared key are accepted.
+    const answered = await Promise.all(names.map(async (name, at) => {
+      const clean = { ...inputs[at] };
+
+      delete clean[SENTINEL];
+
+      return answerOf(toolNamed(name), planted.context, clean);
+    }));
+
+    expect(answered.map((one) => one.success)).toEqual([true, true, true]);
   });
 });

@@ -56,9 +56,12 @@
  * THE FILTER, THE SORT AND THE WINDOW ARRIVE ALREADY DERIVED, on the
  * terms every list on this surface keeps. `?verdict`, `?category`,
  * `?since`, `?until`, `?sort`, `?page` and `?perPage` are how a
- * caller ASKED — a vocabulary belonging to HTTP that an MCP tool
- * would not spell at all — and {@link findingListQuerySchema} is the
- * whole of what this module says about it. `toTimeWindow` and
+ * caller ASKED, and {@link findingListQuerySchema} is the whole of
+ * what this module says about it. A tool spells those same seven
+ * as members of one arguments object rather than as a query
+ * string, which is why the schema is EXPORTED and why
+ * `src/findings/routes.ts` composes the tool input out of it: the
+ * spelling is the only part that belongs to HTTP. `toTimeWindow` and
  * `toStoreWindow` in `src/http/schemas.ts` own the two translations,
  * so nothing here re-checks a bound: the schema is what refuses an
  * inverted window and a `perPage` above the cap, and a second check

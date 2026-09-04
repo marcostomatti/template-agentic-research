@@ -152,7 +152,10 @@ import {
   getFinding,
   listFindings,
 } from './service.js';
-import { recordVerdict } from './verdict-service.js';
+import {
+  recordVerdict,
+  verdictBodySchema,
+} from './verdict-service.js';
 
 /**
  * The `:slug` segment, as an object schema over `req.params`.
@@ -229,6 +232,34 @@ export const findingListToolInputSchema = findingListQuerySchema
  */
 export const findingReadToolInputSchema = z.object({
   ...findingAddressSchema.shape,
+}).strict();
+
+/**
+ * What the MCP tool over `PATCH /findings/:id/verdict` is called
+ * with.
+ *
+ * The address names the finding and `verdictBodySchema` names the
+ * ruling, so the two spreads are the whole request. Neither schema
+ * declares a member the other does, which is what lets them share
+ * one object without either having to rename anything.
+ *
+ * SPREAD RATHER THAN EXTENDED, where the list above is the other
+ * way round: neither piece here carries an object-level refinement,
+ * so a fresh strict object loses nothing.
+ *
+ * NO VALUE RULE TRAVELS WITH `verdict`, and its absence is the same
+ * decision on both protocols rather than a narrowing this schema
+ * forgot. The accepted set is the OWNING DOMAIN's ladder, which is
+ * not knowable until the finding has been read — so a `z.enum` here
+ * would name a set some other domain uses, and the refusal stays
+ * {@link recordVerdict}'s. What that means for a tool caller is
+ * that a verdict outside the ladder is a `422` from the service and
+ * never from this object, carrying the accepted set and nothing the
+ * caller sent.
+ */
+export const findingVerdictToolInputSchema = z.object({
+  ...findingAddressSchema.shape,
+  ...verdictBodySchema.shape,
 }).strict();
 
 /** Everything {@link buildFindingsRouter} needs. */

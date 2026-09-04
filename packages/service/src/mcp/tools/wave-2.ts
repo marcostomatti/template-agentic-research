@@ -71,8 +71,8 @@
  * reasons rather than an absence to interpret. Every create and
  * patch on this wave: a topic's terms, a feed's `parser_config`, a
  * subscription's interval and a connector's `config` are all
- * configuration a research pass is scored by, and the spec's safe
- * list names the run-now pair and the wave-1 term edits alone. The
+ * configuration a research pass is scored by, and no write on
+ * this wave beyond the two below is on the spec's safe list. The
  * connector writes carry a further reason of their own — a create
  * or a patch there is how a CREDENTIAL is set, and the surfaces
  * this protocol may not reach name that one first. Every delete,

@@ -44,16 +44,16 @@
  * surface: a narrower parameter is assignable here, and the
  * intersection is the widest thing any entry could ask for.
  *
- * THE LIST IS FILLED A WAVE AT A TIME, which is a schedule rather
- * than a decision. All three wave modules have landed and hold
- * twenty-four entries between them; what is still outstanding is
- * the three wave-3 MUTATIONS, which `./wave-3.ts` takes in its own
- * task, and the server rewrite that loops over this list. So a
- * route this service serves that no entry names is not yet an
- * absence anybody decided, and only
- * `tests/invariants/mcp-exposure.test.ts` — once every wave is in
- * — can hold the exposed set against the banned one and say which
- * is which.
+ * THE LIST IS FILLED A WAVE AT A TIME, and every wave has now
+ * landed: three modules holding twenty-seven entries between them,
+ * twenty of them reads and seven the mutations the API spec names
+ * among its safe ones. What is still outstanding is the server
+ * rewrite that loops over this list, and the exposure invariant.
+ * So a route this service serves that no entry names is an absence
+ * somebody decided rather than one nobody has reached yet, and
+ * `tests/invariants/mcp-exposure.test.ts` is where the exposed set
+ * is held against the banned one and against what the routers
+ * declare, in both directions.
  */
 
 import type { ConnectorStore } from '../../connectors/store.js';
@@ -297,10 +297,11 @@ export interface McpToolEntry {
  *
  * COMPOSED FROM THE WAVE MODULES, one spread each, so a tool is
  * declared beside the routes it mirrors and this literal stays a
- * list of lists. All three are landed and every entry in them is a
- * read or one of the four safe mutations already exposed; the
- * header says why the three wave-3 writes arriving later are a
- * schedule rather than a decision.
+ * list of lists. All three are landed, and every entry in them is
+ * a read or one of the seven safe mutations: the two term edits,
+ * the two `run-now` verbs, the operator ruling on a finding and
+ * the two approval gates. Each wave module says beside its own
+ * list what it deliberately leaves off.
  *
  * REGISTERED STATICALLY, never by reading the directory, on the
  * rule `EXPORT_RENDERERS` and `SOURCE_ADAPTERS` both state for

@@ -10,11 +10,11 @@
  * file and `tests/invariants/mcp-exposure.test.ts` away together.
  *
  * THREE CLAIMS ABOUT THE LIST, and they now read something:
- * `MCP_TOOLS` carries all three wave modules, with only the
- * wave-3 MUTATIONS still to land in their own task. That is worth
- * stating because it was not true when this file was written — an
- * empty list satisfies all three, so a reader meeting three green
- * cases needs to know whether they read anything. The evidence is
+ * `MCP_TOOLS` carries all three wave modules whole, twenty-seven
+ * entries between them. That is worth stating because it was not
+ * true when this file was written — an empty list satisfies all
+ * three, so a reader meeting three green cases needs to know
+ * whether they read anything. The evidence is
  * still in the FABRICATED samples, which is where the same three
  * checks are shown to report and shown not to report everything,
  * and the checks are the same functions in both places rather than

@@ -151,6 +151,7 @@ import {
 import { parseBody, parseQuery } from '../http/validation.js';
 
 import {
+  approveConfigSchema,
   approveSourceConfig,
   listPendingConfigs,
 } from './proposals-service.js';
@@ -206,9 +207,10 @@ const sourceAddressSchema = z
  * order, so a model reading the backlog over MCP and an operator
  * reading it from a terminal are told the same row is next.
  *
- * ONLY THE READ IS HERE. The approval beside it is a write, and
- * `src/mcp/tools/wave-3.ts` takes it in its own task, with its own
- * schema declared beside this one when it does.
+ * THE APPROVAL BESIDE IT HAS ITS OWN SCHEMA, declared below rather
+ * than folded into this one: the two routes take different
+ * arguments and a shared object would let a queue read carry a
+ * `proposalId` that means nothing to it.
  *
  * The address const above stays private. Nothing here exports one,
  * so the three routers under this prefix claim that they agree by
@@ -217,6 +219,31 @@ const sourceAddressSchema = z
 export const pendingConfigListToolInputSchema = z.object({
   ...sourceAddressSchema.shape,
   ...paginationQuerySchema.shape,
+}).strict();
+
+/**
+ * What the MCP tool over `POST /sources/:id/approve-config` is
+ * called with.
+ *
+ * The address names the feed and `approveConfigSchema` names the
+ * queued proposal being ruled on, so the two spreads are the whole
+ * request. The two ids mean two different things — one is the feed
+ * a ruling is given about and the other is the proposal whose two
+ * documents are written onto it — exactly as the wire carries them,
+ * one in the path and one in the body.
+ *
+ * SPREAD RATHER THAN EXTENDED, per the queue above.
+ *
+ * NEITHER THE CROSS-FEED REFUSAL NOR THE `409` IS HERE. That a
+ * proposal was raised for the addressed feed, and that it has not
+ * been applied already, are facts about a stored row rather than
+ * about the arguments — so both stay {@link approveSourceConfig}'s,
+ * and a tool caller and an operator on the wire are turned away by
+ * one comparison rather than by two that could drift.
+ */
+export const sourceApproveConfigToolInputSchema = z.object({
+  ...sourceAddressSchema.shape,
+  ...approveConfigSchema.shape,
 }).strict();
 
 /** Everything {@link buildSourceProposalsRouter} needs. */

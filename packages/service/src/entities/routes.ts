@@ -175,6 +175,7 @@ import { parseBody, parseQuery } from '../http/validation.js';
 
 import {
   approveEntityResearch,
+  approveResearchSchema,
   getEntity,
   listEntityResearch,
   patchEntity,
@@ -250,6 +251,34 @@ export const entityReadToolInputSchema = z.object({
 export const entityResearchListToolInputSchema = z.object({
   ...entityAddressSchema.shape,
   ...paginationQuerySchema.shape,
+}).strict();
+
+/**
+ * What the MCP tool over `POST /entities/:id/approve-research` is
+ * called with.
+ *
+ * The address names the subject and `approveResearchSchema` names
+ * the queued intention being ruled on, so the two spreads are the
+ * whole request. The two ids mean two different things — one is the
+ * registry row a ruling is given about and the other is the
+ * `research_pool` row that moves — exactly as the wire carries
+ * them, one in the path and one in the body, and neither schema
+ * declares a member the other does.
+ *
+ * SPREAD RATHER THAN EXTENDED, on the terms the research page above
+ * states: neither piece carries an object-level refinement, so a
+ * fresh strict object loses nothing.
+ *
+ * THE COMPARISON THAT REFUSES SOMEBODY ELSE'S INTENTION IS NOT
+ * HERE, and could not be. That an intention was raised about the
+ * addressed subject is a fact about two stored rows rather than
+ * about the arguments, so it stays {@link approveEntityResearch}'s
+ * — and both protocols are refused by the one comparison rather
+ * than by a check this object could only approximate.
+ */
+export const entityApproveResearchToolInputSchema = z.object({
+  ...entityAddressSchema.shape,
+  ...approveResearchSchema.shape,
 }).strict();
 
 /** Everything {@link buildEntitiesRouter} needs. */
