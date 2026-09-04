@@ -7,13 +7,15 @@
  * ONE FUNCTION, AND IT IS A SIBLING OF `./service.ts` RATHER THAN A
  * MEMBER OF IT. That module rules on a `sources` ROW — reading a
  * domain's feeds, adding one, retuning one, retiring one — and this
- * one rules on the `documents` captured through one of them. Two
- * subjects, two files, and the split is what keeps the resource
- * operations and the queue from growing into each other:
- * `SourceServiceStore` over there names neither read below, and
- * {@link SourceFailuresServiceStore} names none of the writes.
- * `./store.ts` carries the whole of that argument for the one port
- * the two of them narrow.
+ * one rules on the `documents` captured through one of them.
+ * `./proposals-service.ts` is the third, ruling on the
+ * `source_config_proposals` queued against one. Three subjects,
+ * three files, and the split is what keeps the resource
+ * operations, the queue and the gate from growing into each
+ * other: `SourceServiceStore` over there names neither read
+ * below, and {@link SourceFailuresServiceStore} names none of the
+ * writes. `./store.ts` carries the whole of that argument for the
+ * one port the three of them narrow.
  *
  * THE SOURCE IS RESOLVED BEFORE ANY DOCUMENT IS READ, and that read
  * is the entire difference between a source whose captures all
