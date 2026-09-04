@@ -4,12 +4,14 @@
  * `tests/helpers/memory-research-store.ts`, so every claim here is
  * answered with no database anywhere.
  *
- * FIVE SECTIONS AND FOURTEEN CASES. Four sections are the refusals
- * this surface can raise and their controls: a `?domain` slug no
- * domain carries, an id no run carries, a `perPage` above the cap
- * `src/http/schemas.ts` declares, and a `?domain` that could not be
- * a slug at all. The fifth is what those refusals carry, read per
- * channel.
+ * SEVEN SECTIONS AND NINETEEN CASES. Four sections are the
+ * refusals this surface can raise and their controls: a `?domain`
+ * slug no domain carries, an id no run carries, a `perPage` above
+ * the cap `src/http/schemas.ts` declares, and a `?domain` that
+ * could not be a slug at all. One is what those refusals carry,
+ * read per channel. The last two are what the two reads ANSWER —
+ * which passes a page holds under each spelling of `?domain`, and
+ * what a pass carries beside its own row.
  *
  * TWO OF THE FOUR ARE THIS MODULE'S OWN AND TWO ARE THE SCHEMA'S,
  * and saying which is half of what this file is for. `listRuns` and
@@ -27,18 +29,21 @@
  * `tests/helpers/memory-research-store.test.ts` is where they are
  * held, so a case about a refusal cannot fail for an ordering reason
  * and an ordering that broke is reported in one place rather than in
- * two files disagreeing about which.
+ * two files disagreeing about which. The one case that reads WHICH
+ * rows survived a cut says it as a membership too:
+ * {@link LONG_LEDGER}'s stamps and its ids agree, so the newest
+ * {@link RUN_LEDGER_CAP} calls are also the highest ids and which
+ * end the cut took is readable without asserting an order.
  *
- * WHAT A PAGE AND A DETAIL CARRY IS THE NEXT HALF'S SUBJECT, and
- * this one deliberately stops short of it. The domain-less tick
- * standing in an unfiltered page, a ledger longer than
- * `RUN_LEDGER_CAP` answering its newest rows, and `llmCallCount`
- * reporting the full number beside a cut list are positive readings;
- * every assertion below is a refusal, a control varied along that
- * refusal's own axis, or a count. The honest consequence is that no
- * leg aimed at the cap, the truncation flag or either order can
- * report in this revision, and the grid below records those zeros
- * rather than leaving them to be read as coverage.
+ * WHAT A PAGE AND A DETAIL CARRY IS READ HERE TOO, and the two
+ * sections that read it are what closed four of the zeros the
+ * refusal-only revision of this file recorded. The domain-less
+ * tick standing in an unfiltered page, a ledger longer than
+ * {@link RUN_LEDGER_CAP} answering its newest rows, and
+ * `llmCallCount` reporting the full number beside a cut list are
+ * the claims those sections make; the grid below reports each by
+ * name against the revision before them, and says which recorded
+ * zero went live and which one is a zero still.
  *
  * EVERY REFUSAL CASE CARRIES ITS OWN CONTROL, VARIED ALONG THAT
  * ROW'S OWN AXIS. A function refusing everything and a schema
@@ -102,6 +107,46 @@
  * called nothing from a pass that is not there, and calls really
  * planted under an unused id are still refused.
  *
+ * THAT AN ABSENT `?domain` WIDENS AND A PRESENT ONE NARROWS, read
+ * off the ROWS rather than off a total. The unnarrowed page holds
+ * the maintenance tick beside a pass a domain made, and the two are
+ * told apart by the `domainId` each answered row carries — a null
+ * and the id the slug resolved to — so a widening that had quietly
+ * dropped the rows belonging to nobody is a red rather than a
+ * smaller number nothing compares.
+ *
+ * THAT THE NARROWINGS PARTITION THE COLLECTION, which no single
+ * narrowed page can report: a filter that had stopped being applied
+ * answers every narrowed page plausibly, and only the arithmetic
+ * catches it. The two domains' totals together fall short of the
+ * unnarrowed one by exactly the passes belonging to nobody, which
+ * is the positive form of this wave's decision that no spelling of
+ * `?domain` asks for those passes alone.
+ *
+ * THAT THE LEDGER IS CUT AT {@link RUN_LEDGER_CAP} AND THE CUT IS
+ * REPORTED, bracketed rather than asserted. A pass under the cap
+ * answers its ledger whole with `RunDetail.ledgerTruncated`
+ * false and its count equal to its length; a pass past the cap
+ * answers exactly {@link RUN_LEDGER_CAP} rows, `true`, and a count
+ * that is the FULL number — the two differing by exactly what was
+ * withheld. The over-cap fixture is DERIVED from the exported
+ * constant rather than transcribed, so a cap that moved moves the
+ * plant with it instead of leaving a case that no longer reaches
+ * one.
+ *
+ * THAT THE END THE CUT TOOK IS THE OLDEST ONE, which a length alone
+ * cannot say. The dropped ids are asserted absent from what came
+ * back, and every planted call is read off the port in the same
+ * case first, so the rows missing from the answer were CUT rather
+ * than never stored.
+ *
+ * THAT A PASS THAT CALLED NOTHING IS A `200` AND NOT A `404`. Both
+ * ledger reads answer emptily for a pass that spent nothing and for
+ * an id no run carries, so the empty list is the state the lookup
+ * separated from the refusal one section above — and the control is
+ * the same call against a pass that DID spend, which a function
+ * answering an empty ledger to everything fails.
+ *
  * THAT NO REFUSAL QUOTES ANYTHING, READ PER CHANNEL. An `AppError`
  * can carry a submitted value out through three of them — the
  * message, the details and the CAUSE — and a count taken over the
@@ -122,14 +167,23 @@
  * id matches one of those by coincidence often enough to read as a
  * leak.
  *
- * Mutation grid, run WHOLE over this file TWICE with
- * `--reporter=json` and read as the failed case SET rather than as
- * a count. The two runs agreed member for member on all SEVENTEEN
- * legs, which is what separates a measurement from a bad capture.
- * Fourteen mutate `./service.ts` and three mutate
- * `tests/helpers/memory-research-store.ts`. There is no HEAD-vs-tip
- * diff beside them: the file is new, so every figure below is its
- * first.
+ * Mutation grid, TWENTY-TWO legs, run WHOLE over this file TWICE
+ * with `--reporter=json` and read as the failed case SET rather
+ * than as a count. The two runs agreed member for member on every
+ * leg, which is what separates a measurement from a bad capture,
+ * and a third run of the twenty-one legs that predate the two
+ * positive sections agreed with both. Sixteen mutate
+ * `./service.ts` and six mutate
+ * `tests/helpers/memory-research-store.ts`. Beside them is a
+ * HEAD-vs-tip diff: the same legs run against
+ * `git show HEAD:./src/runs/service.test.ts`, the revision before
+ * the two positive sections landed. NOTHING was lost on any leg —
+ * every set at the tip is its HEAD set plus new cases — so the
+ * three groups below are the whole reading.
+ *
+ * ELEVEN LEGS HELD BYTE-IDENTICAL SETS, one of them empty at both
+ * revisions, which is what says the two new sections took over no
+ * claim an older case was making.
  *
  * THE TWO 404 BRANCHES ARE THE LARGEST LEGS AND THEIR SETS ARE
  * DISJOINT. Comparing the resolved domain against `undefined` so
@@ -137,69 +191,79 @@
  * section that refuse, the tail of the shape section, which drives
  * a slug that parses and resolves to nothing, and the containment
  * case that goes through it. Comparing the resolved run the same
- * way reddens 4, the whole of the second section plus its own
- * containment case. That the two sets share no member is what says
- * the two refusals are separately covered rather than one of them
- * standing in for both.
+ * way reddens 4, the whole of the second refusal section plus its
+ * own containment case. That the two sets share no member is what
+ * says the two refusals are separately covered rather than one of
+ * them standing in for both.
  *
- * THE THREE ORDERING LEGS REDDEN ONE CASE EACH, and each of those
- * cases is a tally no assertion on a status could replace. Issuing
- * the run reads above the lookup reddens 1; issuing the ledger
- * reads above it reddens 1; and looking the domain up even when no
- * `?domain` was sent reddens 1, the widening tally, which is the
- * only reading in the file that can report it.
+ * THE THREE ORDERING LEGS REDDEN ONE CASE EACH, unmoved, and each
+ * of those cases is a tally no assertion on a status could
+ * replace: issuing the run reads above the lookup 1, issuing the
+ * ledger reads above it 1, and looking the domain up even when no
+ * `?domain` was sent 1 — the widening tally, which is the only
+ * reading in the file that can report it.
  *
  * COMPOSING A SUBMITTED VALUE INTO A MESSAGE REDDENS ONE CASE PER
- * REFUSAL. The slug rendered into the missing-domain sentence
- * reddens 1 and the id rendered into the missing-run one reddens 1,
- * each on its own containment case — which is what says the
- * per-channel counts are reading the refusal they name.
+ * REFUSAL, 1 and 1, each on its own containment case. THE TWO
+ * LOOSENING LEGS are unmoved too: a catchall on the composed
+ * schema reddens 1, the undeclared-key case alone, and swapping
+ * `slugParamSchema` for `z.string()` reddens 2 — the shape refusal
+ * and the containment case beside it — leaving every case that
+ * sends a well-shaped slug green, which is the honest limit rather
+ * than a gap.
  *
  * THE CEILING LEG NEEDS A CEILING THAT DIFFERS, which is the one
- * place a leg's spelling changes its answer. A `perPage`
- * re-declared on the composed schema with the SAME bounds reddens
- * ZERO, agreeing with the shared one in every request; the same
- * declaration with the ceiling RAISED reddens 3 — the bracketing
- * case, the boundary case, and the containment case whose refusal
- * stops being raised. That zero is the state the bracketing case
- * exists to catch the day either number moves, and a grid run with
- * the agreeing spelling alone would record the case as dead.
+ * place a leg's spelling changes its answer, and it is unmoved at
+ * both revisions. A `perPage` re-declared on the composed schema
+ * with the SAME bounds reddens ZERO, agreeing with the shared one
+ * in every request; the same declaration with the ceiling RAISED
+ * reddens 3 — the bracketing case, the boundary case, and the
+ * containment case whose refusal stops being raised.
  *
- * THE TWO LOOSENING LEGS REDDEN WHAT THEY CAN REACH. Giving the
- * composed schema a catchall reddens 1, the undeclared-key case
- * alone. Swapping `slugParamSchema` for `z.string()` on `?domain`
- * reddens 2 — the shape refusal and the containment case beside it
- * — and leaves every case that sends a well-shaped slug green,
- * which is the honest limit rather than a gap: a looser type still
- * accepts every value those cases send.
+ * FIVE LEGS WENT FROM 0 TO LIVE, and they are what the two new
+ * sections bought. Handing the store a limit of 1 instead of
+ * {@link RUN_LEDGER_CAP} reddens 2, the short ledger and the long
+ * one. Pinning `RunDetail.ledgerTruncated` to `false`
+ * reddens 1, the long ledger alone. Comparing on `>=` rather than
+ * `>` reddens 2, the short ledger and the empty one — the two
+ * whose count equals their length, the long one answering `true`
+ * either way. Answering `llmCallCount` off the cut list rather
+ * than off the count reddens 1, the long ledger alone. And in the
+ * store, a ledger read not scoped by its run reddens 2 — the short
+ * ledger and the empty one, the long one's newest two hundred
+ * being its own either way, every unattributed call having been
+ * made a day earlier.
  *
- * THE FOUR FIXTURE LEGS ARE WHAT SAY THE PLANTED ROWS ARE REACHED.
- * Planting nothing reddens 7. Dropping the store's runs predicate
- * reddens 2 and answering `0` for every ledger count reddens 2,
- * each pair being that half's scoping control and its orphan plant.
- * Building the filter with no `domainId` reddens 1, the scoping
- * control alone.
+ * SIX LEGS MOVED, every added member a new case and none lost.
+ * Planting nothing at all goes 7 to 12; planting no runs 5 to 10
+ * and no calls 3 to 6; dropping the store's runs predicate 2 to 4;
+ * answering `0` for every ledger count 2 to 5; and building the
+ * filter with no `domainId` 1 to 3, its two new members being the
+ * page section's own cases.
  *
- * THE PLANT-NOTHING SURVIVORS ARE THE COVERAGE STATEMENT RATHER
- * THAN ITS COUNT. Seven of fourteen stay green, and every one is a
- * case that needs no planted row to make its point: the four whose
- * subject is a query the schema refuses or accepts, the two of the
- * first section whose readings are a status and a tally, and the
- * containment case over the two boundary refusals. A survivor that
- * could not be explained that way would be a case asserting
- * something it does not mean.
+ * THE PLANT-NOTHING SURVIVORS ARE STILL THE COVERAGE STATEMENT
+ * RATHER THAN ITS COUNT. Seven of nineteen stay green, and every
+ * one is a case that needs no planted row to make its point: the
+ * four whose subject is a query the schema refuses or accepts, the
+ * two of the first section whose readings are a status and a
+ * tally, and the containment case over the two boundary refusals.
+ * A survivor that could not be explained that way would be a case
+ * asserting something it does not mean.
  *
- * THREE LEGS READ 0 AND ARE RECORDED RATHER THAN WIDENED AWAY, and
- * two of the three belong to the half this revision does not reach.
- * Handing the store a limit of 1 instead of `RUN_LEDGER_CAP`
- * reddens nothing, and pinning `ledgerTruncated` to `false` reddens
- * nothing: no case here reads the length of an embedded ledger or
- * the flag beside it. What closes those two is a pass whose ledger
- * EXCEEDS the cap, which is the next half's fixture and not this
- * one's. The third is the agreeing ceiling above.
+ * ONE LEG STILL READS 0 AND ONE MORE IS RECORDED BESIDE IT. The
+ * agreeing ceiling above is the first, and it is the state the
+ * bracketing case exists to catch the day either number moves. The
+ * second is measured rather than run in the grid: comparing
+ * `llmCallCount` against {@link RUN_LEDGER_CAP} rather than
+ * against the length that came back reddens 0 of 19, because
+ * `src/runs/service.ts` argues the difference shows only for a
+ * store that cut LOWER than the cap it was handed and no store
+ * here does. Nothing in this file can close it, and widening a
+ * case would not — it is a claim about a store rather than about
+ * a service.
  */
 import type { RunsServiceStore } from './service.js';
-import type { RunFilter, RunRecord } from './store.js';
+import type { RunFilter } from './store.js';
 import type { FieldError } from '../../lib/errors/index.js';
 import type {
   MemoryLlmCall,
@@ -222,7 +286,12 @@ import {
 import { paginationQuerySchema } from '../http/schemas.js';
 import { parseQuery } from '../http/validation.js';
 
-import { getRun, listRuns, runListQuerySchema } from './service.js';
+import {
+  getRun,
+  listRuns,
+  RUN_LEDGER_CAP,
+  runListQuerySchema,
+} from './service.js';
 
 /** The seeded worked example, and the domain most cases narrow to. */
 const RADAR = 'example-tech-radar';
@@ -346,6 +415,18 @@ const RUN_TICK = 4330001;
 /** A pass filed under a domain id no row carries. */
 const RUN_ORPHAN = 4440001;
 
+/**
+ * A pass whose ledger runs past {@link RUN_LEDGER_CAP}.
+ *
+ * PLANTED BY THE ONE CASE THAT READS IT rather than by
+ * {@link plantRuns}, on {@link ORPHAN_RUN}'s reasoning: a ledger of
+ * {@link LONG_LEDGER}'s size standing behind every case would make
+ * the fixture the slowest thing in this file to answer a claim two
+ * cases read, and every count above would be taken over a table
+ * two hundred rows deeper than the one they are about.
+ */
+const RUN_LONG = 4550001;
+
 /** Whose pass a planted row is, as the fixture names it. */
 type PassOwner = 'nobody' | 'radar' | 'sibling';
 
@@ -445,6 +526,25 @@ const RADAR_RUN_IDS: readonly number[] = idsOwnedBy('radar');
 /** {@link SIBLING}'s one. */
 const SIBLING_RUN_IDS: readonly number[] = idsOwnedBy('sibling');
 
+/** The maintenance tick, which belongs to neither. */
+const TICK_RUN_IDS: readonly number[] = idsOwnedBy('nobody');
+
+/**
+ * Every planted pass, whoever made it.
+ *
+ * THE UNION OF THE THREE OWNERS rather than a fourth derivation
+ * over the same table, so the roster an unnarrowed page is read
+ * against is the three narrowed ones added up — which is the same
+ * partition the page cases assert, taken here at fixture time.
+ * {@link PassOwner} is closed at three, so nothing can be left out
+ * of it without `check-types` saying so.
+ */
+const ALL_RUN_IDS: readonly number[] = [
+  ...RADAR_RUN_IDS,
+  ...SIBLING_RUN_IDS,
+  ...TICK_RUN_IDS,
+].sort((left, right) => left - right);
+
 /** One planted `llm_calls` row, before the store holds it. */
 interface PlantedCall {
   /** `llm_calls.id`, and the ledger's tiebreak. */
@@ -477,10 +577,34 @@ const PLANTED_CALLS: readonly PlantedCall[] = [
   { id: 5330001, runId: null, node: 'maintenance' },
 ];
 
-/** How many calls {@link RUN_BUSY} ledgered, derived from the plant. */
-const BUSY_LEDGER_COUNT = PLANTED_CALLS.filter(
-  (call) => call.runId === RUN_BUSY,
-).length;
+/**
+ * The ids of the calls one pass ledgered, ASCENDING.
+ *
+ * DERIVED FROM {@link PLANTED_CALLS} rather than written out, on
+ * {@link idsOwnedBy}'s reasoning one table down: a call that
+ * changed pass moves every roster it is read against.
+ *
+ * @param runId - Whose ledger to name, or null for the calls that
+ *   name no pass at all.
+ * @returns Their ids, ascending, for a membership reading that
+ *   says nothing about the order a ledger came back in.
+ */
+function callIdsUnder(runId: number | null): number[] {
+  return PLANTED_CALLS
+    .filter((call) => call.runId === runId)
+    .map((call) => call.id)
+    .sort((left, right) => left - right);
+}
+
+/** {@link RUN_BUSY}'s two calls. */
+const BUSY_CALL_IDS: readonly number[] = callIdsUnder(RUN_BUSY);
+
+/** {@link RUN_ELSEWHERE}'s one, which no ledger read here holds. */
+const ELSEWHERE_CALL_IDS: readonly number[] =
+  callIdsUnder(RUN_ELSEWHERE);
+
+/** How many calls {@link RUN_BUSY} ledgered. */
+const BUSY_LEDGER_COUNT = BUSY_CALL_IDS.length;
 
 /** The call planted under a run id no row carries. */
 const ORPHAN_CALLS: readonly PlantedCall[] = [
@@ -506,6 +630,57 @@ function ledgered(call: PlantedCall): MemoryLlmCall {
     calledAt: new Date(CALLED_AT),
   };
 }
+
+/** How many calls {@link LONG_LEDGER} runs past the cap. */
+const LEDGER_OVERSHOOT = 3;
+
+/** The first id {@link LONG_LEDGER} takes. */
+const LONG_CALL_FIRST_ID = 5550001;
+
+/**
+ * A ledger longer than the cap: {@link RUN_LEDGER_CAP} calls plus
+ * {@link LEDGER_OVERSHOOT}, OLDEST FIRST.
+ *
+ * DERIVED FROM THE CAP RATHER THAN TRANSCRIBED, which is what
+ * exporting the constant is for: a fixture of two hundred and three
+ * literal rows would go on reading as a ledger past the cap after
+ * the cap had moved above it, and the case would answer nothing.
+ *
+ * ITS STAMPS AND ITS IDS AGREE, one minute apart and one id apart,
+ * so the newest {@link RUN_LEDGER_CAP} calls are also the highest
+ * ids and the case can read WHICH rows survived the cut as a
+ * membership. That keeps this file's rule that no case here reads
+ * either order — `called_at DESC, id DESC` is `RunStore`'s promise
+ * and `tests/helpers/memory-research-store.test.ts` is where it is
+ * held — while still saying the cut took the OLDEST end, which a
+ * length alone cannot.
+ *
+ * THE STAMPS ARE BUILT FROM `Date.UTC` AND NOT FROM A STRING, so
+ * nothing here depends on a parse: the month is 0-based, so the
+ * calls are made through the morning of 4 March 2026.
+ */
+const LONG_LEDGER: readonly MemoryLlmCall[] = Array.from(
+  { length: RUN_LEDGER_CAP + LEDGER_OVERSHOOT },
+  (_unused, index) => ({
+    id: LONG_CALL_FIRST_ID + index,
+    runId: RUN_LONG,
+    node: 'step',
+    model: null,
+    promptChars: null,
+    estTokens: null,
+    calledAt: new Date(Date.UTC(2026, 2, 4, 0, index)),
+  }),
+);
+
+/** The ids the cap keeps: the newest {@link RUN_LEDGER_CAP}. */
+const LONG_KEPT_IDS: readonly number[] = LONG_LEDGER
+  .slice(LEDGER_OVERSHOOT)
+  .map((call) => call.id);
+
+/** The ids it drops: the {@link LEDGER_OVERSHOOT} oldest. */
+const LONG_DROPPED_IDS: readonly number[] = LONG_LEDGER
+  .slice(0, LEDGER_OVERSHOOT)
+  .map((call) => call.id);
 
 /** The two domains, the four passes across them, and the store. */
 interface PlantedRuns {
@@ -590,6 +765,32 @@ const ORPHAN_RUN: MemoryRun = {
   errors: [{ node: SENTINEL_ERROR }],
   scheduledBy: 'interval',
 };
+
+/**
+ * The pass {@link LONG_LEDGER} belongs to.
+ *
+ * A FUNCTION BECAUSE ITS OWNER IS ONLY KNOWN AT RUN TIME: the
+ * domain ids are the store's. An ordinary domain-scoped pass is
+ * what this reading wants — how long a ledger ran is a fact about
+ * what a pass spent and not about whose it was — and a null here
+ * would quietly make the one case that plants it a second reading
+ * about the domain-less ticks.
+ *
+ * @param domainId - The domain the pass belongs to.
+ * @returns The row to plant.
+ */
+function longRun(domainId: number): MemoryRun {
+  return {
+    id: RUN_LONG,
+    domainId,
+    startedAt: new Date(THIRD_START),
+    finishedAt: null,
+    status: 'ok',
+    counts: {},
+    errors: [],
+    scheduledBy: 'interval',
+  };
+}
 
 /** How many times each read this file drives was issued. */
 interface ReadCounts {
@@ -804,14 +1005,17 @@ function leaksIn(err: AppError, needle: string): number[] {
 }
 
 /**
- * @param rows - The page a read answered.
+ * @param rows - The page a read answered, or the ledger one did.
+ *   Both records carry an `id` and nothing else here needs a
+ *   wider view of either — one helper rather than two saying the
+ *   same thing about two tables.
  * @returns The ids in it, ASCENDING, for a membership reading that
  *   says nothing about the order a page came back in. What that
  *   order is belongs to the store's own file, and reading it here
  *   would make a case about a refusal able to fail for an ordering
  *   reason.
  */
-function idsOf(rows: readonly RunRecord[]): number[] {
+function idsOf(rows: readonly { readonly id: number }[]): number[] {
   return [...rows].map((row) => row.id).sort((left, right) => left - right);
 }
 
@@ -929,6 +1133,77 @@ describe('a domain slug that names no row', () => {
 });
 
 // ---------------------------------------------------------------------------
+// The passes a page holds
+// ---------------------------------------------------------------------------
+
+describe('the passes a page holds', () => {
+  it('holds the domain-less tick when nothing narrows', async () => {
+    // An absent `?domain` is EVERY pass, per `src/runs/service.ts`,
+    // and the tick is the row that says so: a maintenance pass
+    // belongs to nobody, and a widening that quietly dropped the
+    // rows carrying a null would answer three where four were
+    // planted. Read as a membership and a count, so it cannot fail
+    // for an ordering reason.
+    const { store, domainId } = await plantRuns();
+    const page = await listRuns(store, undefined, WIDE_WINDOW);
+
+    expect(idsOf(page.rows)).toEqual([...ALL_RUN_IDS]);
+    expect(page.total).toBe(PLANTED_PASSES.length);
+
+    // BOTH KINDS ARE REALLY IN IT, read off the answered rows and
+    // not off their ids: one pass carries the domain it was made
+    // for and one carries the null. Without this the case is a page
+    // holding four numbers rather than a page holding both.
+    const tick = page.rows.find((row) => row.id === RUN_TICK);
+    const owned = page.rows.find((row) => row.id === RUN_BUSY);
+
+    expect(tick?.domainId).toBeNull();
+    expect(owned?.domainId).toBe(domainId);
+
+    // The control, varied along the one axis under test: the same
+    // window with the parameter PRESENT leaves the tick out. A
+    // function that ignored `?domain` altogether answers everything
+    // above and fails this.
+    const narrowed = await listRuns(store, RADAR, WIDE_WINDOW);
+
+    expect(idsOf(narrowed.rows)).not.toContain(RUN_TICK);
+  });
+
+  it('holds one domain and leaves the tick out', async () => {
+    // `?domain` NARROWS a collection that exists without it, and
+    // what says so is a PARTITION rather than a count: the two
+    // narrowings together fall short of the unnarrowed page by
+    // exactly the passes belonging to nobody. Neither narrowed page
+    // alone can report a filter that had stopped being applied,
+    // both being correct under a store answering everything.
+    const { store, domainId } = await plantRuns();
+    const every = await listRuns(store, undefined, WIDE_WINDOW);
+    const radar = await listRuns(store, RADAR, WIDE_WINDOW);
+    const sibling = await listRuns(store, SIBLING, WIDE_WINDOW);
+    const narrowed = radar.total + sibling.total;
+
+    expect(idsOf(radar.rows)).toEqual([...RADAR_RUN_IDS]);
+    expect(idsOf(radar.rows)).not.toContain(RUN_TICK);
+    expect(narrowed + TICK_RUN_IDS.length).toBe(every.total);
+    expect(narrowed).toBeLessThan(every.total);
+
+    // And every row the narrowing DID answer belongs to the domain
+    // the slug resolved to, which is the other half of the same
+    // claim: the page is one domain rather than merely fewer rows.
+    const owners = new Set(radar.rows.map((row) => row.domainId));
+
+    expect([...owners]).toEqual([domainId]);
+
+    // And the tick the narrowing left out is really THERE, which is
+    // what makes its absence above a narrowing rather than a row
+    // nothing planted. There is no spelling that asks for it alone,
+    // per `src/runs/service.ts`, so the unnarrowed page is the only
+    // place it can be read from.
+    expect(idsOf(every.rows)).toContain(RUN_TICK);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // An id that names no run
 // ---------------------------------------------------------------------------
 
@@ -1001,6 +1276,109 @@ describe('an id that names no run', () => {
 
     expect(refusal).toBeInstanceOf(NotFoundError);
     expect(refusal.statusCode).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The ledger a pass answers
+// ---------------------------------------------------------------------------
+
+describe('the ledger a pass answers', () => {
+  it('answers a short ledger whole and says it was not cut', async () => {
+    // Under the cap, so the answered list IS the ledger and
+    // `ledgerTruncated` is false. The count and the length agree
+    // here, which is what a `>=` in place of the `>` in
+    // `src/runs/service.ts` turns into a `true` nothing withheld.
+    const { store } = await plantRuns();
+    const answered = await getRun(store, RUN_BUSY);
+
+    expect(answered.run.id).toBe(RUN_BUSY);
+    expect(idsOf(answered.ledger)).toEqual([...BUSY_CALL_IDS]);
+    expect(answered.llmCallCount).toBe(BUSY_LEDGER_COUNT);
+    expect(answered.ledger).toHaveLength(answered.llmCallCount);
+    expect(answered.ledgerTruncated).toBe(false);
+    expect(answered.llmCallCount).toBeLessThan(RUN_LEDGER_CAP);
+
+    // The equality above is a scoping reading too: the calls of the
+    // other domain's pass and the call attributed to no pass at all
+    // are both in the table and in neither list. Read off the port,
+    // so their absence is a ledger addressed by a run id rather
+    // than rows nothing planted.
+    const elsewhere = await store.countRunLedger(RUN_ELSEWHERE);
+
+    expect(elsewhere).toBe(ELSEWHERE_CALL_IDS.length);
+    expect(elsewhere).toBeGreaterThan(0);
+  });
+
+  it('answers the newest calls of a ledger past the cap', async () => {
+    // The cap is a constant of `src/runs/service.ts` and not a
+    // parameter, so the only way to reach it is a pass that spent
+    // more than it. Planted here rather than in the fixture, per
+    // {@link RUN_LONG}, and the base rows are re-planted beside it
+    // because both seams REBUILD their collection.
+    const planted = await plantRuns();
+
+    planted.store.setRuns([...planted.runs, longRun(planted.domainId)]);
+    planted.store.setLlmCalls([
+      ...PLANTED_CALLS.map(ledgered),
+      ...LONG_LEDGER,
+    ]);
+
+    // Every planted call is really reachable through the port, so
+    // the rows missing from the answer below were CUT rather than
+    // never stored — which is the whole of what this case is about.
+    const whole = await planted.store.listRunLedger(
+      RUN_LONG,
+      LONG_LEDGER.length,
+    );
+
+    expect(idsOf(whole)).toEqual(idsOf(LONG_LEDGER));
+
+    const answered = await getRun(planted.store, RUN_LONG);
+
+    expect(answered.run.id).toBe(RUN_LONG);
+    expect(answered.ledger).toHaveLength(RUN_LEDGER_CAP);
+    expect(idsOf(answered.ledger)).toEqual([...LONG_KEPT_IDS]);
+    expect(answered.ledgerTruncated).toBe(true);
+
+    // The count is the FULL one beside the cut list, and the two
+    // differ by exactly what was withheld — the number a caller
+    // deciding whether to go back for the rest is reading.
+    expect(answered.llmCallCount).toBe(LONG_LEDGER.length);
+    expect(answered.llmCallCount - answered.ledger.length)
+      .toBe(LEDGER_OVERSHOOT);
+
+    // And the end that went is the OLDEST one, which the length
+    // alone cannot say: the dropped ids are the earliest calls and
+    // none of them survived.
+    const kept = idsOf(answered.ledger);
+
+    expect(LONG_DROPPED_IDS.filter((id) => kept.includes(id)))
+      .toEqual([]);
+  });
+
+  it('answers an empty ledger rather than a 404', async () => {
+    // A pass that called nothing is a `200` with an empty list, not
+    // a missing run: `RunStore.countRunLedger` answers zero both
+    // for a pass that spent nothing and for an id no run carries,
+    // and the lookup is the only thing that separates them.
+    const { store } = await plantRuns();
+    const answered = await getRun(store, RUN_QUIET);
+
+    expect(answered.run.id).toBe(RUN_QUIET);
+    expect(answered.ledger).toEqual([]);
+    expect(answered.llmCallCount).toBe(0);
+    expect(answered.ledgerTruncated).toBe(false);
+
+    // The control, varied along the one axis under test: the same
+    // call against a pass that DID spend answers rows. A function
+    // answering an empty ledger to everything, or a store that had
+    // lost `llm_calls` altogether, passes everything above and
+    // fails this.
+    const spent = await getRun(store, RUN_BUSY);
+
+    expect(spent.ledger.length).toBeGreaterThan(0);
+    expect(spent.llmCallCount).toBeGreaterThan(answered.llmCallCount);
   });
 });
 
