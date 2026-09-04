@@ -94,15 +94,21 @@ Two ways to combine them:
   `AUTH_INTROSPECT_URL`/`AUTH_INTROSPECT_SECRET` point the middleware at
   somebody else's RFC 7662 endpoint instead; with neither pair set both are
   no-op passthroughs. Configured either way, they fail closed.
-- **The HTTP resource surface** — eight resource groups over schema v2, wired
-  from `src/index.ts` as ten routers, because the taxonomy and the sources
-  group each contribute two. Wave 1 is `src/domains/`, `src/taxonomy/`
-  (categories and terms), `src/personas/` and `src/settings/`; wave 2 adds
-  `src/topics/`, the HTTP half of `src/sources/` with its read-only failures
-  queue beside the adapter contract that was already there,
-  `src/connectors/`, and `src/subscriptions/` — which answers under
-  `/exports`, that name having been taken by the renderer registry in
-  `src/exports/`. All ten sit over the shared route boundary in `src/http/`.
+- **The HTTP resource surface** — twelve resource groups over schema v2,
+  wired from `src/index.ts` as sixteen routers, because the taxonomy
+  contributes two, the sources group three and the runs group two. Wave 1 is
+  `src/domains/`, `src/taxonomy/` (categories and terms), `src/personas/` and
+  `src/settings/`; wave 2 adds `src/topics/`, the HTTP half of `src/sources/`
+  with its read-only failures queue beside the adapter contract that was
+  already there, `src/connectors/`, and `src/subscriptions/` — which answers
+  under `/exports`, that name having been taken by the renderer registry in
+  `src/exports/`; wave 3 adds `src/findings/` and the verdicts an operator
+  rules on them with, `src/documents/`, `src/entities/` and the gate over the
+  research queued against them, `src/runs/` with the spend summary over its
+  model-call ledger, and the config-proposal gate under `/sources/:id` that
+  wave 2 deferred. `src/approvals/` is in neither count: it is the vocabulary
+  both approval gates answer in, and holds no router, no port and no store.
+  All sixteen routers sit over the shared route boundary in `src/http/`.
   Every path is declared root-absolute and every router mounts at `/`, so the
   string in the router is the string on the wire; the inventory is the router
   table in `docs/architecture/08-http-api.md`. A success answers
@@ -118,9 +124,30 @@ Two ways to combine them:
   a caller carrying no credential rather than Express's `404` — the one
   answer outside their own prefixes that they change. Three of those routes
   write a due time and nothing else does: `POST /topics/:id/run-now`,
-  `POST /topics/:id/pause` and `POST /exports/:id/run-now`, which is why
-  the topics and subscriptions routers are the two handed a clock beside
-  the store.
+  `POST /topics/:id/pause` and `POST /exports/:id/run-now`. Wave 3 adds four
+  writers and none of them is a fourth: the verdict appended to a finding,
+  the entity patch, and the two approvals. Three routers are handed a clock
+  beside the store — topics, subscriptions and the spend summary — and only
+  the last of the three reads it without writing a column.
+- **The MCP tool surface** — `MCP_TOOLS` in `src/mcp/tools/registry.ts` is
+  the written-out list of everything a client is offered over the second
+  protocol, composed from three wave modules beside it: twenty-seven entries,
+  twenty of them reads and seven the mutations the design names among its
+  safe ones — the two term edits, the two `run-now` verbs, the verdict on a
+  finding, and the two approvals. `src/mcp/server.ts` registers every one of
+  them in one loop, so a tool arrives by an edit somebody reviews and never
+  by a file appearing in the directory. Each entry carries the input schema
+  its HTTP route already exports, asserted identical rather than restated,
+  and calls the same service function that route calls, so neither protocol
+  decides anything the other does not. Three routes are banned outright and
+  may never be an entry — `POST /connectors` and `PATCH /connectors/:id`,
+  each of which is how a stored credential is set, and
+  `DELETE /domains/:slug`, the one act here no later request can undo — and
+  so is every route under `/_control`.
+  `tests/invariants/mcp-exposure.test.ts` holds that roster, the separate
+  written-out set of routes nobody has exposed, and the partition over what
+  the routers themselves declare, so a route named by no roster fails rather
+  than passing unnoticed. See `docs/architecture/09-mcp.md`.
 - **Operator control plane** — with `control` configured, `/_control` exposes
   status/pause/resume/restart behind a shared token, and `stop` as well when
   `control.allowStop` opts in (see `lib/express/control/`; hardening notes

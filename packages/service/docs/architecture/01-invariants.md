@@ -321,11 +321,16 @@ path anybody has to review for.
 
 A branch inside a workflow would be the weaker form of the same rule. It
 can be edited by anyone who can open the executor's UI, that edit leaves
-no diff to review, and it binds only the writer it sits in. Until the
-service and its UI take approvals over, rulings on both gates are made
-through one small CLI — `scripts/approve.ts`, landed in phase 2 and
-taught the second gate in phase 5 — which is a client of the constraints
-and not a substitute for either.
+no diff to review, and it binds only the writer it sits in. Rulings on
+both gates are made through one small CLI — `scripts/approve.ts`, landed
+in phase 2 and taught the second gate in phase 5 — and, since q13, over
+HTTP beside it, at `POST /entities/:id/approve-research` and
+`POST /sources/:id/approve-config`, answering in the one vocabulary
+`src/approvals/ruling.ts` holds. A UI over either has still to arrive.
+Each of those is a client of the constraints and not a substitute for
+either, which is why a second one could land without this register
+changing: the gate is in the database, so growing the set of writers
+costs it nothing.
 
 How far each constraint reaches is where they differ, and the difference
 is worth stating because their register cells look alike.
