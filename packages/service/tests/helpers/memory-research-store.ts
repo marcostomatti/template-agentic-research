@@ -5124,11 +5124,13 @@ export function createMemoryResearchStore(
    * grouping produced would agree on every number and disagree on
    * the array.
    *
-   * THE NULL GOES LAST BY A BRANCH AND NOT BY ARITHMETIC, which is
-   * what the SQL spells `NULLS LAST` on an ascending key for. It is
-   * the one place on this half where a null sorts rather than
-   * filtering: the page's two descending keys are over NOT NULL
-   * columns.
+   * THE NULL GOES LAST BY A BRANCH AND NOT BY ARITHMETIC, where
+   * `src/runs/db-store.ts` gets it from `ASC` alone: NULLS LAST is
+   * already what that word means to Postgres, so the SQL spells no
+   * qualifier and this comparator has to say the same thing out
+   * loud. It is the one place on this half where a null sorts
+   * rather than filtering: the page's two descending keys are over
+   * NOT NULL columns.
    *
    * @param left - The first bucket.
    * @param right - The second.
