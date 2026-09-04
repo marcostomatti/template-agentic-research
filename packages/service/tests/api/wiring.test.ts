@@ -25,7 +25,7 @@
  * suite can do. {@link bootWiredService} spells the same
  * `app.use(ctx.requireAuth, router)` lines in the same order, below
  * a starter route mounted above them, over the in-memory store
- * instead of the eight drizzle ones. A divergence introduced in
+ * instead of the twelve drizzle ones. A divergence introduced in
  * `src/index.ts` itself is invisible here; what reaches that module
  * is `lint`, `check-types` and booting it by hand.
  *
@@ -51,30 +51,34 @@
  *   the route table                          0 of 100, no service
  *   every wave 1 route, behind its mount    39 of 100
  *   every wave 2 route, behind its mount    41 of 100
+ *   every wave 3 route, behind its mount    27 of 100
  *   the wired service around the mounts      5 of 100
  *
  * A wave describe spends two requests per row plus the one its own
- * spend case makes: 19 rows and 20 rows against the limiter's 100.
+ * spend case makes: 19, 20 and 13 rows against the limiter's 100.
  * The mounts describe spends four — `/health` and `/example` open,
  * then the unmatched path anonymously and with a credential — plus
- * the same one. THE HEADROOM IS THE POINT: the widest describe leaves
- * 59, where the single service this file used to boot had spent 82 of
- * its one 100 with 18 left, and a wave-3 group of thirteen routes
- * costs 26. That group did not fit and its own describe does, which
- * is the ceiling this split was made for. Adding rows to an EXISTING
- * describe still spends that describe's budget, and the third case in
- * `the route table` is what refuses a wave that has outgrown it — a
- * `429` would otherwise present as a flaky mount on whichever rows
- * ran last, rather than as a limit.
+ * the same one. THE HEADROOM IS THE POINT, and the wave-3 group is
+ * what turned it from an argument into a measurement: the widest
+ * describe leaves 59, while the four describes together want 112 of
+ * one window. Booting a single service for the whole file is a leg
+ * below, and it now reddens EIGHT — the last three wave-3 rows
+ * answering `429`, and `/health` and `/example` behind them
+ * answering it too, on a file that had 18 of its one window left
+ * before this wave landed. Adding rows to an EXISTING describe still
+ * spends that describe's budget, and the third case in `the route
+ * table` is what refuses a wave that has outgrown it: a `429` would
+ * otherwise present as a flaky mount on whichever rows ran last,
+ * rather than as a limit.
  *
  * THE STORE IS THE SUBSTITUTION and it is the only one. Everything
  * else on the path is the shipped module: the real routers, the real
  * services behind them, the real boundary parser, and the real
  * `createService` resolving the real guard from a real `auth` block.
- * `src/index.ts` spreads its eight drizzle stores into one
+ * `src/index.ts` spreads its twelve drizzle stores into one
  * `researchStore` and hands that object to every router;
  * `tests/helpers/memory-research-store.ts` is the same shape from
- * the other side — one implementation of all eight ports — so one
+ * the other side — one implementation of all twelve ports — so one
  * object stands behind the whole surface in each describe too.
  *
  * THE VERIFIER IS SCRIPTED rather than real, and that is deliberate
@@ -117,23 +121,39 @@
  * file reading one at the end, which is the claim the split moved:
  * what a wave's rows wrote is now a question about that wave alone.
  * Connectors are the one group hanging off no domain, so their count
- * is read directly; every other resource is created through a
- * `:slug`, and a domain count of zero is what says no request in
- * that describe ever resolved one to create anything under.
+ * is read directly; every wave-1 and wave-2 resource is created
+ * through a `:slug`, and a domain count of zero is what says no
+ * request in that describe ever resolved one to create anything
+ * under. WAVE 3 IS THE EXCEPTION AND WANTS A READING OF ITS OWN:
+ * all four of its writes are addressed by an `:id` rather than
+ * through a `:slug`, so the domain count says nothing about them.
+ * The verdict route is the one of the four whose table is readable
+ * from the address alone, and the empty label list the same case
+ * reads is what says no ruling was appended under it.
  *
- * THIRTY LEGS WERE RUN AGAINST THESE FIFTY CASES, twice each, and
- * twenty-nine answered the same failed SET both times. The base run
- * is 0 of 50; every figure below is failed-of-total, and the three
- * legs whose total moves move it by editing the table itself.
+ * FORTY LEGS WERE RUN AGAINST THESE SIXTY-FIVE CASES, three times
+ * each, and every figure below is the failed SET at least two of the
+ * three passes agreed on. The base run is 0 of 65; every figure is
+ * failed-of-total, and the three legs whose total moves move it by
+ * editing the table itself. Thirty of the forty were run three times
+ * against HEAD's copy of this file as well, which is what separates
+ * a figure this wave MOVED from one that drifted: twenty-two came
+ * back set-identical on both sides, eight gained members and none
+ * lost any, and each gained member is named below. The other ten
+ * have no anchor at HEAD — six wave-3 mounts, one cumulative guard
+ * leg reaching past them, and the three the label reading below
+ * needs.
  *
  * FOUR ARE ABOUT THE TABLE AND ITS DERIVATION. Adding a row for a
- * route no router declares reddens TWO of 51 — the table guard, and
+ * route no router declares reddens TWO of 66 — the table guard, and
  * the row's own generated case, which requests a path Express never
- * matched. Dropping a row reddens the table guard alone, 1 of 49,
+ * matched. Dropping a row reddens the table guard alone, 1 of 64,
  * and so does the same comparison's other direction:
  * {@link registeredLabels} losing the five wave-2 routers while the
  * table keeps their rows. Making {@link urlFor} answer its argument
- * unchanged reddens the substitution guard alone.
+ * unchanged reddens the substitution guard alone. All four are
+ * set-identical to their HEAD readings: the guards are per-table
+ * rather than per-row, so thirteen more rows do not widen them.
  *
  * THREE ARE ABOUT WHAT A MOUNT SERVES, and each reddens exactly the
  * rows of the router it took away: unmounting the connectors router
@@ -144,74 +164,101 @@
  * other mount still refuses an anonymous request, which is the split
  * saying not-`401` on its own would have missed it.
  *
- * TWO ARE ABOUT THE DATASET, and the split MOVED both of them from
- * one case to two. Seeding a domain no row addresses reddens BOTH
- * wave describes' dataset cases, the seed sitting in the boot every
- * one of them makes. Seeding the domain the table's `:slug` names
- * reddens `DELETE /domains/:slug` on `expected '' to be
- * 'application/json'` — the delete succeeds and answers `204` with
- * no body — and the WAVE-2 dataset case, which is the reading the
- * split bought: wave 1's own stays green because the row it counted
- * was taken by the case above it, and no wave-2 row deletes a domain
- * at all.
+ * FIVE ARE ABOUT THE DATASET, two of them carried in and three of
+ * them the price of the label reading the wave-3 writes needed.
+ * Seeding a domain no row addresses reddens ALL THREE dataset cases,
+ * the seed sitting in the boot every one of them makes. Seeding the
+ * domain the table's `:slug` names reddens `DELETE /domains/:slug`
+ * on `expected '' to be 'application/json'` — the delete succeeds
+ * and answers `204` with no body — plus the wave-2 AND wave-3
+ * dataset cases: wave 1's own stays green because the row it counted
+ * was taken by the case above it, and no wave-2 or wave-3 row
+ * deletes a domain at all. Each is the HEAD set plus exactly the new
+ * describe's dataset case.
  *
- * TWELVE DROP `ctx.requireAuth` FROM A MOUNT, and each reddens five
- * cases or none, decided by the mount's POSITION rather than by the
- * router behind it — which is where they part company with the
+ * THE LABEL READING NEEDED THREE OF ITS OWN, because an empty store
+ * answers `[]` for every id and a zero over nothing planted is not a
+ * reading. Planting a finding at the addressed id and a ruling on it
+ * reddens all THREE dataset cases; the SAME plant with the read
+ * aimed at an id nothing planted reddens NOTHING, which is what says
+ * the address is load-bearing rather than decorative; and aiming the
+ * read elsewhere with nothing planted reddens nothing either, which
+ * is the honest limit — that argument is pinned only under a plant.
+ * The plant has to be a finding AND a ruling: the fake refuses a
+ * label whose finding it does not carry, and a leg planting the
+ * label alone takes the whole FILE down at `beforeAll` rather than
+ * reddening a case.
+ *
+ * NINETEEN DROP `ctx.requireAuth` FROM A MOUNT, and each reddens
+ * five cases or none, decided by the mount's POSITION rather than by
+ * the router behind it — which is where they part company with the
  * unmount legs above, whose router lost its own cases wherever it
  * sat. Taken off the FIRST mount, exactly the five domains cases
  * redden, every one at `expect(anonymous.status).toBe(401)` and none
- * through a control. Taken off any of the other NINE mounts it
- * reddens NOTHING — nine measured zeros rather than one, because
- * every mount sits at `/` and the first guard still standing refuses
- * every anonymous request before any later mount is reached. What
- * makes those zeros a statement about position is the two cumulative
+ * through a control. Taken off any of the other FIFTEEN it reddens
+ * NOTHING — fifteen measured zeros rather than one, because every
+ * mount sits at `/` and the first guard still standing refuses every
+ * anonymous request before any later mount is reached. What makes
+ * those zeros a statement about position is the three cumulative
  * legs: dropping the guard from the first TWO mounts reddens NINE,
- * the five domains cases plus the four categories ones, and dropping
- * it from the first SIX reddens TWENTY-FIVE, every wave-1 row plus
- * the six topics ones — each stopping at the next guard in the
- * fall-through. The split spreads that twenty-five across two
- * describes and does not change it.
+ * the five domains cases plus the four categories ones; from the
+ * first SIX, TWENTY-FIVE, every wave-1 row plus the six topics ones;
+ * and from the first ELEVEN, FORTY-TWO, which is every wave-1 and
+ * wave-2 row plus the three findings ones — each stopping at the
+ * next guard in the fall-through, and the last of them the reading
+ * that says the fall-through reaches a wave-3 mount the same way.
+ * The six wave-3 zeros are why that third cumulative leg is here at
+ * all: a zero per mount says nothing on its own about a mount no
+ * request can reach.
  *
- * NINE ARE ABOUT THE SPLIT AND THE SPEND, which is the half this
- * file gained. Booting ONE service for the whole file, as it did
- * before, reddens TWO: the wave-2 and mounts spend cases, which then
- * read 80 and 85 rather than 41 and 5, while wave 1's stays green
- * for running first. That leg is what says the split is real rather
- * than a rearrangement. Dropping {@link SPEND_PROBE_COST} from the
- * prediction reddens the two wave spend cases, and so does pricing a
- * row at ONE request rather than two. Transcribing the shipped
- * ceiling as 30 reddens FOUR — all three `limit` assertions and the
- * ceiling case, 39 and 41 both being over it — where transcribing it
- * as 200 reddens the three `limit` assertions alone, which is the
- * pair that says those are two claims rather than one. Reading the
- * spend off a header the limiter does not send reddens all three, on
- * the `NaN` {@link headerNumberOf} answers rather than a zero.
- * Pricing the mounts describe at six requests reddens its own spend
- * case alone. Answering every wave the FIRST wave's rows reddens the
- * partition assertion alone, 1 of 49, the spend cases staying green
- * because a nineteen-row describe spends what a nineteen-row
- * prediction says; and collapsing the wave list to one reddens that
- * same case, 1 of 28, on the two claims it holds together.
+ * NINE ARE ABOUT THE SPLIT AND THE SPEND, and this wave turned the
+ * first of them from a claim about a budget into one about
+ * behaviour. Booting ONE service for the whole file, as it did
+ * before the split, reddens EIGHT: the wave-2 spend case, the last
+ * three wave-3 rows, the wave-3 spend case, and all three cases of
+ * the mounts describe behind them. At HEAD's two-wave table that
+ * same leg reddened TWO spend cases and nothing else, so the six it
+ * gained are the window running OUT mid-file rather than merely
+ * being mispredicted — which is what says the split is load-bearing
+ * and not a rearrangement. Dropping {@link SPEND_PROBE_COST} from
+ * the prediction reddens the three wave spend cases, and so does
+ * pricing a row at ONE request rather than two; both are their HEAD
+ * set plus the new describe's. Transcribing the shipped ceiling as
+ * 30 reddens FIVE — all four `limit` assertions and the ceiling
+ * case, 39 and 41 both being over it — where transcribing it as 200
+ * reddens the four `limit` assertions alone, which is the pair that
+ * says those are two claims rather than one. Reading the spend off a
+ * header the limiter does not send reddens all four, on the `NaN`
+ * {@link headerNumberOf} answers rather than a zero. Pricing the
+ * mounts describe at six requests reddens its own spend case alone.
+ * Answering every wave the FIRST wave's rows reddens the partition
+ * assertion alone, 1 of 70, the spend cases staying green because a
+ * nineteen-row describe spends what a nineteen-row prediction says;
+ * and collapsing the wave list to one reddens that same case, 1 of
+ * 28, on the two claims it holds together.
  *
  * ONE HONEST ZERO, and it is structural. The ceiling assertion
  * itself — {@link spendOfWave} against {@link RATE_LIMIT_MAX} — has
  * no leg at this table size other than moving the ceiling, no
- * mutation short of adding eleven rows to a wave breaching 100. That
- * is why the leg above is spelled as a transcription of 30 rather
- * than as a wider table, and it is not an argument for dropping the
- * assertion: what it exists to refuse is a wave that GREW.
+ * mutation short of adding thirty rows to the widest wave to breach
+ * 100. That is why the leg above is spelled as a transcription of 30
+ * rather than as a wider table, and it is not an argument for
+ * dropping the assertion: what it exists to refuse is a wave that
+ * GREW.
  *
  * THE SPEND CASES ARE COUPLED TO THE RECORDED SUPERTEST FLAKE, which
  * is the one cost of measuring rather than counting. A request lost
  * to it is a request the limiter never counted, so a flaked row case
  * drags its own describe's spend case down with it and a one-case
- * leg reads as three. That is what made the mounts-pricing leg the
- * one of thirty whose two runs disagreed, each carrying a different
- * row case beside the real red; five solo runs of it answered ONE
- * every time, and five of the unmodified file answered 0 of 50. Read
- * a spend case reddening BESIDE a row case as the flake rather than
- * as a budget that moved.
+ * leg reads as three. That coupling is why every figure above is a
+ * MAJORITY over three passes rather than a single reading: eight of
+ * the tip's single passes carried a flake pair and six of HEAD's
+ * did, no two of them the same pair, and one leg — the guard on the
+ * SECOND mount — carried one in two passes of three and had to be
+ * re-run alone, where it answered zero three times out of three.
+ * Read a spend case reddening BESIDE a row case as the flake rather
+ * than as a budget that moved, and re-run the leg rather than
+ * recording what one pass said.
  *
  * SO THIS FILE PINS THE SURFACE RATHER THAN THE MOUNTS. What it
  * reports is that an anonymous request is refused before it reaches
@@ -244,13 +291,21 @@ import {
 import {
   buildConnectorsRouter,
 } from '../../src/connectors/routes.js';
+import { buildDocumentsRouter } from '../../src/documents/routes.js';
 import { buildDomainsRouter } from '../../src/domains/index.js';
+import { buildEntitiesRouter } from '../../src/entities/routes.js';
+import { buildFindingsRouter } from '../../src/findings/routes.js';
 import { buildPersonasRouter } from '../../src/personas/routes.js';
 import { exampleRouter } from '../../src/routes/example.js';
+import { buildRunsRouter } from '../../src/runs/routes.js';
+import { buildSpendRouter } from '../../src/runs/spend-routes.js';
 import { buildSettingsRouter } from '../../src/settings/routes.js';
 import {
   buildSourceFailuresRouter,
 } from '../../src/sources/failures-routes.js';
+import {
+  buildSourceProposalsRouter,
+} from '../../src/sources/proposals-routes.js';
 import { buildSourcesRouter } from '../../src/sources/routes.js';
 import {
   buildSubscriptionsRouter,
@@ -409,10 +464,11 @@ type HttpMethod = 'delete' | 'get' | 'patch' | 'post' | 'put';
  *
  * A union rather than a `string`, so a mistyped wave is a compile
  * error instead of a describe of one row booting a service of its
- * own. The wave that lands next widens this by an edit somebody
- * reviews, which is the same reason the table is written out.
+ * own. Widening it is an edit somebody reviews, which is the same
+ * reason the table is written out: wave 3 is the last one the API
+ * plan declares, and a fourth would arrive here the same way.
  */
-type SurfaceWave = 'wave 1' | 'wave 2';
+type SurfaceWave = 'wave 1' | 'wave 2' | 'wave 3';
 
 /** One row of {@link SURFACE_ROUTES}. */
 interface SurfaceRoute {
@@ -433,7 +489,7 @@ interface SurfaceRoute {
 }
 
 /**
- * Every route the ten routers `src/index.ts` mounts register.
+ * Every route the sixteen routers `src/index.ts` mounts register.
  *
  * Held equal to what those routers actually declare by the first case
  * in this file, so this is a table that cannot go quietly stale
@@ -486,6 +542,20 @@ const SURFACE_ROUTES = [
   { method: 'patch', path: '/exports/:id', wave: 'wave 2' },
   { method: 'delete', path: '/exports/:id', wave: 'wave 2' },
   { method: 'post', path: '/exports/:id/run-now', wave: 'wave 2' },
+
+  { method: 'get', path: '/domains/:slug/findings', wave: 'wave 3' },
+  { method: 'get', path: '/findings/:id', wave: 'wave 3' },
+  { method: 'patch', path: '/findings/:id/verdict', wave: 'wave 3' },
+  { method: 'get', path: '/domains/:slug/documents', wave: 'wave 3' },
+  { method: 'get', path: '/entities/:id', wave: 'wave 3' },
+  { method: 'patch', path: '/entities/:id', wave: 'wave 3' },
+  { method: 'get', path: '/entities/:id/research', wave: 'wave 3' },
+  { method: 'post', path: '/entities/:id/approve-research', wave: 'wave 3' },
+  { method: 'get', path: '/runs', wave: 'wave 3' },
+  { method: 'get', path: '/runs/:id', wave: 'wave 3' },
+  { method: 'get', path: '/spend/summary', wave: 'wave 3' },
+  { method: 'get', path: '/sources/:id/pending-configs', wave: 'wave 3' },
+  { method: 'post', path: '/sources/:id/approve-config', wave: 'wave 3' },
 ] as const satisfies readonly SurfaceRoute[];
 
 /**
@@ -610,6 +680,12 @@ function registeredLabels(): string[] {
     buildSourceFailuresRouter({ store }),
     buildConnectorsRouter({ store }),
     buildSubscriptionsRouter({ store, clock }),
+    buildFindingsRouter({ store }),
+    buildDocumentsRouter({ store }),
+    buildEntitiesRouter({ store }),
+    buildRunsRouter({ store }),
+    buildSpendRouter({ store, clock }),
+    buildSourceProposalsRouter({ store }),
   ].flatMap(labelsOf);
 }
 
@@ -756,6 +832,20 @@ async function bootWiredService(): Promise<WiredService> {
       app.use(
         ctx.requireAuth,
         buildSubscriptionsRouter({ store, clock }),
+      );
+
+      // The wave-3 six, below the wave-2 five and in the same order
+      // `src/index.ts` mounts them. One of them takes the clock, and
+      // it is the only mount on this service that READS the present
+      // rather than writing it into a column.
+      app.use(ctx.requireAuth, buildFindingsRouter({ store }));
+      app.use(ctx.requireAuth, buildDocumentsRouter({ store }));
+      app.use(ctx.requireAuth, buildEntitiesRouter({ store }));
+      app.use(ctx.requireAuth, buildRunsRouter({ store }));
+      app.use(ctx.requireAuth, buildSpendRouter({ store, clock }));
+      app.use(
+        ctx.requireAuth,
+        buildSourceProposalsRouter({ store }),
       );
     },
   });
@@ -968,6 +1058,18 @@ for (const wave of SURFACE_WAVES) {
       // through a `:slug`, and the zero above is what says no
       // request here ever resolved a domain to create one under.
       expect(await store.countConnectors({})).toBe(0);
+
+      // Wave 3's four writes are the exception, and the zero above
+      // says nothing about them: every one of them is addressed by
+      // an `:id` rather than through a `:slug`.
+      // `PATCH /findings/:id/verdict` is the one of the four whose
+      // table is readable from the address alone — an entity patch
+      // and either approval can only ever rewrite a row no store
+      // here carries — and an empty list is what says no ruling was
+      // appended under the id the table addresses.
+      const labels = await store.listFindingLabels(Number(UNSTORED_ID));
+
+      expect(labels).toStrictEqual([]);
     });
 
     it('spent a measured share of the limiter window', async () => {

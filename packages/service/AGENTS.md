@@ -717,10 +717,12 @@ describe rather than one for the file. `lib/express` mounts its limiter
 app-wide at 100 requests a minute from a literal in `middleware.ts`, each
 limiter carries a store of its own, and each table row costs TWO — so the
 budget is per `createService`, and a describe that boots one starts from a
-fresh 100. Measured at that rework: three services spending 39, 41 and 5 of
-their own 100, against 82 of a single 100 before it, which is what a
-thirteen-route wave costing 26 did not fit into. The ceiling is now
-ENFORCED rather than recorded. The last case of each describe reads
+fresh 100. Measured once the wave-3 rows landed: FOUR services spending 39,
+41, 27 and 5 of their own 100, where the single service the file used to
+boot would want 112 of its one 100 — a leg in that file's header boots one
+and reddens EIGHT, the last three wave-3 rows answering `429` and the two
+open routes behind them answering it too. The ceiling is now ENFORCED
+rather than recorded. The last case of each describe reads
 `Number(res.headers['ratelimit-remaining'])` off a real response — which
 needs no request the run was not already making — and holds
 `limit - remaining` against what that describe's own rows predict, while a
