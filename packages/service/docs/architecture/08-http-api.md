@@ -3121,3 +3121,235 @@ that did either would be a second rule nobody would notice drifting
 from the first. `The failures queue` above says the same of the review
 surface, which is the other reader of the same two passes over the
 same table.
+
+## Entities
+
+### A subject is addressed by its own id, and by nothing else
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /entities/:id` | `200` with the stored row: its `domainId`, its `name`, the `nameNorm` computed from that name, its `aliasOf` and its `attributes`. `404` for an unknown id, `422` for a segment that is not one. Reads no query at all. |
+| `PATCH /entities/:id` | `200` with the stored row afterwards, read off the write. `404` for an unknown id, `409` for a rename onto a key another subject in the domain already holds, `422` for a segment that is not an id, for a body outside `{ name?, attributes?, aliasOf? }`, for an undeclared key in it, for a name that identifies nothing, and for each of the three refused aliases. |
+| `GET /entities/:id/research` | `200` with one page of what has been found out about the subject, `researched_at` descending with `id` descending breaking a tie, plus `meta`. `404` for an unknown id, `422` for a segment that is not one and for the pagination faults every list route answers. |
+| `POST /entities/:id/approve-research` | `200` with the four-member ruling. `404` for an unknown id and for a `poolId` this subject does not hold, `422` for a segment that is not an id, for a body that is not `{ poolId }`, and for an undeclared key in it. |
+
+`buildEntitiesRouter` in `src/entities/routes.ts` declares all four
+and decides none of them: each handler narrows the segment, takes
+the query apart or hands on the body it was given, calls the
+matching function in `src/entities/service.ts`, and chooses a
+status.
+
+Every path here opens on the row's own id and none opens on
+`/domains/:slug`, which is where this group departs from the two the
+same wave landed before it. A finding and a document are met in
+their domain because a caller holding a slug should not have to look
+an id up to read one. A subject is met by its id because the row
+carries its own `domain_id`, and that column is what the
+cross-domain alias rule below is decided against — so a slug in the
+path would be a second answer to a question the row has already
+settled, and this surface would then owe a reading of what a
+disagreement between the two means. That is `A domain is addressed
+by slug` above rather than an exception to it.
+
+There is no `GET /domains/:slug/entities` on this wave at all, so a
+registry is read one subject at a time and the collection under a
+domain is a path this wave leaves free. The research collection
+hangs off the subject instead, for the reason the addressing gives:
+a pass is about one entity, `entity_research` carries that entity's
+id and nothing else that addresses it, and a caller reading passes
+already holds the subject they were read about.
+
+`409` is available to this group and to no other in the wave. The
+findings and documents groups have no conflicting state to refuse; a
+rename here can collide with `entities_domain_id_name_norm_unique`,
+which the section below argues. Every other refusal available here
+is the `404` about an address and the `422` about a request.
+
+Neither read takes a filter, so this group has no narrowing to
+argue. `GET /entities/:id/research` reads `?page` and `?perPage` and
+no other parameter, `meta.total` is the whole collection rather than
+a narrowed part of it, and a subject nobody has researched answers
+an empty page on the terms `A page past the end is an empty list`
+above sets.
+
+### `name_norm` is recomputed on a rename and never accepted
+
+A `name` patch is reduced through `normalizeEntityName` in
+`src/lib/entity-name-norm.ts` and the two halves are written
+together, so a request that moved the display spelling without the
+key it reduces to is not one this surface can express. A body naming
+`nameNorm` is refused as an undeclared key rather than having the
+member quietly dropped. The detail names `body` and never the key,
+which `An unrecognized_keys detail names the container` above
+argues, and a dropped member would be indistinguishable on the wire
+from the surface having honoured it.
+
+That closes a silent miss the column's own comment asks for and had
+no answer to. `entities.name_norm` is the key half of the natural
+key `entities_domain_id_name_norm_unique` is declared over, and
+nothing in this repository wrote an `entities` row before this wave
+— no workflow inserts one, and `scripts/approve.ts` reads the
+registry through joins alone — so the reduction had no definition
+anywhere at all. A caller allowed to supply one would key a row on
+something no spelling of its name reduces to: every later lookup
+would find nothing, the next sighting would insert a rival row, and
+no constraint in the database would report it, a writer that reduces
+differently never failing but only missing.
+
+A name that carries nothing identifying is a `422` naming `name`
+under a code of the service's own, because no schema could raise it:
+whether a name identifies a subject is the reduction's answer rather
+than a shape rule, and asking it twice is exactly the second
+definition this group exists to avoid. It is a `422` rather than the
+`500` the library's own plain `Error` would otherwise become —
+`src/lib/entity-name-norm.ts` throws one deliberately, being spliced
+into workflow nodes where there is no status to raise, and this
+surface is the boundary that has one.
+
+A rename onto a key another subject in the same domain already holds
+is a `409` carrying no `details` at all. Which subject holds the key
+is a fact about a row the caller did not ask about and, the display
+spelling being free to differ from it, may never have seen — naming
+it would let a caller enumerate a registry by proposing names, which
+is `A validation detail names a field path` above applied to a
+refusal that has no field to name.
+
+Neither the collision nor the alias foreign key is checked before
+the write. A read-then-write pair would answer about a row that had
+gone in between and would miss one that arrived, where the
+constraint is the deployment's own authority at the instant of the
+write. So the two rules the database holds are TRANSLATED here and
+the two it cannot hold are held here, which is the split the next
+section is about.
+
+The patch answers the stored row rather than the request, and the
+recomputed key is why that matters on this route above the others:
+reading it back is the only way a client learns what its name
+reduced to. A body of `{}` is a legal call answering that row
+unchanged, `entities` carrying no `updated_at` for a write to stamp.
+
+### Two alias rules this surface holds that the database does not
+
+`entities.alias_of` is a nullable self-referencing foreign key, and
+the database will store two things through it that nobody meant. A
+row pointing at ITSELF makes a subject its own subject, which every
+reader following the pointer either loops on or silently stops at. A
+row pointing at a subject in ANOTHER domain joins two registries
+whose criteria, findings and research were accumulated apart, and no
+foreign key anywhere would follow the join back out. The column's
+own comment says both are storable; nothing in the DDL refuses
+either.
+
+Each is a `422` naming `aliasOf` under a code of the service's own —
+`self_alias` and `cross_domain_alias`. They have to be the service's
+codes because no schema raised them: the first is a comparison
+between the path and the body, and the second is a comparison
+between two stored rows, which is two reads rather than a shape
+rule. The detail carries the rule and never the two domains, both of
+which are facts about rows the caller did not ask about and, in the
+case of the subject's own, did not even name.
+
+The self rule is decided before any read, the two ids both being in
+hand. The one-registry rule costs the read that resolves the target,
+and an alias naming a target that is NOT there falls through to the
+write rather than being refused here: there is no domain to compare
+against, and the foreign key is the authority at the instant of the
+write, per the section above. It reaches the caller as the same
+`422` naming the same member under a third code, so the three read
+alike from the outside and only one of them cost a round trip.
+
+`aliasOf` distinguishes three requests, which is why the member is
+both nullable and optional. Absent leaves the pointer where it is, a
+number aims the row at a subject, and `null` clears it back to a row
+that is its own subject — the only way back, and unexpressible if
+absent and null meant the same thing.
+
+The `409` one section above and these three `422`s are the whole of
+what a patch can be refused for beyond its shape, and the difference
+between the two statuses is which layer knows. A duplicate key is a
+conflict with a row that exists; an alias into another registry is a
+request that was never coherent, whichever rows happen to be
+stored.
+
+### The intention is named in the body and its subject in the path
+
+`POST /entities/:id/approve-research` takes `{ poolId }` and nothing
+else, and the pairing is argued for both gates under
+`An approval names its own row` above. What this route adds is which
+refusals the pairing produces here, and why a caller reads one
+sentence for three of them.
+
+`EntityStore.findPoolRowById` is UNSCOPED on purpose: the row is
+read and then judged rather than selected under the subject. A
+lookup narrowed to the subject would answer null for `no such row`
+and for `not this subject's row` alike, and the gate has to tell
+those apart even though what a caller reads is the same either way.
+Telling a caller which of the two happened would say that a row it
+does not own exists, which is the whole reason the sentence is
+shared.
+
+`research_pool.entity_id` is NULLABLE, an intention being raisable
+from a finding nothing has attributed to a subject yet, so a row
+naming NO subject at all is refused by that same comparison rather
+than by a clause of its own. That is the third refusal under the one
+sentence; the write's own null, the row having gone between the read
+and the ruling, is a fourth path to it that no ordinary sequence of
+calls produces.
+
+The subject is resolved before the intention is read, so an id
+nothing carries costs one lookup and never reaches the queue. It is
+also what makes the comparison decidable at all: it is the ADDRESSED
+entity the stored row has to name, and there is nothing else in the
+request that says which registry either id belongs to.
+
+There is no spelling here for approving a subject's queue wholesale.
+An operator ruling on an intention has read the search terms that
+intention carries, and a request naming a subject rather than a row
+would be approving terms nobody was shown.
+
+This wave serves no page over `research_pool`, which is the one
+asymmetry between the two gates worth stating rather than leaving to
+be counted. `GET /sources/:id/pending-configs` pages the proposal
+queue; the entity queue is read from `listPending` in
+`scripts/approve.ts` and from nowhere on this surface, so a `poolId`
+submitted here was learned from the CLI. `EntityStore` declares the
+two reads that would serve such a page and no route on this wave
+calls either, which is the port recording the gap rather than
+closing it.
+
+### The ruling is the whole of the write, and research is elsewhere
+
+`The API ratifies` above states the split once for both gates. What
+this route does under it is `approvePoolRow` and nothing else: two
+columns of one `research_pool` row, `approved_at` stamped
+`coalesce(approved_at, now())` and `status` moved to the approved
+member. No research is recorded, no search is issued, and nothing
+downstream is told — `ar-research` picks the row up on a later pass
+and writes what it found out.
+
+The split is a property of the port rather than of the handler's
+restraint. `EntityStore` declares no method that writes
+`entity_research` at all, so a route recording a summary beside the
+approval could not be added here by a small edit: there would be
+nothing on the store to call. `Read-first` above states that law for
+the whole wave and names the two writers this group is entitled to,
+and `tests/invariants/api-read-first.test.ts` derives it from `keyof`
+over the port types rather than from any paragraph.
+
+A second ruling on one row is a `200` and not a `409`, because the
+`coalesce` answers the FIRST ruling's instant and a row already
+closed ratifies without complaint. That is `An approval is
+idempotent` above plus the one axis on which the two gates differ:
+ratifying twice is a no-op where applying twice is refused, and
+`RULING_ACTS` in `src/approvals/ruling.ts` is where that difference
+is declared once rather than as an `if` in either gate.
+
+What comes back is the four-member ruling — the row's id, where it
+stands, when a person agreed, and when the intention was closed —
+taken off the row the write answered rather than rebuilt around the
+`poolId` that was sent. `approvedAt` and `id` are the members no
+request carried, which is what makes the response a reading of the
+write. `closedAt` reads `research_pool.researched_at`, so a
+ratification answers `null` there by construction: the gate records
+that somebody agreed, and what closes the intention is the pass this
+surface never runs.
