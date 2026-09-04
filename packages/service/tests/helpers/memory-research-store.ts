@@ -251,18 +251,57 @@
  * larger thing the delete would have taken, and for no reason a case
  * could check.
  *
- * THE THIRD REFUSING KEY IS NOT IMITATED, and the reason is that the
- * state is unreachable rather than that it was overlooked.
- * `source_config_proposals_source_id_sources_id_fk` refuses a source
- * that a config proposal still names — measured in
- * `drizzle/0005_freezing_hairball.sql` — but no port here writes a
- * proposal and no seam below plants one, so there is no dataset this
- * store can be in where that key would fire. A fake refusing a state
- * it cannot reach would be inventing a rule rather than imitating
- * one. `src/sources/store.ts` declares the throw, and the live seam
- * is where it is discharged.
+ * THE THIRD REFUSING KEY IS IMITATED NOW, AND A SEAM IS WHAT MADE IT
+ * REACHABLE. `source_config_proposals_source_id_sources_id_fk`
+ * refuses a source that a config proposal still names — measured in
+ * `drizzle/0005_freezing_hairball.sql` — and while no seam here
+ * planted a proposal there was no dataset this store could be in
+ * where it would fire, so it was left alone rather than overlooked:
+ * a fake refusing a state it cannot reach invents a rule instead of
+ * imitating one. {@link MemoryResearchStore.setDomainProposals}
+ * reaches that state directly, and a fake ACCEPTING a delete the
+ * deployment refuses is the defect this file exists to prevent, so
+ * the third name joins the two above it in `deleteSource`.
  *
- * TWO SEAMS PLANT WHAT NO PORT CAN WRITE, and their shapes differ
+ * THE PROPOSALS QUEUE IS THIS FILE'S SECOND APPROVAL GATE, and it is
+ * written to read as the same gate as the first. Four methods sit on
+ * `source_config_proposals`: a page narrowed to `pending` and its
+ * count, an UNSCOPED read by id, and one writer that rules and
+ * applies. The page is ordered `proposed_at` ascending with `id`
+ * ascending — `listPendingProposals` in `scripts/approve.ts` member
+ * for member, one queue with two clients — where the failures queue
+ * one table over is newest-first, because a failure queue is about
+ * what broke most recently and a gate is about what has waited
+ * longest. `EntityStore` over `research_pool` is the other gate, and
+ * every claim in this paragraph has its counterpart there.
+ *
+ * ITS WRITER IS THE ONLY METHOD IN THIS FILE THAT TOUCHES TWO
+ * TABLES, and it is the only one that calls into `src/`.
+ * `approveAndApplyProposal` stamps `approved_at` as
+ * `coalesce(approved_at, now())`, derives the two source columns
+ * from THAT row through `proposalToSourceUpdate` in
+ * `src/sources/config-proposer.ts`, writes them onto the feed, and
+ * stamps `applied_at` the same idempotent way. Everything is
+ * computed before any stored state moves, which is what one
+ * transaction means where there is no transaction to open: a run
+ * that cannot finish leaves the proposal unruled and the feed
+ * untouched, which is the state the request can be made from again.
+ * The derivation goes through that one function so that this store
+ * and the drizzle one cannot become two appliers.
+ *
+ * AND A DOMAIN TAKES ITS PROPOSALS WITH IT, BY A ROUTE OF THEIR OWN.
+ * `source_config_proposals.domain_id` cascades, so the rows go with
+ * the domain that owns them rather than with the feed each names —
+ * which is why the seam is keyed by the domain, and why the cascade
+ * is a line of its own beside the sources rather than part of
+ * {@link dropSourcesOf}. ACROSS two domains it diverges, and this
+ * store takes a delete a deployment refuses: a proposal planted
+ * under one domain and naming another's feed does not hold that
+ * feed's removal when its domain is deleted, which is the EIGHTH
+ * known divergence and the sixth and seventh ones over a third pair
+ * of tables.
+ *
+ * THREE SEAMS PLANT WHAT NO PORT CAN INSERT, and their shapes differ
  * because what the port can ASK about each differs.
  * {@link MemoryResearchStore.setSourceDocuments} plants ROWS, because
  * three methods read documents as rows — the parse-status aggregate,
@@ -271,6 +310,11 @@
  * a COUNT, because `countSourceDependents` is the only thing on this
  * port that can ask about a sighting at all and a row would carry
  * members nothing here reads.
+ * {@link MemoryResearchStore.setDomainProposals} plants ROWS for the
+ * documents seam's reason and is keyed by the DOMAIN rather than by
+ * the feed, which is the one place a seam in this half departs from
+ * its neighbours: `source_config_proposals.domain_id` is the
+ * cascading column, and the feed rides on the row.
  *
  * THE PARSE-STATUS AGGREGATE IS COUNTED FROM THOSE ROWS, never
  * planted beside them, which is what keeps the delete guard and the
@@ -295,11 +339,12 @@
  *
  * AND A DOMAIN TAKES ITS SOURCES WITH IT, ALONG WITH EVERYTHING
  * PLANTED UNDER THEM. `sources.domain_id` is `ON DELETE CASCADE`, and
- * so are the domain columns on `documents` and on `finding_sightings`
- * — the second through `findings`, which carries its own cascade — so
- * one statement removes the sources and the rows that were refusing
- * their deletes together, and the end-of-statement check finds
- * nothing left citing a source that is gone. That is why the cascade
+ * so are the domain columns on `documents`, on `finding_sightings`
+ * and on `source_config_proposals` — the second through `findings`,
+ * which carries its own cascade — so one statement removes the
+ * sources and all three kinds of row that were refusing their
+ * deletes together, and the end-of-statement check finds nothing
+ * left citing a source that is gone. That is why the cascade
  * below drops both plants rather than running into its own guard, the
  * same care `deleteCategory` is not reused inside it for. Deleting a
  * domain is therefore permitted where deleting one of its sources is
@@ -341,8 +386,8 @@
  * plan, since that is the reading the sources half's plan got wrong.
  * `export_subscriptions_connector_id_connectors_id_fk` is the whole
  * of it. So this half has no unimitated key of its own, and the
- * sentence the sources half owes about a state it cannot reach has no
- * counterpart here.
+ * sentence the sources half owed about a state it could not reach
+ * — until a seam reached it — has no counterpart here.
  *
  * ITS ONE SEAM PLANTS A COUNT, and that is
  * {@link MemoryResearchStore.setSourceSightings}' shape taken for
@@ -978,6 +1023,7 @@ import type { SettingsStore } from '../../src/settings/store.js';
 import type {
   InsertSourceInput,
   ParseStatusCounts,
+  SourceConfigProposalRecord,
   SourceDependentCounts,
   SourceFailureRecord,
   SourcePatch,
@@ -1016,6 +1062,7 @@ import {
   SOURCE_KINDS,
 } from '../../src/db/schema/values.js';
 import { StoreRefusal } from '../../src/db/store-errors.js';
+import { proposalToSourceUpdate } from '../../src/sources/config-proposer.js';
 
 /**
  * One planted `documents` row, as the sources half reads it.
@@ -1593,15 +1640,118 @@ export interface MemoryLlmCall {
 }
 
 /**
- * All twelve research ports over one dataset, plus the twelve seams
- * a case needs that no port declares.
+ * One planted `source_config_proposals` row: one arrangement a model
+ * proposed for reading a feed, waiting on a person.
+ *
+ * {@link SourceConfigProposalRecord} MINUS the `domain_id` the seam
+ * keys on, which is the ordinary shape here and the one
+ * {@link MemoryResearchPoolRow} could not have: that record carries
+ * no domain to drop. `sourceId` STAYS, because it is what the queue
+ * is scoped by and what the containment rule one layer up reads —
+ * the seam's key and the read's key are two different columns on
+ * this table, which is what makes both of them plantable state.
+ *
+ * ITS `status` IS THE UNION WHERE THE RECORD'S IS `string`, holding
+ * `source_config_proposals_status_check` the way
+ * {@link MemoryResearchPoolRow.status} holds its own table's: both
+ * columns are generated from `RESEARCH_POOL_STATUSES`, so a plant
+ * outside it does not compile rather than being refused at run time.
+ * The record widens it back, because that is what a SELECT answers.
+ *
+ * PLANTED AND THEN WRITTEN, as {@link MemoryResearchPoolRow} is:
+ * {@link SourceStore.approveAndApplyProposal} rewrites the status
+ * and both stamps of a row this seam supplied. Every member is
+ * plantable, the two stamps included, because the state
+ * `source_config_proposals_approval_check` refuses is a pair of them
+ * and a case about that check has to be able to propose it.
+ */
+export interface MemorySourceProposal {
+  /**
+   * `source_config_proposals.id`: the id a ruling names and the
+   * queue's tiebreak.
+   *
+   * The fixture's own, no port here declaring an insert over this
+   * table — {@link MemoryRun.id}'s terms one half over.
+   */
+  readonly id: number;
+
+  /**
+   * The feed this proposal is for, and the member every read here is
+   * scoped or checked by.
+   *
+   * NOT NULL, so unlike {@link MemoryResearchPoolRow.entityId} there
+   * is no row that belongs to no parent: a proposed `parser_config`
+   * is an arrangement for reading one particular feed, and a row
+   * naming none would be a proposal with nothing to apply it to.
+   *
+   * It need not name a STORED source. Every read below answers about
+   * an id rather than about a feed, so a proposal is plantable ahead
+   * of the row it hangs off — the state
+   * {@link MemoryResearchStore.setSourceDocuments} allows for the
+   * same reason, and the one
+   * {@link SourceStore.approveAndApplyProposal} says a deployment's
+   * foreign key makes unreachable.
+   */
+  readonly sourceId: number;
+
+  /**
+   * The `parser_config` being proposed: what an approval writes onto
+   * `sources.parser_config`. Copied on the way in and out.
+   */
+  readonly parserConfig: unknown;
+
+  /**
+   * The `contract` being proposed, and the other column one approval
+   * writes. Copied on the terms above.
+   */
+  readonly contract: unknown;
+
+  /** What proposed it, as provenance and nothing addressable. */
+  readonly proposedBy: string;
+
+  /** Where the row stands at the gate. See the interface TSDoc. */
+  readonly status: ResearchPoolStatus;
+
+  /**
+   * When the proposal was made: the queue's first key, ASCENDING,
+   * with {@link MemorySourceProposal.id} breaking the tie `now()`
+   * makes inevitable. Copied on the way in.
+   */
+  readonly proposedAt: Date;
+
+  /**
+   * When a person ruled in favour, or null while nobody has.
+   *
+   * Plantable so that a case can put a row on either side of the
+   * idempotence, and so that the one state the applier refuses is
+   * reachable from a plant: a row carrying null here is what
+   * `proposalToSourceUpdate` in `src/sources/config-proposer.ts`
+   * throws over. Copied on the way in.
+   */
+  readonly approvedAt: Date | null;
+
+  /**
+   * When the two documents were written onto the source, or null
+   * while they have not been.
+   *
+   * The member `source_config_proposals_approval_check` holds
+   * against the one above it, and the reason this shape is refusable
+   * at all: an instant here beside a null approval is the state the
+   * seam throws over. Copied on the way in.
+   */
+  readonly appliedAt: Date | null;
+}
+
+/**
+ * All twelve research ports over one dataset, plus the thirteen
+ * seams a case needs that no port declares.
  *
  * EVERY ONE OF THEM WHOLE rather than a `Pick` of it. The category
  * half stood behind a narrowed alias while the term methods were
  * unwritten, which was the honest statement of what existed rather
  * than a gap papered over with stubs; all twelve taxonomy methods,
- * all six persona ones, all seven topic ones, all nine source ones,
- * all seven connector ones, all seven subscription ones, both
+ * all six persona ones, all seven topic ones, all thirteen source
+ * ones, all seven connector ones, all seven subscription ones, both
  * settings ones, all seven finding ones, both document ones, all
  * eight entity ones and all six run ones are here now, so a caller
  * wanting any of the twelve ports entire can be handed this store.
@@ -2035,9 +2185,12 @@ export interface MemoryResearchStore extends
    * cascade follows, `research_pool.domain_id` being the column that
    * carries it.
    *
-   * IT IS THE ONE SEAM HERE THAT CAN REFUSE. Every row is held
-   * against `research_pool_approval_check` before any is stored, so a
-   * row carrying `researched_at` and no `approved_at` throws a
+   * IT IS THE FIRST OF THE TWO SEAMS HERE THAT CAN REFUSE, the
+   * other being
+   * {@link MemoryResearchStore.setDomainProposals} over the other
+   * gate's columns. Every row is held against
+   * `research_pool_approval_check` before any is stored, so a row
+   * carrying `researched_at` and no `approved_at` throws a
    * {@link StoreRefusal} and the batch lands nowhere. The module
    * header carries why the check has to be reached from here rather
    * than through a method, and why the refusal is over the WHOLE
@@ -2120,6 +2273,54 @@ export interface MemoryResearchStore extends
    *   foreign key makes unreachable in a deployment.
    */
   setLlmCalls(rows: readonly MemoryLlmCall[]): void;
+
+  /**
+   * Plants the `source_config_proposals` rows queued against one
+   * domain's feeds, for the queue, the by-id read and the approval
+   * to work over.
+   *
+   * KEYED BY THE DOMAIN AND NOT BY THE SOURCE, which is the one
+   * thing about this seam a reader inside the sources half would
+   * predict the other way round — its two neighbours,
+   * {@link MemoryResearchStore.setSourceDocuments} and
+   * {@link MemoryResearchStore.setSourceSightings}, are both keyed
+   * by the feed. `source_config_proposals.domain_id` is what the
+   * cascade follows, so keying on it is what makes a domain delete
+   * one line rather than a walk of the sources it is about to
+   * remove — and it is the key
+   * {@link MemoryResearchStore.setDomainPool} uses over the other
+   * gate, one table across, for the same reason. The source rides
+   * on {@link MemorySourceProposal.sourceId} instead, which is
+   * where every read below is scoped from.
+   *
+   * IT IS THE SECOND SEAM HERE THAT CAN REFUSE, and its refusal is
+   * {@link MemoryResearchStore.setDomainPool}'s written over the
+   * other gate's columns. Every row is held against
+   * `source_config_proposals_approval_check` before any is stored,
+   * so a row carrying `applied_at` and no `approved_at` throws a
+   * {@link StoreRefusal} and the batch lands nowhere. The module
+   * header carries why the check has to be reached from here rather
+   * than through a method: the approval writes both stamps in an
+   * order that satisfies it, and nothing on this port writes either
+   * column back to null.
+   *
+   * @param domainId - The domain whose feeds the proposals are for.
+   *   Need not name a stored domain, for the reason the seams above
+   *   give.
+   * @param rows - What to record, WHOLE. A second call replaces the
+   *   first rather than appending to it, on the terms
+   *   {@link MemoryResearchStore.setDomainFindings} states. Each
+   *   row's `proposedAt`, `approvedAt` and `appliedAt` is copied on
+   *   the way in, and so are both proposed documents.
+   * @throws A `check-violation` {@link StoreRefusal} naming
+   *   `source_config_proposals_approval_check` when any row states
+   *   that it was applied without stating that it was approved.
+   *   Nothing is stored when it does.
+   */
+  setDomainProposals(
+    domainId: number,
+    rows: readonly MemorySourceProposal[],
+  ): void;
 }
 
 /** What {@link createMemoryResearchStore} may be handed. */
@@ -2239,6 +2440,23 @@ const SOURCE_DOCUMENTS_FK = 'documents_source_id_sources_id_fk';
 const SOURCE_SIGHTINGS_FK = 'finding_sightings_source_id_sources_id_fk';
 
 /**
+ * The foreign key from `source_config_proposals.source_id`, and the
+ * THIRD of the names a refused source delete can carry.
+ *
+ * `ON DELETE no action` like the two above it, and read off
+ * `drizzle/0005_freezing_hairball.sql` rather than off a plan.
+ * `src/db/schema/sources.ts` argues it at the column: a proposal is
+ * the account of what was asked for one feed, so a cascade would
+ * drop the record of a decision along with the feed it was about.
+ *
+ * Until {@link MemoryResearchStore.setDomainProposals} there was no
+ * dataset this store could be in where the key would fire, and the
+ * module header records why it was left alone rather than imitated.
+ * A plant reaches the state directly now.
+ */
+const SOURCE_PROPOSALS_FK = 'source_config_proposals_source_id_sources_id_fk';
+
+/**
  * The natural key on `connectors`, spelled as
  * `src/db/schema/sources.ts` spells it. The one key both connector
  * writes name: `name` is patchable per `ConnectorPatch`, so an
@@ -2271,9 +2489,10 @@ const CONNECTOR_KIND_CHECK = 'connectors_kind_check';
  * Exactly one, re-derived from the generated SQL rather than taken
  * from a plan — the reading the sources half's plan got wrong by
  * one, where a sibling leg's migration had added a third refusing key
- * nobody had named. So unlike that half there is no key here left
- * unimitated, and no dataset this store can be in that a deployment
- * would refuse a delete over while this one takes it.
+ * nobody had named. That key is imitated now, a seam having reached
+ * the state it needs, so neither half leaves one unimitated — and
+ * this half is still the one with no cross-domain shape to diverge
+ * over, where the sources half now has one at its own delete.
  */
 const CONNECTOR_SUBSCRIPTIONS_FK
   = 'export_subscriptions_connector_id_connectors_id_fk';
@@ -2407,17 +2626,48 @@ const ENTITY_ALIAS_FK = 'entities_alias_of_entities_id_fk';
 const POOL_APPROVAL_CHECK = 'research_pool_approval_check';
 
 /**
- * The status {@link EntityStore.approvePoolRow} writes.
+ * The status {@link EntityStore.approvePoolRow} and
+ * {@link SourceStore.approveAndApplyProposal} both write.
+ *
+ * ONE CONSTANT FOR TWO GATES, which is `scripts/approve.ts`' own
+ * shape: `research_pool.status` and `source_config_proposals.status`
+ * are two columns generated from ONE tuple, so a second constant
+ * here would be a second authority for a value neither table gets
+ * to disagree about.
  *
  * Annotated against {@link ResearchPoolStatus} rather than left a
  * bare literal, for the reason `APPROVED_STATUS` in
  * `scripts/approve.ts` records: the member belongs to
- * `RESEARCH_POOL_STATUSES`, the tuple `research_pool_status_check` is
+ * `RESEARCH_POOL_STATUSES`, the tuple both status CHECKs are
  * generated from, so renaming it there fails this file's compile
  * instead of leaving a fake that writes a status the database would
  * refuse.
  */
-const POOL_APPROVED_STATUS: ResearchPoolStatus = 'approved';
+const APPROVED_STATUS: ResearchPoolStatus = 'approved';
+
+/**
+ * The CHECK on `source_config_proposals` holding its two stamps
+ * against each other, and the FIFTH CHECK this file imitates.
+ *
+ * {@link POOL_APPROVAL_CHECK} over the other gate's columns, spelled
+ * `applied_at IS NULL OR approved_at IS NOT NULL` where that one
+ * spells `researched_at`. The second one reached from a SEAM rather
+ * than from a method, and for the same reason: the approval below
+ * writes `approved_at` before `applied_at` and neither back to null,
+ * so no call can propose the state this refuses.
+ */
+const PROPOSAL_APPROVAL_CHECK = 'source_config_proposals_approval_check';
+
+/**
+ * The status a proposal is queued under, and the whole of what
+ * {@link SourceStore.listPendingProposals} selects on.
+ *
+ * `listPendingProposals` in `scripts/approve.ts` reads on the same
+ * member of the same tuple, which is the substance of one queue with
+ * two clients rather than a coincidence to be preserved by hand.
+ * Annotated on {@link APPROVED_STATUS}'s terms.
+ */
+const PENDING_STATUS: ResearchPoolStatus = 'pending';
 
 /** Three zeros: what a domain nothing points at has accumulated. */
 const NO_DEPENDENTS: DomainDependentCounts = {
@@ -3244,6 +3494,93 @@ function categoryTextOf(
 }
 
 /**
+ * One stored proposal beside the domain it was planted under.
+ *
+ * The pair every proposal read here works in, because
+ * {@link MemorySourceProposal} DROPS the column its seam keys on and
+ * {@link SourceConfigProposalRecord} answers it: the row alone
+ * cannot be projected, so the two travel together from the walk that
+ * found the row to the projection that puts the key back.
+ */
+interface PlantedProposal {
+  /** The domain the row is planted under: `domain_id`. */
+  readonly domainId: number;
+
+  /** The row itself, the seam's key dropped. */
+  readonly row: MemorySourceProposal;
+}
+
+/**
+ * A planted proposal whose mutable members belong to nobody else.
+ *
+ * FIVE MEMBERS RATHER THAN {@link copyPlantedPoolRow}'s FOUR, which
+ * is the two proposed documents taking the round trip
+ * {@link copyJsonDocument} makes and the three stamps being copied
+ * instant by instant. Both nullable stamps stay null where they are
+ * null, which matters more here than anywhere above:
+ * {@link PROPOSAL_APPROVAL_CHECK} reads the PAIR of them, so a copy
+ * turning either into something else would move the row across the
+ * rule.
+ *
+ * @param row - The row a seam or an approval is storing.
+ * @returns A copy safe to store.
+ */
+function copyPlantedProposal(
+  row: MemorySourceProposal,
+): MemorySourceProposal {
+  return {
+    ...row,
+    parserConfig: copyJsonDocument(row.parserConfig),
+    contract: copyJsonDocument(row.contract),
+    proposedAt: copyInstant(row.proposedAt),
+    approvedAt: row.approvedAt === null
+      ? null
+      : copyInstant(row.approvedAt),
+    appliedAt: row.appliedAt === null
+      ? null
+      : copyInstant(row.appliedAt),
+  };
+}
+
+/**
+ * The port's projection of one planted proposal.
+ *
+ * THE SEAM'S KEY IS PUT BACK, which is {@link sightingOf}'s shape
+ * rather than {@link poolRowOf}'s: {@link SourceConfigProposalRecord}
+ * answers its table whole and `domain_id` is a real column on it, so
+ * the domain the row was planted under is handed in and written
+ * onto the answer. `status` widens back to the `string` a SELECT
+ * gives, on {@link runOf}'s terms.
+ *
+ * @param domainId - The domain the row is planted under, which is
+ *   the column the plant drops.
+ * @param row - The stored proposal.
+ * @returns The ten members {@link SourceConfigProposalRecord}
+ *   declares, its stamps and both documents copied.
+ */
+function proposalOf(
+  domainId: number,
+  row: MemorySourceProposal,
+): SourceConfigProposalRecord {
+  return {
+    id: row.id,
+    domainId,
+    sourceId: row.sourceId,
+    parserConfig: copyJsonDocument(row.parserConfig),
+    contract: copyJsonDocument(row.contract),
+    proposedBy: row.proposedBy,
+    status: row.status,
+    proposedAt: copyInstant(row.proposedAt),
+    approvedAt: row.approvedAt === null
+      ? null
+      : copyInstant(row.approvedAt),
+    appliedAt: row.appliedAt === null
+      ? null
+      : copyInstant(row.appliedAt),
+  };
+}
+
+/**
  * Builds a store over one dataset, holding no rows.
  *
  * @param options - Where the clock comes from; see
@@ -3309,6 +3646,14 @@ export function createMemoryResearchStore(
   // and the cascade reads them off there.
   const runs = new Map<number, MemoryRun>();
   const llmCalls = new Map<number, MemoryLlmCall>();
+
+  // The proposals half's one collection, keyed by the DOMAIN whose
+  // feeds the rows are about rather than by the feed itself. That is
+  // the cascading column, so a domain delete is one line here where a
+  // source-keyed collection would have to walk the sources first; the
+  // feed rides on `sourceId`, which is what every read is scoped or
+  // checked by. It is `setDomainPool`'s key over the other gate.
+  const domainProposals = new Map<number, MemorySourceProposal[]>();
   let nextDomainId = 1;
   let nextCategoryId = 1;
   let nextTermId = 1;
@@ -4967,6 +5312,183 @@ export function createMemoryResearchStore(
   }
 
   /**
+   * Every planted proposal naming one feed, across every domain,
+   * each beside the domain it was planted under.
+   *
+   * ACROSS EVERY DOMAIN, because the seam's key is the domain and
+   * the question is about the source — {@link poolRowsFor}'s shape
+   * over the other gate, where the seam keys on the domain and the
+   * reads are addressed by a subject. A proposal planted under one
+   * domain and naming a feed of another is found here, which is a
+   * state a plant can reach and the module header records as a
+   * divergence at the delete.
+   *
+   * IT CARRIES THE KEY OUT WITH THE ROW, which is what lets the page
+   * below project `domain_id` back without a second walk: the column
+   * the plant drops is the one this collection is keyed by, so the
+   * only place it can be read is here.
+   *
+   * @param sourceId - The feed to look for.
+   * @returns The stored rows, unordered and in any status.
+   */
+  function proposalsFor(sourceId: number): PlantedProposal[] {
+    const held: PlantedProposal[] = [];
+
+    for (const [domainId, planted] of domainProposals) {
+      for (const row of planted) {
+        if (row.sourceId === sourceId) {
+          held.push({ domainId, row });
+        }
+      }
+    }
+
+    return held;
+  }
+
+  /**
+   * The rows of one feed's queue: those still waiting on a ruling.
+   *
+   * PENDING ONLY, AND THE FILTER IS THE STORE'S RATHER THAN A
+   * CALLER'S. `SourceStore.listPendingProposals` declares no status
+   * parameter, so this predicate is not something a request can
+   * widen and the gate's history is not pageable from here. It is
+   * `listPendingProposals` in `scripts/approve.ts` member for
+   * member.
+   *
+   * @param sourceId - The feed whose queue to read.
+   * @returns Its pending rows, unordered.
+   */
+  function pendingProposalsFor(sourceId: number): PlantedProposal[] {
+    return proposalsFor(sourceId).filter(
+      (held) => held.row.status === PENDING_STATUS,
+    );
+  }
+
+  /**
+   * One feed's queue, oldest first: `proposed_at` ascending with
+   * `id` ascending breaking a tie, as
+   * {@link SourceStore.listPendingProposals} promises.
+   *
+   * ASCENDING, WHICH IS THE OTHER GATE'S ORDER AND NOT THE FAILURES
+   * QUEUE'S one table over. A failure queue is about what broke most
+   * recently; a gate is about what has waited longest, and the
+   * oldest pending proposal is the one whose absence of a ruling has
+   * cost the most passes. {@link orderedPool} orders the same way
+   * for the same reason.
+   *
+   * THE TIEBREAK IS NOT OPTIONAL. `now()` is the transaction's start
+   * time, so proposals written in one pass tie to the microsecond,
+   * and a tie spanning a page boundary would let two pages disagree
+   * about which row they hold.
+   *
+   * @param sourceId - The feed whose queue to read.
+   * @returns Its pending rows in that order, possibly empty.
+   */
+  function orderedPendingProposals(
+    sourceId: number,
+  ): SourceConfigProposalRecord[] {
+    return pendingProposalsFor(sourceId)
+      .map((held) => proposalOf(held.domainId, held.row))
+      .sort((left, right) => {
+        const byProposed = left.proposedAt.getTime()
+          - right.proposedAt.getTime();
+
+        if (byProposed !== 0) {
+          return byProposed;
+        }
+
+        return left.id - right.id;
+      });
+  }
+
+  /**
+   * The planted proposal carrying one id, and the domain it was
+   * planted under.
+   *
+   * @param id - The proposal to look for.
+   * @returns The domain and the stored row, or null when nothing
+   *   carries the id.
+   */
+  function plantedProposal(id: number): PlantedProposal | null {
+    for (const [domainId, planted] of domainProposals) {
+      const row = planted.find((held) => held.id === id);
+
+      if (row !== undefined) {
+        return { domainId, row };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Rewrites one stored proposal in place, on
+   * {@link replacePoolRow}'s terms.
+   *
+   * @param domainId - The domain the row sits under.
+   * @param row - What the row becomes.
+   */
+  function replaceProposal(
+    domainId: number,
+    row: MemorySourceProposal,
+  ): void {
+    const planted = domainProposals.get(domainId);
+
+    if (planted === undefined) {
+      return;
+    }
+
+    const at = planted.findIndex((held) => held.id === row.id);
+
+    if (at >= 0) {
+      planted[at] = row;
+    }
+  }
+
+  /**
+   * Refuses a planted proposal that states it was applied without
+   * stating that it was approved.
+   *
+   * `source_config_proposals_approval_check` READ FROM THE ONE SIDE
+   * A CALL CAN PROPOSE IT, which is {@link guardPoolApproval}'s
+   * argument over the other gate's columns. The constraint bites
+   * both ways in a deployment — stamping `applied_at` on a row
+   * nobody approved, and clearing `approved_at` on a row already
+   * applied — and only the first is reachable here, because nothing
+   * on this port writes either column to null. The status is not
+   * consulted, exactly as the constraint does not consult it.
+   *
+   * @param row - The row a seam is about to store.
+   * @throws A `check-violation` {@link StoreRefusal} naming
+   *   {@link PROPOSAL_APPROVAL_CHECK}.
+   */
+  function guardProposalApproval(row: MemorySourceProposal): void {
+    if (row.appliedAt !== null && row.approvedAt === null) {
+      throw new StoreRefusal({
+        reason: 'check-violation',
+        constraint: PROPOSAL_APPROVAL_CHECK,
+      });
+    }
+  }
+
+  /**
+   * Removes every proposal made about one domain's feeds, as
+   * `ON DELETE CASCADE` does.
+   *
+   * ONE LEVEL AND ONE TABLE, AND IT DOES NOT GO THROUGH THE SOURCES.
+   * `source_config_proposals.domain_id` is the cascading column, so
+   * the rows go with the domain that owns them and not with the feed
+   * each names — {@link dropPoolOf}'s argument over the other gate.
+   * `source_id` is `ON DELETE no action`, so nothing here follows
+   * it, and a row whose domain is not this one is left standing.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropProposalsOf(domainId: number): void {
+    domainProposals.delete(domainId);
+  }
+
+  /**
    * Every stored run, as a fresh list.
    *
    * @returns The rows. A fresh array every call, so a caller
@@ -5444,6 +5966,18 @@ export function createMemoryResearchStore(
      * are needed and neither is redundant, which one case reads from
      * each side.
      *
+     * ITS CONFIG PROPOSALS GO IN THAT SAME PLACE AND BY A ROUTE OF
+     * THEIR OWN, which is the intentions' argument one gate over.
+     * `source_config_proposals.domain_id` cascades, so the rows go
+     * with the domain that owns them rather than with the feed each
+     * names — and {@link dropSourcesOf} above has already removed
+     * those feeds without being refused, exactly as it is not
+     * refused by the documents and the sightings. ACROSS two domains
+     * it is not so: a proposal planted under one domain and naming
+     * another's feed is left standing while its feed goes, which is
+     * a delete a deployment refuses and this file's EIGHTH known
+     * divergence.
+     *
      * ITS ENTITIES GO IN THAT SAME PLACE AND TAKE THEIR RESEARCH
      * WITH THEM, and ITS INTENTIONS GO BY A ROUTE OF THEIR OWN.
      * `entities.domain_id` cascades and `entity_research.entity_id`
@@ -5478,6 +6012,7 @@ export function createMemoryResearchStore(
       dropDocumentsOf(id);
       dropEntitiesOf(id);
       dropPoolOf(id);
+      dropProposalsOf(id);
       dropRunsOf(id);
 
       for (const [categoryId, row] of categories) {
@@ -6475,23 +7010,31 @@ export function createMemoryResearchStore(
     /**
      * Deletes one source, unless something still cites it.
      *
-     * ITS DOCUMENTS AND ITS SIGHTINGS EACH REFUSE THE DELETE, which
-     * is both columns being `ON DELETE no action` rather than a rule
-     * invented here. This is the shape `deleteCategory` has and
-     * `deleteTopic` does not, and it differs from the category one in
-     * the direction the refusal points: a category is held by its own
-     * table's children, and a source is held from outside by two
-     * tables of somebody else's rows.
+     * ITS DOCUMENTS, ITS SIGHTINGS AND ITS CONFIG PROPOSALS EACH
+     * REFUSE THE DELETE, which is all three columns being
+     * `ON DELETE no action` rather than a rule invented here. This is
+     * the shape `deleteCategory` has and `deleteTopic` does not, and
+     * it differs from the category one in the direction the refusal
+     * points: a category is held by its own table's children, and a
+     * source is held from outside by three tables of somebody else's
+     * rows.
      *
      * NO CASCADE ANYWHERE. This either removes a row nothing
      * references or is refused; it never takes a second row with it,
      * which is the opposite of `deleteDomain` above.
      *
-     * THE ORDER OF THE TWO CHECKS IS NOT MEASURED AND NOT OBSERVABLE:
-     * both are end-of-statement checks over one statement, and the
-     * service reads the counts rather than the constraint name. The
-     * module header carries that whole argument, and the reason a
-     * THIRD refusing key is not imitated at all.
+     * THE ORDER OF THE THREE CHECKS IS NOT MEASURED AND NOT
+     * OBSERVABLE: all are end-of-statement checks over one statement,
+     * and the service reads the counts rather than the constraint
+     * name. The module header carries that whole argument, and why
+     * the third key was left alone until a seam could reach it.
+     *
+     * THE PROPOSALS CHECK IS OVER EVERY STATUS AND NOT THE QUEUE.
+     * `source_config_proposals_source_id_sources_id_fk` does not
+     * consult `status`, so a proposal already applied holds the
+     * delete exactly as a pending one does — which is the column's
+     * own argument that a proposal is the account of what was asked
+     * for a feed, and outlives the ruling.
      */
     async deleteSource(id: number): Promise<boolean> {
       if (documentsOf(id).length > 0) {
@@ -6505,6 +7048,13 @@ export function createMemoryResearchStore(
         throw new StoreRefusal({
           reason: 'foreign-key-violation',
           constraint: SOURCE_SIGHTINGS_FK,
+        });
+      }
+
+      if (proposalsFor(id).length > 0) {
+        throw new StoreRefusal({
+          reason: 'foreign-key-violation',
+          constraint: SOURCE_PROPOSALS_FK,
         });
       }
 
@@ -6548,6 +7098,176 @@ export function createMemoryResearchStore(
      */
     async countSourceFailures(sourceId: number): Promise<number> {
       return failuresOf(sourceId).length;
+    },
+
+    /**
+     * One window of a feed's PENDING config proposals, oldest first.
+     *
+     * READS A TABLE THIS PORT ALSO WRITES, which is where the queue
+     * differs from the failures one beside it: three of the four
+     * methods here read, and the fourth rules and applies. Every row
+     * arrived through {@link MemoryResearchStore.setDomainProposals},
+     * no port declaring an insert — a proposal is made by
+     * `proposeSourceConfig` in `src/sources/config-proposer.ts` and
+     * this seam is the whole of how one arrives here.
+     *
+     * ONE QUEUE WITH TWO CLIENTS. The predicate and both ordering
+     * keys are `listPendingProposals` in `scripts/approve.ts` member
+     * for member, and {@link orderedPendingProposals} carries the
+     * argument. What differs is the CLIENT: that function is
+     * addressed at no source and takes a ceiling, this one is scoped
+     * to a feed and takes a window that pages.
+     *
+     * AN ID NO SOURCE CARRIES ANSWERS AN EMPTY LIST rather than
+     * failing, and so do a feed with nothing pending, a feed whose
+     * proposals have all been ruled on, and a window past the end.
+     * Both proposed documents come back AS STORED, unread and uncut.
+     */
+    async listPendingProposals(
+      sourceId: number,
+      window: StoreWindow,
+    ): Promise<readonly SourceConfigProposalRecord[]> {
+      return orderedPendingProposals(sourceId)
+        .slice(window.offset, window.offset + window.limit);
+    },
+
+    /**
+     * How many proposals are waiting on a ruling for one feed,
+     * ignoring any window.
+     *
+     * COUNTS THE QUEUE AND NOT THE TABLE, selecting through the same
+     * {@link pendingProposalsFor} the page does — which is what
+     * keeps a page's total describing the page's own collection here
+     * rather than by coincidence. A feed carrying fifty applied
+     * proposals and nothing pending answers `0`, which is the honest
+     * number for a backlog.
+     */
+    async countPendingProposals(sourceId: number): Promise<number> {
+      return pendingProposalsFor(sourceId).length;
+    },
+
+    /**
+     * One proposal by its own id, whatever feed it names.
+     *
+     * UNSCOPED ON PURPOSE, AND THAT IS WHAT MAKES THE CONTAINMENT
+     * RULE DECIDABLE ONE LAYER UP — the argument
+     * {@link EntityStore.findPoolRowById} makes over the other gate.
+     * A read scoped to the source would answer null for `no such
+     * row` and for `not this feed's row` alike, which are a `404`
+     * for different reasons and only one of which is honest.
+     *
+     * ANY STATUS, NOT ONLY A PENDING ONE, which is what separates
+     * this from the queue above beyond the window: the refusal a
+     * service owes an already-applied proposal is decidable only
+     * from a read that can see one.
+     */
+    async findProposalById(
+      id: number,
+    ): Promise<SourceConfigProposalRecord | null> {
+      const held = plantedProposal(id);
+
+      return held === null
+        ? null
+        : proposalOf(held.domainId, held.row);
+    },
+
+    /**
+     * Rules in favour of one proposal AND writes its two documents
+     * onto the feed it names. THE HALF'S FOURTH WRITE AND THE ONLY
+     * ONE HERE THAT TOUCHES TWO TABLES.
+     *
+     * TOGETHER OR NOT AT ALL, which is what one transaction means
+     * where there is no transaction to open. Every value is derived
+     * first — the approved row, the two columns, the feed they are
+     * written onto — and stored state is touched only once all three
+     * exist. A source the plant never supplied therefore leaves the
+     * proposal unruled and the row it named untouched, rather than
+     * leaving an approval stamped with no config written or a config
+     * written that no proposal can account for. Those are the two
+     * halves `SourceStore.approveAndApplyProposal` says are not
+     * states anybody meant.
+     *
+     * THREE STAGES IN THE ORDER THE PORT DECLARES. The approval is
+     * computed as `coalesce(approved_at, now())` with the status
+     * moved; the two columns are derived from THAT row; the closing
+     * stamp is `coalesce(applied_at, now())`. Neither swap is
+     * available: {@link PROPOSAL_APPROVAL_CHECK} refuses an
+     * `applied_at` on a row carrying no `approved_at`, and the
+     * derivation reads `approved_at` and cannot run before the row
+     * carries one.
+     *
+     * THE DERIVATION GOES THROUGH ONE FUNCTION, and this is the one
+     * place in this file that calls into `src/`. Reading
+     * `parserConfig` and `contract` off the row here would make this
+     * a second applier, and the refusal standing between an unruled
+     * proposal and the two columns every later pass reads would then
+     * be restated once per implementation instead of being one
+     * function both go through. `proposalToSourceUpdate` also
+     * answers the SET clause itself, so nothing spread here can
+     * widen what an approval authorizes.
+     *
+     * IDEMPOTENT ON BOTH STAMPS, which is `coalesce` on each: a
+     * second ruling keeps the first one's instants rather than
+     * re-dating an approval already given or an application already
+     * made. `approveProposalById` in `scripts/approve.ts` writes
+     * `approved_at` the same way and deliberately leaves
+     * `applied_at` alone — so the CLI rules and this rules and
+     * writes, one gate with two clients.
+     *
+     * NOTHING IS ASKED OF THE ROW'S STATE and nothing validates the
+     * documents. Whether an already-applied proposal may be applied
+     * again is `RULING_ACTS` in `src/approvals/ruling.ts`, one layer
+     * up; a malformed `parser_config` somebody approved anyway is
+     * written, because the approval IS the gate and this is not a
+     * second one.
+     *
+     * @throws {Error} A plain fault, NOT a {@link StoreRefusal}, when
+     *   the proposal names a source this dataset does not hold. A
+     *   deployment cannot be in that state —
+     *   {@link SOURCE_PROPOSALS_FK} is `ON DELETE no action` and
+     *   `deleteSource` above imitates it — but the seam plants under
+     *   an id rather than a row, so this store can be, and answering
+     *   a refusal for it would invent a rule Postgres does not have.
+     */
+    async approveAndApplyProposal(
+      id: number,
+    ): Promise<SourceConfigProposalRecord | null> {
+      const held = plantedProposal(id);
+
+      if (held === null) {
+        return null;
+      }
+
+      const approved: MemorySourceProposal = {
+        ...held.row,
+        status: APPROVED_STATUS,
+        approvedAt: held.row.approvedAt ?? stamp(),
+      };
+      const update = proposalToSourceUpdate(approved);
+      const source = sources.get(approved.sourceId);
+
+      if (source === undefined) {
+        throw new Error(
+          `[memory-research-store] proposal ${id} names source `
+          + `${approved.sourceId}, which this dataset does not hold. `
+          + 'A deployment cannot reach that state, so neither stamp '
+          + 'is written and the feed is left as it was.',
+        );
+      }
+
+      const ruled: MemorySourceProposal = {
+        ...approved,
+        appliedAt: approved.appliedAt ?? stamp(),
+      };
+
+      sources.set(source.id, {
+        ...source,
+        parserConfig: copyJsonDocument(update.parserConfig),
+        contract: copyJsonDocument(update.contract),
+      });
+      replaceProposal(held.domainId, copyPlantedProposal(ruled));
+
+      return proposalOf(held.domainId, ruled);
     },
 
     /**
@@ -7532,7 +8252,7 @@ export function createMemoryResearchStore(
 
       const ruled: MemoryResearchPoolRow = {
         ...held.row,
-        status: POOL_APPROVED_STATUS,
+        status: APPROVED_STATUS,
         approvedAt: held.row.approvedAt ?? stamp(),
       };
 
@@ -7798,6 +8518,22 @@ export function createMemoryResearchStore(
       for (const row of rows) {
         runs.set(row.id, copyPlantedRun(row));
       }
+    },
+
+    setDomainProposals(
+      domainId: number,
+      rows: readonly MemorySourceProposal[],
+    ): void {
+      // Every row held against the CHECK BEFORE any is stored, on
+      // `setDomainPool`'s terms one gate over: a batch carrying one
+      // impossible state lands nowhere and the previous plant is
+      // left standing, where a guard applied row by row as it stored
+      // would leave the collection half written.
+      for (const row of rows) {
+        guardProposalApproval(row);
+      }
+
+      domainProposals.set(domainId, rows.map(copyPlantedProposal));
     },
 
     setLlmCalls(rows: readonly MemoryLlmCall[]): void {

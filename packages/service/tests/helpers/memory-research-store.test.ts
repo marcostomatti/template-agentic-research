@@ -29,16 +29,20 @@
  * refuses on an INSERT and on an UPDATE because `name` is
  * patchable, and `topics_domain_id_domains_id_fk`, which the insert
  * alone can reach because `domainId` is not. The sources half adds
- * FOUR and reaches them from three calls, which is the widest
+ * SIX and reaches them from four calls, which is the widest
  * mechanism surface of any half here and the only one whose delete
  * is refused from OUTSIDE the row: `sources_kind_check`, the first
  * CHECK this file imitates, refusing on an INSERT and on an UPDATE
  * alike because `kind` is patchable;
  * `sources_domain_id_domains_id_fk`, which the insert alone reaches;
- * and `documents_source_id_sources_id_fk` beside
- * `finding_sightings_source_id_sources_id_fk`, two `ON DELETE no
- * action` keys in other tables that each hold the delete of a source
- * their rows still cite. The connectors half adds THREE and reaches
+ * `documents_source_id_sources_id_fk` beside
+ * `finding_sightings_source_id_sources_id_fk` and
+ * `source_config_proposals_source_id_sources_id_fk`, three
+ * `ON DELETE no action` keys in other tables that each hold the
+ * delete of a source their rows still cite; and
+ * `source_config_proposals_approval_check`, which no method reaches
+ * at all — the fourth call is a SEAM, and the paragraphs on the
+ * proposals half below carry why. The connectors half adds THREE and reaches
  * them from three calls as well, in a shape that is the sources
  * half's mirrored: `connectors_kind_name_unique` refusing on an
  * INSERT and on an UPDATE alike because `name` is patchable,
@@ -102,16 +106,22 @@
  * `src/sources/service.ts` reads the COUNTS rather than the
  * constraint name, so nothing downstream can tell which fired.
  *
- * THAT ONE REFUSING KEY IS DELIBERATELY NOT IMITATED, and the reason
- * is unreachability rather than oversight.
+ * THAT THE KEY THIS FILE ONCE DECLINED TO IMITATE IS IMITATED NOW,
+ * because a seam made the state reachable.
  * `source_config_proposals_source_id_sources_id_fk` is a third
- * `ON DELETE no action` key onto `sources.id`, but no port here
- * writes a proposal and no seam plants one, so there is no dataset
- * this store can be in where it would fire. A fake refusing a state
- * it cannot reach would be inventing a rule rather than imitating
- * one. There is no case for it, and that absence is why
- * `SourceStore.deleteSource` declares the throw rather than
- * promising that two zero counts mean the delete will land.
+ * `ON DELETE no action` key onto `sources.id`, and while no seam
+ * planted a proposal there was no dataset this store could be in
+ * where it would fire, so leaving it alone was unreachability rather
+ * than oversight — a fake refusing a state it cannot reach invents a
+ * rule instead of imitating one.
+ * `MemoryResearchStore.setDomainProposals` reaches it directly, so
+ * three cases hold it: the feed a pending proposal names, the same
+ * feed with an APPLIED one, since the key does not consult `status`,
+ * and a fourth feed nothing has proposed for whose delete lands.
+ * That last one is the positive control, and it is also what
+ * `SourceStore.deleteSource` warns of — three zero counts still do
+ * not promise the delete will land, `countSourceDependents` having
+ * no member for a proposal.
  *
  * THAT ITS IDS COME FROM 1 AND ARE NOT GAPLESS. A refused insert
  * burns an id here because it burns one in Postgres, measured on a
@@ -139,10 +149,11 @@
  * depend on a gaplessness only the fake has.
  *
  * THAT A DELETE CAN BE REFUSED BY ROWS IN ANOTHER TABLE, which is
- * the sources half's shape and no other's. `documents.source_id` and
- * `finding_sightings.source_id` are both `ON DELETE no action`, so a
- * feed whose captures are in the corpus cannot be removed until they
- * are — argued at both columns, and most sharply at the second,
+ * the sources half's shape and no other's. `documents.source_id`,
+ * `finding_sightings.source_id` and
+ * `source_config_proposals.source_id` are all `ON DELETE no action`,
+ * so a feed whose captures are in the corpus cannot be removed until
+ * they are — argued at both columns, and most sharply at the second,
  * where `src/db/schema/findings.ts` states the sightings table IS
  * the provenance record. The two are separate claims rather than one
  * rule read twice, and one case exists only to say so: a source
@@ -171,11 +182,13 @@
  * says the absence IS the read-only rule; what this file can add is
  * that a queue read and a queue count leave the aggregate exactly as
  * it was, and that every document any case here has to exist came
- * through a SEAM rather than through a method. Two seams, and their
- * shapes differ on purpose — rows for the documents, because three
- * reads answer rows, and a number for the sightings, because
- * `countSourceDependents` is the only thing that can ask about one
- * at all.
+ * through a SEAM rather than through a method. Three seams over this
+ * half, and their shapes differ on purpose — rows for the documents,
+ * because three reads answer rows; a number for the sightings,
+ * because `countSourceDependents` is the only thing that can ask
+ * about one at all; and rows for the config proposals, keyed by the
+ * DOMAIN rather than by the feed, which is the one place a seam here
+ * departs from its neighbours.
  *
  * THAT AN UPSERT REWRITES THREE COLUMNS AND KEEPS THE STORED ROW'S
  * ID. Measured: the statement answered the STORED id with `weight`,
@@ -1834,6 +1847,126 @@
  * the database's order, at both depths and off the plain read as
  * well as off the write. No re-aiming of this leg reaches it from
  * here.
+ *
+ * THAT THE PROPOSALS HALF IS THE FILE'S SECOND APPROVAL GATE AND
+ * READS AS THE SAME GATE. Four methods over
+ * `source_config_proposals`: a page narrowed to `pending` with its
+ * count, an UNSCOPED read by id, and one writer that rules AND
+ * applies. Every claim the entities half makes over `research_pool`
+ * has its counterpart here — an ascending queue, a by-id read that
+ * answers a row whatever parent it names, a CHECK reached from the
+ * seam alone, and an approval that keeps the first ruling's instant
+ * — and the cases are written to be read against those.
+ *
+ * THAT ITS QUEUE IS ASCENDING, NARROWED AND SCOPED, AND THAT THE
+ * THREE ARE SEPARATE CLAIMS. The fixture plants five proposals on
+ * one feed and one on its sibling: the tied pair carries ONE instant
+ * and is planted HIGH FIRST, the tiebreak being ASCENDING, and the
+ * oldest row carries the HIGHEST id, so `proposed_at` and `id`
+ * disagree on every pair. One case writes out the four orders the
+ * answer is NOT. Two of the five are ruled on, which is what the
+ * narrowing case reads and what makes the count three where the
+ * table holds five; the sixth row is what the scope case reads. It
+ * is `listPendingProposals` in `scripts/approve.ts` member for
+ * member, and the cases are what keep that a claim rather than a
+ * coincidence.
+ *
+ * THAT ITS WRITER TOUCHES TWO TABLES OR NEITHER. One case reads all
+ * four faces of a ruling in one body — both stamps, the status, the
+ * two documents landing on the feed exactly as proposed, and the row
+ * leaving the queue — and one drives the state a deployment's
+ * foreign key forbids and this seam can reach: a proposal naming a
+ * source nothing stored. Nothing is written until every value
+ * exists, so that case asserts the proposal is still unruled and the
+ * feed byte-identical to what it was, and asserts the fault is a
+ * plain `Error` rather than a `StoreRefusal` — answering a refusal
+ * for a state Postgres cannot be in would invent a rule.
+ *
+ * THAT BOTH ITS STAMPS ARE IDEMPOTENT AND THAT THEY ARE TWO CLAIMS.
+ * `coalesce` on each, so a second ruling keeps the first instants;
+ * the case moves the CLOCK between the two calls and rules on a
+ * third row afterwards as the control that it moved. A separate
+ * case rules on a row somebody already approved, where one
+ * `coalesce` falls through and the other does not, which is what
+ * separates the two.
+ *
+ * THAT A MALFORMED CONFIG IS WRITTEN. The approval IS the gate and
+ * this is not a second one, so a `parser_config` that is a bare
+ * string and a `contract` that is a number land on the feed. A store
+ * validating on the way through would refuse a row the deployment
+ * stores.
+ *
+ * THAT ITS CASCADE FOLLOWS THE DOMAIN AND NOT THE FEED, AND THAT THE
+ * DIFFERENCE IS THIS FILE'S EIGHTH KNOWN DIVERGENCE.
+ * `source_config_proposals.domain_id` cascades, so every status goes
+ * rather than the pending rows alone; one case drives the source
+ * delete FIRST, refused, and then the domain delete, taken, which is
+ * what says the cascade is not simply meeting nothing. A third case
+ * plants a proposal of the SECOND domain onto the first domain's
+ * feed and deletes that domain: the feed goes and the row is left
+ * naming an id nothing carries, where a deployment refuses the
+ * delete outright. `tests/live/api-wave3.live.test.ts` is where the
+ * refusal is discharged.
+ *
+ * THAT THE PROPOSALS HALF'S MUTATION GRID IS TWENTY-ONE LEGS, and
+ * that two of them are honest ZEROS. Every leg was run twice over
+ * one tree and the two runs agree member for member; every failed
+ * set lies entirely INSIDE this half, which is what says the half
+ * changed nothing above it. Planting nothing reddens 27 of the 29
+ * cases, and the two survivors are the coverage statement rather
+ * than the figure: the seam refusal, which is answered before
+ * anything is stored, and the feed nothing has proposed for, whose
+ * subject is an absence it never had to reach.
+ *
+ * The ordering legs are three and two of them are IDENTICAL at 3,
+ * told apart only by the assertion that fails inside each: dropping
+ * the `proposed_at` key and reversing the whole order redden the
+ * ordering case, the window case and the batch-refusal case that
+ * reads the queue back. Dropping the `id` tiebreak reddens those
+ * three plus the ruling case, whose queue assertion after the write
+ * is the tied pair alone. That the tiebreak leg reddens at all is
+ * the fixture's doing rather than the store's,
+ * `Array.prototype.sort` being stable.
+ *
+ * The two narrowing legs are 10 and 12 and neither contains the
+ * other: dropping the `pending` predicate and dropping the source
+ * scope share seven cases, and each reaches three the other does
+ * not. Nine of the twelve the scope leg reddens are cases about
+ * something else entirely, which is the shape a scope has.
+ *
+ * The check legs are 2 and 1 and they are nested rather than
+ * disjoint, exactly as the other gate's are: accepting an applied
+ * row with no approval reddens the refusal case and the batch case,
+ * and storing the rows as it guarded them row by row reddens the
+ * batch case alone.
+ *
+ * The ruling legs are 2, 1, 1, 4, 2 and 1 — a bare `now()` in place
+ * of each `coalesce`, leaving the status where it was, discarding
+ * the source write, discarding the proposal write, and stamping the
+ * proposal BEFORE the two columns are derived. The last is the only
+ * leg the atomicity case can report and it reddens exactly that one.
+ *
+ * The key and cascade legs are 3 and 2, overlapping in one case: the
+ * one that drives the refused source delete and the taken domain
+ * delete in the same body, which is what says that case is about the
+ * pair rather than about either line. Answering `domain_id` as a
+ * constant reddens exactly the whole-row case.
+ *
+ * The copy legs are one per DIRECTION and read 1 apiece — storing
+ * what the seam was handed, and handing the stored payload out.
+ *
+ * TWO LEGS ARE MEASURED ZEROS AND BOTH ARE STRUCTURAL. Deriving the
+ * two columns inline instead of through `proposalToSourceUpdate`
+ * reddens NOTHING, that function being a pass-through for any row
+ * carrying an approval and the row carrying one by the statement
+ * before: the claim it is one function both implementations go
+ * through is about where a future rule would live, and no case here
+ * can reach it. Handing the derived documents to the feed without
+ * copying them reddens nothing either, and the reason is narrower
+ * than it looks — the proposal is replaced by a fresh copy in the
+ * same call, so the object the feed keeps is one nobody else holds,
+ * and the two copies that ARE observable are pinned by the legs
+ * above. Neither zero is closable by widening a case.
  */
 import type {
   MemoryDomainDocument,
@@ -1844,6 +1977,7 @@ import type {
   MemoryResearchPoolRow,
   MemoryResearchStore,
   MemorySourceDocument,
+  MemorySourceProposal,
   MemoryRun,
 } from './memory-research-store.js';
 import type {
@@ -1879,6 +2013,7 @@ import type {
 } from '../../src/runs/store.js';
 import type {
   InsertSourceInput,
+  SourceConfigProposalRecord,
   SourceFailureRecord,
   SourcePatch,
   SourceRecord,
@@ -1919,6 +2054,29 @@ const TRANSIT = 'example-urban-transit';
 
 /** A window wide enough to read every row any case here writes. */
 const WHOLE_COLLECTION = { limit: 50, offset: 0 };
+
+/**
+ * A domain id nothing stores, and the needle every no-echo case in
+ * this file searches its own refusal for.
+ *
+ * SEVEN DIGITS ON PURPOSE, and the reason is the `stack` those cases
+ * serialise. A stack frame carries a LINE and a COLUMN number, so a
+ * three- or four-digit sentinel matches one by accident the moment
+ * anybody inserts lines into `./memory-research-store.js` — measured,
+ * a four-digit id came back once as `memory-research-store.ts:4041`
+ * and the case read a leak where the refusal was clean. Nothing in an
+ * eight-thousand-line file reaches seven digits, so the zero those
+ * cases assert is about the refusal rather than about where the throw
+ * happens to sit today.
+ *
+ * ONE CONSTANT FOR THREE HALVES, because the reason is one reason.
+ * The personas, topics and sources foreign keys each answer about an
+ * id, and a sentinel per half would be three places to shorten.
+ */
+const ABSENT_DOMAIN_ID = 4041987;
+
+/** {@link ABSENT_DOMAIN_ID} as the text a no-echo scan looks for. */
+const NEEDLE = String(ABSENT_DOMAIN_ID);
 
 /**
  * The connector filter that narrows nothing.
@@ -5147,7 +5305,7 @@ describe('the persona domain foreign key', () => {
   it('puts the refused id in nothing a logger can reach', async () => {
     const store = createMemoryResearchStore();
     const refusal = await refusalFrom(
-      () => addPersona(store, 4041, DRAFTER),
+      () => addPersona(store, ABSENT_DOMAIN_ID, DRAFTER),
     );
     const serialised = JSON.stringify({
       ...refusal,
@@ -5155,15 +5313,15 @@ describe('the persona domain foreign key', () => {
       stack: refusal.stack,
     });
 
-    expect(countOccurrences(serialised, '4041')).toBe(0);
+    expect(countOccurrences(serialised, NEEDLE)).toBe(0);
 
     // The same search over a message that DOES carry the id.
     const planted = JSON.stringify({
       ...refusal,
-      message: 'domain 4041 does not exist',
+      message: `domain ${NEEDLE} does not exist`,
     });
 
-    expect(countOccurrences(planted, '4041')).toBe(1);
+    expect(countOccurrences(planted, NEEDLE)).toBe(1);
   });
 });
 
@@ -5706,7 +5864,7 @@ describe('the topic domain foreign key', () => {
     const store = createMemoryResearchStore();
 
     const refusal = await refusalFrom(
-      () => addTopic(store, 4004, EDGE_INFERENCE),
+      () => addTopic(store, ABSENT_DOMAIN_ID, EDGE_INFERENCE),
     );
     const serialised = JSON.stringify({
       ...refusal,
@@ -5714,15 +5872,15 @@ describe('the topic domain foreign key', () => {
       stack: refusal.stack,
     });
 
-    expect(countOccurrences(serialised, '4004')).toBe(0);
+    expect(countOccurrences(serialised, NEEDLE)).toBe(0);
 
     // The same search over a message that DOES carry the id.
     const planted = JSON.stringify({
       ...refusal,
-      message: 'domain 4004 is not there',
+      message: `domain ${NEEDLE} is not there`,
     });
 
-    expect(countOccurrences(planted, '4004')).toBe(1);
+    expect(countOccurrences(planted, NEEDLE)).toBe(1);
   });
 });
 
@@ -6476,7 +6634,7 @@ describe('the source domain foreign key', () => {
     const store = createMemoryResearchStore();
 
     const refusal = await refusalFrom(
-      () => addSource(store, 4004, FEED_ENDPOINT),
+      () => addSource(store, ABSENT_DOMAIN_ID, FEED_ENDPOINT),
     );
     const serialised = JSON.stringify({
       ...refusal,
@@ -6484,15 +6642,15 @@ describe('the source domain foreign key', () => {
       stack: refusal.stack,
     });
 
-    expect(countOccurrences(serialised, '4004')).toBe(0);
+    expect(countOccurrences(serialised, NEEDLE)).toBe(0);
 
     // The same search over a message that DOES carry the id.
     const plantedMessage = JSON.stringify({
       ...refusal,
-      message: 'domain 4004 is not there',
+      message: `domain ${NEEDLE} is not there`,
     });
 
-    expect(countOccurrences(plantedMessage, '4004')).toBe(1);
+    expect(countOccurrences(plantedMessage, NEEDLE)).toBe(1);
   });
 });
 
@@ -13684,5 +13842,826 @@ describe('the run payload crossing the boundary', () => {
     ]);
     expect(await store.countRunLedger(RUN_TIED_LOW)).toBe(1);
     expect(await store.findRunById(RUN_TIED_LOW)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The proposals half's fixture
+// ---------------------------------------------------------------------------
+
+/**
+ * The two instants the queue is proposed across, and the two the
+ * already-ruled rows carry.
+ *
+ * SPELLED OUT RATHER THAN DERIVED FROM ONE ANOTHER, on the terms
+ * {@link RESEARCHED_T0} states, and kept clear of the other gate's
+ * stamps: the two gates are argued to be the same gate, so a shared
+ * instant would put a fixture at the centre of the comparison.
+ */
+const PROPOSED_T0 = '2026-06-01T09:00:00.000Z';
+const PROPOSED_T1 = '2026-06-02T09:00:00.000Z';
+
+/** When the fixture's already-ruled proposals were approved. */
+const AGREED_AT = '2026-06-03T09:00:00.000Z';
+
+/** When the one applied proposal was written onto its feed. */
+const WRITTEN_AT = '2026-06-04T09:00:00.000Z';
+
+/**
+ * The six proposals the fixture plants, named for what each is in
+ * the rules rather than for its id.
+ *
+ * `PROPOSED_TIED_LOW` and `PROPOSED_TIED_HIGH` carry ONE instant and
+ * are planted HIGH FIRST, the queue's tiebreak being ASCENDING — so
+ * a stable sort that lost the tiebreak answers them the wrong way
+ * round rather than reproducing the answer by accident.
+ * `PROPOSED_FIRST` is the HIGHEST id and the OLDEST stamp, so the
+ * two keys disagree on every pair it is in and an ordering by `id`
+ * alone cannot look right. `AGREED` and `APPLIED` are ruled on and
+ * are what says the queue is narrowed; `ON_ITEMS` names the sibling
+ * feed and is what says it is scoped.
+ */
+const PROPOSED_TIED_LOW = 194;
+const PROPOSED_TIED_HIGH = 195;
+const PROPOSED_FIRST = 196;
+const AGREED = 197;
+const APPLIED = 198;
+const ON_ITEMS = 199;
+
+/** The one proposal planted under the second domain. */
+const ELSEWHERE_PROPOSAL = 200;
+
+/**
+ * The two documents an approval writes, distinct from anything the
+ * sources fixture stores so that a case can tell a config that was
+ * APPLIED from one a feed was inserted with.
+ */
+const PROPOSED_PARSER = { item: 'entry', select: 'a' } as const;
+const PROPOSED_CONTRACT = { expects: 'entry', minimum: 3 } as const;
+
+/** What {@link proposed} defaults when a case is not about it. */
+type ProposalDefaults = Partial<Omit<MemorySourceProposal, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setDomainProposals}.
+ *
+ * A function rather than a constant, for the reason {@link queued}
+ * is one: the copy cases WRITE into the documents they planted,
+ * which is the whole point of them.
+ *
+ * @param id - The proposal's id, which is what a ruling names and
+ *   what the queue's tiebreak reads.
+ * @param sourceId - The feed it is for. Required rather than
+ *   defaulted, `source_config_proposals.source_id` being NOT NULL
+ *   and every read here being scoped or checked by it.
+ * @param values - The seven members a case may care about. Both
+ *   stamps default to null, which is the open state every row starts
+ *   in and the one side of `source_config_proposals_approval_check`
+ *   that is always legal.
+ * @returns The row to plant.
+ */
+function proposed(
+  id: number,
+  sourceId: number,
+  values: ProposalDefaults = {},
+): MemorySourceProposal {
+  return {
+    id,
+    sourceId: values.sourceId ?? sourceId,
+    parserConfig: values.parserConfig ?? { ...PROPOSED_PARSER },
+    contract: values.contract ?? { ...PROPOSED_CONTRACT },
+    proposedBy: values.proposedBy ?? `proposer ${id}`,
+    status: values.status ?? 'pending',
+    proposedAt: values.proposedAt ?? new Date(PROPOSED_T1),
+    approvedAt: values.approvedAt ?? null,
+    appliedAt: values.appliedAt ?? null,
+  };
+}
+
+/**
+ * Two domains, two feeds in the first and one in the second, with
+ * six proposals queued against the first domain's feeds and one
+ * against the second's.
+ *
+ * PLANTED IN AN ORDER NO READ ANSWERS, on the terms
+ * {@link seedEntities} states.
+ *
+ * @param store - The store to write to.
+ * @returns Both domains and all three feeds: the queue's, the
+ *   sibling the scope is read against, and the one in the second
+ *   domain the cascade is read against.
+ */
+async function seedProposals(store: MemoryResearchStore): Promise<{
+  domain: DomainRecord;
+  other: DomainRecord;
+  feed: SourceRecord;
+  items: SourceRecord;
+  elsewhere: SourceRecord;
+}> {
+  const domain = await store.insertDomain(domainInput(RADAR));
+  const other = await store.insertDomain(domainInput(TRANSIT));
+  const feed = await addSource(store, domain.id, FEED_ENDPOINT);
+  const items = await addSource(store, domain.id, ITEMS_ENDPOINT, {
+    kind: 'api',
+  });
+  const elsewhere = await addSource(store, other.id, FEED_ENDPOINT);
+
+  store.setDomainProposals(domain.id, [
+    proposed(PROPOSED_TIED_HIGH, feed.id),
+    proposed(APPLIED, feed.id, {
+      appliedAt: new Date(WRITTEN_AT),
+      approvedAt: new Date(AGREED_AT),
+      status: 'done',
+    }),
+    proposed(PROPOSED_FIRST, feed.id, {
+      proposedAt: new Date(PROPOSED_T0),
+    }),
+    proposed(ON_ITEMS, items.id),
+    proposed(AGREED, feed.id, {
+      approvedAt: new Date(AGREED_AT),
+      status: 'approved',
+    }),
+    proposed(PROPOSED_TIED_LOW, feed.id),
+  ]);
+  store.setDomainProposals(other.id, [
+    proposed(ELSEWHERE_PROPOSAL, elsewhere.id),
+  ]);
+
+  return { domain, other, feed, items, elsewhere };
+}
+
+/**
+ * Reads one window of a feed's pending config proposals.
+ *
+ * @param store - The store to read.
+ * @param sourceId - The feed whose queue to read.
+ * @param window - How much to take, the whole collection by default.
+ * @returns The ids in the order they arrived.
+ */
+async function queuePage(
+  store: MemoryResearchStore,
+  sourceId: number,
+  window = WHOLE_COLLECTION,
+): Promise<number[]> {
+  const page = await store.listPendingProposals(sourceId, window);
+
+  return page.map((row) => row.id);
+}
+
+/**
+ * Reads a proposal that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no proposal carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readProposal(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<SourceConfigProposalRecord> {
+  const row = await store.findProposalById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored proposal under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * Rules on a proposal that must be there.
+ *
+ * @param store - The store to write to.
+ * @param id - The proposal to rule on.
+ * @returns The row as it stands after both stamps.
+ * @throws When no proposal carries the id, so a case about an
+ *   approval cannot quietly assert over a null.
+ */
+async function ruleOn(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<SourceConfigProposalRecord> {
+  const row = await store.approveAndApplyProposal(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored proposal under ${id}`);
+  }
+
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// The pending queue, its order and its two narrowings
+// ---------------------------------------------------------------------------
+
+describe('the pending config queue ordering', () => {
+  it('answers it oldest first with id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedProposals(store);
+    const page = await queuePage(store, feed.id);
+
+    // ASCENDING where the failures queue one table over descends,
+    // which is `listPendingProposals` in `scripts/approve.ts` member
+    // for member. The tied pair was planted HIGH FIRST, so a stable
+    // sort that lost the tiebreak answers them the wrong way round.
+    expect(page).toStrictEqual([
+      PROPOSED_FIRST,
+      PROPOSED_TIED_LOW,
+      PROPOSED_TIED_HIGH,
+    ]);
+
+    // The four orders it is NOT, written out: a three-row page
+    // agreeing with any of them would be reproducing the answer by
+    // accident rather than by the two keys.
+    expect(page).not.toStrictEqual([
+      PROPOSED_TIED_HIGH,
+      PROPOSED_FIRST,
+      PROPOSED_TIED_LOW,
+    ]);
+    expect(page).not.toStrictEqual([
+      PROPOSED_TIED_LOW,
+      PROPOSED_FIRST,
+      PROPOSED_TIED_HIGH,
+    ]);
+    expect(page).not.toStrictEqual([
+      PROPOSED_TIED_LOW,
+      PROPOSED_TIED_HIGH,
+      PROPOSED_FIRST,
+    ]);
+    expect(page).not.toStrictEqual([
+      PROPOSED_TIED_HIGH,
+      PROPOSED_TIED_LOW,
+      PROPOSED_FIRST,
+    ]);
+  });
+
+  it('narrows to the rows still waiting on a ruling', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedProposals(store);
+    const page = await queuePage(store, feed.id);
+
+    // PENDING ONLY, and the filter is the store's rather than a
+    // caller's: there is no status parameter, so the gate's history
+    // is not pageable from here. Both ruled rows are on the SAME
+    // feed and are readable by id, which the next describe reads.
+    expect(page).not.toContain(AGREED);
+    expect(page).not.toContain(APPLIED);
+    expect(await readProposal(store, AGREED)).toMatchObject({
+      status: 'approved',
+    });
+    expect(await readProposal(store, APPLIED)).toMatchObject({
+      status: 'done',
+    });
+  });
+
+  it('scopes the queue to the feed it was asked about', async () => {
+    const store = createMemoryResearchStore();
+    const { feed, items, elsewhere } = await seedProposals(store);
+
+    expect(await queuePage(store, feed.id)).not.toContain(ON_ITEMS);
+    expect(await queuePage(store, items.id)).toStrictEqual([ON_ITEMS]);
+    expect(await queuePage(store, elsewhere.id)).toStrictEqual([
+      ELSEWHERE_PROPOSAL,
+    ]);
+    expect(await store.countPendingProposals(feed.id)).toBe(3);
+    expect(await store.countPendingProposals(items.id)).toBe(1);
+  });
+
+  it('counts the queue and not the table', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedProposals(store);
+
+    // Five rows are planted against this feed and two are ruled on,
+    // so a count over the table answers five and the honest number
+    // for a backlog is three: what is closed is not waiting on
+    // anybody. The by-id reads are what say the other two are there.
+    expect(await store.countPendingProposals(feed.id)).toBe(3);
+    expect(await store.findProposalById(AGREED)).not.toBeNull();
+    expect(await store.findProposalById(APPLIED)).not.toBeNull();
+  });
+
+  it('windows the page and counts the whole either way', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedProposals(store);
+
+    expect(
+      await queuePage(store, feed.id, { limit: 1, offset: 1 }),
+    ).toStrictEqual([PROPOSED_TIED_LOW]);
+    expect(
+      await queuePage(store, feed.id, { limit: 2, offset: 9 }),
+    ).toStrictEqual([]);
+    expect(await store.countPendingProposals(feed.id)).toBe(3);
+  });
+
+  it('answers an empty list and a zero for an unknown id', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedProposals(store);
+
+    expect(await queuePage(store, 9999)).toStrictEqual([]);
+    expect(await store.countPendingProposals(9999)).toBe(0);
+    expect(await queuePage(store, feed.id)).toHaveLength(3);
+  });
+});
+
+describe('the proposal read by its own id', () => {
+  it('answers a row whatever feed it names', async () => {
+    const store = createMemoryResearchStore();
+    const { feed, items, elsewhere } = await seedProposals(store);
+
+    // UNSCOPED on purpose: a read narrowed to the source would
+    // answer null for `no such row` and for `not this feed's row`
+    // alike, and only one of those is honest. Whose row it is, is
+    // the service's question, and `sourceId` is what it holds
+    // against the addressed feed.
+    expect(await readProposal(store, PROPOSED_FIRST)).toMatchObject({
+      sourceId: feed.id,
+    });
+    expect(await readProposal(store, ON_ITEMS)).toMatchObject({
+      sourceId: items.id,
+    });
+    expect(await readProposal(store, ELSEWHERE_PROPOSAL)).toMatchObject({
+      sourceId: elsewhere.id,
+    });
+  });
+
+  it('answers the row whole, the seam key put back', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    // `domainId` is the column the plant DROPS, the seam keying on
+    // it, so a projection that forgot to put it back would answer
+    // nine members where the record declares ten.
+    expect(await readProposal(store, APPLIED)).toStrictEqual({
+      appliedAt: new Date(WRITTEN_AT),
+      approvedAt: new Date(AGREED_AT),
+      contract: { ...PROPOSED_CONTRACT },
+      domainId: domain.id,
+      id: APPLIED,
+      parserConfig: { ...PROPOSED_PARSER },
+      proposedAt: new Date(PROPOSED_T1),
+      proposedBy: `proposer ${APPLIED}`,
+      sourceId: feed.id,
+      status: 'done',
+    });
+  });
+
+  it('answers null for an id no proposal carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedProposals(store);
+
+    expect(await store.findProposalById(9999)).toBeNull();
+    expect(await store.findProposalById(PROPOSED_FIRST)).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The check the seam holds, and the ruling that applies what it ruled
+// ---------------------------------------------------------------------------
+
+describe('the source_config_proposals_approval_check', () => {
+  it('refuses an applied row carrying no approval', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    const refusal = await refusalFrom(async () => {
+      store.setDomainProposals(domain.id, [
+        proposed(201, feed.id, {
+          appliedAt: new Date(WRITTEN_AT),
+          status: 'done',
+        }),
+      ]);
+    });
+
+    expect(refusal.reason).toBe('check-violation');
+    expect(refusal.constraint).toBe('source_config_proposals_approval_check');
+  });
+
+  it('takes the same row once it also states an approval', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    // The check read from its other side, and the control that makes
+    // the refusal above about the PAIR rather than about the stamp:
+    // the identical applied instant is stored once an approval
+    // stands beside it.
+    store.setDomainProposals(domain.id, [
+      proposed(201, feed.id, {
+        appliedAt: new Date(WRITTEN_AT),
+        approvedAt: new Date(AGREED_AT),
+        status: 'done',
+      }),
+    ]);
+
+    expect(await readProposal(store, 201)).toMatchObject({
+      appliedAt: new Date(WRITTEN_AT),
+    });
+  });
+
+  it('leaves the previous plant standing when it refuses', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    await refusalFrom(async () => {
+      store.setDomainProposals(domain.id, [
+        proposed(201, feed.id),
+        proposed(202, feed.id, {
+          appliedAt: new Date(WRITTEN_AT),
+          status: 'done',
+        }),
+      ]);
+    });
+
+    // The batch lands NOWHERE: the legal row beside the refused one
+    // is not stored either, and what was planted before is still
+    // there. A guard applied row by row as it stored would leave the
+    // collection half written, which one statement cannot produce.
+    expect(await store.findProposalById(201)).toBeNull();
+    expect(await queuePage(store, feed.id)).toStrictEqual([
+      PROPOSED_FIRST,
+      PROPOSED_TIED_LOW,
+      PROPOSED_TIED_HIGH,
+    ]);
+  });
+
+  it('never consults the status the row states', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    // The constraint holds the two timestamps against each other and
+    // reads nothing else, so a row calling itself done with neither
+    // stamp set is storable — and is stored, and is out of the queue
+    // because the queue reads the status the constraint ignores.
+    store.setDomainProposals(domain.id, [
+      proposed(201, feed.id, { status: 'done' }),
+    ]);
+
+    expect(await readProposal(store, 201)).toMatchObject({
+      appliedAt: null,
+      approvedAt: null,
+      status: 'done',
+    });
+    expect(await queuePage(store, feed.id)).toStrictEqual([]);
+  });
+});
+
+describe('the ruling that applies what it approved', () => {
+  it('stamps both, moves the status and writes the feed', async () => {
+    const ruled = new Date('2026-06-10T10:00:00.000Z');
+    const store = createMemoryResearchStore({ now: () => ruled });
+    const { feed } = await seedProposals(store);
+
+    expect(await ruleOn(store, PROPOSED_FIRST)).toMatchObject({
+      appliedAt: ruled,
+      approvedAt: ruled,
+      id: PROPOSED_FIRST,
+      status: 'approved',
+    });
+
+    // BOTH TABLES, which is what makes this the one writer here that
+    // is not about a single row: the two documents land on the feed
+    // exactly as they were proposed, and neither was what the source
+    // was inserted with.
+    expect(await readSource(store, feed.id)).toMatchObject({
+      contract: { ...PROPOSED_CONTRACT },
+      parserConfig: { ...PROPOSED_PARSER },
+    });
+    expect(await readProposal(store, PROPOSED_FIRST)).toMatchObject({
+      appliedAt: ruled,
+      approvedAt: ruled,
+      status: 'approved',
+    });
+
+    // AND IT LEAVES THE QUEUE, the status having moved off the one
+    // member the queue selects on.
+    expect(await queuePage(store, feed.id)).toStrictEqual([
+      PROPOSED_TIED_LOW,
+      PROPOSED_TIED_HIGH,
+    ]);
+  });
+
+  it('keeps both first instants when it is ruled on twice', async () => {
+    let reading = new Date('2026-06-10T10:00:00.000Z');
+    const store = createMemoryResearchStore({ now: () => reading });
+
+    await seedProposals(store);
+
+    const first = await ruleOn(store, PROPOSED_FIRST);
+
+    reading = new Date('2026-06-11T10:00:00.000Z');
+
+    // The clock has moved, so a store writing a bare `now()` answers
+    // the second reading here. `coalesce` on each stamp answers the
+    // first, which is what makes ruling twice a no-op rather than a
+    // way to re-date an approval already given or an application
+    // already made.
+    const second = await ruleOn(store, PROPOSED_FIRST);
+
+    expect(second.approvedAt).toStrictEqual(first.approvedAt);
+    expect(second.appliedAt).toStrictEqual(first.appliedAt);
+    expect(second.approvedAt).toStrictEqual(
+      new Date('2026-06-10T10:00:00.000Z'),
+    );
+
+    // The control that says the clock did move: a row nobody has
+    // ruled on takes the SECOND reading on both stamps.
+    expect(await ruleOn(store, PROPOSED_TIED_LOW)).toMatchObject({
+      appliedAt: new Date('2026-06-11T10:00:00.000Z'),
+      approvedAt: new Date('2026-06-11T10:00:00.000Z'),
+    });
+  });
+
+  it('keeps the approval a row already carried', async () => {
+    const store = createMemoryResearchStore({
+      now: () => new Date('2026-06-11T10:00:00.000Z'),
+    });
+    const { feed } = await seedProposals(store);
+
+    // Nothing is asked of the row's state. A row approved and never
+    // applied takes the closing stamp alone and keeps the instant
+    // somebody else gave it — which is what separates the two
+    // `coalesce` calls: one falls through and one does not.
+    expect(await ruleOn(store, AGREED)).toMatchObject({
+      appliedAt: new Date('2026-06-11T10:00:00.000Z'),
+      approvedAt: new Date(AGREED_AT),
+    });
+    expect(await readSource(store, feed.id)).toMatchObject({
+      parserConfig: { ...PROPOSED_PARSER },
+    });
+  });
+
+  it('writes a config nothing validated', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    store.setDomainProposals(domain.id, [
+      proposed(201, feed.id, { contract: 7, parserConfig: 'not a config' }),
+    ]);
+
+    await ruleOn(store, 201);
+
+    // The approval IS the gate and this is not a second one: a
+    // malformed `parser_config` somebody agreed to is written,
+    // because the alternative is a store refusing a row the
+    // deployment stores.
+    expect(await readSource(store, feed.id)).toMatchObject({
+      contract: 7,
+      parserConfig: 'not a config',
+    });
+  });
+
+  it('leaves both tables alone when the feed is not there', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    store.setDomainProposals(domain.id, [proposed(201, 9999)]);
+
+    const before = await readSource(store, feed.id);
+    const fault = await plainErrorFrom(
+      () => store.approveAndApplyProposal(201),
+    );
+
+    // TOGETHER OR NOT AT ALL. Nothing is stored until every value
+    // exists, so neither stamp is written and the feeds are as they
+    // were — the two halves the port says are not states anybody
+    // meant. It is a plain Error and not a `StoreRefusal`, because a
+    // deployment's foreign key makes the state unreachable and
+    // answering a refusal for it would invent a rule.
+    expect(fault).not.toBeInstanceOf(StoreRefusal);
+    expect(await readProposal(store, 201)).toMatchObject({
+      appliedAt: null,
+      approvedAt: null,
+      status: 'pending',
+    });
+    expect(await readSource(store, feed.id)).toStrictEqual(before);
+  });
+
+  it('answers null for an id no proposal carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedProposals(store);
+
+    expect(await store.approveAndApplyProposal(9999)).toBeNull();
+    expect(await store.approveAndApplyProposal(PROPOSED_FIRST)).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a domain delete takes, and the delete a proposal holds
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its config proposals', () => {
+  it('takes them and leaves another domain standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, elsewhere } = await seedProposals(store);
+
+    // The state before, so the absences below are about the delete
+    // rather than about a fixture that planted nothing.
+    expect(await store.findProposalById(PROPOSED_FIRST)).not.toBeNull();
+    expect(await store.findProposalById(APPLIED)).not.toBeNull();
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // `source_config_proposals.domain_id` cascades, so every status
+    // goes rather than the pending ones alone, and the second
+    // domain's row is untouched.
+    expect(await store.findProposalById(PROPOSED_FIRST)).toBeNull();
+    expect(await store.findProposalById(APPLIED)).toBeNull();
+    expect(await store.findProposalById(ON_ITEMS)).toBeNull();
+    expect(await queuePage(store, elsewhere.id)).toStrictEqual([
+      ELSEWHERE_PROPOSAL,
+    ]);
+  });
+
+  it('is not refused by the feeds it removes in the same act', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    // The delete of that feed on its own is refused, which is the
+    // control that says the cascade is not simply meeting nothing —
+    // and the domain delete takes both anyway, because one statement
+    // removes the sources and the proposals that were holding them.
+    await expect(store.deleteSource(feed.id)).rejects.toBeInstanceOf(
+      StoreRefusal,
+    );
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findSourceById(feed.id)).toBeNull();
+    expect(await store.findProposalById(PROPOSED_FIRST)).toBeNull();
+  });
+
+  it('leaves a proposal another domain raised on its feed', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other, feed } = await seedProposals(store);
+
+    store.setDomainProposals(other.id, [
+      proposed(ELSEWHERE_PROPOSAL, feed.id),
+    ]);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // THE EIGHTH KNOWN DIVERGENCE. `source_config_proposals.source_id`
+    // is `ON DELETE no action`, so a deployment refuses this delete
+    // while a row of ANOTHER domain still names the feed; here the
+    // cascade follows `domain_id` alone and the row is left naming an
+    // id nothing carries. The module header states it, and the live
+    // suite is where the refusal is discharged.
+    expect(await store.findSourceById(feed.id)).toBeNull();
+    expect(await readProposal(store, ELSEWHERE_PROPOSAL)).toMatchObject({
+      sourceId: feed.id,
+    });
+  });
+});
+
+describe('the proposals that hold a source delete', () => {
+  it('refuses the feed a proposal still names', async () => {
+    const store = createMemoryResearchStore();
+    const { feed, items } = await seedProposals(store);
+
+    const refusal = await refusalFrom(() => store.deleteSource(feed.id));
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe(
+      'source_config_proposals_source_id_sources_id_fk',
+    );
+
+    // The positive control in the same body: the SAME call over a
+    // feed whose only proposal has been cleared is taken, so the
+    // refusal is about the rows rather than about the method.
+    store.setDomainProposals((await readSource(store, items.id)).domainId, []);
+
+    expect(await store.deleteSource(items.id)).toBe(true);
+  });
+
+  it('refuses it whatever status the proposal stands at', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    store.setDomainProposals(domain.id, [
+      proposed(201, feed.id, {
+        appliedAt: new Date(WRITTEN_AT),
+        approvedAt: new Date(AGREED_AT),
+        status: 'done',
+      }),
+    ]);
+
+    // The key does not consult `status`, so a proposal already
+    // applied holds the delete exactly as a pending one does — a
+    // proposal is the account of what was asked for a feed, and it
+    // outlives the ruling.
+    const refusal = await refusalFrom(() => store.deleteSource(feed.id));
+
+    expect(refusal.constraint).toBe(
+      'source_config_proposals_source_id_sources_id_fk',
+    );
+    expect(await store.countPendingProposals(feed.id)).toBe(0);
+  });
+
+  it('is not reached by a feed nothing has proposed for', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedProposals(store);
+    const spare = await addSource(store, domain.id, ITEMS_ENDPOINT);
+
+    // Three feeds carry proposals and this one does not, so its
+    // delete lands — which is what says the refusal above is scoped
+    // to the feed each row names rather than to the domain.
+    expect(await store.deleteSource(spare.id)).toBe(true);
+  });
+});
+
+describe('the proposal payload crossing the boundary', () => {
+  it('copies the documents and the stamps on the way in', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+    const row = proposed(201, feed.id, {
+      approvedAt: new Date(AGREED_AT),
+      parserConfig: { item: 'entry' },
+      status: 'approved',
+    });
+
+    store.setDomainProposals(domain.id, [row]);
+
+    (row.parserConfig as Record<string, unknown>).item = 'moved';
+    row.proposedAt.setUTCFullYear(1999);
+    row.approvedAt?.setUTCFullYear(1999);
+
+    expect(await readProposal(store, 201)).toMatchObject({
+      approvedAt: new Date(AGREED_AT),
+      parserConfig: { item: 'entry' },
+      proposedAt: new Date(PROPOSED_T1),
+    });
+  });
+
+  it('copies them on the way out of every read', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedProposals(store);
+    const [first] = await store.listPendingProposals(
+      feed.id,
+      WHOLE_COLLECTION,
+    );
+
+    (first?.parserConfig as Record<string, unknown>).item = 'moved';
+    first?.proposedAt.setUTCFullYear(1999);
+
+    // Compared against the fixture FUNCTION rather than against the
+    // row a call answered: a store handing its own object out has
+    // aliased the two, and a comparison between two answers would
+    // hold one lie against itself and pass.
+    expect(await readProposal(store, PROPOSED_FIRST)).toMatchObject({
+      parserConfig: { ...PROPOSED_PARSER },
+      proposedAt: new Date(PROPOSED_T0),
+    });
+
+    const ruled = await ruleOn(store, PROPOSED_TIED_LOW);
+
+    ruled.appliedAt?.setUTCFullYear(1999);
+
+    expect((await readProposal(store, PROPOSED_TIED_LOW)).appliedAt)
+      .not.toStrictEqual(new Date('1999-01-01T00:00:00.000Z'));
+  });
+
+  it('rebuilds the planted queue rather than holding it', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+    const rows = [proposed(201, feed.id)];
+
+    store.setDomainProposals(domain.id, rows);
+
+    rows.push(proposed(202, feed.id));
+
+    expect(await queuePage(store, feed.id)).toStrictEqual([201]);
+
+    // A second call REPLACES the first rather than appending to it,
+    // which is what makes a domain going back to having proposed
+    // nothing expressible.
+    store.setDomainProposals(domain.id, []);
+
+    expect(await queuePage(store, feed.id)).toStrictEqual([]);
+    expect(await store.countPendingProposals(feed.id)).toBe(0);
+    expect(await store.findProposalById(201)).toBeNull();
+  });
+
+  it('writes a copy of the config onto the feed', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+    const row = proposed(201, feed.id, { parserConfig: { item: 'entry' } });
+
+    store.setDomainProposals(domain.id, [row]);
+    await ruleOn(store, 201);
+
+    const applied = await readSource(store, feed.id);
+
+    (applied.parserConfig as Record<string, unknown>).item = 'moved';
+
+    // The feed's own copy, so writing into what a source read
+    // answered moves neither the stored source nor the proposal the
+    // documents came from.
+    expect(await readSource(store, feed.id)).toMatchObject({
+      parserConfig: { item: 'entry' },
+    });
+    expect(await readProposal(store, 201)).toMatchObject({
+      parserConfig: { item: 'entry' },
+    });
   });
 });
