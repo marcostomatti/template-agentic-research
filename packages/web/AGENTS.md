@@ -342,8 +342,8 @@ They are here because every one of them is invisible to `lint`,
   `div` and NOT a `tabpanel`: half a relationship reads worse than
   none, and a spec reaching for `getByRole('tabpanel')` finds nothing.
   Address the switch as `getByRole('tab', { name })` and give the
-  tablist an `aria-label` at the call site — the two words on the
-  segments say WHICH view, and nothing else says what they are views
+  tablist an `aria-label` at the call site — the segments' own
+  words say WHICH view, and nothing else says what they are views
   of. It also spreads `HTMLAttributes`, so that label passes straight
   through (measured). Its track is `inline-flex`, which stretches like
   any flex child, so a call site inside a column wants `self-start`.

@@ -1,5 +1,9 @@
 import type { TermPayloadEntry } from './schema';
-import type { TermCandidate, TermPresentation } from './terms';
+import type {
+  TermCandidate,
+  TermPresentation,
+  TermPresentationOption,
+} from './terms';
 import type { Term, TermPolarity } from '../../data/types';
 
 import { describe, expect, it } from 'vitest';
@@ -39,6 +43,26 @@ const BUCKET_ORDER: readonly TermPolarity[] = [
   'positive',
   'negative',
   'ignore',
+];
+
+/**
+ * The presentations the editor offers, in the order it offers them.
+ *
+ * A TYPED literal for the reason {@link BUCKET_ORDER} is one, and the
+ * REMOVAL direction of the union's totality: a presentation dropped
+ * from `TermPresentation` upstream is TS2322 at the spelling that
+ * outlived it, here, where the module's own tables would simply stop
+ * carrying it. The ADDITION direction is the module's keyed record,
+ * which the compiler makes demand a member.
+ *
+ * Spelled out rather than read off `termPresentationOptions()`, which
+ * is the whole point: a roster derived from the thing under test
+ * agrees with it whatever either says.
+ */
+const PRESENTATION_SEQUENCE: readonly TermPresentation[] = [
+  'template',
+  'fields',
+  'json',
 ];
 
 /**
@@ -1074,27 +1098,79 @@ function entry(
   return { pattern, weight, polarity, notes: null };
 }
 
+/**
+ * One presentation, crossed through the option key type and back.
+ *
+ * The third totality direction, and the one NEITHER table in the
+ * module reports: widening `TermPresentationOption['key']` to `string`
+ * leaves the order roster and the label record compiling, every option
+ * spelled exactly as before, and every runtime case here agreeing with
+ * itself. The two names sit in opposite positions on purpose, and
+ * each direction is caught at its own line: `key` takes the union
+ * INTO the option's key type, so a NARROWED one reds there, and
+ * `back` takes it OUT again, so a WIDENED one reds there. Measured
+ * both ways, TS2322 apiece — and the widening reds a second site,
+ * TS2345 where a case hands an option's key to
+ * `termPresentationIndex`.
+ *
+ * A compile-time reading rather than an assertion. What it answers is
+ * its argument, so the case calling it has a runtime claim of its own
+ * and nothing here is dead code the linter would drop.
+ *
+ * @param presentation - Which drawing is on screen.
+ * @returns The same presentation, having been an option key.
+ */
+function crossPresentation(
+  presentation: TermPresentation,
+): TermPresentation {
+  const key: TermPresentationOption['key'] = presentation;
+  const back: TermPresentation = key;
+
+  return back;
+}
+
 describe('termPresentationOptions', () => {
   it('offers every drawing the editor can be in', () => {
     // The equivalence the pair exists for, as a set: a presentation
     // the state can hold and the control cannot reach is a drawing
     // with no way back to it, and it is invisible from either side.
-    // Arrange
-    const reachable: readonly TermPresentation[] = ['template', 'json'];
-
     // Act
     const offered = termPresentationOptions().map((option) => option.key);
 
     // Assert
-    expect(offered).toEqual(reachable);
+    expect(offered).toEqual(PRESENTATION_SEQUENCE);
   });
 
-  it('labels each option, and no two of them the same', () => {
+  it('labels each option in the surface\'s own words', () => {
+    // Retyped rather than read off the module, which is the rule for
+    // USER-VISIBLE text and the opposite of the rule for a structural
+    // spelling: a case reading the table agrees with whatever the
+    // table says, and a reworded segment would reach an operator with
+    // nothing reporting it.
+    //
+    // The words rather than a count of non-empty ones, because a key
+    // present in the record holding an `undefined` VALUE is a
+    // different fault from a key that is absent, and only the absent
+    // one is a `check-types` error. A count of non-empty labels
+    // passes over the first — measured.
     // Act
     const labels = termPresentationOptions().map((option) => option.label);
 
     // Assert
-    expect(labels.filter((label) => label !== '')).toHaveLength(2);
+    expect(labels).toEqual(['Buckets', 'Fields', 'JSON']);
+  });
+
+  it('labels no two of them the same', () => {
+    // The claim that outlives the words above rather than a second
+    // reading of them: the segments carry no other name, so two
+    // presentations sharing a label would be two tabs an operator
+    // cannot tell apart. Taken off the module's own answer, so a
+    // rewording that collides is still reported once the retyped
+    // list next door has been updated to match it.
+    // Act
+    const labels = termPresentationOptions().map((option) => option.label);
+
+    // Assert
     expect(repeated(labels)).toEqual([]);
   });
 
@@ -1109,7 +1185,19 @@ describe('termPresentationOptions', () => {
     first.push({ key: 'json', label: 'planted' });
 
     // Assert
-    expect(termPresentationOptions()).toHaveLength(2);
+    expect(termPresentationOptions()).toHaveLength(3);
+  });
+
+  it('carries the union at the key an option reports', () => {
+    // Act
+    const crossed = PRESENTATION_SEQUENCE.map(
+      (presentation) => crossPresentation(presentation),
+    );
+
+    // Assert
+    expect(crossed).toEqual(
+      termPresentationOptions().map((option) => option.key),
+    );
   });
 });
 
@@ -1117,8 +1205,18 @@ describe('readTermPresentation', () => {
   it('answers nothing for a position the control never drew', () => {
     // A default here would be this module choosing a drawing for the
     // operator, which is the one thing a narrowing must not do.
+    //
+    // The literal is one past the third presentation and pins TODAY's
+    // roster; the derived position beside it is what keeps the case
+    // measuring once a fourth lands, where a literal alone would go
+    // quietly green at a position the control by then draws.
+    // Arrange
+    const beyond = termPresentationOptions().length;
+
+    // Assert
     expect(readTermPresentation(-1)).toBeUndefined();
-    expect(readTermPresentation(2)).toBeUndefined();
+    expect(readTermPresentation(3)).toBeUndefined();
+    expect(readTermPresentation(beyond)).toBeUndefined();
     expect(readTermPresentation(Number.NaN)).toBeUndefined();
   });
 
@@ -1135,7 +1233,7 @@ describe('readTermPresentation', () => {
 
     // Assert
     expect(read).toEqual(offered.map((option) => option.key));
-    expect(read).toHaveLength(2);
+    expect(read).toHaveLength(PRESENTATION_SEQUENCE.length);
   });
 });
 
@@ -1157,6 +1255,9 @@ describe('termPresentationIndex', () => {
   });
 
   it('round-trips a position back to the presentation at it', () => {
+    // The LAST presentation rather than merely a non-first one: with
+    // three offered, a pair agreeing on any fixed position satisfies
+    // the round trip, and only the position itself reports it.
     // Arrange
     const held: TermPresentation = 'json';
 
@@ -1167,7 +1268,23 @@ describe('termPresentationIndex', () => {
     expect(readTermPresentation(index)).toBe(held);
     // The vacuity guard: a pair of functions both answering the first
     // option would satisfy the line above.
-    expect(index).not.toBe(0);
+    expect(index).toBe(PRESENTATION_SEQUENCE.length - 1);
+  });
+
+  it('round-trips the presentation the swap put between them', () => {
+    // The middle member specifically: an index built by counting from
+    // either end lands on the same position for the first and the
+    // last, and only a member with neighbours on both sides reports
+    // one that counts from the wrong one.
+    // Arrange
+    const held: TermPresentation = 'fields';
+
+    // Act
+    const index = termPresentationIndex(held);
+
+    // Assert
+    expect(index).toBe(1);
+    expect(readTermPresentation(index)).toBe(held);
   });
 });
 

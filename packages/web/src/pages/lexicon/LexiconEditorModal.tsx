@@ -576,8 +576,8 @@ const LexiconEditorBody = ({
     <div className="flex flex-col gap-5">
       {/*
         `self-start` because the track is `inline-flex` and a flex
-        child stretches by default, which would draw a two-option
-        switch the width of the modal.
+        child stretches by default, which would draw the switch the
+        width of the modal whatever it holds.
 
         The library wires no `aria-controls` per tab and offers no way
         to, so what follows is a plain region rather than a
