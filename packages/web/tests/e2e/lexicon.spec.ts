@@ -1,6 +1,10 @@
 import type { CategorySummary } from '../../src/data/lexicon';
 import type { Term } from '../../src/data/types';
-import type { TermPayload } from '../../src/pages/lexicon/schema';
+import type { ListFieldDef } from '../../src/dynamic-form/fieldDef';
+import type {
+  TermPayload,
+  TermPayloadEntry,
+} from '../../src/pages/lexicon/schema';
 import type { Locator, Page } from '@playwright/test';
 
 import { expect, test } from '@playwright/test';
@@ -12,13 +16,16 @@ import {
 } from '../../src/components/jsonDraft';
 import { fetchCategorySummaries, fetchTerms } from '../../src/data/api';
 import { DEFAULT_DOMAIN_SLUG } from '../../src/data/domains';
+import { buildFormTree, treeNavNodes } from '../../src/dynamic-form/tree';
 import { POLARITY_FACETS, termNoun } from '../../src/pages/lexicon/cards';
+import { fieldDefsForTermPayload } from '../../src/pages/lexicon/fieldDefs';
 import { termPayloadSchema } from '../../src/pages/lexicon/schema';
 import {
   describeTermBlockReading,
   parseTermBlock,
   splitTermBuckets,
   toTermPayload,
+  withTermPayload,
   withTermPolarity,
 } from '../../src/pages/lexicon/terms';
 import {
@@ -62,6 +69,27 @@ import {
 // address is the one claim here that is base-dependent, the editor's
 // close being relative. `navigation.spec.ts` and
 // `domain-switch.spec.ts` own the rest of the two-base surface.
+//
+// ## The swap's own claims, which no other file makes
+//
+// `dynamic-form.spec.ts` drives the provider inside one presentation
+// and never leaves it, and every pure module under `src/dynamic-form/`
+// carries its own cases. What is only true once the third segment sits
+// beside the other two is what `LexiconEditorModal.tsx` claims about
+// the swap: that all three drawings write the ONE draft, and that the
+// box is still offered rather than replaced.
+//
+// A swap UNMOUNTS the drawing it leaves, which is what makes it the
+// reading that separates a draft from a control still holding text: a
+// value that comes back under another segment came out of the draft.
+// `pattern` is the member every case below edits, because it is the
+// only one all three drawings show — each bucket row names it in its
+// polarity control, the box carries it in the payload, and the form
+// draws it in a box of its own.
+//
+// The two save cases read the way the polarity ones above do and for
+// the same reason: reopened by CLICKING the card, a `goto` being a
+// fresh document and so the very reset the reload case is about.
 
 /** Which surface this is — the list path comes off the same table. */
 const LEXICON_SURFACE_ID = 'lexicon';
@@ -835,5 +863,606 @@ test.describe('a polarity change', () => {
     await expect
       .poll(() => readBuckets(dialog))
       .toEqual(expectedBuckets(move.terms));
+  });
+});
+
+/** What the segment that swaps to the fixed template is called. */
+const TEMPLATE_TAB_NAME = 'Buckets';
+
+/** What the segment that swaps to the fields presentation is called. */
+const FIELDS_TAB_NAME = 'Fields';
+
+/**
+ * What the presentation control itself is called.
+ *
+ * `Segmented` renders a `tablist` and the shell hides its own chrome
+ * behind an open dialog, so an unnamed locator would find this one
+ * today — and start matching whichever tablist a later surface adds.
+ */
+const PRESENTATION_CONTROL_NAME = 'Term editor presentation';
+
+/**
+ * Every segment the control offers, in the order it draws them.
+ *
+ * Retyped rather than read off `termPresentationOptions()`, which is
+ * the table the control is built from: a roster derived from it
+ * agrees with whatever it says, where these three are words an
+ * operator reads. The ORDER is the fallback chain — the drawing that
+ * assumes the most about a category's shape first, the one that
+ * assumes nothing last — so the box sitting LAST is the claim here
+ * rather than an incidental spelling.
+ */
+const PRESENTATION_TAB_NAMES = [
+  TEMPLATE_TAB_NAME,
+  FIELDS_TAB_NAME,
+  JSON_TAB_NAME,
+] as const;
+
+/**
+ * The app-wide settled-state handle.
+ *
+ * `@ar/ui`'s `Skeleton` is its only user and the editor draws one
+ * while its term read is in flight. A stand-in is `aria-hidden`, so a
+ * locator taken mid-load addresses a body that has not arrived and
+ * reports the absence as a fault in the app.
+ */
+const SKELETON = '.animate-shimmer';
+
+/** Which entry of the payload every edit below is made in. */
+const EDITED_ENTRY_INDEX = 0;
+
+/**
+ * A pattern this file writes through the fields presentation.
+ *
+ * Asserted in the Arrange to collide with no stored pattern, so the
+ * value that comes back after a swap or a save can only have been
+ * written here — a write back to what was already there would leave
+ * every reading below satisfied by a draft nothing reached.
+ */
+const EDITED_PATTERN = 'spec swapped pattern';
+
+/**
+ * Which member of an entry that edit is made in.
+ *
+ * Keyed by the payload's own entry type, so a member that drifts is a
+ * `check-types` failure naming it rather than a box locator that
+ * quietly stops matching anything. {@link pickFieldsEdit} crosses it
+ * against the literal the edited entry is written with, which is what
+ * keeps the two spellings from parting company.
+ */
+const EDITED_MEMBER: keyof TermPayloadEntry = 'pattern';
+
+/** What the structure column calls the payload and its entries. */
+interface TreeLabels {
+  /** The root node's label — the payload itself. */
+  readonly root: string;
+  /** One label per entry, in the order the tree draws them. */
+  readonly entries: readonly string[];
+}
+
+/** What one edit made in the fields presentation is driven with. */
+interface FieldsEdit {
+  /** The category whose editor is opened. */
+  readonly summary: CategorySummary;
+  /** Its vocabulary as stored. */
+  readonly terms: readonly Term[];
+  /** What the edited member's box opens showing. */
+  readonly stored: string;
+  /** The payload the edit produces. */
+  readonly edited: TermPayload;
+  /** The vocabulary that payload writes back. */
+  readonly editedTerms: readonly Term[];
+  /** What the structure column calls the payload and its entries. */
+  readonly labels: TreeLabels;
+  /** Which entry the edit is made in, as the tree names it. */
+  readonly entryLabel: string;
+  /** What the edited member's box is called. */
+  readonly boxLabel: string;
+}
+
+/**
+ * Wait for every loading stand-in on the page to have resolved.
+ *
+ * See {@link SKELETON}. A precondition rather than an assertion about
+ * loading: the editor's body is a shimmer until its term read
+ * settles, and the presentation control is not drawn before then.
+ *
+ * @param page - The page an address has been opened on.
+ */
+async function expectSettled(page: Page): Promise<void> {
+  await expect(page.locator(SKELETON)).toHaveCount(0);
+}
+
+/**
+ * Every segment of the presentation control, in the order drawn.
+ *
+ * @param dialog - The open editor.
+ * @returns The control's tabs.
+ */
+function presentationTabs(dialog: Locator): Locator {
+  return dialog
+    .getByRole('tablist', { name: PRESENTATION_CONTROL_NAME, exact: true })
+    .getByRole('tab');
+}
+
+/**
+ * Swap the editor to one of the three drawings.
+ *
+ * @param dialog - The open editor.
+ * @param name - Which segment to press.
+ */
+async function swapTo(dialog: Locator, name: string): Promise<void> {
+  await dialog.getByRole('tab', { name, exact: true }).click();
+}
+
+/**
+ * The one mounted form, addressed by the node it is drawing.
+ *
+ * `NodeForm` names its group after that node, so a locator can say
+ * WHICH node's members it is reaching rather than trust that only one
+ * form is up.
+ *
+ * @param dialog - The open editor.
+ * @param label - The node's label.
+ * @returns The form's group.
+ */
+function nodeForm(dialog: Locator, label: string): Locator {
+  return dialog.getByRole('group', { name: label, exact: true });
+}
+
+/**
+ * Drill into one entry through the mounted form's own row.
+ *
+ * The tree's rows and the form's drill-in rows carry the same words
+ * and never collide: one is a `treeitem` and the other a `button`.
+ *
+ * @param dialog - The open editor.
+ * @param edit - The edit being driven, for its two labels.
+ * @returns That entry's mounted form.
+ */
+async function drillInto(
+  dialog: Locator,
+  edit: FieldsEdit,
+): Promise<Locator> {
+  await nodeForm(dialog, edit.labels.root)
+    .getByRole('button', { name: edit.entryLabel, exact: true })
+    .click();
+
+  const form = nodeForm(dialog, edit.entryLabel);
+
+  await expect(form).toBeVisible();
+
+  return form;
+}
+
+/**
+ * The edited member's box inside one mounted form.
+ *
+ * @param form - The entry's mounted form.
+ * @param edit - The edit being driven, for the box's label.
+ * @returns That member's box.
+ */
+function memberBox(form: Locator, edit: FieldsEdit): Locator {
+  return form.getByRole('textbox', { name: edit.boxLabel, exact: true });
+}
+
+/**
+ * The defs the fields presentation draws a term payload from.
+ *
+ * The reading the modal itself takes, so a shape v1 stopped being
+ * able to express is a failure naming that rather than a case whose
+ * every locator has silently moved to the JSON box.
+ *
+ * @returns The list def.
+ * @throws If v1 cannot express the payload at all.
+ */
+function entryDefs(): ListFieldDef {
+  const defs = fieldDefsForTermPayload();
+
+  if (defs === null) {
+    throw new Error('v1 cannot express the term payload.');
+  }
+
+  return defs;
+}
+
+/**
+ * What one member's box is called, from the member it writes.
+ *
+ * A def's `key` is a plain string, so the member a box writes and the
+ * word above it are two facts and this is where they are held
+ * together — which is also what keeps the locators below addressing a
+ * member rather than a label somebody may reword.
+ *
+ * @param defs - The list def the presentation draws from.
+ * @param member - The payload member whose box is wanted.
+ * @returns The label that box carries.
+ * @throws If the item is not an object, or draws no such member.
+ */
+function memberLabel(
+  defs: ListFieldDef,
+  member: keyof TermPayloadEntry,
+): string {
+  const { item } = defs;
+
+  if (item.type !== 'object') {
+    throw new Error('The entry def does not draw members.');
+  }
+
+  const field = item.fields.find((each) => each.key === member);
+
+  if (field === undefined) {
+    throw new Error(`No def draws the ${member} member.`);
+  }
+
+  return field.label;
+}
+
+/**
+ * What the structure column calls the payload and each entry.
+ *
+ * Through the projection the shell hands its tree, so a list item's
+ * positional label is the app's own answer rather than a rule this
+ * file re-implements.
+ *
+ * @param defs - The list def the presentation draws from.
+ * @param payload - The payload the form opens on.
+ * @returns The root's label and one label per entry.
+ * @throws If the projection carries no root.
+ */
+function treeLabels(defs: ListFieldDef, payload: TermPayload): TreeLabels {
+  const [root] = treeNavNodes(buildFormTree(defs, payload));
+
+  if (root === undefined) {
+    throw new Error('The projected tree carries no root node.');
+  }
+
+  return {
+    root: root.label,
+    entries: root.children.map((child) => child.label),
+  };
+}
+
+/**
+ * An edit the fields presentation can make, derived not chosen.
+ *
+ * The first seeded category, its first entry, and this file's own
+ * pattern written over that entry's — so the edit is real whichever
+ * way the fixtures are edited, and what it should leave behind comes
+ * from `withTermPayload`, the very projection the modal writes with.
+ *
+ * @returns Everything a swap or a save case needs.
+ * @throws If the fixtures carry no category, or v1 cannot draw one.
+ */
+async function pickFieldsEdit(): Promise<FieldsEdit> {
+  const summary = first(await seededSummaries(), 'category summary');
+  const terms = await fetchTerms(DEFAULT_DOMAIN_SLUG, summary.category.id);
+
+  // A category carrying no vocabulary draws no entry to drill into,
+  // which would leave every locator below addressing nothing.
+  expect(terms.length).toBeGreaterThan(0);
+
+  const payload = toTermPayload(terms);
+  const entry = first(payload, 'entry in the stored payload');
+  const edited = payload.map((held, index) => (
+    index === EDITED_ENTRY_INDEX
+      ? { ...held, pattern: EDITED_PATTERN }
+      : held
+  ));
+  const editedTerms = withTermPayload(terms, edited, summary.category.id);
+  const defs = entryDefs();
+  const labels = treeLabels(defs, payload);
+
+  // Five guards, every one of them about vacuity rather than about
+  // the app. The literal above has to be the member this file says it
+  // is editing, or the box locator and the write part company. The
+  // pattern has to be new, or the value that comes back proves
+  // nothing. The schema has to TAKE the candidate, or this is a
+  // refusal case wearing an acceptance's title. And both readings the
+  // swap case makes have to MOVE — the buckets and the box text —
+  // or a drawing that never re-derived would satisfy them.
+  expect(first(edited, 'edited entry')[EDITED_MEMBER]).toBe(EDITED_PATTERN);
+  expect(terms.map((term) => term.pattern)).not.toContain(EDITED_PATTERN);
+  expect(termPayloadSchema.safeParse(edited).success).toBe(true);
+  expect(expectedBuckets(editedTerms)).not.toEqual(expectedBuckets(terms));
+  expect(formatJsonDraft(edited)).not.toBe(formatJsonDraft(payload));
+
+  return {
+    summary,
+    terms,
+    stored: entry.pattern,
+    edited,
+    editedTerms,
+    labels,
+    entryLabel: first(labels.entries, 'entry in the tree'),
+    boxLabel: memberLabel(defs, EDITED_MEMBER),
+  };
+}
+
+/**
+ * Open the editor by CLICKING its card, and settle it.
+ *
+ * The gesture every save case here reaches the editor by, and the
+ * reason is the one the polarity cases above give: `page.goto` is a
+ * fresh document, so reopening that way would clear the draft store
+ * the case is asking a question about.
+ *
+ * @param page - The page, already on the lexicon list.
+ * @param name - Which category's card to press.
+ * @returns The open dialog.
+ */
+async function openByCard(page: Page, name: string): Promise<Locator> {
+  await page
+    .getByRole('main')
+    .getByRole('button', { name, exact: true })
+    .click();
+
+  const dialog = page.getByRole('dialog');
+
+  // The dialog first, then the settled state, and only then anything
+  // inside it: a locator taken against a body that has not arrived
+  // burns the budget and reports the exhaustion somewhere else.
+  await expect(dialog).toBeVisible();
+  await expectSettled(page);
+
+  return dialog;
+}
+
+/**
+ * Make the edit, in the drawing every case here is about.
+ *
+ * @param dialog - The open editor.
+ * @param edit - The edit being driven.
+ */
+async function typeEdit(dialog: Locator, edit: FieldsEdit): Promise<void> {
+  await swapTo(dialog, FIELDS_TAB_NAME);
+
+  const form = await drillInto(dialog, edit);
+  const box = memberBox(form, edit);
+
+  // What the box opened on, before anything is typed: without it a
+  // box that had never drawn the stored value would pass the read
+  // after the fill just as well.
+  await expect(box).toHaveValue(edit.stored);
+  await box.fill(EDITED_PATTERN);
+  await expect(box).toHaveValue(EDITED_PATTERN);
+}
+
+/**
+ * What the fields presentation draws for the edited member, now.
+ *
+ * Reached by swapping and drilling in again, which remounts every
+ * control and draws it from the VALUE — see the header on why a box
+ * read without that walk is evidence about the box.
+ *
+ * @param dialog - The open editor.
+ * @param edit - The edit being driven.
+ * @returns The edited member's box, in a freshly mounted form.
+ */
+async function redrawnBox(
+  dialog: Locator,
+  edit: FieldsEdit,
+): Promise<Locator> {
+  await swapTo(dialog, FIELDS_TAB_NAME);
+
+  return memberBox(await drillInto(dialog, edit), edit);
+}
+
+test.describe('an edit made in the fields presentation', () => {
+  test('survives a swap to the other drawings and back', async ({
+    page,
+  }) => {
+    // Arrange
+    const edit = await pickFieldsEdit();
+
+    await page.goto(
+      editPath(SINGLE_DOMAIN_BASE, edit.summary.category.id),
+    );
+
+    const dialog = page.getByRole('dialog');
+
+    await expect(dialog).toBeVisible();
+    await expectSettled(page);
+
+    const save = dialog.getByRole('button', { name: SAVE_NAME });
+
+    // The shut footer this case opens on is what makes the enabled
+    // one below a change rather than a state it was already in.
+    await expect(save).toBeDisabled();
+
+    // Act
+    await typeEdit(dialog, edit);
+
+    await expect(save).toBeEnabled();
+
+    // Assert — the buckets draw the edited vocabulary, as the app's
+    // own splitter says they should. Whole membership rather than
+    // one row, so an edit that had reached a second entry is an
+    // extra difference here rather than a row nobody looked for.
+    await swapTo(dialog, TEMPLATE_TAB_NAME);
+
+    await expect
+      .poll(() => readBuckets(dialog))
+      .toEqual(expectedBuckets(edit.editedTerms));
+
+    // The box holds the edited payload, phrased as the app phrases
+    // it. `JsonEditor` seeds its text from the value at MOUNT, and
+    // this swap is that mount — so the text is the draft's, and
+    // never something the previous drawing handed across.
+    await swapTo(dialog, JSON_TAB_NAME);
+
+    await expect(
+      dialog.getByRole('textbox', { name: JSON_FIELD_NAME, exact: true }),
+    ).toHaveValue(formatJsonDraft(edit.edited));
+
+    // And the drawing the edit was made in opens on it again, which
+    // is the whole of "all three write the ONE draft": two swaps and
+    // two unmounts stand between the fill and this read.
+    const redrawn = await redrawnBox(dialog, edit);
+
+    await expect(redrawn).toHaveValue(EDITED_PATTERN);
+    await expect(save).toBeEnabled();
+  });
+
+  test('survives a save, which the editor reopens on', async ({ page }) => {
+    // Arrange
+    const edit = await pickFieldsEdit();
+    const listAddress = listPath(SINGLE_DOMAIN_BASE);
+
+    await page.goto(listAddress);
+
+    // Act
+    const dialog = await openByCard(page, edit.summary.category.name);
+    const save = dialog.getByRole('button', { name: SAVE_NAME });
+
+    await typeEdit(dialog, edit);
+    await expect(save).toBeEnabled();
+    await save.click();
+
+    // Assert — a save closes this editor, which is this surface's
+    // own choice and not the shared frame's.
+    await expect(dialog).toHaveCount(0);
+    await expect(page).toHaveURL(listAddress);
+
+    // Reopened by CLICKING the card. The editor comes back on the
+    // template, which is the drawing it opens on, and the buckets
+    // read the SAVED vocabulary — so the write reached the store
+    // rather than only the editor it was made in.
+    await openByCard(page, edit.summary.category.name);
+
+    await expect
+      .poll(() => readBuckets(dialog))
+      .toEqual(expectedBuckets(edit.editedTerms));
+
+    // And the drawing that made it opens on it too, from a mount
+    // that never saw the keystroke.
+    const redrawn = await redrawnBox(dialog, edit);
+
+    await expect(redrawn).toHaveValue(EDITED_PATTERN);
+
+    // With nothing left unsaved: a footer still offering to write
+    // would mean the reopened editor had re-dirtied its own draft.
+    await expect(save).toBeDisabled();
+  });
+
+  test('is gone after a reload', async ({ page }) => {
+    // Arrange — the same save, since a store that never held the
+    // edit would pass a reset check for the wrong reason.
+    const edit = await pickFieldsEdit();
+
+    await page.goto(listPath(SINGLE_DOMAIN_BASE));
+
+    const dialog = await openByCard(page, edit.summary.category.name);
+    const save = dialog.getByRole('button', { name: SAVE_NAME });
+
+    await typeEdit(dialog, edit);
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(dialog).toHaveCount(0);
+
+    // Reopened by CLICK and never by `page.goto`: a goto is a fresh
+    // document, which is the very reset this case is about to make.
+    // Reaching the editor that way would leave the assertions below
+    // passing over a store that was cleared a step early.
+    await openByCard(page, edit.summary.category.name);
+
+    await expect
+      .poll(() => readBuckets(dialog))
+      .toEqual(expectedBuckets(edit.editedTerms));
+
+    // Act — a reload, which is the whole of the gesture: the draft
+    // store is module-scoped state in the TAB, so nothing outlives
+    // the document that held it.
+    await page.reload();
+    await expect(dialog).toBeVisible();
+    await expectSettled(page);
+
+    // Assert — the vocabulary is the fixture's again, in the
+    // buckets and in the drawing the edit was made in. That is the
+    // honest scope of every save on this surface today: `drafts.ts`
+    // is the stand-in for server state, and it goes with the
+    // fixtures on the day the seam points at HTTP.
+    await expect
+      .poll(() => readBuckets(dialog))
+      .toEqual(expectedBuckets(edit.terms));
+
+    const redrawn = await redrawnBox(dialog, edit);
+
+    await expect(redrawn).toHaveValue(edit.stored);
+  });
+});
+
+test.describe('the JSON fallback beside the fields presentation', () => {
+  test('is offered last, and still refuses text that is not JSON', async ({
+    page,
+  }) => {
+    // Arrange — the payload the box seeds itself from, and what the
+    // app's own parser makes of text no parser can get past.
+    const summary = first(await seededSummaries(), 'category summary');
+    const terms = await fetchTerms(DEFAULT_DOMAIN_SLUG, summary.category.id);
+    const payload = toTermPayload(terms);
+    const parsed = parseJsonDraft(UNPARSEABLE_TEXT);
+    const labels = treeLabels(entryDefs(), payload);
+
+    if (parsed.ok) {
+      throw new Error('The unparseable sample parsed.');
+    }
+
+    // A refusal producing no sentence would leave the loop below
+    // asserting nothing and passing.
+    expect(parsed.sentences.length).toBeGreaterThan(0);
+
+    await page.goto(editPath(SINGLE_DOMAIN_BASE, summary.category.id));
+
+    const dialog = page.getByRole('dialog');
+
+    await expect(dialog).toBeVisible();
+    await expectSettled(page);
+
+    // Assert — every segment the control offers, in the order it
+    // draws them. One reading rather than three visibility checks:
+    // this fails on a segment lost, a fourth one added, a renamed
+    // one, and on the box moving out of last place.
+    await expect(presentationTabs(dialog)).toHaveText([
+      ...PRESENTATION_TAB_NAMES,
+    ]);
+
+    // Act — through the drawing that arrived, and then past it. The
+    // fields presentation draws the structure column and no box, so
+    // the two are told apart by what each one leaves standing.
+    await swapTo(dialog, FIELDS_TAB_NAME);
+
+    const box = dialog.getByRole('textbox', {
+      name: JSON_FIELD_NAME,
+      exact: true,
+    });
+
+    await expect(nodeForm(dialog, labels.root)).toBeVisible();
+    await expect(box).toHaveCount(0);
+
+    await swapTo(dialog, JSON_TAB_NAME);
+
+    // Assert — the box is still offered, and it opens on the payload
+    // the form was drawing. One draft under both.
+    await expect(box).toBeVisible();
+    await expect(box).toHaveValue(formatJsonDraft(payload));
+    await expect(nodeForm(dialog, labels.root)).toHaveCount(0);
+
+    // Act
+    await box.fill(UNPARSEABLE_TEXT);
+
+    // Assert — every sentence the parser produces is on the screen,
+    // phrased exactly as it phrased it, the box says it is holding
+    // something it cannot read, and there is nothing to save.
+    for (const sentence of parsed.sentences) {
+      await expect(
+        dialog.getByText(sentence, { exact: true }),
+      ).toBeVisible();
+    }
+
+    await expect(box).toHaveAttribute('aria-invalid', 'true');
+    await expect(
+      dialog.getByRole('button', { name: SAVE_NAME }),
+    ).toBeDisabled();
   });
 });
