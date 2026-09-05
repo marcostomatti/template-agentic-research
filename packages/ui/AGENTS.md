@@ -33,6 +33,19 @@ are only meant for that component (e.g. a `Table` with `TableCell`, `TableRow`,
 variants and stories on the main component only. Layers export up through layer
 barrels to the root `src/index.tsx`.
 
+A sub-component that is only ever the parent's own implementation detail may
+stay PRIVATE in the parent's file instead — no folder entry of its own, no
+barrel line, no variants file and no story: `Breadcrumb`'s `Chevron`,
+`Pagination`'s `Arrow`, `Stepper`'s `Check`, `Table`'s `ColGroup`, and the
+`TreeNavItem` inside `src/molecules/TreeNav/TreeNav.tsx`. `TreeNavItem` is the
+only component under `src/` that renders ITSELF (measured over every non-story
+`.tsx`; a crude scan that includes `.stories.tsx` answers six more, all of them
+demo wrappers used further down their own file rather than recursion). That
+recursion is what lets a whole nested tree be one file: the markup nests
+because the ARIA pattern does, a `treeitem` wrapping a `role="group"` list,
+while the row list the keyboard walks is flattened once per render and does
+not nest at all.
+
 Other trees:
 
 - `src/lib` — `cn()` and shared utilities (formatting lives here; never
@@ -168,19 +181,33 @@ owns this package does not re-derive them.
   `useRef` plus `useEffect` is too late, Radix having already
   autofocused) and restore it from `onCloseAutoFocus` with a
   `preventDefault`. `@ar/web` carries the current behaviour as a
-  documented ledger assertion, so the repair will red exactly two
-  named cases there.
+  documented ledger assertion, so the repair will red the THREE cases
+  there that poll for `body` — count the `message: FOCUS_RETURN_DEBT`
+  sites in `keyboard.spec.ts` rather than quoting the number, which
+  has already moved once. The third arrived with the tree: a
+  composite widget inside the dialog has to be shown not to swallow
+  Escape, and the case that shows it reads this same ledger on its
+  way out.
 - **The app shell has no responsive behaviour.** `appShellSidebar` is
   a flat `w-[var(--sidebar-w)]` with no media query (measured 264px
   identically at 320, 768, 1024 and 1440) and nothing watches the
   viewport, so a 320px viewport is a 264px rail beside a 56px content
   column.
 
-Two related non-defects worth not re-measuring: `Overlay`'s
+Three related non-defects worth not re-measuring. `Overlay`'s
 `trapFocus={false}` does NOT stop Tab looping (Radix hardcodes
 `loop: true` in `DialogContentImpl`, so the flag only reaches
-`Dialog.Root`'s `modal`), and `Overlay` ships no enter/exit transition
-at all, so there is no modal transition to reduce.
+`Dialog.Root`'s `modal`). `Overlay` ships no enter/exit transition at
+all, so there is no modal transition to reduce. And NOTHING a
+consumer mounts inside it can swallow Escape, so a composite widget
+of its own is never why a dialog failed to close:
+`@radix-ui/react-dismissable-layer` (1.1.19, reached through
+`react-dialog` 1.1.23) adds its keydown to `ownerDocument` with
+`{ capture: true }`, so a descendant's bubble-phase handler never
+sees the press first. Measured against the tree — `TreeNav`'s own key
+switch, given an `Escape` case calling `stopPropagation` AND
+`stopImmediatePropagation`, reds 0 of the 6 fields-presentation cases
+in `@ar/web`, the one pressing Escape from inside the tree included.
 
 A `packages/ui` mutation leg IS reachable from a `packages/web`
 Playwright grid, and the pipeline is proven rather than assumed: edit
@@ -191,6 +218,29 @@ MINIFIED form of the change (a boolean default reads
 `trapFocus: a = !1`), because a leg that never reached the browser is
 indistinguishable from one the tests do not discriminate. Budget two
 builds per leg, one to apply and one to restore.
+
+The tree's own grid took the cheaper shape, which needs no build at
+all: `packages/web/node_modules/@ar/ui` symlinks straight here and
+this package's `.` export names `./dist/index.js` under its `import`
+condition, so editing that file IS the leg and the next vite boot
+reads it. Identifiers are mangled, but one `//#region <source path>`
+marker per module and the `displayName` strings both survive, so the
+region to edit is greppable by source path rather than by reading the
+original code. Two disciplines follow from `dist/` being gitignored,
+which leaves `git status` clean with a mutation IN PLACE: keep the
+pristine bytes in `/tmp` and restore from them after each leg, and
+prove the tree carries no leftover with a sha256 held across a hand
+`bun run --filter '@ar/ui' build` — equal before and after means the
+tree's bytes are the build's bytes. An mtime says nothing in either
+direction, a restore having rewritten the file too.
+
+That no-build path needs a POSITIVE control in the same sitting,
+because the warning above applies to it twice over: a leg that never
+reached the browser and a leg the tests do not discriminate both read
+as a clean zero. Pick something the spec addresses directly — the
+tree's `role: "tree"` retyped to `role: "treegrid"` reds
+`dialog.getByRole('tree')` at exit 1 in about six seconds, which is
+what makes a 0-of-N leg beside it a reading rather than a dead edit.
 
 ## Reference-free rule (CRITICAL)
 
