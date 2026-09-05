@@ -135,6 +135,59 @@ import { SINGLE_DOMAIN_BASE, withBase } from '../../src/routes/paths';
 // each, which is the only shape that reports a keystroke the
 // control swallowed — a box asserted once at the end agrees with a
 // control that rewrote the text on the way through.
+// ## The reorder: three gestures, one arrival
+//
+// `NodeForm.tsx` reaches ONE report from both gestures and the shell
+// answers it with one `withListReordered` call, so what a browser is
+// needed for is that the two ARRIVALS agree: a pointer drag and a
+// keyboard-reachable control landing the same entry in the same
+// position. Only the pointer path owes a translation — `Sortable`
+// reports a drop as the whole next ORDER and works in insertion GAPS
+// — and that translation is the one place the two can still drift.
+// Nothing in either gate reaches it, a static render firing no drop.
+//
+// The drag takes TWO moves over the row it lands on, which is a
+// property of `Sortable` rather than of the driver. Its container
+// claims a slot on the FIRST `dragover` of a drag and its row claims
+// one on every `dragover`, and both read the same not-yet-committed
+// state — so a single move leaves the dragged row at the END of the
+// list rather than where the pointer is. Measured both ways. A
+// one-move drag is therefore A reorder and not the one under test,
+// which is exactly the shape that would pass while measuring nothing.
+//
+// ## What an order is read OFF, and what it is not read off
+//
+// A list item's label is POSITIONAL — `tree.ts` numbers it from
+// where it sits — so the form's rows, the tree's items and the move
+// controls all keep their names through a move, and none of them says
+// which ENTRY is where. That splits the reading in two and both
+// halves are load-bearing:
+//
+// - The ROSTER, off the move controls' own accessible names in DOM
+//   order. Invariant under a move by construction, which is the
+//   point: it is what reports a row lost, duplicated or misnumbered.
+// - The CONTENT, off each entry's own boxes after drilling in. It is
+//   what MOVED, and it is a form VALUE rather than rendered prose —
+//   deliberately, prose on a surface being free to carry a stamp and
+//   `@ar/ui`'s same-day relative-time rung rendering a LOCAL clock
+//   time, which is why `playwright.config.ts` pins a timezone at all.
+//
+// ## A drag from outside the list
+//
+// Exactly one `Sortable` is mounted here at a time: the template
+// presentation draws three of its own, and only one presentation
+// renders. So a cross-list drag cannot be made with a pointer and is
+// SYNTHESIZED instead — a real `dragstart` on a row, which is what
+// makes `Sortable` write its own drag type onto the transfer, then a
+// drop carrying that type under another list's name. Neither the
+// prefix nor the group is spelled here: both come off the component's
+// own answer, so a renamed group cannot leave this case dropping
+// something no list would ever have sent.
+//
+// Its control is the same dispatch carrying the list's OWN type,
+// which varies exactly the axis under test and is the only thing that
+// says the synthesized events reach the component at all. It lands
+// the row at the END, per the one-`dragover` reading above.
 
 /** Which surface this is — the list path comes off the same table. */
 const LEXICON_SURFACE_ID = 'lexicon';
@@ -1450,5 +1503,676 @@ test.describe('what the fields presentation takes', () => {
     await expect(
       redrawn.getByRole('textbox', { name: numeric.label, exact: true }),
     ).toHaveValue(spellStored(reading.value));
+  });
+});
+/**
+ * The verb both move controls open their accessible name with.
+ *
+ * Retyped rather than imported, the rule this file splits
+ * user-visible text from structural spellings by: a case importing
+ * `NodeForm.tsx`'s own constant agrees with whatever that constant
+ * says, and a reworded control would travel to an operator with
+ * nothing reporting it.
+ */
+const MOVE_VERB = 'Move';
+
+/** The word the control moving a row towards the top ends with. */
+const MOVE_UP_WORD = 'up';
+
+/** The word the control moving a row towards the end ends with. */
+const MOVE_DOWN_WORD = 'down';
+
+/**
+ * The two direction words, in the order a row draws its controls.
+ *
+ * The ORDER is the claim — the roster read off the rendered
+ * controls is compared against a roster built from this, so a pair
+ * drawn the other way round is a mismatch naming both positions.
+ */
+const MOVE_WORDS: readonly string[] = [MOVE_UP_WORD, MOVE_DOWN_WORD];
+
+/** Which row every gesture below moves. Not an end, deliberately. */
+const MOVED_ROW_INDEX = 1;
+
+/** Where the pointer path lands it: the position above. */
+const LANDED_ROW_INDEX = 0;
+
+/**
+ * How far into a row the press that starts a drag goes.
+ *
+ * Into `SortableRow`'s grip, which it draws first inside the row's
+ * own left padding and which `NodeForm.tsx` leaves as the only
+ * thing a drag starts from, its content and its move controls both
+ * opting out. A press that missed it would start no drag at all,
+ * and the order read afterwards is what says it did not.
+ */
+const GRIP_OFFSET_X = 18;
+
+/**
+ * How far below a row's top the drop goes.
+ *
+ * `Sortable` reads a slot from which half of the row the pointer is
+ * over, so this has to be the half ABOVE its midpoint for the drag
+ * to mean "land it here" rather than "land it after".
+ */
+const DROP_OFFSET_Y = 4;
+
+/** How far the press moves before leaving the row it started on. */
+const DRAG_LIFT_Y = 6;
+
+/**
+ * What makes a synthesized drop come from ANOTHER list.
+ *
+ * Appended to the drag type `Sortable` wrote itself, so what lands
+ * is a type under the library's own namespace naming a group this
+ * list does not have — which is the CROSS case rather than a
+ * foreign format the component would ignore for a different reason.
+ */
+const OTHER_LIST_SUFFIX = '-elsewhere';
+
+/** What one synthesized drop put on the wire, and under what name. */
+interface SynthesizedDrop {
+  /** Every type `Sortable` wrote when the drag started. */
+  readonly types: readonly string[];
+  /** The type the drop carried; empty if the drag wrote none. */
+  readonly dropped: string;
+}
+
+/**
+ * One list with one item moved, as THIS file states the move.
+ *
+ * Written out rather than taken from `dynamic-form/values.ts`,
+ * which is the module the app answers a move with: a spec deriving
+ * its expectation from the code under test cannot report that
+ * code's own fault. `to` is where the item LANDS, the convention
+ * that module documents and both gestures report in.
+ *
+ * @param items - The list as it stands.
+ * @param from - Where the moved item is now.
+ * @param to - Where it lands.
+ * @returns The list after the move.
+ * @throws If there is no item at `from`.
+ */
+function movedTo<T>(
+  items: readonly T[],
+  from: number,
+  to: number,
+): readonly T[] {
+  const moved = items[from];
+
+  if (moved === undefined) {
+    throw new Error(`No item at position ${from} to move.`);
+  }
+
+  const rest = items.filter((_item, at) => at !== from);
+
+  return [...rest.slice(0, to), moved, ...rest.slice(to)];
+}
+
+/** What one row's move control in one direction is called. */
+function moveControlName(label: string, word: string): string {
+  return `${MOVE_VERB} ${label} ${word}`;
+}
+
+/**
+ * Every move control's name, in the order the rows draw them.
+ *
+ * Derived from the tree's own labels rather than spelled, so a
+ * renumbering moves this with it — and POSITIONAL by
+ * construction, which is the whole point: it is what reports a row
+ * lost, duplicated or misnumbered and never what moved.
+ *
+ * @param labels - What the tree calls the payload and its entries.
+ * @returns One name per row per direction.
+ */
+function moveRoster(labels: TreeLabels): readonly string[] {
+  return labels.entries.flatMap(
+    (label) => MOVE_WORDS.map((word) => moveControlName(label, word)),
+  );
+}
+
+/**
+ * Every move control of one mounted list form, in DOM order.
+ *
+ * Matched on the verb rather than listed by name, so a control the
+ * form drew and this file did not predict is a roster mismatch
+ * rather than an absence nothing looks for.
+ *
+ * @param form - The list level's own mounted form.
+ * @returns Its move controls.
+ */
+function moveControls(form: Locator): Locator {
+  return form.getByRole('button', {
+    name: new RegExp(`^${MOVE_VERB} `, 'u'),
+  });
+}
+
+/**
+ * What a set of controls is CALLED, in DOM order.
+ *
+ * The attribute rather than the computed name, and the two are the
+ * same string for both callers: a move control is a `Touchable`
+ * whose only content is an `aria-hidden` glyph, and a `TreeNav` row
+ * pins its own name with the attribute for the reason that module
+ * records. Every other locator in this file addresses these
+ * controls through `getByRole`, so the role channel is exercised
+ * either way; this is the only reading that answers an ORDER.
+ *
+ * @param controls - The controls to read.
+ * @returns One name per control, in the order the DOM holds them.
+ */
+async function ariaLabels(
+  controls: Locator,
+): Promise<readonly (string | null)[]> {
+  return controls.evaluateAll(
+    (nodes) => nodes.map((node) => node.getAttribute('aria-label')),
+  );
+}
+
+/**
+ * Every draggable row of one mounted list form, in DOM order.
+ *
+ * Structural rather than by role, because a drag handle has none:
+ * `Sortable` puts `draggable` on a bare wrapper around each row,
+ * and that wrapper is what a press has to land in. The form's only
+ * child is the sortable container and its children are the rows, so
+ * the count held against the payload is what says this is still
+ * addressing them.
+ *
+ * @param form - The list level's own mounted form.
+ * @returns Its row wrappers.
+ */
+function dragRows(form: Locator): Locator {
+  return form.locator('> div > div');
+}
+
+/**
+ * What the tree calls the entry at one position.
+ *
+ * @param labels - What the tree calls the payload and its entries.
+ * @param index - The position wanted.
+ * @returns Its label.
+ * @throws If the tree draws no entry there.
+ */
+function entryLabelAt(labels: TreeLabels, index: number): string {
+  const label = labels.entries[index];
+
+  if (label === undefined) {
+    throw new Error(`The tree draws no entry at position ${index}.`);
+  }
+
+  return label;
+}
+
+/**
+ * What one entry reads as, member by member, as a payload holds it.
+ *
+ * Every member rather than the identifying one: an order compared
+ * on `pattern` alone agrees with a reorder that moved the patterns
+ * and rebuilt the rest, which is a different bug wearing the same
+ * green.
+ *
+ * @param entry - The entry to spell.
+ * @param members - The members one entry draws, in draw order.
+ * @returns Its members as their boxes would show them.
+ */
+function entrySpelling(
+  entry: TermPayloadEntry,
+  members: readonly (keyof TermPayloadEntry)[],
+): readonly string[] {
+  return members.map((member) => spellStored(entry[member]));
+}
+
+/**
+ * What one entry's mounted form shows, member by member.
+ *
+ * @param form - That entry's own mounted form.
+ * @param defs - The list def the presentation draws from.
+ * @param members - The members one entry draws, in draw order.
+ * @returns One box value per member, in draw order.
+ */
+async function readEntry(
+  form: Locator,
+  defs: ListFieldDef,
+  members: readonly (keyof TermPayloadEntry)[],
+): Promise<readonly string[]> {
+  const spelling: string[] = [];
+
+  for (const member of members) {
+    const box = form.getByRole('textbox', {
+      name: memberLabel(defs, member),
+      exact: true,
+    });
+
+    spelling.push(await box.inputValue());
+  }
+
+  return spelling;
+}
+
+/**
+ * What the list holds, position by position, read off the boxes.
+ *
+ * The CONTENT half of the reading the header splits in two: the
+ * roster says the rows are still the rows, and this says which
+ * entry each one is now over. It drills in and walks back out per
+ * position, which is also the remount every other case here reads
+ * an acceptance after.
+ *
+ * @param dialog - The open editor.
+ * @param defs - The list def the presentation draws from.
+ * @param labels - What the tree calls the payload and its entries.
+ * @param members - The members one entry draws, in draw order.
+ * @returns One spelling per position, in the order the list holds
+ * them.
+ */
+async function readOrder(
+  dialog: Locator,
+  defs: ListFieldDef,
+  labels: TreeLabels,
+  members: readonly (keyof TermPayloadEntry)[],
+): Promise<readonly (readonly string[])[]> {
+  const order: (readonly string[])[] = [];
+
+  for (const label of labels.entries) {
+    const form = await drillInto(dialog, labels.root, label);
+
+    order.push(await readEntry(form, defs, members));
+    await walkBack(dialog, labels.root);
+  }
+
+  return order;
+}
+
+/**
+ * Drag one row onto the half above another row's midpoint.
+ *
+ * Four moves rather than a single `dragTo`, and the count is the
+ * measurement rather than a precaution — see the header on why a
+ * one-move drag lands the row at the END of the list instead. The
+ * press goes into the grip; the two moves over the target are what
+ * let `Sortable`'s row handler claim the slot its container claimed
+ * first.
+ *
+ * @param page - The page to drive.
+ * @param source - The row wrapper to drag.
+ * @param target - The row wrapper to drop it above.
+ * @throws If either row has no box on screen.
+ */
+async function dragRowOnto(
+  page: Page,
+  source: Locator,
+  target: Locator,
+): Promise<void> {
+  const held = await source.boundingBox();
+  const onto = await target.boundingBox();
+
+  if (held === null || onto === null) {
+    throw new Error('A row being dragged is not on screen.');
+  }
+
+  const grip = held.y + (held.height / 2);
+
+  await page.mouse.move(held.x + GRIP_OFFSET_X, grip);
+  await page.mouse.down();
+  await page.mouse.move(held.x + GRIP_OFFSET_X, grip - DRAG_LIFT_Y);
+  await page.mouse.move(onto.x + GRIP_OFFSET_X, onto.y + DROP_OFFSET_Y);
+  await page.mouse.move(onto.x + GRIP_OFFSET_X, onto.y + DROP_OFFSET_Y - 1);
+  await page.mouse.up();
+}
+
+/**
+ * Drop one row onto its own list, under a type of this file's
+ * choosing.
+ *
+ * The drag type is never spelled here: a real `dragstart` on the
+ * row is what makes `Sortable` write its own, and the suffix is
+ * appended to whatever came back. So the same call is the refusal
+ * and its control, varying exactly the axis under test.
+ *
+ * No `dragover` is dispatched, which is what makes the accepting
+ * form land the row at the END rather than somewhere it has to
+ * predict — the same reading the header takes of a one-move drag.
+ *
+ * @param row - The row wrapper to start the drag on.
+ * @param suffix - Appended to the drag's own type; empty leaves it.
+ * @returns What the drag wrote, and what the drop carried.
+ */
+async function dropFromList(
+  row: Locator,
+  suffix: string,
+): Promise<SynthesizedDrop> {
+  return row.evaluate((node, tail: string) => {
+    const started = new DataTransfer();
+
+    node.dispatchEvent(new DragEvent('dragstart', {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer: started,
+    }));
+
+    const types = [...started.types];
+    const [own] = types;
+
+    if (own === undefined) {
+      return { types, dropped: '' };
+    }
+
+    const dropped = `${own}${tail}`;
+    const carried = new DataTransfer();
+
+    carried.setData(dropped, started.getData(own));
+    node.dispatchEvent(new DragEvent('drop', {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer: carried,
+    }));
+
+    return { types, dropped };
+  }, suffix);
+}
+
+test.describe('the reorder the fields presentation makes', () => {
+  test('reaches one order by drag, by move up and by move down', async ({
+    page,
+  }) => {
+    // Arrange
+    const summary = first(await seededSummaries(), 'category summary');
+    const terms = await fetchTerms(
+      DEFAULT_DOMAIN_SLUG,
+      summary.category.id,
+    );
+
+    expect(terms.length).toBeGreaterThan(0);
+
+    const payload = toTermPayload(terms);
+    const defs = entryDefs();
+    const labels = treeLabels(defs, payload);
+    const members = ACCEPTED_EDITS.map((each) => each.member);
+    const stored = payload.map((entry) => entrySpelling(entry, members));
+    const expected = movedTo(stored, MOVED_ROW_INDEX, LANDED_ROW_INDEX);
+    const roster = moveRoster(labels);
+    const movedLabel = entryLabelAt(labels, MOVED_ROW_INDEX);
+    const landedLabel = entryLabelAt(labels, LANDED_ROW_INDEX);
+
+    // Six guards, every one about vacuity rather than about the app.
+    // The spelling has to cover every box one entry draws, or two
+    // entries could differ in a member nothing reads. Every entry has
+    // to spell DIFFERENTLY, or an order comparison cannot report a
+    // move at all. The projection has to cover the payload, and the
+    // row being moved has to exist. The move has to CHANGE the order,
+    // or all three gestures agree with a form that did nothing. And
+    // the schema has to take what it produces, or the enabled footer
+    // below is asserting the wrong outcome.
+    expect(members).toHaveLength(entryFields(defs).length);
+    expect(new Set(stored.map((each) => each.join(' '))).size)
+      .toBe(stored.length);
+    expect(labels.entries).toHaveLength(payload.length);
+    expect(payload.length).toBeGreaterThan(MOVED_ROW_INDEX);
+    expect(expected).not.toEqual(stored);
+    expect(
+      termPayloadSchema.safeParse(
+        movedTo(payload, MOVED_ROW_INDEX, LANDED_ROW_INDEX),
+      ).success,
+    ).toBe(true);
+
+    // Act — the pointer path. `Sortable` has no keyboard path of its
+    // own, so this is the gesture the controls are the equivalent OF
+    // rather than the other way round.
+    const dragged = await openFields(page, summary.category.id);
+    const dragForm = nodeForm(dragged, labels.root);
+    const rows = dragRows(dragForm);
+
+    await expect(rows).toHaveCount(payload.length);
+
+    // The editor opens on the stored order, which is the control for
+    // every reading below: without it a form that draws the moved
+    // order from the start would pass the same assertions.
+    expect(await readOrder(dragged, defs, labels, members))
+      .toEqual(stored);
+
+    await dragRowOnto(
+      page,
+      rows.nth(MOVED_ROW_INDEX),
+      rows.nth(LANDED_ROW_INDEX),
+    );
+
+    // Assert — the drop reached the draft, and the rows behind it are
+    // the same rows renumbered rather than a set that lost one.
+    await expect(
+      dragged.getByRole('button', { name: SAVE_NAME }),
+    ).toBeEnabled();
+
+    const afterDrag = await readOrder(dragged, defs, labels, members);
+
+    expect(await ariaLabels(moveControls(dragForm))).toEqual(roster);
+    expect(afterDrag).toEqual(expected);
+
+    // Act — the same move with no pointer, from the control on the
+    // row that moves.
+    const upward = await openFields(page, summary.category.id);
+    const upForm = nodeForm(upward, labels.root);
+    const moveUp = upForm.getByRole('button', {
+      name: moveControlName(movedLabel, MOVE_UP_WORD),
+      exact: true,
+    });
+
+    expect(await readOrder(upward, defs, labels, members)).toEqual(stored);
+    await moveUp.click();
+
+    // Assert
+    await expect(
+      upward.getByRole('button', { name: SAVE_NAME }),
+    ).toBeEnabled();
+
+    const afterUp = await readOrder(upward, defs, labels, members);
+
+    expect(await ariaLabels(moveControls(upForm))).toEqual(roster);
+    expect(afterUp).toEqual(expected);
+
+    // Act — the same move again, from the OTHER control on the OTHER
+    // row. Moving the row above down and the row below up are one
+    // move, so this is the third arrival at one order rather than a
+    // second claim.
+    const downward = await openFields(page, summary.category.id);
+    const downForm = nodeForm(downward, labels.root);
+    const moveDown = downForm.getByRole('button', {
+      name: moveControlName(landedLabel, MOVE_DOWN_WORD),
+      exact: true,
+    });
+
+    expect(await readOrder(downward, defs, labels, members))
+      .toEqual(stored);
+    await moveDown.click();
+
+    // Assert
+    await expect(
+      downward.getByRole('button', { name: SAVE_NAME }),
+    ).toBeEnabled();
+
+    const afterDown = await readOrder(downward, defs, labels, members);
+
+    expect(await ariaLabels(moveControls(downForm))).toEqual(roster);
+    expect(afterDown).toEqual(expected);
+
+    // Assert — the claim the three legs above exist for, stated
+    // between the MEASURED orders rather than between each of them
+    // and this file's own expectation: the pointer path owes a
+    // translation the other two do not, and this is where a drift in
+    // it would show.
+    expect(afterDrag).toEqual(afterUp);
+    expect(afterUp).toEqual(afterDown);
+  });
+
+  test('renumbers its rows and the tree, and shuts both ends', async ({
+    page,
+  }) => {
+    // Arrange
+    const summary = first(await seededSummaries(), 'category summary');
+    const terms = await fetchTerms(
+      DEFAULT_DOMAIN_SLUG,
+      summary.category.id,
+    );
+
+    expect(terms.length).toBeGreaterThan(0);
+
+    const payload = toTermPayload(terms);
+    const defs = entryDefs();
+    const labels = treeLabels(defs, payload);
+    const members = ACCEPTED_EDITS.map((each) => each.member);
+    const stored = payload.map((entry) => entrySpelling(entry, members));
+    const roster = moveRoster(labels);
+    const treeNames = [labels.root, ...labels.entries];
+    const movedLabel = entryLabelAt(labels, MOVED_ROW_INDEX);
+    const landedLabel = entryLabelAt(labels, LANDED_ROW_INDEX);
+    const lastLabel = entryLabelAt(labels, payload.length - 1);
+    const movedSpelling = stored[MOVED_ROW_INDEX];
+
+    // Three guards. A payload of one row draws no move that is not
+    // also an end, so both ends and the middle would be one control.
+    // The moved row has to have a spelling to be looked for
+    // afterwards. And the roster has to have a control per row per
+    // direction, or the ends read below are not ends of anything.
+    expect(payload.length).toBeGreaterThan(MOVED_ROW_INDEX + 1);
+    expect(movedSpelling).toBeDefined();
+    expect(roster).toHaveLength(payload.length * MOVE_WORDS.length);
+
+    // Act
+    const dialog = await openFields(page, summary.category.id);
+    const form = nodeForm(dialog, labels.root);
+    const firstUp = form.getByRole('button', {
+      name: moveControlName(entryLabelAt(labels, 0), MOVE_UP_WORD),
+      exact: true,
+    });
+    const lastDown = form.getByRole('button', {
+      name: moveControlName(lastLabel, MOVE_DOWN_WORD),
+      exact: true,
+    });
+    const middleUp = form.getByRole('button', {
+      name: moveControlName(movedLabel, MOVE_UP_WORD),
+      exact: true,
+    });
+
+    // Assert — the ends before anything moves. The enabled middle is
+    // the control for the two disabled reads: without it a form that
+    // shut every move would pass both.
+    await expect(firstUp).toBeDisabled();
+    await expect(lastDown).toBeDisabled();
+    await expect(middleUp).toBeEnabled();
+    expect(await ariaLabels(treeRows(dialog))).toEqual(treeNames);
+
+    // Act
+    await middleUp.click();
+
+    // Assert — the tree draws the same rows in the same order, which
+    // is what POSITIONAL labels mean: nothing about the structure
+    // column moved, and what moved is which entry each row is over.
+    await expect(
+      dialog.getByRole('button', { name: SAVE_NAME }),
+    ).toBeEnabled();
+    await expect(treeRows(dialog)).toHaveCount(labels.entries.length + 1);
+    expect(await ariaLabels(treeRows(dialog))).toEqual(treeNames);
+    expect(await ariaLabels(moveControls(form))).toEqual(roster);
+
+    // And the ends are still the ends, the list being the same length.
+    await expect(firstUp).toBeDisabled();
+    await expect(lastDown).toBeDisabled();
+
+    // The trail is untouched: a reorder is not a move between nodes,
+    // and the list level is still what is mounted.
+    await expect(breadcrumb(dialog).getByRole('button')).toHaveCount(1);
+
+    // Act — through the TREE's own row rather than the form's, which
+    // is what makes this a reading of the structure column.
+    await dialog
+      .getByRole('treeitem', { name: landedLabel, exact: true })
+      .click();
+
+    // Assert — the first position is over the entry that moved into
+    // it. The tree's node order followed the value rather than the
+    // selection following the item that was there.
+    expect(
+      await readEntry(nodeForm(dialog, landedLabel), defs, members),
+    ).toEqual(movedSpelling);
+  });
+
+  test('refuses a drag from another list, and takes its own', async ({
+    page,
+  }) => {
+    // Arrange
+    const summary = first(await seededSummaries(), 'category summary');
+    const terms = await fetchTerms(
+      DEFAULT_DOMAIN_SLUG,
+      summary.category.id,
+    );
+
+    expect(terms.length).toBeGreaterThan(0);
+
+    const payload = toTermPayload(terms);
+    const defs = entryDefs();
+    const labels = treeLabels(defs, payload);
+    const members = ACCEPTED_EDITS.map((each) => each.member);
+    const stored = payload.map((entry) => entrySpelling(entry, members));
+    const roster = moveRoster(labels);
+    const lastIndex = payload.length - 1;
+    const expected = movedTo(stored, MOVED_ROW_INDEX, lastIndex);
+
+    // Three guards. A drop carrying no `dragover` lands the row at the
+    // END, so the row being dropped must not already be there or the
+    // control below is satisfied by a refusal. The order it produces
+    // has to differ from the stored one for the same reason. And
+    // every entry has to spell differently, or neither reading can
+    // report a move.
+    expect(lastIndex).toBeGreaterThan(MOVED_ROW_INDEX);
+    expect(expected).not.toEqual(stored);
+    expect(new Set(stored.map((each) => each.join(' '))).size)
+      .toBe(stored.length);
+
+    // Act
+    const dialog = await openFields(page, summary.category.id);
+    const form = nodeForm(dialog, labels.root);
+    const rows = dragRows(form);
+    const save = dialog.getByRole('button', { name: SAVE_NAME });
+
+    await expect(rows).toHaveCount(payload.length);
+    await expect(save).toBeDisabled();
+    expect(await readOrder(dialog, defs, labels, members)).toEqual(stored);
+
+    const foreign = await dropFromList(
+      rows.nth(MOVED_ROW_INDEX),
+      OTHER_LIST_SUFFIX,
+    );
+    const own = first(foreign.types, 'type the drag wrote');
+
+    // Assert — what was dropped was a drag from ANOTHER list and not
+    // a foreign format the component would ignore for a different
+    // reason: it carries the library's own namespace under a group
+    // this list does not have. The single type is the liveness of the
+    // whole dispatch — a `dragstart` that reached nothing would
+    // leave the transfer empty and everything below vacuous.
+    expect(foreign.types).toHaveLength(1);
+    expect(foreign.dropped.startsWith(own)).toBe(true);
+    expect(foreign.dropped).not.toBe(own);
+
+    // Assert — nothing landed. `NodeForm.tsx` offers the list one
+    // group and no receiver, which is what refuses it; the shut
+    // footer is the reading with the least room to be a coincidence,
+    // a landed reorder being a write to the draft.
+    await expect(save).toBeDisabled();
+    expect(await ariaLabels(moveControls(form))).toEqual(roster);
+    expect(await readOrder(dialog, defs, labels, members)).toEqual(stored);
+
+    // Act — the control, varying exactly the axis under test: the
+    // same dispatch on the same row, carrying the list's OWN type.
+    const mine = await dropFromList(rows.nth(MOVED_ROW_INDEX), '');
+
+    // Assert — the dispatch does reach the component, so the refusal
+    // above is the group being wrong rather than the events going
+    // nowhere.
+    expect(mine.dropped).toBe(first(mine.types, 'type the drag wrote'));
+    await expect(save).toBeEnabled();
+    expect(await ariaLabels(moveControls(form))).toEqual(roster);
+    expect(await readOrder(dialog, defs, labels, members))
+      .toEqual(expected);
   });
 });
