@@ -4,8 +4,8 @@
  * text, and a schema refusal turned into sentences.
  *
  * `./JsonEditor.tsx` is the fallback presentation an editor offers
- * for a payload its fixed template cannot express, and it is
- * deliberately thin — the dynamic form provider replaces it later.
+ * for a payload no other drawing can express, and it is deliberately
+ * thin — the dynamic form provider stands beside it, not over it.
  * Every decision it makes therefore lives here, for the reason the
  * two-runner split makes structural: the unit runner collects `.ts`
  * files under `src` in a node environment, so a decision living in a

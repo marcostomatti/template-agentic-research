@@ -6,27 +6,31 @@
  *
  * ## Thin on purpose, and what "thin" is protecting
  *
- * The dynamic form provider replaces this file. It renders editable
- * fields from a type definition, so the shapes this box exists for
- * get real controls and nobody edits punctuation to change a weight.
- * Until it lands an operator still needs SOME way to reach a shape
- * the fixed templates do not cover, and a textarea over the payload
- * is the smallest thing that is honest about being one.
+ * The dynamic form provider has landed beside this file and did NOT
+ * replace it. It renders editable fields from a type definition, so
+ * a shape it can express gets real controls and nobody edits
+ * punctuation to change a weight — but the shape has to be
+ * expressible WHOLE, and a payload that is not still needs SOME way
+ * to be reached. A textarea over the payload is the smallest thing
+ * that is honest about being one, and it is also the only drawing
+ * that survives a copy and paste between deployments.
  *
- * So nothing is built here that the replacement would not want.
- * There is no bracket matching, no gutter, no reformat-as-you-type,
- * no undo stack of its own. Each of them is work thrown away on the
- * day the provider arrives, and each of them is a decision living in
- * a `.tsx`, which is where no test in this package can reach it.
+ * So nothing is built here that the provider would not want. There
+ * is no bracket matching, no gutter, no reformat-as-you-type, no
+ * undo stack of its own. Each of them is a decision living in a
+ * `.tsx`, which is where no test in this package can reach it, and
+ * none of them is what a fallback is for.
  *
  * ## `value`, `onChange` and `schema` are the whole contract
  *
  * Those three are the entire seam between a page and this editor,
- * and keeping it to three is the point. The replacement takes a
- * value, reports a new one, and is told what a value has to satisfy;
- * it takes nothing else from a page either. So swapping it in is an
- * edit to this file and to the import beside it — a COMPONENT change
- * — rather than an edit to each editor that composes one.
+ * and keeping it to three is the point. The provider takes a value,
+ * reports a new one, and is told what a value has to satisfy; the
+ * only thing more it takes from a page is the defs to draw. So
+ * offering it beside this box was an edit to one branch and the
+ * import above it — a COMPONENT change — rather than an edit to each
+ * editor that composes one. `../pages/lexicon/LexiconEditorModal.tsx`
+ * is where that was measured rather than predicted.
  *
  * Everything else here is presentation and is deliberately not part
  * of that bargain: that the value is shown as text, that a refusal
@@ -55,9 +59,9 @@
  * {@link formatJsonDraft}, and owned here for as long as this
  * component is mounted. A caller that needs it re-seeded from a
  * value edited elsewhere remounts the editor — a `key`, or the
- * branch swap a presentation toggle already performs. Nothing about
- * the swapped-in provider makes that shape wrong: a form provider
- * holds per-field working state for the same reason.
+ * branch swap a presentation toggle already performs. The provider
+ * next door makes the same shape wrong nowhere: it holds per-field
+ * working state for the same reason, one control at a time.
  *
  * ## What the save path refuses, and the one thing it cannot
  *
@@ -84,9 +88,11 @@
  *
  * {@link JsonEditorProps.readOnly} draws the same box with typing
  * turned off. It is PRESENTATION and sits with the rest of it —
- * outside the three-prop bargain above — because the replacement
- * renders fields from a type definition and will need exactly the
- * same thing: a document being ruled on rather than edited.
+ * outside the three-prop bargain above — because the state it
+ * describes belongs to the document rather than to the drawing: a
+ * proposal is ruled on rather than edited whichever component draws
+ * it. The provider builds no such mode in v1, having no caller for
+ * one, so this box is the only drawing that answers it today.
  *
  * The one caller today is the sources surface's config approval,
  * where a proposal is accepted or refused as a ROW and the two
@@ -245,7 +251,7 @@ export interface JsonEditorProps<T extends object> {
    * Required, and a string: an editor showing two payloads at once
    * (a parser config beside its contract) would otherwise offer two
    * boxes named the same nothing. Presentation rather than contract
-   * — the replacement labels its fields too, but from the type
+   * — the provider labels its fields too, but from the type
    * definition rather than from here.
    */
   readonly label: string;

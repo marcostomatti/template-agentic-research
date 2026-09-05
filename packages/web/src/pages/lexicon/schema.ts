@@ -7,10 +7,11 @@
  * Beside the modal rather than inside it, for the reason `./cards.ts`
  * and `./terms.ts` give about their own halves — and for one of its
  * own. `../../components/JsonEditor.tsx` takes a schema as a PROP,
- * because the page is what knows the shape it is editing and the
- * dynamic form provider replacing that editor renders its fields from
- * the same declaration. So this file outlives the fallback it is
- * written for, and an editor points at it rather than holding it.
+ * because the page is what knows the shape it is editing — and the
+ * dynamic form provider beside it takes the same one, checking every
+ * candidate against this declaration before reporting it. So this
+ * file is read by more than the fallback it was written for, and an
+ * editor points at it rather than holding it.
  *
  * ## What it mirrors
  *
