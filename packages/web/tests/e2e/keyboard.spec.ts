@@ -1,5 +1,10 @@
 import type { Term } from '../../src/data/types';
-import type { Page } from '@playwright/test';
+import type { FieldDef, ListFieldDef } from '../../src/dynamic-form/fieldDef';
+import type {
+  TermPayload,
+  TermPayloadEntry,
+} from '../../src/pages/lexicon/schema';
+import type { Locator, Page } from '@playwright/test';
 
 import { expect, test } from '@playwright/test';
 
@@ -14,9 +19,12 @@ import {
   fetchTerms,
 } from '../../src/data/api';
 import { DEFAULT_DOMAIN_SLUG } from '../../src/data/domains';
+import { buildFormTree, treeNavNodes } from '../../src/dynamic-form/tree';
 import { POLARITY_FACETS } from '../../src/pages/lexicon/cards';
+import { fieldDefsForTermPayload } from '../../src/pages/lexicon/fieldDefs';
 import {
   splitTermBuckets,
+  toTermPayload,
   withTermPolarity,
 } from '../../src/pages/lexicon/terms';
 import { SINGLE_DOMAIN_BASE, withBase } from '../../src/routes/paths';
@@ -85,6 +93,56 @@ import { SINGLE_DOMAIN_BASE, withBase } from '../../src/routes/paths';
 // control with clicks. The case here drives it with keys only: Tab to
 // the control, Enter to open it, ArrowDown to reach the target,
 // Enter to commit. Nothing in that case touches the pointer.
+//
+// ## The fields presentation, and the walk a two-column form owes
+//
+// `src/dynamic-form/` draws a navigation tree beside ONE mounted
+// form, and every part of that is a composite an operator can see and
+// click before anybody asks whether it can be reached. Five claims,
+// each measured over the term editor swapped to its fields segment
+// before a case below was written.
+//
+// The structure column is ONE tab stop, however many rows it holds.
+// That is the WAI-ARIA tree pattern's own bargain — a roving tabindex
+// buys the arrows in exchange for not spending a stop per row — and
+// it is a property of the walk rather than of any row, so it is read
+// as the number of in-tree stops in one cycle rather than off a
+// locator. See {@link TabStop.inTree}.
+//
+// Inside it, ArrowDown and ArrowUp cross every visible row and Home
+// and End reach the two ends. Those keys are the whole of what the
+// one stop bought, so a tree that took the stop and moved nothing
+// would have cost an operator every row below the first.
+//
+// The trail above the form is reachable and every step of it
+// navigates, the current one included: `@ar/ui`'s `Breadcrumb` draws
+// each step as a real button, and the last is where an operator
+// already is — pressing it has to leave them there rather than
+// dropping them somewhere else.
+//
+// Every box of the mounted form is a stop, in the order the defs draw
+// them. That is the claim a pointer would never think to make, and it
+// is what says the two columns did not buy their navigation at the
+// form's expense.
+//
+// The reorder controls are reachable and they MOVE. `@ar/ui`'s
+// `Sortable` is HTML5 drag-and-drop with no keyboard path at all, so
+// these controls are not an enhancement over the drag: they are the
+// only way an operator without a pointer reorders anything, which is
+// the same SC 2.5.7 argument the polarity control above answers.
+// `dynamic-form.spec.ts` drives them with clicks and holds them
+// against the drag; the case here presses them with Enter.
+//
+// And Escape still closes, pressed from inside the tree — which is
+// where a walk leaves an operator, and the reason the press is made
+// there rather than from the footer. It is NOT a claim that a
+// composite could have swallowed it: Radix registers its escape
+// listener on the DOCUMENT with `capture: true`, so a handler inside
+// the dialog never sees the press first, and a leg giving the tree
+// its own Escape case reddened nothing at all. What the case does
+// report is that the dismissal is still wired (narrowing `Overlay`'s
+// own `dismiss` reddens it) and that focus still lands where {@link
+// FOCUS_RETURN_DEBT} says it does (a close-time focus reddens it).
 
 /** Which domain every subject below is read out of. */
 const SLUG = DEFAULT_DOMAIN_SLUG;
@@ -237,6 +295,18 @@ interface TabStop {
   readonly text: string;
   /** Whether it sits inside the open dialog. */
   readonly inDialog: boolean;
+  /**
+   * Whether it sits inside a `role="tree"`.
+   *
+   * The reading the fields presentation's first claim is made of, and
+   * a containment question exactly as {@link TabStop.inDialog} is: a
+   * roving tabindex is a property of the WALK rather than of any one
+   * row, so it cannot be read off a named locator. `@ar/ui`'s
+   * `TreeNav` is the only thing in either package that draws a tree,
+   * so this is false everywhere else and costs the other cases
+   * nothing.
+   */
+  readonly inTree: boolean;
 }
 
 /** How wide a stop's text reading is. */
@@ -259,7 +329,12 @@ async function focusedStop(page: Page): Promise<TabStop> {
 
     if (node === null) {
       return {
-        tag: 'none', role: '', label: '', text: '', inDialog: false,
+        tag: 'none',
+        role: '',
+        label: '',
+        text: '',
+        inDialog: false,
+        inTree: false,
       };
     }
 
@@ -273,6 +348,7 @@ async function focusedStop(page: Page): Promise<TabStop> {
       label: node.getAttribute('aria-label') ?? '',
       text: text.slice(0, limit),
       inDialog: node.closest('[role="dialog"]') !== null,
+      inTree: node.closest('[role="tree"]') !== null,
     };
   }, STOP_TEXT_LIMIT);
 }
@@ -1066,5 +1142,694 @@ test.describe('the drag alternative', () => {
     // Assert
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page).toHaveURL(listPath('lexicon'));
+  });
+});
+
+/** The segment that swaps the term editor to the fields drawing. */
+const FIELDS_TAB_NAME = 'Fields';
+
+/**
+ * What the trail above the mounted form is called.
+ *
+ * `@ar/ui`'s `Breadcrumb` names its own landmark, and the word is
+ * retyped here for the reason every other name in this file is: a
+ * case importing the library's constant agrees with whatever that
+ * constant becomes, and a renamed landmark would travel to an
+ * operator with nothing reporting it.
+ */
+const BREADCRUMB_NAME = 'Breadcrumb';
+
+/** The footer control that writes, addressed by name. */
+const SAVE_NAME = 'Save';
+
+/** The verb both move controls open their accessible name with. */
+const MOVE_VERB = 'Move';
+
+/** The word the control moving a row towards the top ends with. */
+const MOVE_UP_WORD = 'up';
+
+/** The word the control moving a row towards the end ends with. */
+const MOVE_DOWN_WORD = 'down';
+
+/**
+ * The two direction words, in the order a row draws its controls.
+ *
+ * The ORDER is part of the claim: the roster read off the rendered
+ * controls is held against a roster built from this, so a pair drawn
+ * the other way round is a mismatch naming both positions.
+ */
+const MOVE_WORDS: readonly string[] = [MOVE_UP_WORD, MOVE_DOWN_WORD];
+
+/** Which row the reorder case moves. Not an end, deliberately. */
+const MOVED_ROW_INDEX = 1;
+
+/** Where the move lands it: the position above. */
+const LANDED_ROW_INDEX = 0;
+
+/**
+ * The member the reorder case reads a position's content off.
+ *
+ * Keyed by the payload's own entry type, so a member that drifts is a
+ * `check-types` failure naming it rather than a locator that quietly
+ * stops matching anything.
+ */
+const PATTERN_MEMBER: keyof TermPayloadEntry = 'pattern';
+
+/** What the tree calls the payload and each entry under it. */
+interface TreeLabels {
+  /** The root node's label — the payload itself. */
+  readonly root: string;
+  /** One label per entry, in the order the tree draws them. */
+  readonly entries: readonly string[];
+}
+
+/** What the fields cases below are driven with. */
+interface FieldsSubject {
+  /** The editor address the presentation is reached at. */
+  readonly path: string;
+  /** The list def the presentation draws the payload from. */
+  readonly defs: ListFieldDef;
+  /** What the tree calls the payload and its entries. */
+  readonly labels: TreeLabels;
+  /** The payload the form opens on, as the fixtures hold it. */
+  readonly payload: TermPayload;
+}
+
+/**
+ * The first category's editor, and everything its form is drawn from.
+ *
+ * Derived rather than spelled, which is what keeps every locator
+ * below addressing a MEMBER or a POSITION rather than a word somebody
+ * may reword: the defs come from the reading the modal itself takes,
+ * and the labels from the projection the shell hands its tree — so
+ * `dynamic-form/tree.ts` remains the one place a list item's
+ * positional name is decided.
+ *
+ * @returns The address, the defs, the labels and the payload.
+ * @throws If v1 cannot express the payload, or the tree carries no
+ * root.
+ */
+async function fieldsSubject(): Promise<FieldsSubject> {
+  const summary = first(
+    await fetchCategorySummaries(SLUG),
+    'lexicon category',
+  );
+  const defs = fieldDefsForTermPayload();
+
+  if (defs === null) {
+    throw new Error('v1 cannot express the term payload.');
+  }
+
+  const payload = toTermPayload(await fetchTerms(SLUG, summary.category.id));
+  const [root] = treeNavNodes(buildFormTree(defs, payload));
+
+  if (root === undefined) {
+    throw new Error('The projected tree carries no root node.');
+  }
+
+  // More than one row under the root, or the arrow walk below is
+  // satisfied by a tree with nowhere to go and the one-stop reading
+  // is a claim about a tree that could not have cost more.
+  expect(root.children.length).toBeGreaterThan(1);
+
+  return {
+    path: `${listPath('lexicon')}/${String(summary.category.id)}/edit`,
+    defs,
+    labels: {
+      root: root.label,
+      entries: root.children.map((child) => child.label),
+    },
+    payload,
+  };
+}
+
+/**
+ * Open the term editor and swap it to the fields presentation.
+ *
+ * The swap is a CLICK and the claim never is: which segment draws
+ * what belongs to `lexicon.spec.ts` and `dynamic-form.spec.ts`, and
+ * every case here is about what happens after the drawing is up. The
+ * dismissal case below reaches the same segment with keys instead,
+ * which is where that gesture is the subject.
+ *
+ * @param page - A fresh page.
+ * @param subject - Which editor, and what it draws.
+ * @returns The open dialog.
+ */
+async function showFields(
+  page: Page,
+  subject: FieldsSubject,
+): Promise<Locator> {
+  await page.goto(subject.path);
+
+  const dialog = page.getByRole('dialog');
+
+  // The dialog first, then the settled state, and only then anything
+  // inside it: a walk taken while the body is still a stand-in reads
+  // a shorter cycle than the surface really has.
+  await expect(dialog).toBeVisible();
+  await expectSettled(page);
+  await dialog
+    .getByRole('tab', { name: FIELDS_TAB_NAME, exact: true })
+    .click();
+  await expect(dialog.getByRole('tree')).toBeVisible();
+
+  return dialog;
+}
+
+/**
+ * The one mounted form, addressed by the node it is drawing.
+ *
+ * `NodeForm` names its group after that node, so the form, the tree's
+ * selected row and the breadcrumb's last step all carry one word —
+ * which is what lets an assertion say WHICH node's members it reached
+ * rather than trust that only one form is up.
+ *
+ * @param dialog - The open editor.
+ * @param label - The node's label.
+ * @returns That node's form.
+ */
+function nodeForm(dialog: Locator, label: string): Locator {
+  return dialog.getByRole('group', { name: label, exact: true });
+}
+
+/**
+ * The trail above the mounted form, through its own landmark.
+ *
+ * Named as well as scoped. The shell draws two more `nav` landmarks
+ * of its own and a dialog hides both along with `main`, so an unnamed
+ * locator would pass today and start matching the shell the moment
+ * anything here is read outside a modal.
+ *
+ * @param dialog - The open editor.
+ * @returns The breadcrumb's landmark.
+ */
+function breadcrumb(dialog: Locator): Locator {
+  return dialog.getByRole('navigation', {
+    name: BREADCRUMB_NAME,
+    exact: true,
+  });
+}
+
+/**
+ * The members one entry is drawn from, in draw order.
+ *
+ * @param defs - The list def the presentation draws from.
+ * @returns The item's own fields.
+ * @throws If the item draws no members.
+ */
+function entryFields(defs: ListFieldDef): readonly FieldDef[] {
+  const { item } = defs;
+
+  if (item.type !== 'object') {
+    throw new Error('The entry def does not draw members.');
+  }
+
+  return item.fields;
+}
+
+/**
+ * What one member's box is called, from the member it writes.
+ *
+ * The crossing `pages/lexicon/fieldDefs.ts` says only a runtime
+ * reading can make: a def's `key` is a plain string, so the member a
+ * box writes and the word above it are two facts and this is where
+ * they are held together.
+ *
+ * @param defs - The list def the presentation draws from.
+ * @param member - The payload member whose box is wanted.
+ * @returns The label that box carries.
+ * @throws If no def draws that member.
+ */
+function memberLabel(
+  defs: ListFieldDef,
+  member: keyof TermPayloadEntry,
+): string {
+  const field = entryFields(defs).find((each) => each.key === member);
+
+  if (field === undefined) {
+    throw new Error(`No def draws the ${member} member.`);
+  }
+
+  return field.label;
+}
+
+/**
+ * What the tree calls the entry at one position.
+ *
+ * @param labels - What the tree calls the payload and its entries.
+ * @param index - The position wanted.
+ * @returns Its label.
+ * @throws If the tree draws no entry there.
+ */
+function entryLabelAt(labels: TreeLabels, index: number): string {
+  const label = labels.entries[index];
+
+  if (label === undefined) {
+    throw new Error(`The tree draws no entry at position ${index}.`);
+  }
+
+  return label;
+}
+
+/**
+ * One entry of the stored payload, or a failure naming the position.
+ *
+ * @param payload - The payload the form opens on.
+ * @param index - The position wanted.
+ * @returns That entry.
+ * @throws If the payload holds none there.
+ */
+function entryAt(payload: TermPayload, index: number): TermPayloadEntry {
+  const entry = payload[index];
+
+  if (entry === undefined) {
+    throw new Error(`The payload holds no entry at position ${index}.`);
+  }
+
+  return entry;
+}
+
+/** What one row's move control in one direction is called. */
+function moveControlName(label: string, word: string): string {
+  return `${MOVE_VERB} ${label} ${word}`;
+}
+
+/**
+ * Every move control's name, in the order the rows draw them.
+ *
+ * POSITIONAL by construction, which is the whole point: a move
+ * renames nothing, so this is what reports a row lost, duplicated or
+ * misnumbered and never what moved.
+ *
+ * @param labels - What the tree calls the payload and its entries.
+ * @returns One name per row per direction.
+ */
+function moveRoster(labels: TreeLabels): readonly string[] {
+  return labels.entries.flatMap(
+    (label) => MOVE_WORDS.map((word) => moveControlName(label, word)),
+  );
+}
+
+/**
+ * Every move control of one mounted list form, in DOM order.
+ *
+ * Matched on the verb rather than listed by name, so a control the
+ * form drew and this file did not predict is a roster mismatch rather
+ * than an absence nothing looks for. Disabled controls are members
+ * too: a row at an end still draws both, and one of them is what a
+ * Tab walk is expected to step over.
+ *
+ * @param form - The list level's own mounted form.
+ * @returns Its move controls.
+ */
+function moveControls(form: Locator): Locator {
+  return form.getByRole('button', {
+    name: new RegExp(`^${MOVE_VERB} `, 'u'),
+  });
+}
+
+/**
+ * What a set of controls is CALLED, in DOM order.
+ *
+ * The attribute rather than the computed name, and for these two
+ * callers they are the same string: a move control's only content is
+ * an `aria-hidden` glyph, and a `TreeNav` row pins its own name with
+ * the attribute because an item wrapping its children is otherwise
+ * named after its whole open subtree.
+ *
+ * @param controls - The controls to read.
+ * @returns One name per control, in the order the DOM holds them.
+ */
+async function ariaLabels(
+  controls: Locator,
+): Promise<readonly (string | null)[]> {
+  return controls.evaluateAll(
+    (nodes) => nodes.map((node) => node.getAttribute('aria-label')),
+  );
+}
+
+/**
+ * Tab until the keyboard is inside the structure tree.
+ *
+ * The whole tree is one stop, so this lands on whichever row holds
+ * the roving tabindex — the selected one until an arrow moves it.
+ *
+ * @param page - The page the editor is open on.
+ */
+async function enterTree(page: Page): Promise<void> {
+  await walkTo(page, (stop) => stop.inTree, 'the structure tree');
+}
+
+/**
+ * Select one entry through the tree, with no pointer.
+ *
+ * Home first, so the walk starts from the top of the tree wherever
+ * the roving tabindex was left, and then one ArrowDown per row: the
+ * root is a row of its own, which is why reaching position zero takes
+ * a press.
+ *
+ * @param page - The page the editor is open on.
+ * @param dialog - The open editor.
+ * @param labels - What the tree calls the payload and its entries.
+ * @param index - Which entry to select.
+ * @returns That entry's own mounted form.
+ */
+async function selectEntry(
+  page: Page,
+  dialog: Locator,
+  labels: TreeLabels,
+  index: number,
+): Promise<Locator> {
+  await enterTree(page);
+  await page.keyboard.press('Home');
+
+  // Sequential on purpose: each press moves the row the next one is
+  // taken from.
+  for (let step = 0; step <= index; step += 1) {
+    await page.keyboard.press('ArrowDown');
+  }
+
+  const label = entryLabelAt(labels, index);
+
+  expect((await focusedStop(page)).label).toBe(label);
+  await page.keyboard.press('Enter');
+
+  const form = nodeForm(dialog, label);
+
+  await expect(form).toBeVisible();
+
+  return form;
+}
+
+test.describe('the fields presentation', () => {
+  test('spends one tab stop on its whole structure tree', async ({
+    page,
+  }) => {
+    // Arrange
+    const subject = await fieldsSubject();
+    const dialog = await showFields(page, subject);
+
+    // The rows the tree really draws, which is what stops the count
+    // below being a claim about a tree that could not have cost more
+    // than one stop anyway.
+    expect(await ariaLabels(dialog.getByRole('treeitem'))).toEqual([
+      subject.labels.root,
+      ...subject.labels.entries,
+    ]);
+
+    // Act — the same containment walk every modal case above takes.
+    const forward = await walk(page, TAB_BUDGET);
+    const period = tabPeriod(forward);
+
+    // Assert — a cycle to read the tree's share of, and one that
+    // moved: a period of one is what a dead walk answers.
+    expect(
+      period,
+      `Tab did not repeat inside ${TAB_BUDGET} presses: ${
+        forward.map(fingerprint).join(' | ')}`,
+    ).toBeDefined();
+    expect(period).toBeGreaterThan(1);
+
+    const cycle = forward.slice(0, period);
+    const inTree = cycle.filter((stop) => stop.inTree);
+
+    expect(
+      inTree.map(fingerprint),
+      'the structure tree is not one tab stop',
+    ).toHaveLength(1);
+
+    // And the stop it spends is a row rather than the tree itself:
+    // `TreeNav` puts the tabindex on the treeitem, which is what the
+    // arrow keys are then delivered to.
+    expect(inTree.map((stop) => stop.role)).toEqual(['treeitem']);
+  });
+
+  test('walks the tree with the arrows, both ends included', async ({
+    page,
+  }) => {
+    // Arrange
+    const subject = await fieldsSubject();
+    const dialog = await showFields(page, subject);
+    const { root, entries } = subject.labels;
+    const last = entries.length - 1;
+
+    // Act — one Tab in, which lands on the row holding the roving
+    // tabindex: the selected one, and nothing has selected anything
+    // else yet.
+    await enterTree(page);
+
+    // Assert
+    expect((await focusedStop(page)).label).toBe(root);
+
+    // Act — ArrowDown, once per row under the root.
+    const walked: string[] = [];
+
+    for (let step = 0; step < entries.length; step += 1) {
+      await page.keyboard.press('ArrowDown');
+      walked.push((await focusedStop(page)).label);
+    }
+
+    // Assert — every row, in the order the tree draws them. A walk
+    // that skipped one would leave a row an operator can see and
+    // never reach.
+    expect(walked).toEqual(entries);
+
+    // Act/Assert — ArrowUp comes back, and the two ends are one press
+    // each from wherever the walk stopped.
+    await page.keyboard.press('ArrowUp');
+    expect((await focusedStop(page)).label).toBe(
+      entryLabelAt(subject.labels, last - 1),
+    );
+
+    await page.keyboard.press('End');
+    expect((await focusedStop(page)).label).toBe(
+      entryLabelAt(subject.labels, last),
+    );
+
+    await page.keyboard.press('Home');
+    expect((await focusedStop(page)).label).toBe(root);
+
+    // Act — and Enter selects the row the walk is standing on, which
+    // is what the arrows were for: a tree that moved focus and
+    // selected nothing would be a walk with no arrival.
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+
+    // Assert — the mounted form and the trail are two drawings of the
+    // one selection, so both are read.
+    const arrived = entryLabelAt(subject.labels, 0);
+
+    await expect(nodeForm(dialog, arrived)).toBeVisible();
+    await expect(breadcrumb(dialog).getByRole('button')).toHaveText([
+      root,
+      arrived,
+    ]);
+  });
+
+  test('offers every breadcrumb step, and each one navigates', async ({
+    page,
+  }) => {
+    // Arrange — a drilled-in node, reached through the tree with no
+    // pointer, so the trail below has a step to walk back to.
+    const subject = await fieldsSubject();
+    const dialog = await showFields(page, subject);
+    const { root } = subject.labels;
+    const entry = entryLabelAt(subject.labels, 0);
+    const trail = [root, entry];
+    const steps = breadcrumb(dialog).getByRole('button');
+
+    await selectEntry(page, dialog, subject.labels, 0);
+    await expect(steps).toHaveText(trail);
+
+    // Act — Tab out of the tree: the trail's steps are the stops that
+    // follow it, in trail order. One press per step, counted off the
+    // trail rather than off a number written here.
+    const stops = await walk(page, trail.length);
+
+    // Assert
+    expect(stops.map((stop) => stop.text)).toEqual(trail);
+    expect(
+      stops.every((stop) => stop.tag === 'button'),
+      'a breadcrumb step is not a button',
+    ).toBe(true);
+
+    // Act — the last step is where we already are. Pressing it has to
+    // leave an operator there: a step that navigated to its own node
+    // by unmounting and remounting would lose every box's typed text.
+    await page.keyboard.press('Enter');
+
+    // Assert
+    await expect(nodeForm(dialog, entry)).toBeVisible();
+    await expect(steps).toHaveText(trail);
+
+    // Act — and the step before it walks back to the level above.
+    await page.keyboard.press('Shift+Tab');
+    expect((await focusedStop(page)).text).toBe(root);
+    await page.keyboard.press('Enter');
+
+    // Assert — the list level is mounted and the trail has shortened
+    // to it, which is what says the step navigated rather than
+    // redrawing what was already there.
+    await expect(nodeForm(dialog, root)).toBeVisible();
+    await expect(steps).toHaveText([root]);
+  });
+
+  test('offers every box of the mounted form in draw order', async ({
+    page,
+  }) => {
+    // Arrange
+    const subject = await fieldsSubject();
+    const dialog = await showFields(page, subject);
+    const form = await selectEntry(page, dialog, subject.labels, 0);
+    const members = entryFields(subject.defs);
+
+    // One box per member and no more, so the walk below is over the
+    // whole form rather than over a prefix of it.
+    await expect(form.getByRole('textbox')).toHaveCount(members.length);
+
+    // Act — Tab out of the tree and past the trail, whose length is
+    // read off the trail itself rather than counted here.
+    const trail = await breadcrumb(dialog)
+      .getByRole('button')
+      .count();
+
+    await walk(page, trail);
+
+    // Assert — one press per member, each landing on the box that
+    // writes it, in the order the defs list them. Derived from the
+    // defs, so a member reordered there moves this with it.
+    for (const def of members) {
+      await page.keyboard.press('Tab');
+      await expect(
+        form.getByRole('textbox', { name: def.label, exact: true }),
+      ).toBeFocused();
+    }
+  });
+
+  test('moves a row with the reorder controls and no pointer', async ({
+    page,
+  }) => {
+    // Arrange
+    const subject = await fieldsSubject();
+    const dialog = await showFields(page, subject);
+    const { labels, payload } = subject;
+    const listForm = nodeForm(dialog, labels.root);
+    const roster = moveRoster(labels);
+    const moved = entryAt(payload, MOVED_ROW_INDEX);
+    const landedOn = entryAt(payload, LANDED_ROW_INDEX);
+    const patternLabel = memberLabel(subject.defs, PATTERN_MEMBER);
+
+    // The two entries have to differ where the reading is taken, or a
+    // move that did nothing at all reads exactly like one that
+    // worked. And the roster is the precondition for the invariance
+    // asserted after the move.
+    expect(moved[PATTERN_MEMBER]).not.toBe(landedOn[PATTERN_MEMBER]);
+    expect(await ariaLabels(moveControls(listForm))).toEqual(roster);
+
+    // Act — Tab to the control that moves the second row up, and
+    // press it. `@ar/ui`'s `Sortable` has no keyboard path of its
+    // own, so this pair of controls is the whole of SC 2.5.7 here.
+    const control = moveControlName(
+      entryLabelAt(labels, MOVED_ROW_INDEX),
+      MOVE_UP_WORD,
+    );
+
+    await walkTo(
+      page,
+      (stop) => stop.label === control,
+      `the control called "${control}"`,
+    );
+    await page.keyboard.press('Enter');
+
+    // Assert — the roster first: every label here is positional, so
+    // it is unchanged by construction and a difference is a row lost,
+    // duplicated or misnumbered rather than a row that moved.
+    expect(await ariaLabels(moveControls(listForm))).toEqual(roster);
+
+    // What MOVED is read off the landing position's own box, through
+    // the tree, which is also the remount that makes the reading
+    // about the value rather than about text a control is holding.
+    const landedForm = await selectEntry(
+      page,
+      dialog,
+      labels,
+      LANDED_ROW_INDEX,
+    );
+
+    await expect(
+      landedForm.getByRole('textbox', { name: patternLabel, exact: true }),
+    ).toHaveValue(moved[PATTERN_MEMBER]);
+
+    // And the draft took it. A move that had only redrawn the rows
+    // would leave the footer with nothing to write.
+    await expect(
+      dialog.getByRole('button', { name: SAVE_NAME, exact: true }),
+    ).toBeEnabled();
+  });
+
+  test('closes on Escape from inside the tree, and drops focus', async ({
+    page,
+  }) => {
+    // Arrange — the grid, and the card control this editor is opened
+    // from, so the ledger below is read beside an opener that is
+    // still there.
+    const summary = first(
+      await fetchCategorySummaries(SLUG),
+      'lexicon category',
+    );
+    const { name } = summary.category;
+    const path = listPath('lexicon');
+
+    await page.goto(path);
+    await expectSettled(page);
+
+    const opener = page.getByRole('button', { name, exact: true });
+    const dialog = page.getByRole('dialog');
+
+    // Act — keys the whole way in, this being the one case where the
+    // swap to the fields drawing is itself part of the claim.
+    await walkTo(
+      page,
+      (stop) => isOpenControl(stop, name),
+      `the open control for "${name}"`,
+    );
+    await page.keyboard.press('Enter');
+    await expect(dialog).toBeVisible();
+    await expectSettled(page);
+    await walkTo(
+      page,
+      (stop) => stop.role === 'tab' && stop.text === FIELDS_TAB_NAME,
+      `the "${FIELDS_TAB_NAME}" segment`,
+    );
+    await page.keyboard.press('Enter');
+    await expect(dialog.getByRole('tree')).toBeVisible();
+    await enterTree(page);
+
+    // Act — from inside the tree, where the walk above leaves an
+    // operator. The dialog answers it wherever the press is made,
+    // Radix listening on the document in the capture phase, so this
+    // is the position the gesture is used from rather than a claim
+    // about what the tree might have swallowed.
+    await page.keyboard.press('Escape');
+
+    // Assert — gone, and back on the list the sub-route hangs under.
+    await expect(dialog).toHaveCount(0);
+    await expect(page).toHaveURL(path);
+
+    // And the ledger, unchanged by the drawing that was up: see
+    // FOCUS_RETURN_DEBT. Focus lands on the body.
+    await expect
+      .poll(async () => (await focusedStop(page)).tag, {
+        message: FOCUS_RETURN_DEBT,
+      })
+      .toBe('body');
+
+    // The opener is still on screen and still takes focus, so the
+    // reading above is about where focus WENT and never about a
+    // control that stopped existing.
+    await expect(opener).toBeVisible();
+    await expect(opener).toBeEnabled();
+    await expect(opener).not.toBeFocused();
   });
 });
