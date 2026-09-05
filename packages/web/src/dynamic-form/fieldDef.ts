@@ -26,13 +26,13 @@
  * Discriminated, that literal is a `check-types` error where somebody
  * wrote it rather than an empty form on somebody else's screen.
  *
- * And it takes the exhaustiveness away from the compiler. `type`
- * being a discriminant is what makes `./registry.ts`'s switch total:
- * a seventh member of {@link FieldType} reddens every switch holding
- * no case for it, which is what turns growing the contract into a
- * build failure rather than a default branch quietly drawing the new
- * type as text. The mutation note below measures that rather than
- * asserting it.
+ * And it takes the exhaustiveness away from the compiler. A
+ * seventh member of {@link FieldType} reddens every switch holding
+ * no case for it, and it is also a key `./registry.ts`'s table
+ * DEMANDS — which is what turns growing the contract into a build
+ * failure rather than a default branch quietly drawing the new type
+ * as text. The mutation note below measures both rather than
+ * asserting them.
  *
  * Narrowing is the third thing that falls out and the one every walk
  * leans on: `def.type === 'list'` hands over the item def with no
@@ -72,16 +72,25 @@
  * Measured rather than argued, with a fabricated `'currency'` added
  * to {@link LeafFieldType} and every case and every table left as it
  * stands. `bun run check-types` from inside `packages/web` answers
- * EXIT 2 — tsc's code for a type error, never 1 — with exactly two
- * errors, both naming the fabricated member:
+ * EXIT 2 — tsc's code for a type error, never 1 — with three
+ * errors, every one naming the fabricated member:
  *
  * - TS2345 at {@link isContainerField}'s default branch, where the
  *   discriminant it hands on is no longer `never`.
  * - TS2741 in `./fieldDef.test.ts`, whose def table is keyed by
  *   {@link FieldType} and so is short a key.
+ * - TS2741 in `./registry.ts`, whose control table is keyed the
+ *   same way and short the same key.
  *
- * Restoring the member leaves both green and this file
+ * Restoring the member leaves all three green and this file
  * byte-identical.
+ *
+ * THREE is a snapshot rather than a property of the union: the
+ * count is one per module keying a table by {@link FieldType}, so a
+ * later module adding one moves it again. Re-derive it rather than
+ * holding a run against the number here — what the mutation
+ * claims is that every such table is short a key, not that there
+ * are three of them.
  *
  * That PAIR is the whole of this module's exhaustiveness claim, and
  * the opposite direction is a DIFFERENT mutation: removing
