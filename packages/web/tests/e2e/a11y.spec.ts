@@ -99,6 +99,25 @@ import {
 // resets `src/data/drafts.ts`, so no case can inherit an edit another
 // one recorded.
 //
+// ## One address, two drawings
+//
+// The lexicon editor is scanned TWICE: once as it opens, and once
+// swapped to the fields presentation. Two drawings rather than one
+// drawing read twice — the editor opens on three lists of term rows,
+// where the fields presentation is `src/dynamic-form/`'s two-column
+// shell over a navigation tree and one mounted form — so a rule
+// violated in one says nothing about the other, and a `goto` reaches
+// only the first.
+//
+// The ledger cannot be the liveness control for that swap, which is
+// why {@link showFields} carries one of its own. Both drawings stand
+// inside the same `Modal`, so `aria-dialog-name` is violated either
+// way and a case whose click missed the segment would pass against
+// the identical set — the same shape as a modal address answering the
+// SURFACE ledger, one level further in. What closes it is
+// `role="tree"`: `@ar/ui`'s `TreeNav` is the only thing in either
+// package that draws one, and only the fields presentation mounts it.
+//
 // ## What this file deliberately does not claim
 //
 // That the domain base scans clean. Both bases are built from one
@@ -129,6 +148,16 @@ import {
  * all. Waiting on it is what makes the sweep non-vacuous.
  */
 const SKELETON = '.animate-shimmer';
+
+/**
+ * The segment that swaps the term editor to the fields presentation.
+ *
+ * Retyped rather than read out of `pages/lexicon/terms.ts`, which is
+ * what every operator-visible word in these specs is: a case
+ * importing that table agrees with whatever the table says, so a
+ * reworded segment would reach an operator with this file green.
+ */
+const FIELDS_TAB_NAME = 'Fields';
 
 /** Which impacts this file gates on. */
 const GATED_IMPACTS: readonly string[] = ['serious', 'critical'];
@@ -384,6 +413,46 @@ async function openModal(page: Page, path: string): Promise<Locator> {
   return dialog;
 }
 
+/**
+ * The lexicon editor's address, for the category the pair reads.
+ *
+ * Derived and shared rather than spelled in each case: the two
+ * lexicon cases below are one claim about ONE address in two
+ * drawings, and a second copy of the path is exactly where that would
+ * quietly become a claim about two addresses.
+ *
+ * @returns The edit address of the first category the fixtures hold.
+ */
+async function lexiconEditPath(): Promise<string> {
+  const summary = firstOf(
+    await fetchCategorySummaries(SLUG),
+    'lexicon category',
+  );
+
+  return `${withBase(SINGLE_DOMAIN_BASE, 'lexicon')}/${
+    String(summary.category.id)}/edit`;
+}
+
+/**
+ * Swap an open term editor to the fields presentation.
+ *
+ * The tree assertion is this case's own liveness control and it is
+ * not decoration, for the reason {@link openModal}'s dialog read is
+ * not: the two drawings share a `Modal`, so {@link MODAL_LEDGER} is
+ * satisfied by either one and a click that landed on nothing would
+ * scan the buckets and pass. `role="tree"` is drawn by `@ar/ui`'s
+ * `TreeNav` alone and mounted by this presentation alone, so it says
+ * WHICH drawing was read. It is also the deterministic wait: the
+ * provider mounts off the term read the caller already settled, so
+ * there is no second stand-in to wait out.
+ *
+ * @param dialog - An open, settled term editor.
+ */
+async function showFields(dialog: Locator): Promise<void> {
+  await dialog.getByRole('tab', { name: FIELDS_TAB_NAME }).click();
+  await expect(dialog.getByRole('tree')).toBeVisible();
+}
+
 test.describe('every surface', () => {
   for (const surface of SURFACES) {
     test(`${surface.id} violates only the carried-in ledger`, async ({
@@ -412,13 +481,24 @@ test.describe('every modal sub-route', () => {
   test('the lexicon editor violates only the carried-in ledger', async ({
     page,
   }) => {
-    const summary = firstOf(
-      await fetchCategorySummaries(SLUG),
-      'lexicon category',
-    );
+    const path = await lexiconEditPath();
 
-    await openModal(page, `${withBase(SINGLE_DOMAIN_BASE, 'lexicon')}/${
-      String(summary.category.id)}/edit`);
+    await openModal(page, path);
+
+    await expectLedger(page, MODAL_LEDGER);
+  });
+
+  // The same address again, in the drawing no navigation reaches: the
+  // provider is a PRESENTATION rather than a route, so the only way to
+  // scan it is to open the editor and swap the control. See the header
+  // on why the ledger alone cannot say the swap happened.
+  test('the fields presentation violates only the carried-in ledger', async ({
+    page,
+  }) => {
+    const path = await lexiconEditPath();
+    const dialog = await openModal(page, path);
+
+    await showFields(dialog);
 
     await expectLedger(page, MODAL_LEDGER);
   });
