@@ -126,14 +126,18 @@
  *
  * `check-types` proves the bindings, from inside `packages/web`, at
  * EXIT 2, and the code follows the SITE rather than the shape of the
- * fault. Measured: a leaf def handed as {@link DynamicFormProps.defs}
- * is TS2322 at the prop, the shown node handed to `./NodeForm.tsx` as
- * a path is TS2739 at the prop, and {@link DynamicFormProps.onChange}
+ * fault. Measured: the shown node handed to `./NodeForm.tsx` as a
+ * path is TS2739 at the prop, and {@link DynamicFormProps.onChange}
  * handed something the schema's type parameter does not admit is
  * TS2345 at the CALL. Typing a reorder index as a string answers
  * BOTH — TS2322 where the prop is declared and TS2345 where
  * {@link withListReordered} is called — which is the clearest
- * reading of that rule there is.
+ * reading of that rule there is. {@link DynamicFormProps.defs}
+ * has no reading of its own yet: nothing in the tree mounts
+ * this component, so that prop has no assignment site at all,
+ * and a leaf-shaped def declared there reds TS2345 at
+ * {@link buildFormTree} rather than TS2322 at a prop. The
+ * page that mounts it is what makes the prop reading exist.
  *
  * Two offline probes measure the rest, neither needing a DOM. A
  * static render prints the real markup; standing in a hook

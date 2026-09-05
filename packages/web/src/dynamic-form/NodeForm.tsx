@@ -117,25 +117,25 @@
  * ## No test in this package reaches this file
  *
  * A fact about the runner rather than an omission, and the one
- * `./FieldControl.tsx` records: `@ar/web` runs vitest over `src`
- * in a NODE environment with an include of `*.test.ts`, so a
- * `.tsx` is neither collected nor renderable there. Which is why
- * everything worth asserting sits next door, in the colocated
- * cases over the five modules this one composes. What is left is
- * composition, one derivation and three reports, and two things
- * measure it.
+ * `./FieldControl.tsx` records: `@ar/web` runs vitest over `src` in
+ * a NODE environment with an include of `*.test.ts`, so a `.tsx` is
+ * neither collected nor renderable there. Which is why everything
+ * worth asserting sits next door, in the colocated cases over the
+ * five modules this one composes. What is left is composition, one
+ * derivation and three reports, and two things measure it.
  *
  * `check-types` proves the bindings, measured from inside
  * `packages/web` at EXIT 2 every time. A leaf def handed to either
- * branch is TS2322 at the JSX prop. A reorder index typed
- * as a string is TS2345 where {@link NodeFormProps.onReorder}
- * declares it and TS2322 where a row control does — predict
- * the code from the SITE, a call against two props. Dropping
- * `'down'` from {@link MoveDirection} is TS2322 at the roster
- * literal plus TS2353 at both keyed tables. And the axis a reader
- * assumes is covered and is not: a third CONTAINER TYPE reds
- * NOTHING here, landing in `./registry.ts` and a sibling fixture,
- * where a third DEF-union member is TS2345 at the default branch.
+ * branch is TS2322 at the JSX prop. A reorder index typed as a
+ * string reds BOTH codes whichever prop declares it — TS2345
+ * at the call it broke and TS2322 at the prop forwarding the old
+ * handler on — so expect one of each; mutating the ARGUMENT
+ * instead reds TS2345 alone. Dropping `'down'` from
+ * {@link MoveDirection} is TS2322 at the roster literal plus
+ * TS2353 at both keyed tables. And the axis a reader assumes is
+ * covered and is not: a third CONTAINER TYPE reds NOTHING here,
+ * landing in `./registry.ts` and a sibling fixture, where a third
+ * DEF-union member is TS2345 at the default branch.
  *
  * An offline static render prints the real markup with no DOM and
  * no runner, and the same probe reaches the derivation by calling
