@@ -87,6 +87,7 @@
  * like any other bad shape.
  */
 import type { CategoryServiceStore } from './categories-service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -98,9 +99,11 @@ import { parseBody, parseQuery } from '../http/validation.js';
 
 import {
   createCategory,
+  createCategorySchema,
   deleteCategory,
   listCategories,
   patchCategory,
+  patchCategorySchema,
 } from './categories-service.js';
 
 /**
@@ -170,14 +173,56 @@ const categoryAddressSchema = z.object({ id: resourceIdParamSchema }).strict();
  * emptiness from the schema rather than from a comment is what
  * keeps that true if the route ever grows one.
  *
- * The address const above stays private. Nothing here exports one,
- * so its own claim that the two routers agree by intent rather than
- * by derivation is untouched by this schema.
+ * The address const above stays private, and the binding table
+ * below does not change that: a table exports the schema OBJECTS a
+ * route parses with rather than the NAMES they are declared under,
+ * so there is still nothing here for `src/domains/routes.ts` to
+ * import and its own claim that the two routers agree by intent
+ * rather than by derivation is untouched by either export.
  */
 export const categoryListToolInputSchema = z.object({
   ...domainAddressSchema.shape,
   ...noQuerySchema.shape,
 }).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. The bodies are the service's, imported
+ * rather than declared, because no handler below parses one — the
+ * module header's rule, read straight off the table.
+ *
+ * THE TWO PATH SHAPES ARE VISIBLE HERE AS TWO ADDRESS SCHEMAS. The
+ * collection routes bind {@link domainAddressSchema} and the two
+ * writes bind {@link categoryAddressSchema}, which is the split the
+ * module header argues for rather than a second thing to keep in
+ * step with it.
+ *
+ * `GET /domains/:slug/categories` BINDS A QUERY THAT DECLARES NO
+ * PARAMETER, and that is {@link noQuerySchema} rather than an empty
+ * binding on purpose. The two say different things: this route
+ * REFUSES every query parameter, where a route binding no query at
+ * all is one that never looks. A document built off `{}` here would
+ * describe the second and this router is the first.
+ */
+export const categoriesRouteSchemas = {
+  'GET /domains/:slug/categories': {
+    params: domainAddressSchema,
+    query: noQuerySchema,
+  },
+  'POST /domains/:slug/categories': {
+    params: domainAddressSchema,
+    body: createCategorySchema,
+  },
+  'PATCH /categories/:id': {
+    params: categoryAddressSchema,
+    body: patchCategorySchema,
+  },
+  'DELETE /categories/:id': { params: categoryAddressSchema },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildCategoriesRouter} needs. */
 export interface CategoriesRouterOptions {

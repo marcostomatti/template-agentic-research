@@ -116,6 +116,7 @@
  * like any other bad shape.
  */
 import type { TermServiceStore } from './terms-service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -281,6 +282,55 @@ export const termPatchToolInputSchema = z.object({
   ...resourceAddressSchema.shape,
   ...patchTermSchema.shape,
 }).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. `resourceAddressSchema` is bound by all
+ * four, which is the one-schema-for-both-addresses decision above
+ * read straight off the table rather than restated.
+ *
+ * TWO OF THE FOUR ANSWER TO TWO SCHEMAS APIECE AND A BINDING HOLDS
+ * ONE, so this table carries the branch a caller reaches without
+ * asking for the other and records the rest here rather than
+ * inventing a schema to cover both.
+ *
+ * `GET /categories/:id/terms` binds `paginationQuerySchema`, the
+ * branch taken when no `?format` is named. {@link seedQuerySchema}
+ * governs the other and is deliberately absent: a union written for
+ * this table would be a schema no handler parses with, which is the
+ * one thing the identity rule forbids, and it would describe a
+ * query neither branch accepts — the two vocabularies being
+ * exclusive is why the handler reads them in two steps at all.
+ *
+ * `POST /categories/:id/terms` binds `createTermSchema`, the single
+ * term. A body carrying {@link TERMS_MEMBER} is a seed document
+ * parsed by `TermsFileSchema` in `./seed-format.ts`, and is absent
+ * for the same reason.
+ *
+ * Neither branch is undocumented — the module header states both
+ * and `docs/architecture/08-http-api.md` tabulates them. What is
+ * deferred is their appearance in a GENERATED document, and that
+ * is a limit of one binding per member rather than of this group.
+ */
+export const termsRouteSchemas = {
+  'GET /categories/:id/terms': {
+    params: resourceAddressSchema,
+    query: paginationQuerySchema,
+  },
+  'POST /categories/:id/terms': {
+    params: resourceAddressSchema,
+    body: createTermSchema,
+  },
+  'PATCH /terms/:id': {
+    params: resourceAddressSchema,
+    body: patchTermSchema,
+  },
+  'DELETE /terms/:id': { params: resourceAddressSchema },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** What a bulk import answers instead of the rows it wrote. */
 export interface TermImportSummary {
