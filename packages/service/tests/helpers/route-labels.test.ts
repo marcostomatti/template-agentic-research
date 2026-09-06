@@ -1,11 +1,13 @@
 /**
- * `tests/helpers/route-labels.ts` in the two claims its consumers
+ * `tests/helpers/route-labels.ts` in the three claims its consumers
  * lean on: that {@link labelsOf} reads a router's own declaration in
- * one vocabulary, and that {@link buildAuthRouterEntry} labels the
- * auth router at the mount `src/index.ts` actually serves it from.
+ * one vocabulary, that {@link buildAuthRouterEntry} labels the auth
+ * router at the mount `src/index.ts` actually serves it from, and
+ * that {@link buildResearchRouters} answers a whole research surface
+ * in which no router has quietly stopped declaring anything.
  *
  * THE WALK IS DRIVEN OVER HAND-BUILT ROUTERS rather than over the
- * seventeen the module builds, and that is the point of this file
+ * seventeen the module builds, and that is the point of those cases
  * rather than a shortcut. The real routers are a moving surface —
  * a route added to any of them changes what a walk over them
  * answers — so a case asserting a figure taken off them measures
@@ -37,8 +39,21 @@
  * {@link buildAuthRouterEntry} carries four labels over three routes;
  * a walk that deduplicated would make that entry look correct while
  * silently changing what every consumer counting handlers reads.
+ *
+ * THE ROSTER CASES DO READ THE REAL ROUTERS, which is the opposite
+ * choice from the walk cases above and a different question. Whether
+ * the walk is correct cannot be asked of a moving surface; whether
+ * that surface is still whole can be asked of nothing else. So the
+ * per-router label counts are pinned as a NAME-KEYED RECORD rather
+ * than as a total: fifty-two stays fifty-two when one router loses a
+ * route and another gains one, and a router that stopped registering
+ * altogether disappears into any single number, where the record
+ * names it. Those counts are expected to move as routes are added,
+ * and that is the reading rather than the cost — a red says WHICH
+ * router moved.
  */
 
+import type { DeclaredRouter } from './route-labels.js';
 import type { Request, Response, NextFunction } from 'express';
 
 import { Router } from 'express';
@@ -46,6 +61,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildAuthRouterEntry,
+  buildResearchRouters,
   labelFor,
   labelsOf,
 } from './route-labels.js';
@@ -80,6 +96,104 @@ function passThrough(
   next: NextFunction,
 ): void {
   next();
+}
+
+/**
+ * A name the research roster answers.
+ *
+ * Present so that the membership readings below are paired: a
+ * refusal on its own is satisfied by an empty roster, where a
+ * refusal beside a name that IS answered is not.
+ */
+const DECLARED_ROUTER = 'domains';
+
+/** A label {@link DECLARED_ROUTER} answers, for the collision plant. */
+const DECLARED_LABEL = 'GET /domains';
+
+/** A name no router answers. The roster's refusal reading. */
+const FABRICATED_ROUTER = 'zz-not-a-router';
+
+/** The name every planted control entry below is added under. */
+const PLANTED_ROUTER = 'zz-planted-router';
+
+/**
+ * How many labels each research router declares, keyed by the name
+ * {@link buildResearchRouters} answers it under.
+ *
+ * Measured off the routers rather than transcribed, and expected to
+ * move: a route added anywhere on the research surface reddens
+ * exactly one entry here. That is the reading rather than the cost.
+ * A total absorbs one router losing a route while another gains one,
+ * and absorbs a router that stopped registering altogether once its
+ * neighbours have grown by as much; keyed by name, the diff says
+ * WHICH router moved.
+ */
+const RESEARCH_LABEL_COUNTS: Readonly<Record<string, number>> = {
+  domains: 5,
+  categories: 4,
+  terms: 4,
+  personas: 4,
+  settings: 2,
+  topics: 6,
+  sources: 4,
+  'source-failures': 1,
+  connectors: 4,
+  exports: 5,
+  findings: 3,
+  documents: 1,
+  entities: 4,
+  runs: 2,
+  spend: 1,
+  proposals: 2,
+};
+
+/**
+ * One roster entry as the record member it is compared under.
+ *
+ * @param entry - A roster entry.
+ * @returns Its name and how many labels it declared.
+ */
+function labelCountOf(entry: DeclaredRouter): [string, number] {
+  return [entry.name, entry.labels.length];
+}
+
+/**
+ * The names of every roster entry declaring no label at all.
+ *
+ * @param entries - A roster, in the shape
+ *   {@link buildResearchRouters} answers.
+ * @returns One name per silent entry, so a failure names the router
+ *   rather than reporting a count that names nobody.
+ */
+function silentRouters(entries: readonly DeclaredRouter[]): string[] {
+  return entries
+    .filter((entry) => entry.labels.length === 0)
+    .map((entry) => entry.name);
+}
+
+/**
+ * Every label a roster answers more than once, with its owners.
+ *
+ * @param entries - A roster, in the shape
+ *   {@link buildResearchRouters} answers.
+ * @returns One `GET /x <- a, b` line per repeated label, sorted, and
+ *   the empty array when the union is distinct. Two routers claiming
+ *   one label and one router repeating its own read the same way,
+ *   which is what the owners are there to tell apart.
+ */
+function duplicatedLabels(entries: readonly DeclaredRouter[]): string[] {
+  const owners = new Map<string, readonly string[]>();
+
+  for (const entry of entries) {
+    for (const label of entry.labels) {
+      owners.set(label, [...(owners.get(label) ?? []), entry.name]);
+    }
+  }
+
+  return [...owners.entries()]
+    .filter(([, names]) => names.length > 1)
+    .map(([label, names]) => `${label} <- ${names.join(', ')}`)
+    .sort();
 }
 
 describe('labelFor', () => {
@@ -201,6 +315,66 @@ describe('labelsOf', () => {
     // right rather than something this walk quietly repairs.
     expect(labelsOf(router, '/api/')).toStrictEqual(['GET /api//things']);
     expect(labelsOf(router, 'api')).toStrictEqual(['GET api/things']);
+  });
+});
+
+describe('buildResearchRouters', () => {
+  it('answers sixteen entries, keyed by router name', () => {
+    const entries = buildResearchRouters();
+
+    expect(entries).toHaveLength(16);
+
+    // The length is not redundant beside the record: two entries
+    // sharing a name collapse into one key, which leaves fifteen
+    // members here and sixteen entries there.
+    const counts = Object.fromEntries(entries.map(labelCountOf));
+
+    expect(counts).toStrictEqual(RESEARCH_LABEL_COUNTS);
+  });
+
+  it('answers at least one label for every entry', () => {
+    const entries = buildResearchRouters();
+
+    expect(silentRouters(entries)).toStrictEqual([]);
+
+    // The zero above is a reading only because the same filter names
+    // a planted entry that declares nothing: a filter that matched
+    // nothing, and a roster that was empty, answer the same [].
+    const planted = [...entries, { name: PLANTED_ROUTER, labels: [] }];
+
+    expect(silentRouters(planted)).toStrictEqual([PLANTED_ROUTER]);
+  });
+
+  it('answers a union carrying no label twice', () => {
+    const entries = buildResearchRouters();
+    const union = entries.flatMap((entry) => [...entry.labels]);
+
+    expect(duplicatedLabels(entries)).toStrictEqual([]);
+
+    // Planted with a label the roster really answers, asserted
+    // present in the same reading, so the zero above cannot be a
+    // detector that only ever matches a fabricated string. Both
+    // owners come back, which is what names the two sides of a
+    // collision rather than merely counting one.
+    const collided = [
+      ...entries,
+      { name: PLANTED_ROUTER, labels: [DECLARED_LABEL] },
+    ];
+
+    expect(union).toContain(DECLARED_LABEL);
+    expect(duplicatedLabels(collided)).toStrictEqual([
+      `${DECLARED_LABEL} <- ${DECLARED_ROUTER}, ${PLANTED_ROUTER}`,
+    ]);
+  });
+
+  it('answers no router under a fabricated name', () => {
+    const names = buildResearchRouters().map((entry) => entry.name);
+
+    // Paired, or the refusal is satisfied by a roster that answered
+    // nothing at all: a name the surface really carries is asserted
+    // present in the same reading.
+    expect(names).toContain(DECLARED_ROUTER);
+    expect(names).not.toContain(FABRICATED_ROUTER);
   });
 });
 
