@@ -4,16 +4,52 @@
  * registrations it is assembled from, and the document itself.
  *
  * The parse is the one thing in `./openapi.ts` with a claim of its
- * own. Everything else there is assembly: a schema it registers came
- * from a binding table and is compared to the table by
- * `tests/invariants/`, while a label it splits wrong becomes a path
- * nothing else reads. So the four parse rows are shapes rather than
- * a sample, and two of them are unreachable from any real label —
+ * own. Everything else there is assembly: a schema it registers
+ * came from a binding table, and the identity case below is where
+ * the two are held together — nothing under `tests/` reads this
+ * registry at all, measured, so the comparison lives here and
+ * nowhere else. A label it splits wrong becomes a path nothing
+ * else reads. So the four parse rows are shapes rather than a
+ * sample, and two of them are unreachable from any real label —
  * no route on this surface carries two parameters, and every label a
  * router produces is uppercased by the helper that builds it. They
  * are here because a document is exactly where an unexercised branch
  * goes unnoticed: half-converting a two-parameter path would render
  * as a literal segment nobody could call.
+ *
+ * THE IDENTITY CASE IS THE GATE ON THE ONE RULE THE ASSEMBLY HAS,
+ * and the reason `toBe` appears in a file otherwise written in
+ * `toStrictEqual`. A binding table names the const its handler
+ * parses with BY IDENTITY, so a registration that RESTATED one —
+ * wrote the same members out a second time instead of binding the
+ * module's own object — would describe a request shape no route is
+ * judged against, with the route still in the document and every
+ * structural compare green. The control is that restatement,
+ * `domainAddressSchema`'s own declaration written out a second
+ * time: two such declarations are `toStrictEqual` to each other
+ * and are different objects, measured, so a structural compare is
+ * satisfied by exactly the fault this case exists to find.
+ *
+ * IT COMPARES TWO RESTATEMENTS RATHER THAN A RESTATEMENT AND THE
+ * BINDING, which is the shape a reader would reach for first, and
+ * the reason is measured. zod installs its instance methods
+ * LAZILY, so a schema the generator has already walked carries own
+ * properties a freshly declared twin does not — `shape` and `meta`
+ * here — and the restatement held against the real binding answers
+ * DIFFERS, with `Compared values have no visual difference`
+ * printed beneath it. `toStrictEqual` on a zod schema therefore
+ * reads which methods have been touched rather than what the
+ * schema describes, which makes it the wrong instrument in both
+ * directions and is the deeper reason the rule gated here is
+ * identity.
+ *
+ * Two readings keep that zero from being a zero over less. The
+ * seventeen tables are transcribed here a second time rather than
+ * read back out of the module under test, and every label the
+ * registry registered is asserted to come from one of them — a
+ * module dropped from the roster would otherwise shrink the
+ * population silently. And the walk answers more members than
+ * there are routes, most routes binding two.
  *
  * One case is deliberately weak and one is what covers it. Asserting
  * that a registration matches its own label parsed — the round trip
@@ -102,7 +138,21 @@
  * Varying the version literal reds the version case. Spelling the
  * server URL with a literal port, and dropping the `servers` entry
  * outright, both red the server case.
+ *
+ * Neither grid was re-run against the identity case, so both
+ * denominators are the case counts at the time they were taken.
+ * That case has a grid of its own, four legs at 26 cases with the
+ * no-patch control at 0. Registering `params` and `query` as a
+ * CLONE of what the table bound, and registering the body as one,
+ * each red EXACTLY it and nothing else, which is the whole claim:
+ * nothing else in this tree can see a re-wrap. Dropping a table
+ * from the assembly reds nine, the identity case among them, six
+ * of the others looking a route up by a label that has gone. And
+ * dropping one module from the roster this file transcribes reds
+ * the identity case alone, through its coverage half rather than
+ * its identity one.
  */
+import type { RouteSchemas } from './http/openapi-bindings.js';
 import type { RouteLabelParts } from './openapi.js';
 import type { RouteConfig } from '@asteasolutions/zod-to-openapi';
 
@@ -111,17 +161,35 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { authRouteSchemas } from './auth/routes.js';
 import { config } from './config.js';
+import { connectorsRouteSchemas } from './connectors/routes.js';
+import { documentsRouteSchemas } from './documents/routes.js';
+import { domainsRouteSchemas } from './domains/routes.js';
+import { entitiesRouteSchemas } from './entities/routes.js';
+import { findingsRouteSchemas } from './findings/routes.js';
 import {
   errorEnvelopeSchema,
   paginatedEnvelopeSchema,
   successEnvelopeSchema,
 } from './http/envelope.js';
+import { slugParamSchema } from './http/schemas.js';
 import {
   buildOpenApiRegistry,
   generateOpenApiDocument,
   parseRouteLabel,
 } from './openapi.js';
+import { personasRouteSchemas } from './personas/routes.js';
+import { runsRouteSchemas } from './runs/routes.js';
+import { spendRouteSchemas } from './runs/spend-routes.js';
+import { settingsRouteSchemas } from './settings/routes.js';
+import { sourceFailuresRouteSchemas } from './sources/failures-routes.js';
+import { sourceProposalsRouteSchemas } from './sources/proposals-routes.js';
+import { sourcesRouteSchemas } from './sources/routes.js';
+import { subscriptionsRouteSchemas } from './subscriptions/routes.js';
+import { categoriesRouteSchemas } from './taxonomy/categories-routes.js';
+import { termsRouteSchemas } from './taxonomy/terms-routes.js';
+import { topicsRouteSchemas } from './topics/routes.js';
 
 type Registry = ReturnType<typeof buildOpenApiRegistry>;
 type Definition = Registry['definitions'][number];
@@ -290,6 +358,180 @@ function responseOf(route: RouteConfig, status: string): Response {
 
   return response;
 }
+
+/** One router module's exported binding table. */
+interface ExportedTable {
+  /** The module under `src/`, as a failure has to name it. */
+  readonly module: string;
+
+  /** What that module exports, read by route label. */
+  readonly table: Readonly<Record<string, RouteSchemas>>;
+}
+
+/**
+ * The seventeen tables, under the modules that declare them.
+ *
+ * Transcribed here a second time on purpose. A roster read back out
+ * of `./openapi.ts` could only ever agree with the module under
+ * test; this is an independent list of what the routers export, and
+ * the case below asserts the registry registered no label a table
+ * here does not carry.
+ */
+const EXPORTED_TABLES: readonly ExportedTable[] = [
+  { module: 'auth', table: authRouteSchemas },
+  { module: 'connectors', table: connectorsRouteSchemas },
+  { module: 'documents', table: documentsRouteSchemas },
+  { module: 'domains', table: domainsRouteSchemas },
+  { module: 'entities', table: entitiesRouteSchemas },
+  { module: 'findings', table: findingsRouteSchemas },
+  { module: 'personas', table: personasRouteSchemas },
+  { module: 'runs', table: runsRouteSchemas },
+  { module: 'runs/spend', table: spendRouteSchemas },
+  { module: 'settings', table: settingsRouteSchemas },
+  { module: 'sources', table: sourcesRouteSchemas },
+  { module: 'sources/failures', table: sourceFailuresRouteSchemas },
+  { module: 'sources/proposals', table: sourceProposalsRouteSchemas },
+  { module: 'subscriptions', table: subscriptionsRouteSchemas },
+  { module: 'taxonomy/categories', table: categoriesRouteSchemas },
+  { module: 'taxonomy/terms', table: termsRouteSchemas },
+  { module: 'topics', table: topicsRouteSchemas },
+];
+
+/** Every label those tables key, for the coverage half below. */
+const EXPORTED_LABELS = new Set(
+  EXPORTED_TABLES.flatMap((entry) => Object.keys(entry.table)),
+);
+
+/** One schema a table binds, named as a failure has to name it. */
+interface NamedBinding {
+  /** `<module> <label> <member>`. */
+  readonly name: string;
+
+  /** The label, which is how the registration is found again. */
+  readonly label: string;
+
+  /** Which half of the request: `params`, `query` or `body`. */
+  readonly member: string;
+
+  /** The object the module's own export holds there. */
+  readonly held: unknown;
+}
+
+/**
+ * Every schema those tables bind, flattened and named.
+ *
+ * @param roster - The tables to read.
+ * @returns One entry per bound member. A route that binds nothing
+ *   contributes none, which `GET /settings` really does.
+ *
+ * @remarks
+ * The spread is what gets the members out at all: `RouteSchemas` is
+ * an interface and carries no index signature, so `Object.entries`
+ * over one answers `any`, where the same call over the anonymous
+ * type a spread produces answers the members.
+ */
+function bindingsExported(
+  roster: readonly ExportedTable[],
+): NamedBinding[] {
+  const bindings: NamedBinding[] = [];
+
+  for (const entry of roster) {
+    for (const [label, binding] of Object.entries(entry.table)) {
+      const bound: Record<string, unknown> = { ...binding };
+
+      for (const [member, held] of Object.entries(bound)) {
+        const name = `${entry.module} ${label} ${member}`;
+
+        bindings.push({ name, label, member, held });
+      }
+    }
+  }
+
+  return bindings;
+}
+
+/**
+ * What the registry registered for one half of a request.
+ *
+ * @param route - A registration.
+ * @param member - `params`, `query` or `body`.
+ * @returns Whatever sits there, unnarrowed: the identity is the
+ *   subject here, so the type is deliberately not asserted. A body
+ *   is reached through its media entry, which the library types as
+ *   a reference OR a media object, so the narrowing is the same one
+ *   {@link bodySchemaOf} makes on the response side.
+ * @throws Error - On any other member name, so a member added to
+ *   `RouteSchemas` and bound by a table fails here rather than
+ *   going quietly uncompared.
+ */
+function registeredMemberOf(route: RouteConfig, member: string): unknown {
+  const request = route.request;
+
+  if (member === 'params') return request?.params;
+  if (member === 'query') return request?.query;
+
+  if (member === 'body') {
+    const media = request?.body?.content[JSON_MEDIA];
+
+    return media !== undefined && 'schema' in media
+      ? media.schema
+      : undefined;
+  }
+
+  throw new Error(`${route.summary ?? ''} binds an unknown ${member}`);
+}
+
+/**
+ * The bindings the registry did NOT register by identity.
+ *
+ * @param bindings - Per {@link bindingsExported}.
+ * @returns One name per binding whose registration is a different
+ *   object from the one its module exports. Empty is the passing
+ *   answer, and any member names the module, the route and the
+ *   half rather than reporting a count.
+ */
+function restatedAmong(bindings: readonly NamedBinding[]): string[] {
+  const moved = bindings.filter((binding) => {
+    const route = routeLabelled(binding.label);
+
+    return registeredMemberOf(route, binding.member) !== binding.held;
+  });
+
+  return moved.map((binding) => binding.name);
+}
+
+/**
+ * One binding out of the walk, by name.
+ *
+ * @param bindings - Per {@link bindingsExported}.
+ * @param name - `<module> <label> <member>`.
+ * @returns That binding.
+ * @throws Error - When nothing carries the name, so a case about a
+ *   binding that has moved fails naming it rather than reading a
+ *   member off `undefined` two lines later.
+ */
+function bindingNamed(
+  bindings: readonly NamedBinding[],
+  name: string,
+): NamedBinding {
+  const found = bindings.find((binding) => binding.name === name);
+
+  if (found === undefined) throw new Error(`no binding named ${name}`);
+
+  return found;
+}
+
+/**
+ * The binding the identity case restates.
+ *
+ * `domainAddressSchema`, which `src/domains/routes.ts` declares as
+ * `z.object({ slug: slugParamSchema }).strict()` and deliberately
+ * keeps private — so the restatement below is that declaration
+ * written out a second time, which is what a registration going
+ * around the table would look like, rather than a schema invented
+ * to fail.
+ */
+const RESTATED_BINDING = 'domains GET /domains/:slug params';
 
 /**
  * The document every case below reads, generated once.
@@ -468,6 +710,49 @@ describe('buildOpenApiRegistry', () => {
     expect(request?.params).toBeInstanceOf(z.ZodObject);
     expect(request?.body?.content[JSON_MEDIA]).toBeDefined();
     expect(request?.query).toBeUndefined();
+  });
+
+  // Identity, over every schema all seventeen tables bind, and the
+  // one rule this assembly has. A table names the const its handler
+  // parses with BY IDENTITY, so a registration that RESTATED one —
+  // wrote the same members out a second time instead of binding the
+  // module's own object — would describe a request shape no route
+  // is judged against, and nothing else in the tree would report
+  // it. The control is that restatement, which is also why the
+  // comparison is `toBe`: two writings of one declaration are
+  // `toStrictEqual` to each other and are not the same object, so
+  // a structural compare is satisfied by exactly the fault this
+  // case exists to find.
+  it('registers the schema each module exports, by identity', () => {
+    const bindings = bindingsExported(EXPORTED_TABLES);
+    const sample = bindingNamed(bindings, RESTATED_BINDING);
+    const restated = z.object({ slug: slugParamSchema }).strict();
+    const twin = z.object({ slug: slugParamSchema }).strict();
+    const unwalked = ROUTES.filter(
+      (route) => !EXPORTED_LABELS.has(route.summary ?? ''),
+    );
+
+    expect(restatedAmong(bindings)).toEqual([]);
+    // What keeps that zero from being a zero over less: no
+    // registered label falls outside the roster above, and the
+    // tables bind more members than there are routes.
+    expect(unwalked.map((route) => route.summary)).toEqual([]);
+    expect(bindings.length).toBeGreaterThan(ROUTES.length);
+    expect(registeredMemberOf(routeLabelled(sample.label), sample.member))
+      .toBe(sample.held);
+
+    // The plant, driven through the same walk the zero came from.
+    // The twin is what says a structural compare would have let it
+    // through: two writings of one declaration are `toStrictEqual`
+    // and are not the same object. It stands in for the binding
+    // itself because zod materialises its instance methods lazily,
+    // so the walked binding carries own properties a fresh twin
+    // does not — see the header.
+    expect(restated).not.toBe(sample.held);
+    expect(restated).toStrictEqual(twin);
+    expect(twin).not.toBe(restated);
+    expect(restatedAmong([{ ...sample, held: restated }]))
+      .toEqual([sample.name]);
   });
 });
 
