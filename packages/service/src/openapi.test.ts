@@ -89,6 +89,51 @@
  * this file reads by a path of its own, so the two mechanisms are
  * independent rather than the module compared with itself.
  *
+ * THE CREDENTIAL CASE IS A ZERO, so most of it is the reading that
+ * keeps the zero from being one over nothing. The walk collects
+ * every value the document DOCUMENTS — whatever sits under an
+ * `example`, `examples`, `default`, `enum` or `const`, flattened
+ * through arrays and objects alike — and refuses one naming a member
+ * the connector mask covers, one under a `config` property that is
+ * not the mask, and one whose text is credential-shaped. Measured
+ * over this document: 83 documented values of which 55 are strings,
+ * the longest thirteen characters, and no fault at all. The
+ * population is asserted non-empty in the same case, because a walk
+ * that collected nothing answers the same zero.
+ *
+ * ITS FOUR PLANTS ARE THE CONTROL, each a CLONE of the real document
+ * carrying one `example` the document does not have, on a member
+ * read out of the real document first — so the plants land on
+ * `properties.config`, `properties.token` and `properties.name` as
+ * this surface actually declares them, and a member that has moved
+ * fails naming the walk rather than planting into a branch nothing
+ * has. Each row is compared whole, reason and position together, so
+ * a fault raised for the wrong reason or at the wrong member is
+ * named rather than counted. The fourth row is the positive control
+ * on the one exemption: the SAME member as the third, carrying
+ * `MASKED_SECRET`, answering nothing — which is what says the rule
+ * refuses a VALUE and not a position.
+ *
+ * The four credential shapes carry a battery of their own in that
+ * case, a pattern that had gone dead being invisible in a zero. Each
+ * row's sample must match its OWN row and no other, and each row's
+ * near miss none at all, which is liveness and distinctness in one
+ * comparison. They are shapes and not vendors on purpose: a roster
+ * of issuer prefixes would be a second authority nothing here
+ * maintains. Which KEYS carry a secret is not a second authority
+ * either — `SECRET_CONFIG_KEYS` is read straight out of
+ * `src/connectors/secrets.ts`, the module `MASKED_SECRET` comes
+ * from.
+ *
+ * ONE OF THOSE RULES IS DELIBERATELY NARROWER THAN IT SOUNDS. A
+ * value is refused for its PATH only where a schema PROPERTY names
+ * the config, not wherever the word appears: two routes here answer
+ * under `/sources/{id}/pending-configs` and
+ * `/sources/{id}/approve-config`, so a substring test over the whole
+ * path claims everything they declare. Measured, 41 strings in this
+ * document sit under a path naming config that way, and every one of
+ * them is a type, a name, a `$ref` or prose.
+ *
  * ONE LIMIT IS WORTH STATING BECAUSE IT IS INVISIBLE. A version
  * written here as a literal that HAPPENS to match the manifest is
  * green, measured — `readServiceVersion()` replaced by the current
@@ -151,6 +196,25 @@
  * dropping one module from the roster this file transcribes reds
  * the identity case alone, through its coverage half rather than
  * its identity one.
+ *
+ * The credential case has a grid of its own, ten legs at 27 cases
+ * with the no-patch control at 0, and NINE of them land on exactly
+ * it. Stopping the walk from descending, emptying the value-key
+ * roster, answering false from either key rule, dropping the mask
+ * exemption, making one shape unmatchable, widening the config rule
+ * to a bare substring over the whole path, reporting a fault at the
+ * wrong position and matching every shape against everything each
+ * red it and nothing else, which is what says the readings inside it
+ * are separate rather than one assertion with decoration. TWO OF
+ * THEM WERE GREEN WHEN FIRST MEASURED and the case grew the readings
+ * that catch them: the descent, because a single string default
+ * outside every enum kept the string count non-zero on its own, and
+ * the narrowing, because nothing this document documents sits under
+ * a URL naming config until a reading goes looking for it. The tenth
+ * leg is on the module rather than on this file — dropping the
+ * connectors table from the assembly reds TWO, this case and the
+ * identity one, because the plants read their member out of the real
+ * document before planting and a member that has gone fails there.
  */
 import type { RouteSchemas } from './http/openapi-bindings.js';
 import type { RouteLabelParts } from './openapi.js';
@@ -164,6 +228,7 @@ import { z } from 'zod';
 import { authRouteSchemas } from './auth/routes.js';
 import { config } from './config.js';
 import { connectorsRouteSchemas } from './connectors/routes.js';
+import { MASKED_SECRET, SECRET_CONFIG_KEYS } from './connectors/secrets.js';
 import { documentsRouteSchemas } from './documents/routes.js';
 import { domainsRouteSchemas } from './domains/routes.js';
 import { entitiesRouteSchemas } from './entities/routes.js';
@@ -597,6 +662,484 @@ function valuesUnder(value: unknown, key: string): unknown[] {
 }
 
 /**
+ * The keys an OpenAPI document writes a VALUE under, as opposed to
+ * a type, a name, a reference or prose.
+ *
+ * `example`, `examples` and `const` are in the roster although this
+ * generator emits none of them today — measured, v9 renders a
+ * `z.literal()` as a single-member `enum` rather than as `const`,
+ * and no schema on this surface carries an example at all. They are
+ * here because the rule below is about where a credential CAN land
+ * in a document of this dialect, and the day one arrives is exactly
+ * the day nobody re-reads this file.
+ */
+const VALUE_KEYS = new Set([
+  'const',
+  'default',
+  'enum',
+  'example',
+  'examples',
+]);
+
+/** One value a document documents, and where it sits. */
+interface DocumentedValue {
+  /** The key path joined, which is how a fault names it. */
+  readonly path: string;
+
+  /** The same path split, which is what the two key rules read. */
+  readonly segments: readonly string[];
+
+  /** The scalar itself. */
+  readonly value: unknown;
+}
+
+/**
+ * Every scalar at or below one documented value.
+ *
+ * @param value - Whatever a value key carries. An `enum` is an
+ *   array and an `examples` an object, so both are flattened rather
+ *   than read as one member, an index becoming a path segment.
+ * @param segments - The key path so far.
+ * @param into - Where the scalars land.
+ */
+function scalarsUnder(
+  value: unknown,
+  segments: readonly string[],
+  into: DocumentedValue[],
+): void {
+  if (value === null || typeof value !== 'object') {
+    into.push({ path: segments.join('.'), segments, value });
+
+    return;
+  }
+
+  const members = Object.entries(value as Record<string, unknown>);
+
+  for (const [key, member] of members) {
+    scalarsUnder(member, [...segments, key], into);
+  }
+}
+
+/**
+ * Walks a document looking for the values it documents.
+ *
+ * @param value - Where the walk is.
+ * @param segments - The key path so far.
+ * @param into - Where {@link scalarsUnder} puts what it finds.
+ */
+function walkForValues(
+  value: unknown,
+  segments: readonly string[],
+  into: DocumentedValue[],
+): void {
+  if (value === null || typeof value !== 'object') return;
+
+  const members = Object.entries(value as Record<string, unknown>);
+
+  for (const [key, member] of members) {
+    const next = [...segments, key];
+
+    if (VALUE_KEYS.has(key)) scalarsUnder(member, next, into);
+    else walkForValues(member, next, into);
+  }
+}
+
+/**
+ * Every value a document documents, at any depth.
+ *
+ * @param document - A generated document, or a planted copy of one.
+ * @returns One entry per scalar under a {@link VALUE_KEYS} member.
+ *   Measured over this surface: 83, of which 55 are strings and the
+ *   longest is thirteen characters.
+ */
+function documentedValuesIn(document: unknown): DocumentedValue[] {
+  const found: DocumentedValue[] = [];
+
+  walkForValues(document, [], found);
+
+  return found;
+}
+
+/**
+ * Whether a collected value is a container rather than a scalar.
+ *
+ * @param value - One documented value.
+ * @returns `true` for an array or an object, either of which the
+ *   walk is supposed to have descended into rather than collected.
+ */
+function isContainer(value: unknown): boolean {
+  return value !== null && typeof value === 'object';
+}
+
+/** The connector mask roster, lower-cased once for the rule below. */
+const SECRET_KEYS = new Set<string>(
+  SECRET_CONFIG_KEYS.map((key) => key.toLowerCase()),
+);
+
+/**
+ * Whether a key path passes through a member the mask covers.
+ *
+ * @param segments - A documented value's path.
+ * @returns `true` when a segment names one of the keys
+ *   `src/connectors/secrets.ts` masks on the way out. That module
+ *   is this repository's one authority for which names carry a
+ *   secret, and it is read here rather than transcribed — the same
+ *   module {@link MASKED_SECRET} comes from.
+ */
+function namesSecret(segments: readonly string[]): boolean {
+  return segments.some((segment) => SECRET_KEYS.has(segment.toLowerCase()));
+}
+
+/**
+ * Whether a key path passes through a schema property named for a
+ * configuration.
+ *
+ * @param segments - A documented value's path.
+ * @returns `true` when a segment immediately under a `properties`
+ *   object is named `config` or ends in it, `parserConfig` on a
+ *   source being the second member of that family.
+ *
+ * @remarks
+ * The `properties` predecessor is load-bearing rather than
+ * decoration, and the measurement says so. Two routes on this
+ * surface answer under paths carrying the word —
+ * `/sources/{id}/pending-configs` and `/sources/{id}/approve-config`
+ * — so a bare substring test over the whole path claims everything
+ * they declare: 41 strings in this document sit under a path naming
+ * config that way, and every one of them is a type, a name, a
+ * `$ref` or a description.
+ */
+function namesConfig(segments: readonly string[]): boolean {
+  for (const [index, segment] of segments.entries()) {
+    if (segments[index - 1] !== 'properties') continue;
+
+    if (segment.toLowerCase().endsWith('config')) return true;
+  }
+
+  return false;
+}
+
+/** One way a documented value reads as a credential. */
+interface CredentialShape {
+  /** What the row is about, and what a fault is named after. */
+  readonly id: string;
+
+  /** What it matches. */
+  readonly pattern: RegExp;
+
+  /** A value it MUST match, so no row can go quietly dead. */
+  readonly sample: string;
+
+  /** A value it must NOT match, varied along that row's own axis. */
+  readonly nearMiss: string;
+}
+
+/** One `Authorization` value written out, and the first plant. */
+const BEARER_SAMPLE = 'Bearer nnnn-not-a-real-credential';
+
+/**
+ * The shapes a credential takes on a wire.
+ *
+ * Shapes rather than vendors on purpose: a roster of issuer
+ * prefixes would be a second authority nothing here maintains, and
+ * these are what a leak looks like whoever issued it. Which KEYS
+ * carry a secret is a different question and is not answered here
+ * — {@link namesSecret} reads the mask roster for that.
+ *
+ * The length floor on the last row is measured rather than picked.
+ * The longest string this document documents is thirteen
+ * characters, so twenty-four clears every enum member the sixteen
+ * groups emit; re-measure it before adding a schema whose legal
+ * values are long and opaque.
+ */
+const CREDENTIAL_SHAPES: readonly CredentialShape[] = [
+  {
+    id: 'bearer-credential',
+    pattern: /bearer\s+\S/i,
+    sample: BEARER_SAMPLE,
+    nearMiss: 'bearer',
+  },
+  {
+    id: 'authority-credential',
+    pattern: /:\/\/[^\s/@]+:[^\s/@]+@/,
+    sample: 'https://svc:nnnn@example.invalid/feed',
+    nearMiss: 'https://example.invalid:8443/feed',
+  },
+  {
+    id: 'private-key-block',
+    pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+    sample: '-----BEGIN PRIVATE KEY-----',
+    nearMiss: '-----BEGIN CERTIFICATE-----',
+  },
+  {
+    id: 'opaque-token',
+    pattern: /(?=[\w-]*[A-Za-z])(?=[\w-]*\d)[\w-]{24,}/,
+    sample: 'aaaa1111bbbb2222cccc3333dddd',
+    nearMiss: 'notification_channels_and_more',
+  },
+];
+
+/** A documented value under a key the connector mask covers. */
+const SECRET_KEY_REASON = 'a member the connector mask covers';
+
+/** A documented string under a config property, unmasked. */
+const CONFIG_REASON = 'an unmasked config member';
+
+/** One credential a document documents, and where. */
+interface CredentialFault {
+  /** Which rule it breaks, or which shape it matches. */
+  readonly reason: string;
+
+  /** The key path, so a failure names the position. */
+  readonly path: string;
+}
+
+/**
+ * Why one documented value is a credential, if it is.
+ *
+ * @param documented - One value out of the walk.
+ * @returns One reason per rule it breaks. Empty is the passing
+ *   answer, and what every value in this document answers.
+ *
+ * @remarks
+ * STRINGS only. A `default: 50` on `?perPage` is a documented value
+ * and cannot be a credential, and reading non-strings would red
+ * this against the twenty-seven numeric defaults the paged routes
+ * already emit.
+ *
+ * {@link MASKED_SECRET} is the one exemption and it is uniform
+ * across both key rules, because it is exactly what a document
+ * SHOULD say a masked member reads as. It exempts the VALUE and
+ * never the position, which is what the fourth plant below reads.
+ */
+function reasonsFor(documented: DocumentedValue): string[] {
+  const { segments, value } = documented;
+
+  if (typeof value !== 'string') return [];
+
+  const masked = value === MASKED_SECRET;
+  const reasons: string[] = [];
+
+  if (namesSecret(segments) && !masked) reasons.push(SECRET_KEY_REASON);
+  if (namesConfig(segments) && !masked) reasons.push(CONFIG_REASON);
+
+  for (const shape of CREDENTIAL_SHAPES) {
+    if (shape.pattern.test(value)) reasons.push(shape.id);
+  }
+
+  return reasons;
+}
+
+/**
+ * Every credential a document documents.
+ *
+ * @param document - A generated document, or a planted copy of one.
+ * @returns One fault per rule broken, carrying the reason and the
+ *   position, so a failure names both rather than reporting a
+ *   count. Empty is the passing answer.
+ */
+function credentialsIn(document: unknown): CredentialFault[] {
+  const found: CredentialFault[] = [];
+
+  for (const documented of documentedValuesIn(document)) {
+    for (const reason of reasonsFor(documented)) {
+      found.push({ reason, path: documented.path });
+    }
+  }
+
+  return found;
+}
+
+/** Where the connectors body documents its operator config. */
+const CONFIG_MEMBER: readonly string[] = [
+  'paths', '/connectors', 'post', 'requestBody', 'content',
+  JSON_MEDIA, 'schema', 'properties', 'config',
+];
+
+/** Where the logout body documents the credential it revokes. */
+const SECRET_MEMBER: readonly string[] = [
+  'paths', '/auth/logout', 'post', 'requestBody', 'content',
+  JSON_MEDIA, 'schema', 'properties', 'token',
+];
+
+/** A member neither key rule is about, for the value-shape row. */
+const NEUTRAL_MEMBER: readonly string[] = [
+  'paths', '/domains', 'post', 'requestBody', 'content',
+  JSON_MEDIA, 'schema', 'properties', 'name',
+];
+
+/** What an operator would have sent, and no rule reads as a shape. */
+const OPERATOR_VALUE = 'whatever the operator sent';
+
+/** One planted example, and the faults the walk must answer with. */
+interface PlantCase {
+  /** What the row is about, and what names it in a failure. */
+  readonly plant: string;
+
+  /** The schema member the planted `example` lands on. */
+  readonly at: readonly string[];
+
+  /** What that example carries. */
+  readonly value: string;
+
+  /** Every reason the walk must answer, in the order it answers. */
+  readonly reasons: readonly string[];
+}
+
+/**
+ * The plants that make the zero above a reading.
+ *
+ * Each lands on a member this surface really declares, which is
+ * what says the walk reaches the depth a leak would sit at rather
+ * than that it can find a value in a document shaped for it. The
+ * last row is the positive control on the one exemption: the SAME
+ * member as the row above it, carrying the mask, answering nothing
+ * — a rule that refused the position rather than the value would
+ * red there.
+ */
+const PLANTED: readonly PlantCase[] = [
+  {
+    plant: 'a credential-shaped example on an ordinary member',
+    at: NEUTRAL_MEMBER,
+    value: BEARER_SAMPLE,
+    reasons: ['bearer-credential'],
+  },
+  {
+    plant: 'an example on a member the connector mask covers',
+    at: SECRET_MEMBER,
+    value: OPERATOR_VALUE,
+    reasons: [SECRET_KEY_REASON],
+  },
+  {
+    plant: 'an unmasked example on a config member',
+    at: CONFIG_MEMBER,
+    value: OPERATOR_VALUE,
+    reasons: [CONFIG_REASON],
+  },
+  {
+    plant: 'the mask itself, on that same config member',
+    at: CONFIG_MEMBER,
+    value: MASKED_SECRET,
+    reasons: [],
+  },
+];
+
+/**
+ * A copy of the real document carrying one example it does not
+ * have.
+ *
+ * @param at - The member the example lands on. Read out of the real
+ *   document first, so a member that has moved fails naming the
+ *   walk rather than planting into a branch nothing has.
+ * @param value - What the planted `example` carries.
+ * @returns The copy. {@link DOCUMENT} is module-scope and every
+ *   other case here reads it, so the plant clones and the case
+ *   asserts it stayed as it was.
+ */
+function documentPlanting(at: readonly string[], value: string): unknown {
+  const planted = structuredClone(DOCUMENT);
+  const target = memberAt(planted, ...at) as Record<string, unknown>;
+
+  target.example = value;
+
+  return planted;
+}
+
+/** One planted row's answer, named so a failure names the row. */
+interface PlantedResult {
+  /** The row, per {@link PlantCase.plant}. */
+  readonly plant: string;
+
+  /** What the walk answered, or what the row says it must. */
+  readonly faults: readonly CredentialFault[];
+}
+
+/**
+ * What the walk answers over one planted document.
+ *
+ * @param row - One {@link PLANTED} row.
+ * @returns The row's name and every fault the walk found.
+ */
+function faultsPlanted(row: PlantCase): PlantedResult {
+  return {
+    plant: row.plant,
+    faults: credentialsIn(documentPlanting(row.at, row.value)),
+  };
+}
+
+/**
+ * What that row says the walk must answer.
+ *
+ * @param row - One {@link PLANTED} row.
+ * @returns The row's name and its reasons, each at the position the
+ *   plant landed on — derived rather than transcribed, so a fault
+ *   raised at the wrong place is named rather than counted.
+ */
+function faultsExpected(row: PlantCase): PlantedResult {
+  const path = [...row.at, 'example'].join('.');
+
+  return {
+    plant: row.plant,
+    faults: row.reasons.map((reason) => ({ reason, path })),
+  };
+}
+
+/**
+ * Which shapes read one value as a credential.
+ *
+ * @param value - A sample or a near miss.
+ * @returns The id of every shape that matches it.
+ */
+function shapesMatching(value: string): string[] {
+  const matched: string[] = [];
+
+  for (const shape of CREDENTIAL_SHAPES) {
+    if (shape.pattern.test(value)) matched.push(shape.id);
+  }
+
+  return matched;
+}
+
+/** One shape's battery reading, named so a failure names the row. */
+interface ShapeReading {
+  /** The row, per {@link CredentialShape.id}. */
+  readonly id: string;
+
+  /** Which shapes its sample matches. */
+  readonly sample: readonly string[];
+
+  /** Which shapes its near miss matches. */
+  readonly nearMiss: readonly string[];
+}
+
+/**
+ * One shape's own battery, read through the same patterns the walk
+ * uses.
+ *
+ * @param shape - One {@link CREDENTIAL_SHAPES} row.
+ * @returns Which shapes its sample and its near miss match. The
+ *   sample answering its own id alone is liveness and distinctness
+ *   at once; the near miss answering nothing is the guard.
+ */
+function shapeReading(shape: CredentialShape): ShapeReading {
+  return {
+    id: shape.id,
+    sample: shapesMatching(shape.sample),
+    nearMiss: shapesMatching(shape.nearMiss),
+  };
+}
+
+/**
+ * What {@link shapeReading} must answer for each row.
+ *
+ * @param shape - One {@link CREDENTIAL_SHAPES} row.
+ * @returns Its own id for the sample and nothing for the near miss.
+ */
+function shapeExpected(shape: CredentialShape): ShapeReading {
+  return { id: shape.id, sample: [shape.id], nearMiss: [] };
+}
+
+/**
  * This package's own manifest, read by a path of its own.
  *
  * The module under test resolves the version through
@@ -821,5 +1364,67 @@ describe('generateOpenApiDocument', () => {
       .toStrictEqual([`http://localhost:${config.PORT}`]);
     expect(explicit.map((server) => server.url))
       .toStrictEqual([`http://localhost:${UNUSED_PORT}`]);
+  });
+
+  // No credential reaches the document, and most of this case is
+  // the reading that keeps that zero from being a zero over
+  // nothing. The walk collects every value the document DOCUMENTS
+  // — whatever sits under an `example`, `examples`, `default`,
+  // `enum` or `const`, flattened through arrays and objects — and
+  // reads three rules over it: a member the connector mask covers,
+  // a config property carrying anything but the mask, and a value
+  // whose text is credential-shaped. The plants are the control on
+  // the zero, each a clone of this document carrying one example
+  // at a member it really declares. The shapes carry a battery of
+  // their own, a pattern that had gone dead being invisible in a
+  // zero.
+  it('documents no credential at any depth', () => {
+    const documented = documentedValuesIn(DOCUMENT);
+    const texts = documented.filter((row) => typeof row.value === 'string');
+    const boxed = documented.filter((row) => isContainer(row.value));
+    const enumed = documented.filter((row) => row.path.includes('.enum.'));
+    const worded = documented.filter((row) => row.path.includes('config'));
+    const reasons = [
+      SECRET_KEY_REASON,
+      CONFIG_REASON,
+      ...CREDENTIAL_SHAPES.map((shape) => shape.id),
+    ];
+
+    expect(credentialsIn(DOCUMENT)).toStrictEqual([]);
+    // What keeps that zero from being a zero over nothing: the
+    // walk really did collect this document. 83 and 55, measured.
+    expect(documented.length).toBeGreaterThan(0);
+    expect(texts.length).toBeGreaterThan(0);
+    // And it DESCENDED. An `enum` is an array and an `examples` an
+    // object, so a walk that collected the container rather than
+    // its members would read a whole enum vocabulary as one value
+    // no rule can match: 54 of this document's 55 documented
+    // strings sit inside an enum, and the single default that does
+    // not is why the string count above cannot report it alone.
+    expect(boxed).toStrictEqual([]);
+    expect(enumed.length).toBeGreaterThan(0);
+    // The config rule reads a schema PROPERTY and never the word.
+    // Two routes here answer under a URL that carries it, and what
+    // they document is ordinary; a substring test claims both.
+    expect(worded.length).toBeGreaterThan(0);
+    expect(worded.filter((row) => namesConfig(row.segments))).toEqual([]);
+    // A fault names one rule, so no two rules may share a name.
+    expect(new Set(reasons).size).toBe(reasons.length);
+
+    // The plants, compared whole — reason and position together,
+    // so one raised for the wrong reason or at the wrong member is
+    // named rather than counted. The fourth row is the exemption's
+    // own control: the same member as the third, carrying the
+    // mask, and answering nothing.
+    expect(PLANTED.map(faultsPlanted))
+      .toStrictEqual(PLANTED.map(faultsExpected));
+    // And they cloned. Every other case in this file reads the
+    // same module-scope document.
+    expect(documentedValuesIn(DOCUMENT).length).toBe(documented.length);
+
+    // Every shape matches its own sample and no other row's, and
+    // none of them matches a near miss.
+    expect(CREDENTIAL_SHAPES.map(shapeReading))
+      .toStrictEqual(CREDENTIAL_SHAPES.map(shapeExpected));
   });
 });
