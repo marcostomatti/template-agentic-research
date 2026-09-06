@@ -236,10 +236,9 @@ export const paginationMetaSchema = z.object({
  * that a success body carries these two members, that `success` is
  * the discriminator, and that whatever was answered sits under
  * `data`. Per-record response schemas are deferred rather than
- * forgotten, and this paragraph is the whole of that record until the
- * not-enforced row naming the deferral lands in the register in
- * `docs/architecture/01-invariants.md`, which carries no such row
- * today.
+ * forgotten, and the register in `docs/architecture/01-invariants.md`
+ * carries the not-enforced row that records the deferral; this
+ * paragraph is the argument that row points back at.
  *
  * An open `data` is not an ABSENT one. Measured under the zod 4.5.1
  * in this tree, `z.unknown()` still requires the key: a body with no
