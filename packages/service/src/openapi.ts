@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
- * The OpenAPI registry, assembled from the seventeen binding tables
- * and from nothing else.
+ * The OpenAPI registry and the 3.1 document generated from it,
+ * assembled from the seventeen binding tables and from nothing else.
  *
  * Every router module exports one table keyed by the labels of the
  * routes it declares — `GET /domains/:slug` and its fifty-four
@@ -88,6 +88,18 @@
  * table this module reads. That split is also why the two rosters
  * below are separate, exactly as `tests/helpers/route-labels.ts`
  * keeps its auth entry apart from the sixteen it walks.
+ *
+ * THE DOCUMENT WRITES DOWN TWO FACTS THAT LIVE ELSEWHERE, and
+ * neither is spelled here as a literal. `info.version` comes from
+ * `readServiceVersion`, the same function `GET /_control/status`
+ * reports through, so the version a document claims and the version
+ * a running service reports cannot drift apart; it reads the nearest
+ * `package.json` above the framework module it lives in, which in a
+ * normal checkout is this package's own manifest. The `servers`
+ * entry is built from `config.PORT`, the port `src/index.ts` hands
+ * `createService`, so a deployment that moves the port moves the
+ * document with it. Everything else under `info` is prose about
+ * this surface and belongs nowhere but here.
  */
 import type { RouteSchemas } from './http/openapi-bindings.js';
 import type {
@@ -95,10 +107,16 @@ import type {
   RouteConfig,
 } from '@asteasolutions/zod-to-openapi';
 
-import { OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
+import {
+  OpenAPIRegistry,
+  OpenApiGeneratorV31,
+} from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 
+import { readServiceVersion } from '../lib/express/control/version.js';
+
 import { authRouteSchemas } from './auth/routes.js';
+import { config } from './config.js';
 import { connectorsRouteSchemas } from './connectors/routes.js';
 import { documentsRouteSchemas } from './documents/routes.js';
 import { domainsRouteSchemas } from './domains/routes.js';
@@ -530,4 +548,89 @@ export function buildOpenApiRegistry(): OpenAPIRegistry {
   registerTable(registry, AUTH_TABLE, bareResponses);
 
   return registry;
+}
+
+/**
+ * The dialect the generated document declares itself in.
+ *
+ * `OpenApiGeneratorV31` and not `OpenApiGeneratorV3`, because 3.1 is
+ * the version whose JSON Schema dialect matches what zod 4 emits: a
+ * positive integer renders `exclusiveMinimum: 0`, the numeric 3.1
+ * spelling, where 3.0 wants a `minimum` beside a boolean flag.
+ * Measured on `?page`, which every paged route parses.
+ */
+const OPENAPI_DIALECT = '3.1.0';
+
+/** What a reader meets at the top of the rendered document. */
+const DOCUMENT_TITLE = 'agentic-research service API';
+
+const DOCUMENT_DESCRIPTION = 'Every route this service declares, '
+  + 'assembled from the schemas its routers parse requests with. What '
+  + 'a route READS is described per route. What it ANSWERS is '
+  + 'described once for the whole surface: the status lives in the '
+  + 'handler, where no generator can see it.';
+
+const SERVER_DESCRIPTION = 'The service on the port it was '
+  + 'configured with. A deployment behind a proxy answers somewhere '
+  + 'else, and nothing here knows where.';
+
+/**
+ * A generated document, typed as the generator itself types it.
+ *
+ * `ReturnType` rather than an import of the `openapi3-ts/oas31` that
+ * declares the shape: that package is a dependency of the generator
+ * and not of this one, so under the isolated linker it sits in the
+ * generator's store directory and no specifier here resolves to it.
+ * Reading the type off the method needs no second dependency and
+ * cannot drift from what the generator actually answers.
+ */
+export type OpenApiDocument =
+  ReturnType<OpenApiGeneratorV31['generateDocument']>;
+
+/**
+ * The OpenAPI 3.1 document this surface publishes.
+ *
+ * @param port - The port the one `servers` entry names. Defaults to
+ *   `config.PORT`, the port `src/index.ts` hands `createService`;
+ *   passed explicitly it documents the port a proxy publishes, and
+ *   it is what lets a case read the derivation rather than compare
+ *   this module's answer against this module's own input.
+ * @returns A document over a fresh registry, carrying one operation
+ *   per binding-table key.
+ * @throws TypeError - From {@link parseRouteLabel} or the object
+ *   narrowing above, when a table carries a label or a binding this
+ *   module cannot describe. A table that cannot be registered is a
+ *   route missing from the document, which is the one fault a
+ *   document is least able to show.
+ *
+ * @remarks
+ * `info.version` is {@link readServiceVersion} and not a literal, so
+ * the version this document claims is the version
+ * `GET /_control/status` reports; it resolves from the nearest
+ * `package.json` above the framework module that owns it, which in a
+ * normal checkout is this package's own.
+ *
+ * Fresh on every call, for the reason {@link buildOpenApiRegistry}
+ * gives: the generator is constructed over one registry's
+ * definitions, and a registry is an accumulator.
+ */
+export function generateOpenApiDocument(
+  port: number = config.PORT,
+): OpenApiDocument {
+  const generator = new OpenApiGeneratorV31(
+    buildOpenApiRegistry().definitions,
+  );
+
+  return generator.generateDocument({
+    openapi: OPENAPI_DIALECT,
+    info: {
+      title: DOCUMENT_TITLE,
+      version: readServiceVersion(),
+      description: DOCUMENT_DESCRIPTION,
+    },
+    servers: [{
+      url: `http://localhost:${port}`,
+      description: SERVER_DESCRIPTION,
+    }],
+  });
 }

@@ -1,6 +1,7 @@
 /**
- * `parseRouteLabel` and `buildOpenApiRegistry` — the label the
- * document restates, and the registrations it is assembled from.
+ * `parseRouteLabel`, `buildOpenApiRegistry` and
+ * `generateOpenApiDocument` — the label the document restates, the
+ * registrations it is assembled from, and the document itself.
  *
  * The parse is the one thing in `./openapi.ts` with a claim of its
  * own. Everything else there is assembly: a schema it registers came
@@ -40,47 +41,87 @@
  * schema whose `.openapi()` throws, and the registered component's
  * id read beside the three exports that must carry none.
  *
- * Mutation grid, eleven legs over the module, measured at the 20
- * cases here and restored byte-identical. `red` counts cases; `tsc`
- * counts diagnostics from `bun x tsc --noEmit`, and TS6133 is what a
- * leg that leaves a helper uncalled answers with rather than
- * anything about the claim under test.
+ * The document cases read three things the registry cases cannot.
+ * The dialect is asserted twice over — the `openapi` field, which
+ * is only the constant handed to the generator, and beside it the
+ * NUMERIC `exclusiveMinimum` the 3.1 emission uses where 3.0 wants a
+ * boolean flag, which is the half that says `OpenApiGeneratorV31`
+ * actually ran. Every component the document hoists is asserted as a
+ * SET, because `generateDocument` answers `components.schemas` as an
+ * empty object when nothing is registered and a defined-ness check
+ * would pin nothing. And the version is compared against a manifest
+ * this file reads by a path of its own, so the two mechanisms are
+ * independent rather than the module compared with itself.
  *
- * Returning the path unconverted answers red=4 — three parse rows
- * and the colon case, the round trip green as above. Dropping the
- * `g` flag so only the first parameter is rewritten reds exactly
- * ONE, the two-parameter row, which is that row's whole reason to
- * exist. Not lowercasing the verb is the odd leg: every label then
- * fails the membership test, `buildOpenApiRegistry` throws while
- * this file is still importing, and vitest reports red=0 of 0 with
- * the SUITE failed — the shape a leg that killed collection takes,
- * and not a leg nothing covers. Calling `extendZodWithOpenApi`
- * reds 1, the prototype case, and nothing else at either gate.
+ * ONE LIMIT IS WORTH STATING BECAUSE IT IS INVISIBLE. A version
+ * written here as a literal that HAPPENS to match the manifest is
+ * green, measured — `readServiceVersion()` replaced by the current
+ * `0.1.0` reds nothing at all, where the same replacement varied to
+ * `9.9.9` reds the version case. No case can tell a correct literal
+ * from a read; what the case does report is a literal left behind
+ * when the manifest moves, which is the failure that actually
+ * happens.
+ *
+ * Mutation grid, eleven legs over the module, measured at the 20
+ * cases this file then had and restored byte-identical. `red` counts
+ * cases; `tsc` counts diagnostics from `bun x tsc --noEmit`, and
+ * TS6133 is what a leg that leaves a helper uncalled answers with
+ * rather than anything about the claim under test.
+ *
+ * Returning the path unconverted answered red=4 then and red=5 now —
+ * three parse rows, the colon case and the document paths case, the
+ * round trip green as above. Dropping the `g` flag so only the first
+ * parameter is rewritten reds exactly ONE, the two-parameter row,
+ * which is that row's whole reason to exist. Not lowercasing the
+ * verb is the odd leg: every label then fails the membership test,
+ * `buildOpenApiRegistry` throws while this file is still importing,
+ * and vitest reports red=0 of 0 with the SUITE failed — the shape a
+ * leg that killed collection takes, and not a leg nothing covers.
+ * Calling `extendZodWithOpenApi` reds 1, the prototype case, and
+ * nothing else at either gate.
  *
  * The assembly legs each land on one case. Declaring the `422`
  * unconditionally reds the pair that reads `GET /settings` against
  * `GET /domains`; giving the auth mount the envelope responses reds
  * the case that asserts a described-but-unnamed body; tagging every
  * group `domains` reds the tag case; and dropping the id from the
- * error envelope reds 2, the components case and the control beside
- * the untagged exports. Two legs are wider by construction: not
- * registering the auth table reds 3, since two cases look a route up
- * by a label that has gone, and registering the path as the summary
- * reds 8 for the same reason — a lookup that throws is the design,
- * so those counts are the helper working rather than over-coupling.
+ * error envelope reds 3 now against 2 then, the two components cases
+ * and the control beside the untagged exports. Two legs are wider by
+ * construction: not registering the auth table reds 3, since two
+ * cases look a route up by a label that has gone, and registering
+ * the path as the summary reds 8 for the same reason — a lookup that
+ * throws is the design, so those counts are the helper working
+ * rather than over-coupling. The remaining seven legs were not
+ * re-run against the five cases added here, so their figures are as
+ * first measured.
+ *
+ * Six further legs, over the document half, each landing on exactly
+ * one case with the no-patch control at 0 of 25. Declaring the
+ * dialect `3.0.3` and constructing an `OpenApiGeneratorV3` instead
+ * both red the dialect case, one through each of its two halves.
+ * Varying the version literal reds the version case. Spelling the
+ * server URL with a literal port, and dropping the `servers` entry
+ * outright, both red the server case.
  */
 import type { RouteLabelParts } from './openapi.js';
 import type { RouteConfig } from '@asteasolutions/zod-to-openapi';
 
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { config } from './config.js';
 import {
   errorEnvelopeSchema,
   paginatedEnvelopeSchema,
   successEnvelopeSchema,
 } from './http/envelope.js';
-import { buildOpenApiRegistry, parseRouteLabel } from './openapi.js';
+import {
+  buildOpenApiRegistry,
+  generateOpenApiDocument,
+  parseRouteLabel,
+} from './openapi.js';
 
 type Registry = ReturnType<typeof buildOpenApiRegistry>;
 type Definition = Registry['definitions'][number];
@@ -250,6 +291,80 @@ function responseOf(route: RouteConfig, status: string): Response {
   return response;
 }
 
+/**
+ * The document every case below reads, generated once.
+ *
+ * Once rather than per case because generation walks all seventeen
+ * tables, and because the two cases that vary the port build their
+ * own anyway.
+ */
+const DOCUMENT = generateOpenApiDocument();
+
+/** A port no configuration here uses, for the derivation case. */
+const UNUSED_PORT = 41999;
+
+/**
+ * One member of a nested plain-object value, unnarrowed.
+ *
+ * @param value - Where the walk starts.
+ * @param keys - One key per level.
+ * @returns Whatever sits there.
+ * @throws Error - As soon as a level is absent, so a case about a
+ *   member that has moved fails naming the walk rather than reading
+ *   a property off `undefined` two lines later.
+ */
+function memberAt(value: unknown, ...keys: readonly string[]): unknown {
+  let cursor = value;
+
+  for (const key of keys) {
+    if (cursor === null || typeof cursor !== 'object') {
+      throw new Error(`no ${keys.join('.')} in the document`);
+    }
+
+    cursor = (cursor as Record<string, unknown>)[key];
+
+    if (cursor === undefined) {
+      throw new Error(`no ${keys.join('.')} in the document`);
+    }
+  }
+
+  return cursor;
+}
+
+/**
+ * Every value one key carries anywhere below a document.
+ *
+ * @param value - Where the walk starts.
+ * @param key - The key to collect.
+ * @returns One entry per occurrence, at any depth, arrays included.
+ *
+ * @remarks
+ * The walk does NOT descend into a value it has just collected,
+ * which is what keeps a nested homonym from being counted twice. No
+ * key read here nests inside itself today; the rule is written down
+ * because a reader cannot tell from the call site.
+ */
+function valuesUnder(value: unknown, key: string): unknown[] {
+  if (value === null || typeof value !== 'object') return [];
+
+  const members = Object.entries(value as Record<string, unknown>);
+
+  return members.flatMap(([name, member]) => (name === key
+    ? [member]
+    : valuesUnder(member, key)));
+}
+
+/**
+ * This package's own manifest, read by a path of its own.
+ *
+ * The module under test resolves the version through
+ * `readServiceVersion`, which walks up from a framework module in
+ * `lib/`; this reads the file directly, relative to this test. Two
+ * different mechanisms agreeing is what makes the version case a
+ * reading rather than a comparison of the module against itself.
+ */
+const MANIFEST = new URL('../package.json', import.meta.url);
+
 describe('parseRouteLabel', () => {
   for (const { shape, label, parsed } of PARSED) {
     it(`parses ${shape}`, () => {
@@ -373,5 +488,53 @@ describe('the zod instance this module shares', () => {
     expect(paginatedEnvelopeSchema.meta()).toBeUndefined();
     expect(errorEnvelopeSchema.meta()).toBeUndefined();
     expect(componentIdOf(registered)).toBe('ErrorEnvelope');
+  });
+});
+
+describe('generateOpenApiDocument', () => {
+  it('declares the 3.1 dialect and emits in it', () => {
+    const bounds = valuesUnder(DOCUMENT, 'exclusiveMinimum');
+
+    expect(DOCUMENT.openapi.startsWith('3.1')).toBe(true);
+    expect(bounds.length).toBeGreaterThan(0);
+    expect(bounds.every((bound) => typeof bound === 'number')).toBe(true);
+  });
+
+  it('carries a non-empty paths object, every path converted', () => {
+    const paths = Object.keys(DOCUMENT.paths ?? {});
+
+    expect(paths.length).toBeGreaterThan(0);
+    expect(paths).toContain('/domains/{slug}');
+    expect(paths.filter((path) => path.includes(':'))).toStrictEqual([]);
+  });
+
+  it('names the three envelope components and no fourth', () => {
+    const schemas = Object.keys(DOCUMENT.components?.schemas ?? {});
+
+    expect(new Set(schemas)).toStrictEqual(new Set([
+      'SuccessEnvelope',
+      'PaginatedEnvelope',
+      'ErrorEnvelope',
+    ]));
+  });
+
+  it('reads its version from the package manifest', () => {
+    const raw = readFileSync(MANIFEST, 'utf8');
+    const manifest: unknown = JSON.parse(raw);
+    const declared = memberAt(manifest, 'version');
+
+    expect(declared).toBeTypeOf('string');
+    expect(DOCUMENT.info.version).toBe(declared);
+  });
+
+  it('derives its one server from the port it is handed', () => {
+    const configured = generateOpenApiDocument().servers ?? [];
+    const explicit = generateOpenApiDocument(UNUSED_PORT).servers ?? [];
+
+    expect(config.PORT).not.toBe(UNUSED_PORT);
+    expect(configured.map((server) => server.url))
+      .toStrictEqual([`http://localhost:${config.PORT}`]);
+    expect(explicit.map((server) => server.url))
+      .toStrictEqual([`http://localhost:${UNUSED_PORT}`]);
   });
 });
