@@ -25,4 +25,5 @@ export * from './PasskeyPrompt';
 export * from './RowStatCard';
 export * from './SectionCard';
 export * from './SmallStatCard';
+export * from './TreeNav';
 export * from './UsageChart';

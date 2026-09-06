@@ -150,11 +150,12 @@
  * and it obeys the quoting rule above: two counts and this module's
  * own words, with nothing off the block in it.
  *
- * ## Two presentations, one draft
+ * ## Three presentations, one draft
  *
- * The editor draws a category two ways — the three buckets above,
- * and the payload itself in a box — and a control switches between
- * them. {@link termPresentationOptions} is that control's vocabulary,
+ * The editor draws a category three ways — the three buckets above,
+ * the payload as one labelled control per member, and the payload
+ * itself in a box — and a control switches between them.
+ * {@link termPresentationOptions} is that control's vocabulary,
  * {@link termPresentationIndex} is where it sits, and
  * {@link readTermPresentation} reads its answer back: the same pair
  * {@link termPolarityOptions} and {@link readTermPolarity} make for
@@ -162,14 +163,14 @@
  * POSITION, and a fallback in the narrowing would be this module
  * choosing a presentation on the operator's behalf.
  *
- * {@link toTermPayload} and {@link withTermPayload} are what make the
- * two write the ONE draft, which is the whole point of offering both:
- * an edit made in either is an edit the other opens on. The payload
- * carries no `id` and no `categoryId` — `./schema.ts` says at length
- * why those are the members an operator may not change — so it is a
- * category's VOCABULARY rather than its rows, and re-associating an
- * edited payload with the rows it is a reading of falls here, to the
- * module holding both.
+ * {@link toTermPayload} and {@link withTermPayload} are what make all
+ * three write the ONE draft, which is the whole point of offering
+ * them: an edit made in one is an edit the other two open on. The
+ * payload carries no `id` and no `categoryId` — `./schema.ts` says
+ * at length why those are the members an operator may not change —
+ * so it is a category's VOCABULARY rather than its rows, and
+ * re-associating an edited payload with the rows it is a reading of
+ * falls here, to the module holding both.
  *
  * That association is BY POSITION, because position is the only thing
  * a payload carries. Three consequences, each deliberate:
@@ -240,6 +241,12 @@ const EMPTY_BLOCK_SENTENCE = 'That block held nothing to read.';
  *
  * The template first, because it is what an operator wants unless the
  * payload has outgrown it — the header says what the fallback is for.
+ * The box LAST for the other half of that sentence, and the fields
+ * between them: the order runs from the drawing that knows the most
+ * about a category's shape to the one that knows nothing about it, so
+ * each is reached only where the one before it has run out. Adding a
+ * member is therefore a question about how much it assumes and not
+ * about where there is room.
  *
  * A list rather than a record, because the ORDER is the whole of what
  * this table is: a control draws its options left to right and reports
@@ -250,6 +257,7 @@ const EMPTY_BLOCK_SENTENCE = 'That block held nothing to read.';
  */
 const PRESENTATION_ORDER: readonly TermPresentation[] = [
   'template',
+  'fields',
   'json',
 ];
 
@@ -262,12 +270,19 @@ const PRESENTATION_ORDER: readonly TermPresentation[] = [
  *
  * 'Buckets' rather than 'Template': the operator is looking at three
  * lists of terms, and the word this file uses for the code's sake is
- * not the word on the screen. 'JSON' is the payload's own name and
- * there is no plainer one — a box showing punctuation is what the
- * fallback IS, and calling it 'Advanced' would hide that.
+ * not the word on the screen. 'Fields' for the same reason — what is
+ * on the screen is one labelled box per member, where 'Form' would
+ * name the mechanism drawing them. 'JSON' is the payload's own name
+ * and there is no plainer one — a box showing punctuation is what
+ * the fallback IS, and calling it 'Advanced' would hide that.
+ *
+ * No two of them are the same word, which is what the control needs:
+ * the segments carry no other name, so two presentations sharing a
+ * label would be two tabs an operator cannot tell apart.
  */
 const PRESENTATION_LABELS: Readonly<Record<TermPresentation, string>> = {
   template: 'Buckets',
+  fields: 'Fields',
   json: 'JSON',
 };
 
@@ -331,14 +346,29 @@ export interface TermPolarityOption {
 }
 
 /**
- * Which of the editor's two drawings of a category is on screen.
+ * Which of the editor's three drawings of a category is on screen.
  *
  * `template` is the three buckets and the paste panel under them;
- * `json` is the payload in a box. Both write the one draft — the
+ * `fields` is the payload as one labelled control per member; `json`
+ * is the payload in a box. All three write the one draft — the
  * header says how — so this names a PRESENTATION and never a mode
  * with rules of its own.
+ *
+ * Two tables answer to this union and NEITHER reports what the other
+ * does. {@link PRESENTATION_LABELS} is keyed by it, so a member added
+ * here and nowhere else is a key the compiler demands rather than a
+ * drawing the control quietly stops offering.
+ * {@link PRESENTATION_ORDER} is typed by it, so a spelling that
+ * outlived the union is an error at the roster rather than an entry
+ * the control goes on drawing.
+ *
+ * {@link TermPresentationOption} carries the union a THIRD time, at
+ * the key the control reports back, and widening that one to `string`
+ * is the direction neither table reports — both go on compiling,
+ * and every option keeps its spelling. The colocated test crosses the
+ * two names in opposite positions for it.
  */
-export type TermPresentation = 'template' | 'json';
+export type TermPresentation = 'template' | 'fields' | 'json';
 
 /**
  * What the presentation control offers.

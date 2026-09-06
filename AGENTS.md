@@ -9,7 +9,7 @@ expose/export results over multiple formats/protocols (MCP, Markdown, RSS, …).
 | Path | Package | What it is |
 |---|---|---|
 | `packages/ui` | `@ar/ui` | Component library (CVA + Tailwind 4 + Radix), Storybook workbench, visual regression harness. Vendored fork of the `components-library` template. |
-| `packages/web` | `@ar/web` | The web app (Vite + React 19 + react-router v8), consumes `@ar/ui`. Fixture-backed: the shell, all six surfaces and the seven modal sub-routes run with no backend, writes included — an editor's save lands in a session draft store that lives for the tab and is deleted with the fixture modules. Its own `AGENTS.md` carries the two route bases, the API swap seam, and the test seam's two runners and two Playwright configs. |
+| `packages/web` | `@ar/web` | The web app (Vite + React 19 + react-router v8), consumes `@ar/ui`. Fixture-backed: the shell, all six surfaces and the seven modal sub-routes run with no backend, writes included — an editor's save lands in a session draft store that lives for the tab and is deleted with the fixture modules. `src/dynamic-form/` draws an editable value from a `FieldDef` list and a zod schema — a tree of the value's structure beside ONE flat form for the selected node, over `@ar/ui`'s `TreeNav`. The lexicon term editor is the only caller so far, drawing it as the middle of three presentations over one draft, between the fixed template and the JSON fallback that still stands beside it. The package's own `AGENTS.md` carries the two route bases, the API swap seam, and the test seam's two runners and two Playwright configs. |
 | `packages/service` | `@ar/service` | Express + MCP service (drizzle/Postgres), vendored fork of the `template-service-express` template. Future home of the research pipeline stack (workflows, sources, exports). |
 | `tools/ralph` | — | The agent task loop (`bun run ralph plan|start|usage` from the repo root). Plans/trackers live in `.plans/`. |
 
@@ -132,6 +132,18 @@ wanted in both places must be made in both repos.
   the reflow. The repairs that keep both the rule and the width are a
   `function` declaration (no `func-style` rule is configured anywhere here)
   or hoisting a nested callback's inner list to a module-scope const.
+- The `type` block and the VALUE block demand OPPOSITE orders for the SAME
+  two modules, and one file carrying both looks inconsistent while being
+  the only green spelling. Measured both ways in one test file: putting a
+  PARENT type import first is `type import should occur after type import
+  of './schema'`, and putting that same module's VALUE import after a
+  sibling is `import should occur before import of './cards'`. So the type
+  block is sibling-then-parent and the value block is parent-then-sibling,
+  in one file, both required. The related first-write error is a missing
+  BLANK LINE rather than a wrong order, the value block's parent and
+  sibling imports being two groups. Write it, run `lint`, and take the
+  order from the MESSAGE — every attempt to reason it out of the `groups`
+  array has been wrong here.
 - Two `@stylistic` rules put a hard ARITHMETIC ceiling on a vitest title and
   on any supertest chain, and `lint:fix` repairs neither the way you want.
   `function-paren-newline` refuses the two-line `it('long title',\n
@@ -538,13 +550,21 @@ reading).
   probe. Read each control's file SET individually.
 - One of those four controls IS dead here, and the tell is the file SET
   rather than the count: the origin HOST needle has no legitimate near
-  neighbour in this tree at all. The other three do discriminate
-  (prefix-without-lookbehind: 15 hits, 1 third-party;
-  note-app-without-scheme: 33 across 16;
-  path-segment-without-slashes: 27 across 3). So say which zeros are backed
-  by a live control and which rest on the planted sample ALONE — a blanket
-  "the controls proved the guards discriminate" is false of the host needle
-  every time.
+  neighbour in this tree at all. The other three do discriminate, and
+  their counts are SNAPSHOTS that grow with the tree rather than
+  properties of the guards — re-derive them. Measured at 780 tracked
+  files: prefix-without-lookbehind 15 hits / 1 third-party,
+  note-app-without-scheme 33 across 16, path-segment-without-slashes 27
+  across 3. Re-measured at 1038, after phase 6's export and renderer
+  modules landed: 15 / 1 UNCHANGED, then 162 hits across 44 files and
+  202 across 16. Only the first is stable, so a stage holding either of
+  the others against a quoted figure reports a correct control as a
+  regression. Mind the shape too — a `git grep` figure counts LINES
+  while a `findForbiddenMatches` probe counts one record per HIT (150
+  and 187 lines respectively for those two). So say which zeros are
+  backed by a live control and which rest on the planted sample ALONE
+  — a blanket "the controls proved the guards discriminate" is false
+  of the host needle every time.
 - The `packages/ui` bucket is a SEPARATE probe from `findForbiddenMatches`
   and needs its OWN fragment-built planted control, taken from
   `packages/ui/eslint.config.mjs`'s `BANNED_SOURCE_SCOPE` and
@@ -602,6 +622,64 @@ reading).
   nothing about whether the NEEDLE is right. What catches a mis-derived
   needle is the fragment count held against the array's arity, plus the real
   tree's own carried-in hits being non-zero.
+- Three derivation faults make a five- or seven-needle sweep report a
+  clean zero it did not earn, and none is visible in the planted control.
+  `FORBIDDEN_PATTERNS`'s entries carry `source` as a STRING field and NOT
+  a compiled RegExp, so the reflexive `p.pattern.source` dies as
+  `TypeError: undefined is not an object`, which reads as a broken
+  invariant helper rather than as a wrong field name — read `p.source`.
+  The `origin-prefix` entry is guarded by a NEGATIVE lookbehind `(?<!...)`
+  and not the `(?<=` form the drop-the-guard prose implies, so a
+  plantable-literal derivation stripping only `^\(\?<=` leaves the guard
+  standing and the control comes back 4 of 5 ids — which reads as one
+  needle legitimately having no plantable form. Strip
+  `^\(\?<[=!][^)]*\)`, hold the id COUNT against
+  `FORBIDDEN_PATTERNS.length` with the MISSING ids NAMED, and inspect such
+  an entry by MASKING its alphanumerics
+  (`source.replace(/[a-z0-9]/gi,'a')`) rather than printing it. And
+  deriving the two `packages/ui` needles from the RESOLVED eslint config
+  instead of from the declaring ARRAY LITERAL is a live-LOOKING
+  under-report: importing that config from a `/tmp` probe WORKS, and the
+  two needles sit right there in `no-restricted-imports`'s
+  `patterns[].group`, but glob-DECORATED and two characters longer
+  apiece, with no array left to hold a fragment count against. Measured
+  over 1062 tracked files, the decorated pair answers 1 hit / 1 file EACH
+  where the array-literal derivation answers 1/1 and 6/5 — so the scope
+  needle looks right by luck and the repo needle misses five of its six.
+  Read the declaring file as TEXT.
+- The four near-neighbour controls are ONE parse of the declaring module
+  rather than four hand-written guard edits, which is what keeps
+  `chosen per needle` from collapsing into `guessed per needle`: strip the
+  leading lookbehind from the entry's own `source` for the prefix, take
+  `frags[0]` for the host and for the URI (which is what drops the scheme
+  separator), and take the NON-delimiter fragments for the path segment.
+  Measured at 1062 tracked files, reported as THIRD-PARTY files because
+  the declaring modules hit every control by construction: prefix 15 hits
+  / 1 third-party LIVE, host 2 / 0 DEAD, uri 162 / 42 LIVE, path 202 / 14
+  LIVE.
+- The cheap attribution above (`git log -1 -- <path>` naming an older
+  commit, plus `git diff ——name-only <base>..HEAD -- packages/ui`
+  answering nothing) is UNAVAILABLE to any branch that legitimately edits
+  that package or either `AGENTS.md`, and both legs then answer
+  `the branch touched it` for a hit it did not introduce. The reading that
+  survives is per-PATH with the base side in the SAME probe: run the
+  matcher over `git show <base>:<path>` and over the working copy, hold
+  the hit COUNT per `(patternId, path)` equal, and compare the two hit
+  LINES for byte equality. The line-DROPPED diff must be a COUNT and not a
+  second membership SET, for a reason beyond settling a moved line — a
+  path carrying TWO hits collapses to ONE member under a set, so a
+  set-keyed second diff stays green when one of the two vanishes
+  (measured: one README carries 2 and an eight-hit tree answers SEVEN
+  keys). Measured at the q17 tip: both branch-touched law statements
+  carried in, one moving 201 —> 251 under a byte-identical line while the
+  other stayed at 363.
+- After writing a scan RESULT into a document, sweep that document with
+  the SAME matcher — a close-out that records forbidden-name findings is
+  exactly where a needle gets retyped into a tracked file. The live
+  control that costs nothing: spike a COPY of the real document content
+  with one derived literal per line and require every id back, rather than
+  planting into a toy sample. Control and sweep then differ only by the
+  spike, which is what makes the zero a reading instead of a dead needle.
 - On a tree that already carries legitimate hits there is no zero to lean
   on, and the only reading separating yours from carried-in is a
   before/after hit SET diff taken with the SAME matcher:
@@ -798,6 +876,17 @@ red package never masks another and a single run gives the whole picture.
   147/18/4 across levels 30/40/50, level 50 being exactly the framework's
   four vendored error-path records and level 40 the app's route refusals
   plus one framework case.
+- The two needles in that rule are NOT equally unusable, and the difference
+  is one space. Measured across a GREEN and a RED `test:all` at ONE commit:
+  the space-delimited ` FAIL ` answered 0 on the green capture and 1 on the
+  red, naming the failing file, where `failed` answered 22 on that SAME
+  green capture — every one of them a deliberate pino record, 18/2/2 across
+  levels 40/50/30. So the bullet above is about `failed`; the delimited
+  ` FAIL ` is the runners' own per-file verdict spelling and a green run
+  carries none of it. Two captures at one commit is the whole evidence, so
+  treat it as a cross-check that still owes its control and never as the
+  verdict — the summary lines and the separately captured `EXIT=$?` remain
+  the primary reading.
 - Keying that same capture on the runners' failure glyphs is a ZERO-HIT
   scan without a live control, because a GREEN run emits no per-case
   FAILURE glyph at all. Cover all five glyphs in one matcher (U+00D7 from
@@ -1238,13 +1327,20 @@ matching anything prints exactly the same five lines.
 - Un-TARGETED is not un-LINTABLE, and the gap between the two hides a real
   error nobody will ever be shown. The base config's markdown block DOES
   carry rules for a package-root `.md`: an explicit-path `bun x eslint -f
-  json AGENTS.md` from inside `packages/web` returned neither the
+  json AGENTS.md` from inside `packages/web` once returned neither the
   covered-and-clean shape NOR an ignore warning, but one severity-2
-  `markdown/fenced-code-language` naming a route-diagram fence —
-  pre-existing, confirmed by reading the merge-base blob. Run the
-  explicit-path form once on any package-root docs task: it is the ONLY
-  reading that exists, no fan-out line is evidence about the file, and a
-  fence or link fault introduced there is invisible forever.
+  `markdown/fenced-code-language` naming a route-diagram fence. That
+  example is HISTORICAL and no longer reproduces — the fence has since
+  been tagged, and at `ee338e3` and after, that file carries two fenced
+  blocks with a language apiece and the run answers the covered-and-clean
+  shape at exit 0. So the zero there needs the planted control the ROOT
+  file's own bullet below prescribes, and it passes it: appending a
+  languageless fence reds the same run at exit 1 naming
+  `markdown/fenced-code-language`, and restoring leaves the file
+  byte-identical. Run the explicit-path form once on any package-root
+  docs task: it is the ONLY reading that exists, no fan-out line is
+  evidence about the file, and a fence or link fault introduced there is
+  invisible forever.
 - The covered-and-clean shape has NO liveness of its own, and for the ROOT
   `AGENTS.md` it is a zero over an EMPTY rule surface: that file carries
   ZERO fenced code blocks, so the one markdown rule measured to fire here
@@ -1273,6 +1369,106 @@ matching anything prints exactly the same five lines.
   (`git status --short -uall -- <path>` plus `git diff HEAD --name-only --
   <path>`) — trivially empty on a clean tree, which is exactly when a
   reader forgets it was part of the claim.
+- Two of those three widenings carry a MECHANISM worth stating, because
+  both read as ceremonial. `——no-renames` is LOAD-BEARING on any
+  package-was-not-touched claim: under rename detection a file MOVED OUT
+  of the excluded package is ONE rename entry printing its DESTINATION
+  only, so a `-- packages/<pkg>` pathspec never matches it and the
+  exclusion claim comes back clean; `——no-renames` splits that into a
+  delete the pathspec does match. Print the branch's whole rename
+  inventory beside it (`diff ——name-status ——find-renames` filtered to
+  `^R`) — zero renames means the two forms agree by construction and the
+  flag proved nothing, the same caveat `——full-history` carries against a
+  zero merge count. And the TOP-LEVEL bucketing is the STRONGEST leg
+  precisely because it takes no pathspec: bucket `git diff ——name-only
+  ——no-renames <base>..HEAD`, read the excluded package's bucket as
+  absent, and reconcile the buckets against the total by ARITHMETIC
+  (measured 30 web + 6 ui + 1 repo-root + 0 service == 37). The sum
+  reconciling is what says the classifier dropped no path; the pathspec
+  forms structurally cannot say it, each seeing only its own slice. Run
+  the misspelt pathspec in the SAME command — `packages/servicx` answered
+  exit 0, 0 stdout bytes and 0 stderr bytes, byte-identical to the correct
+  spelling's honest empty.
+- `git check-ignore -v`'s SOURCE field is the load-bearing half of the
+  ignored-trio claim above, and the prescription naming only the rule and
+  the LINE leaves it open: an ignore can come from `.git/info/exclude`,
+  which is per-CLONE, untracked and travels with nobody, so a path
+  protected only there is UNPROTECTED on a fresh clone and in CI while
+  every local reading still says ignored. Both sources are live here and
+  one command reports both — measured `.gitignore` lines 7, 20 and 21
+  governing `progress.txt`, `.plans` and `.specs`, against
+  `.git/info/exclude:7` governing `.claude/worktrees/`. So assert the
+  source is the TRACKED `.gitignore` (`git ls-files ——error-unmatch
+  .gitignore`) rather than merely non-empty, and cross-read each named
+  line with `awk`. The `ls —ld` leg beside it carries the exit-code trap
+  in the OPPOSITE direction: `check-ignore` exits 0 when ANY ONE argument
+  is ignored, while `ls —ld a b c` exits 1 when ANY ONE is missing and
+  identically when ALL THREE are (measured 2 stdout lines beside 1 stderr,
+  against 0 beside 3, both at EXIT=1). The reading in BOTH halves is the
+  stdout LINE COUNT held at three, for opposite reasons — and `ls` SORTS
+  its output rather than preserving argument order, so a positional read
+  of the first line names the wrong path.
+- `gate:control-bytes` has a THIRD mode: `——include-untracked` adds
+  `git ls-files ——others ——exclude-standard` to the walk. Measured at a
+  throwaway repo — an untracked file carrying a raw NUL is INVISIBLE to
+  the default run (exit 0, 2 files scanned) and CAUGHT by the flag (exit 1
+  naming it), while a GITIGNORED file carrying the same byte is invisible
+  to BOTH, so `progress.txt`, `.plans/` and `.specs/` stay outside even
+  that mode. It is a NO-OP on a clean tree (identical count at the real
+  repo), so it cannot serve as a coverage proof on its own and the
+  stage-first law still owns that job. `bun run` forwards the flag. Parse
+  the scanned count out of the gate's own CAPTURE rather than hardcoding
+  a number a run printed, and anchor the regex on the ASCII tail
+  (`file\(s\) scanned`) — the OK line separates the verdict from the
+  count with a non-ASCII dash, so a matcher keyed on that spelling is a
+  codec risk on the one line the whole coverage proof turns on.
+- A task told to run a gate `with every file STAGED` is discharged by
+  TRACKEDNESS on any plan whose earlier tasks each committed their own
+  work, and the healthy evidence reads exactly like a failure:
+  `git add —A` exits 0 having staged ZERO, so `git diff ——cached
+  ——name-only` is empty and a driver requiring a non-empty staged set
+  reports a correct state as broken. The FULL gate walks `git ls-files`,
+  so committed is strictly STRONGER than staged and the precondition is
+  already met. The reading with content is per-PATH membership instead
+  (measured 37 of 37 present, 0 deleted, 0 unscanned, over a branch of 24
+  added and 13 modified).
+- A branch's mergeability can be entirely about `origin/main` while local
+  `main` sits AT the merge-base, so `git merge-base main HEAD` and
+  `git merge-base origin/main HEAD` answer the SAME sha and nothing says
+  the local ref is stale. Measured at the q17 tip: both answered `ee338e3`
+  while `origin/main` was 80 commits beyond it, so every before/after
+  reading the plan took against `main` stayed correct while the merge
+  answer was about a tree none of them had seen. Print
+  `git rev-list ——count <base>..main` beside `<base>..origin/main` — a
+  plan quoting `the merge-base` is not wrong, and a reader takes local
+  `main` for current.
+- The both-touched set can be exactly ONE file and that file can be the
+  conflict, which makes the line-arithmetic reading above UNAVAILABLE
+  rather than skipped: there is no auto-merged both-touched blob to take
+  it over. Measured 37 paths ours against 111 theirs intersecting at one
+  docs file. SAY the reading is unavailable — a close-out silently
+  omitting it reads as one that forgot, and the merged blob still owes the
+  conflict-marker and duplicate-heading sweep, which a conflicted path
+  does carry. Two parallel legs can also independently correct the SAME
+  false claim in a shared doc, and that conflict is an AGREEMENT rather
+  than a disagreement, which changes the resolution from a merge to a
+  choice of wording. What separates it from a real semantic conflict is
+  reading the two sides' COMMIT SUBJECTS and the paragraphs whole
+  (`git show <ref>:<path>` per side, braced against the zsh
+  history-modifier trap), never the conflict hunk alone.
+- `bun run test:all` at a clean tree can come back FULLY GREEN even
+  though the `@ar/service` supertest flake is live, so a stage asserting
+  the one-red shape reports a clean fan-out as a broken baseline.
+  Measured twice at ONE commit on one tree, 42 minutes apart: EXIT 1 with
+  `1 failed | 138 passed | 25 skipped (164)` and EXIT 0 with
+  `139 passed | 25 skipped (164)`, the two reconciling member for member
+  with the one case crossing out of the `failed` segment. The FILE and
+  CASE totals are identical on both sides and are what a stage can hold;
+  the failing case's identity re-rolls between files AND within one file.
+  Attribute such a red by running the NAMED FILE ALONE first —
+  `bun x vitest run <file>` from inside the package is —10s, runs NO
+  `pretest`, builds nothing and mutates nothing, which makes it safe
+  against a package a parallel leg owns.
 - A `zero commits touch <dir>` claim is NOT answered by the changed-set
   bucket above, and the two are different questions. `git diff <base>..HEAD`
   is a TREE-to-TREE comparison, so a path CREATED AND DELETED inside the
@@ -1545,6 +1741,13 @@ matching anything prints exactly the same five lines.
   a stale file cannot read as fresh, and print `EXIT=$?` beside the
   capture's BYTE COUNT in the same command — the byte count is what
   separates an aborted tool from a tool that legitimately found nothing.
+- A probe's own VERDICT line is prose no gate ever re-runs, exactly like a
+  commit message or a TSDoc mutation note, so DERIVE its totals from the
+  checks themselves rather than typing them: a hand-written
+  `checks run: 24` sat over 19 actual assertions here and read precisely
+  like a measurement. Append every check's label to a list and print that
+  list's length — one line, and it also makes a leg that silently stopped
+  running visible as a total that moved.
 
 ## Workflow
 

@@ -164,47 +164,78 @@
  * instead of leaving it: a sentence names a LINE NUMBER, and a
  * keystroke can move the line it points at.
  *
- * ## The JSON fallback, and what it is a stand-in for
+ * ## Three presentations, and the chain between them
  *
- * A control at the top of the body chooses between the fixed template
- * above and the payload itself in a box, validated by `./schema.ts`.
+ * A control at the top of the body chooses between the fixed
+ * template above, the payload drawn as fields, and the payload
+ * itself in a box — every one of them validated by `./schema.ts`.
  * The template is the answer for the shape a category usually has;
- * the box is the v1 answer for every shape it cannot express — a note
- * carrying the separator the paste format splits on, a weight typed
- * beside forty others, a vocabulary being moved between two
- * deployments by copy and paste.
+ * the fields are the answer wherever v1 has a type per member; the
+ * box is the answer for the rest — a note carrying the separator
+ * the paste format splits on, or a vocabulary being moved between
+ * two deployments by copy and paste.
  *
- * v1 is the operative word. `../../components/JsonEditor.tsx` is
- * deliberately thin because the dynamic form provider replaces this
- * whole branch: it renders editable fields from a type definition, so
- * the shapes this box exists for get real controls and nobody edits
- * punctuation to change a weight. On the day it lands this file swaps
- * one component for another and keeps everything around it — the
- * payload, the schema and the two projections are what the
- * replacement takes too, which is the whole reason that seam is three
- * props wide.
+ * `./terms.ts` orders them from the drawing that assumes the most
+ * about a category's shape to the one that assumes nothing, and the
+ * fallback runs the same way. {@link fieldDefsForTermPayload} is
+ * what makes "where the shape allows" a COMPUTED reading rather than
+ * a branch written here: it answers a def list or `null`, and `null`
+ * draws the box under the fields segment. That predicate is a pure
+ * module the unit runner collects, which is the whole reason it is
+ * not an `if` in this file.
  *
- * ## Both presentations write the ONE draft
+ * ## The swap this header predicted has landed
  *
- * That is what makes switching free, and it is why the fallback is a
+ * `../../components/JsonEditor.tsx` is deliberately thin because the
+ * provider was always going to arrive, and the arrival is exactly
+ * the exchange that was written down: ONE component for another,
+ * with everything around it unmoved. The payload is still
+ * {@link toTermPayload}'s, the schema is still `./schema.ts`'s
+ * `termPayloadSchema`, and the two projections still cross between
+ * the draft and a payload. `DynamicForm` takes the value, the report
+ * and the schema the box takes, and one prop more — the defs
+ * `./fieldDefs.ts` answers. That is the whole of the difference, and
+ * it is why that seam was kept three props wide.
+ *
+ * What did NOT happen is a replacement. The box stays: it is what
+ * the chain above ends in, it is the only drawing that can express
+ * a shape `./fieldDefs.ts` refuses whole, and it has a second caller
+ * this branch never touched.
+ *
+ * ## What the two columns did not get
+ *
+ * `Modal`'s `size` is `sm | md | lg` and this editor was already at
+ * `lg` before the fields presentation existed, so there is nothing
+ * to widen it to. A fourth width would be a variant in `@ar/ui`,
+ * which is a change to that package rather than to this file. What
+ * adapts instead is the provider's own shell: it stacks its two
+ * columns under `sm` and draws the structure column at 220px above
+ * it, inside whatever panel it is given.
+ *
+ * ## All three write the ONE draft
+ *
+ * That is what makes switching free, and it is why each of them is a
  * PRESENTATION rather than a second editor. {@link toTermPayload}
- * reads the draft into the box's value and {@link withTermPayload}
- * writes an accepted payload back, so an edit made in either drawing
- * is an edit the other opens on. Neither branch knows the other
- * exists, and no third state records which one made a change.
+ * reads the draft into the value the box and the form both open on,
+ * {@link withTermPayload} writes an accepted payload back, and both
+ * payload drawings report through one handler. So an edit made in any
+ * drawing is an edit the others open on, no drawing knows the others
+ * exist, and no third state records which one made a change.
  *
- * What a swap DOES discard is text that is not yet an edit: the box's
- * unparsed characters and whatever is typed into the paste panel,
- * both of which live in a component the swap unmounts. Nothing there
- * ever reached the draft — the box reports a payload only once it
- * parses AND satisfies the schema — so the draft is exactly what the
- * footer counts and what a save writes, whichever drawing is up.
+ * What a swap DOES discard is text that is not yet an edit: the
+ * box's unparsed characters, a field's half-typed number, and
+ * whatever is typed into the paste panel, all of which live in
+ * components the swap unmounts. Nothing there ever reached the draft
+ * — neither the box nor the form reports a payload the schema has
+ * not accepted — so the draft is exactly what the footer counts
+ * and what a save writes, whichever drawing is up.
  *
  * The re-association is BY POSITION and `./terms.ts` carries its
  * three consequences: a reorder moves the vocabulary and leaves the
- * ids, an entry past the last row is minted an unsaved row, and a row
- * past the last entry is gone. The last two run into the same seam
- * limit the paste panel does, and the badge reads both the same way.
+ * ids, an entry past the last row is minted an unsaved row, and a
+ * row past the last entry is gone. The last two run into the same
+ * seam limit the paste panel does, and the badge reads both the same
+ * way.
  *
  * ## What no test in this package reaches
  *
@@ -212,6 +243,15 @@
  * `.ts` alone — this file's decisions are next door, its bindings are
  * proven by a `check-types` mutation grid, and what it renders falls
  * to the Playwright specs.
+ *
+ * {@link TermDrawing} is the exception to how little that leaves
+ * measurable, and only offline: it calls no hook, so its element can
+ * be taken by calling it as a plain function and the props it hands
+ * each drawing read straight off. That is what said the fields
+ * branch passes the payload, the schema, the defs and the one
+ * payload handler, and that a `null` def reading falls through to
+ * the box — four legs on the same reading each reddened it. A probe,
+ * not a test: nothing re-runs it.
  */
 
 import type { TermPayload } from './schema';
@@ -255,7 +295,9 @@ import {
   useSaveCategoryTerms,
   useTerms,
 } from '../../data/hooks';
+import { DynamicForm } from '../../dynamic-form/DynamicForm';
 
+import { fieldDefsForTermPayload } from './fieldDefs';
 import { termPayloadSchema } from './schema';
 import {
   describeTermBlockReading,
@@ -351,6 +393,17 @@ const PRESENTATION_LABEL = 'Term editor presentation';
 const JSON_FIELD_LABEL = 'Term payload';
 
 /**
+ * What the fields presentation calls its structure column.
+ *
+ * `DynamicForm` hands this straight to the tree as its accessible
+ * name, so it has to say what the tree is OF rather than repeat what
+ * is in it: `./fieldDefs.ts` already labels the root node `Terms`,
+ * and a tree named the same word as its first row reads as a stutter
+ * to anyone hearing it rather than seeing it.
+ */
+const FIELDS_TREE_LABEL = 'Term payload structure';
+
+/**
  * A category's vocabulary, as the draft holder carries it.
  *
  * One member, because the write behind this editor replaces the
@@ -378,8 +431,9 @@ const ignoreReorder = () => undefined;
 /**
  * The lexicon's term editor.
  *
- * @returns The modal: the category's three buckets over the draft, or
- * whichever of the three read states the term list is in.
+ * @returns The modal: the chosen drawing of the category's
+ * vocabulary over the draft, or whichever of the three read states
+ * the term list is in.
  */
 export const LexiconEditorModal = () => {
   const { domainSlug, entityId } = useParams<{
@@ -453,10 +507,12 @@ export const LexiconEditorModal = () => {
     writeTerms(mergeTermCandidates(edited, candidates, categoryId));
   };
 
-  // The fallback's write, and the third of the three that reach this
-  // one draft. It fires only over a payload that parsed AND satisfied
-  // the schema — `../../components/JsonEditor.tsx` refuses everything
-  // else — so nothing unreadable is ever in what a save reads.
+  // The payload write, and the one BOTH payload drawings reach this
+  // draft through. It fires only over a payload the schema accepted:
+  // `../../components/JsonEditor.tsx` refuses everything else and
+  // `../../dynamic-form/DynamicForm.tsx` makes the same promise from
+  // the same schema, so nothing unreadable is ever in what a save
+  // reads.
   const handlePayload = (payload: TermPayload) => {
     if (edited === undefined) {
       return;
@@ -514,23 +570,19 @@ interface LexiconEditorBodyProps {
   readonly onWeightTextChange: (termId: number, text: string) => void;
   /** Report the candidates a pasted block was read into. */
   readonly onAddCandidates: (candidates: readonly TermCandidate[]) => void;
-  /** Report a payload the fallback parsed and the schema accepted. */
+  /** Report a payload a payload drawing had the schema accept. */
   readonly onPayloadChange: (payload: TermPayload) => void;
 }
 
 /**
- * The editor's body: the buckets and the paste panel, or the reason
- * there are no buckets.
+ * The editor's body: the presentation control and the drawing under
+ * it, or the reason there is no drawing.
  *
  * Split out of the modal rather than written as nested ternaries
  * inside its JSX — the states are exclusive and each has something to
  * say, which reads as a sequence of early returns and very little
- * else.
- *
- * The two states that mean the category was READ share the panel: a
- * category with no vocabulary is the one that most needs a bulk
- * gesture, so the empty state stands where the buckets would and the
- * panel sits under either.
+ * else. Which of the three drawings is up is {@link TermDrawing}'s to
+ * answer, for the same reason and one level down.
  *
  * Which PRESENTATION is up is held here rather than in the modal,
  * because it is not a draft: it changes nothing an operator could
@@ -540,8 +592,8 @@ interface LexiconEditorBodyProps {
  * which state the read is in.
  *
  * @param props - Which state the read is in, and what to render with.
- * @returns The buckets and the panel, the empty state and the panel,
- * the payload in a box, or whichever read state is standing.
+ * @returns The control over the chosen drawing, or whichever read
+ * state is standing.
  */
 const LexiconEditorBody = ({
   failed,
@@ -576,8 +628,8 @@ const LexiconEditorBody = ({
     <div className="flex flex-col gap-5">
       {/*
         `self-start` because the track is `inline-flex` and a flex
-        child stretches by default, which would draw a two-option
-        switch the width of the modal.
+        child stretches by default, which would draw the switch the
+        width of the modal whatever it holds.
 
         The library wires no `aria-controls` per tab and offers no way
         to, so what follows is a plain region rather than a
@@ -603,47 +655,128 @@ const LexiconEditorBody = ({
         }}
       />
 
-      {presentation === 'json'
-        ? (
-          // Seeded from the draft at mount and owned by the box from
-          // then on — the swap that gets here is the remount its own
-          // header names as the way a caller re-seeds it. Nothing is
-          // keyed: the two branches are different element types, so
-          // React unmounts either way round.
-          <JsonEditor
-            label={JSON_FIELD_LABEL}
-            value={toTermPayload(terms)}
-            schema={termPayloadSchema}
-            onChange={onPayloadChange}
-          />
-        )
-        : (
-          <>
-            {terms.length === 0
-              ? (
-                <EmptyState
-                  title="No terms yet"
-                  description="This category carries no vocabulary. A term is what the pipeline matches on, and its polarity is what the match is worth. Paste a block below to start one."
-                />
-              )
-              : (
-                <div className="flex flex-col gap-4">
-                  {splitTermBuckets(terms).map((bucket) => (
-                    <BucketList
-                      key={bucket.polarity}
-                      bucket={bucket}
-                      weightTexts={weightTexts}
-                      onPolarityChange={onPolarityChange}
-                      onWeightTextChange={onWeightTextChange}
-                    />
-                  ))}
-                </div>
-              )}
-
-            <TermPastePanel terms={terms} onAdd={onAddCandidates} />
-          </>
-        )}
+      <TermDrawing
+        presentation={presentation}
+        terms={terms}
+        weightTexts={weightTexts}
+        onPolarityChange={onPolarityChange}
+        onWeightTextChange={onWeightTextChange}
+        onAddCandidates={onAddCandidates}
+        onPayloadChange={onPayloadChange}
+      />
     </div>
+  );
+};
+
+/** What the drawing the presentation control chose is given. */
+interface TermDrawingProps
+  extends Omit<LexiconEditorBodyProps, 'failed' | 'terms'> {
+  /** Which of the three drawings the control is reporting. */
+  readonly presentation: TermPresentation;
+  /** The vocabulary as edited; the read has settled by here. */
+  readonly terms: readonly Term[];
+}
+
+/**
+ * Whichever of the three drawings the control chose.
+ *
+ * A sequence of early returns rather than a ternary nested two deep
+ * in {@link LexiconEditorBody}'s JSX, for the reason that component
+ * gives about the read states — and taken in `./terms.ts`'s own
+ * order, which is also the fallback order: the template assumes the
+ * most about a category's shape, the fields assume a v1 type per
+ * member, the box assumes nothing.
+ *
+ * {@link fieldDefsForTermPayload} is READ here rather than above,
+ * and that is what makes the fallback a narrowing instead of a
+ * second branch: the form is handed a def list because there is one,
+ * and a `null` answer falls through to the box with nothing asserted
+ * about it.
+ *
+ * The two template states share the paste panel: a category with no
+ * vocabulary is the one that most needs a bulk gesture, so the empty
+ * state stands where the buckets would and the panel sits under
+ * either.
+ *
+ * All three write the ONE draft, through the payload report or the
+ * per-row gestures beside it — the header says why that is what
+ * makes switching presentation free.
+ *
+ * @param props - Which drawing is up, the vocabulary, and the
+ * gestures each drawing reports.
+ * @returns The buckets and the paste panel, the two-column form over
+ * the payload, or the payload in a box.
+ */
+const TermDrawing = ({
+  presentation,
+  terms,
+  weightTexts,
+  onPolarityChange,
+  onWeightTextChange,
+  onAddCandidates,
+  onPayloadChange,
+}: TermDrawingProps) => {
+  if (presentation === 'template') {
+    return (
+      <>
+        {terms.length === 0
+          ? (
+            <EmptyState
+              title="No terms yet"
+              description="This category carries no vocabulary. A term is what the pipeline matches on, and its polarity is what the match is worth. Paste a block below to start one."
+            />
+          )
+          : (
+            <div className="flex flex-col gap-4">
+              {splitTermBuckets(terms).map((bucket) => (
+                <BucketList
+                  key={bucket.polarity}
+                  bucket={bucket}
+                  weightTexts={weightTexts}
+                  onPolarityChange={onPolarityChange}
+                  onWeightTextChange={onWeightTextChange}
+                />
+              ))}
+            </div>
+          )}
+
+        <TermPastePanel terms={terms} onAdd={onAddCandidates} />
+      </>
+    );
+  }
+
+  const defs = presentation === 'fields'
+    ? fieldDefsForTermPayload()
+    : null;
+
+  if (defs !== null) {
+    return (
+      // Re-derived from the draft on every render, unlike the box
+      // below: a form edits a VALUE, and the only half-typed text it
+      // holds lives per control, where the provider keys it to the
+      // member it belongs to.
+      <DynamicForm
+        label={FIELDS_TREE_LABEL}
+        value={toTermPayload(terms)}
+        schema={termPayloadSchema}
+        defs={defs}
+        onChange={onPayloadChange}
+      />
+    );
+  }
+
+  return (
+    // Seeded from the draft at mount and owned by the box from then
+    // on — the swap that gets here is the remount its own header
+    // names as the way a caller re-seeds it. Nothing is keyed: no two
+    // of the three drawings are the same element type, so React
+    // unmounts whichever way round a swap goes.
+    <JsonEditor
+      label={JSON_FIELD_LABEL}
+      value={toTermPayload(terms)}
+      schema={termPayloadSchema}
+      onChange={onPayloadChange}
+    />
   );
 };
 

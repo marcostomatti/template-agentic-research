@@ -20,7 +20,8 @@ package.
 | `src/routes/` | `paths.ts` (the surface table and the two-base path arithmetic), `router.tsx` (the route tree as DATA plus a `createAppRouter` factory), `DomainGuard.tsx`, `useSearchParamState.ts`. |
 | `src/data/` | The fixture data layer and the API swap seam: `api.ts` (the accessors — reads, and, since the editors landed, writes), `hooks.ts` (one cache hook per accessor), `types.ts` (the redeclared schema vocabulary and `FIXTURE_NOW`), one fixture module per table — `proposals.ts` is the newest of them, redeclaring `source_config_proposals` — and `drafts.ts`, the session draft store every write is recorded in. See below. |
 | `src/pages/` | One directory per surface, plus `index.ts` — the surface-id to component registry the router reads. Each page keeps its pure helpers beside it as `.ts` (`rows.ts`, `cards.ts`, `fields.ts`, `editor.ts`, `schema.ts`), which is where colocated tests can reach them, and its own modal `.tsx` beside the list page — all seven the router registers live in the surface directory that owns them, never in `src/components/`. |
-| `src/components/` | App-local stand-ins for `@ar/ui` components that do not exist yet, the shared list-page skeleton, the frame the editor modals are built in (`EditorModal.tsx`), the JSON fallback an editor offers for a shape no fixed template covers (`JsonEditor.tsx`), the pressable-badge filter row the sources toolbar uses in place of a count-carrying `Select` (`FilterBadgeRow.tsx`), and the pure `.ts` modules they share (`editorDraft.ts` for the draft a modal holds, `jsonDraft.ts` for the JSON fallback's parse, format and refusal sentences). See below. |
+| `src/components/` | App-local stand-ins for `@ar/ui` components that do not exist yet, the shared list-page skeleton, the frame the editor modals are built in (`EditorModal.tsx`), the JSON fallback an editor offers for a shape neither a fixed template nor `src/dynamic-form/`'s fields can express (`JsonEditor.tsx`), the pressable-badge filter row the sources toolbar uses in place of a count-carrying `Select` (`FilterBadgeRow.tsx`), and the pure `.ts` modules they share (`editorDraft.ts` for the draft a modal holds, `jsonDraft.ts` for the JSON fallback's parse, format and refusal sentences). See below. |
+| `src/dynamic-form/` | The dynamic form provider: an editable value drawn from a `FieldDef` list, in the two-column shape the recursion question was closed at — a tree of the structure on the left, ONE flat form for the selected node on the right, and no recursive form anywhere. Six pure `.ts` hold every decision (`fieldDef.ts` the contract union over the six types, `nodePath.ts` where a node sits, `tree.ts` the node tree plus the projections `TreeNav` and `Breadcrumb` take, `values.ts` the only module that answers a NEW value, `readers.ts` the four leaf readers, `registry.ts` the type-to-control-kind map) and three `.tsx` draw them (`FieldControl`, `NodeForm`, `DynamicForm`). A top-level directory rather than an entry under `src/components/` because it is a subsystem rather than a component. Its only caller so far is the lexicon editor's fields presentation; the def list for that payload, and the ruling on what v1 can express, are the page's — `src/pages/lexicon/fieldDefs.ts`. |
 | `src/test-support/` | Helpers shared by colocated tests only. No app module imports it and the vitest include collects no non-`*.test.ts` file, so it ships in no bundle. |
 | `src/styles.css` | Two imports: `tailwindcss` and `@ar/ui/styles.css`. The design tokens, the element defaults and the theme contract all belong to `@ar/ui`. |
 | `tests/e2e/` | The default Playwright suite, behind `playwright.config.ts`. `tests/README.md` states the two-runner split, and why that README is itself load-bearing. |
@@ -342,11 +343,33 @@ They are here because every one of them is invisible to `lint`,
   `div` and NOT a `tabpanel`: half a relationship reads worse than
   none, and a spec reaching for `getByRole('tabpanel')` finds nothing.
   Address the switch as `getByRole('tab', { name })` and give the
-  tablist an `aria-label` at the call site — the two words on the
-  segments say WHICH view, and nothing else says what they are views
+  tablist an `aria-label` at the call site — the segments' own
+  words say WHICH view, and nothing else says what they are views
   of. It also spreads `HTMLAttributes`, so that label passes straight
   through (measured). Its track is `inline-flex`, which stretches like
   any flex child, so a call site inside a column wants `self-start`.
+- **`Sortable` has no keyboard path at all.** It is HTML5
+  drag-and-drop over `dataTransfer`, and neither `Sortable.tsx` nor
+  `SortableRow.tsx` carries an `onKeyDown`, a `tabIndex` or one ARIA
+  attribute (measured). So a list drawn in it owes move controls of its
+  own, and those controls are the MECHANISM rather than an enhancement
+  on the drag: WCAG 2.2 SC 2.5.7 asks for a keyboard-reachable
+  equivalent of a dragging movement, and a second implementation of the
+  same move would answer it only until the two drifted. Route both
+  gestures through ONE call so they cannot — `NodeForm.tsx` under
+  `src/dynamic-form/` reports a single move and the shell answers it
+  with one `withListReordered`.
+- **Three more `Sortable` contracts are invisible from the call site.**
+  A drop is reported as the WHOLE NEXT ORDER and never a pair of
+  indices, and its internal move works in insertion GAPS, so a consumer
+  holding an index-pair API owes a derivation — which is the one place
+  the pointer path and the keyboard path can still disagree. Omitting
+  `onReceive` is what REFUSES a drag out of another list (the handlers
+  return before `preventDefault`, so the drop never lands), so it is a
+  decision rather than an omission. And `draggable` sits on the wrapper
+  around EVERY row, so a press on a button or a text selection inside
+  one starts a drag unless the row's content opts out with
+  `draggable={false}`.
 - **A `Readonly<Record<Union, T>>` over a cva PROP union is not
   exhaustive** the way one over an app-owned union is: every
   `VariantProps` member resolves to `T | null | undefined`, so a key set
@@ -354,6 +377,64 @@ They are here because every one of them is invisible to `lint`,
   default variant. The record still refuses a missing key and an excess
   one; only a colocated "gives every member a value" test catches the
   third case.
+- **This app reaches NO icon library and no `@ar/ui` glyph.** `lucide` is
+  absent from this package's manifest (measured 0 occurrences) and
+  `packages/ui/src/lib/icons.tsx` is internal by design, never
+  re-exported from that package's root. So a component needing a glyph
+  draws its own inline `<svg>`, which is what `@ar/ui`'s own `Breadcrumb`
+  does for its separator. Mark it `aria-hidden` — that is what keeps a
+  whole-row button's accessible name the label ALONE, the concatenated-
+  subtree naming an ARIA composite suffers biting a row button the same
+  way.
+- **`FormField` owns labelling through `htmlFor`, which reaches a
+  LABELABLE control and nothing else.** This package has already ruled
+  that a `<label for>` does not reach `Switch` (a `button`) or `Select`
+  (a menu trigger) — see `ControlRow` in
+  `src/pages/sources/SourceEditorModal.tsx`. So a form drawing mixed
+  controls needs TWO envelopes and the split follows what the control IS
+  rather than a style choice: `FormField` for the `<input>` kinds, and a
+  labelling element carrying an id plus `aria-labelledby` for the rest.
+  `FormField`'s label and hint spans carry NO id, so nothing can point
+  `aria-describedby` at them; the established repair is putting the id
+  INSIDE the `error` slot (`error={<span id={faultId}>{fault}</span>}`).
+- **Surface tokens are HYPHENATED and a wrong spelling is silent.**
+  `bg-surface-1`, `bg-surface-2` and `bg-surface-sunk` are the only three
+  in the tree, so a reflexive `bg-surface2` renders no rule at all and
+  `lint`, `check-types` and a render probe are every one of them green.
+  Derive the token with `git grep —oh 'bg-surface[a-z0-9-]*' | sort |
+  uniq —c` before writing one. `surface-sunk` already carries a MEANING
+  here — `src/components/JsonEditor.tsx` uses it for a read-only box
+  because that surface means "not where you type" everywhere — so a
+  navigation row is the right reuse and an input is not.
+- **A component library's variant roster is a CEILING a page can already
+  be sitting at**, and nothing in the tree reports that a widening is a
+  no-op: `Modal` offers `sm | md | lg` and the lexicon editor was already
+  `lg`, so a task saying "widen the size" was unsatisfiable without a
+  change to the library. Read the variant's own `cva` declaration (or
+  `dist/**/*.variants.d.ts`, which prints the union) BEFORE planning
+  around a size, and record the ceiling in the consuming file's TSDoc.
+- **Two tsconfig facts that only surface from inside this package.** `lib`
+  is ES2022 + DOM, so the ES2023 array methods are NOT typed here —
+  `toSorted`, `toReversed` and `with` are each TS2550 on an array while
+  `lint` and the runtime are both fine, bun and modern chromium shipping
+  them; `[...x].sort()` is the form this package already uses, and
+  raising `lib` to satisfy one call widens what every module may reach.
+  And `noUncheckedIndexedAccess` is on repo-wide but does NOT reach a
+  `Record<UnionOfStringLiterals, V>`, that being a mapped type with
+  literal keys rather than an index signature — so a roster-keyed table
+  answers `V` and needs no non-null assertion, and adding a `?? fallback`
+  hides the very TS2741 that reports a member the table is missing.
+- **The established typed-text-beside-value shape** is three lines and is
+  worth copying rather than re-deriving: `const [typed, setTyped] =
+  useState<string | undefined>(undefined)`, `const text = typed ??
+  spell(value)`, then `setTyped(next)` UNCONDITIONALLY in `onChange` with
+  the report guarded on the reading. `undefined` rather than `''` is what
+  lets the box follow a value edited elsewhere until an operator takes it
+  over, and the consequence both existing sites document is that a SAVE
+  can be offered while a box shows a refusal. The hold's lifetime is the
+  component's MOUNT, so the caller's `key` is load-bearing: without a
+  per-member key React reuses the control at a position and one member's
+  half-typed text appears in another's box.
 
 ## Editors, drafts and the write seam
 
@@ -405,6 +486,30 @@ layer; until then these are the app's real rules.
   submit. The cost is a click that is refused rather than prevented,
   so the sentences must be on screen BEFORE the click: a live region
   rendered from mount, not one that arrives with its first sentence.
+- **The lexicon term editor draws ONE draft three ways.** `Buckets` is
+  the fixed template, `Fields` is the two-column provider under
+  `src/dynamic-form/`, and `JSON` is `src/components/JsonEditor.tsx`.
+  `src/pages/lexicon/terms.ts` holds the order and it is the FALLBACK
+  order as well: from the drawing that assumes the most about a
+  category's shape to the one that assumes nothing, so each is reached
+  only where the one before it ran out. All three write the SAME draft
+  through `toTermPayload` / `withTermPayload` and validate against the
+  same `termPayloadSchema` — which is what makes switching presentation
+  free rather than a save, and what keeps two drawings from answering
+  one question two ways.
+- **The JSON box is the fallback under the FIELDS segment, not a
+  retired presentation.** `fieldDefsForTermPayload()` answers a def
+  list or `null`, and a `null` answer draws the box where the form
+  would have gone — so "where the shape allows" is a computed reading
+  in a pure `.ts` the unit runner collects, rather than an `if` in the
+  modal. The provider landing did NOT replace the box and no prose
+  here should say it did: it is the only drawing that can express a
+  payload the def list refuses whole, it is how a vocabulary moves
+  between two deployments by copy and paste, and it has a second caller
+  (`src/pages/sources/SourceConfigApprovalModal.tsx`, `readOnly`) the
+  swap never touched. A presentation swap is also a REMOUNT — no two
+  of the three are the same element type — so the box re-seeds its
+  text from the draft every time it is reached.
 - **A modal that NORMALISES the loaded row** (stripping a mask,
   blanking a write-only member) must hand `withLoadedRow` the OPENED
   row as the holder's SOURCE, never the row the query answered.
@@ -625,11 +730,14 @@ package load-bearing rather than stylistic: a `.tsx` file is read by
 `lint` and `check-types` and by NO test, so shape each module so the
 decision is a pure function over already-read browser values and the
 component or hook is the thin part around it. `pages/*/rows.ts`,
-`cards.ts`, `fields.ts`, `editor.ts`, `pages/filters.ts`,
-`app-shell/theme.ts` and the pair under `src/components/`
-(`editorDraft.ts`, `jsonDraft.ts`) are all that shape. Anything
-touching `document` at import time crashes the unit runner outright
-and takes its whole file with it.
+`cards.ts`, `fields.ts`, `editor.ts`, `schema.ts`, `fieldDefs.ts`,
+`pages/filters.ts`, `app-shell/theme.ts`, the pair under
+`src/components/` (`editorDraft.ts`, `jsonDraft.ts`) and the six pure
+modules under `src/dynamic-form/` are all that shape — the provider's
+whole core is `.ts` for exactly this reason, and its three `.tsx` hold
+no decision the unit runner would have wanted. Anything touching
+`document` at import time crashes the unit runner outright and takes
+its whole file with it.
 
 Four scripts drive them, and only the first two are ever a gate:
 
@@ -675,15 +783,30 @@ Reading a run:
 - The `&&` short-circuits. A red vitest means Playwright never ran, so
   the ABSENCE of a Playwright section from a capture is not evidence
   that it passed. Read BOTH summaries.
-- This package is the ONLY source of the root fan-out's pass-glyph
+- This package is the only source of the fan-out's VARIABLE pass-glyph
   ticks, so growing THIS suite is what moves a figure the root
-  `AGENTS.md` discusses as invariant under vitest growth. Measured
-  across q15: 27 Playwright cases contributing a fan-out total of 31,
-  then 146 contributing 150, the constant 4 being two vite build ticks
-  apiece from the `@ar/ui` and `@ar/web` pretests. Decompose that total
-  BY PREFIX rather than quoting it — the vitest reporter contributes
-  exactly zero of them, so the whole figure is this package's Playwright
-  count plus 4.
+  `AGENTS.md` discusses as invariant under vitest growth. It is NOT the
+  only source outright, and a decomposition says so: measured at
+  `b510833`, the 174 split by prefix as `@ar/web test:` 170 (Playwright
+  per-case lines, every one carrying `[chromium]`), `@ar/web pretest:
+  @ar/ui build:` 2, and `@ar/ui pretest:` 2 — that last pair being
+  `@ar/ui`'s own script, which no run of this package emits. Three
+  readings of the same rule now: 27 Playwright cases contributing a
+  fan-out total of 31 across q15, then 146 contributing 150, then 170
+  contributing 174 once one new `tests/e2e` spec and three extended
+  ones added 24 cases for the dynamic form. The constant 4 is two vite
+  build ticks apiece from the `@ar/ui` and `@ar/web` pretests, and the
+  wave's `tests/visual/` spec contributes NOTHING to it, being behind
+  the other config. Decompose that total BY PREFIX rather than quoting
+  it — the vitest reporter contributes exactly zero of them, measured
+  over 5561-, 1704-, 45- and 18-case runs, so the whole figure is this
+  package's Playwright count plus 4. A package-scope `bun run test` at
+  the same commit reads 172, exactly the `@ar/web` top-level bucket
+  plus the `@ar/ui build:` pair its own pretest emits, which is what
+  reconciles the two scopes. Both captures carried 0 from the failure
+  family, and it is the pass count beside it that makes that zero a
+  reading rather than the shape a capture read with the wrong codec
+  also produces.
 - Both runners fail CLOSED on an empty suite — `vitest run` exits 1 on
   no matching files, and `playwright test` exits 1 with `No tests
   found` before the webServer even starts. Do not reach for
@@ -864,6 +987,101 @@ trigger — but delete it in the same step, because `tests/e2e/` IS the
   instead, since a page needs a router and a query client. Delete
   either in the same step: `tests/e2e/` IS the `testDir`, so a
   leftover probe silently JOINS the suite and its count.
+
+- The dynamic form's locator vocabulary, which no gate states and which
+  four specs now depend on. `NodeForm` wraps the ONE mounted form in
+  `role="group"` named after the node it draws, so
+  `getByRole('group', { name, exact: true })` is the scope handle that
+  says WHICH node's members a locator is reaching. A container's
+  drill-in row is a `button` whose exact accessible name is that same
+  label (its chevron is `aria-hidden` and its description sits OUTSIDE
+  the button via `aria-describedby`), while `TreeNav` draws its row as a
+  `span` inside the `li[role="treeitem"]` — so a `button` name locator
+  addresses the FORM's row and a `treeitem` one addresses the TREE, with
+  no collision. `@ar/ui`'s `Breadcrumb` is
+  `nav[aria-label="Breadcrumb"]` over `button`s carrying
+  `aria-current="page"`, its first step being the walk back to the list
+  level, and `Segmented` is a `role="tablist"` over `role="tab"` buttons
+  whose accessible name IS the label. Derive both node labels from
+  `treeNavNodes(buildFormTree(defs, payload))` and a box label from the
+  def whose `key` is the payload member — that crossing keeps a spec
+  addressing a MEMBER rather than a word somebody may reword.
+- The tab order inside it, likewise unstated anywhere else: the
+  presentation segments, then the tree as ONE stop (the
+  `li[role="treeitem"]` holds the tabindex, not the `ul`), then the
+  breadcrumb's steps in trail order, then the mounted form's own
+  controls in def order, then `Cancel` and `Close`. A DISABLED `Save` is
+  not a stop, so the cycle GROWS BY ONE the moment a case dirties the
+  draft. Selecting through the tree is Home, then one ArrowDown per row
+  (the root is a row of its own), then Enter. A DISABLED control is in
+  the accessibility tree but NOT in the tab order, so a roster read
+  through `getByRole` and one read off a Tab walk are different lengths
+  BY CONSTRUCTION (measured 8 move controls against 6 tab stops, the
+  first row's `up` and the last row's `down` being disabled at the
+  ends): read an ORDER off the role locator and REACHABILITY off the
+  walk.
+- A value read at the KEYSTROKE is evidence about the BOX and never
+  about the draft — a control reporting nothing at all still leaves
+  every character on screen and passes `toHaveValue`, because the boxes
+  here hold typed text beside the value they reported. The separating
+  reading is the REMOUNT, and it needs no new mechanism: `DynamicForm`
+  keys the one mounted form by the node's path key, so walking out to
+  the list level through the breadcrumb and drilling back in unmounts
+  every control and redraws it from the VALUE. Take every acceptance
+  read AFTER that walk, and assert the UNEDITED members in the SAME
+  post-walk loop as the edited one. A presentation SWAP is the coarser
+  remount beside it and the only one crossing COMPONENT boundaries,
+  which is what makes a three-way swap the reading that says N drawings
+  are over ONE draft rather than each holding its own copy.
+- A refusal in that provider has TWO channels and a spec that does not
+  separate them lets one stand for the other. The `string` boxes accept
+  every text they can hold, an empty one included, so a cleared required
+  member and an out-of-union enum spelling are both READER acceptances
+  that only the whole-payload `safeParse` refuses. The reading that
+  separates them is the box's own `aria-invalid`, which React renders as
+  the literal `"false"` while the banner is up — assert it, or a case
+  cannot tell a member only the payload can refuse from one the control
+  refuses on its own, and a leg marking every box invalid passes every
+  other assertion.
+- A `number` field drawn for DIRECT text entry has a three-part evidence
+  set, each part answering a different way of getting it wrong: the
+  box's `type` reading `text` (never `number`), its `inputmode` reading
+  `decimal`, and `getByRole('spinbutton')` at zero across the dialog.
+  The keystroke claim is separate again and one `toHaveValue` at the end
+  of typing does not make it, that assertion agreeing with a control
+  that rewrote the text on the way through — press one character at a
+  time and assert the RUNNING prefix after each.
+- Every label in that list is POSITIONAL — the tree's items, the form's
+  drill-in rows and both move controls — so a reorder moves NONE of them
+  and an order reading has to be TWO readings. The ROSTER, off the move
+  controls' `aria-label`s in DOM order, is invariant under a move by
+  construction and is what reports a row lost, duplicated or
+  misnumbered; the CONTENT, off each entry's own boxes after drilling
+  in, is what MOVED. Driving `@ar/ui`'s `Sortable` from Playwright takes
+  `page.mouse` and never `locator.dragTo()`: its container `onDragOver`
+  claims a slot when `overIndex` is null and runs LAST on the first
+  event of a drag, so ONE move over the target drops the row at the END
+  of the list. Press inside the row's GRIP (about 18px in), one small
+  move to start, then TWO moves over the target's half above its
+  midpoint, then release.
+- `tests/` carries NO shared helper module and that is the CONVENTION
+  rather than an oversight: every spec imports from `src/`, from
+  `@playwright/test` and from nothing else in the tree, and `SKELETON`
+  alone is redeclared in six of them. A task tempted to hoist
+  `expectSettled` or a `first` helper into a sibling module is changing
+  a convention rather than removing duplication, and it drags every
+  existing spec's imports with it.
+- Two FAST gates a scoped task owes, neither of them a full
+  `bun run test`. `bun x vitest run` from inside the package is the unit
+  half ALONE — it runs no `pretest`, never starts the dev server and so
+  never binds 5174, which is the port a parallel checkout's run steals.
+  `bun x playwright test tests/e2e/<file>.spec.ts` is its e2e sibling,
+  —5s for a three-case file where the whole chain is minutes, and the
+  whole `tests/e2e` suite is —40s at 149 cases with 5 workers. Both DO
+  bind 5174 in the second case, so the parallel-leg port check still
+  applies, and neither runs `pretest` — so the sha256-against-pristine
+  check on `@ar/ui`'s built `dist/index.js` is mandatory before either,
+  and redundant only before `bun run test`.
 
 CI runs `bun run test` — the vitest suite and the default
 Playwright config, never the screenshot one — from
