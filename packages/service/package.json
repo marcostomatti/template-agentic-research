@@ -57,6 +57,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@eslint/markdown": "^8.0.3",
+    "@seriousme/openapi-schema-validator": "^2.9.1",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/bun": "^1.4.0",
     "@types/cookie-parser": "^1.4.7",
