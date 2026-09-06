@@ -762,6 +762,17 @@ red package never masks another and a single run gives the whole picture.
   147/18/4 across levels 30/40/50, level 50 being exactly the framework's
   four vendored error-path records and level 40 the app's route refusals
   plus one framework case.
+- The two needles in that rule are NOT equally unusable, and the difference
+  is one space. Measured across a GREEN and a RED `test:all` at ONE commit:
+  the space-delimited ` FAIL ` answered 0 on the green capture and 1 on the
+  red, naming the failing file, where `failed` answered 22 on that SAME
+  green capture — every one of them a deliberate pino record, 18/2/2 across
+  levels 40/50/30. So the bullet above is about `failed`; the delimited
+  ` FAIL ` is the runners' own per-file verdict spelling and a green run
+  carries none of it. Two captures at one commit is the whole evidence, so
+  treat it as a cross-check that still owes its control and never as the
+  verdict — the summary lines and the separately captured `EXIT=$?` remain
+  the primary reading.
 - Keying that same capture on the runners' failure glyphs is a ZERO-HIT
   scan without a live control, because a GREEN run emits no per-case
   FAILURE glyph at all. Cover all five glyphs in one matcher (U+00D7 from
