@@ -490,11 +490,34 @@ established that.
 ### The paths wave 1 does not take
 
 `GET /health` and `ALL /_control/*` belong to the framework
-(`lib/express/builtin-routes.ts`), `/auth/*` to q07, and `/me` and
-`/example` are declared in `src/index.ts` today. Wave 1 adds
+(`lib/express/builtin-routes.ts`), `/auth/*` to q07, and `/users`
+and `/me` are declared in `src/index.ts` today. Wave 1 adds
 nothing under any of them, and none of its five prefixes —
 `/domains`, `/categories`, `/terms`, `/personas`, `/settings` —
 collides with one.
+
+`GET /example` sat in that list until 2026-09-06, when q14 removed
+it together with `src/routes/example.ts` — the demonstrator this
+package inherited from its template, which held nothing else and
+took the directory with it. Three reasons, argued at the head of
+`register` in `src/index.ts`: the service now carries a real
+surface; the mount was open where every mount in the guarded block
+below it carries `ctx.requireAuth`; and its body put the template
+repository name in front of any caller. Nothing replaced it, so
+the prefix is free rather than reassigned.
+
+That leaves three declarations above the guarded block, in
+`register`'s own order: the `/auth` mount, conditional on a
+bootstrapped credential where nothing else here is; `GET /users`,
+open; and `GET /me`, which carries `ctx.requireAuth` on the route
+itself rather than inheriting it from a mount. The framework's
+`GET /health` sits above all three, `mountBuiltinRoutes` running
+before `register` is called, and `ALL /_control/*` is mounted by
+nothing here — its config block is optional with no default and
+`src/index.ts` passes none. Read that inventory off `src/index.ts`
+rather than off `bootWiredService` in `tests/api/wiring.test.ts`,
+which is a deliberately partial mirror and has never carried the
+`/auth` mount.
 
 Waves 2 and 3 extend the same root on the same terms. Wave 2 takes
 four of those prefixes and the table below names them; `/findings`,
