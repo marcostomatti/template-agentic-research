@@ -53,6 +53,7 @@
 import type { AuthDeps } from './auth/index.js';
 import type { ServiceConfig } from '../lib/express/index.js';
 
+import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
 
 import { createService } from '../lib/express/index.js';
@@ -485,9 +486,65 @@ await createService({
     // it cannot describe, so a table that has drifted fails the process
     // here rather than the first request to `/docs`. Nothing it renders
     // varies per caller either — it reads no request.
+    //
+    // A ROUTE-SCOPED `Content-Security-Policy`, on this mount alone.
+    // The app-wide `helmet()` in `lib/express/middleware.ts` has set
+    // the default header by the time a request reaches here; this
+    // middleware runs later and REPLACES it rather than appending
+    // (measured on the wire: one string value, never an array), so
+    // every other path keeps helmet's defaults untouched. That default
+    // set is pinned name-by-name and value-by-value in
+    // `lib/express/__tests__/middleware.test.ts`, which is where a
+    // drift in it is reported.
+    //
+    // WHICH DIRECTIVES WERE RELAXED: NONE. The override spells the two
+    // a Swagger UI mount is expected to need relaxed, and neither ends
+    // up wider than helmet's own value.
+    //
+    // - `script-src 'self'` is helmet's default, unchanged.
+    //   swagger-ui-express 5.0.1 emits NO inline `<script>`: measured
+    //   over `swaggerUi.generateHTML(...)`, 3106 bytes carrying three
+    //   `src`-referenced same-origin scripts and zero inline handler
+    //   attributes, the third of them (`./swagger-ui-init.js`) served
+    //   by `swaggerUi.serve` below. The bundle's one `new Function` is
+    //   webpack's `globalThis` polyfill, behind a `typeof globalThis`
+    //   check and a `try`/`catch`, so `'unsafe-eval'` is not wanted
+    //   either.
+    // - `style-src 'self' 'unsafe-inline'` is helmet's default MINUS
+    //   its `https:` source. The two inline `<style>` blocks and the
+    //   one `style=` attribute do need `'unsafe-inline'` — which the
+    //   app-wide default already carries, so it is not a relaxation
+    //   this mount introduces. Nothing here loads a style over
+    //   `https:`: the one stylesheet linked is the same-origin
+    //   `./swagger-ui.css`, whose four `url()` values are all `data:`
+    //   and which declares no `@import`, and the bundle creates no
+    //   `<style>` element at runtime.
+    //
+    // So the one difference from the app-wide header is a NARROWING
+    // rather than the relaxation this mount was expected to need — the
+    // premise that helmet's defaults leave Swagger UI blank is false at
+    // this version. The scope is a single guarded operator-only route:
+    // the `ctx.requireAuth` above gates it, and the override reaches
+    // the static assets under `/docs/` because it sits on the mount
+    // rather than on a handler.
+    //
+    // ORDER INSIDE THE MOUNT: the guard is ahead of the policy, so a
+    // refusal never reaches it. Measured over a booted service, an
+    // anonymous `GET /docs/` answers `401` carrying the APP-WIDE
+    // header, and only a request the guard let through carries the
+    // scoped one — which is what a case reading this header off the
+    // wire has to send. The 200s it does reach include the static
+    // assets: `GET /docs/swagger-ui.css` carries the scoped value too.
     app.use(
       '/docs',
       ctx.requireAuth,
+      helmet.contentSecurityPolicy({
+        useDefaults: true,
+        directives: {
+          scriptSrc: ['\'self\''],
+          styleSrc: ['\'self\'', '\'unsafe-inline\''],
+        },
+      }),
       swaggerUi.serve,
       swaggerUi.setup(generateOpenApiDocument()),
     );
