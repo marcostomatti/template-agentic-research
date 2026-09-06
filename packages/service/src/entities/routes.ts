@@ -160,6 +160,7 @@
  * makes over the port types for the whole wave at once.
  */
 import type { EntitiesServiceStore } from './service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -179,6 +180,7 @@ import {
   getEntity,
   listEntityResearch,
   patchEntity,
+  patchEntitySchema,
 } from './service.js';
 
 /**
@@ -226,9 +228,12 @@ const entityAddressSchema = z
  * one member, spread from {@link entityAddressSchema}. The tool is
  * therefore the stricter of the two faces of this route.
  *
- * The address const above stays private. Nothing here exports one,
- * so the sibling routers claim that they agree by intent rather
- * than by derivation is untouched by this pair.
+ * The address const above stays private, and the binding table
+ * below does not change that: a table exports the schema OBJECTS a
+ * route parses with rather than the NAMES they are declared under,
+ * so the sibling routers still have nothing here to import and
+ * their claim that they agree by intent rather than by derivation
+ * is untouched by either export.
  */
 export const entityReadToolInputSchema = z.object({
   ...entityAddressSchema.shape,
@@ -280,6 +285,72 @@ export const entityApproveResearchToolInputSchema = z.object({
   ...entityAddressSchema.shape,
   ...approveResearchSchema.shape,
 }).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. The two bodies are
+ * `src/entities/service.ts`'s, imported rather than declared,
+ * because no handler below parses either — the module header's
+ * rule, read straight off the table.
+ *
+ * FOUR ROUTES AND ONE ADDRESS SCHEMA, which is the one-path-shape
+ * claim the module header opens with, written as a table: all four
+ * address the same row by the same segment, so every entry binds
+ * {@link entityAddressSchema} and there is no second address here
+ * to keep it in step with.
+ *
+ * ONE QUERY BINDING, AND IT IS THE SHARED PAGE.
+ * {@link paginationQuerySchema} is what the research list parses,
+ * that collection declaring no narrowing of its own — so `?page`
+ * and `?perPage` are the whole of this router's query surface, and
+ * a document assembled from this table says the same.
+ *
+ * THE SINGLE GET BINDS NO QUERY, and the absence means it never
+ * READS one rather than that it refuses one. It parses no query at
+ * all, so a `?page` sent to `GET /entities/:id` is IGNORED, where
+ * the same parameter sent to a route binding a strict query would
+ * be a 422. {@link entityReadToolInputSchema} is the stricter face
+ * of that route for the same reason, and its own comment says so.
+ *
+ * NEITHER READ BINDS A BODY, and that absence means something else
+ * again: `express.json()` has already parsed whatever was sent and
+ * no handler behind either GET reads it, so a request carrying one
+ * is answered exactly as one that did not. An empty `body` binding
+ * would document a refusal neither route makes.
+ *
+ * THE THREE VALUE RULES ARE OUTSIDE THIS TABLE AND COULD NOT BE
+ * PUT IN IT. `patchEntitySchema` narrows the SHAPE of a patch; that
+ * a name reduces onto a key another subject in the same domain
+ * already holds is `entities_domain_id_name_norm_unique`'s at the
+ * instant of the write, and that an `aliasOf` names the subject
+ * itself or a subject in another registry is two reads
+ * {@link patchEntity} makes. So a document built from this binding
+ * describes the shape half alone, and the `409` and the two alias
+ * `422`s stay the service's to raise.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const entitiesRouteSchemas = {
+  'GET /entities/:id': { params: entityAddressSchema },
+  'PATCH /entities/:id': {
+    params: entityAddressSchema,
+    body: patchEntitySchema,
+  },
+  'GET /entities/:id/research': {
+    params: entityAddressSchema,
+    query: paginationQuerySchema,
+  },
+  'POST /entities/:id/approve-research': {
+    params: entityAddressSchema,
+    body: approveResearchSchema,
+  },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildEntitiesRouter} needs. */
 export interface EntitiesRouterOptions {

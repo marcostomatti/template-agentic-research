@@ -118,6 +118,7 @@
  * did not.
  */
 import type { SpendServiceStore } from './spend-service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -158,6 +159,50 @@ import {
  * same way whether or not the route it mirrors has an address.
  */
 export const spendSummaryToolInputSchema = spendQuerySchema;
+
+/**
+ * What the one route below binds, keyed by the label the wire
+ * carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: the member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. {@link spendQuerySchema} is
+ * `src/runs/spend-service.ts`'s, imported rather than declared,
+ * because that module owns every rule the window is held to.
+ *
+ * ONE ROUTE AND ONE MEMBER, WHICH IS THE WHOLE REQUEST. The path
+ * addresses nothing — there is no `:id` and no `:slug` for a
+ * `params` member to describe, and this file declares no address
+ * schema at all — so the absence is that the route HAS NO ADDRESS
+ * rather than that it ignores or refuses one. The `GET` reads no
+ * body either, so a request carrying one is answered exactly as
+ * one that did not.
+ *
+ * THE MEMBER AND {@link spendSummaryToolInputSchema} ARE THE SAME
+ * OBJECT, which happens on this route alone. Every sibling group's
+ * tool input is a fresh object spread from an address and a query,
+ * and is therefore the wrong thing for a document to read; here
+ * the route has no address to merge, so the tool input ALIASES the
+ * query rather than copying it — for the reason its own comment
+ * gives, the object-level check zod carries outwards only — and
+ * the two protocols and this table read one const between them.
+ *
+ * THE SPAN CEILING IS OUTSIDE THIS TABLE AND COULD NOT BE PUT IN
+ * IT. What the binding carries is the shape of each bound and the
+ * object-level refusal of a `?since` at or after its `?until`;
+ * that a RESOLVED span is wider than `SPEND_MAX_WINDOW_DAYS` needs
+ * the clock, and is therefore {@link summariseSpend}'s to raise
+ * against a present no schema holds. A document assembled from
+ * this binding describes the first two refusals and not the third.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const spendRouteSchemas = {
+  'GET /spend/summary': { query: spendQuerySchema },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildSpendRouter} needs. */
 export interface SpendRouterOptions {

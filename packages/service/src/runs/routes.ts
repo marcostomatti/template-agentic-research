@@ -122,6 +122,7 @@
  * did not.
  */
 import type { RunsServiceStore } from './service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -197,13 +198,65 @@ export const runListToolInputSchema = z.object({
  * one member, spread from {@link runAddressSchema}. The tool is
  * therefore the stricter of the two faces of this route.
  *
- * The address const above stays private. Nothing here exports one,
- * so the sibling routers claim that they agree by intent rather
- * than by derivation is untouched by this pair.
+ * The address const above stays private, and the binding table
+ * below does not change that: a table exports the schema OBJECTS a
+ * route parses with rather than the NAMES they are declared under,
+ * so the sibling routers still have nothing here to import and
+ * their claim that they agree by intent rather than by derivation
+ * is untouched by either export.
  */
 export const runReadToolInputSchema = z.object({
   ...runAddressSchema.shape,
 }).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: each member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. The query is `src/runs/service.ts`'s,
+ * imported rather than declared, because that module owns the
+ * filter the parsed slug is handed to; the address is this file's,
+ * because narrowing a path segment is all this file does.
+ *
+ * TWO ROUTES, AND NEITHER BINDS BOTH HALVES OF A REQUEST — which
+ * is the module header's query-before-address paragraph read off a
+ * table rather than argued. The list has a query and no address,
+ * the single get has an address and no query, so no request to
+ * this router can get both wrong at once and there is no ordering
+ * here for a document to describe.
+ *
+ * THE TWO ABSENCES THEREFORE MEAN DIFFERENT THINGS. `GET /runs` is
+ * met at the root, so it HAS NO ADDRESS rather than ignoring one:
+ * there is no `:id` or `:slug` in the path for a `params` member
+ * to describe. `GET /runs/:id` READS NO QUERY AT ALL, so a `?page`
+ * sent to it is IGNORED, where the same parameter sent to a route
+ * binding a strict query would be a 422 —
+ * {@link runReadToolInputSchema} is the stricter face of that
+ * route for the same reason, and its own comment says so.
+ *
+ * NEITHER BINDS A BODY, which is a third reading again: both are
+ * GETs and neither handler reads one, so a request carrying a body
+ * is answered exactly as one that did not. An empty `body` binding
+ * would document a refusal neither route makes.
+ *
+ * THE `?domain` IS IN THE TABLE AND ITS `404` IS NOT.
+ * {@link runListQuerySchema} declares the parameter and refuses a
+ * string that could not be a slug, and that a deployment carries
+ * no such domain is a stored fact {@link listRuns} finds out — so
+ * a document assembled from this binding describes the parameter
+ * and its shape, and the narrowing's own refusal stays one file
+ * over, where the read is.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const runsRouteSchemas = {
+  'GET /runs': { query: runListQuerySchema },
+  'GET /runs/:id': { params: runAddressSchema },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildRunsRouter} needs. */
 export interface RunsRouterOptions {
