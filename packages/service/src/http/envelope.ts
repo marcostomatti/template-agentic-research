@@ -5,14 +5,17 @@
  * route answers through {@link ok} or {@link okPage}, and this module
  * is the only place either object is built.
  *
- * THE FAILURE HALF IS NOT HERE, AND IS NOT THIS SHAPE. A refusal
- * answers the framework's own `{ code, message, details? }` — what
- * `AppError.toJSON()` in `lib/errors/errors.ts` produces and the
- * `errorHandler` that `createService` registers LAST writes — with
- * the HTTP status carrying the failure. Nothing here ever emits
+ * THE FAILURE HALF IS NOT BUILT HERE, AND IS NOT THIS SHAPE. A
+ * refusal answers the framework's own `{ code, message, details? }`
+ * — what `AppError.toJSON()` in `lib/errors/errors.ts` produces and
+ * the `errorHandler` that `createService` registers LAST writes —
+ * with the HTTP status carrying the failure. Nothing here ever emits
  * `{ success: false }`, so `success` is a discriminator that is `true`
  * on every body this module writes rather than a status code in
- * disguise.
+ * disguise. That shape IS described at the bottom of this module, as
+ * {@link errorEnvelopeSchema}, so one document can carry both halves
+ * of this wire; no function here produces it and nothing here parses
+ * it.
  *
  * That asymmetry is a decision, and the cheaper of the two available.
  * Reshaping the failure half means editing `lib/errors/handler.ts`:
@@ -38,9 +41,11 @@
  *
  * The last third of this module states those same two shapes a
  * SECOND time, as zod schemas, for the OpenAPI document to carry as
- * reusable components. Nothing there parses a response at runtime
- * and nothing there is derived from the interfaces above; the
- * comment over each says what holds the two declarations equal.
+ * reusable components, and adds the failure shape above as a third.
+ * Nothing there parses a response at runtime and nothing there is
+ * derived from the interfaces above; the comment over each says what
+ * holds the two declarations equal — and, for the failure schema,
+ * what holds it equal to a shape another package declares.
  */
 import { z } from 'zod';
 
@@ -281,3 +286,50 @@ export const paginatedEnvelopeSchema = successEnvelopeSchema.extend({
   data: z.array(z.unknown()),
   meta: paginationMetaSchema,
 });
+
+/**
+ * The framework's failure body, `{ code, message, details? }`, as a
+ * schema — so one document can carry both halves of this wire.
+ *
+ * The odd member of this section, and deliberately so: nothing in
+ * this module BUILDS this shape. It is what `AppError.toJSON()` in
+ * `lib/errors/errors.ts` produces and what the `errorHandler` that
+ * `createService` registers LAST writes, with the HTTP status
+ * carrying the failure. It is declared here because `src/http/` is
+ * where this service's wire vocabulary lives and a document
+ * describing only the success half would describe no route
+ * completely — not because anything here answers a refusal.
+ *
+ * `details` is the member with a decision in it. `AppError` types it
+ * `unknown`, and this schema claims something narrower: absent or
+ * present, and when present STRUCTURED — the `FieldError[]` a
+ * refused parse carries, or the dependent-count record a refused
+ * delete carries — but never a bare string. That is the argument
+ * the head of this module already makes, stated as a parse: a single
+ * string would encode those field paths into prose, which is the one
+ * thing a machine-readable failure must not be.
+ *
+ * Nothing in `lib/errors` enforces that, so what holds the claim
+ * true is `./envelope.test.ts`, which parses bodies captured off
+ * real responses rather than literals written out beside it. Both
+ * union members are load-bearing, measured rather than assumed:
+ * `z.record(z.string(), z.unknown())` refuses an array, so dropping
+ * either one would refuse half of what this surface answers.
+ *
+ * Strict, which makes the THIRD body on this wire a non-member.
+ * `requireAuth` in `lib/express/auth.ts` answers `401` with
+ * `{ error: 'Unauthorized' }` before any handler runs, and that body
+ * is in neither envelope — which several router modules already
+ * say in prose and this schema now refuses. `statusCode` is not a
+ * member either: `AppErrorShape` in `lib/errors/types.ts` declares
+ * one, but `parseApiError` fills it CLIENT-side from the HTTP status
+ * and no body on this wire carries it.
+ */
+export const errorEnvelopeSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  details: z.union([
+    z.array(z.unknown()),
+    z.record(z.string(), z.unknown()),
+  ]).optional(),
+}).strict();

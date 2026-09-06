@@ -1,8 +1,9 @@
 /**
  * `ok`, `okPage` and `buildPaginationMeta` — the three functions that
- * build every success body this service writes — and the three
- * schemas that state those same shapes a second time for a document
- * to carry.
+ * build every success body this service writes — and the four
+ * schemas beside them: three that state those same shapes a second
+ * time for a document to carry, and one that states the FAILURE
+ * shape this module does not build at all.
  *
  * Four claims about the builders, and each one is a promise made to a
  * client that has only the body. That a success body is always the
@@ -39,7 +40,23 @@
  * Without them a refusal reads identically against a schema that
  * refuses everything it is given.
  *
- * Mutation grid, measured over the 27 cases in this file, with the
+ * The last four cases are the odd ones out, their subject being a
+ * shape `lib/errors` owns and this module only describes. They are
+ * driven over two bodies CAPTURED off real responses — a query parse
+ * this service's own vocabulary refused, and a `NotFoundError` —
+ * rather than over literals, because a transcribed body says only
+ * that the schema accepts the body its author had in mind. Both are
+ * here rather than one of them twice because they differ on the
+ * member the schema narrows: the 422 carries a structured `details`
+ * and the 404 carries none.
+ *
+ * Two of those four ACCEPT, and no guard-removal leg can redden a
+ * case that only accepts. So each carries its inverting half in the
+ * same case — the same captured body handed to `successEnvelopeSchema`
+ * and refused there — and the grid below names the legs that do
+ * reach them.
+ *
+ * Mutation grid, measured over the 31 cases in this file, with the
  * figure the first four legs answered at 15 cases beside each — a leg
  * that stops reproducing its old count is a wrong spelling rather
  * than a stale header. Turning `Math.ceil` into `Math.floor` reddens
@@ -73,25 +90,46 @@
  * envelope. Turning `totalPages` from non-negative to positive
  * reddens 1, the window-shapes case — which is there for exactly
  * that, an empty collection answering `0` pages being the one shape a
- * positive bound would refuse.
+ * positive bound would refuse. Every figure in those two paragraphs
+ * was re-measured at 31 and none of them moved, which is the reading
+ * that says the four cases below reach neither a builder nor the
+ * success envelopes.
+ *
+ * The failure schema's own legs, each naming the case it exists for.
+ * `code: z.string().optional()` reddens 1, the missing-member case.
+ * Replacing the `details` union with a bare `z.unknown().optional()`
+ * reddens 1, the bare-string case, which is the whole of what the
+ * union buys. Making `details` REQUIRED reddens 1, and it is the 404
+ * case — the inverting leg those two acceptances would otherwise
+ * have none of. `message: z.number()` reddens all 4, the two
+ * acceptances directly and the two refusals through their controls.
  */
 import type {
   PaginatedEnvelope,
   PaginationInput,
   SuccessEnvelope,
 } from './envelope.js';
+import type { Application } from 'express';
 import type { ZodSafeParseResult, ZodType } from 'zod';
 
-import { describe, expect, it } from 'vitest';
+import express from 'express';
+import request from 'supertest';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import { errorHandler, NotFoundError } from '../../lib/errors/index.js';
+import { createLogger } from '../../lib/logger/node.js';
 
 import {
   buildPaginationMeta,
+  errorEnvelopeSchema,
   ok,
   okPage,
   paginatedEnvelopeSchema,
   paginationMetaSchema,
   successEnvelopeSchema,
 } from './envelope.js';
+import { paginationQuerySchema } from './schemas.js';
+import { parseQuery } from './validation.js';
 
 /**
  * The page shapes the arithmetic table has to cover. Held set-equal to
@@ -448,5 +486,187 @@ describe('paginatedEnvelopeSchema', () => {
     // an array schema rebuilds the array, and only its members
     // survive by reference.
     expect(asInterface.data[0]).toBe(rows[0]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// errorEnvelopeSchema
+// ---------------------------------------------------------------------------
+
+/**
+ * A real logger with every level suppressed.
+ *
+ * `errorHandler` writes a warn line for each body captured below, and
+ * a hand-rolled recorder would be a second implementation of an
+ * interface this file makes no claim about. Silent is the whole
+ * requirement.
+ */
+const silentLogger = createLogger('envelope-test', { level: 'silent' });
+
+/** The route whose query parse the capture below refuses. */
+const REFUSED_QUERY_PATH = '/refused-query';
+
+/** The route that answers as if the resource were not there. */
+const ABSENT_PATH = '/absent';
+
+/** What that route's `NotFoundError` says. */
+const NO_SUCH_RESOURCE = 'No resource carries that address';
+
+/** A `?page` no coercion can turn into a number. */
+const NOT_A_NUMBER = 'x';
+
+/**
+ * An app carrying one route per failure shape, and nothing else.
+ *
+ * `errorHandler` is registered LAST, exactly as `createService` does
+ * it, because that registration is what turns a bare `throw` into a
+ * typed body — without it the cases below would capture Express's
+ * own 500 page rather than the shape this schema describes.
+ *
+ * The first route is a REAL route: it parses a real query string
+ * through the vocabulary every paginated route parses with, and
+ * answers the success envelope when the query is sound. So the body
+ * it refuses with is the one a client of this service would receive,
+ * rather than a `ValidationError` assembled to be captured.
+ *
+ * @returns The app, with both routes mounted at the root.
+ */
+function buildFailingApp(): Application {
+  const app = express();
+
+  app.get(REFUSED_QUERY_PATH, (req, res) => {
+    res.json(ok(parseQuery(paginationQuerySchema, req.query)));
+  });
+  app.get(ABSENT_PATH, () => {
+    throw new NotFoundError(NO_SUCH_RESOURCE);
+  });
+  app.use(errorHandler(silentLogger));
+
+  return app;
+}
+
+/** One failure body, as it reached the wire. */
+interface FailureCapture {
+  /** The status the response carried. */
+  readonly status: number;
+  /** The parsed body, exactly as `errorHandler` wrote it. */
+  readonly body: Record<string, unknown>;
+}
+
+/**
+ * The two captured bodies, keyed by the error class that produced
+ * them.
+ *
+ * Every case in the section below reads its subject from here rather
+ * than from a literal, and that is the whole of what makes an
+ * accepting case a statement about THIS service: a transcribed body
+ * says only that the schema accepts the body its author had in mind.
+ */
+const CAPTURED = new Map<string, FailureCapture>();
+
+/**
+ * The capture named `label`, or a failure naming what was captured.
+ *
+ * A `Map` lookup is `undefined`-typed and the cases read members off
+ * the body, so an absent capture would otherwise surface as a
+ * property read on `undefined` two lines later. Throwing here names
+ * the missing label instead.
+ *
+ * @param label - The error class whose body the case is about.
+ * @returns That capture.
+ * @throws Error When nothing was captured under `label`.
+ */
+function captureOf(label: string): FailureCapture {
+  const found = CAPTURED.get(label);
+
+  if (found === undefined) {
+    const captured = [...CAPTURED.keys()].join(', ');
+
+    throw new Error(`no capture for ${label}; captured: ${captured}`);
+  }
+
+  return found;
+}
+
+describe('errorEnvelopeSchema', () => {
+  beforeAll(async () => {
+    const app = buildFailingApp();
+    const refused = await request(app)
+      .get(REFUSED_QUERY_PATH)
+      .query({ page: NOT_A_NUMBER });
+    const absent = await request(app).get(ABSENT_PATH);
+
+    CAPTURED.set('ValidationError', {
+      status: refused.status,
+      body: refused.body as Record<string, unknown>,
+    });
+    CAPTURED.set('NotFoundError', {
+      status: absent.status,
+      body: absent.body as Record<string, unknown>,
+    });
+  });
+
+  it('refuses a failure body with no code member', () => {
+    const captured = captureOf('ValidationError');
+    const body = withoutMember(captured.body, 'code');
+    // The control: the same body as `errorHandler` wrote it. Without
+    // it this case reads the same against a schema that refuses
+    // everything it is handed.
+    const asWritten = errorEnvelopeSchema.safeParse(captured.body);
+
+    expect(refusalOf(errorEnvelopeSchema.safeParse(body))).toEqual([
+      { code: 'invalid_type', field: 'code' },
+    ]);
+    expect(refusalOf(asWritten)).toEqual([]);
+  });
+
+  it('refuses a failure body whose details is a bare string', () => {
+    const captured = captureOf('ValidationError');
+    const prose = { ...captured.body, details: captured.body['message'] };
+    // The control, varied along this case's own axis: the same body
+    // with `details` still the field list the refused parse built. So
+    // what is refused above is prose in that member's place, and not
+    // the member being present at all.
+    const asWritten = errorEnvelopeSchema.safeParse(captured.body);
+
+    expect(refusalOf(errorEnvelopeSchema.safeParse(prose))).toEqual([
+      { code: 'invalid_union', field: 'details' },
+    ]);
+    expect(refusalOf(asWritten)).toEqual([]);
+  });
+
+  it('accepts the 422 body a refused query parse answers with', () => {
+    const captured = captureOf('ValidationError');
+    const asFailure = errorEnvelopeSchema.safeParse(captured.body);
+    const asSuccess = successEnvelopeSchema.safeParse(captured.body);
+
+    expect(captured.status).toBe(422);
+    // The half of the shape this body is here for: a structured
+    // `details`, which is the member the schema narrows and the one a
+    // 422 owes its caller.
+    expect(Array.isArray(captured.body['details'])).toBe(true);
+    expect(refusalOf(asFailure)).toEqual([]);
+    // The inverting half. An accepting case reads the same against a
+    // schema that accepts anything, so it is paired with the other
+    // envelope refusing the same body — which is also this module's
+    // own claim that a refusal is not a success body with the
+    // discriminator flipped.
+    expect(asSuccess.success).toBe(false);
+  });
+
+  it('accepts the 404 body an absent resource answers with', () => {
+    const captured = captureOf('NotFoundError');
+    const asFailure = errorEnvelopeSchema.safeParse(captured.body);
+    const asSuccess = successEnvelopeSchema.safeParse(captured.body);
+
+    expect(captured.status).toBe(404);
+    // The other half of the shape: no `details` member at all, which
+    // is why the two captures are both here rather than one of them
+    // twice. `toJSON` omits the key rather than answering it
+    // `undefined`, so this is the optional member exercised by a body
+    // that really carries none.
+    expect(Object.keys(captured.body).sort()).toEqual(['code', 'message']);
+    expect(refusalOf(asFailure)).toEqual([]);
+    expect(asSuccess.success).toBe(false);
   });
 });
