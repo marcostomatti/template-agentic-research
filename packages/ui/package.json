@@ -68,7 +68,7 @@
     "@tanstack/react-query": "^5.102.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^1.39.0",
+    "lucide-react": "^1.40.0",
     "tailwind-merge": "^3.6.0"
   },
   "peerDependencies": {
@@ -94,7 +94,7 @@
     "@types/jest-image-snapshot": "^6.4.1",
     "@types/node": "^26.4.1",
     "@types/react": "^19.2.15",
-    "@types/react-dom": "^19.2.5",
+    "@types/react-dom": "^19.2.6",
     "@typescript-eslint/parser": "^8.69.0",
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/browser": "^4.1.7",
