@@ -829,11 +829,15 @@ limiter carries a store of its own, and each table row costs TWO — so the
 budget is per `createService`, and a describe that boots one starts from a
 fresh 100. Measured at the q14 `/docs` describe, whose CSP-scoping case
 took its spend from four requests to nine: FIVE services spending 39, 41,
-27, 5 and 10 of their own 100, where the single service the file used to
-boot would want 122 of its one 100 — a leg in that file's header boots one
-and reddens EIGHT, the last three wave-3 rows answering `429` and the two
-open routes behind them answering it too. The ceiling is now ENFORCED
-rather than recorded. The last case of each describe that has one reads
+27, 4 and 10 of their own 100, where the single service the file used to
+boot would want 121 of its one 100 — a leg in that file's header boots one
+and reddened EIGHT when it was measured, the last three wave-3 rows
+answering `429` and the mounts describe behind them answering it too. That
+figure and the 122 it was taken at both PREDATE q14's removal of
+`/example`, which took the second of that describe's open routes and one
+request with it; the leg has not been re-run, and `/health` is now the only
+open route the file reads. The ceiling is now ENFORCED rather than
+recorded. The last case of each describe that has one reads
 `Number(res.headers['ratelimit-remaining'])` off a real response — which
 needs no request the run was not already making — and holds
 `limit - remaining` against what that describe's own rows predict, while a

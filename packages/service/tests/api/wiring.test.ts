@@ -54,29 +54,33 @@
  *   every wave 1 route, behind its mount    39 of 100
  *   every wave 2 route, behind its mount    41 of 100
  *   every wave 3 route, behind its mount    27 of 100
- *   the wired service around the mounts      5 of 100
+ *   the wired service around the mounts      4 of 100
  *   the generated document behind /docs     10 of 100
  *
  * A wave describe spends two requests per row plus the one its own
  * spend case makes: 19, 20 and 13 rows against the limiter's 100. The
- * mounts describe spends four — `/health` and `/example` open, then the
- * unmatched path anonymously and with a credential — plus the same one.
- * THE `/docs` DESCRIBE IS READ THE SAME WAY NOW, its own spend case
- * having landed beside the policy one: it drives no table row either,
- * so its NINE are written out — `/docs` and `/docs/` anonymously and
- * then both again with a credential, plus the five the policy case
- * makes — and the header is what holds them to it. THE HEADROOM IS THE
- * POINT, and the wave-3 group is what turned it from an argument into a
+ * mounts describe spends three — `/health` open, then the unmatched
+ * path anonymously and with a credential — plus the same one. THE
+ * `/docs` DESCRIBE IS READ THE SAME WAY NOW, its own spend case having
+ * landed beside the policy one: it drives no table row either, so its
+ * NINE are written out — `/docs` and `/docs/` anonymously and then
+ * both again with a credential, plus the five the policy case makes —
+ * and the header is what holds them to it. THE HEADROOM IS THE POINT,
+ * and the wave-3 group is what turned it from an argument into a
  * measurement: the widest describe leaves 59, while the five describes
- * together want 122 of one window. Booting a single service for the
- * whole file is a leg below, and it now reddens EIGHT — the last three
- * wave-3 rows answering `429`, and `/health` and `/example` behind them
- * answering it too, on a file that had 18 of its one window left before
- * this wave landed. Adding rows to an EXISTING describe still spends
- * that describe's budget, and the third case in `the route table` is
- * what refuses a wave that has outgrown it: a `429` would otherwise
- * present as a flaky mount on whichever rows ran last, rather than as a
- * limit.
+ * together want 121 of one window. Booting a single service for the
+ * whole file is a leg below, and it reddened EIGHT when it was
+ * measured — the last three wave-3 rows answering `429`, and the
+ * mounts describe behind them answering it too, on a file that had 18
+ * of its one window left before this wave landed. That measurement was
+ * taken while `/example` was still open beside `/health`, at 122
+ * rather than 121, and it has not been re-run since: what the removal
+ * took is one request from a describe whose requests were already past
+ * the ceiling under that leg. Adding rows to an EXISTING describe
+ * still spends that describe's budget, and the third case in
+ * `the route table` is what refuses a wave that has outgrown it: a
+ * `429` would otherwise present as a flaky mount on whichever rows ran
+ * last, rather than as a limit.
  *
  * THE STORE IS THE SUBSTITUTION and it is the only one. Everything
  * else on the path is the shipped module: the real routers, the real
@@ -114,9 +118,15 @@
  * `401` anonymously. The waves are asserted to PARTITION the table
  * and to leave every describe inside the window, which is what stops
  * a derived describe list from quietly collapsing to one. And
- * `/health` and `/example` are asserted OPEN to an anonymous
- * request, which is what separates these `401`s from a service that
- * refuses everything without a credential.
+ * `/health` is asserted OPEN to an anonymous request, which is what
+ * separates these `401`s from a service that refuses everything
+ * without a credential. It carried that reading beside `/example`
+ * until q14, and it is the WEAKER half alone: `/health` is the
+ * framework's own route, registered before `register` runs, so an
+ * open answer from it says the service does not refuse everything
+ * and says nothing about mount ORDER. Nothing inside `register` sits
+ * above the guarded block on this service any more, so the ordering
+ * reading `/example` carried is gone rather than moved.
  *
  * NOTHING HERE WRITES, which is what lets one service serve a whole
  * describe. Each store is constructed empty, every `:slug` and `:id`
@@ -368,7 +378,6 @@ import { buildEntitiesRouter } from '../../src/entities/routes.js';
 import { buildFindingsRouter } from '../../src/findings/routes.js';
 import { generateOpenApiDocument } from '../../src/openapi.js';
 import { buildPersonasRouter } from '../../src/personas/routes.js';
-import { exampleRouter } from '../../src/routes/example.js';
 import { buildRunsRouter } from '../../src/runs/routes.js';
 import { buildSpendRouter } from '../../src/runs/spend-routes.js';
 import { buildSettingsRouter } from '../../src/settings/routes.js';
@@ -608,10 +617,12 @@ const SPEND_PROBE_COST = 1;
 /**
  * What `the wired service around the mounts` spends on its rows.
  *
- * Two open routes plus the unmatched path twice. Written out because
- * that describe drives no table rows, so nothing derives it.
+ * ONE open route plus the unmatched path twice. It was two open
+ * routes and a 4 until q14 removed `/example`, which is the whole of
+ * the difference. Written out because that describe drives no table
+ * rows, so nothing derives it.
  */
-const MOUNT_EDGE_REQUESTS = 4;
+const MOUNT_EDGE_REQUESTS = 3;
 
 /**
  * What `the generated document behind /docs` spends on its cases.
@@ -1060,11 +1071,15 @@ async function bootWiredService(): Promise<WiredService> {
     register(app, ctx) {
       captured = ctx;
 
-      // Above the mounts, exactly as in `src/index.ts`, and the one
-      // starter route there that needs no database. It stays open,
-      // which is what says the guard belongs to the mounts below
-      // rather than to the app.
-      app.use('/example', exampleRouter);
+      // NOTHING IS MOUNTED ABOVE THE GUARDED BLOCK here any more,
+      // which is itself the mirror. `GET /example` — the one starter
+      // route that needed no database, and the one that stayed open —
+      // sat on this line until q14 removed it together with
+      // `src/routes/example.js`; `src/index.ts` carries the three
+      // reasons at the head of its own `register`. The `/auth` mount
+      // that sits above the block THERE rides a bootstrapped
+      // credential and is `tests/auth/wiring.test.ts`'s subject, so
+      // this mirror has never carried it.
 
       app.use(ctx.requireAuth, buildDomainsRouter({ store }));
       app.use(ctx.requireAuth, buildCategoriesRouter({ store }));
@@ -1382,21 +1397,24 @@ describe('the wired service around the mounts', () => {
     expect(serviceOf().ctx.requireAuth).not.toBe(passthroughMiddleware);
   });
 
-  it('leaves the routes mounted above them open', async () => {
+  it('leaves the one route above them open', async () => {
     const { app } = serviceOf().handle;
 
     const health = await request(app).get(HEALTH_PATH);
-    const example = await request(app).get('/example');
 
     // The in-band control for every `401` above. A service refusing
     // every row because it refuses every anonymous request would
     // answer those cases identically, and only a route that stays
     // OPEN separates the two. `/health` is the framework's own,
-    // registered before `register` runs; `/example` is inside
-    // `register` and above every mount, which is the more exact
-    // reading of the mount ORDER.
+    // registered before `register` runs, and since q14 removed
+    // `/example` it is the ONLY open route this service answers —
+    // so what it still carries is that control, and what went with
+    // `/example` is the mount-ORDER half beside it: a route inside
+    // `register` and above every mount, staying open, said the
+    // guard belongs to the mount lines rather than to the app.
+    // Nothing is mounted above the guarded block here now, so no
+    // request on this service can read that ordering again.
     expect(health.status).toBe(200);
-    expect(example.status).toBe(200);
   });
 
   it('answers 401 before 404 on a path no router matched', async () => {
@@ -1427,10 +1445,11 @@ describe('the wired service around the mounts', () => {
     const { app } = serviceOf().handle;
     const spend = windowSpendOf(await request(app).get(HEALTH_PATH));
 
-    // This describe drives no table row, so its four requests are
-    // written out rather than derived: `/health` and `/example`
-    // open, then the unmatched path twice. The reading is the same
-    // one every wave describe makes, against the same ceiling.
+    // This describe drives no table row, so its three requests are
+    // written out rather than derived: `/health` open, then the
+    // unmatched path anonymously and with a credential. It was four
+    // while `/example` was open beside `/health`. The reading is the
+    // same one every wave describe makes, against the same ceiling.
     expect(spend.limit).toBe(RATE_LIMIT_MAX);
     expect(spend.spent).toBe(MOUNT_EDGE_REQUESTS + SPEND_PROBE_COST);
     expect(spend.remaining).toBeGreaterThan(0);
