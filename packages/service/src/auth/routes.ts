@@ -78,6 +78,7 @@
 import type { AuthDeps } from './service.js';
 import type { AuthStore } from './store.js';
 import type { Logger } from '../../lib/logger/node.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -141,6 +142,83 @@ const loginBodySchema = z.object({
 const tokenBodySchema = z.object({
   token: z.string().min(1),
 });
+
+/**
+ * What the three routes below bind, keyed by the label the wire
+ * carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. {@link loginBodySchema} and
+ * {@link tokenBodySchema} are this module's own and stay private —
+ * a table exports the schema OBJECTS and never the names they are
+ * declared under, so no sibling gains anything to import.
+ *
+ * THE KEYS CARRY THE `/auth` MOUNT, and this is the one table on
+ * the surface where they have to. Every other router in this
+ * package is mounted at `/` with root-absolute paths, so its label
+ * is the string it registered; these three register router-relative
+ * and `src/index.ts` mounts them under `/auth`. The **Endpoints**
+ * list on {@link buildAuthRouter} below is deliberately the other
+ * spelling, because it describes what this FILE declares — the keys
+ * here describe what a caller SENDS, which is what a document has
+ * to say and what a path seen in a log is greppable as.
+ *
+ * SO THE PREFIX IS TRANSCRIBED HERE AND READ FROM SOURCE THERE, on
+ * purpose. `tests/helpers/route-labels.ts` derives the mount out of
+ * `src/index.ts` rather than writing it out, so a mount moved to
+ * another path moves that roster and leaves this table behind —
+ * which is exactly what a coverage equality over the two is there
+ * to report. Two transcriptions would agree with each other
+ * forever.
+ *
+ * NO `params` ON ANY OF THE THREE, and the absence means the routes
+ * HAVE NO ADDRESS rather than that they ignore one. Each path is
+ * met at the mount, there is no `:id` or `:slug` narrowing any of
+ * them, and this file declares no address schema for an entry to
+ * bind.
+ *
+ * NO `query` EITHER, and that absence is a different one: these
+ * handlers read `req.query` nowhere at all, so an undeclared
+ * parameter is IGNORED here, where the same parameter sent to a
+ * route binding a strict query on this surface is a 422.
+ *
+ * TWO ENTRIES BIND ONE OBJECT, which is {@link tokenBodySchema}'s
+ * own stated reason read off a second shape: logout and introspect
+ * take exactly the same thing, so the identity rule makes their
+ * `body` members the same const rather than two spellings of it.
+ *
+ * WHAT A FAILED PARSE ANSWERS IS OUTSIDE THIS TABLE, and on these
+ * routes it is not this surface's ordinary 422. Nothing here goes
+ * through `src/http/validation.ts`: each handler `safeParse`s and
+ * writes its own refusal, so login answers one flat `401` for a
+ * malformed body exactly as for a wrong password, and the other two
+ * answer `400`. The header above argues each. A document assembled
+ * from this table describes what the three routes ACCEPT, and their
+ * refusals have to be read off that prose — the `errorHandler`
+ * `createService` registers last is reached by none of them.
+ *
+ * THE INTROSPECTION SECRET AND THE LOGIN LIMITER ARE OUTSIDE IT
+ * TOO, and could not be put in. `RouteSchemas` declares a params, a
+ * query and a body and no header member at all, so the
+ * `Authorization` gate that answers `401` before the introspection
+ * route parses anything is invisible here; and the `429` ahead of
+ * login is a second handler rather than anything a schema holds.
+ * That second one is also why a walk over this router answers FOUR
+ * labels where this table has three keys — the limiter is a handler
+ * on an existing route and not a route — so the equality that
+ * compares them takes the SET.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const authRouteSchemas = {
+  'POST /auth/login': { body: loginBodySchema },
+  'POST /auth/logout': { body: tokenBodySchema },
+  'POST /auth/introspect': { body: tokenBodySchema },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /**
  * Everything {@link buildAuthRouter} needs.
