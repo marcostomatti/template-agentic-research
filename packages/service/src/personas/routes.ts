@@ -101,6 +101,7 @@
  * like any other bad shape.
  */
 import type { PersonaServiceStore } from './service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -117,9 +118,11 @@ import { parseBody, parseQuery } from '../http/validation.js';
 
 import {
   createPersona,
+  createPersonaSchema,
   deletePersona,
   listPersonas,
   patchPersona,
+  patchPersonaSchema,
 } from './service.js';
 
 /**
@@ -161,14 +164,62 @@ const personaAddressSchema = z.object({ id: resourceIdParamSchema }).strict();
  * names one schema covering the whole request, spread from the
  * pieces this route already parses rather than written again.
  *
- * The address consts above stay private. Nothing here exports one,
- * so their claim that the three routers agree by intent rather than
- * by derivation is untouched by this schema.
+ * The address consts above stay private, and the binding table
+ * below does not change that: a table exports the schema OBJECTS a
+ * route parses with rather than the NAMES they are declared under,
+ * so a sibling router still has nothing here to import and their
+ * claim that the three routers agree by intent rather than by
+ * derivation is untouched by either export.
  */
 export const personaListToolInputSchema = z.object({
   ...domainAddressSchema.shape,
   ...paginationQuerySchema.shape,
 }).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. The bodies are the service's, imported
+ * rather than declared, because no handler below parses one — the
+ * module header's rule, read straight off the table.
+ *
+ * THE TWO PATH SHAPES ARE VISIBLE HERE AS TWO ADDRESS SCHEMAS. The
+ * collection routes bind {@link domainAddressSchema} and the two
+ * writes bind {@link personaAddressSchema}, which is the split the
+ * module header argues for rather than a second thing to keep in
+ * step with it: a persona is met in its domain and written by its
+ * id, so no route below binds both.
+ *
+ * ONE ROUTE BINDS A QUERY AND THREE BIND NONE, which is a fact
+ * about them rather than a gap here. `GET /domains/:slug/personas`
+ * is paginated and refuses an undeclared parameter through
+ * `paginationQuerySchema`; the two writes and the delete never read
+ * `req.query` at all, so none of them refuses anything there. A
+ * document has to keep those two apart, which is why an absent
+ * member means the second and never the first.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const personasRouteSchemas = {
+  'GET /domains/:slug/personas': {
+    params: domainAddressSchema,
+    query: paginationQuerySchema,
+  },
+  'POST /domains/:slug/personas': {
+    params: domainAddressSchema,
+    body: createPersonaSchema,
+  },
+  'PATCH /personas/:id': {
+    params: personaAddressSchema,
+    body: patchPersonaSchema,
+  },
+  'DELETE /personas/:id': { params: personaAddressSchema },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildPersonasRouter} needs. */
 export interface PersonasRouterOptions {

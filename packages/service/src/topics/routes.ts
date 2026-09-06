@@ -152,6 +152,7 @@
  * like any other bad shape.
  */
 import type { TopicServiceStore } from './service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -168,10 +169,13 @@ import { parseBody, parseQuery } from '../http/validation.js';
 
 import {
   createTopic,
+  createTopicSchema,
   deleteTopic,
   listTopics,
   patchTopic,
+  patchTopicSchema,
   pauseTopic,
+  pauseTopicSchema,
   runTopicNow,
 } from './service.js';
 
@@ -213,9 +217,12 @@ const topicAddressSchema = z.object({ id: resourceIdParamSchema }).strict();
  * names one schema covering the whole request, spread from the
  * pieces this route already parses rather than written again.
  *
- * The address consts above stay private. Nothing here exports one,
- * so the sibling routers' claim that they agree by intent rather
- * than by derivation is untouched by this pair.
+ * The address consts above stay private, and the binding table
+ * below does not change that: a table exports the schema OBJECTS a
+ * route parses with rather than the NAMES they are declared under,
+ * so a sibling router still has nothing here to import and their
+ * claim that they agree by intent rather than by derivation is
+ * untouched by either export.
  */
 export const topicListToolInputSchema = z.object({
   ...domainAddressSchema.shape,
@@ -239,6 +246,63 @@ export const topicListToolInputSchema = z.object({
 export const topicRunNowToolInputSchema = z.object({
   ...topicAddressSchema.shape,
 }).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. The bodies are the service's, imported
+ * rather than declared, because no handler below parses one — the
+ * module header's rule, read straight off the table.
+ *
+ * SIX ROUTES AND TWO ADDRESS SCHEMAS. The collection routes bind
+ * {@link domainAddressSchema} and the four that address one topic
+ * bind {@link topicAddressSchema}, which is the split the module
+ * header argues for rather than a second thing to keep in step
+ * with it.
+ *
+ * THE TWO SCHEDULE VERBS BIND DIFFERENTLY, and the asymmetry is
+ * real rather than an omission here. `POST /topics/:id/pause`
+ * counts cycles, so it binds {@link pauseTopicSchema};
+ * `POST /topics/:id/run-now` takes no argument beyond the id, so it
+ * binds the address alone. What that absence means is that the
+ * route never LOOKS at a body — `express.json()` will have parsed
+ * one, {@link runTopicNow} is handed nothing, and a request that
+ * sent a body is answered exactly as one that did not. It is not a
+ * route that refuses a body, and a document built off an empty
+ * body binding would describe the wrong one.
+ *
+ * ONE ROUTE BINDS A QUERY. `GET /domains/:slug/topics` is paginated
+ * and refuses an undeclared parameter through
+ * `paginationQuerySchema`; the other five never read `req.query`,
+ * so none of them refuses anything there.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const topicsRouteSchemas = {
+  'GET /domains/:slug/topics': {
+    params: domainAddressSchema,
+    query: paginationQuerySchema,
+  },
+  'POST /domains/:slug/topics': {
+    params: domainAddressSchema,
+    body: createTopicSchema,
+  },
+  'PATCH /topics/:id': {
+    params: topicAddressSchema,
+    body: patchTopicSchema,
+  },
+  'DELETE /topics/:id': { params: topicAddressSchema },
+  'POST /topics/:id/run-now': { params: topicAddressSchema },
+  'POST /topics/:id/pause': {
+    params: topicAddressSchema,
+    body: pauseTopicSchema,
+  },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildTopicsRouter} needs. */
 export interface TopicsRouterOptions {
