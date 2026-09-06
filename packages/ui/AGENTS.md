@@ -133,6 +133,106 @@ files than exist", the two reaching the stories through completely
 different pipelines. Hold them against each other rather than quoting
 one.
 
+**Reading a `test:visual` capture.** The storybook test-runner is JEST,
+which spells a per-file verdict as the WORDS `PASS` and `FAIL`, so a
+glyph matcher has NO positive control there and its zero is the shape a
+broken run also produces (a green 86-file run counted 2 U+2713, both
+from `build:storybook`'s vite ticks, and 0 from the failure family).
+Read the `PASS` LINE COUNT and hold it against `Test Suites: N` — 86 ==
+86 with 0 `FAIL` lines is a positive count from the same reporter whose
+zero is being read. Three more reconciliations are free in the run you
+already did. `Test Suites: N` against
+`git ls-files —— 'src/**/*.stories.tsx'` (BARE pathspec, from inside the
+package — the repo-root-relative form answers a false 0 that reads as
+"this package ships no stories") is the FILE-level half of
+`check:stories`. `Snapshots: N` == the file count in
+`visual/__image_snapshots__/` == `Tests: M` doubled, the factor being
+the THEME count the harness shoots (744 == 2 x 372, splitting exactly
+into `——light.png` and `——dark.png`). And the story TOTAL reconciles
+THREE ways once a build has run — `test:visual`'s `Tests: N`,
+`check:stories`'s `N/N`, and the `type === 'story'` entry count in
+`storybook-static/index.json`, three different pipelines, so a runner
+that collected fewer stories than exist shows up as a DISAGREEMENT
+rather than as a smaller green number. `check:stories` also carries the
+in-band control `test:visual` lacks: one U+2713 line per story, so that
+count against its own denominator (377 == 377, 0 U+2717) is a positive
+reading from the same emitter as the zero.
+
+**A NEW component's baselines need NO `test:visual:update` run**, and
+reaching for one is DESTRUCTIVE rather than redundant. The plain ASSERT
+run WRITES every missing baseline and passes — measured on a five-story
+landing as `matched: 744, added: 10, updated: 0, didUpdate: false`, the
+10 being that file's stories times the two themes — where `——update`
+adds `-u`, rewrites ALL of them and reports `didUpdate: true`, deleting
+the very evidence the baseline-safe order exists to produce. So the
+shape for a component landing is assert-then-REASSERT, the second run
+answering `matched: 754, added: 0`. The counter saying the seed was
+CONFINED is `snapshot.filesAdded` (1, the one new story file); `added`
+alone cannot say which files it came from, and `unchecked: 0` is what
+says no baseline went unexercised.
+
+**A cheap THIRD gate for a component landing**, between the unit suite
+and the minutes-long visual one: `bun x vitest run ——project storybook`
+from inside the package renders EVERY story through chromium in —12s,
+where `bun run test` is the cache/unit project ALONE and reads no
+component at all. It runs NO `pretest`, so it builds nothing and is safe
+beside another checkout. It reconciles two ways in the run you already
+did — `Test Files` against `git ls-files —— 'src/**/*.stories.tsx'` plus
+whatever is still untracked (measured 87 == 86 + 1), and a single-file
+re-run naming each story it collected. That pair separates "my stories
+were collected and rendered" from "the suite is green".
+
+**Play-function story conventions**, none of them enforced. Assertions
+come from `storybook/test` (`expect`, `userEvent`, `waitFor`, `within`)
+and NEVER from `vitest`, which crashes the preview — five story files
+already spell it, so copy one. A story asserting a STATE TRANSITION
+needs a stateful `const XDemo = () => {...}` plus `render: () => <XDemo
+/>`, because a fully controlled component only changes when its owner
+says so and `args` cannot say it (`ChipList`, `SearchSuggest`,
+`CodeInput` are the precedents). And any claim about TAB needs focusable
+SENTINELS the story itself renders on BOTH sides of the widget:
+`userEvent.tab()` is document-wide, a bare canvas has nothing on either
+side, and "one Tab reaches it and no more" then has nowhere to be
+measured from. The gate for all of it is
+`bun x vitest run ——project storybook <the story file>`, —3s.
+
+**A play function's PASS is not evidence the walk is measuring**, and
+the two ways it goes vacuous are both invisible. An assertion taken from
+a widget's FALLBACK position asserts nothing: deleting a roving
+tabindex's whole "return to where focus last was" fallback left a
+tab-out/tab-back-in case GREEN, because focus had been sitting on the
+FIRST row, which is also what the widget falls back to. Take that
+reading only after focus has MOVED off the fallback, and pick the leg by
+deleting the fallback rather than by breaking the movement. And a guard
+can be co-defended by the RENDERING rather than by another guard:
+dropping the `return` that stops an opening ArrowRight from also
+descending is GREEN in every spelling, a collapsed branch's children not
+being in the DOM at all. Attribute such a green with a `throw` on the
+branch the leg claims to reach — 12 of 13 legs red over one keyboard
+story, and the 13th was dead rather than uncovered.
+
+**`dist/index.d.ts` is a SIX-LINE re-export barrel**, so grepping it for
+a component's name answers 0 even on a green build that shipped it — the
+declaration is at `dist/<layer>/<Name>.d.ts`. That matters because
+`@ar/web` resolves this package's TYPES through `dist/` and not through
+`src/`: a component landed in `packages/ui/src` is INVISIBLE to that
+package's `check-types` until this one is BUILT, and the failure is a
+plain TS2305 naming the export as if it did not exist. `bun run build`
+(—1 min) is the fix. The entry file is `src/index.tsx` and not
+`src/index.ts`, so a reflexive `head src/index.ts` reports the package
+as having no barrel at all.
+
+**The `offline-react-render-probe` skill works UNCHANGED here** — `bun
+<probe>.tsx` from inside the package resolves react/react-dom and
+renders a component to markup with no jsdom, no runner and no storybook,
+which is the only way to MEASURE what a `.tsx` renders in a package
+shipping no component unit tests by design. Its lazy-suspend trap has a
+specific tripwire: `src/lib/icons.tsx`'s `StrokeIcon` is a plain inline
+SVG and is safe, while the `Icon` ATOM is `React.lazy` per glyph and
+makes `renderToStaticMarkup` throw. Prefer `StrokeIcon` in any component
+whose markup you intend to probe, and delete the probe in the same
+braced command that runs it.
+
 ## Visual CI
 
 `.github/workflows/front.yml` runs the visual suite on a self-hosted runner
