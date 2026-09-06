@@ -28,8 +28,10 @@ You want to start a new service from this template.
 1. Copy the repo (or use GitHub's template button) into a fresh repo.
 2. Rename the package in `package.json` and the `serviceId` values in
    `src/index.ts`, `src/mcp/server.ts`, and `tests/health.test.ts`.
-3. Replace the starter surface: `src/routes/example.ts`, the `users`
-   schema/repository, the `heartbeat` cron job.
+3. Replace the starter surface: the `users` schema/repository and the
+   `heartbeat` cron job. The template also shipped a `src/routes/example.ts`
+   demonstrator, removed here in q14 (see the note at the head of `register`
+   in `src/index.ts`).
 4. Delete what you don't need (`src/redis/` if you never opt in, `src/mcp/`
    if you only serve HTTP, `specs/` entries that don't apply) — and keep the
    [NOTICE](NOTICE) attribution either way.

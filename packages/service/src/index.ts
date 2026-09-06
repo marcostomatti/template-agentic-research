@@ -87,7 +87,6 @@ import { generateOpenApiDocument } from './openapi.js';
 import { createDbPersonaStore } from './personas/db-store.js';
 import { buildPersonasRouter } from './personas/routes.js';
 import { createRedisDependency } from './redis/index.js';
-import { exampleRouter } from './routes/example.js';
 import { createDbRunStore } from './runs/db-store.js';
 import { buildRunsRouter } from './runs/routes.js';
 import { buildSpendRouter } from './runs/spend-routes.js';
@@ -358,7 +357,38 @@ await createService({
   ],
   ...authConfig,
   register(app, ctx) {
-    app.use('/example', exampleRouter);
+    // `GET /example` — the demonstrator route this package inherited from
+    // its template — was mounted HERE, first in `register`. It was
+    // removed in q14 together with `src/routes/example.ts`, which held
+    // nothing else and took the directory with it. Three reasons, none of
+    // them decisive alone:
+    //
+    // - The service now carries a real surface. The seventeen routers
+    //   wired in this block answer fifty-five routes, so a route whose
+    //   whole purpose was to show that a router can be mounted at all
+    //   demonstrates nothing this file does not now say better.
+    // - It was OPEN, on a surface where nothing else is. Every mount
+    //   below carries `ctx.requireAuth`, and the `/docs` decision at the
+    //   foot of this block spends a paragraph on keeping one
+    //   operator-only route explicitly guarded rather than guarded by
+    //   position. An unauthenticated demonstrator on that same surface is
+    //   the posture that argument is against.
+    // - Its response body put the template repository name on the wire,
+    //   to any caller. That is NOT a forbidden-name hit and never was:
+    //   `findForbiddenMatches` over `src/routes/example.ts` answered ZERO
+    //   against all five needles, measured with a derived per-line
+    //   planted control live at 5 of 5 ids and a clean sample at zero.
+    //   The needle set does not carry that name, so what the route leaked
+    //   was template IDENTITY rather than an origin name — which is why
+    //   no gate here ever reported it.
+    //
+    // The removal does not take that name out of this file. The
+    // `serviceId` on the `createService` call above and the logger name
+    // at the top of the file still carry it, and `package.json` names the
+    // template repository in its `repository.url`. Neither of the first
+    // two reaches a caller from here: the only route that reports
+    // `serviceId` is the control plane's status route, and this file
+    // passes no `control` block, so `/_control` is never mounted at all.
 
     // The session routes ride the same toggle as the verifier: with no
     // credential bootstrapped, a login could only ever be refused.
@@ -400,13 +430,13 @@ await createService({
     // at `/` with no path of its own, so its `ctx.requireAuth` runs for
     // every request that REACHES it and not only for the ones its router
     // matches. Measured against a service carrying an auth block: from
-    // here, `/example`, `/auth/*`, `/users` and `/me` answer exactly as
-    // they did, because all four are mounted above; a credentialled
-    // request runs the guard once per mount it falls through, so the
-    // LAST router below runs it once for every router above it too; and
-    // an unmatched path answers `401` rather than `404` to a caller with
-    // no credential, which is the one answer on this service these
-    // mounts change outside their own prefixes.
+    // here, `/auth/*`, `/users` and `/me` answer exactly as they did,
+    // because all three are mounted above; a credentialled request runs
+    // the guard once per mount it falls through, so the LAST router below
+    // runs it once for every router above it too; and an unmatched path
+    // answers `401` rather than `404` to a caller with no credential,
+    // which is the one answer on this service these mounts change outside
+    // their own prefixes.
     app.use(ctx.requireAuth, buildDomainsRouter({ store: researchStore }));
     app.use(ctx.requireAuth, buildCategoriesRouter({ store: researchStore }));
     app.use(ctx.requireAuth, buildTermsRouter({ store: researchStore }));
