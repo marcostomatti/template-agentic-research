@@ -14,20 +14,33 @@ groups — the two schedule verbs and the one column they may
 write, the columns the pipeline owns and never accepts, the
 connector-secret mask, and the read-only failures queue.
 
-Each half was written before any of its routes existed, which is
-the point. Every rule below is one that each resource group would
-otherwise settle separately, and a surface whose 422 body depends on
-which router answered is not one contract but four. The routes land
-against this document; where one of them departs from it, the
-departure is argued here in the same commit rather than left for a
-reader to find in a response.
+Wave 3 adds five more groups over the same schema and takes the pair
+wave 2 deferred: the findings a scoring pass produced and the
+verdicts an operator rules on them with, the raw documents behind
+them, the entity registry and its research approvals, the run ledger
+with the spend summary over it, and the pending-config queue on
+`/sources/:id`. What THEY share sits below the wave-2 groups — the
+read-first law the ports carry rather than promise, the per-domain
+verdict vocabulary, the time-window and sort vocabulary two groups
+read, the one cap stored untrusted text is cut at, the approval
+vocabulary both gates answer in, and the reason no member of the
+spend surface is money.
+
+Each of the three halves was written before any of its routes
+existed, which is the point. Every rule below is one that each
+resource group would otherwise settle separately, and a surface
+whose 422 body depends on which router answered is not one contract
+but one per router. The routes land against this document; where
+one of them departs from it, the departure is argued here in the
+same commit rather than left for a reader to find in a response.
 
 It is the document the HTTP API row of the behaviour table in
 `docs/architecture/00-overview.md` names, so a change to an
 envelope, to the pagination contract, to the guard or to a declared
 path lands here with the code. The designs it implements are
-`.specs/q08-api-wave-1.md` and `.specs/q11-api-wave-2.md`, waves 1
-and 2 of three carved out of `.specs/2026-08-19-backend-api.md`.
+`.specs/q08-api-wave-1.md`, `.specs/q11-api-wave-2.md` and
+`.specs/q13-api-wave-3-mcp.md`, the three waves carved out of
+`.specs/2026-08-19-backend-api.md`.
 
 The framework half is not this. `lib/express/` builds the app,
 installs the middleware and registers the error handler last;
@@ -74,10 +87,13 @@ handlers carry no try/catch at all: `createService` registers
 `errorHandler` as the last middleware, and under Express 5 a bare
 `throw` inside an `async` handler reaches it with no `next(err)`.
 
-Wave 3 exposes those same service functions as MCP tools and reads
-`err.code` rather than an HTTP status, which is why the code is the
-part that has to mean something and the status is the part that
-merely has to be right.
+Wave 3 exposes some of those same service functions as MCP tools,
+and a raise reaches a tool's caller as its message alone — no
+status, and no `code` either. So the status stays the part that
+merely has to be right, `code` is what an HTTP client discriminates
+on, and the message is the one part both protocols carry.
+`docs/architecture/09-mcp.md` carries what a raise becomes on that
+crossing.
 
 ### The asymmetry between them is deliberate and cheaper than the fix
 
@@ -527,28 +543,96 @@ listing that reads like a misfile.
 
 `GET /sources/:id/pending-configs` and
 `POST /sources/:id/approve-config` are in the parent spec's sources
-list and are NOT in this wave. They read and rule on
-`source_config_proposals`, and they move to q13, the approvals wave,
-where they land beside the entity approvals over `research_pool`.
+list and were NOT in wave 2. They read and rule on
+`source_config_proposals`, and they moved to q13, the approvals
+wave, where they landed beside the entity approvals over
+`research_pool`. The deferral is closed rather than pending: both
+paths are in the wave-3 table below, served by
+`buildSourceProposalsRouter` in `src/sources/proposals-routes.ts`.
 
-The reason they were carved out has expired and the deferral stands on
-a second one that has not. The table was still moving when this wave
-was planned — it arrived on leg A with q09, so a route planned against
-it here would have targeted a schema somebody else was landing — and
-it is in the tree now. What has not changed is that an approval gate
-is one vocabulary and this repository has two subjects on it:
-`scripts/approve.ts` already rules on `source_config_proposals` and on
-`research_pool` from one CLI, and the HTTP half should arrive as one
-surface answering for both rather than as half a surface here and the
-other half two waves later.
+The reason they were carved out of wave 2 had already expired when
+that wave was written, and the deferral stood on a second one that
+had not. The table was still moving when wave 2 was planned — it
+arrived on leg A with q09, so a route planned against it there would
+have targeted a schema somebody else was landing — and it was in the
+tree before those routes landed. What had not changed is that an
+approval gate is one vocabulary and this repository has two subjects
+on it: `scripts/approve.ts` rules on `source_config_proposals` and
+on `research_pool` from one CLI, and the HTTP half was to arrive as
+one surface answering for both rather than as half a surface in wave
+2 and the other half two waves later.
 
-So the pair is scheduled rather than missing, and this is the sentence
-that says so. The same note sits beside the approval gate itself in
+That is what arrived. `src/approvals/ruling.ts` is the one
+vocabulary both gates answer in, and the pair landed in the same
+wave as `POST /entities/:id/approve-research`, which is the other
+subject — so neither gate had to settle the subject word for itself,
+and neither can drift into answering differently about the same act.
+`The approval vocabulary` below is where that is argued.
+
+The same note sits beside the approval gate itself in
 `docs/architecture/04-sources.md`, under `The HTTP half of this gate
-is scheduled`, so a reader who reaches the gate from the pipeline
+landed with q13`, so a reader who reaches the gate from the pipeline
 side is not left to conclude that the API forgot it. The `Sources`
-group below repeats it a third time, where a reader looking up the
-four routes would otherwise find six expected and four listed.
+group below carries it a third time, where a reader looking that
+group up meets the pair under a router of its own.
+
+### The five prefixes wave 3 adds, and the two it borrows
+
+| Router | Module | Paths it declares |
+| --- | --- | --- |
+| `buildFindingsRouter` | `src/findings/routes.ts` | `GET /domains/:slug/findings`, `GET /findings/:id`, `PATCH /findings/:id/verdict` |
+| `buildDocumentsRouter` | `src/documents/routes.ts` | `GET /domains/:slug/documents` |
+| `buildEntitiesRouter` | `src/entities/routes.ts` | `GET /entities/:id`, `PATCH /entities/:id`, `GET /entities/:id/research`, `POST /entities/:id/approve-research` |
+| `buildRunsRouter` | `src/runs/routes.ts` | `GET /runs`, `GET /runs/:id` |
+| `buildSpendRouter` | `src/runs/spend-routes.ts` | `GET /spend/summary` |
+| `buildSourceProposalsRouter` | `src/sources/proposals-routes.ts` | `GET /sources/:id/pending-configs`, `POST /sources/:id/approve-config` |
+
+The five new prefixes are `/findings`, `/documents`, `/entities`,
+`/runs` and `/spend`, and none of them collides with a framework
+path, with `/auth/*`, or with a prefix either earlier wave took. Two
+existing prefixes are borrowed rather than added, which is the third
+wave running to do it: `/domains/:slug` carries two more collections,
+and `/sources/:id` carries the proposal pair beside the failures
+queue it already carries.
+
+Four of the five carry a path in this wave and `/documents` does
+not, which is worth stating rather than leaving a reader to count the
+table. The documents group serves exactly one route and it is
+`GET /domains/:slug/documents`, so the prefix is claimed against the
+framework and the two earlier waves rather than taken — a raw
+document is met in its domain and there is no `GET /documents/:id`
+to look for. What the claim buys is that the name stays free: a
+document addressed by its own id is the obvious next thing to want,
+and a prefix reserved in this table is one nothing else can quietly
+occupy first.
+
+Six routers over five prefixes, because neither a prefix nor a
+directory maps one to one onto them. `GET /spend/summary` is served
+from `src/runs/` rather than from a directory of its own: the
+aggregation is over `llm_calls`, that table hangs off `runs`, and a
+`src/spend/` holding one read over somebody else's table would be a
+directory named for a question rather than for a subject. It is a
+second router in the same directory instead — `spend-routes.ts`
+beside `routes.ts` — so the mount list stays one line per prefix.
+
+The proposal pair lands in `src/sources/` for the reason the
+failures queue did, one wave earlier: `source_config_proposals` is
+one table and `SourceStore` is one port over the sources group, so
+the pair arrives as `proposals-service.ts` and `proposals-routes.ts`
+beside the adapter contract and the wave-2 HTTP half rather than in a
+second directory named for the same group. `The paths wave 2 defers`
+above is where the pair was promised; this row is where it is
+declared.
+
+Three of the five new prefixes are addressed by id alone —
+`/findings/:id`, `/entities/:id` and `/runs/:id` — which is the rule
+above rather than an exception to it: a domain is met by slug and
+everything else is written by its id. `/spend/summary` is the one
+path here that addresses nothing at all, in the shape `/settings`
+already takes: it is a question over a whole deployment's ledger, and
+the domain it may be narrowed to travels as a query parameter rather
+than as a segment, because a summary over every domain is the
+ordinary request rather than a special case of one.
 
 ## Domains
 
@@ -565,8 +649,11 @@ four routes would otherwise find six expected and four listed.
 `src/domains/routes.ts` declares all five and decides none of them:
 each handler reads the address, derives the window, calls the
 matching function in `src/domains/service.ts` and chooses a status.
-Wave 3 exposes those same functions as MCP tools, so a rule that
-lived in a handler would be a rule that surface could not reach.
+Wave 3 exposes the two reads among them as MCP tools, so a rule
+that lived in a handler would be a rule that surface could not
+reach; the other three are off it, and `The banned surfaces` and
+`The deliberate absences` in `docs/architecture/09-mcp.md` say which
+is which.
 
 ### A create answers `201` and carries no `Location` header
 
@@ -1830,26 +1917,55 @@ would be a button that hides that nothing was fixed. `enabled` is
 the column the schema provides for retiring a feed, and it IS
 patchable.
 
-### The pending-config pair is not on this router, and q13 takes it
+### The pending-config pair is a router of its own under this prefix
 
-`GET /sources/:id/pending-configs` and
-`POST /sources/:id/approve-config` are in the parent spec's sources
-list and are not among the four routes above. They read and rule on
-`source_config_proposals`, and they move to q13, the approvals wave,
-where they land beside the entity approvals over `research_pool`.
+| Method and path | Answers |
+| --- | --- |
+| `GET /sources/:id/pending-configs` | `200` with one page of the arrangements proposed for the feed and not yet ruled on, `proposed_at` ascending with `id` ascending breaking a tie, plus `meta`. Each row is the proposal as stored. `404` for an unknown id, `422` for a segment that is not one and for the pagination faults every list route answers. Never `409`. |
+| `POST /sources/:id/approve-config` | `200` with the four-member ruling. `404` for an unknown source id, and for a `proposalId` naming nothing or naming a proposal queued against another feed — one sentence for both. `409` when that proposal has already been applied. `422` for a segment that is not an id, for a body that is not `{ proposalId }`, and for an undeclared key in it. |
 
-`The paths wave 2 defers` above carries the whole argument, and the
-same note sits beside the approval gate itself in
-`docs/architecture/04-sources.md`. In short: the reason they were
-carved out has expired — the table arrived on leg A with q09 and is
-in the tree — and the deferral stands on the reason that has not,
-which is that an approval gate is one vocabulary with two subjects
-and `scripts/approve.ts` already rules on both from one CLI. The
-HTTP half should arrive as one surface answering for both rather
-than as half a surface here and the other half two waves later.
+`buildSourceProposalsRouter` in `src/sources/proposals-routes.ts` is
+the whole of it: one `get`, one `post`, and a store that is the
+five-method `Pick` `src/sources/proposals-service.ts` declares, of
+which exactly one writes. So this prefix carries three routers — the
+two `sources` writes above, the read-only failures queue, and this
+pair — and the split is by subject rather than by path, exactly as
+`src/sources/store.ts` splits the port all three narrow.
 
-So this group is four routes rather than six on purpose, and this is
-the sentence that says so.
+The queue is the CLI's queue. The predicate and both ordering keys
+are `SourceStore.listPendingProposals`, which is
+`listPendingProposals` in `scripts/approve.ts` for the part that
+decides which row is next, so a backlog worked from a terminal and
+one worked from this route are one backlog rather than two that
+agree today. `The pending queue is the CLI's queue` below argues it,
+including why oldest-first inverts every other list on this surface.
+
+The rows come back AS STORED, which is where this queue departs from
+the failures one under the same prefix. That one cuts and masks a
+captured body because nobody chose the text; here the whole point of
+the page is that a person rules on the exact two documents a
+proposer answered, so an account of either would make the ruling a
+ruling about something else.
+
+The approval writes two tables or neither.
+`SourceStore.approveAndApplyProposal` stamps the ruling on the
+proposal, derives the feed's `parser_config` and `contract` from the
+row it just stamped, and stamps the application, in one transaction.
+Neither the router nor `src/sources/proposals-service.ts` derives
+those two columns: `proposalToSourceUpdate` in
+`src/sources/config-proposer.ts` is the one function every writer
+goes through, and `docs/architecture/04-sources.md` is where the gap
+it stands in is argued.
+
+This is the one approval gate on this surface that answers `409`.
+Ratifying an intention twice is a no-op and applying a proposal
+twice is not, because the first application already wrote both
+documents onto the feed. `RULING_ACTS` in `src/approvals/ruling.ts`
+declares the difference, and `An approval is idempotent` below is
+where the other subject's answer is argued.
+
+So the group is seven paths across three routers, and the pair wave
+2 named as deferred is the last two of them.
 
 ## Connectors
 
@@ -2203,3 +2319,1314 @@ a single page already holds — a domain's standing export requests are
 counted in single figures, bounded by how many formats there are
 times how many connectors a deployment runs. It would be additive if
 that stops being true.
+
+## Read-first
+
+### No port in this wave declares a method that recomputes anything
+
+Read-first is a property of the port types rather than a promise a
+handler keeps. `FindingStore`, `DocumentStore`, `EntityStore` and
+`RunStore` declare no method that writes `findings.score`,
+`findings.score_version` or `documents.parse_status`, so a handler
+cannot re-score a finding or re-file a parse by mistake or by a
+later edit — there is nothing on the store to call.
+
+That is the shape `GET /sources/:id/failures` already took one wave
+earlier, stated once for a whole wave rather than argued per group.
+It is worth having as a type rather than as a sentence because the
+edit that would break it is small and reads as an improvement: a
+review surface showing a failed parse is one line away from offering
+to retry it, and a findings list showing a score is one line away
+from offering to recompute one.
+
+### The wave writes in exactly four places, and they are named
+
+The four writers are the verdict append on `finding_labels`, the
+patch on `entities`, the approval on `research_pool`, and the
+approve-and-apply on `source_config_proposals` and the source row it
+updates. Everything else this wave serves is a read.
+
+`tests/invariants/api-read-first.test.ts` derives that split from
+`keyof` over the port and patch types rather than from this
+paragraph, so a fifth writer added to a port fails the invariant
+naming itself, and a patch type gaining a `score`, `scoreVersion` or
+`parseStatus` member fails it the same way. A roster nothing checks
+is a roster the next contributor widens, which is the same argument
+the MCP non-exposure claim rests on.
+
+### A workflow is not reachable from here, and the ledger is not written
+
+`The API never claims a row, opens a run, or invokes a workflow`
+above is a wave-2 claim about the schedule verbs, and it holds
+unchanged for a wave whose whole subject is what a pipeline
+produced. Nothing here opens a run, closes one, appends to
+`llm_calls`, or writes `entity_research`: those rows are written by
+`ar-research`, `ar-score` and `ar-digest`, and this surface reads
+them and rules on them.
+
+`run-now` remains the only spelling on the whole API that causes
+work, and it causes it by setting a schedule column that
+`ar-dispatch` picks up. A wave that answers runs and their cost is
+exactly the wave where a second trigger would look reasonable, which
+is why the claim is restated here rather than left to the section
+that first made it.
+
+## Verdict vocabulary
+
+### The accepted set is read per request off the domain row
+
+`finding_labels.verdict` is the one NOT NULL text column in schema v2
+that is constrained to a value set and carries no CHECK for it. The
+set is `DomainSettings.verdictVocabulary` on the OWNING domain's row,
+and `DEFAULT_VERDICT_VOCABULARY` in `src/db/schema/values.ts` where
+that domain names none.
+
+So `PATCH /findings/:id/verdict` resolves the finding, reads the
+domain it belongs to, and judges the submitted verdict against what
+that row holds at the moment of the request. Not compiled in, not
+cached for the process, and not narrowed to a union type anywhere on
+the way: a `Verdict` union would re-close in the code exactly what
+the column deliberately leaves open, and every consumer written
+against it would then refuse the verdicts of any domain that had
+exercised its own ladder.
+
+A domain naming NO vocabulary and a domain naming an EMPTY one are
+different requests and get different answers. The first is judged
+against the default ladder; the second has named a ladder with
+nothing on it and every verdict is refused. That falls out of the
+whole-unit `settings` rule in the Domains group above rather than
+being decided again here — an absent member and a present empty one
+are already two different requests everywhere else on this surface.
+
+### The refusal names the accepted set and never the submitted value
+
+A verdict outside the vocabulary is a `422` whose detail names the
+field path and the ACCEPTED set. The submitted string appears in no
+message, in no detail and in no log line.
+
+This is `A validation detail names a field path and never a submitted
+value` above, applied to the one route on the surface whose entire
+subject is a string the caller chose. Nothing narrower would do:
+answering `"quarantine" is not a verdict` reads as helpful and writes
+the request into the response body and the warn line, which is the
+trap `src/http/validation.ts` exists to close.
+
+The accepted set is not submitted content, and answering it is not
+the mirror of the same fault. A vocabulary is the operator's own
+configuration, stored inside the `settings` payload that
+`GET /domains/:slug` already answers whole to the same credential —
+so a caller learns which ladder this domain judges on and learns
+nothing it was not already entitled to read. What a request carried
+is the thing nobody else had.
+
+Because the set is read per request, the refusal is a statement about
+a moment rather than about the API. A verdict refused now is accepted
+after the domain's settings are widened, with no deploy in between,
+which is the whole reason the vocabulary is a setting.
+
+### A ruling is appended, and the sequence is the record
+
+`finding_labels` carries no unique key at all, so a second ruling on
+one finding APPENDS a row rather than updating one. The verdict in
+force is the newest row by `labelled_at` with `id` breaking the tie —
+the same total-order shape the failures queue and the run ledger
+take, and for the same reason a tie at a page boundary is otherwise
+free to disagree with itself.
+
+Re-judging is an operator changing their mind, and the ruling it
+replaces is a true statement about the moment it was made under the
+ladder in force then. An UPDATE would destroy the only thing on this
+table that nothing recomputes: findings are rebuilt by re-scoring a
+corpus, and nothing rebuilds what a person concluded.
+
+## Time windows and sort keys
+
+### One window vocabulary, `since` and `until`, and it is half-open
+
+`?since` and `?until` are ISO-8601 datetimes, each optional, and the
+bounds they name are half-open: a row stamped exactly at `since` is
+IN the window and a row stamped exactly at `until` is not. They are
+declared once, as `timeWindowQuerySchema` in `src/http/schemas.ts`
+beside `paginationQuerySchema`, with `toTimeWindow` translating a
+parsed pair into what a store port takes exactly as `toStoreWindow`
+translates a parsed page.
+
+What it translates them INTO says which side each bound closes:
+`sinceInclusive` and `untilExclusive`, rather than the two words the
+wire uses. `since` and `until` do not carry their own inclusivity,
+and a store writing `<= until` is a bug no type could report — a
+member called `untilExclusive` is read by whoever writes the
+predicate, which is where the mistake would otherwise be made. An
+absent bound arrives as `null` rather than as a missing key, so a
+store branches on one shape.
+
+Two groups read that vocabulary — the findings list and the spend
+summary — and neither declares a second spelling of it. No
+`?from`/`?to`, no `?days`, and no bare `?date`. This is the
+pagination rule one level up: the translation happens once so that
+two surfaces cannot come to disagree about what a window means.
+
+Half-open rather than closed because two adjacent windows should
+partition a ledger rather than overlap on it. Closed bounds put every
+row stamped on the boundary into both of them, which double-counts
+exactly at the seam a caller paging through time crosses most often,
+and no member of either answer says it happened.
+
+### A window narrows what is counted; a page windows what is answered
+
+The two are different questions and a route may read both. The
+findings list does: `?since`/`?until` decide which findings are in
+the collection, and `?page`/`?perPage` decide which slice of it comes
+back. A route reading both COMPOSES the two declarations rather than
+respelling either, the way `GET /connectors` extends the page schema
+for its `?kind`, so the default, the cap and the strictness are
+inherited and an undeclared parameter is still a `422` naming
+`query`.
+
+The composition has a DIRECTION, and it is not the one that reads
+naturally. `since` before `until` is a check on the window OBJECT,
+and measured against this tree's zod, `.extend()` carries such a
+check OUTWARDS and not inwards:
+`timeWindowQuerySchema.extend(paginationQuerySchema.shape)` refuses
+an inverted window and
+`paginationQuerySchema.extend(timeWindowQuerySchema.shape)` accepts
+one. Both spellings type-check, both answer every other request
+identically, and only one of them refuses — so a list route reading
+a window extends FROM the window schema, and
+`src/http/schemas.test.ts` sends an inverted window through the
+composed query rather than through the window schema alone.
+
+`GET /spend/summary` reads the window and no page at all, which puts
+it in the small unpaginated class `GET /domains/:slug/categories`
+opened. They are unpaginated for different reasons and it is worth
+not reading them as one convention: a domain's taxonomy is small by
+construction, while a summary is bounded by the WINDOW it aggregates
+over — a bucket per domain per day, so the size of the answer is a
+function of the span and of how many domains the deployment runs
+rather than of how much the ledger holds.
+
+That is why the span itself is bounded on the way in. `/spend/summary`
+defaults to a declared number of days and refuses one above a declared
+maximum with a `422`, so no request can ask for an unbounded scan of
+`llm_calls`. It is the same decision `perPage` is refused above 200
+for, taken on the axis this route actually windows.
+
+### `since` at or after `until` is a `422`, not a swap and not a clamp
+
+An unparseable stamp and a `since` that is not strictly before its
+`until` are both refusals out of the same parse, with a field path
+naming the parameter and no submitted value in the detail.
+
+Swapping the two would answer a window nobody asked for, and clamping
+either would make the answer disagree with the request in a way
+nothing in the body reports — which is the argument `perPage` above
+the cap already loses. An empty window is a legitimate request and
+answers an empty result; an inverted one is a mistake and says so.
+
+### A sort is a declared key, and never a column name
+
+`?sort` takes one member of a tuple the route declares — `score` and
+`recency` on the findings list — and never a column name, never a
+direction, and never a comma-separated list of either. A key outside
+the tuple is a `422` naming the parameter and the accepted keys.
+
+The tuple states its own default by its ORDER: `sortQuerySchema`
+defaults an absent `?sort` to the FIRST member, so a route names its
+default ordering once rather than in a tuple and again in a default
+that could come to disagree with it.
+
+The keys name ORDERINGS rather than columns, and that is the whole
+point of the spelling. `score` is three keys deep: score descending
+with a finding carrying none sorted LAST rather than lowest, then
+`created_at` descending, then `id` descending. That order is
+`compareFindings` in `src/lib/digest-assemble.ts`, which the digest
+selection and every renderer already agree on, expressed in SQL.
+Accepting `?sort=score&dir=asc` would put a second authority on an
+order this repository has already settled once, and accepting a bare
+column name would let a caller ask for one no index answers.
+
+Every ordering this surface offers ends in `id`, on the tie-break
+rule the failures queue's own ordering states in full: a timestamp
+alone is not a total order, and a tie at a page boundary is how page
+1 and page 2 come to disagree about which row they hold, with nothing
+in either response saying so.
+
+## Stored untrusted text
+
+### Two surfaces cut at one cap, and it is one binding rather than two
+
+`BODY_CODE_POINT_CAP` moves out of `src/sources/failures-service.ts`
+and into `src/http/control-bytes.ts`, beside `maskControlBytes` and
+`takeCodePoints`. The failures service imports it from there, the
+documents service reads the same binding, and neither declares a
+number of its own.
+
+Two literals that agree today are two caps. The day one of them moves
+there is nothing in either file that reports the other did not, and a
+review surface and a debug surface answering different amounts of one
+stored body is precisely the drift nobody looks for. A case holds the
+two imports EQUAL rather than transcribing the number, on the rule
+the constant's own TSDoc already states for its tests: a reading that
+restates the value stays green against a value that has moved.
+
+### The second reader is held to the masking rather than deciding again
+
+`GET /domains/:slug/documents` answers `body` and `parse_error` with
+every C0 control, DEL, every C1 control and every lone surrogate
+replaced by its `\uXXXX` text form, which is the masking rule in
+`The failures queue` above applied unchanged. That section carries
+the whole argument — what JSON escaping does not cover, and what a
+raw control byte does to a terminal, a log file or a tracked
+artifact.
+
+The documents view is the wider reader of the two, and the widening
+is the part worth arguing. The failures queue answers rows whose
+`parse_status` is `failed`, where the bytes that broke the parser are
+the likeliest in the corpus to be hostile. This route answers both
+members of `DOCUMENT_PARSE_STATUSES`, so most of what it serves
+parsed cleanly — and a document that parsed is untrusted text all the
+same, because what it came from is a fetch of somebody else's bytes
+either way. Masking only the failed half would make the masking a
+property of a status column rather than of where the text came from.
+
+### `bodyBytes` travels with the cut, on both surfaces
+
+The stored byte length is answered beside a `bodyTruncated` flag, and
+it is the STORED length rather than the answered one. The two differ
+by exactly what was withheld, which is the number a reader needs to
+decide whether to go back to the database for the rest.
+
+The cut is by code point rather than by UTF-16 unit, so it can never
+split an astral pair into a lone surrogate that the masking would
+then have to escape — the two rules are ordered rather than merely
+both present.
+
+## The approval vocabulary
+
+### Two gates, one vocabulary, and `src/approvals/ruling.ts` holds it
+
+This repository has two approval subjects. `research_pool` carries an
+intention to research an entity, held by
+`research_pool_approval_check`; `source_config_proposals` carries a
+proposed parser config, held by
+`source_config_proposals_approval_check`. `scripts/approve.ts`
+already rules on both from one CLI, and the HTTP half arrives as one
+vocabulary rather than as two that agree for a while.
+
+`src/approvals/ruling.ts` is where it lives: the ruling projection
+both routes answer with, and the closed roster of refusal reasons
+either may raise, as named tokens rather than as strings written out
+at two call sites. It imports no store, writes nothing and reaches no
+table — it is a vocabulary, not a service.
+
+That is the promise `The paths wave 2 defers` above made when the
+pending-config pair was carved out of wave 2. The pair could have
+landed there against a table that was already in the tree; what it
+could not have landed with is the other subject, and half a
+vocabulary is what the deferral bought its way out of.
+
+### An approval is idempotent, because a second one is not a re-date
+
+Both writes stamp `coalesce(approved_at, now())`, matching
+`approveById` and `approveProposalById` in `scripts/approve.ts`
+member for member. Ruling twice on one row keeps the time the first
+ruling was given, so a re-approval is a no-op rather than a way to
+re-date something already paid for.
+
+Nothing in the database refuses the other behaviour. Both CHECK
+constraints hold the two timestamps against each other and never
+consult the status column, so a bare `now()` here would be accepted
+and would quietly move the record of when a person agreed. That makes
+the `coalesce` the writer's discipline rather than the schema's — the
+reading `research_pool.approved_at` records at the column — which is
+why it is stated here and held by a case rather than assumed from the
+DDL.
+
+### An approval names its own row, or it is a `404`
+
+`POST /entities/:id/approve-research` takes `{ poolId }` and
+`POST /sources/:id/approve-config` takes `{ proposalId }`, both
+`.strict()`. A row whose parent is not the addressed one is a `404`
+rather than an approval granted to somebody else's intention.
+
+The id in the body is not enough on its own, and the segment is not
+decoration on a route that could have been flat. An operator ruling
+from a queue they are looking at addresses the parent they are
+looking at, and the pairing is what turns a mistyped id into a
+refusal instead of into an approval of whatever that id happened to
+name.
+
+### The API ratifies, and never writes what it ratified
+
+Approve-research writes the approval and never `entity_research`.
+That table is what a research pass found out and is `ar-research`'s
+to write; no method on any port in this wave touches it. The gate is
+the ratify half of the propose-then-ratify pattern the parser-config
+proposals already use, and a surface that could write both halves
+would be a proposer wearing a gate's name.
+
+Approve-config is the same split with one more step, because an
+approved config is only worth anything once it is on the source row.
+It writes the approval and the two source columns in ONE
+transaction, and it derives those columns through
+`proposalToSourceUpdate` in `src/sources/config-proposer.ts` rather
+than copying them off the row. That function gates on `approved_at`
+and on nothing else — `status` is deliberately not consulted — and
+throws on a row carrying none. It is the applier q09 declared, and
+the refusal is one this route is not allowed to re-derive in its own
+words.
+
+### The pending queue is the CLI's queue, and it is oldest-first
+
+`GET /sources/:id/pending-configs` selects `status = 'pending'`
+ordered `proposed_at ASC, id ASC`, which is `listPendingProposals` in
+`scripts/approve.ts` member for member. One queue with two clients,
+rather than two queues that happen to agree today and drift the first
+time either side adds a predicate.
+
+Oldest-first is a queue rather than a list, and it is the one
+time-ordered collection on this surface that runs that way: a
+backlog is worked from its head, so the proposal that has waited
+longest is the one an operator should be offered first. Every other
+collection ordered by time here — the failures queue, the findings
+list, a run's ledger — is newest-first, because each is a record
+being read rather than a backlog being cleared. The `id ASC`
+tiebreak is the same total-order rule as everywhere else:
+`proposed_at` alone is not one, and a proposer writing several rows
+inside one transaction gives them all one stamp.
+
+## The spend ledger
+
+### `llm_calls` carries no money column, so no member here is currency
+
+The table holds `node`, `model`, `prompt_chars`, `est_tokens` and
+`called_at`, and no price, rate, amount or currency at all. So
+`GET /spend/summary` answers `calls`, `promptChars` and `estTokens` —
+a count and two magnitudes — and there is no member of it a reader
+can mistake for a cost, because there is no column behind one.
+
+This is the group where the name of the surface pulls the other way,
+which is why it is written down before the route exists. `spend` is
+what the question is called and what the widget reading it is for; a
+member called `cost`, a `usd` beside a total, or a rate applied on
+the way out would each be a number nobody measured, answered in the
+one shape a reader trusts without checking.
+
+### `est_tokens` does not reconcile with a bill, and the column says so
+
+Its own TSDoc is the authority and states it plainly: the `est_` is
+load-bearing, the value is arithmetic over `prompt_chars` — characters
+divided by a constant, in the design this port draws from — so the
+two columns are one reading expressed twice rather than two
+independent ones, nothing stored says which estimator produced it,
+and a total over it does not reconcile with a bill.
+
+What it IS good for is comparison. A magnitude lets one run be held
+against another, one node against another, one week against the week
+before, and every one of those is what the summary is read for. A
+number that cannot be compared to an invoice can still be compared to
+itself, and saying which of the two it is here is what keeps a
+consumer from doing the other thing with it.
+
+`prompt_chars` and `est_tokens` are both nullable, and a NULL means
+nothing measured that call rather than a call that sent nothing —
+zero is a real reading here, a call declined before it was sent. A
+summary totalling them therefore reports a sum over the calls that
+WERE measured beside a count of all of them, and the two disagreeing
+is information rather than a fault.
+
+### The bucket is UTC, and it is stated rather than inherited
+
+The day bucket is `date_trunc` over `called_at` at UTC explicitly,
+never at whatever zone the session happens to carry. `called_at` is
+`timestamptz`, so it names an absolute instant and the truncation is
+what chooses a calendar to name it in — `date_trunc('day', ...)`
+reads the session's own `TimeZone` unless the value is taken
+`AT TIME ZONE 'UTC'` first. That is a setting rather than a constant,
+so a bucket left to it is a silent per-deployment difference in every
+number the widget shows: two deployments of one build, reading one
+ledger, would answer different summaries and nothing in either answer
+would say why.
+
+The window is parsed as ISO-8601 and the stamps are compared as
+instants, so the grouping is the one step in the whole read where a
+default could quietly have introduced a second calendar. Stating it
+costs four words in the SQL and closes the class.
+
+`runs.domain_id` is nullable — a maintenance or cross-domain tick
+belongs to no domain — so the summary carries a bucket whose domain
+is null rather than dropping those calls or attributing them
+somewhere. Calls that belong to no domain still belong to the
+deployment, and an aggregate that silently omits them is a total
+that does not add up to the ledger it claims to summarise.
+
+## Findings
+
+### A finding is met in its domain and addressed by its id
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /domains/:slug/findings` | `200` with one page of the domain's findings, in the ordering `?sort` names, plus `meta`. `404` for an unknown slug, `422` for a segment that is not a slug, for an unparseable or inverted window, for a `?sort` outside the two declared keys, and for the pagination faults every list route answers. |
+| `GET /findings/:id` | `200` with the finding, its sightings, its rulings newest first and its entity's research. `404` for an unknown id, `422` for a segment that is not one. Reads no query at all. |
+| `PATCH /findings/:id/verdict` | `200` with the appended `finding_labels` row. `404` for an unknown id, `422` for a segment that is not one, for a body that is not `{ verdict, note? }`, for an undeclared key in it, and for a verdict outside the owning domain's ladder. |
+
+`src/findings/routes.ts` declares all three and decides none: each
+handler reads the address, takes apart the query or hands on the body
+it was given, calls the matching function in
+`src/findings/service.ts` or `src/findings/verdict-service.ts`, and
+chooses a status.
+
+The collection hangs off `/domains/:slug` because a finding is what a
+domain's criteria produced, and a caller holding a slug should not
+have to look an id up to read one. The single get and the ruling
+address `/findings/:id` instead, for the reason a topic is written by
+id: the row carries its own `domain_id`, no rule on this table spans
+a domain, and repeating the slug would let a request name a domain
+the row does not belong to. The ruling is where that would cost most,
+since the ladder it is judged against is read off `domain_id` and a
+slug in the path would be a second answer to a question the row has
+already settled.
+
+None of the three can answer `409`. Neither read decides on stored
+state beyond whether the domain and the finding are there, and the
+ruling has no conflicting state to refuse — `A second ruling` below
+is why — so the refusals available to this group are the `404` about
+the address and the `422` about the request and nothing else.
+
+### The reads and the ruling are two modules on one router
+
+`PATCH /findings/:id/verdict` belongs to this router and is addressed
+the same way, but it is not served by the same module. The two reads
+are `src/findings/service.ts` and the ruling is
+`src/findings/verdict-service.ts`, so the store the reads are handed
+does not name the one method that appends a `finding_labels` row, and
+no handler serving them could append one by mistake or by a later
+edit. `Read-first` above states why that is a type rather than an
+observance.
+
+That split is what lets the two be read separately. What a verdict IS
+— the set it is judged against, the refusal that names that set
+rather than the submitted value, and the append that makes the
+sequence the record — is argued once under `Verdict vocabulary`
+above, because it is a fact about the column rather than about this
+route.
+
+What the three sub-sections at the foot of this group add is what the
+ROUTE does under each of them: which row the ladder is read off, how
+a client tells the two `422`s apart, and what a second ruling on one
+finding answers.
+
+### Two narrowings and a window, and none of them refuses a value
+
+`GET /domains/:slug/findings` reads `?verdict`, `?category`,
+`?since`, `?until`, `?sort`, `?page` and `?perPage`, and no other
+parameter. Its schema composes the three shared declarations rather
+than respelling any of them, so the 50-row default, the 200 cap, the
+ISO-8601 stamp format, the half-open bounds and the
+first-member-is-the-default rule are all inherited — and the
+composition extends FROM the window schema, for the reason
+`A window narrows what is counted` above measures.
+
+The two narrowings accept any string and refuse none. A `?verdict` no
+label carries and a `?category` the domain never declared are each
+`200` with an empty `data`, not a `404` and not a `422`. Either could
+be a value that was legitimate when the rows were written: a domain
+is free to retire a verdict from its ladder, and the rows stored
+under the retired one still answer to it. A refusal would make this
+answer depend on the settings and the taxonomy in force at the moment
+of the request rather than on the rows.
+
+`?verdict` matches the LATEST ruling and not any. A finding judged
+one way and then re-judged another is in the page for the second
+verdict and out of the page for the first, because the first is no
+longer in force. A finding nobody has judged matches no verdict at
+all, which follows rather than being decided — there is no latest row
+to read one off — so this parameter cannot ask for the findings
+nobody has ruled on, and no spelling of it here can.
+
+The count is taken through the SAME filter as the page, so
+`meta.total` describes the collection the page came out of. A total
+counted without the narrowings would tell a caller filtering by one
+verdict how many findings the domain holds altogether, and every page
+of that filter would then be read against a number about something
+else.
+
+### The order is `compareFindings`, and it is checked from two sides
+
+`?sort=score` is score descending with an absent score sorted LAST
+rather than lowest, then `created_at` descending, then `id`
+descending. `?sort=recency` is that same order with the score key
+dropped. Both are `compareFindings` in `src/lib/digest-assemble.ts`,
+which the digest selection and every renderer already agree on — the
+keys and what they mean are stated once under `A sort is a declared
+key` above and are not re-argued here.
+
+What this group adds is that the SQL and the library are held against
+each other rather than trusted to match.
+`src/findings/service.test.ts` reads a page out of the store and
+compares it against `orderFindings` over the same rows, so one order
+is checked from two sides rather than two orders being free to
+disagree. The recency expectation is derived by neutralising the
+score in the input to the SAME library rather than by writing a
+second comparator in the test: a comparator written out beside the
+one it copies is a third authority, and it goes stale silently.
+
+The store spells `DESC NULLS LAST` on every descending key, which is
+not decoration. `findings_domain_id_score_created_at_idx` is declared
+that way, a Postgres pathkey carries its nulls ordering, and the
+planner matches it literally — so a store writing a bare `DESC`
+cannot use the index even on a `NOT NULL` column, and nothing in the
+answer would say the read had degraded to a sort.
+
+### A category is a member of `fields`, and no column links the two
+
+No foreign key joins a finding to a category. `?category` reads the
+member of the `fields` payload that `FINDING_CATEGORY_FIELD` names —
+the string `category` — and matches it against nothing else. It is a
+jsonb read rather than a join, and it is the same member `ar-digest`
+files a finding under when it lays a section out. The two agreeing is
+what makes the API's filing and the digest's one act rather than two.
+
+The one place they could part is worth naming rather than leaving to
+be met. The digest matches the member as its own sanitiser REDUCED
+it, while this filter reads the column. For any key an operator
+actually declared the two are the same string, a reduction leaving an
+ordinary key as it stands. A stored value the sanitiser would edit is
+a finding filed under a key no domain declares, which both surfaces
+already answer the same way: the digest's undeclared section, and an
+empty page here.
+
+### The single get embeds three collections and pages none of them
+
+`GET /findings/:id` answers `finding`, `sightings`, `labels` and
+`research` — four members rather than a flattened row, because the
+three lists are about different tables and a reader has to be able to
+tell an empty one from a finding that has none. All three can be
+empty at once, and each empty one is an ordinary state: a finding
+nobody has judged, one no feed has cited again, and one attributed to
+no entity.
+
+`research` is resolved through the finding's own `entity_id` inside
+the port, so nothing on this route reads that member, branches on its
+nullability or addresses a second surface. An unattributed finding
+answers an empty list. Those rows are `ar-research`'s to write and no
+method behind this route touches them, which is
+`A workflow is not reachable from here` above applied to the one read
+on this surface that embeds a table somebody else fills.
+
+None of the three takes a window. They are embedded in one finding's
+answer rather than paged, so there is no `?page` for a caller to send
+and no total for one to be read against — which is a decision rather
+than an omission, and the place a cap would go if one is ever wanted
+is beside a count in `src/findings/service.ts` rather than as a
+silent limit inside an implementation.
+
+`labels` arrives NEWEST FIRST and carries the whole sequence rather
+than the head of it. The first row is the verdict in force, and the
+ruling a later one replaced is still a true statement about the
+moment it was made under the ladder in force then —
+`A ruling is appended` above is where that is argued.
+
+### The ladder is the owning domain's, and no segment names it
+
+`PATCH /findings/:id/verdict` addresses a FINDING, so the domain
+whose ladder judges the ruling is `findings.domain_id` on the row
+that id resolved to. A caller neither names it nor can get it wrong:
+there is no spelling of this request that would judge one domain's
+finding against another's vocabulary, and `DomainStore` carries a
+by-id read for this lookup and for no other on the surface.
+
+`The accepted set is read per request` above is where that set being
+a per-domain setting is argued, and it is argued about the column. On
+this route it shows as an ORDER, and none of the three reads in it
+can be issued together, each answer being the next question's
+argument. The body is parsed first, so a malformed ruling is a `422`
+whether or not the finding exists and costs no read at all; the
+finding is resolved next; the domain is read off the row it answered;
+and only then does the ladder decide whether the append happens.
+
+The body is `{ verdict, note? }` and strict. `verdict` carries no
+value rule in the schema at all — not an enum, not a length — and
+that absence is the subject rather than an omission: the accepted set
+is not knowable until a row has been read, so a rule here would
+either name some other domain's ladder or refuse one particular
+non-member under a different code from every other. `note` is
+optional and its absence is a NULL, there being no writer but a
+person on this route.
+
+A domain that has gone by the time the second read runs is the same
+`404` as a finding that is not there, and that is a statement about
+the schema rather than a convenience. `findings.domain_id` is NOT
+NULL and cascades, so a domain that went between the two reads took
+this finding with it: by the time the caller reads the answer, no
+finding carries the id, which is exactly what the refusal says.
+
+### The refusal names the ladder, and never the ruling refused
+
+A verdict outside the vocabulary is a `422` whose one detail names
+`verdict` and carries the accepted set. `The refusal names the
+accepted set` above argues why that direction is the safe one. What
+this route adds is that the refusal is the SERVICE's rather than a
+schema's, and that the two `422`s a caller can get here are
+distinguishable.
+
+The code is `verdict_outside_vocabulary`, declared in
+`src/findings/verdict-service.ts` rather than mapped from a schema
+issue. No schema raised it because none could: the accepted set is a
+row this request had to be resolved before it could be read. So a
+client branching on the code learns that its ruling was refused by
+the DOMAIN, where the other `422` on this route — a malformed body,
+an undeclared key, a segment that is not an id — says the REQUEST was
+the wrong shape. That is the one distinction between them, and it is
+the one a caller acts on differently: the first is fixed by sending a
+verdict the ladder holds, the second by sending a different request.
+
+The set is rendered with `JSON.stringify` rather than joined, which
+is not formatting. It quotes each member, so a verdict carrying a
+comma or a space is still readable as one member; and it escapes
+every control character it meets, so a ladder an operator stored with
+a raw NUL or a lone surrogate in it reaches the wire and the log line
+as an escape. `Two surfaces cut at one cap` above reaches the same
+discipline through a mask, and one detail built from a constant and
+an array does not need the second pass.
+
+One thing the containment claim does not cover is worth meeting here
+rather than discovering. A submitted string that happens to be a
+SUBSTRING of a declared verdict comes back inside that member.
+Nothing copied it — the sentence is a constant of the module's own
+with the stored ladder appended — so it is a coincidence of what the
+domain declared rather than an echo, and the case that counts
+occurrences uses a sentinel no vocabulary here contains a piece of,
+so its zero is a reading of the refusal rather than of the fixture.
+
+### A second ruling is a `200`, because the table appends
+
+`A ruling is appended` above argues the column: `finding_labels`
+carries no unique key, so the sequence is the record. What that means
+at this route is that there is nothing here to conflict with. A
+second ruling on one finding — the SAME verdict included — is a `200`
+and a second row, never a `409` and never a silent no-op, which is
+why the `409` is unavailable across all three routes of this group
+and not only across the two reads.
+
+What comes back is the row the append STORED, read back rather than
+rebuilt from the body. Its `id` and its `labelled_at` are the two
+members no request carried, which is what makes the answer a reading
+of the write: a body assembled from the parsed input would agree with
+this one on every member a caller submitted, and those two are where
+the difference is.
+
+The route answers one row and never the list. What it did is one act,
+and what the finding now stands at is a question about the finding —
+`GET /findings/:id` is where the sequence is read, newest first and
+whole.
+
+## Documents
+
+### A corpus is met in its domain, and there is no second address
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /domains/:slug/documents` | `200` with one page of the domain's corpus, `captured_at` descending with `id` descending breaking a tie, plus `meta`. `404` for an unknown slug, `422` for a segment that is not a slug, for a `?parseStatus` outside `DOCUMENT_PARSE_STATUSES`, and for the pagination faults every list route answers — an undeclared parameter among them, naming `query` rather than the parameter. Never `409`. |
+
+`buildDocumentsRouter` in `src/documents/routes.ts` declares that one
+route and decides nothing in it: the handler reads the address, takes
+the query apart into a filter and a window, calls `listDocuments` in
+`src/documents/service.ts`, and chooses a status.
+
+The collection hangs off `/domains/:slug` because a corpus is what a
+domain's polls brought in, and a caller holding a slug should not have
+to look an id up to read one. Nothing here addresses a single
+document: there is no `GET /documents/:id`, so the `/documents` prefix
+`The five prefixes wave 3 adds` above tabulates is claimed against the
+framework and the earlier waves rather than taken. What the claim buys
+is that the name stays free for the route that would want it, which is
+`A domain is addressed by slug` above applied to a table this wave
+does not address by id.
+
+The window is the ordinary one and departs from nothing above: `?page`
+and `?perPage` through `paginationQuerySchema`, defaulting to 50,
+refused above 200, and a page past the end answering an empty list. A
+domain that has captured nothing answers an empty list too, with a
+`200` — which is what tells it apart from a slug no domain carries,
+and what the lookup in front of both document reads exists for.
+
+### One route, one verb, and no writer on the store behind it
+
+This router registers `get` and no other verb, and the store it holds
+is the `Pick` pair `src/documents/service.ts` declares: one domain
+read, and the two methods `DocumentStore` has, both of them reads.
+There is no third method on that port left out of the narrowing — the
+port declares two — so read-only here is the whole port rather than a
+slice of one that keeps more.
+
+`Read-first` above states that law once for the wave and names the
+small edit it exists to stop. This is the group where that edit reads
+most like an improvement: a page showing a document whose parse failed
+is one line from offering to re-run it. What stops it is that there
+would be nothing on the store to call. Re-parsing is a pipeline
+operation with a cost and a dedupe question attached, and only the
+writer that saw a parse fail can record that it did — nothing reading
+a stored row later can work that out.
+
+`The queue under this prefix is read-only` above took the same shape
+one prefix over a wave earlier. Two routers now read `documents` and
+neither can write a row of it, which is the arrangement rather than a
+coincidence: `src/documents/store.ts` and `SourceStore` are two ports
+over one table, split by what each collection is for.
+
+### A failed document is in the default page, not behind a flag
+
+An absent `?parseStatus` is BOTH members of the set rather than
+neither, so the ordinary request over this collection answers a mixed
+page. There is no spelling here that widens, because nothing has been
+narrowed to widen back.
+
+That follows the column rather than this surface. A payload its
+contract rejects is STORED with its `parse_error` rather than dropped,
+the source's failure counter is bumped, and a run of rejections trips
+`sources.flagged` — fail-flag-keep, the rule
+`src/db/schema/documents.ts` records at `parse_status`. The row is the
+keep and the column is the flag, and a page that hid the flagged half
+would be answering about a corpus the pipeline does not have.
+
+The debug reading is what the default is for. An operator reaching for
+this collection is asking what the last poll brought in, and the rows
+worth seeing first are the ones every other reader has already put
+aside: what scores is what parsed, what a digest carries is what
+scored, and a default here that agreed with them would hide the
+disagreement precisely where somebody is looking for it. A flag would
+make finding those rows an extra request that has to be known about,
+which is the same thing as hiding them.
+
+Because the page carries both members, every row answers its own
+`parseStatus` as stored. A reader shown a mixed page is owed the
+column that says which of the two a row is, and it is answered on
+every row rather than only on a narrowed one.
+
+### `?parseStatus` is refused at the boundary, not paged empty
+
+A `?parseStatus` outside `DOCUMENT_PARSE_STATUSES` is a `422` naming
+the parameter, raised before the domain is resolved and before any
+document is read. It is not passed through to a page that would come
+back empty.
+
+That is the opposite of what `Connectors` above does with its `?kind`,
+and the two are worth reading together, because what separates them is
+what a value can MEAN rather than a preference about strictness. A
+connector kind is an open registry a deployment extends, so a kind no
+row carries is a question about the rows and an empty page answers it
+honestly. A parse status is a two-member CHECK constraint, so a third
+value is not a status the corpus happens to lack — it is a value the
+column cannot hold, and an empty page would answer it as though the
+corpus simply held none.
+
+Inside the tuple the rule flips back. `?parseStatus=failed` over a
+domain whose captures all parsed is a `200` with an empty `data`, on
+the terms `A page past the end is an empty list` above sets: a member
+of the set that no row carries is a fact about the rows, and a domain
+whose feeds are all healthy is not a failure to read.
+
+What reaches the port is a value object rebuilt member by member
+rather than the parsed query forwarded whole, so `?page` never crosses
+a boundary that has no use for it, and a parameter added to the wire
+reaches the store only when somebody adds it there too.
+
+### The body is masked and cut, and this router chooses neither
+
+Every row's `body` is answered cut to `BODY_CODE_POINT_CAP` code
+points and then masked, its `parseError` is answered masked and uncut,
+and `bodyBytes` and `bodyTruncated` travel beside them. The `url` is
+answered as stored, which is the narrower promise of the three and is
+recorded here rather than left to be discovered.
+
+Three sections above carry the arguments and this is the sentence that
+says which layer holds them. `Two surfaces cut at one cap` above is
+why the number is one binding rather than two; `The second reader is
+held to the masking` above is why this page masks what parsed as well
+as what failed; `bodyBytes` above is why the length answered is the
+STORED one and why the cut is by code point rather than by UTF-16
+unit.
+
+What belongs to this group is the ORDER of the two passes and the one
+member left out of them. The cut runs on the stored text and the
+masking on what the cut answered: masking first would let a single
+control byte spend six of the cap's budget, and would let the cut land
+in the middle of an escape the masking had just written. `parseError`
+is masked and never cut, because it is a sentence a writer in this
+system composed rather than a payload somebody else sent, and cutting
+one would take the end of the sentence that names the fault — where
+cutting a body takes the end of somebody else's document, which is
+what the cap is for.
+
+Neither pass is in the router. `src/documents/service.ts` runs both
+before any row reaches a handler, so nothing on this route trims a
+string it was given or escapes a byte it was handed, and a handler
+that did either would be a second rule nobody would notice drifting
+from the first. `The failures queue` above says the same of the review
+surface, which is the other reader of the same two passes over the
+same table.
+
+## Entities
+
+### A subject is addressed by its own id, and by nothing else
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /entities/:id` | `200` with the stored row: its `domainId`, its `name`, the `nameNorm` computed from that name, its `aliasOf` and its `attributes`. `404` for an unknown id, `422` for a segment that is not one. Reads no query at all. |
+| `PATCH /entities/:id` | `200` with the stored row afterwards, read off the write. `404` for an unknown id, `409` for a rename onto a key another subject in the domain already holds, `422` for a segment that is not an id, for a body outside `{ name?, attributes?, aliasOf? }`, for an undeclared key in it, for a name that identifies nothing, and for each of the three refused aliases. |
+| `GET /entities/:id/research` | `200` with one page of what has been found out about the subject, `researched_at` descending with `id` descending breaking a tie, plus `meta`. `404` for an unknown id, `422` for a segment that is not one and for the pagination faults every list route answers. |
+| `POST /entities/:id/approve-research` | `200` with the four-member ruling. `404` for an unknown id and for a `poolId` this subject does not hold, `422` for a segment that is not an id, for a body that is not `{ poolId }`, and for an undeclared key in it. |
+
+`buildEntitiesRouter` in `src/entities/routes.ts` declares all four
+and decides none of them: each handler narrows the segment, takes
+the query apart or hands on the body it was given, calls the
+matching function in `src/entities/service.ts`, and chooses a
+status.
+
+Every path here opens on the row's own id and none opens on
+`/domains/:slug`, which is where this group departs from the two the
+same wave landed before it. A finding and a document are met in
+their domain because a caller holding a slug should not have to look
+an id up to read one. A subject is met by its id because the row
+carries its own `domain_id`, and that column is what the
+cross-domain alias rule below is decided against — so a slug in the
+path would be a second answer to a question the row has already
+settled, and this surface would then owe a reading of what a
+disagreement between the two means. That is `A domain is addressed
+by slug` above rather than an exception to it.
+
+There is no `GET /domains/:slug/entities` on this wave at all, so a
+registry is read one subject at a time and the collection under a
+domain is a path this wave leaves free. The research collection
+hangs off the subject instead, for the reason the addressing gives:
+a pass is about one entity, `entity_research` carries that entity's
+id and nothing else that addresses it, and a caller reading passes
+already holds the subject they were read about.
+
+`409` is available to this group and to no other in the wave. The
+findings and documents groups have no conflicting state to refuse; a
+rename here can collide with `entities_domain_id_name_norm_unique`,
+which the section below argues. Every other refusal available here
+is the `404` about an address and the `422` about a request.
+
+Neither read takes a filter, so this group has no narrowing to
+argue. `GET /entities/:id/research` reads `?page` and `?perPage` and
+no other parameter, `meta.total` is the whole collection rather than
+a narrowed part of it, and a subject nobody has researched answers
+an empty page on the terms `A page past the end is an empty list`
+above sets.
+
+### `name_norm` is recomputed on a rename and never accepted
+
+A `name` patch is reduced through `normalizeEntityName` in
+`src/lib/entity-name-norm.ts` and the two halves are written
+together, so a request that moved the display spelling without the
+key it reduces to is not one this surface can express. A body naming
+`nameNorm` is refused as an undeclared key rather than having the
+member quietly dropped. The detail names `body` and never the key,
+which `An unrecognized_keys detail names the container` above
+argues, and a dropped member would be indistinguishable on the wire
+from the surface having honoured it.
+
+That closes a silent miss the column's own comment asks for and had
+no answer to. `entities.name_norm` is the key half of the natural
+key `entities_domain_id_name_norm_unique` is declared over, and
+nothing in this repository wrote an `entities` row before this wave
+— no workflow inserts one, and `scripts/approve.ts` reads the
+registry through joins alone — so the reduction had no definition
+anywhere at all. A caller allowed to supply one would key a row on
+something no spelling of its name reduces to: every later lookup
+would find nothing, the next sighting would insert a rival row, and
+no constraint in the database would report it, a writer that reduces
+differently never failing but only missing.
+
+A name that carries nothing identifying is a `422` naming `name`
+under a code of the service's own, because no schema could raise it:
+whether a name identifies a subject is the reduction's answer rather
+than a shape rule, and asking it twice is exactly the second
+definition this group exists to avoid. It is a `422` rather than the
+`500` the library's own plain `Error` would otherwise become —
+`src/lib/entity-name-norm.ts` throws one deliberately, being spliced
+into workflow nodes where there is no status to raise, and this
+surface is the boundary that has one.
+
+A rename onto a key another subject in the same domain already holds
+is a `409` carrying no `details` at all. Which subject holds the key
+is a fact about a row the caller did not ask about and, the display
+spelling being free to differ from it, may never have seen — naming
+it would let a caller enumerate a registry by proposing names, which
+is `A validation detail names a field path` above applied to a
+refusal that has no field to name.
+
+Neither the collision nor the alias foreign key is checked before
+the write. A read-then-write pair would answer about a row that had
+gone in between and would miss one that arrived, where the
+constraint is the deployment's own authority at the instant of the
+write. So the two rules the database holds are TRANSLATED here and
+the two it cannot hold are held here, which is the split the next
+section is about.
+
+The patch answers the stored row rather than the request, and the
+recomputed key is why that matters on this route above the others:
+reading it back is the only way a client learns what its name
+reduced to. A body of `{}` is a legal call answering that row
+unchanged, `entities` carrying no `updated_at` for a write to stamp.
+
+### Two alias rules this surface holds that the database does not
+
+`entities.alias_of` is a nullable self-referencing foreign key, and
+the database will store two things through it that nobody meant. A
+row pointing at ITSELF makes a subject its own subject, which every
+reader following the pointer either loops on or silently stops at. A
+row pointing at a subject in ANOTHER domain joins two registries
+whose criteria, findings and research were accumulated apart, and no
+foreign key anywhere would follow the join back out. The column's
+own comment says both are storable; nothing in the DDL refuses
+either.
+
+Each is a `422` naming `aliasOf` under a code of the service's own —
+`self_alias` and `cross_domain_alias`. They have to be the service's
+codes because no schema raised them: the first is a comparison
+between the path and the body, and the second is a comparison
+between two stored rows, which is two reads rather than a shape
+rule. The detail carries the rule and never the two domains, both of
+which are facts about rows the caller did not ask about and, in the
+case of the subject's own, did not even name.
+
+The self rule is decided before any read, the two ids both being in
+hand. The one-registry rule costs the read that resolves the target,
+and an alias naming a target that is NOT there falls through to the
+write rather than being refused here: there is no domain to compare
+against, and the foreign key is the authority at the instant of the
+write, per the section above. It reaches the caller as the same
+`422` naming the same member under a third code, so the three read
+alike from the outside and only one of them cost a round trip.
+
+`aliasOf` distinguishes three requests, which is why the member is
+both nullable and optional. Absent leaves the pointer where it is, a
+number aims the row at a subject, and `null` clears it back to a row
+that is its own subject — the only way back, and unexpressible if
+absent and null meant the same thing.
+
+The `409` one section above and these three `422`s are the whole of
+what a patch can be refused for beyond its shape, and the difference
+between the two statuses is which layer knows. A duplicate key is a
+conflict with a row that exists; an alias into another registry is a
+request that was never coherent, whichever rows happen to be
+stored.
+
+### The intention is named in the body and its subject in the path
+
+`POST /entities/:id/approve-research` takes `{ poolId }` and nothing
+else, and the pairing is argued for both gates under
+`An approval names its own row` above. What this route adds is which
+refusals the pairing produces here, and why a caller reads one
+sentence for three of them.
+
+`EntityStore.findPoolRowById` is UNSCOPED on purpose: the row is
+read and then judged rather than selected under the subject. A
+lookup narrowed to the subject would answer null for `no such row`
+and for `not this subject's row` alike, and the gate has to tell
+those apart even though what a caller reads is the same either way.
+Telling a caller which of the two happened would say that a row it
+does not own exists, which is the whole reason the sentence is
+shared.
+
+`research_pool.entity_id` is NULLABLE, an intention being raisable
+from a finding nothing has attributed to a subject yet, so a row
+naming NO subject at all is refused by that same comparison rather
+than by a clause of its own. That is the third refusal under the one
+sentence; the write's own null, the row having gone between the read
+and the ruling, is a fourth path to it that no ordinary sequence of
+calls produces.
+
+The subject is resolved before the intention is read, so an id
+nothing carries costs one lookup and never reaches the queue. It is
+also what makes the comparison decidable at all: it is the ADDRESSED
+entity the stored row has to name, and there is nothing else in the
+request that says which registry either id belongs to.
+
+There is no spelling here for approving a subject's queue wholesale.
+An operator ruling on an intention has read the search terms that
+intention carries, and a request naming a subject rather than a row
+would be approving terms nobody was shown.
+
+This wave serves no page over `research_pool`, which is the one
+asymmetry between the two gates worth stating rather than leaving to
+be counted. `GET /sources/:id/pending-configs` pages the proposal
+queue; the entity queue is read from `listPending` in
+`scripts/approve.ts` and from nowhere on this surface, so a `poolId`
+submitted here was learned from the CLI. `EntityStore` declares the
+two reads that would serve such a page and no route on this wave
+calls either, which is the port recording the gap rather than
+closing it.
+
+### The ruling is the whole of the write, and research is elsewhere
+
+`The API ratifies` above states the split once for both gates. What
+this route does under it is `approvePoolRow` and nothing else: two
+columns of one `research_pool` row, `approved_at` stamped
+`coalesce(approved_at, now())` and `status` moved to the approved
+member. No research is recorded, no search is issued, and nothing
+downstream is told — `ar-research` picks the row up on a later pass
+and writes what it found out.
+
+The split is a property of the port rather than of the handler's
+restraint. `EntityStore` declares no method that writes
+`entity_research` at all, so a route recording a summary beside the
+approval could not be added here by a small edit: there would be
+nothing on the store to call. `Read-first` above states that law for
+the whole wave and names the two writers this group is entitled to,
+and `tests/invariants/api-read-first.test.ts` derives it from `keyof`
+over the port types rather than from any paragraph.
+
+A second ruling on one row is a `200` and not a `409`, because the
+`coalesce` answers the FIRST ruling's instant and a row already
+closed ratifies without complaint. That is `An approval is
+idempotent` above plus the one axis on which the two gates differ:
+ratifying twice is a no-op where applying twice is refused, and
+`RULING_ACTS` in `src/approvals/ruling.ts` is where that difference
+is declared once rather than as an `if` in either gate.
+
+What comes back is the four-member ruling — the row's id, where it
+stands, when a person agreed, and when the intention was closed —
+taken off the row the write answered rather than rebuilt around the
+`poolId` that was sent. `approvedAt` and `id` are the members no
+request carried, which is what makes the response a reading of the
+write. `closedAt` reads `research_pool.researched_at`, so a
+ratification answers `null` there by construction: the gate records
+that somebody agreed, and what closes the intention is the pass this
+surface never runs.
+
+## Runs and spend
+
+### Two routers under two prefixes, and one directory behind both
+
+| Method and path | Answers |
+| --- | --- |
+| `GET /runs` | `200` with one page of the passes the service has made, `startedAt` descending with `id` descending breaking a tie, plus `meta`. `404` when a `?domain` was sent and no domain carries it, `422` for a `?domain` that could not be a slug and for the pagination faults every list route answers. |
+| `GET /runs/:id` | `200` with the pass, the newest `RUN_LEDGER_CAP` rows of its ledger, the full `llmCallCount` and a `ledgerTruncated` flag. `404` for an unknown id, `422` for a segment that is not one. Reads no query at all. |
+| `GET /spend/summary` | `200` with the resolved `window` and one bucket per domain per UTC day inside it. `404` when a `?domain` was sent and no domain carries it, `422` for a `?domain` that could not be a slug, for an unparseable or inverted window, for a span above the maximum, and for any undeclared parameter, `?page` included. |
+
+`buildRunsRouter` in `src/runs/routes.ts` declares the first two and
+`buildSpendRouter` in `src/runs/spend-routes.ts` declares the third,
+and neither decides anything: each handler takes a query apart or
+narrows a segment, calls the matching function in
+`src/runs/service.ts` or `src/runs/spend-service.ts`, and chooses a
+status.
+
+Two routers rather than one, in one directory rather than two.
+`The five prefixes wave 3 adds` above carries the arithmetic; what
+the split buys HERE is that the store each router is handed has no
+member for the other's read. The page and the single get reach five
+`RunStore` methods, the summary reaches the sixth, and no method is
+named by both — so the ledger cannot be paged through the summary's
+store or bucketed through the page's, by accident or by a later
+edit.
+
+Neither prefix is domain-scoped, which is where this group departs
+from every list the wave landed before it. A finding and a document
+are met in their domain because a caller holding a slug should not
+have to look an id up; a pass belongs to a domain or to NONE, so the
+collection is the deployment's and the domain narrows it. `/runs/:id`
+addresses the row by its own id under `A domain is addressed by slug`
+above, and `/spend/summary` addresses nothing at all, in the shape
+`/settings` already takes.
+
+`409` is available to none of the three, and neither is `204`.
+Nothing on these routes writes, and nothing on them decides on
+stored state beyond whether the domain and the run are there, so the
+only refusals they can answer are the `404` about an address or a
+narrowing and the `422` about a request. `Read-first` above states
+the law for the wave, and `RunStore` declares six methods of which
+all six are reads — so the claim is the port's shape rather than
+these routers' restraint.
+
+### The domain is a filter here, and there is no domain-less spelling
+
+`?domain=<slug>` is optional on both the page and the summary. Absent
+answers EVERY run and every call, the ones belonging to no domain
+included; present answers that domain's alone. There is no third
+request, and that absence is this wave's decision on the record
+rather than an omission for a later reader to find.
+
+`runs.domain_id` is nullable because a maintenance or cross-domain
+tick belongs to nobody, so the rows such a spelling would name do
+exist. What makes asking for them inexpressible is the TYPE of the
+narrowing: `RunFilter.domainId` is an optional `number` and never a
+`number | null`, so there is no value a caller could send that would
+mean the rows belonging to no domain — and both query schemas are
+`.strict()`, so a parameter invented to carry one is a `422` naming
+`query` rather than a filter silently ignored. A widened member would
+have shipped a third query nobody scoped.
+
+Reading the unattributed rows alone is therefore a subtraction the
+caller does: the unnarrowed answer less each domain's. That is what
+the summary's null bucket is for, and it is why the per-domain
+summaries do NOT sum to the unnarrowed one — the difference is the
+unattributed spend rather than a rounding of it.
+
+The narrowing splits its refusal in two, and the split is the
+`slugParamSchema` the parameter is held to. A value that could not be
+a slug is a `422` naming `domain`, raised before any store call; a
+well-shaped one no domain carries is a `404` raised after one. A
+request that never named a well-formed slug has not established that
+no domain carries it, which is `A validation detail names a field
+path` above applied to a narrowing rather than to a body.
+
+That `404` is not the one a `/domains/:slug` route answers, and the
+difference is worth stating: `/runs` exists for every deployment,
+including one that runs no domains at all, so what is missing is the
+narrowing rather than the collection. A domain that has run nothing
+answers `200` with an empty `data` under `A page past the end is an
+empty list` above.
+
+### The filter is built one file in, which inverts every other list
+
+Every other narrowing on this surface is rebuilt in the handler that
+read it. A `?kind`, a `?verdict` or a `?parseStatus` becomes the
+port's own value object there, because what a caller ASKED FOR and
+what a port NARROWS ON are different statements, and a parsed query
+forwarded whole would put `?page` on the far side of a boundary with
+no use for it.
+
+`?domain` cannot follow that rule. `RunFilter.domainId` is an ID, and
+the only thing that turns a slug into one is `findDomainBySlug` — a
+store call, which a handler has nowhere to make. So both handlers
+hand the slug on as the string it arrived as and the service builds
+the filter. The value object is still built once and in one place;
+that place is one file further in than it is anywhere else, and both
+routers say so where a reader looks.
+
+### The ledger is embedded, cut at one constant, and the cut is reported
+
+`GET /runs/:id` answers at most `RUN_LEDGER_CAP` calls — 200 of them
+— `calledAt` descending with `id` descending breaking a tie. The cap
+is a module constant in `src/runs/service.ts` rather than a query
+parameter, so no caller can ask for the whole of a long pass's ledger
+and no route can be talked into serving one: every model call the
+service makes lands in `llm_calls`, nothing prunes the table, and a
+pass that looped or ran for a day is exactly the row whose embedded
+ledger would otherwise be fetched whole.
+
+The list is CUT rather than paged, which is why two members travel
+beside it. `llmCallCount` is the FULL count and `ledgerTruncated`
+says whether the cap took anything, so a ledger of exactly 200 rows
+and the head of a longer one are distinguishable — which they would
+not be from the list alone. A client cannot compare a length against
+a cap it was never told, which is what `bodyBytes` above records one
+collection over, on the same reasoning.
+
+Newest-first is what makes this cut the useful one: what a long
+pass's ledger loses is its OLDEST end, and a reader opening a run is
+asking what it has been doing lately. There is no `?page` over the
+embedded list, no total for a window to be read against and no `meta`
+inside the answer — the ledger is part of one run's reading rather
+than a collection this surface addresses.
+
+A pass that called nothing answers `200` with an empty `ledger`,
+`llmCallCount` at zero and `ledgerTruncated` false. A tick that found
+no work to do ledgers nothing at all, which is an ordinary state
+rather than a failure to read.
+
+### The window defaults to 30 days and is refused above 92
+
+`GET /spend/summary` reads `?since` and `?until` in the vocabulary
+`One window vocabulary` above declares — ISO-8601, half-open,
+`sinceInclusive` and `untilExclusive` — and closes whatever the caller
+left open. Three spellings arrive and all three leave with two
+bounds: neither sent is the last `SPEND_DEFAULT_WINDOW_DAYS` days, an
+`until` alone closes below it by the same span, and a `since` alone
+closes at the clock. So an unbounded scan of `llm_calls` is
+unreachable from the wire.
+
+A resolved span wider than `SPEND_MAX_WINDOW_DAYS` — a quarter — is a
+`422` naming `since` under a code of the service's own, carrying the
+MAXIMUM rather than the span submitted, and raised before any store
+is asked anything. It is refused and not clamped, on the terms a
+`perPage` above the cap is refused by: clamping would answer a
+narrower window than the request named with no member of the answer
+saying so. A year is still askable, in four requests, the half-open
+bounds being what makes four adjacent quarters partition it rather
+than overlap on the seams.
+
+The ceiling exists because this is the one read on the surface with
+no page at all. Every other collection is bounded by `?perPage`; a
+summary is bounded by the SPAN it aggregates over, one bucket per
+domain per day, so the size of the body is a function of that number
+and of how many domains the deployment runs. `?page` and `?perPage`
+are undeclared here and, on a `.strict()` shape, a `422` naming
+`query` rather than parameters quietly ignored.
+
+The resolved window TRAVELS BACK, as `window` in the
+`sinceInclusive`/`untilExclusive` spelling. A request that sent no
+bounds is answered over a span the service chose, and a bare list of
+buckets would leave a reader inferring which one from the days that
+happen to carry calls — which says nothing at all about a window in
+which nothing was called. `window` is what stands in for `meta` here:
+the answer says which span it covers rather than which slice of a
+collection.
+
+A `?since` in the future with no `?until` is an empty summary and not
+a refusal. The clock closes such a window below its own lower bound,
+and under half-open semantics nothing can fall inside it, so an empty
+`buckets` is the truthful answer to a request for the calls made
+since an instant that has not arrived. It is not refused because the
+rule would depend on the clock rather than on the request, and the
+schema's ordering check is what makes it unreachable whenever both
+bounds were sent.
+
+### A count and two magnitudes, and no member of either is a total
+
+Each bucket is `{ domainId, day, calls, promptChars, estTokens }`.
+`The spend ledger` above argues why none of the three numbers is
+currency — there is no price, rate, amount or currency column on
+`llm_calls` for one to be answered from. What this route adds is that
+it composes no total either: no sum across buckets, no rate applied
+on the way out and no member a handler multiplied, so a consumer
+adding them up is doing arithmetic over a count and two magnitudes it
+can see.
+
+The authority on the second magnitude is the column's own comment,
+and it states it plainly: a total over this column does not reconcile
+with a bill. The `est_` is load-bearing — the value is arithmetic
+over `prompt_chars` rather than a count a provider reported, so the
+two are one reading expressed twice, and nothing stored says which
+estimator produced it. What the number IS good for is comparison, one
+run against another and one week against the week before, which is
+what the summary is read for.
+
+`promptChars` and `estTokens` are each nullable in a bucket as they
+are in a row, and a NULL means nothing measured that call rather than
+a call that sent nothing — zero being a real reading here. So a
+bucket may carry a non-zero `calls` beside a null magnitude, and the
+two disagreeing is information rather than a fault.
+
+A bucket exists because calls landed in it. There is no row for a day
+nothing was called on and none for a domain that made no calls, so a
+consumer filling a chart supplies its own zeroes for the gaps. An
+empty `buckets` is an ordinary answer, and three requests reach it: a
+window in which nothing was called, a domain that called nothing, and
+a deployment that has called nothing at all.
+
+### The day arrives as the instant a UTC day opens
+
+`The bucket is UTC` above argues the grouping. What a client reads is
+its consequence: `day` is a `Date` across the service and reaches the
+wire through `Date#toJSON`, so it arrives as `...T00:00:00.000Z` —
+the instant that opens the day at UTC, with the calendar written into
+the value rather than left to whoever reads it. Two deployments of
+one build, reading one ledger, answer the same string.
+
+The order is `day` descending then `domainId` ascending, with the
+null bucket last. Nothing on this router re-buckets, re-orders or
+truncates anything: a handler doing any of the three would be a
+second calendar for the one question where a default is a silent
+per-deployment difference in every number a widget shows.
+
+The null bucket is how the calls belonging to no domain are answered
+rather than dropped. Both `runs.domain_id` and `llm_calls.run_id` are
+nullable, so a call can reach no domain by two routes and both land
+there — which is what makes the buckets' `calls` add up to the number
+of calls the window holds.

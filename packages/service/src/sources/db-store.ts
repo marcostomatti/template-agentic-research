@@ -42,15 +42,40 @@
  * carries no `domainId`. There is no unique key on this table at
  * all, so no method below can raise a `unique-violation`.
  *
- * THE LIST READ IS TWO STATEMENTS AND EVERY OTHER METHOD IS ONE,
- * which is the one place this module departs from the shape its
- * siblings hold to. The page of sources is read first, and then ONE
- * `GROUP BY (source_id, parse_status)` over exactly the ids that
- * page returned — never a count per source, which
- * {@link SourceStore.listSourcesWithParseStats} rules out by putting
- * the aggregate on the read rather than on a second method. The
- * grouped read is skipped altogether when the page is empty, so a
- * window past the end of the collection costs one statement.
+ * THE FOURTH WRITER REACHES NO MECHANISM AT ALL, and
+ * {@link refusing} sits on it regardless.
+ * {@link SourceStore.approveAndApplyProposal} writes a status the
+ * tuple `source_config_proposals_status_check` is generated from
+ * names, satisfies `source_config_proposals_approval_check` by the
+ * order it stamps in, and touches no constrained column on
+ * `sources` — so a `StoreRefusal` out of it would be a fault rather
+ * than a rule, which is what the port says outright. What the
+ * wrapper buys is the containment above, and it buys it where the
+ * bytes are worst: its second statement binds both proposed
+ * documents whole, so an untranslated failure would spell an entire
+ * parser arrangement into a log line through `errorHandler`'s
+ * `cause`. `src/entities/db-store.ts` wraps the other gate's
+ * approval on the same terms and records the same reasoning.
+ *
+ * TWO METHODS ISSUE MORE THAN ONE STATEMENT AND EVERY OTHER ONE
+ * ISSUES A SINGLE STATEMENT, which is where this module departs
+ * from the shape its siblings hold to. The page of sources is read
+ * first, and then ONE `GROUP BY (source_id, parse_status)` over
+ * exactly the ids that page returned — never a count per source,
+ * which {@link SourceStore.listSourcesWithParseStats} rules out by
+ * putting the aggregate on the read rather than on a second method.
+ * The grouped read is skipped altogether when the page is empty, so
+ * a window past the end of the collection costs one statement.
+ *
+ * THE OTHER IS {@link SourceStore.approveAndApplyProposal}, three
+ * statements inside ONE `db.transaction`, and it is the only
+ * transaction in this file. The `UNION ALL` below buys ONE SNAPSHOT
+ * for a pair of numbers that would misread an operator if they came
+ * from two instants; this buys ATOMICITY over a pair of TABLES,
+ * which is a different thing to want and the only place here that
+ * wants it. `./store.ts` argues why neither half of that write is a
+ * state anybody meant on its own, and the method below carries the
+ * order of the three and why neither swap is available.
  *
  * `documents_source_parse_status_idx` over (`source_id`,
  * `parse_status`) is what both of this module's `documents` readers
@@ -88,18 +113,60 @@
  * because `UNION ALL` promises no order without an `ORDER BY`.
  *
  * NOTHING HERE WRITES A `documents` ROW, and the absence is the
- * read-only rule rather than a description of it. Three of the nine
- * methods touch that table — the aggregate above, the queue and
- * its count — and none is an insert, an update or a delete.
+ * read-only rule rather than a description of it. Three of the
+ * thirteen methods touch that table — the aggregate above, the
+ * queue and its count — and none is an insert, an update or a
+ * delete.
  *
- * BOTH PROJECTIONS ARE COLUMN-SCOPED, and for different reasons.
- * {@link SOURCE_COLUMNS} names all twelve of the table's columns, so
- * a column added to `sources` reaches no caller until somebody puts
- * it on {@link SourceRecord} deliberately — `src/sources/routes.ts`
- * hands a record straight to `ok()`. {@link FAILURE_COLUMNS} names
+ * ALL THREE PROJECTIONS NAME THEIR COLUMNS, and for different
+ * reasons. {@link SOURCE_COLUMNS} names all twelve of the table's
+ * columns, so a column added to `sources` reaches no caller until
+ * somebody puts it on {@link SourceRecord} deliberately —
+ * `src/sources/routes.ts` hands a record straight to `ok()`.
+ * {@link PROPOSAL_COLUMNS} names all ten of its table's on the same
+ * terms, and answers a record that is deliberately WHOLE:
+ * {@link SourceConfigProposalRecord} argues that an operator rules
+ * on exactly what will be written. {@link FAILURE_COLUMNS} names
  * five of the fifteen `documents` carries, and there the scoping is
  * the record's own subject, which {@link SourceFailureRecord} sets
  * out.
+ *
+ * THE PROPOSALS HALF READS AND WRITES `source_config_proposals`,
+ * which is the fourth table this module touches and the second it
+ * writes. Three of those four methods read — the pending queue,
+ * its count, and the unscoped lookup a ruling resolves through —
+ * and the fourth rules and applies.
+ *
+ * `source_config_proposals_source_id_status_idx` over (`source_id`,
+ * `status`) is what the queue and its count stand on, and both
+ * spell an equality on BOTH of its columns so the pair is a key
+ * rather than a filter applied to a scan. `proposed_at` is
+ * deliberately not in that index and `src/db/schema/sources.ts`
+ * argues why at length; what it costs here is that the ORDER BY
+ * sorts what the index found rather than reading it out in order,
+ * which is bounded by how many proposals one feed can have waiting
+ * at once.
+ *
+ * THE QUEUE'S ASCENDING KEYS SPELL NO NULLS QUALIFIER AND THE
+ * FAILURES QUEUE'S DESCENDING ONES SPELL `NULLS LAST`, which is one
+ * rule rather than an inconsistency: NULLS LAST is already
+ * Postgres's default for `ASC` and the opposite of its default for
+ * `DESC`. `src/entities/db-store.ts` carries the measurement, and
+ * both orders here are over NOT NULL columns in any case.
+ *
+ * THE APPLIER IS IMPORTED RATHER THAN RESTATED, and it is the only
+ * value this module takes from a sibling. `proposalToSourceUpdate`
+ * in `./config-proposer.ts` is what turns an approved row into the
+ * two columns an approval authorizes and it answers the SET clause
+ * itself, so nothing spread here can widen what was agreed to.
+ * Reading `parserConfig` and `contract` off the row instead would
+ * make this a second applier, and the refusal standing between an
+ * unruled proposal and the columns every later pass reads would be
+ * restated once per implementation rather than being one function
+ * both go through. `tests/helpers/memory-research-store.ts` makes
+ * its single call into `src/` for the same reason, and
+ * {@link SourceStore.approveAndApplyProposal} assigns the function
+ * to statement 2 by name.
  *
  * NOTHING HERE STAMPS A TIMESTAMP, which is what makes an empty
  * patch a branch in this module rather than a statement. `sources`
@@ -114,6 +181,7 @@
 import type {
   InsertSourceInput,
   ParseStatusCounts,
+  SourceConfigProposalRecord,
   SourceDependentCounts,
   SourceFailureRecord,
   SourcePatch,
@@ -122,15 +190,27 @@ import type {
   SourceWithParseStats,
 } from './store.js';
 import type { Db } from '../db/index.js';
-import type { DocumentParseStatus } from '../db/schema/values.js';
+import type {
+  DocumentParseStatus,
+  ResearchPoolStatus,
+} from '../db/schema/values.js';
 import type { StoreWindow } from '../http/schemas.js';
+import type { SQL } from 'drizzle-orm';
+import type { PgColumn } from 'drizzle-orm/pg-core';
 
 import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
 
 import { DOCUMENT_PARSE_STATUSES } from '../db/schema/values.js';
-import { documents, findingSightings, sources } from '../db/schema.js';
+import {
+  documents,
+  findingSightings,
+  sourceConfigProposals,
+  sources,
+} from '../db/schema.js';
 import { classifyPgError } from '../db/store-errors.js';
+
+import { proposalToSourceUpdate } from './config-proposer.js';
 
 /**
  * The `sources` columns {@link SourceRecord} is made of, as one
@@ -176,6 +256,36 @@ const FAILURE_COLUMNS = {
 };
 
 /**
+ * The `source_config_proposals` columns
+ * {@link SourceConfigProposalRecord} is made of, as one object the
+ * three reads and both `RETURNING` lists below project through.
+ *
+ * All ten of the table's columns, so this object narrows nothing
+ * today — the header carries what naming them is for, which is the
+ * eleventh column somebody adds. That the record is WHOLE is its
+ * own decision rather than this file's:
+ * {@link SourceConfigProposalRecord} argues that an approval is an
+ * approval OF THESE TWO DOCUMENTS, so a projection describing them
+ * instead of carrying them would make the ruling a ruling about
+ * something else.
+ *
+ * The reads and the write project through one object, which is what
+ * stops them drifting into different shapes.
+ */
+const PROPOSAL_COLUMNS = {
+  id: sourceConfigProposals.id,
+  domainId: sourceConfigProposals.domainId,
+  sourceId: sourceConfigProposals.sourceId,
+  parserConfig: sourceConfigProposals.parserConfig,
+  contract: sourceConfigProposals.contract,
+  proposedBy: sourceConfigProposals.proposedBy,
+  status: sourceConfigProposals.status,
+  proposedAt: sourceConfigProposals.proposedAt,
+  approvedAt: sourceConfigProposals.approvedAt,
+  appliedAt: sourceConfigProposals.appliedAt,
+};
+
+/**
  * The status the review queue reads, spelled once.
  *
  * Annotated with {@link DocumentParseStatus} rather than left as a
@@ -185,6 +295,38 @@ const FAILURE_COLUMNS = {
  * filtering on a status the CHECK no longer admits.
  */
 const FAILED_STATUS: DocumentParseStatus = 'failed';
+
+/**
+ * The status the pending queue selects on.
+ *
+ * Annotated on {@link FAILED_STATUS} above's terms, one tuple over:
+ * the member belongs to `RESEARCH_POOL_STATUSES` in
+ * `src/db/schema/values.ts`, which
+ * `source_config_proposals_status_check` is generated from, so a
+ * member renamed there reddens here instead of leaving both queue
+ * readers filtering on a status no row can carry — which reports an
+ * empty backlog rather than an error.
+ *
+ * NAMED FOR ITS TABLE rather than spelled `PENDING_STATUS`, which
+ * is what `scripts/approve.ts` and
+ * `tests/helpers/memory-research-store.ts` both call the identical
+ * value. {@link FAILED_STATUS} above is a `DocumentParseStatus`, and
+ * two bare `*_STATUS` constants over different tuples in one file
+ * would read as one vocabulary.
+ */
+const PENDING_PROPOSAL_STATUS: ResearchPoolStatus = 'pending';
+
+/**
+ * The status {@link SourceStore.approveAndApplyProposal} writes.
+ *
+ * Annotated and named on {@link PENDING_PROPOSAL_STATUS}'s terms.
+ * What the annotation heads off differs on this side, exactly as
+ * `scripts/approve.ts` records over the same pair: a READ against a
+ * member that no longer exists reports an empty queue, where a
+ * WRITE of one is refused by the CHECK at the moment somebody is
+ * trying to clear a backlog.
+ */
+const APPROVED_PROPOSAL_STATUS: ResearchPoolStatus = 'approved';
 
 /**
  * One row of the grouped parse-status read: which source, which
@@ -408,12 +550,16 @@ function countedTotal(
 }
 
 /**
- * Runs one statement, translating a Postgres refusal into the one
- * error type {@link SourceStore} lets cross it.
+ * Runs one statement — or, for the ruling at the foot, one
+ * whole transaction — translating a Postgres refusal into the
+ * one error type {@link SourceStore} lets cross it.
  *
- * @param run - The statement, as a thunk rather than an already
- *   started promise, so the `try` covers the query builder's own
- *   throw as well as the driver's.
+ * @param run - The work, as a thunk rather than an already started
+ *   promise, so the `try` covers the query builder's own throw as
+ *   well as the driver's. Wrapping a transaction wraps its
+ *   `ROLLBACK` too: drizzle rolls back and rethrows, so a refusal
+ *   raised by any of the three statements is translated once, on
+ *   the way out of a transaction that has already been undone.
  * @returns Whatever the statement answered.
  * @throws StoreRefusal When {@link classifyPgError} recognised the
  *   SQLSTATE, walking the `cause` chain drizzle wraps the driver
@@ -484,18 +630,79 @@ function failedCaptures(sourceId: number) {
 }
 
 /**
+ * `coalesce(<column>, now())`: the stamp a ruling writes, which
+ * keeps whatever instant is already there.
+ *
+ * BOTH OF {@link SourceStore.approveAndApplyProposal}'S STAMPS GO
+ * THROUGH ONE SPELLING, which is what makes the idempotence one
+ * rule rather than two that agree today. `approveById` and
+ * `approveProposalById` in `scripts/approve.ts` write this same
+ * expression over `approved_at`, and `EntityStore.approvePoolRow`
+ * in `src/entities/db-store.ts` over the other gate's.
+ *
+ * IDEMPOTENT BY CONSTRUCTION RATHER THAN BY A BRANCH. The stored
+ * value is read INSIDE the statement that rewrites it, so nothing
+ * here reads a stamp in order to decide whether to write one and
+ * there is no window between a read and a write for a second ruling
+ * to land in.
+ *
+ * `now()` is the server's clock rather than this process's, and it
+ * is the TRANSACTION's start time — so the two stamps a single
+ * ruling writes carry one instant, and rows written by one pass tie
+ * to the microsecond with `id` breaking the tie.
+ *
+ * @param column - The timestamp column to keep where it is already
+ *   set.
+ * @returns The `set` value, as SQL naming a column rather than
+ *   carrying anything a caller chose.
+ */
+function keptStamp(column: PgColumn): SQL {
+  return sql`coalesce(${column}, now())`;
+}
+
+/**
+ * The predicate both queue readers share: one source's PENDING
+ * config proposals and nothing else.
+ *
+ * Written once so the queue and its total cannot drift into
+ * describing different collections — the argument
+ * {@link failedCaptures} above makes over the other queue, and true
+ * here for the same reason: `meta.total` on that page is derived
+ * from the count.
+ *
+ * AN EQUALITY ON BOTH COLUMNS OF
+ * `source_config_proposals_source_id_status_idx`, in the order that
+ * index declares them, which is what puts both readers on it.
+ *
+ * PENDING ONLY, AND THE FILTER IS THIS MODULE'S RATHER THAN A
+ * CALLER'S. There is no status parameter on either method, so
+ * neither can be asked for approved or applied rows and neither can
+ * become a way to page the gate's history.
+ *
+ * @param sourceId - The {@link SourceRecord.id} to read within.
+ * @returns The `WHERE` clause, for both statements below.
+ */
+function pendingProposals(sourceId: number) {
+  return and(
+    eq(sourceConfigProposals.sourceId, sourceId),
+    eq(sourceConfigProposals.status, PENDING_PROPOSAL_STATUS),
+  );
+}
+
+/**
  * Builds the {@link SourceStore} backed by Postgres.
  *
  * @param getDb - Resolves the drizzle client. Called once per method
  *   call and never at construction, which is what lets the store be
  *   built before the Postgres dependency has started; see the thunk
  *   paragraph above for why that ordering is forced.
- * @returns A store issuing one statement per method, with one
- *   exception the header argues: the list read issues a second for
- *   the whole page's parse-status aggregate, and the dependent count
- *   is one `UNION ALL` rather than two round trips. It holds no
- *   state of its own, so building a second one over the same thunk
- *   is free and equivalent.
+ * @returns A store issuing one statement per method, with two
+ *   exceptions the header argues: the list read issues a second for
+ *   the whole page's parse-status aggregate, and the ruling at the
+ *   foot issues three inside one transaction. The dependent count is
+ *   one `UNION ALL` rather than two round trips. It holds no state
+ *   of its own, so building a second one over the same thunk is free
+ *   and equivalent.
  */
 export function createDbSourceStore(getDb: () => Db): SourceStore {
   return {
@@ -875,6 +1082,258 @@ export function createDbSourceStore(getDb: () => Db): SourceStore {
         .where(failedCaptures(sourceId));
 
       return writtenRow(row, 'countSourceFailures').total;
+    },
+
+    /**
+     * One window of one source's PENDING config proposals, oldest
+     * first.
+     *
+     * ONE QUEUE WITH TWO CLIENTS. The predicate and both ordering
+     * keys are `listPendingProposals` in `scripts/approve.ts` member
+     * for member, and `./store.ts` carries which parts of that are
+     * the QUEUE and which are the CLIENT: an operator ruling from a
+     * terminal and one ruling from the API have to be looking at the
+     * same next row, and need not agree about how much of the
+     * backlog either can see at once.
+     *
+     * OLDEST FIRST, BECAUSE THE QUEUE IS WORKED FROM THE TOP, which
+     * is the opposite of {@link SourceStore.listSourceFailures}
+     * above and right for the same reason: a failure queue is about
+     * what broke most recently, and a gate about what has been
+     * waiting longest.
+     *
+     * THE TIEBREAK IS NOT OPTIONAL, per the port. `proposed_at`
+     * defaults to `now()`, which is the TRANSACTION's start time, so
+     * several proposals written in one pass tie to the microsecond
+     * and a tie spanning a page boundary would let two pages
+     * disagree about which row they hold. `id` ascending closes it,
+     * ascending so the tiebreak reads the same direction as the
+     * sort.
+     *
+     * NEITHER KEY SPELLS A NULLS QUALIFIER and the failures queue
+     * above spells one on both of its, which the header argues is
+     * one rule rather than two: NULLS LAST is already Postgres's
+     * default for `ASC`, so drizzle's `asc()` renders what the
+     * planner wants and no `sql` fragment is needed.
+     *
+     * BOTH PROPOSED DOCUMENTS COME BACK AS STORED, unread and uncut.
+     * The queue is what an approval is given from, so answering an
+     * account of them instead would make the ruling a ruling about
+     * something else. `src/sources/failures-service.ts` is where the
+     * neighbouring queue's stored bytes are masked and cut; nothing
+     * of the sort happens to these, and `./proposals-service.ts`
+     * hands the rows on whole.
+     *
+     * The window arrives already validated, per the port. Whether
+     * the source exists was settled by the lookup in front of this
+     * call, and an id no source carries answers an empty list here
+     * rather than failing.
+     */
+    async listPendingProposals(
+      sourceId: number,
+      window: StoreWindow,
+    ): Promise<readonly SourceConfigProposalRecord[]> {
+      return await getDb().select(PROPOSAL_COLUMNS)
+        .from(sourceConfigProposals)
+        .where(pendingProposals(sourceId))
+        .orderBy(
+          asc(sourceConfigProposals.proposedAt),
+          asc(sourceConfigProposals.id),
+        )
+        .limit(window.limit)
+        .offset(window.offset);
+    },
+
+    /**
+     * How many of one source's config proposals are waiting on a
+     * ruling, ignoring any window.
+     *
+     * The same predicate as the read above, through the same
+     * {@link pendingProposals} clause, and separate from it for the
+     * reason {@link SourceStore.countSources} gives: a page's total
+     * describes the collection and not the page.
+     *
+     * COUNTS THE QUEUE AND NOT THE TABLE. A source carrying fifty
+     * applied proposals and nothing pending answers `0`, which is
+     * the honest number for a backlog — what is closed is not
+     * waiting on anybody.
+     *
+     * `count()` and not `count(sourceConfigProposals.id)`, for the
+     * reason {@link SourceStore.countSources} above gives: there is
+     * no LEFT JOIN here, so every row counted is a real row and the
+     * bare form has no null-extended row to miscount. An id no
+     * source carries answers zero rather than failing.
+     */
+    async countPendingProposals(sourceId: number): Promise<number> {
+      const [row] = await getDb().select({ total: count() })
+        .from(sourceConfigProposals)
+        .where(pendingProposals(sourceId));
+
+      return writtenRow(row, 'countPendingProposals').total;
+    },
+
+    /**
+     * One proposal by primary key, whatever source it names, so the
+     * result is at most one row by construction rather than by a
+     * `LIMIT`.
+     *
+     * UNSCOPED ON PURPOSE, AND THAT IS WHAT MAKES THE CONTAINMENT
+     * RULE DECIDABLE ONE LAYER UP. A read scoped to the source would
+     * answer null for `no such row` and for `not this source's row`
+     * alike, which are a `404` for different reasons and only one of
+     * which is honest; `./proposals-service.ts` holds
+     * {@link SourceConfigProposalRecord.sourceId} against the
+     * addressed source instead, and `./store.ts` argues it in full.
+     *
+     * ANY STATUS, NOT ONLY A PENDING ONE, which is what separates
+     * this from the queue above beyond the window: the refusal a
+     * service owes an already-applied proposal is decidable only
+     * from a read that can see one.
+     *
+     * Null is neither an error nor a refusal — it is the fact the
+     * service decides a 404 from, exactly as
+     * {@link selectSourceById} above.
+     */
+    async findProposalById(
+      id: number,
+    ): Promise<SourceConfigProposalRecord | null> {
+      const [row] = await getDb().select(PROPOSAL_COLUMNS)
+        .from(sourceConfigProposals)
+        .where(eq(sourceConfigProposals.id, id));
+
+      return row ?? null;
+    },
+
+    /**
+     * Rules in favour of one proposal AND writes its two documents
+     * onto the source it names, in THREE STATEMENTS INSIDE ONE
+     * `db.transaction`. THE PORT'S FOURTH WRITER, THE ONLY ONE HERE
+     * THAT TOUCHES TWO TABLES, AND THE ONLY TRANSACTION IN THIS
+     * FILE.
+     *
+     * THE ORDER OF THE THREE IS THE PORT'S RATHER THAN THIS
+     * MODULE'S TASTE.
+     *
+     * 1. `UPDATE source_config_proposals SET status = $1,
+     *    approved_at = coalesce(approved_at, now()) WHERE id = $2
+     *    RETURNING ...`, which answers the row statement 2 derives
+     *    from, and answers nothing when no row carries the id.
+     * 2. `UPDATE sources SET parser_config = $1, contract = $2
+     *    WHERE id = $3 RETURNING id`, the two columns derived from
+     *    THAT returned row through `proposalToSourceUpdate` in
+     *    `./config-proposer.ts`, and the id read off it too.
+     * 3. `UPDATE source_config_proposals SET applied_at =
+     *    coalesce(applied_at, now()) WHERE id = $1 RETURNING ...`,
+     *    which is the answer.
+     *
+     * Each is its own prepared statement, so the numbering restarts
+     * rather than running on, and drizzle orders a `set` list by the
+     * table's column declaration order rather than by the object
+     * literal's — which is why statement 1 writes the status first.
+     *
+     * NEITHER SWAP IS AVAILABLE.
+     * `source_config_proposals_approval_check` refuses an
+     * `applied_at` on a row carrying no `approved_at`, so stamping
+     * the two the other way round is refused by the server
+     * mid-transaction; and the derivation reads `approved_at`, so it
+     * cannot run before statement 1 has written one.
+     *
+     * ONE TRANSACTION, BECAUSE THE APPROVAL AND THE SOURCE WRITE ARE
+     * ONE DECISION, and `./store.ts` argues both half-states at
+     * length. An approval recorded with the source unwritten leaves
+     * a gate saying a config was agreed while every later pass still
+     * reads the feed the old way; a source written with `applied_at`
+     * unstamped is the worse half, because `sources.parser_config`
+     * cannot say which proposal put it there and the only account of
+     * why those two columns hold what they hold is gone. A failure
+     * anywhere in the middle rolls all three statements back, which
+     * leaves the state the request can be made from again.
+     *
+     * THE DERIVATION GOES THROUGH ONE FUNCTION, per the port and per
+     * the header. `proposalToSourceUpdate` answers the SET clause
+     * itself, so nothing spread here can widen what the approval
+     * authorized. Its own refusal is unreachable from here —
+     * statement 1 wrote the stamp it reads — and reaching it would
+     * mean that statement did not do what it says. That is a fault
+     * rather than a refusal of the request, so it is not a
+     * `StoreRefusal` and no service catches it.
+     *
+     * IDEMPOTENT ON BOTH STAMPS, through the one {@link keptStamp}
+     * spelling and by construction rather than by a branch. A second
+     * ruling keeps the first one's instants rather than re-dating an
+     * approval already given or an application already made.
+     * `approveProposalById` in `scripts/approve.ts` writes
+     * `approved_at` the same way and deliberately leaves
+     * `applied_at` alone — the CLI rules, and this rules and
+     * applies, one gate with two clients.
+     *
+     * NOTHING IS ASKED OF THE ROW'S STATE and nothing validates the
+     * documents. Whether an already-applied proposal may be applied
+     * again is `RULING_ACTS` in `src/approvals/ruling.ts`, decided
+     * one layer up, and `./proposals-service.ts` answers the `409`
+     * before this is called; a malformed `parser_config` somebody
+     * approved anyway is written, because the approval IS the gate
+     * and this is not a second one.
+     *
+     * THE STATUS AND EVERY ID ARE BOUND RATHER THAN SPELLED INTO THE
+     * SQL, and so are the two derived documents: drizzle renders a
+     * `set` value and an `eq` alike as a placeholder. The two
+     * `coalesce` fragments are the only SQL text here and each names
+     * a column.
+     *
+     * STATEMENT 2 IS COUNTED THROUGH ITS `RETURNING` LIST.
+     * `source_config_proposals_source_id_sources_id_fk` emits `ON
+     * DELETE no action`, so the source a proposal names cannot have
+     * gone and that statement matches a row by construction — which
+     * is what makes an empty result a state this module has no
+     * account of rather than a race, and {@link writtenRow} the
+     * answer to it. The throw rolls the transaction back, so a
+     * database that had stopped holding its own keys leaves the
+     * proposal unruled rather than stamped applied over a source
+     * nothing was written to.
+     *
+     * Null rather than a throw when no row carries the id, and the
+     * transaction then commits having written nothing. An id that
+     * never existed and one deleted since it was read are
+     * indistinguishable here, and both say the same thing: there was
+     * nothing to rule on.
+     *
+     * The row is read back through {@link PROPOSAL_COLUMNS} rather
+     * than reconstructed, so a caller sees the instants `coalesce`
+     * settled on. The four members `describeRuling` in
+     * `src/approvals/ruling.ts` reads are on the answer, so a
+     * service can project the ruling without a second read.
+     */
+    async approveAndApplyProposal(
+      id: number,
+    ): Promise<SourceConfigProposalRecord | null> {
+      return await refusing(() => getDb().transaction(async (tx) => {
+        const [approved] = await tx.update(sourceConfigProposals)
+          .set({
+            approvedAt: keptStamp(sourceConfigProposals.approvedAt),
+            status: APPROVED_PROPOSAL_STATUS,
+          })
+          .where(eq(sourceConfigProposals.id, id))
+          .returning(PROPOSAL_COLUMNS);
+
+        if (approved === undefined) {
+          return null;
+        }
+
+        const [written] = await tx.update(sources)
+          .set(proposalToSourceUpdate(approved))
+          .where(eq(sources.id, approved.sourceId))
+          .returning({ id: sources.id });
+
+        writtenRow(written, 'the source update in approveAndApplyProposal');
+
+        const [ruled] = await tx.update(sourceConfigProposals)
+          .set({ appliedAt: keptStamp(sourceConfigProposals.appliedAt) })
+          .where(eq(sourceConfigProposals.id, id))
+          .returning(PROPOSAL_COLUMNS);
+
+        return writtenRow(ruled, 'approveAndApplyProposal');
+      }));
     },
   };
 }

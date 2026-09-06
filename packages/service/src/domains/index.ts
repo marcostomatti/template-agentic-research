@@ -23,10 +23,14 @@
  * one directly would be running them rather than going around them,
  * and `createDomainSchema`, `patchDomainSchema` and
  * `domainSettingsSchema` are the shapes those functions parse their
- * own bodies against. They are absent because nothing outside this
- * directory has a caller for one today. Wave 3 exposes those same
- * functions as MCP tools; the export line belongs to the commit that
- * gives them a second caller, where a case can reach it.
+ * own bodies against. They are absent because this file is the
+ * APPLICATION'S way in and nothing wiring an application needs one.
+ * `src/mcp/tools/wave-1.ts` is the second caller that arrived, and
+ * it reaches `./service.ts` and `./routes.ts` DIRECTLY, on the
+ * reasoning the paragraph below gives for the suite's own deep
+ * imports: a second PROTOCOL is not a second application. So this
+ * surface stayed as it was, and a widening here would still be a
+ * claim about wiring.
  *
  * A BARREL IS THE APPLICATION'S WAY IN RATHER THAN AN ACCESS RULE,
  * which is what the suite's two deep imports are evidence of rather

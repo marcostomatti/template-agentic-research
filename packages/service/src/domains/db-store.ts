@@ -267,6 +267,24 @@ export function createDbDomainStore(getDb: () => Db): DomainStore {
     },
 
     /**
+     * One row by primary key, on
+     * {@link DomainStore.findDomainBySlug}'s terms: at most one row
+     * by construction, and null rather than a throw when nothing
+     * carries the id.
+     *
+     * The same projection as every other read here, so a domain
+     * reached through a finding is the same shape as one reached
+     * through its slug.
+     */
+    async findDomainById(id: number): Promise<DomainRecord | null> {
+      const [row] = await getDb().select(DOMAIN_COLUMNS)
+        .from(domains)
+        .where(eq(domains.id, id));
+
+      return row ?? null;
+    },
+
+    /**
      * One insert, reading the row back rather than reconstructing it
      * from the input, so the id and both stamps are the database's
      * own.

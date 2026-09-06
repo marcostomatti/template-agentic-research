@@ -73,11 +73,17 @@
  * THE BODY IS NOT PARSED HERE, exactly as in
  * `./categories-routes.ts` and `src/domains/routes.ts`. All four
  * service functions taking a body take an `unknown` and parse it
- * themselves, because wave 3 exposes those same functions as MCP
- * tools and a body validated by the router would leave that caller
- * validating against a second schema nobody would notice drifting.
- * What a router owns instead is what only HTTP has: the `:id` in
- * the path and the `?format` in the query.
+ * themselves, because an operation owns its own input contract and
+ * a body validated by the router would leave a second caller
+ * validating against a schema nobody would notice drifting. The
+ * wave-1 MCP module IS that second caller on this group:
+ * {@link createTerm} and {@link patchTerm} are the term edits the
+ * API spec names among its safe mutations, and the tool-input
+ * schemas below are what it imports rather than restates.
+ *
+ * What a router owns instead is the SPELLING only HTTP has — the
+ * `:id` in a path, and the `?format` in a query string, which is
+ * the one member of this router vocabulary no tool spells at all.
  *
  * NO HANDLER HERE CARRIES A TRY/CATCH AND NONE CALLS `next(err)`.
  * `createService` registers `errorHandler` from `lib/errors` LAST,
@@ -125,11 +131,13 @@ import { parseBody, parseQuery } from '../http/validation.js';
 
 import {
   createTerm,
+  createTermSchema,
   deleteTerm,
   exportTermsAsSeed,
   importTerms,
   listTerms,
   patchTerm,
+  patchTermSchema,
 } from './terms-service.js';
 
 /**
@@ -218,6 +226,60 @@ const seedQuerySchema = z.object({
  */
 const resourceAddressSchema = z.object({
   id: resourceIdParamSchema,
+}).strict();
+
+/**
+ * What the MCP tool over the paginated read is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so every entry in `src/mcp/tools/wave-1.ts`
+ * names one schema covering the whole request, spread from the
+ * pieces the route already parses rather than written again.
+ *
+ * THE SEED BRANCH IS NOT ON THAT PROTOCOL. `?format=seed` answers
+ * a whole document, written byte for byte by
+ * `serializeTermSeedDocument` so that it imports back unchanged,
+ * which is a file rather than a result — and
+ * {@link seedQuerySchema} is deliberately absent from the spread
+ * above. A tool caller reads a category's lexicon a page at a
+ * time; an operator moving one between deployments uses the route.
+ */
+export const termListToolInputSchema = z.object({
+  ...resourceAddressSchema.shape,
+  ...paginationQuerySchema.shape,
+}).strict();
+
+/**
+ * What the MCP tool over the single-term create is called with.
+ *
+ * The address names the category and `createTermSchema` names the
+ * term, so the two spreads are the whole request. Neither schema
+ * declares a member the other does, which is what lets them share
+ * one object without either having to rename anything.
+ *
+ * THE BULK IMPORT IS NOT REACHABLE THROUGH IT, and `.strict()` is
+ * what makes that structural rather than a convention: the member
+ * a document is recognised by is {@link TERMS_MEMBER}, which no
+ * member of `createTermSchema` shares, so a document sent here is
+ * refused as a key this input does not declare. The route's own
+ * dispatch is unchanged; what a tool cannot do is take the branch.
+ */
+export const termCreateToolInputSchema = z.object({
+  ...resourceAddressSchema.shape,
+  ...createTermSchema.shape,
+}).strict();
+
+/**
+ * What the MCP tool over the term patch is called with.
+ *
+ * `id` is the term being rewritten and `categoryId` is where a move
+ * lands it — two ids meaning two different things, exactly as the
+ * wire carries them, one in the path and one in the body.
+ */
+export const termPatchToolInputSchema = z.object({
+  ...resourceAddressSchema.shape,
+  ...patchTermSchema.shape,
 }).strict();
 
 /** What a bulk import answers instead of the rows it wrote. */

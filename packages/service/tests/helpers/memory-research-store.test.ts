@@ -1,10 +1,11 @@
 /**
- * `tests/helpers/memory-research-store.ts` in all eight ports it
+ * `tests/helpers/memory-research-store.ts` in all twelve ports it
  * implements — the claims that make it a second implementation of
  * `DomainStore`, of `TaxonomyStore` WHOLE with categories and terms
  * together, of `PersonaStore`, of `TopicStore`, of `SourceStore`, of
- * `ConnectorStore`, of `SubscriptionStore` and of `SettingsStore`,
- * rather than a bag that stores what it is handed.
+ * `ConnectorStore`, of `SubscriptionStore`, of `SettingsStore`, of
+ * `FindingStore`, of `DocumentStore`, of `EntityStore` and of
+ * `RunStore`, rather than a bag that stores what it is handed.
  *
  * THAT IT REFUSES WHAT POSTGRES REFUSES. Every refusal case names
  * the `reason` a SQLSTATE classifies to and the constraint the
@@ -28,16 +29,20 @@
  * refuses on an INSERT and on an UPDATE because `name` is
  * patchable, and `topics_domain_id_domains_id_fk`, which the insert
  * alone can reach because `domainId` is not. The sources half adds
- * FOUR and reaches them from three calls, which is the widest
+ * SIX and reaches them from four calls, which is the widest
  * mechanism surface of any half here and the only one whose delete
  * is refused from OUTSIDE the row: `sources_kind_check`, the first
  * CHECK this file imitates, refusing on an INSERT and on an UPDATE
  * alike because `kind` is patchable;
  * `sources_domain_id_domains_id_fk`, which the insert alone reaches;
- * and `documents_source_id_sources_id_fk` beside
- * `finding_sightings_source_id_sources_id_fk`, two `ON DELETE no
- * action` keys in other tables that each hold the delete of a source
- * their rows still cite. The connectors half adds THREE and reaches
+ * `documents_source_id_sources_id_fk` beside
+ * `finding_sightings_source_id_sources_id_fk` and
+ * `source_config_proposals_source_id_sources_id_fk`, three
+ * `ON DELETE no action` keys in other tables that each hold the
+ * delete of a source their rows still cite; and
+ * `source_config_proposals_approval_check`, which no method reaches
+ * at all — the fourth call is a SEAM, and the paragraphs on the
+ * proposals half below carry why. The connectors half adds THREE and reaches
  * them from three calls as well, in a shape that is the sources
  * half's mirrored: `connectors_kind_name_unique` refusing on an
  * INSERT and on an UPDATE alike because `name` is patchable,
@@ -101,16 +106,22 @@
  * `src/sources/service.ts` reads the COUNTS rather than the
  * constraint name, so nothing downstream can tell which fired.
  *
- * THAT ONE REFUSING KEY IS DELIBERATELY NOT IMITATED, and the reason
- * is unreachability rather than oversight.
+ * THAT THE KEY THIS FILE ONCE DECLINED TO IMITATE IS IMITATED NOW,
+ * because a seam made the state reachable.
  * `source_config_proposals_source_id_sources_id_fk` is a third
- * `ON DELETE no action` key onto `sources.id`, but no port here
- * writes a proposal and no seam plants one, so there is no dataset
- * this store can be in where it would fire. A fake refusing a state
- * it cannot reach would be inventing a rule rather than imitating
- * one. There is no case for it, and that absence is why
- * `SourceStore.deleteSource` declares the throw rather than
- * promising that two zero counts mean the delete will land.
+ * `ON DELETE no action` key onto `sources.id`, and while no seam
+ * planted a proposal there was no dataset this store could be in
+ * where it would fire, so leaving it alone was unreachability rather
+ * than oversight — a fake refusing a state it cannot reach invents a
+ * rule instead of imitating one.
+ * `MemoryResearchStore.setDomainProposals` reaches it directly, so
+ * three cases hold it: the feed a pending proposal names, the same
+ * feed with an APPLIED one, since the key does not consult `status`,
+ * and a fourth feed nothing has proposed for whose delete lands.
+ * That last one is the positive control, and it is also what
+ * `SourceStore.deleteSource` warns of — three zero counts still do
+ * not promise the delete will land, `countSourceDependents` having
+ * no member for a proposal.
  *
  * THAT ITS IDS COME FROM 1 AND ARE NOT GAPLESS. A refused insert
  * burns an id here because it burns one in Postgres, measured on a
@@ -138,10 +149,11 @@
  * depend on a gaplessness only the fake has.
  *
  * THAT A DELETE CAN BE REFUSED BY ROWS IN ANOTHER TABLE, which is
- * the sources half's shape and no other's. `documents.source_id` and
- * `finding_sightings.source_id` are both `ON DELETE no action`, so a
- * feed whose captures are in the corpus cannot be removed until they
- * are — argued at both columns, and most sharply at the second,
+ * the sources half's shape and no other's. `documents.source_id`,
+ * `finding_sightings.source_id` and
+ * `source_config_proposals.source_id` are all `ON DELETE no action`,
+ * so a feed whose captures are in the corpus cannot be removed until
+ * they are — argued at both columns, and most sharply at the second,
  * where `src/db/schema/findings.ts` states the sightings table IS
  * the provenance record. The two are separate claims rather than one
  * rule read twice, and one case exists only to say so: a source
@@ -170,11 +182,13 @@
  * says the absence IS the read-only rule; what this file can add is
  * that a queue read and a queue count leave the aggregate exactly as
  * it was, and that every document any case here has to exist came
- * through a SEAM rather than through a method. Two seams, and their
- * shapes differ on purpose — rows for the documents, because three
- * reads answer rows, and a number for the sightings, because
- * `countSourceDependents` is the only thing that can ask about one
- * at all.
+ * through a SEAM rather than through a method. Three seams over this
+ * half, and their shapes differ on purpose — rows for the documents,
+ * because three reads answer rows; a number for the sightings,
+ * because `countSourceDependents` is the only thing that can ask
+ * about one at all; and rows for the config proposals, keyed by the
+ * DOMAIN rather than by the feed, which is the one place a seam here
+ * departs from its neighbours.
  *
  * THAT AN UPSERT REWRITES THREE COLUMNS AND KEEPS THE STORED ROW'S
  * ID. Measured: the statement answered the STORED id with `weight`,
@@ -355,6 +369,135 @@
  * copy reaching for the instant unconditionally throws on a null, and
  * the three answer sites are asserted in one body.
  *
+ * THAT THE FINDINGS HALF PLANTS THREE TABLES AND WRITES ONE, which
+ * is a shape no half above has. `FindingStore` declares six readers
+ * and one writer, so `findings`, `finding_sightings` and
+ * `entity_research` arrive through seams and only `finding_labels`
+ * is appended to. The consequence for this file is that the half has
+ * ONE mechanism rather than the sources half's four:
+ * `finding_labels_finding_id_findings_id_fk`, refusing a ruling
+ * appended onto a finding that is not there. Its case carries the
+ * positive control in the same body and the id-burn case beside it
+ * pins the counter, on the `personas` measurement rather than one of
+ * this table's own.
+ *
+ * THAT ITS PAGE IS ORDERED BY `compareFindings`' KEYS AND THAT THE
+ * TAIL IS NOT THE FLOOR. The fixture is planted in an order no read
+ * answers and its five rows tell the score ordering from the recency
+ * one and both from either direction of `id`: two rows carry one
+ * score AND one stamp, so only the tiebreak separates them, and they
+ * are planted with the LOWER id first so that a stable sort losing
+ * that tiebreak answers them the wrong way round rather than
+ * reproducing the right order by accident. One case reads the
+ * absent score against a ZERO one, which is the pair a store
+ * reading null as zero gets wrong: those two tie on the first key
+ * and fall through to the stamp, and the unscored row is the newest
+ * in the fixture.
+ *
+ * THAT ITS VERDICT FILTER READS THE LATEST RULING AND NOT ANY, which
+ * needs a finding judged TWICE before any case can see it. The
+ * re-judged row falls out of the first verdict and into the second
+ * while both labels stay readable, so a store matching any label
+ * answers both findings and a store reading the head of an unordered
+ * read answers whichever it reached. One case ties the two stamps
+ * under a fixed clock, which is where `id` is the only thing
+ * deciding what is in force.
+ *
+ * THAT ITS CATEGORY FILTER IS THE COLUMN READ AND NOT THE DIGEST'S.
+ * `fields->>'category'` answers TEXT, so a numeric member is matched
+ * by its digits and a store comparing only strings answers an empty
+ * page where a deployment answers a row. A key the domain never
+ * declared answers a page and a key it DID declare that nothing
+ * carries answers none, which is one case reading both directions:
+ * no column links a finding to a category, so the taxonomy in force
+ * decides neither. A third case plants an INHERITED member and reads
+ * it back gone, which is the seam storing what a `jsonb` column
+ * would.
+ *
+ * THAT ITS WINDOW IS HALF-OPEN AND THAT A NULL BOUND IS UNBOUNDED.
+ * One case takes the lower boundary and drops the upper in the same
+ * body, one reads each bound alone against the unbounded page, and
+ * one drives all three members at once so that the filter is shown
+ * selecting an intersection rather than the last member written.
+ *
+ * THAT IT PLANTS SIGHTINGS AS ROWS WHERE THE SOURCES HALF PLANTS A
+ * NUMBER, OVER ONE TABLE. That is this file's FOURTH known
+ * divergence and it is pinned from both faces: a sighting planted
+ * through the findings seam answers a `findingSightings` count of
+ * zero and its source's delete LANDS, while the planted number in
+ * the sibling case still refuses that same delete. Neither case
+ * describes a guard that had stopped guarding.
+ *
+ * THAT A PLANTED FINDING DOES NOT MOVE THE DOMAIN DEPENDENT COUNT,
+ * which is the THIRD known divergence and is
+ * `setConnectorSubscriptions`' decision taken again for its reason.
+ * The case reads the counted zero beside a page of five and then
+ * plants the number to show the guard still reads it.
+ *
+ * THAT A DOMAIN TAKES ITS FINDINGS AND TWO TABLES BELOW THEM. The
+ * cascade case asserts the state BEFORE the delete so the three
+ * empties after it are a delete reaching them rather than reads that
+ * never answered, a sibling domain's finding is left standing so a
+ * store clearing everything fails, and a third case appends a ruling
+ * onto the gone finding and reads the foreign key refusing it.
+ *
+ * THAT THE RESEARCH EMBEDDING IS ADDRESSED BY THE FINDING AND
+ * RESOLVED THROUGH ITS ENTITY. Two findings attributed to one
+ * subject answer the same rows, a finding attributed to another
+ * answers that one's, and an unattributed finding answers an empty
+ * list with the attributed sibling in the same body as the control.
+ * An id no finding carries answers the same empty list, which is the
+ * one place two different absences legitimately compare equal.
+ *
+ * THAT THE DOCUMENTS HALF WRITES NOTHING AT ALL, which is a shape no
+ * half above has: two methods, both reads, no mechanism to refuse
+ * with and no id to burn. So there is no refusal case in this half
+ * and no id-sequence case either, and both absences are the port's
+ * shape rather than coverage nobody wrote.
+ *
+ * THAT ITS PAGE IS `captured_at` DESCENDING WITH `id` DESCENDING AND
+ * THAT THE TIE IS THE SERVER'S OWN. The fixture plants five
+ * documents in an order no read answers, and its NEWEST row carries
+ * the LOWEST id so that an ordering by `id` in either direction
+ * disagrees with the answer rather than resembling it. Two rows
+ * carry ONE instant and are planted with the lower id first, so a
+ * stable sort that lost the tiebreak answers them the wrong way
+ * round; one case reads both their stamps off the store before
+ * asserting the order, which is what makes the tie a measurement
+ * rather than a fixture comment.
+ *
+ * THAT A FAILED DOCUMENT IS IN THE CORPUS RATHER THAN BEHIND A FLAG.
+ * The default page's statuses are read as a SET against
+ * `DOCUMENT_PARSE_STATUSES` rather than counted, since a store
+ * answering five `ok` rows passes a length assertion; and the two
+ * narrowed pages are asserted in ONE body, which is what says the
+ * filter selects rather than that `failed` happens to name
+ * everything. A status no row carries is an empty page rather than a
+ * refusal, with the unnarrowed page beside it as the control.
+ *
+ * THAT IT HOLDS DOCUMENTS THE FAILURES QUEUE STRUCTURALLY CANNOT.
+ * One case reads a null `sourceId` back with a sibling carrying the
+ * feed in the same body, because the state that makes this
+ * collection wider than the queue is the one
+ * {@link MemoryResearchStore.setSourceDocuments} has no key to plant
+ * at all.
+ *
+ * THAT IT PLANTS THE SAME TABLE THE SOURCES HALF PLANTS, KEYED
+ * DIFFERENTLY. That is this file's FIFTH known divergence, and it is
+ * pinned from both faces: a `failed` corpus document answers a queue
+ * of zero, an aggregate of zero and a dependent count of zero, so
+ * its source's delete LANDS, while the sibling case plants through
+ * the sources seam and reads that same delete refused by name. A
+ * third case reads the divergence the other way round, a queued
+ * failure being absent from the corpus page. None of the three
+ * describes a guard that had stopped guarding.
+ *
+ * THAT A DOMAIN TAKES ITS CORPUS THROUGH A SECOND CASCADE LINE OVER
+ * A TABLE THE SOURCES LINE HAS ALREADY REACHED. The two seams hold
+ * `documents` separately, so one case asserts the state BEFORE the
+ * delete and then reads BOTH seams empty after it — which is what
+ * says the two lines are two claims rather than one written twice.
+ *
  * THAT THE SETTINGS HALF REFUSES NOTHING AT ALL, which no case here
  * can assert directly and which is therefore stated rather than
  * pinned. `operator_settings` carries two mechanisms — a second
@@ -483,6 +626,140 @@
  * so no dependent count and no queue survives for a source that no
  * longer exists.
  *
+ * THE ENTITIES HALF ADDS TWO MECHANISMS AND IS THE FIRST HALF HERE
+ * WHERE ONE CALL REACHES BOTH.
+ * `entities_domain_id_name_norm_unique` refuses a rename landing on
+ * a key another subject in the same domain already holds, and
+ * `entities_alias_of_entities_id_fk` refuses an `aliasOf` naming an
+ * id no entity carries. `name` and `aliasOf` are both members of one
+ * `EntityPatch`, so a single request can carry both faults — which
+ * is exactly what the term, persona and topic halves each said they
+ * could NOT do, and it is why this half pins an order the three of
+ * them have nothing to pin. Neither mechanism sits on a delete:
+ * `EntityStore` declares none.
+ *
+ * ITS ORDER IS ARGUED AND IT IS ALSO PINNED, which no other argued
+ * order here is. The sources half argues one and says no case can
+ * see it; here a rename onto a taken key BESIDE an alias naming
+ * nothing is a request a case can make, so the case makes it and
+ * reads the KEY. What the order rests on is still the relation the
+ * category half MEASURED between a unique index and an
+ * end-of-statement check, carried across rather than measured on
+ * this table, and the case's second half drives the alias fault
+ * ALONE to show that it was a fault at all.
+ *
+ * ITS CHECK IS HELD BY THE SEAM AND NOT BY A METHOD, which is a
+ * shape no half above has.
+ * `research_pool_approval_check` holds two columns against each
+ * other, and no call on this port can propose the state it refuses:
+ * the approval only ever moves `approved_at` from null to an
+ * instant, and nothing writes `researched_at` at all. So the plant
+ * is where it is raised, over the WHOLE batch rather than row by
+ * row, and one case reads the legal row beside the refused one being
+ * left unstored. Its sibling `research_pool_status_check` is held by
+ * the TYPE instead — {@link MemoryResearchPoolRow} declares that
+ * member as the union — so it has no case here, exactly as
+ * `documents_parse_status_check` has none.
+ *
+ * THAT ITS TWO COLLECTIONS RUN OPPOSITE WAYS, and each fixture is
+ * planted in the order its own tiebreak REVERSES. Research is
+ * `researched_at` descending with `id` descending, and the pool is
+ * `created_at` ASCENDING with `id` ascending — the one queue this
+ * file imitates, `listPending` in `scripts/approve.ts` member for
+ * member. In both, the row carrying the extreme stamp also carries
+ * the extreme id the OTHER way, so an ordering by `id` alone
+ * disagrees with the answer rather than resembling it.
+ *
+ * THAT THE SAME `entity_research` ROWS ARE ANSWERED ONE MEMBER
+ * SHORT. One seam plants that table and two ports read it, so a case
+ * reads the key SET off this half's record and finds no `entityId`
+ * on it: the subject is the PATH here, where a caller of
+ * `listFindingResearch` named a finding and the entity is what the
+ * port resolved.
+ *
+ * THAT THE APPROVAL KEEPS THE FIRST RULING'S INSTANT. The case moves
+ * the clock BETWEEN the two rulings and reads the second answer
+ * against the first, with a row nobody has ruled on taking the
+ * second reading in the same body — without that control a store
+ * whose clock had stopped would pass. A third case ratifies a row
+ * already CLOSED and reads the whole row back, which is what says
+ * nothing is asked of the row's state and that `researched_at` is
+ * not touched from here.
+ *
+ * THAT A DOMAIN TAKES ITS REGISTRY, THE RESEARCH UNDER IT AND ITS
+ * QUEUE, BY TWO DIFFERENT ROUTES. The research goes two levels down
+ * through the entities; the intentions go directly, which is why the
+ * case reads the row naming NO subject going as well — a cascade
+ * written through the registry would leave it. A fourth case reads
+ * the other side of the seam's key: research planted under an id no
+ * entity carries has nothing to cascade from and survives, which is
+ * the state the findings half's own fixture is in.
+ *
+ * THAT A CROSS-DOMAIN CITATION IS A DELETE THIS STORE TAKES AND A
+ * DEPLOYMENT REFUSES. That is the file's sixth known divergence, and
+ * it is pinned from both faces: one case plants an intention in a
+ * SECOND domain naming the first's subject and reads the delete
+ * landing with the citation left dangling, and a sibling reads the
+ * same key holding nothing when both rows go together.
+ *
+ * THE RUNS HALF ADDS NO MECHANISM A CALL CAN REACH, and it is the
+ * SECOND half here to add none rather than the first — the documents
+ * half got there with two methods and this one with six. `runs`
+ * carries `runs_status_check` and `runs_scheduled_by_check` where
+ * `documents` reached neither, and both read a SINGLE column, so
+ * {@link MemoryRun} declares those two members as the unions and
+ * neither has a case: a plant outside `RUN_STATUSES` or
+ * `RUN_SCHEDULERS` does not compile, exactly as
+ * `documents_parse_status_check` and `research_pool_status_check`
+ * have no case for their own tables' sake. There is no writer on this
+ * port at all, so no foreign key here is reachable from a call
+ * either, and this half throws nothing.
+ *
+ * THAT ITS TWO COLLECTIONS ARE PLANTED FLAT, which is a claim about
+ * two NULLABLE columns rather than about a seam's convenience.
+ * `runs.domain_id` and `llm_calls.run_id` are both nullable, so the
+ * subject of this half's load-bearing cases — a maintenance tick that
+ * belongs to no domain, and a call attributed to no pass — has no key
+ * to be planted under at all. Cases read both: the tick is IN the
+ * unfiltered page and in NONE of the narrowed ones, and the call
+ * naming no run is in NO ledger and in EVERY summary.
+ *
+ * THAT ITS TWO ORDERS RUN THE SAME WAY AND ARE EXPRESSED TWICE.
+ * `started_at DESC, id DESC` on the page and
+ * `called_at DESC, id DESC` on the ledger, each planted in the order
+ * its own tiebreak REVERSES and each with the extreme stamp on the
+ * extreme id the OTHER way, so an ordering by `id` alone disagrees
+ * with the answer rather than resembling it. The unfiltered page adds
+ * a reading neither narrowed one can make: its last tie is between
+ * two DOMAINS, so the tiebreak is a comparison across the collection
+ * rather than within a scope.
+ *
+ * THAT THE SPEND SUMMARY GROUPS ON TWO AXES AND COUNTS EVERY ROW. The
+ * day axis is read with a pair of calls ONE MILLISECOND apart across
+ * a UTC midnight, which nothing but the truncation can separate; the
+ * domain axis is read through the join, since `llm_calls` carries no
+ * domain of its own; and the coverage property is read as a
+ * PARTITION, the buckets' `calls` adding up to the whole ledger while
+ * the two domains' own summaries fall three calls short of it. Its
+ * two magnitudes are read on a bucket where one call was measured on
+ * both axes, one on the characters alone and one on neither, which is
+ * what separates a sum from a count and the two sums from each other.
+ *
+ * THAT ITS WINDOW IS HALF-OPEN OVER `called_at`, read with both
+ * bounds landing exactly ON a planted call. A separate case spans two
+ * EMPTY days, which is what says a bucket exists because calls landed
+ * in it rather than because a calendar has that day.
+ *
+ * THAT A DOMAIN TAKES ITS PASSES AND THEIR LEDGER AND LEAVES THE
+ * TICKS. Two levels, as the findings half's cascade is, with the
+ * survivals read in the same bodies: the tick and the second domain's
+ * pass stand, and so do the calls naming no run. A CROSS-DOMAIN
+ * RESULT is the file's SEVENTH known divergence and is pinned from
+ * both faces exactly as the sixth is — one case records research in a
+ * SECOND domain naming the first's run and reads the delete landing
+ * with the citation left dangling, and a sibling reads the same key
+ * holding nothing when both rows go together.
+ *
  * Several cases carry a positive control in the same body rather
  * than in a sibling case, because each is asking a question a broken
  * store answers the same way by accident: a store refusing every
@@ -502,6 +779,208 @@
  * rather than as a count. Every figure below moves again when a
  * later task adds a case to this file, so re-derive the whole grid
  * rather than appending legs for the new rows.
+ *
+ * THE DOCUMENTS HALF FOLLOWED THE FILE'S SUBSTITUTE AND WIDENED THE
+ * RECORDED SET IT RE-RAN. The file holds 453 cases, of which 19 are
+ * this half's. What was run is this half's OWN nineteen legs plus
+ * FIFTEEN recorded ones, chosen by reading what the new cases CALL:
+ * the eight the findings half re-ran, the two sources legs it added,
+ * and five more sources legs these cases drive directly — the source
+ * delete refused by DOCUMENTS, the parse-status aggregate, the
+ * failures queue's own `failed` filter, and the two cascade legs
+ * over `dropSourcesOf`. The rest are closed by the same argument as
+ * before: every old case is untouched and every non-document path in
+ * the store is byte-identical but for the one added line in
+ * `deleteDomain`.
+ *
+ * THE LIVENESS CONTROL IS THE BEFORE-AND-AFTER DIFF AGAIN, AND IT
+ * HELD ON ALL FIFTEEN. Each recorded leg was applied to the store
+ * and run TWICE, once against `git show HEAD:` of this file and once
+ * at the tip, and what is read is the SET each run reddened. HEAD
+ * reproduced the findings half's eight figures EXACTLY — 97, 7, 59,
+ * 33, 50, 8, 6 and 4 — and every one of the fifteen legs' OUTSIDE
+ * sets came back identical member for member, nothing gained and
+ * nothing lost.
+ *
+ * THE DOCUMENTS HALF MOVED FOUR OF THOSE FIFTEEN, BY ONE CASE EACH,
+ * and all four are sources legs reached by a documents case that
+ * plants in the sources half on purpose. Accepting a source delete
+ * while DOCUMENTS cite it went 3 to 4, through the divergence
+ * control; accumulating the aggregate rather than seeding it from
+ * `DOCUMENT_PARSE_STATUSES` went 6 to 7, through the case that reads
+ * that aggregate answering zero over a corpus plant; and leaving the
+ * sources standing in the cascade went 5 to 6 while leaving their
+ * PLANTS standing went 1 to 2, both through the ONE case that reads
+ * both seams empty after a delete. The eleven that did not move
+ * include every one of the eight the findings half re-ran: no
+ * documents case writes a category, a term, a persona or a topic,
+ * reads a domain's dates or touches the operator's row.
+ *
+ * ONE OF THOSE FIFTEEN CARRIES A FIGURE THE SOURCES PARAGRAPH BELOW
+ * RECORDS DIFFERENTLY, and it is that paragraph's own snapshot rule
+ * rather than drift. Leaving the sources standing reads 5 at HEAD
+ * where the sources half recorded 4, the fifth member being a
+ * CONNECTORS cascade case landed since. Read every figure below as
+ * of the half that wrote it.
+ *
+ * Nineteen documents legs redden between 1 and 17, and EVERY red one
+ * of them lands wholly inside the documents describes. The whole
+ * grid was run TWICE over one tree and every leg's set came back
+ * identical member for member, which is what separates a measurement
+ * from a bad capture.
+ *
+ * Planting no document at all is this half's whole-half control and
+ * reddens 17 of the 19. The two survivors are exactly the divergence
+ * cases whose subject is the SOURCES seam — the one reading the
+ * queue, the aggregate and the dependent count answering zero, and
+ * the one reading that same delete refused once the sources seam
+ * holds a row.
+ *
+ * The ordering legs are four and they fall into two IDENTICAL PAIRS,
+ * which is the honest reading of a five-row fixture rather than four
+ * claims. Dropping the capture key and ordering oldest-first redden
+ * the SAME 5, told apart only by the assertion that fails inside
+ * each; dropping the id tiebreak and breaking it ASCENDING redden
+ * the same 5 as each other and a DIFFERENT 5 from the first pair,
+ * overlapping in 3. That the tiebreak legs redden at all is the
+ * fixture's doing rather than the store's: `Array.prototype.sort` is
+ * stable, so the tied pair is planted in the order the tiebreak
+ * REVERSES.
+ *
+ * The filter legs are three and they are not one size. Ignoring the
+ * filter and inverting it redden the same 3; defaulting it to `ok`
+ * rather than to both statuses reddens 9, and THAT is the leg the
+ * failed-by-default claim rests on rather than any assertion naming
+ * it. The three count legs are disjoint from the page's and from
+ * each other in what they are about: counting only the first window
+ * reddens 3, counting the whole domain under any filter 2, and
+ * counting every domain's documents at once 2.
+ *
+ * The two scope legs redden the SAME 2, which is what says the page
+ * and the count are scoped through one predicate rather than two.
+ * Ignoring the window reddens 2, disjoint from both.
+ *
+ * The two divergence legs are disjoint at 2 apiece: resolving the
+ * corpus through the sources seam, and leaving the corpus standing
+ * through a domain delete, the second being both cascade cases.
+ *
+ * The copy legs are one per DIRECTION and the two directions sit in
+ * two case bodies for exactly that reason. Answering the planted
+ * document by reference reddens 1 and handing its stored `Date` out
+ * reddens the SAME 1 — one answer site, `listDocuments` being the
+ * whole of the port's read surface, which is where this half is
+ * narrower than the findings one. Storing the `Date` a plant was
+ * handed reddens the OTHER copy case, and keeping the planted list
+ * rather than rebuilding it reddens that one plus the case named for
+ * it.
+ *
+ * THE FINDINGS HALF FOLLOWED THE FILE'S SUBSTITUTE AND SHARPENED ITS
+ * LIVENESS CONTROL, which is the one change to the practice. The
+ * file holds 434 cases, of which 44 are this half's. What was run is
+ * this half's OWN thirty-eight legs plus TEN recorded ones, chosen by
+ * reading what the new cases CALL: the same eight the subscriptions
+ * half re-ran, plus two sources legs the sightings cases reach. The
+ * rest are closed by the same argument as before, every old case
+ * being untouched and every non-findings path in the store
+ * byte-identical but for the one added line in `deleteDomain`.
+ *
+ * THE LIVENESS CONTROL IS NOW A BEFORE-AND-AFTER DIFF RATHER THAN A
+ * COMPARISON AGAINST A FIGURE IN THIS HEADER, and it is what caught
+ * that two of the eight figures above are pre-subscriptions
+ * snapshots. Each recorded leg was applied to the store and run
+ * TWICE, once against `git show HEAD:` of this file and once at the
+ * tip, and what is read is the SET each run reddened. HEAD
+ * reproduced 96, 7, 59, 33, 50, 8, 6 and 4 — the eight figures the
+ * paragraph below records as 95 ... 49, each already moved by the
+ * one subscriptions case that paragraph names — and every one of
+ * the ten legs' OUTSIDE sets came back identical member for member,
+ * nothing gained and nothing lost.
+ *
+ * THE FINDINGS HALF MOVED THREE OF THOSE TEN, BY ONE CASE EACH, and
+ * all three are findings cases reaching another half's rules on
+ * purpose. Refusing a null parent as a missing one went 96 to 97
+ * through the one case that declares a category, so that a key the
+ * domain HAS declared can be asked for beside one it has not.
+ * Accepting a source delete while sightings cite it went 3 to 4 and
+ * naming the documents key on that refusal went 2 to 3, both through
+ * the single case that reads the planted count still refusing.
+ * The other seven are identical member for member: no findings case
+ * writes a term, a persona or a topic, deletes a category, reads a
+ * domain's dates or touches the operator's row.
+ *
+ * Thirty-eight findings legs redden between 0 and 39 and EVERY red
+ * one of them lands wholly inside the findings describes, which is
+ * the mirror of the paragraph above. One leg had to be EARNED rather
+ * than found: dropping the id tiebreak reddened ZERO until the
+ * fixture was reordered, because `Array.prototype.sort` is stable
+ * and the tied pair had been planted in the very order the tiebreak
+ * answers. It reddens 5 now, and breaking the tie the other way
+ * reddens the same 5.
+ *
+ * The one honest zero is dropping the own-key guard on the category
+ * read, and it is the EIGHTH in this file though it is not the
+ * empty-patch branch the other seven are. A payload reaching that
+ * function came through a JSON round trip, which keeps own members
+ * and drops everything else exactly as a `jsonb` column does, so
+ * there is no inherited member left for the guard to refuse and no
+ * key on `Object.prototype` is spelled `category`. The guard is kept
+ * because `ar-digest`'s assembly node reads a driver row where it
+ * DOES have a subject; `categoryTextOf`'s own TSDoc carries that,
+ * and nothing else pins it.
+ *
+ * Planting no finding at all is this half's whole-half control and
+ * reddens 39 of the 44. The five survivors are exactly the cases
+ * that assert something no planted finding is needed for: the four
+ * sightings cases, whose rows hang off a finding ID rather than off
+ * a finding, and the one dependent-count case whose whole subject is
+ * a planted NUMBER.
+ *
+ * The ordering legs are six and they separate the three keys.
+ * Dropping the score key reddens 6 and ordering the score ASCENDING
+ * reddens 4, inside it. Sorting an absent score FIRST, which is what
+ * a bare SQL `DESC` does, reddens 4; sorting it LOWEST, which is
+ * what `score ?? 0` does, reddens 2 — the smaller figure being the
+ * sharper leg, since only the zero-scored row can tell that fault
+ * from the correct answer. Dropping the stamp key reddens 2 and
+ * dropping the id tiebreak 5.
+ *
+ * The three filter legs redden 5, 5 and 4 and are DISJOINT, which is
+ * what says the three members are three claims. Inside them the
+ * sharper legs are smaller: matching ANY ruling rather than the
+ * latest reddens 2, reading the OLDEST as the one in force 2, and
+ * dropping the id tiebreak from the rulings order 4. Matching a
+ * string member alone rather than the column text reddens exactly 1,
+ * the case written for it. Closing the upper bound of the window
+ * reddens 3 and opening the lower bound 3.
+ *
+ * The write legs are three and they are disjoint from every read
+ * leg. Replacing a ruling rather than appending one reddens 3,
+ * skipping the foreign key 3, and taking the id after that key
+ * exactly 1 — the id-burn case, which is the burn pinned once for
+ * the half's one mechanism.
+ *
+ * The embedded reads redden small and singly, which is the honest
+ * shape for three unbounded lists: ordering the sightings oldest
+ * first reddens 1, dropping their id tiebreak 1, and dropping the
+ * research one 1. Resolving research through the FINDING id rather
+ * than through its entity reddens 6, and answering research for an
+ * unattributed finding anyway reddens 1 inside it.
+ *
+ * The cascade legs NEST at 4 and 1: leaving the findings standing
+ * reddens 4, and leaving only their sightings and rulings standing
+ * reddens the one case written for the second level.
+ *
+ * The copy legs are one per ANSWER SITE and they redden 1 or 2
+ * apiece, disjointly. Answering the planted finding by reference
+ * reddens 2 — the lookup and the page, which is the term half's
+ * shape rather than the category half's, `listFindings` mapping
+ * through the same projection the lookup does. Storing the `fields`
+ * object a plant was handed reddens 1 and storing its `createdAt` 1,
+ * a split the sources half could not make with two documents on one
+ * write. Keeping the planted LIST rather than rebuilding it reddens
+ * 3. Answering a sighting or a research row by reference reddens 1,
+ * answering the stored label by reference 1, and stamping a label
+ * with the clock's own instance 1.
  *
  * THE SUBSCRIPTIONS HALF FOLLOWED THE FILE'S SUBSTITUTE AS WELL, and
  * it is the last half this file will get, so read the case totals
@@ -1129,6 +1608,229 @@
  * insert redden one apiece, the second being the widening leg the
  * nobody's-side-effect case exists for.
  *
+ * THE RUNS HALF RE-RAN THE RECORDED SET AND ADDED FOUR CASCADE LEGS
+ * TO IT, and the reading it bought is that everything carried in
+ * reproduced its recorded figure. The file holds 541 cases, of which
+ * 40 are this half's. What was run is this half's OWN thirty-three
+ * legs plus TEN recorded ones, chosen by reading what the new cases
+ * CALL from outside the half: they reach `insertDomain`,
+ * `deleteDomain`, {@link MemoryResearchStore.setDomainEntities},
+ * {@link MemoryResearchStore.setEntityResearch} and
+ * {@link EntityStore.listEntityResearch}, and nothing else. That is
+ * the entities half's six widened by the four cascade legs its
+ * divergence pair reaches through the registry. Each of the ten was
+ * applied to the store and run TWICE, once against
+ * `git show HEAD:` of this file at 501 cases and once at the tip at
+ * 541, and what is read is the SET each run reddened.
+ *
+ * EVERY ONE OF THE TEN REPRODUCED ITS RECORDED FIGURE AT HEAD, which
+ * is what says these are the legs the prose names rather than ten new
+ * ones that happen to redden something: 6, 8, 4, 2, 4, 2, 1, 1 and 4
+ * for the nine the paragraphs above record, and each OUTSIDE set came
+ * back identical member for member. ONE of them needed the recorded
+ * SPELLING found rather than guessed, and the wrong spelling is the
+ * one a reader reaches for first: `a domain delete that removes no
+ * row` reddens 8 only when the row is LEFT while the return stays
+ * truthful, where answering `false` from the same method reddens 27
+ * at HEAD and 33 at the tip. Both sentences describe the same
+ * mutation in English and they are different legs; the second is
+ * recorded here as the reading that names this half's six cascade
+ * cases, since the six new members are exactly the ones asserting
+ * what the delete returned.
+ *
+ * THE RUNS HALF MOVED EXACTLY TWO OF THE TEN, BY ONE CASE EACH, and
+ * both moved through the same pair of cases. Leaving the entities
+ * standing went 4 to 5 and keeping their research while dropping them
+ * went 1 to 2, each gaining one member of the cross-domain divergence
+ * pair — the only cases here that plant in the entities half on
+ * purpose. The other eight are identical member for member: no runs
+ * case writes a category, a term, a persona, a topic or a source,
+ * reads a domain's dates or touches the operator's row.
+ *
+ * Its own thirty-three legs redden between 1 and 31, EVERY red one of
+ * them lands wholly inside the runs describes, and NONE reads zero.
+ * The whole grid was run TWICE over one tree and every leg's set came
+ * back identical member for member, which is what separates a
+ * measurement from a bad capture.
+ *
+ * Planting no pass reddens 31 and planting no call 22, and the two
+ * are this half's whole-half controls. Their SURVIVORS are the
+ * coverage statement rather than their counts. What survives the
+ * first is exactly the nine cases whose subject is a CALL rather than
+ * a pass — the four ledger reads, whose rows hang off a run ID rather
+ * than off a run, the two call-copy cases, the ledger rebuild, the
+ * absent-run bucket, and the empty-day window case, whose subject is
+ * which DAYS carry a bucket. What survives the second is exactly the
+ * eighteen whose subject is a run row. The first control was 29 until
+ * the divergence pair gained the state-before assertion this file
+ * requires, which took it to 31 and is the whole of why those two
+ * reads are there.
+ *
+ * The runs page's three ordering legs separate its two keys and TWO
+ * OF THEM ARE IDENTICAL: dropping the id tiebreak reddens 4, and
+ * dropping the stamp key and reversing the whole order redden the
+ * same 5, told apart only by the assertion that fails inside each.
+ * That the tiebreak leg reddens at all is the fixture's doing rather
+ * than the store's — `Array.prototype.sort` is stable, so the tied
+ * pair is planted in the order the tiebreak REVERSES, and the oldest
+ * pass is planted with the HIGHEST id so the two keys disagree on
+ * every pair it is in. The ledger's two legs are the same shape one
+ * table down and NEST rather than pairing: dropping its id tiebreak
+ * reddens 4 and reversing it 3, inside.
+ *
+ * The two filter legs redden 5 apiece and are DISJOINT, which is what
+ * says the page and the summary narrow through two predicates rather
+ * than one. Neither is satisfied by a page that merely looks
+ * plausible: both are read through a PARTITION, the two domains'
+ * counts plus the one tick being the whole table on the page and the
+ * two domains' summaries falling three calls short of the
+ * unfiltered one.
+ *
+ * THE SPEND LEGS ARE ELEVEN AND THE THREE SHARPEST ARE THE SMALLEST.
+ * Truncating the day in the process's own zone reddens 11, which is
+ * the leg the UTC claim rests on rather than any assertion naming it;
+ * attributing every call to nobody reddens 12 and joining INNER,
+ * dropping the unattributed calls, reddens 10, the two overlapping in
+ * seven. Counting the measured rows rather than the rows reddens 8.
+ * Losing the null-last rule from the bucket order reddens 2 and
+ * taking the oldest day first reddens 5, disjoint but for the
+ * ordering case itself.
+ *
+ * The two magnitude legs redden 2 apiece and are DISJOINT, which is
+ * the reading two sums over one bucket need: coalescing an unmeasured
+ * bucket to zero reddens the null case and the absent-run one, and
+ * summing either axis only when BOTH were recorded reddens the
+ * separately-summed case and the same absent-run one. A fixture whose
+ * every call carried both magnitudes could report neither.
+ *
+ * The two window legs redden the SAME 1, and that is a case covering
+ * two claims rather than a leg that says nothing: closing the upper
+ * bound and opening the lower each redden the one case that puts both
+ * bounds exactly ON a planted call, which is what a half-open window
+ * is read with. Recorded as two legs on one case rather than as one
+ * figure for both.
+ *
+ * Resolving a call whose run nothing stored as though it named a
+ * domain reddens 7, which is the leg the LEFT JOIN's third null rests
+ * on. It NESTS the separately-summed magnitude leg, both reaching the
+ * absent-run case.
+ *
+ * The three cascade legs read 6, 4 and 2 and NEST: leaving the runs
+ * standing reddens 6, dropping every run whatever domain it belongs
+ * to reddens 4 inside it, and dropping the runs while leaving their
+ * ledger reddens 2 inside that. The middle one is what the tick's
+ * survival is pinned by, and the two divergence cases are inside the
+ * first alone.
+ *
+ * The copy legs are one per DIRECTION and per collection, which is
+ * why they sit in six case bodies rather than four. Storing the rows
+ * a plant was handed reddens 2 and keeping the STAMPS off that same
+ * plant reddens 1 inside it; answering the payloads by reference
+ * reddens 1 and answering the stamps by reference reddens a different
+ * 1. The ledger's pair redden ONE CASE EACH and are DISJOINT, which
+ * they were not until the combined case was split in two — a claim
+ * with two directions in one body cannot be separated by any grid,
+ * and both legs read the same single case before the split.
+ *
+ * The two projection legs redden 1 and 3 and neither is a copy leg.
+ * Keeping `run_id` on the ledger's record reddens exactly 1, the
+ * key-set case, which is the only reading in this half that could
+ * report a member riding along. Dropping `errors` from the runs
+ * record reddens 3, the key-set case plus both payload-copy cases,
+ * since those read the member they are about.
+ *
+ * The two seam-replacement legs redden 1 apiece and are disjoint,
+ * appending rather than replacing being what makes a collection going
+ * back to empty inexpressible — which is the one thing each rebuild
+ * case is for.
+ *
+ * THE ENTITIES HALF RE-RAN THE RECORDED SET RATHER THAN WIDENING IT,
+ * and the reading it bought is that nothing carried in moved at all.
+ * The file holds 501 cases, of which 48 are this half's. What was
+ * run is this half's OWN twenty-eight legs plus SIX recorded ones,
+ * chosen
+ * by reading what the new cases CALL from outside the half: they
+ * reach `insertDomain`, `deleteDomain` and
+ * {@link MemoryResearchStore.setEntityResearch}, and nothing else.
+ * Each of the six was applied to the store and run TWICE, once
+ * against `git show HEAD:` of this file at 453 cases and once at the
+ * tip at 501, and every one came back identical member for member —
+ * nothing gained and nothing lost. Two of the six are the reason the
+ * list is short rather than long: refusing no duplicate slug reddens
+ * 6 on both sides even though this half's fixture inserts two
+ * domains, and a `deleteDomain` that removes no row reddens 8 on
+ * both sides even though six new cases assert what it returns,
+ * because the drops run ahead of the return either way. Dropping the
+ * findings cascade reddens 4 and the documents cascade 2, storing
+ * planted research by reference 1 and reversing the findings half's
+ * own research order 1, all unmoved.
+ *
+ * Its own twenty-eight legs redden between 1 and 21, and every one
+ * of them lands wholly inside the entities describes. The whole grid
+ * was run TWICE over one tree and every leg's set came back
+ * identical member for member, which is what separates a measurement
+ * from a bad capture.
+ *
+ * Planting no entity reddens 19 and planting no intention 21, and
+ * the two are this half's whole-half controls. Their SURVIVORS are
+ * the coverage statement rather than their counts: what survives the
+ * first is exactly the research and pool cases, whose rows come
+ * through other seams, and what survives the second is exactly the
+ * registry and research cases plus the one refusal that stores
+ * nothing. The pool control was 20 until one cascade case gained the
+ * state-before assertion this file requires, which took it to 21 and
+ * is the whole of why that assertion is there.
+ *
+ * The two refusal legs are 2 apiece and they OVERLAP in the order
+ * case, which is what says that case reaches both mechanisms:
+ * accepting a duplicate key reddens the key case and the order case,
+ * and accepting a dangling alias reddens the alias case and the same
+ * order case. Reversing the two guards reddens the order case ALONE
+ * — 1 of 501, the sharpest leg in this half — and comparing the key
+ * against every row rather than every OTHER row reddens 10, which is
+ * every case whose patch keeps the key where it was. Scoping the key
+ * across domains rather than within one reddens 3.
+ *
+ * The ordering legs are six and they fall into TWO IDENTICAL TRIPLES
+ * of 4, which is the honest reading of a three-row fixture rather
+ * than six claims. Dropping the stamp key, dropping the id tiebreak
+ * and reversing the whole order redden the same 4 in the research
+ * collection and a different same-4 in the pool, told apart only by
+ * the assertion that fails inside each: each of the three produces a
+ * DIFFERENT wrong answer, which is what the fixture is planted for.
+ * That the tiebreak legs redden at all is the fixture's doing rather
+ * than the store's, `Array.prototype.sort` being stable.
+ *
+ * Matching a null `entityId` as though it named the subject asked
+ * about reddens 7: every pool case, the one reading a batch left
+ * unstored, and the pool cascade. Answering `entityId` on this
+ * half's research record reddens exactly 1, the key-set case.
+ *
+ * The check legs are 2 and 1 and they are nested rather than
+ * disjoint: accepting a closed row with no approval reddens the
+ * refusal case and the batch case, and storing the rows as it
+ * guarded them row by row reddens the batch case alone.
+ *
+ * The approval legs are 2 apiece and disjoint in what they are
+ * about: a bare `now()` in place of the coalesce reddens the
+ * idempotence case and the closed-row one, and leaving the status
+ * where it was reddens the closed-row one and the first-approval
+ * one. Discarding the approval write entirely reddens 2 and
+ * discarding the registry write 4.
+ *
+ * The three cascade legs read 4, 2 and 1 — dropping the entities,
+ * dropping the pool, and keeping the research while dropping the
+ * entities. The first two OVERLAP in exactly one case, the divergence
+ * control that reads both rows going together, which is what says
+ * that case is about the pair rather than about either line.
+ *
+ * The copy legs are one per DIRECTION and per collection, which is
+ * why they sit in six case bodies. Storing the `attributes` a plant
+ * or a patch was handed reddens 2, handing the stored payload out
+ * reddens the OTHER 1, and the pool's four-member copy reddens 2 on
+ * the way in and the SAME 2 on the way out — one answer site, this
+ * half reading pool rows through one projection.
+ *
  * ECHOING THE ARGUMENT RATHER THAN READING STORED STATE BACK REDDENS
  * NOTHING, and it is a MEASURED ZERO of a different kind from the
  * three empty-patch ones above. The port says a write answers what
@@ -1145,10 +1847,138 @@
  * the database's order, at both depths and off the plain read as
  * well as off the write. No re-aiming of this leg reaches it from
  * here.
+ *
+ * THAT THE PROPOSALS HALF IS THE FILE'S SECOND APPROVAL GATE AND
+ * READS AS THE SAME GATE. Four methods over
+ * `source_config_proposals`: a page narrowed to `pending` with its
+ * count, an UNSCOPED read by id, and one writer that rules AND
+ * applies. Every claim the entities half makes over `research_pool`
+ * has its counterpart here — an ascending queue, a by-id read that
+ * answers a row whatever parent it names, a CHECK reached from the
+ * seam alone, and an approval that keeps the first ruling's instant
+ * — and the cases are written to be read against those.
+ *
+ * THAT ITS QUEUE IS ASCENDING, NARROWED AND SCOPED, AND THAT THE
+ * THREE ARE SEPARATE CLAIMS. The fixture plants five proposals on
+ * one feed and one on its sibling: the tied pair carries ONE instant
+ * and is planted HIGH FIRST, the tiebreak being ASCENDING, and the
+ * oldest row carries the HIGHEST id, so `proposed_at` and `id`
+ * disagree on every pair. One case writes out the four orders the
+ * answer is NOT. Two of the five are ruled on, which is what the
+ * narrowing case reads and what makes the count three where the
+ * table holds five; the sixth row is what the scope case reads. It
+ * is `listPendingProposals` in `scripts/approve.ts` member for
+ * member, and the cases are what keep that a claim rather than a
+ * coincidence.
+ *
+ * THAT ITS WRITER TOUCHES TWO TABLES OR NEITHER. One case reads all
+ * four faces of a ruling in one body — both stamps, the status, the
+ * two documents landing on the feed exactly as proposed, and the row
+ * leaving the queue — and one drives the state a deployment's
+ * foreign key forbids and this seam can reach: a proposal naming a
+ * source nothing stored. Nothing is written until every value
+ * exists, so that case asserts the proposal is still unruled and the
+ * feed byte-identical to what it was, and asserts the fault is a
+ * plain `Error` rather than a `StoreRefusal` — answering a refusal
+ * for a state Postgres cannot be in would invent a rule.
+ *
+ * THAT BOTH ITS STAMPS ARE IDEMPOTENT AND THAT THEY ARE TWO CLAIMS.
+ * `coalesce` on each, so a second ruling keeps the first instants;
+ * the case moves the CLOCK between the two calls and rules on a
+ * third row afterwards as the control that it moved. A separate
+ * case rules on a row somebody already approved, where one
+ * `coalesce` falls through and the other does not, which is what
+ * separates the two.
+ *
+ * THAT A MALFORMED CONFIG IS WRITTEN. The approval IS the gate and
+ * this is not a second one, so a `parser_config` that is a bare
+ * string and a `contract` that is a number land on the feed. A store
+ * validating on the way through would refuse a row the deployment
+ * stores.
+ *
+ * THAT ITS CASCADE FOLLOWS THE DOMAIN AND NOT THE FEED, AND THAT THE
+ * DIFFERENCE IS THIS FILE'S EIGHTH KNOWN DIVERGENCE.
+ * `source_config_proposals.domain_id` cascades, so every status goes
+ * rather than the pending rows alone; one case drives the source
+ * delete FIRST, refused, and then the domain delete, taken, which is
+ * what says the cascade is not simply meeting nothing. A third case
+ * plants a proposal of the SECOND domain onto the first domain's
+ * feed and deletes that domain: the feed goes and the row is left
+ * naming an id nothing carries, where a deployment refuses the
+ * delete outright. `tests/live/api-wave3.live.test.ts` is where the
+ * refusal is discharged.
+ *
+ * THAT THE PROPOSALS HALF'S MUTATION GRID IS TWENTY-ONE LEGS, and
+ * that two of them are honest ZEROS. Every leg was run twice over
+ * one tree and the two runs agree member for member; every failed
+ * set lies entirely INSIDE this half, which is what says the half
+ * changed nothing above it. Planting nothing reddens 27 of the 29
+ * cases, and the two survivors are the coverage statement rather
+ * than the figure: the seam refusal, which is answered before
+ * anything is stored, and the feed nothing has proposed for, whose
+ * subject is an absence it never had to reach.
+ *
+ * The ordering legs are three and two of them are IDENTICAL at 3,
+ * told apart only by the assertion that fails inside each: dropping
+ * the `proposed_at` key and reversing the whole order redden the
+ * ordering case, the window case and the batch-refusal case that
+ * reads the queue back. Dropping the `id` tiebreak reddens those
+ * three plus the ruling case, whose queue assertion after the write
+ * is the tied pair alone. That the tiebreak leg reddens at all is
+ * the fixture's doing rather than the store's,
+ * `Array.prototype.sort` being stable.
+ *
+ * The two narrowing legs are 10 and 12 and neither contains the
+ * other: dropping the `pending` predicate and dropping the source
+ * scope share seven cases, and each reaches three the other does
+ * not. Nine of the twelve the scope leg reddens are cases about
+ * something else entirely, which is the shape a scope has.
+ *
+ * The check legs are 2 and 1 and they are nested rather than
+ * disjoint, exactly as the other gate's are: accepting an applied
+ * row with no approval reddens the refusal case and the batch case,
+ * and storing the rows as it guarded them row by row reddens the
+ * batch case alone.
+ *
+ * The ruling legs are 2, 1, 1, 4, 2 and 1 — a bare `now()` in place
+ * of each `coalesce`, leaving the status where it was, discarding
+ * the source write, discarding the proposal write, and stamping the
+ * proposal BEFORE the two columns are derived. The last is the only
+ * leg the atomicity case can report and it reddens exactly that one.
+ *
+ * The key and cascade legs are 3 and 2, overlapping in one case: the
+ * one that drives the refused source delete and the taken domain
+ * delete in the same body, which is what says that case is about the
+ * pair rather than about either line. Answering `domain_id` as a
+ * constant reddens exactly the whole-row case.
+ *
+ * The copy legs are one per DIRECTION and read 1 apiece — storing
+ * what the seam was handed, and handing the stored payload out.
+ *
+ * TWO LEGS ARE MEASURED ZEROS AND BOTH ARE STRUCTURAL. Deriving the
+ * two columns inline instead of through `proposalToSourceUpdate`
+ * reddens NOTHING, that function being a pass-through for any row
+ * carrying an approval and the row carrying one by the statement
+ * before: the claim it is one function both implementations go
+ * through is about where a future rule would live, and no case here
+ * can reach it. Handing the derived documents to the feed without
+ * copying them reddens nothing either, and the reason is narrower
+ * than it looks — the proposal is replaced by a fresh copy in the
+ * same call, so the object the feed keeps is one nobody else holds,
+ * and the two copies that ARE observable are pinned by the legs
+ * above. Neither zero is closable by widening a case.
  */
 import type {
+  MemoryDomainDocument,
+  MemoryDomainEntity,
+  MemoryDomainFinding,
+  MemoryEntityResearch,
+  MemoryLlmCall,
+  MemoryResearchPoolRow,
   MemoryResearchStore,
   MemorySourceDocument,
+  MemorySourceProposal,
+  MemoryRun,
 } from './memory-research-store.js';
 import type {
   ConnectorRecord,
@@ -1157,12 +1987,33 @@ import type {
 import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type { OperatorSettings } from '../../src/db/schema/settings.js';
 import type {
+  DocumentFilter,
+  DocumentRecord,
+} from '../../src/documents/store.js';
+import type {
   DomainRecord,
   InsertDomainInput,
 } from '../../src/domains/store.js';
+import type {
+  EntityRecord,
+  ResearchPoolRecord,
+} from '../../src/entities/store.js';
+import type {
+  FindingFilter,
+  FindingLabelRecord,
+  FindingRecord,
+  FindingSort,
+} from '../../src/findings/store.js';
+import type { TimeWindow } from '../../src/http/schemas.js';
 import type { PersonaRecord } from '../../src/personas/store.js';
 import type {
+  RunFilter,
+  RunRecord,
+  SpendBucket,
+} from '../../src/runs/store.js';
+import type {
   InsertSourceInput,
+  SourceConfigProposalRecord,
   SourceFailureRecord,
   SourcePatch,
   SourceRecord,
@@ -1203,6 +2054,29 @@ const TRANSIT = 'example-urban-transit';
 
 /** A window wide enough to read every row any case here writes. */
 const WHOLE_COLLECTION = { limit: 50, offset: 0 };
+
+/**
+ * A domain id nothing stores, and the needle every no-echo case in
+ * this file searches its own refusal for.
+ *
+ * SEVEN DIGITS ON PURPOSE, and the reason is the `stack` those cases
+ * serialise. A stack frame carries a LINE and a COLUMN number, so a
+ * three- or four-digit sentinel matches one by accident the moment
+ * anybody inserts lines into `./memory-research-store.js` — measured,
+ * a four-digit id came back once as `memory-research-store.ts:4041`
+ * and the case read a leak where the refusal was clean. Nothing in an
+ * eight-thousand-line file reaches seven digits, so the zero those
+ * cases assert is about the refusal rather than about where the throw
+ * happens to sit today.
+ *
+ * ONE CONSTANT FOR THREE HALVES, because the reason is one reason.
+ * The personas, topics and sources foreign keys each answer about an
+ * id, and a sentinel per half would be three places to shorten.
+ */
+const ABSENT_DOMAIN_ID = 4041987;
+
+/** {@link ABSENT_DOMAIN_ID} as the text a no-echo scan looks for. */
+const NEEDLE = String(ABSENT_DOMAIN_ID);
 
 /**
  * The connector filter that narrows nothing.
@@ -4431,7 +5305,7 @@ describe('the persona domain foreign key', () => {
   it('puts the refused id in nothing a logger can reach', async () => {
     const store = createMemoryResearchStore();
     const refusal = await refusalFrom(
-      () => addPersona(store, 4041, DRAFTER),
+      () => addPersona(store, ABSENT_DOMAIN_ID, DRAFTER),
     );
     const serialised = JSON.stringify({
       ...refusal,
@@ -4439,15 +5313,15 @@ describe('the persona domain foreign key', () => {
       stack: refusal.stack,
     });
 
-    expect(countOccurrences(serialised, '4041')).toBe(0);
+    expect(countOccurrences(serialised, NEEDLE)).toBe(0);
 
     // The same search over a message that DOES carry the id.
     const planted = JSON.stringify({
       ...refusal,
-      message: 'domain 4041 does not exist',
+      message: `domain ${NEEDLE} does not exist`,
     });
 
-    expect(countOccurrences(planted, '4041')).toBe(1);
+    expect(countOccurrences(planted, NEEDLE)).toBe(1);
   });
 });
 
@@ -4990,7 +5864,7 @@ describe('the topic domain foreign key', () => {
     const store = createMemoryResearchStore();
 
     const refusal = await refusalFrom(
-      () => addTopic(store, 4004, EDGE_INFERENCE),
+      () => addTopic(store, ABSENT_DOMAIN_ID, EDGE_INFERENCE),
     );
     const serialised = JSON.stringify({
       ...refusal,
@@ -4998,15 +5872,15 @@ describe('the topic domain foreign key', () => {
       stack: refusal.stack,
     });
 
-    expect(countOccurrences(serialised, '4004')).toBe(0);
+    expect(countOccurrences(serialised, NEEDLE)).toBe(0);
 
     // The same search over a message that DOES carry the id.
     const planted = JSON.stringify({
       ...refusal,
-      message: 'domain 4004 is not there',
+      message: `domain ${NEEDLE} is not there`,
     });
 
-    expect(countOccurrences(planted, '4004')).toBe(1);
+    expect(countOccurrences(planted, NEEDLE)).toBe(1);
   });
 });
 
@@ -5760,7 +6634,7 @@ describe('the source domain foreign key', () => {
     const store = createMemoryResearchStore();
 
     const refusal = await refusalFrom(
-      () => addSource(store, 4004, FEED_ENDPOINT),
+      () => addSource(store, ABSENT_DOMAIN_ID, FEED_ENDPOINT),
     );
     const serialised = JSON.stringify({
       ...refusal,
@@ -5768,15 +6642,15 @@ describe('the source domain foreign key', () => {
       stack: refusal.stack,
     });
 
-    expect(countOccurrences(serialised, '4004')).toBe(0);
+    expect(countOccurrences(serialised, NEEDLE)).toBe(0);
 
     // The same search over a message that DOES carry the id.
     const plantedMessage = JSON.stringify({
       ...refusal,
-      message: 'domain 4004 is not there',
+      message: `domain ${NEEDLE} is not there`,
     });
 
-    expect(countOccurrences(plantedMessage, '4004')).toBe(1);
+    expect(countOccurrences(plantedMessage, NEEDLE)).toBe(1);
   });
 });
 
@@ -8635,5 +9509,5159 @@ describe('the settings a domain delete leaves standing', () => {
       notificationChannels: { email: true, webhook: false },
     });
     expect(await store.findDomainBySlug(RADAR)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The findings half's fixture
+// ---------------------------------------------------------------------------
+
+/**
+ * The four instants the findings fixture is made across, oldest
+ * first and one day apart.
+ *
+ * SPELLED OUT RATHER THAN DERIVED FROM ONE ANOTHER, so that a case
+ * asserting a half-open window compares against a stamp no arithmetic
+ * of the store's could have produced.
+ */
+const MADE_T0 = '2026-03-01T09:00:00.000Z';
+const MADE_T1 = '2026-03-02T09:00:00.000Z';
+const MADE_T2 = '2026-03-03T09:00:00.000Z';
+const MADE_T3 = '2026-03-04T09:00:00.000Z';
+
+/**
+ * The five findings the fixture plants, named for what each is in
+ * the two orderings rather than for its id.
+ *
+ * The ids are the fixture's own rather than a sequence's: nothing on
+ * `FindingStore` inserts a finding, so a case says which row it means
+ * and the store never chooses. `HIGH_FIRST` and `HIGH_SECOND` carry
+ * one score and one stamp, so only `id` separates them and only
+ * descending puts the later insert first.
+ */
+const NO_SCORE = 11;
+const HIGH_FIRST = 12;
+const MIDDLE_SCORE = 13;
+const HIGH_SECOND = 14;
+const ZERO_SCORE = 15;
+
+/**
+ * Two entity ids, neither of which names anything.
+ *
+ * No port here stores an entity, so an id is the whole of what a
+ * finding can be attributed to and the whole of what research can be
+ * planted under. `EntityStore` is a later task; until then this is
+ * the honest shape rather than a placeholder.
+ */
+const SUBJECT = 71;
+const OTHER_SUBJECT = 72;
+
+/**
+ * A category key the fixture files a finding under and no domain
+ * declares.
+ */
+const RETIRED = 'retired-key';
+
+/**
+ * A window with neither bound.
+ *
+ * ANNOTATED RATHER THAN INFERRED, and read by two halves: the
+ * findings page below and the spend summary at the foot. Without the
+ * annotation the type is the literal `{ sinceInclusive: null }` pair,
+ * so a helper defaulting to it takes a parameter no BOUNDED window
+ * can be handed — which reads as a bad argument rather than as a
+ * missing annotation.
+ */
+const EVERY_INSTANT: TimeWindow = {
+  sinceInclusive: null,
+  untilExclusive: null,
+};
+
+/**
+ * The filter that narrows nothing, on the terms {@link EVERY_KIND}
+ * states.
+ */
+const EVERY_FINDING: FindingFilter = { window: EVERY_INSTANT };
+
+/** What {@link madeFinding} defaults when a case is not about it. */
+type FindingDefaults = Partial<Omit<MemoryDomainFinding, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setDomainFindings}.
+ *
+ * A function rather than a constant, for the reason {@link planted}
+ * is one: the copy cases WRITE into the `fields` and the `createdAt`
+ * they planted, which is the whole point of them.
+ *
+ * @param id - The finding id, which is the last key of both
+ *   orderings and the id a ruling is appended against.
+ * @param values - The six members a case may care about. `score`
+ *   defaults to null, which is the side of the ordering a store
+ *   sorting absence lowest gets wrong.
+ * @returns The row to plant.
+ */
+function madeFinding(
+  id: number,
+  values: FindingDefaults = {},
+): MemoryDomainFinding {
+  return {
+    documentId: values.documentId ?? id,
+    entityId: values.entityId ?? null,
+    fields: values.fields ?? {},
+    id,
+    score: values.score ?? null,
+    scoreVersion: values.scoreVersion ?? null,
+    createdAt: values.createdAt ?? new Date(MADE_T0),
+  };
+}
+
+/**
+ * A domain carrying the five findings every ordering, filter and
+ * window case reads.
+ *
+ * PLANTED IN AN ORDER NO READ ANSWERS, which is what lets one fixture
+ * tell the score ordering from the recency one, and both of those
+ * from an ordering by insertion or by id in either direction. The
+ * four answers are written out in the cases rather than here.
+ *
+ * @param store - The store to write to.
+ * @returns The domain the findings hang off.
+ */
+async function seedFindings(
+  store: MemoryResearchStore,
+): Promise<DomainRecord> {
+  const domain = await store.insertDomain(domainInput(RADAR));
+
+  store.setDomainFindings(domain.id, [
+    madeFinding(HIGH_FIRST, {
+      createdAt: new Date(MADE_T1),
+      entityId: SUBJECT,
+      fields: { category: RUNTIMES },
+      score: 0.9,
+    }),
+    madeFinding(MIDDLE_SCORE, {
+      createdAt: new Date(MADE_T2),
+      fields: { category: PLATFORMS },
+      score: 0.2,
+    }),
+    madeFinding(ZERO_SCORE, {
+      createdAt: new Date(MADE_T0),
+      entityId: OTHER_SUBJECT,
+      fields: { category: RETIRED },
+      score: 0,
+    }),
+    madeFinding(NO_SCORE, { createdAt: new Date(MADE_T3) }),
+    madeFinding(HIGH_SECOND, {
+      createdAt: new Date(MADE_T1),
+      entityId: SUBJECT,
+      fields: { category: PLATFORMS },
+      score: 0.9,
+    }),
+  ]);
+
+  return domain;
+}
+
+/**
+ * @param rows - A page of findings.
+ * @returns Their ids in the order they arrived, which is what every
+ *   ordering case compares rather than the rows themselves.
+ */
+function findingIds(rows: readonly FindingRecord[]): number[] {
+  return rows.map((row) => row.id);
+}
+
+/**
+ * Reads one window of a domain's findings under a filter.
+ *
+ * @param store - The store to read.
+ * @param domainId - The domain to read within.
+ * @param filter - What to narrow to.
+ * @param sort - Which ordering to answer in, `score` by default so
+ *   that a case about a filter says nothing about an order.
+ * @returns The ids on the first page.
+ */
+async function pageOf(
+  store: MemoryResearchStore,
+  domainId: number,
+  filter: FindingFilter = EVERY_FINDING,
+  sort: FindingSort = 'score',
+): Promise<number[]> {
+  const page = await store.listFindings(
+    domainId,
+    filter,
+    sort,
+    WHOLE_COLLECTION,
+  );
+
+  return findingIds(page);
+}
+
+/**
+ * Reads a finding that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no finding carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readFinding(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<FindingRecord> {
+  const row = await store.findFindingById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored finding under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * Appends one ruling, defaulting the note a case is not about.
+ *
+ * @param store - The store to write to.
+ * @param findingId - The finding being judged.
+ * @param verdict - The ruling, stored as submitted: no vocabulary is
+ *   consulted below the service.
+ * @param note - What the operator wanted to say, null by default
+ *   because null is what a ruling with nothing recorded carries.
+ * @returns The stored label.
+ */
+async function judge(
+  store: MemoryResearchStore,
+  findingId: number,
+  verdict: string,
+  note: string | null = null,
+): Promise<FindingLabelRecord> {
+  return store.insertFindingLabel({ findingId, note, verdict });
+}
+
+/** Three verdicts, in the same neutral register as the taxonomy keys. */
+const KEEP = 'keep';
+const DROP = 'drop';
+const HOLD = 'hold';
+
+// ---------------------------------------------------------------------------
+// The one key this half can refuse on
+// ---------------------------------------------------------------------------
+
+describe('the finding label foreign key', () => {
+  it('refuses a ruling appended onto a finding nothing carries', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    const refusal = await refusalFrom(
+      () => judge(store, 9999, KEEP),
+    );
+
+    expect(refusal).toBeInstanceOf(StoreRefusal);
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe(
+      'finding_labels_finding_id_findings_id_fk',
+    );
+
+    // The positive control, in this body rather than in a sibling
+    // case: a store refusing every append passes the assertion
+    // above. The same call over a finding that IS there lands.
+    const stored = await judge(store, NO_SCORE, KEEP);
+
+    expect(stored.findingId).toBe(NO_SCORE);
+    expect(await pageOf(store, domain.id)).toHaveLength(5);
+  });
+
+  it('burns an id on the append it refused', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+
+    const first = await judge(store, NO_SCORE, KEEP);
+
+    await refusalFrom(() => judge(store, 9999, DROP));
+
+    const second = await judge(store, NO_SCORE, DROP);
+
+    // The counter is read while the row is being formed and the
+    // foreign key is checked afterwards, so a refused append leaves
+    // the id it took unused. Measured on `personas`, over a key
+    // refusal and a foreign-key one; this table carries only the
+    // second of that pair.
+    expect(first.id).toBe(1);
+    expect(second.id).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The two orderings, and the tail an absent score sorts into
+// ---------------------------------------------------------------------------
+
+describe('the findings page ordering', () => {
+  it('orders by score, then by stamp, then by id descending', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    // Neither the order the rows were planted in
+    // (12, 13, 15, 11, 14) nor either direction of id. The tied
+    // pair is planted with the LOWER id first, so a stable sort
+    // that lost the tiebreak answers them the wrong way round
+    // rather than reproducing this order by accident.
+    const page = await pageOf(store, domain.id, EVERY_FINDING, 'score');
+
+    expect(page).toStrictEqual(
+      [HIGH_SECOND, HIGH_FIRST, MIDDLE_SCORE, ZERO_SCORE, NO_SCORE],
+    );
+  });
+
+  it('orders by recency with the score key dropped', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    // The same three keys with the first removed rather than a
+    // second rule: the unscored finding leads because it is the
+    // newest, and the tie the two high scores share still falls to
+    // id descending.
+    expect(
+      await pageOf(store, domain.id, EVERY_FINDING, 'recency'),
+    ).toStrictEqual(
+      [NO_SCORE, MIDDLE_SCORE, HIGH_SECOND, HIGH_FIRST, ZERO_SCORE],
+    );
+  });
+
+  it('sorts an absent score behind a zero one', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const byScore = await pageOf(store, domain.id, EVERY_FINDING, 'score');
+
+    // A store reading a null score as zero ties these two on the
+    // first key and falls through to the stamp, which would put the
+    // unscored finding FIRST of the pair: it is the newest row in
+    // the fixture and the zero-scored one is the oldest. The
+    // recency page in the same body is what says the two stamps
+    // genuinely run that way.
+    expect(byScore.indexOf(ZERO_SCORE)).toBeLessThan(
+      byScore.indexOf(NO_SCORE),
+    );
+
+    const byRecency = await pageOf(
+      store,
+      domain.id,
+      EVERY_FINDING,
+      'recency',
+    );
+
+    expect(byRecency.indexOf(NO_SCORE)).toBeLessThan(
+      byRecency.indexOf(ZERO_SCORE),
+    );
+  });
+
+  it('separates two findings tied on score and stamp by id', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const high = await Promise.all([
+      readFinding(store, HIGH_FIRST),
+      readFinding(store, HIGH_SECOND),
+    ]);
+
+    // The tie is real rather than assumed: both rows carry one
+    // score and one instant, so `id` descending is the only thing
+    // ordering them and the later insert leads.
+    expect(high.map((row) => row.score)).toStrictEqual([0.9, 0.9]);
+    expect(high.map((row) => row.createdAt.getTime())).toStrictEqual(
+      [Date.UTC(2026, 2, 2, 9), Date.UTC(2026, 2, 2, 9)],
+    );
+
+    const page = await pageOf(store, domain.id);
+
+    expect(page.indexOf(HIGH_SECOND)).toBeLessThan(page.indexOf(HIGH_FIRST));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The window over the page, and the count beside it
+// ---------------------------------------------------------------------------
+
+describe('the findings page window', () => {
+  it('answers one window of the ordered page', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    const page = await store.listFindings(
+      domain.id,
+      EVERY_FINDING,
+      'score',
+      { limit: 2, offset: 1 },
+    );
+
+    // The window is taken from the ORDERED collection rather than
+    // from the planted list, so the second and third of the score
+    // order arrive rather than the second and third row planted.
+    expect(findingIds(page)).toStrictEqual([HIGH_FIRST, MIDDLE_SCORE]);
+  });
+
+  it('answers an empty page past the end and counts the whole', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    const page = await store.listFindings(
+      domain.id,
+      EVERY_FINDING,
+      'score',
+      { limit: 50, offset: 50 },
+    );
+
+    expect(page).toStrictEqual([]);
+
+    // The count ignores the window, which is what a page's
+    // `meta.total` is read for: a window past the end still
+    // describes a collection of five.
+    expect(await store.countFindings(domain.id, EVERY_FINDING)).toBe(5);
+  });
+
+  it('answers nothing for a domain that has made none', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const other = await store.insertDomain(domainInput(TRANSIT));
+
+    expect(await pageOf(store, other.id)).toStrictEqual([]);
+    expect(await store.countFindings(other.id, EVERY_FINDING)).toBe(0);
+
+    // The control: the page is scoped rather than empty for
+    // everyone, and an id no domain carries answers the same way a
+    // domain holding nothing does.
+    expect(await pageOf(store, domain.id)).toHaveLength(5);
+    expect(await pageOf(store, 9999)).toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The verdict a finding stands under, and the ruling that replaced it
+// ---------------------------------------------------------------------------
+
+describe('the findings verdict filter', () => {
+  it('answers the findings whose latest ruling carries it', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await judge(store, MIDDLE_SCORE, KEEP);
+    await judge(store, HIGH_FIRST, KEEP);
+    await judge(store, ZERO_SCORE, DROP);
+
+    const kept = { ...EVERY_FINDING, verdict: KEEP };
+
+    // Ordered by the score keys inside the filter rather than by
+    // the order the rulings were written.
+    expect(await pageOf(store, domain.id, kept)).toStrictEqual(
+      [HIGH_FIRST, MIDDLE_SCORE],
+    );
+    expect(await store.countFindings(domain.id, kept)).toBe(2);
+  });
+
+  it('drops a finding re-judged away from the verdict', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await judge(store, HIGH_FIRST, KEEP);
+    await judge(store, HIGH_SECOND, KEEP);
+    await judge(store, HIGH_FIRST, DROP);
+
+    const kept = { ...EVERY_FINDING, verdict: KEEP };
+    const dropped = { ...EVERY_FINDING, verdict: DROP };
+
+    // The LATEST and not any: the first ruling is still stored and
+    // still readable, and it no longer selects the row. A store
+    // matching any label answers both findings here.
+    expect(await pageOf(store, domain.id, kept)).toStrictEqual(
+      [HIGH_SECOND],
+    );
+    expect(await pageOf(store, domain.id, dropped)).toStrictEqual(
+      [HIGH_FIRST],
+    );
+    expect(await store.listFindingLabels(HIGH_FIRST)).toHaveLength(2);
+  });
+
+  it('leaves a finding nobody has judged out of every verdict', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await judge(store, HIGH_FIRST, KEEP);
+
+    const unjudged = [NO_SCORE, MIDDLE_SCORE, HIGH_SECOND, ZERO_SCORE];
+
+    for (const verdict of [KEEP, DROP, HOLD]) {
+      const page = await pageOf(store, domain.id, {
+        ...EVERY_FINDING,
+        verdict,
+      });
+
+      for (const id of unjudged) {
+        expect(page).not.toContain(id);
+      }
+    }
+
+    // The control: the loop above is satisfied by a store answering
+    // an empty page for every verdict, and this is the one finding
+    // that HAS been judged.
+    expect(
+      await pageOf(store, domain.id, { ...EVERY_FINDING, verdict: KEEP }),
+    ).toStrictEqual([HIGH_FIRST]);
+  });
+
+  it('answers an empty page for a verdict no label carries', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await judge(store, HIGH_FIRST, KEEP);
+
+    const held = { ...EVERY_FINDING, verdict: HOLD };
+
+    // An empty page rather than a refusal: a verdict may be one the
+    // domain has since retired, which rows stored under it still
+    // answer to, so nothing here failed to read.
+    expect(await pageOf(store, domain.id, held)).toStrictEqual([]);
+    expect(await store.countFindings(domain.id, held)).toBe(0);
+    expect(await store.countFindings(domain.id, EVERY_FINDING)).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The category a finding is filed under, which is a member and not a column
+// ---------------------------------------------------------------------------
+
+describe('the findings category filter', () => {
+  it('answers the findings filed under one key', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const platforms = { ...EVERY_FINDING, category: PLATFORMS };
+
+    expect(await pageOf(store, domain.id, platforms)).toStrictEqual(
+      [HIGH_SECOND, MIDDLE_SCORE],
+    );
+    expect(await store.countFindings(domain.id, platforms)).toBe(2);
+
+    // The control: the filter narrows rather than answering
+    // everything, and a second key answers a different row.
+    expect(
+      await pageOf(store, domain.id, { ...EVERY_FINDING, category: RUNTIMES }),
+    ).toStrictEqual([HIGH_FIRST]);
+  });
+
+  it('answers an empty page for a key nothing is filed under', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await addCategory(store, domain.id, TOOLING);
+
+    const tooling = { ...EVERY_FINDING, category: TOOLING };
+
+    // A key the domain DECLARED and nothing carries, and a key the
+    // domain never declared that a finding IS filed under, answer
+    // the same way: an empty page and a page of one. No column
+    // links a finding to a category, so the taxonomy in force at
+    // the moment of the request decides neither.
+    expect(await pageOf(store, domain.id, tooling)).toStrictEqual([]);
+    expect(
+      await pageOf(store, domain.id, { ...EVERY_FINDING, category: RETIRED }),
+    ).toStrictEqual([ZERO_SCORE]);
+  });
+
+  it('files by a stored member and not an inherited one', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const inherited: Record<string, unknown> = Object.assign(
+      Object.create({ category: PLATFORMS }) as Record<string, unknown>,
+      { topic: RUNTIMES },
+    );
+
+    store.setDomainFindings(domain.id, [
+      madeFinding(NO_SCORE, { fields: inherited }),
+      madeFinding(HIGH_FIRST, { fields: { category: PLATFORMS } }),
+    ]);
+
+    const platforms = { ...EVERY_FINDING, category: PLATFORMS };
+
+    // The seam stores what a `jsonb` column would: own members and
+    // nothing else. So the inherited key is gone before any filter
+    // reads one, and the sibling in the same body is what says the
+    // filter still finds a member that WAS stored.
+    expect(await pageOf(store, domain.id, platforms)).toStrictEqual(
+      [HIGH_FIRST],
+    );
+
+    const stored = await readFinding(store, NO_SCORE);
+
+    expect(stored.fields).toStrictEqual({ topic: RUNTIMES });
+  });
+
+  it('matches a numeric member by the text the column answers', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    store.setDomainFindings(domain.id, [
+      madeFinding(NO_SCORE, { fields: { category: 5 } }),
+      madeFinding(HIGH_FIRST, { fields: { category: PLATFORMS } }),
+    ]);
+
+    // `fields->>'category'` answers TEXT rather than a string
+    // member, so a numeric 5 is matched by '5' and a store
+    // comparing only strings answers an empty page where a
+    // deployment answers a row. The sibling in the same body is the
+    // control that the filter has not simply widened to everything.
+    expect(
+      await pageOf(store, domain.id, { ...EVERY_FINDING, category: '5' }),
+    ).toStrictEqual([NO_SCORE]);
+
+    const platforms = { ...EVERY_FINDING, category: PLATFORMS };
+
+    expect(await pageOf(store, domain.id, platforms)).toStrictEqual(
+      [HIGH_FIRST],
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The half-open window over when a finding was made
+// ---------------------------------------------------------------------------
+
+describe('the findings window over when they were made', () => {
+  it('takes the lower boundary and drops the upper', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    // `[sinceInclusive, untilExclusive)` written out rather than
+    // read off the store: the two findings made at the lower bound
+    // are IN and the one made at the upper bound is OUT, so two
+    // adjacent windows do not both take the seam between them.
+    const page = await pageOf(store, domain.id, {
+      window: {
+        sinceInclusive: new Date(MADE_T1),
+        untilExclusive: new Date(MADE_T2),
+      },
+    });
+
+    expect(page).toStrictEqual([HIGH_SECOND, HIGH_FIRST]);
+    expect(page).not.toContain(MIDDLE_SCORE);
+    expect(page).not.toContain(ZERO_SCORE);
+  });
+
+  it('narrows on one bound alone and on neither', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    const since = await pageOf(store, domain.id, {
+      window: {
+        sinceInclusive: new Date(MADE_T2),
+        untilExclusive: null,
+      },
+    });
+
+    const until = await pageOf(store, domain.id, {
+      window: {
+        sinceInclusive: null,
+        untilExclusive: new Date(MADE_T1),
+      },
+    });
+
+    // A bound holding null is unbounded on that side rather than a
+    // bound at the epoch, and the two half-bounded pages plus the
+    // unbounded one below are what say so.
+    expect(since).toStrictEqual([MIDDLE_SCORE, NO_SCORE]);
+    expect(until).toStrictEqual([ZERO_SCORE]);
+    expect(await pageOf(store, domain.id)).toHaveLength(5);
+  });
+
+  it('answers an empty page for a span nothing was made in', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const quiet = {
+      window: {
+        sinceInclusive: new Date('2027-01-01T00:00:00.000Z'),
+        untilExclusive: new Date('2027-02-01T00:00:00.000Z'),
+      },
+    };
+
+    expect(await pageOf(store, domain.id, quiet)).toStrictEqual([]);
+    expect(await store.countFindings(domain.id, quiet)).toBe(0);
+
+    // The control: an empty window is a legitimate request rather
+    // than a store that had stopped answering.
+    expect(await store.countFindings(domain.id, EVERY_FINDING)).toBe(5);
+  });
+
+  it('narrows beside a verdict and a category at once', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await judge(store, HIGH_SECOND, KEEP);
+    await judge(store, MIDDLE_SCORE, KEEP);
+
+    // Three members at once select the intersection rather than the
+    // last one written: only `HIGH_SECOND` is kept, filed under
+    // platforms AND made inside the window.
+    const page = await pageOf(store, domain.id, {
+      category: PLATFORMS,
+      verdict: KEEP,
+      window: {
+        sinceInclusive: new Date(MADE_T1),
+        untilExclusive: new Date(MADE_T2),
+      },
+    });
+
+    expect(page).toStrictEqual([HIGH_SECOND]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The rulings a finding accumulates, and the sequence they are read in
+// ---------------------------------------------------------------------------
+
+describe('the rulings appended to a finding', () => {
+  it('appends a second ruling rather than replacing the first', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+
+    const first = await judge(store, HIGH_FIRST, KEEP, 'worth keeping');
+    const second = await judge(store, HIGH_FIRST, DROP);
+    const stored = await store.listFindingLabels(HIGH_FIRST);
+
+    // `finding_labels` carries no unique key at all, so there is
+    // nothing to upsert on and re-judging is a second ROW. Both are
+    // readable afterwards, which is what makes the sequence the
+    // record of an operator changing their mind.
+    expect(stored).toHaveLength(2);
+    expect(stored.map((row) => row.id)).toStrictEqual(
+      [second.id, first.id],
+    );
+    expect(stored.map((row) => row.verdict)).toStrictEqual([DROP, KEEP]);
+    expect(stored.map((row) => row.note)).toStrictEqual(
+      [null, 'worth keeping'],
+    );
+  });
+
+  it('breaks a tie on the stamp by id descending', async () => {
+    const fixed = new Date('2026-03-05T10:00:00.000Z');
+    const store = createMemoryResearchStore({ now: () => fixed });
+
+    await seedFindings(store);
+    await judge(store, HIGH_FIRST, KEEP);
+    await judge(store, HIGH_FIRST, DROP);
+    await judge(store, HIGH_FIRST, HOLD);
+
+    const stored = await store.listFindingLabels(HIGH_FIRST);
+
+    // `labelled_at` is the transaction's start time, so rulings
+    // written in one transaction tie to the microsecond and `id` is
+    // the only thing separating them. The tie is asserted rather
+    // than assumed, and for a lookup whose whole answer is the
+    // first row it is the difference between a verdict and a coin
+    // flip.
+    const stamps = new Set(stored.map((row) => row.labelledAt.getTime()));
+
+    expect(stamps).toStrictEqual(new Set([fixed.getTime()]));
+    expect(stored.map((row) => row.verdict)).toStrictEqual(
+      [HOLD, DROP, KEEP],
+    );
+  });
+
+  it('reads the verdict in force off the head of that sequence', async () => {
+    const fixed = new Date('2026-03-05T10:00:00.000Z');
+    const store = createMemoryResearchStore({ now: () => fixed });
+    const domain = await seedFindings(store);
+
+    await judge(store, HIGH_FIRST, KEEP);
+    await judge(store, HIGH_FIRST, DROP);
+
+    // The filter reads the same head the list answers, under a
+    // clock that ties the two stamps: a store falling back on the
+    // first row it reaches would select this finding under `keep`.
+    expect(
+      await pageOf(store, domain.id, { ...EVERY_FINDING, verdict: DROP }),
+    ).toStrictEqual([HIGH_FIRST]);
+    expect(
+      await pageOf(store, domain.id, { ...EVERY_FINDING, verdict: KEEP }),
+    ).toStrictEqual([]);
+  });
+
+  it('answers no ruling for an unjudged and an unknown id', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+    await judge(store, HIGH_FIRST, KEEP);
+
+    expect(await store.listFindingLabels(NO_SCORE)).toStrictEqual([]);
+    expect(await store.listFindingLabels(9999)).toStrictEqual([]);
+
+    // The control: the read answers rows for a finding that HAS
+    // been judged, so the two empties above are answers rather than
+    // a read that had stopped working.
+    expect(await store.listFindingLabels(HIGH_FIRST)).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The sightings one finding carries, and the count they do not move
+// ---------------------------------------------------------------------------
+
+describe('the sightings a finding carries', () => {
+  it('answers them newest first with id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+    const seen = '2026-03-06T08:00:00.000Z';
+    const later = '2026-03-07T08:00:00.000Z';
+
+    await seedFindings(store);
+
+    store.setFindingSightings(HIGH_FIRST, [
+      { externalId: 'a', id: 31, seenAt: new Date(seen), sourceId: 5 },
+      { externalId: null, id: 33, seenAt: new Date(later), sourceId: 6 },
+      { externalId: 'c', id: 32, seenAt: new Date(seen), sourceId: 7 },
+    ]);
+
+    const rows = await store.listFindingSightings(HIGH_FIRST);
+
+    // Planted in an order neither answer gives, so this tells the
+    // ordering from the planted one and from id alone.
+    expect(rows.map((row) => row.id)).toStrictEqual([33, 32, 31]);
+    expect(rows.map((row) => row.findingId)).toStrictEqual(
+      [HIGH_FIRST, HIGH_FIRST, HIGH_FIRST],
+    );
+    expect(rows.map((row) => row.sourceId)).toStrictEqual([6, 7, 5]);
+    expect(rows.map((row) => row.externalId)).toStrictEqual(
+      [null, 'c', 'a'],
+    );
+  });
+
+  it('answers nothing for a finding seen nowhere', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+
+    store.setFindingSightings(HIGH_FIRST, [
+      { externalId: null, id: 31, seenAt: new Date(MADE_T1), sourceId: 5 },
+    ]);
+
+    expect(await store.listFindingSightings(NO_SCORE)).toStrictEqual([]);
+    expect(await store.listFindingSightings(9999)).toStrictEqual([]);
+    expect(await store.listFindingSightings(HIGH_FIRST)).toHaveLength(1);
+  });
+
+  it('does not move the count that holds a source delete', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const source = await store.insertSource({
+      contract: {},
+      domainId: domain.id,
+      enabled: true,
+      endpoint: FEED_ENDPOINT,
+      kind: 'rss',
+      parserConfig: {},
+    });
+
+    store.setFindingSightings(HIGH_FIRST, [
+      {
+        externalId: null,
+        id: 31,
+        seenAt: new Date(MADE_T1),
+        sourceId: source.id,
+      },
+    ]);
+
+    const counts = await store.countSourceDependents(source.id);
+
+    // The file's fourth known divergence, pinned rather than left
+    // to be discovered. `countSourceDependents` reads what
+    // `setSourceSightings` planted and never these rows, because
+    // one port can only be asked HOW MANY cite a source while the
+    // other answers the rows. So a row planted here does not hold
+    // the delete a deployment would refuse.
+    expect(counts.findingSightings).toBe(0);
+    expect(await store.listFindingSightings(HIGH_FIRST)).toHaveLength(1);
+    expect(await store.deleteSource(source.id)).toBe(true);
+  });
+
+  it('leaves the planted count refusing that delete', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const source = await store.insertSource({
+      contract: {},
+      domainId: domain.id,
+      enabled: true,
+      endpoint: FEED_ENDPOINT,
+      kind: 'rss',
+      parserConfig: {},
+    });
+
+    store.setSourceSightings(source.id, 1);
+
+    // The control for the case above: the guard still works, so
+    // that case describes a seam the guard cannot see rather than a
+    // guard that had stopped guarding.
+    const refusal = await refusalFrom(() => store.deleteSource(source.id));
+
+    expect(refusal.constraint).toBe(
+      'finding_sightings_source_id_sources_id_fk',
+    );
+    const counts = await store.countSourceDependents(source.id);
+
+    expect(counts.findingSightings).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The research a finding resolves through its entity
+// ---------------------------------------------------------------------------
+
+describe('the research a finding resolves through its entity', () => {
+  it('answers what was planted under the entity it names', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+
+    store.setEntityResearch(SUBJECT, [
+      {
+        id: 41,
+        payload: { note: 'first pass' },
+        researchedAt: new Date(MADE_T1),
+        runId: 9,
+        summary: 'what the first pass came to',
+      },
+    ]);
+    store.setEntityResearch(OTHER_SUBJECT, [
+      {
+        id: 42,
+        payload: {},
+        researchedAt: new Date(MADE_T2),
+        runId: null,
+        summary: null,
+      },
+    ]);
+
+    const rows = await store.listFindingResearch(HIGH_FIRST);
+
+    // Addressed by the FINDING and resolved through its entity, so
+    // a caller holding a finding never reads `entityId` itself. The
+    // two findings attributed to one subject answer the same rows,
+    // and a finding attributed to the other answers that one's.
+    expect(rows.map((row) => row.id)).toStrictEqual([41]);
+    expect(rows.map((row) => row.entityId)).toStrictEqual([SUBJECT]);
+    expect(rows.map((row) => row.runId)).toStrictEqual([9]);
+    expect(rows.map((row) => row.summary)).toStrictEqual(
+      ['what the first pass came to'],
+    );
+
+    const sibling = await store.listFindingResearch(HIGH_SECOND);
+
+    expect(sibling.map((row) => row.id)).toStrictEqual([41]);
+    expect(
+      (await store.listFindingResearch(ZERO_SCORE)).map((row) => row.id),
+    ).toStrictEqual([42]);
+  });
+
+  it('answers an empty list for an unattributed finding', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+
+    store.setEntityResearch(SUBJECT, [
+      {
+        id: 41,
+        payload: {},
+        researchedAt: new Date(MADE_T1),
+        runId: null,
+        summary: null,
+      },
+    ]);
+
+    // A null `entity_id` is an ordinary state rather than an edge
+    // case, so there is no entity to resolve research through and
+    // nothing failed to read. The attributed sibling in the same
+    // body is what says the read still answers rows at all.
+    expect(await readFinding(store, NO_SCORE)).toMatchObject({
+      entityId: null,
+    });
+    expect(await store.listFindingResearch(NO_SCORE)).toStrictEqual([]);
+    expect(await store.listFindingResearch(HIGH_FIRST)).toHaveLength(1);
+  });
+
+  it('answers an empty list for an id no finding carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedFindings(store);
+
+    store.setEntityResearch(SUBJECT, [
+      {
+        id: 41,
+        payload: {},
+        researchedAt: new Date(MADE_T1),
+        runId: null,
+        summary: null,
+      },
+    ]);
+
+    expect(await store.listFindingResearch(9999)).toStrictEqual([]);
+    expect(await store.listFindingResearch(HIGH_SECOND)).toHaveLength(1);
+  });
+
+  it('answers the research newest first with id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+    const tied = '2026-03-08T08:00:00.000Z';
+
+    await seedFindings(store);
+
+    store.setEntityResearch(SUBJECT, [
+      {
+        id: 41,
+        payload: {},
+        researchedAt: new Date(tied),
+        runId: null,
+        summary: null,
+      },
+      {
+        id: 43,
+        payload: {},
+        researchedAt: new Date(MADE_T0),
+        runId: null,
+        summary: null,
+      },
+      {
+        id: 42,
+        payload: {},
+        researchedAt: new Date(tied),
+        runId: null,
+        summary: null,
+      },
+    ]);
+
+    // Planted in an order neither answer gives, so this tells the
+    // ordering from the planted one and from id alone.
+    expect(
+      (await store.listFindingResearch(HIGH_FIRST)).map((row) => row.id),
+    ).toStrictEqual([42, 41, 43]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a domain delete takes, and the count it does not read
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its findings', () => {
+  it('takes its findings and leaves another domain standing', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const other = await store.insertDomain(domainInput(TRANSIT));
+
+    store.setDomainFindings(other.id, [madeFinding(21, { score: 0.5 })]);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    expect(await pageOf(store, domain.id)).toStrictEqual([]);
+    expect(await store.countFindings(domain.id, EVERY_FINDING)).toBe(0);
+    expect(await store.findFindingById(HIGH_FIRST)).toBeNull();
+
+    // The other domain's finding is standing, so this is a cascade
+    // rather than a store that cleared everything.
+    expect(await pageOf(store, other.id)).toStrictEqual([21]);
+  });
+
+  it('takes their sightings and their rulings with them', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    store.setFindingSightings(HIGH_FIRST, [
+      { externalId: null, id: 31, seenAt: new Date(MADE_T1), sourceId: 5 },
+    ]);
+    store.setEntityResearch(SUBJECT, [
+      {
+        id: 41,
+        payload: {},
+        researchedAt: new Date(MADE_T1),
+        runId: null,
+        summary: null,
+      },
+    ]);
+
+    await judge(store, HIGH_FIRST, KEEP);
+
+    // The state before, so the three empties below are a delete
+    // reaching them rather than reads that never answered.
+    expect(await store.listFindingSightings(HIGH_FIRST)).toHaveLength(1);
+    expect(await store.listFindingLabels(HIGH_FIRST)).toHaveLength(1);
+    expect(await store.listFindingResearch(HIGH_FIRST)).toHaveLength(1);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // Two levels down: `findings.domain_id` cascades, and both
+    // `finding_sightings.finding_id` and `finding_labels.finding_id`
+    // cascade onto the findings. The research goes unreachable for
+    // the third reason rather than the same one — the finding it
+    // was resolved through is gone, which is where `EntityStore`
+    // will take over the cascade proper.
+    expect(await store.listFindingSightings(HIGH_FIRST)).toStrictEqual([]);
+    expect(await store.listFindingLabels(HIGH_FIRST)).toStrictEqual([]);
+    expect(await store.listFindingResearch(HIGH_FIRST)).toStrictEqual([]);
+  });
+
+  it('lets a ruling be refused once the finding has gone', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    await judge(store, HIGH_FIRST, KEEP);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // The foreign key read from the write's side after the cascade:
+    // the finding a ruling named is not there, so the append is
+    // refused rather than storing a row citing nothing.
+    const refusal = await refusalFrom(() => judge(store, HIGH_FIRST, DROP));
+
+    expect(refusal.constraint).toBe(
+      'finding_labels_finding_id_findings_id_fk',
+    );
+  });
+});
+
+describe('the findings a dependent count does not see', () => {
+  it('answers the planted number over a planted finding row', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    // The file's third known divergence, pinned rather than left to
+    // be discovered. `countDomainDependents` reads what
+    // `setDomainDependents` planted and never these rows, because
+    // `src/domains/service.test.ts` and `src/domains/routes.test.ts`
+    // reach that guard over a store holding no finding at all.
+    expect(await store.countDomainDependents(domain.id)).toStrictEqual({
+      findings: 0,
+      sources: 0,
+      topics: 0,
+    });
+    expect(await store.countFindings(domain.id, EVERY_FINDING)).toBe(5);
+
+    store.setDomainDependents(domain.id, { findings: 2 });
+
+    // The control: the guard still reads the plant, so the zero
+    // above is a seam it cannot see rather than a count that had
+    // stopped counting.
+    expect(await store.countDomainDependents(domain.id)).toStrictEqual({
+      findings: 2,
+      sources: 0,
+      topics: 0,
+    });
+  });
+
+  it('drops the plant and the rows in one delete', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+
+    store.setDomainDependents(domain.id, { findings: 5 });
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    expect(await store.countDomainDependents(domain.id)).toStrictEqual({
+      findings: 0,
+      sources: 0,
+      topics: 0,
+    });
+    expect(await store.countFindings(domain.id, EVERY_FINDING)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the findings half copies across the boundary
+// ---------------------------------------------------------------------------
+
+describe('the finding payload crossing the boundary', () => {
+  it('does not store the fields object a plant was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const fields: Record<string, unknown> = { category: PLATFORMS };
+
+    store.setDomainFindings(domain.id, [madeFinding(NO_SCORE, { fields })]);
+
+    fields.category = RUNTIMES;
+
+    // Compared against the CONSTANT rather than against a record an
+    // earlier read answered: a store sharing its own object would
+    // otherwise hold one lie against itself and pass.
+    expect(await readFinding(store, NO_SCORE)).toMatchObject({
+      fields: { category: PLATFORMS },
+    });
+
+    const platforms = { ...EVERY_FINDING, category: PLATFORMS };
+
+    expect(await pageOf(store, domain.id, platforms)).toStrictEqual(
+      [NO_SCORE],
+    );
+  });
+
+  it('does not answer the fields object it stores', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await seedFindings(store);
+    const answered = await readFinding(store, HIGH_FIRST);
+
+    answered.fields.category = RETIRED;
+
+    expect((await readFinding(store, HIGH_FIRST)).fields).toStrictEqual({
+      category: RUNTIMES,
+    });
+
+    const [paged] = await store.listFindings(
+      domain.id,
+      { ...EVERY_FINDING, category: RUNTIMES },
+      'score',
+      WHOLE_COLLECTION,
+    );
+
+    // The page is a second answer site rather than the same one:
+    // `listFindings` builds its records through the same projection
+    // the lookup does, and a store mapping stored rows straight out
+    // would share them from both.
+    expect(paged?.fields).toStrictEqual({ category: RUNTIMES });
+  });
+
+  it('does not store or answer the createdAt a plant was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const made = new Date(MADE_T1);
+
+    store.setDomainFindings(domain.id, [
+      madeFinding(NO_SCORE, { createdAt: made }),
+    ]);
+
+    made.setUTCFullYear(2030);
+
+    const stored = await readFinding(store, NO_SCORE);
+
+    expect(stored.createdAt.getTime()).toBe(Date.UTC(2026, 2, 2, 9));
+
+    stored.createdAt.setUTCFullYear(2031);
+
+    expect(
+      (await readFinding(store, NO_SCORE)).createdAt.getTime(),
+    ).toBe(Date.UTC(2026, 2, 2, 9));
+  });
+
+  it('does not share a sighting or a research row it answers', async () => {
+    const store = createMemoryResearchStore();
+    const seen = new Date(MADE_T1);
+    const researched = new Date(MADE_T2);
+    const payload: Record<string, unknown> = { note: 'as recorded' };
+
+    await seedFindings(store);
+
+    store.setFindingSightings(HIGH_FIRST, [
+      { externalId: null, id: 31, seenAt: seen, sourceId: 5 },
+    ]);
+    store.setEntityResearch(SUBJECT, [
+      {
+        id: 41,
+        payload,
+        researchedAt: researched,
+        runId: null,
+        summary: null,
+      },
+    ]);
+
+    seen.setUTCFullYear(2030);
+    researched.setUTCFullYear(2030);
+    payload.note = 'rewritten';
+
+    const [sighting] = await store.listFindingSightings(HIGH_FIRST);
+    const [research] = await store.listFindingResearch(HIGH_FIRST);
+
+    expect(sighting?.seenAt.getTime()).toBe(Date.UTC(2026, 2, 2, 9));
+    expect(research?.researchedAt.getTime()).toBe(Date.UTC(2026, 2, 3, 9));
+    expect(research?.payload).toStrictEqual({ note: 'as recorded' });
+
+    sighting?.seenAt.setUTCFullYear(2031);
+    research?.researchedAt.setUTCFullYear(2031);
+
+    const [again] = await store.listFindingSightings(HIGH_FIRST);
+    const [researchAgain] = await store.listFindingResearch(HIGH_FIRST);
+
+    expect(again?.seenAt.getTime()).toBe(Date.UTC(2026, 2, 2, 9));
+    expect(researchAgain?.researchedAt.getTime()).toBe(
+      Date.UTC(2026, 2, 3, 9),
+    );
+  });
+
+  it('does not share the labelledAt an append or a read answers', async () => {
+    const fixed = new Date('2026-03-05T10:00:00.000Z');
+    const store = createMemoryResearchStore({ now: () => fixed });
+
+    await seedFindings(store);
+
+    const appended = await judge(store, HIGH_FIRST, KEEP);
+
+    appended.labelledAt.setUTCFullYear(2031);
+    fixed.setUTCFullYear(2032);
+
+    const [read] = await store.listFindingLabels(HIGH_FIRST);
+
+    // Three answer sites and one clock: the row the append handed
+    // back, the row the read hands out, and the `Date` the clock
+    // itself answered. A store keeping any of the three would have
+    // every stamped row moving together.
+    expect(read?.labelledAt.getTime()).toBe(Date.UTC(2026, 2, 5, 10));
+
+    read?.labelledAt.setUTCFullYear(2033);
+
+    const [again] = await store.listFindingLabels(HIGH_FIRST);
+
+    expect(again?.labelledAt.getTime()).toBe(Date.UTC(2026, 2, 5, 10));
+  });
+
+  it('rebuilds the planted list rather than holding it', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const rows = [madeFinding(NO_SCORE)];
+
+    store.setDomainFindings(domain.id, rows);
+
+    rows.push(madeFinding(HIGH_FIRST));
+
+    // The seam copies row by row AND rebuilds the array, so pushing
+    // onto what was planted does not plant a second finding.
+    expect(await pageOf(store, domain.id)).toStrictEqual([NO_SCORE]);
+
+    // A second call REPLACES rather than appends, which is what
+    // makes a domain going back to none expressible.
+    store.setDomainFindings(domain.id, []);
+
+    expect(await pageOf(store, domain.id)).toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The documents half's fixture
+// ---------------------------------------------------------------------------
+
+/**
+ * The four instants the corpus fixture is captured across, oldest
+ * first and one day apart.
+ *
+ * SPELLED OUT RATHER THAN DERIVED FROM ONE ANOTHER, so that an
+ * ordering case compares against stamps no arithmetic of the store's
+ * could have produced. Distinct from {@link CAPTURED}, which is the
+ * sources half's default over the same table and the same column: the
+ * two seams hold that table separately, and sharing an instant across
+ * them would put a fixture at the centre of a divergence two cases
+ * here exist to read.
+ */
+const CAPTURED_T0 = '2026-04-01T09:00:00.000Z';
+const CAPTURED_T1 = '2026-04-02T09:00:00.000Z';
+const CAPTURED_T2 = '2026-04-03T09:00:00.000Z';
+const CAPTURED_T3 = '2026-04-04T09:00:00.000Z';
+
+/**
+ * The five documents the corpus fixture plants, named for what each
+ * is in the page rather than for its id.
+ *
+ * The ids are the fixture's own, `DocumentStore` declaring no insert.
+ * `TIED_FAILED` and `TIED_OK` carry ONE instant, so only `id`
+ * separates them, and they are planted with the LOWER id first — a
+ * stable sort that lost the tiebreak answers them the wrong way round
+ * rather than reproducing this order by accident. `PASTED` is the
+ * newest row AND the lowest id, so an ordering by `id` alone in
+ * either direction disagrees with the answer rather than resembling
+ * it.
+ */
+const PASTED = 51;
+const TIED_FAILED = 52;
+const TIED_OK = 53;
+const STALE = 54;
+const RECENT_FAILED = 55;
+
+/** The corpus filter that narrows nothing: both parse statuses. */
+const EVERY_DOCUMENT: DocumentFilter = {};
+
+/** What {@link captured} defaults when a case is not about it. */
+type CorpusDefaults = Partial<Omit<MemoryDomainDocument, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setDomainDocuments}.
+ *
+ * A function rather than a constant, for the reason {@link planted}
+ * is one: the copy cases WRITE into the `capturedAt` they planted,
+ * which is the whole point of them.
+ *
+ * @param id - The document id, which is the page's tiebreak.
+ * @param values - The six members a case may care about. `sourceId`
+ *   defaults to NULL, which is the state the sources seam has no key
+ *   to plant, and `parseStatus` to `ok` so that a case about a
+ *   failure says so.
+ * @returns The row to plant.
+ */
+function captured(
+  id: number,
+  values: CorpusDefaults = {},
+): MemoryDomainDocument {
+  return {
+    id,
+    sourceId: values.sourceId ?? null,
+    url: values.url ?? null,
+    body: values.body ?? `Body of document ${id}`,
+    parseStatus: values.parseStatus ?? 'ok',
+    parseError: values.parseError ?? null,
+    capturedAt: values.capturedAt ?? new Date(CAPTURED_T0),
+  };
+}
+
+/**
+ * A domain carrying the five documents every ordering, filter and
+ * window case reads, and the feed four of them came through.
+ *
+ * PLANTED IN AN ORDER NO READ ANSWERS, which is what lets one fixture
+ * tell the capture ordering from an ordering by insertion or by `id`
+ * in either direction. The answer is written out in the cases rather
+ * than here.
+ *
+ * THE FIFTH CAME THROUGH NO FEED, which is the state that makes this
+ * collection wider than the failures queue rather than a second
+ * spelling of it: `setSourceDocuments` is keyed BY a source, so a
+ * pasted body has no key to be planted under there at all.
+ *
+ * @param store - The store to write to.
+ * @returns The domain the corpus hangs off and the source four of its
+ *   documents name.
+ */
+async function seedDocuments(
+  store: MemoryResearchStore,
+): Promise<{ domain: DomainRecord; feed: SourceRecord }> {
+  const domain = await store.insertDomain(domainInput(RADAR));
+  const feed = await addSource(store, domain.id, FEED_ENDPOINT);
+
+  store.setDomainDocuments(domain.id, [
+    captured(TIED_FAILED, {
+      capturedAt: new Date(CAPTURED_T1),
+      parseError: 'no title',
+      parseStatus: 'failed',
+      sourceId: feed.id,
+    }),
+    captured(STALE, {
+      capturedAt: new Date(CAPTURED_T0),
+      parseStatus: 'failed',
+      sourceId: feed.id,
+    }),
+    captured(PASTED, { capturedAt: new Date(CAPTURED_T3) }),
+    captured(RECENT_FAILED, {
+      capturedAt: new Date(CAPTURED_T2),
+      parseStatus: 'failed',
+      sourceId: feed.id,
+    }),
+    captured(TIED_OK, {
+      capturedAt: new Date(CAPTURED_T1),
+      sourceId: feed.id,
+    }),
+  ]);
+
+  return { domain, feed };
+}
+
+/**
+ * Reads one window of a domain's corpus under a filter.
+ *
+ * @param store - The store to read.
+ * @param domainId - The domain to read within.
+ * @param filter - What to narrow to, both statuses by default so that
+ *   a case about an order says nothing about a status.
+ * @returns The ids on the first page, in the order they arrived.
+ */
+async function corpusPage(
+  store: MemoryResearchStore,
+  domainId: number,
+  filter: DocumentFilter = EVERY_DOCUMENT,
+): Promise<number[]> {
+  const page = await store.listDocuments(
+    domainId,
+    filter,
+    WHOLE_COLLECTION,
+  );
+
+  return page.map((row) => row.id);
+}
+
+/**
+ * Reads a corpus document that must be there.
+ *
+ * Off the PAGE rather than off a lookup, `DocumentStore` declaring no
+ * read by id: a document is met in its domain and addressed by
+ * nothing else.
+ *
+ * @param store - The store to read.
+ * @param domainId - The domain to read within.
+ * @param id - The document to find on its page.
+ * @returns The row.
+ * @throws When the page carries no such document, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readDocument(
+  store: MemoryResearchStore,
+  domainId: number,
+  id: number,
+): Promise<DocumentRecord> {
+  const page = await store.listDocuments(
+    domainId,
+    EVERY_DOCUMENT,
+    WHOLE_COLLECTION,
+  );
+  const row = page.find((held) => held.id === id);
+
+  if (row === undefined) {
+    throw new Error(`expected a stored document under ${id}`);
+  }
+
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// The order the corpus page answers in, and the tie the server makes
+// ---------------------------------------------------------------------------
+
+describe('the corpus page ordering', () => {
+  it('orders newest first with the id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+
+    // Neither the order the rows were planted in
+    // (52, 54, 51, 55, 53) nor either direction of id: the newest
+    // document carries the LOWEST id, so an ordering by id descending
+    // would lead with 55 and one ascending with 51 followed by 52.
+    expect(await corpusPage(store, domain.id)).toStrictEqual(
+      [PASTED, RECENT_FAILED, TIED_OK, TIED_FAILED, STALE],
+    );
+  });
+
+  it('separates two documents tied on capture by id', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const tied = await Promise.all([
+      readDocument(store, domain.id, TIED_FAILED),
+      readDocument(store, domain.id, TIED_OK),
+    ]);
+
+    // The tie is read off the store rather than assumed: both rows
+    // carry one instant, so `id` descending is the only thing
+    // ordering them. That tie is the SERVER's own — `captured_at`
+    // defaults to the transaction's start time, so a batch capture
+    // writes rows tying to the microsecond and a page boundary
+    // falling inside one would show a document twice and another
+    // never.
+    expect(tied.map((row) => row.capturedAt.getTime())).toStrictEqual(
+      [Date.UTC(2026, 3, 2, 9), Date.UTC(2026, 3, 2, 9)],
+    );
+
+    const page = await corpusPage(store, domain.id);
+
+    expect(page.indexOf(TIED_OK)).toBeLessThan(page.indexOf(TIED_FAILED));
+  });
+
+  it('orders one status the same way it orders both', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const failed = { parseStatus: 'failed' } as const;
+
+    // A narrowed page is the same ordering over fewer rows rather
+    // than a second read: the filter and the sort are separate
+    // decisions, and a store applying the window before the order
+    // answers the same rows in another sequence.
+    expect(await corpusPage(store, domain.id, failed)).toStrictEqual(
+      [RECENT_FAILED, TIED_FAILED, STALE],
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the parse-status filter narrows, and what the default holds
+// ---------------------------------------------------------------------------
+
+describe('the corpus parse-status filter', () => {
+  it('carries both statuses when no filter is given', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const page = await store.listDocuments(
+      domain.id,
+      EVERY_DOCUMENT,
+      WHOLE_COLLECTION,
+    );
+
+    // A failed document is IN the corpus rather than behind a flag,
+    // which is fail-flag-keep read from the debug page's side. The
+    // statuses are read as a SET off the page rather than counted:
+    // a store answering five `ok` rows passes a length assertion.
+    expect(new Set(page.map((row) => row.parseStatus))).toStrictEqual(
+      new Set(DOCUMENT_PARSE_STATUSES),
+    );
+    expect(await store.countDocuments(domain.id, EVERY_DOCUMENT)).toBe(5);
+  });
+
+  it('answers the failures alone and the parsed alone', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const failed = { parseStatus: 'failed' } as const;
+    const ok = { parseStatus: 'ok' } as const;
+
+    expect(await corpusPage(store, domain.id, failed)).toStrictEqual(
+      [RECENT_FAILED, TIED_FAILED, STALE],
+    );
+    expect(await store.countDocuments(domain.id, failed)).toBe(3);
+
+    // The other half in the same body, which is what says the filter
+    // selects rather than that `failed` happens to name everything:
+    // the two pages partition the default one and neither is it.
+    expect(await corpusPage(store, domain.id, ok)).toStrictEqual(
+      [PASTED, TIED_OK],
+    );
+    expect(await store.countDocuments(domain.id, ok)).toBe(2);
+  });
+
+  it('answers an empty page for a status no row carries', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const failed = { parseStatus: 'failed' } as const;
+
+    store.setDomainDocuments(domain.id, [
+      captured(PASTED),
+      captured(TIED_OK),
+    ]);
+
+    // A domain whose captures all parsed is not a failure to read,
+    // and a status outside the tuple never reaches here at all —
+    // `src/documents/service.ts` refuses that with a `422`.
+    expect(await corpusPage(store, domain.id, failed)).toStrictEqual([]);
+    expect(await store.countDocuments(domain.id, failed)).toBe(0);
+
+    // The control: the page is narrowed rather than empty, and the
+    // count beside it describes the same collection.
+    expect(await corpusPage(store, domain.id)).toStrictEqual(
+      [TIED_OK, PASTED],
+    );
+    expect(await store.countDocuments(domain.id, EVERY_DOCUMENT)).toBe(2);
+  });
+
+  it('carries a document that came through no feed at all', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedDocuments(store);
+
+    // The state the sources seam has no key to plant: an ingested
+    // file and a pasted body sit in the middle of this page by
+    // capture time and are unreachable through a seam keyed by a
+    // source. The sibling in the same body is the control that a
+    // null is answered rather than written over every row.
+    expect(await readDocument(store, domain.id, PASTED)).toMatchObject({
+      sourceId: null,
+    });
+    expect(await readDocument(store, domain.id, TIED_OK)).toMatchObject({
+      sourceId: feed.id,
+    });
+  });
+
+  it('answers the body and the error as stored, uncut', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const body = `before${String.fromCharCode(0)}after`;
+
+    store.setDomainDocuments(domain.id, [
+      captured(TIED_FAILED, {
+        body,
+        parseError: `broke${String.fromCharCode(27)}here`,
+        parseStatus: 'failed',
+      }),
+    ]);
+
+    // The masking belongs to `src/documents/service.ts`, and keeping
+    // it out of the port is what lets it be tested against a planted
+    // control byte with no database. A store masking here would
+    // answer a body no column holds and would leave `bodyBytes`
+    // reporting the length of something else.
+    const row = await readDocument(store, domain.id, TIED_FAILED);
+
+    expect(row.body).toBe(body);
+    expect(row.parseError).toBe(`broke${String.fromCharCode(27)}here`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The window over the corpus page, and the count beside it
+// ---------------------------------------------------------------------------
+
+describe('the corpus page window', () => {
+  it('answers one window of the ordered page', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+
+    const page = await store.listDocuments(domain.id, EVERY_DOCUMENT, {
+      limit: 2,
+      offset: 1,
+    });
+
+    // The window is taken from the ORDERED collection rather than
+    // from the planted list, so the second and third of the page
+    // arrive rather than the second and third row planted.
+    expect(page.map((row) => row.id)).toStrictEqual(
+      [RECENT_FAILED, TIED_OK],
+    );
+  });
+
+  it('answers an empty page past the end and counts the whole', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+
+    const page = await store.listDocuments(domain.id, EVERY_DOCUMENT, {
+      limit: 50,
+      offset: 50,
+    });
+
+    expect(page).toStrictEqual([]);
+
+    // The count ignores the window, which is what a page's
+    // `meta.total` is read for: a window past the end still
+    // describes a collection of five.
+    expect(await store.countDocuments(domain.id, EVERY_DOCUMENT)).toBe(5);
+  });
+
+  it('answers nothing for a domain that has captured none', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const other = await store.insertDomain(domainInput(TRANSIT));
+
+    expect(await corpusPage(store, other.id)).toStrictEqual([]);
+    expect(await store.countDocuments(other.id, EVERY_DOCUMENT)).toBe(0);
+
+    // The control: the page is scoped rather than empty for
+    // everyone, and an id no domain carries answers the same way a
+    // domain holding nothing does.
+    expect(await corpusPage(store, domain.id)).toHaveLength(5);
+    expect(await corpusPage(store, 9999)).toStrictEqual([]);
+    expect(await store.countDocuments(9999, EVERY_DOCUMENT)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a domain delete takes, over a table two seams hold separately
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its documents', () => {
+  it('takes its corpus and leaves another domain standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const other = await store.insertDomain(domainInput(TRANSIT));
+
+    store.setDomainDocuments(other.id, [captured(61)]);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    expect(await corpusPage(store, domain.id)).toStrictEqual([]);
+    expect(await store.countDocuments(domain.id, EVERY_DOCUMENT)).toBe(0);
+
+    // The other domain's document is standing, so this is a cascade
+    // rather than a store that cleared everything.
+    expect(await corpusPage(store, other.id)).toStrictEqual([61]);
+  });
+
+  it('clears both seams over the one table it cascades to', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedDocuments(store);
+
+    store.setSourceDocuments(feed.id, [
+      planted(71, { parseStatus: 'failed' }),
+    ]);
+
+    // The state before, so the two empties after are a delete
+    // reaching them rather than reads that never answered.
+    expect(await corpusPage(store, domain.id)).toHaveLength(5);
+    expect(await store.countSourceFailures(feed.id)).toBe(1);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // Two lines rather than one, and neither is redundant: the
+    // sources plants go with their sources and the corpus goes with
+    // its domain, so a delete dropping only one of the two leaves
+    // rows of the same table behind.
+    expect(await store.countDocuments(domain.id, EVERY_DOCUMENT)).toBe(0);
+    expect(await store.countSourceFailures(feed.id)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The fifth known divergence: two seams, one table, neither seeing
+// the other
+// ---------------------------------------------------------------------------
+
+describe('the corpus the failures queue does not see', () => {
+  it('answers no queue, no aggregate and no dependent count', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedDocuments(store);
+
+    // Three of the corpus's five are `failed` and four of them name
+    // this feed, so a store reading one seam through the other would
+    // answer three here rather than nought.
+    expect(await store.countSourceFailures(feed.id)).toBe(0);
+    expect(await store.countSourceDependents(feed.id)).toStrictEqual({
+      documents: 0,
+      findingSightings: 0,
+    });
+
+    const [listed] = await store.listSourcesWithParseStats(
+      domain.id,
+      WHOLE_COLLECTION,
+    );
+
+    expect(listed?.parseStats).toStrictEqual({ ok: 0, failed: 0 });
+
+    // So the delete LANDS, where the same rows planted through the
+    // sources seam would refuse it. That is the divergence rather
+    // than a guard that had stopped guarding, and the case below
+    // reads the other face.
+    expect(await store.deleteSource(feed.id)).toBe(true);
+  });
+
+  it('refuses the same delete over the sources seam', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedDocuments(store);
+
+    store.setSourceDocuments(feed.id, [planted(71)]);
+
+    // The control the case above needs: the guard still refuses a
+    // source whose OWN seam holds a document, so the delete landing
+    // there is a seam it cannot see rather than a rule that has
+    // gone.
+    const refusal = await refusalFrom(() => store.deleteSource(feed.id));
+
+    expect(refusal.constraint).toBe('documents_source_id_sources_id_fk');
+  });
+
+  it('leaves a sources plant out of the corpus page', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedDocuments(store);
+
+    store.setSourceDocuments(feed.id, [
+      planted(71, { parseStatus: 'failed' }),
+    ]);
+
+    // The divergence read from the other end: a row the failures
+    // queue answers is not on this page, and the five that are stay
+    // put. A store resolving the sources seam through its source's
+    // domain would answer six.
+    expect(await store.countSourceFailures(feed.id)).toBe(1);
+    expect(await corpusPage(store, domain.id)).toStrictEqual(
+      [PASTED, RECENT_FAILED, TIED_OK, TIED_FAILED, STALE],
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the documents half copies across the boundary
+// ---------------------------------------------------------------------------
+
+describe('the corpus document crossing the boundary', () => {
+  it('does not store the capturedAt a plant was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const taken = new Date(CAPTURED_T1);
+
+    store.setDomainDocuments(domain.id, [
+      captured(PASTED, { capturedAt: taken }),
+    ]);
+
+    taken.setUTCFullYear(2030);
+
+    // Compared against the arithmetic rather than against an instant
+    // an earlier read answered: a store sharing the caller's `Date`
+    // would otherwise hold one lie against itself and pass.
+    expect(
+      (await readDocument(store, domain.id, PASTED)).capturedAt.getTime(),
+    ).toBe(Date.UTC(2026, 3, 2, 9));
+  });
+
+  it('does not answer the capturedAt it stores', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedDocuments(store);
+    const answered = await readDocument(store, domain.id, PASTED);
+
+    answered.capturedAt.setUTCFullYear(2031);
+
+    // The other direction, in its own case so that the two are told
+    // apart by which one reddens — one seam and one answer site,
+    // and a store keeping either has every page it hands out moving
+    // together.
+    expect(
+      (await readDocument(store, domain.id, PASTED)).capturedAt.getTime(),
+    ).toBe(Date.UTC(2026, 3, 4, 9));
+  });
+
+  it('rebuilds the planted list rather than holding it', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const rows = [captured(PASTED)];
+
+    store.setDomainDocuments(domain.id, rows);
+
+    rows.push(captured(TIED_OK));
+
+    // The seam copies row by row AND rebuilds the array, so pushing
+    // onto what was planted does not plant a second document.
+    expect(await corpusPage(store, domain.id)).toStrictEqual([PASTED]);
+
+    // A second call REPLACES rather than appends, which is what
+    // makes a domain going back to none expressible.
+    store.setDomainDocuments(domain.id, []);
+
+    expect(await corpusPage(store, domain.id)).toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The entities half's fixture
+// ---------------------------------------------------------------------------
+
+/**
+ * The two instants the research fixture is recorded across, and the
+ * two the intentions are raised across.
+ *
+ * SPELLED OUT RATHER THAN DERIVED FROM ONE ANOTHER, on the terms
+ * {@link MADE_T0} states, and kept clear of the findings half's own
+ * stamps over the same table: `entity_research` is planted by ONE
+ * seam and read by two ports, so a shared instant would put a fixture
+ * at the centre of the very thing two cases here read.
+ */
+const RESEARCHED_T0 = '2026-05-01T09:00:00.000Z';
+const RESEARCHED_T1 = '2026-05-02T09:00:00.000Z';
+const RAISED_T0 = '2026-05-03T09:00:00.000Z';
+const RAISED_T1 = '2026-05-04T09:00:00.000Z';
+
+/** When the fixture's already-ruled intentions were approved. */
+const RULED_AT = '2026-05-05T09:00:00.000Z';
+
+/** When the one closed intention was closed. */
+const CLOSED_AT = '2026-05-06T09:00:00.000Z';
+
+/**
+ * The four subjects the registry fixture plants, named for what each
+ * is in the rules rather than for its id.
+ *
+ * The ids are the fixture's own, `EntityStore` declaring no insert.
+ * `ELSEWHERE` sits in a SECOND domain under the key `KUBE` holds in
+ * the first, which is the control that says
+ * `entities_domain_id_name_norm_unique` is over the PAIR: a store
+ * keying on the name alone could not hold this fixture at all.
+ */
+const KUBE = 81;
+const MESH = 82;
+const POINTER = 83;
+const ELSEWHERE = 84;
+
+/**
+ * The reduced key the alias row holds.
+ *
+ * The other three keys are the term patterns above, reused the way
+ * the findings half reuses the taxonomy keys: a `name_norm` is free
+ * text, so any neutral string is as good a key as any other.
+ */
+const K8S = 'k8s';
+
+/**
+ * The three research rows planted under `KUBE`, and the one under
+ * `MESH`.
+ *
+ * `PASS_TIED_LOW` and `PASS_TIED_HIGH` carry ONE instant, so only
+ * `id` separates them, and they are planted LOW FIRST — a stable sort
+ * that lost the descending tiebreak answers them the wrong way round
+ * rather than reproducing the answer by accident. `PASS_OLDEST` is
+ * the HIGHEST id and the OLDEST stamp, so the two keys disagree on
+ * every pair it is in and an ordering by `id` alone cannot look
+ * right.
+ */
+const PASS_TIED_LOW = 91;
+const PASS_TIED_HIGH = 92;
+const PASS_OLDEST = 93;
+const PASS_ON_MESH = 99;
+
+/**
+ * The five intentions the pool fixture plants under one domain.
+ *
+ * `QUEUED_TIED_LOW` and `QUEUED_TIED_HIGH` carry one instant and are
+ * planted HIGH FIRST, the queue's tiebreak being ASCENDING — the
+ * mirror of the research fixture above, and reversed for the same
+ * reason. `QUEUED_FIRST` is the HIGHEST id and the OLDEST stamp, so
+ * the two keys disagree there too. `UNATTRIBUTED` names no subject
+ * and `ON_MESH` names another one, which is what makes the scope of
+ * a page readable at all.
+ */
+const QUEUED_TIED_LOW = 94;
+const QUEUED_TIED_HIGH = 95;
+const QUEUED_FIRST = 96;
+const UNATTRIBUTED = 97;
+const ON_MESH = 98;
+
+/** What {@link registered} defaults when a case is not about it. */
+type EntityDefaults = Partial<Omit<MemoryDomainEntity, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setDomainEntities}.
+ *
+ * A function rather than a constant, for the reason {@link planted}
+ * is one: the copy cases WRITE into the `attributes` they planted,
+ * which is the whole point of them.
+ *
+ * @param id - The subject's id, which is what every entity read is
+ *   addressed by.
+ * @param values - The four members a case may care about. `aliasOf`
+ *   defaults to null, which is the ordinary state rather than the
+ *   exception, and the two name halves default to something derived
+ *   from the id so that a case not about the key cannot collide by
+ *   accident.
+ * @returns The row to plant.
+ */
+function registered(
+  id: number,
+  values: EntityDefaults = {},
+): MemoryDomainEntity {
+  return {
+    id,
+    name: values.name ?? `Subject ${id}`,
+    nameNorm: values.nameNorm ?? `subject-${id}`,
+    aliasOf: values.aliasOf ?? null,
+    attributes: values.attributes ?? {},
+  };
+}
+
+/** What {@link queued} defaults when a case is not about it. */
+type PoolDefaults = Partial<Omit<MemoryResearchPoolRow, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setDomainPool}.
+ *
+ * @param id - The intention's id, which is what an approval names.
+ * @param values - The seven members a case may care about. Both
+ *   stamps default to null, which is the open state every row starts
+ *   in and the one side of `research_pool_approval_check` that is
+ *   always legal.
+ * @returns The row to plant.
+ */
+function queued(id: number, values: PoolDefaults = {}): MemoryResearchPoolRow {
+  return {
+    id,
+    entityId: values.entityId ?? null,
+    findingId: values.findingId ?? null,
+    status: values.status ?? 'pending',
+    searchTerms: values.searchTerms ?? [`terms for ${id}`],
+    createdAt: values.createdAt ?? new Date(RAISED_T0),
+    approvedAt: values.approvedAt ?? null,
+    researchedAt: values.researchedAt ?? null,
+  };
+}
+
+/**
+ * Two domains, a registry of three subjects in the first and a fourth
+ * in the second, the research recorded about two of them, and the
+ * five intentions queued under the first.
+ *
+ * PLANTED IN AN ORDER NO READ ANSWERS, on the terms
+ * {@link seedFindings} states, in all three collections.
+ *
+ * @param store - The store to write to.
+ * @returns Both domains: the registry's, and the one holding the
+ *   subject that carries the same key.
+ */
+async function seedEntities(
+  store: MemoryResearchStore,
+): Promise<{ domain: DomainRecord; other: DomainRecord }> {
+  const domain = await store.insertDomain(domainInput(RADAR));
+  const other = await store.insertDomain(domainInput(TRANSIT));
+
+  store.setDomainEntities(domain.id, [
+    registered(POINTER, {
+      aliasOf: KUBE,
+      name: 'K8s',
+      nameNorm: K8S,
+    }),
+    registered(MESH, { name: 'Service Mesh', nameNorm: SERVICE_MESH }),
+    registered(KUBE, {
+      attributes: { tier: 'core' },
+      name: 'Kubernetes',
+      nameNorm: KUBERNETES,
+    }),
+  ]);
+  store.setDomainEntities(other.id, [
+    registered(ELSEWHERE, { name: 'Kubernetes', nameNorm: KUBERNETES }),
+  ]);
+
+  store.setEntityResearch(KUBE, [
+    passOn(PASS_TIED_LOW, RESEARCHED_T1),
+    passOn(PASS_OLDEST, RESEARCHED_T0),
+    passOn(PASS_TIED_HIGH, RESEARCHED_T1),
+  ]);
+  store.setEntityResearch(MESH, [passOn(PASS_ON_MESH, RESEARCHED_T0)]);
+
+  store.setDomainPool(domain.id, [
+    queued(QUEUED_TIED_HIGH, {
+      approvedAt: new Date(RULED_AT),
+      createdAt: new Date(RAISED_T1),
+      entityId: KUBE,
+      researchedAt: new Date(CLOSED_AT),
+      status: 'done',
+    }),
+    queued(QUEUED_FIRST, { entityId: KUBE }),
+    queued(UNATTRIBUTED, {}),
+    queued(ON_MESH, { entityId: MESH }),
+    queued(QUEUED_TIED_LOW, {
+      approvedAt: new Date(RULED_AT),
+      createdAt: new Date(RAISED_T1),
+      entityId: KUBE,
+      status: 'approved',
+    }),
+  ]);
+
+  return { domain, other };
+}
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setEntityResearch}.
+ *
+ * @param id - The pass's id, which is the read's tiebreak.
+ * @param at - When it was recorded, as an ISO instant.
+ * @returns The row to plant.
+ */
+function passOn(id: number, at: string): MemoryEntityResearch {
+  return {
+    id,
+    payload: { pass: id },
+    researchedAt: new Date(at),
+    runId: null,
+    summary: null,
+  };
+}
+
+/**
+ * Reads an entity that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no entity carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readEntity(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<EntityRecord> {
+  const row = await store.findEntityById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored entity under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * Reads an intention that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no intention carries the id.
+ */
+async function readPoolRow(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<ResearchPoolRecord> {
+  const row = await store.findPoolRowById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored intention under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * Reads one window of what has been found out about a subject.
+ *
+ * @param store - The store to read.
+ * @param entityId - The subject to read about.
+ * @param window - How much to take, the whole collection by default.
+ * @returns The ids in the order they arrived.
+ */
+async function researchPage(
+  store: MemoryResearchStore,
+  entityId: number,
+  window = WHOLE_COLLECTION,
+): Promise<number[]> {
+  const page = await store.listEntityResearch(entityId, window);
+
+  return page.map((row) => row.id);
+}
+
+/**
+ * Reads one window of the intentions queued against a subject.
+ *
+ * @param store - The store to read.
+ * @param entityId - The subject to read.
+ * @param window - How much to take, the whole collection by default.
+ * @returns The ids in the order they arrived.
+ */
+async function poolPage(
+  store: MemoryResearchStore,
+  entityId: number,
+  window = WHOLE_COLLECTION,
+): Promise<number[]> {
+  const page = await store.listEntityPool(entityId, window);
+
+  return page.map((row) => row.id);
+}
+
+// ---------------------------------------------------------------------------
+// The two mechanisms the registry write can reach, and their order
+// ---------------------------------------------------------------------------
+
+describe('the entities_domain_id_name_norm_unique key', () => {
+  it('refuses a rename onto a key a sibling already holds', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    const refusal = await refusalFrom(() => store.updateEntity(MESH, {
+      name: { display: 'Kubernetes', norm: KUBERNETES },
+    }));
+
+    expect(refusal.reason).toBe('unique-violation');
+    expect(refusal.constraint).toBe('entities_domain_id_name_norm_unique');
+
+    // The row is as it was, so the refusal happened before the
+    // write rather than after half of one.
+    expect(await readEntity(store, MESH)).toMatchObject({
+      name: 'Service Mesh',
+      nameNorm: SERVICE_MESH,
+    });
+  });
+
+  it('takes the same key under a second domain', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    // The control that makes the refusal above a PAIR key rather
+    // than a name key: this subject is in another registry, so
+    // renaming it onto a key the first domain holds is ordinary.
+    const moved = await store.updateEntity(ELSEWHERE, {
+      name: { display: 'Service Mesh', norm: SERVICE_MESH },
+    });
+
+    expect(moved).toMatchObject({ nameNorm: SERVICE_MESH });
+    expect(await readEntity(store, MESH)).toMatchObject({
+      nameNorm: SERVICE_MESH,
+    });
+  });
+
+  it('takes a rename that leaves the key where it was', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    // A row is not in conflict with itself. A store comparing
+    // against every row in the domain refuses this, which is the
+    // rename that moves only the display half — the commonest edit
+    // this surface will ever be asked for.
+    const renamed = await store.updateEntity(KUBE, {
+      name: { display: 'Kubernetes (k8s)', norm: KUBERNETES },
+    });
+
+    expect(renamed).toMatchObject({
+      name: 'Kubernetes (k8s)',
+      nameNorm: KUBERNETES,
+    });
+  });
+});
+
+describe('the entity alias foreign key', () => {
+  it('refuses an aliasOf naming an id no entity carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    const refusal = await refusalFrom(
+      () => store.updateEntity(MESH, { aliasOf: 9999 }),
+    );
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe('entities_alias_of_entities_id_fk');
+
+    // The control in the same case, varied along that row's own
+    // axis: a live id through the same call is stored, so the
+    // refusal is the id and not the member.
+    expect(await store.updateEntity(MESH, { aliasOf: KUBE })).toMatchObject({
+      aliasOf: KUBE,
+    });
+  });
+
+  it('takes an alias pointing into another domain', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    // One of the two rules this port does NOT hold. The column is
+    // onto `entities.id` alone, so a pointer across registries is
+    // stored — and `src/entities/service.ts` is where it is refused
+    // with a 422, above this port rather than in it.
+    expect(
+      await store.updateEntity(MESH, { aliasOf: ELSEWHERE }),
+    ).toMatchObject({ aliasOf: ELSEWHERE });
+
+    // The other one, in the same case for the same reason: a row
+    // pointing at itself is storable too.
+    expect(await store.updateEntity(MESH, { aliasOf: MESH })).toMatchObject({
+      aliasOf: MESH,
+    });
+  });
+
+  it('takes a null that clears the pointer', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    expect(await readEntity(store, POINTER)).toMatchObject({ aliasOf: KUBE });
+
+    const cleared = await store.updateEntity(POINTER, { aliasOf: null });
+
+    expect(cleared).toMatchObject({ aliasOf: null });
+    expect(await readEntity(store, POINTER)).toMatchObject({ aliasOf: null });
+  });
+});
+
+describe('the order the entity write asks its two mechanisms in', () => {
+  it('answers the key beside an alias naming nothing', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    // The one call in this file that reaches a unique key and a
+    // foreign key at once, `name` and `aliasOf` both being members
+    // of one patch. The order is the relation the category half
+    // MEASURED between an index and an end-of-statement check,
+    // argued across rather than measured here.
+    const refusal = await refusalFrom(() => store.updateEntity(MESH, {
+      aliasOf: 9999,
+      name: { display: 'Kubernetes', norm: KUBERNETES },
+    }));
+
+    expect(refusal.constraint).toBe('entities_domain_id_name_norm_unique');
+
+    // The control that says the alias half of the request was a
+    // fault at all: alone, it is refused by the other mechanism.
+    const alone = await refusalFrom(
+      () => store.updateEntity(MESH, { aliasOf: 9999 }),
+    );
+
+    expect(alone.constraint).toBe('entities_alias_of_entities_id_fk');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the registry answers, and what a patch moves
+// ---------------------------------------------------------------------------
+
+describe('the single entity read', () => {
+  it('answers the stored row with the domain it sits in', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedEntities(store);
+
+    // The domain comes off the seam's KEY rather than off the
+    // planted row, which is what puts it on the answer at all — and
+    // it is the only thing in a request addressed by id that can
+    // say whose registry was read.
+    expect(await readEntity(store, KUBE)).toStrictEqual({
+      aliasOf: null,
+      attributes: { tier: 'core' },
+      domainId: domain.id,
+      id: KUBE,
+      name: 'Kubernetes',
+      nameNorm: KUBERNETES,
+    });
+  });
+
+  it('answers null for an id no entity carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    expect(await store.findEntityById(9999)).toBeNull();
+    expect(await store.findEntityById(KUBE)).not.toBeNull();
+  });
+});
+
+describe('the entity patch', () => {
+  it('moves both name columns or neither', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    const renamed = await store.updateEntity(KUBE, {
+      name: { display: 'Kubernetes Core', norm: K8S + '-core' },
+    });
+
+    // A pair rather than two writes: `EntityNamePatch` is what makes
+    // a display-only move unexpressible, so this case reads both
+    // columns off one request.
+    expect(renamed).toMatchObject({
+      name: 'Kubernetes Core',
+      nameNorm: K8S + '-core',
+    });
+    expect(await readEntity(store, KUBE)).toMatchObject({
+      name: 'Kubernetes Core',
+      nameNorm: K8S + '-core',
+    });
+  });
+
+  it('replaces the attributes payload whole', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    expect(
+      await store.updateEntity(KUBE, { attributes: { owner: 'platform' } }),
+    ).toMatchObject({ attributes: { owner: 'platform' } });
+
+    // WHOLE and never merged, so the member the fixture planted is
+    // gone rather than standing beside the new one.
+    expect(await readEntity(store, KUBE)).toMatchObject({
+      attributes: { owner: 'platform' },
+    });
+
+    // And an empty object is a value rather than an absence, which
+    // is the only shape under which clearing is expressible.
+    await store.updateEntity(KUBE, { attributes: {} });
+
+    expect((await readEntity(store, KUBE)).attributes).toStrictEqual({});
+  });
+
+  it('leaves every member a patch does not name alone', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedEntities(store);
+
+    // The empty patch: three absences at once, so a store defaulting
+    // any of the three answers something this comparison names.
+    expect(await store.updateEntity(POINTER, {})).toStrictEqual({
+      aliasOf: KUBE,
+      attributes: {},
+      domainId: domain.id,
+      id: POINTER,
+      name: 'K8s',
+      nameNorm: K8S,
+    });
+  });
+
+  it('answers null for an id no entity carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    expect(await store.updateEntity(9999, { aliasOf: KUBE })).toBeNull();
+
+    // Nothing was written under that id, and the live sibling in the
+    // same case says the call still writes at all.
+    expect(await store.findEntityById(9999)).toBeNull();
+    expect(await store.updateEntity(MESH, { aliasOf: KUBE })).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The two collections a subject carries, and the orders they run in
+// ---------------------------------------------------------------------------
+
+describe('the research a subject has accumulated', () => {
+  it('answers it newest first with id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    // Planted in an order this answer is neither, so the ordering
+    // is told from the planted one and from id in either direction.
+    // The tied pair was planted LOW FIRST, which is what a stable
+    // sort with the tiebreak gone answers the wrong way round.
+    expect(await researchPage(store, KUBE)).toStrictEqual([
+      PASS_TIED_HIGH,
+      PASS_TIED_LOW,
+      PASS_OLDEST,
+    ]);
+  });
+
+  it('answers those rows one member short', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    const [pass] = await store.listEntityResearch(KUBE, WHOLE_COLLECTION);
+
+    // One seam, one table and two projections: this half drops
+    // `entityId` because the subject is the PATH, and the findings
+    // half keeps it because a caller there named a finding.
+    expect(Object.keys(pass ?? {}).sort()).toStrictEqual([
+      'id',
+      'payload',
+      'researchedAt',
+      'runId',
+      'summary',
+    ]);
+    expect(pass).toMatchObject({
+      id: PASS_TIED_HIGH,
+      payload: { pass: PASS_TIED_HIGH },
+    });
+  });
+
+  it('scopes the collection to the subject it was asked about', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    expect(await researchPage(store, MESH)).toStrictEqual([PASS_ON_MESH]);
+    expect(await store.countEntityResearch(MESH)).toBe(1);
+    expect(await store.countEntityResearch(KUBE)).toBe(3);
+  });
+
+  it('windows the page and counts the whole either way', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    expect(
+      await researchPage(store, KUBE, { limit: 2, offset: 1 }),
+    ).toStrictEqual([PASS_TIED_LOW, PASS_OLDEST]);
+
+    // The window is not the count's to read, so a page past the end
+    // is empty beside a total that is not.
+    expect(
+      await researchPage(store, KUBE, { limit: 2, offset: 9 }),
+    ).toStrictEqual([]);
+    expect(await store.countEntityResearch(KUBE)).toBe(3);
+  });
+
+  it('answers an empty list and a zero for an unknown id', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    expect(await researchPage(store, 9999)).toStrictEqual([]);
+    expect(await store.countEntityResearch(9999)).toBe(0);
+    expect(await researchPage(store, KUBE)).toHaveLength(3);
+  });
+});
+
+describe('the intentions queued against a subject', () => {
+  it('answers them oldest first with id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    // ASCENDING where every other collection here descends, which is
+    // `listPending` in `scripts/approve.ts` member for member. The
+    // tied pair was planted HIGH FIRST, the mirror of the research
+    // fixture and reversed for the same reason.
+    expect(await poolPage(store, KUBE)).toStrictEqual([
+      QUEUED_FIRST,
+      QUEUED_TIED_LOW,
+      QUEUED_TIED_HIGH,
+    ]);
+  });
+
+  it('keeps a row naming no subject out of every page', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    // The null is an ordinary state and it belongs to no subject, so
+    // it is in nobody's page and in nobody's count — while still
+    // being readable by its own id, which the next describe reads.
+    expect(await poolPage(store, KUBE)).not.toContain(UNATTRIBUTED);
+    expect(await poolPage(store, MESH)).toStrictEqual([ON_MESH]);
+    expect(await store.countEntityPool(KUBE)).toBe(3);
+    expect(await store.countEntityPool(MESH)).toBe(1);
+  });
+
+  it('is not narrowed to the rows still waiting', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    const page = await store.listEntityPool(KUBE, WHOLE_COLLECTION);
+
+    // A subject's own queue is a history of what was ever asked
+    // about it, which is where this differs from the CLI listing it
+    // shares an order with.
+    expect(page.map((row) => row.status)).toStrictEqual([
+      'pending',
+      'approved',
+      'done',
+    ]);
+  });
+
+  it('windows the page and counts the whole either way', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    expect(
+      await poolPage(store, KUBE, { limit: 1, offset: 2 }),
+    ).toStrictEqual([QUEUED_TIED_HIGH]);
+    expect(
+      await poolPage(store, KUBE, { limit: 2, offset: 9 }),
+    ).toStrictEqual([]);
+    expect(await store.countEntityPool(KUBE)).toBe(3);
+  });
+
+  it('answers an empty list and a zero for an unknown id', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    expect(await poolPage(store, 9999)).toStrictEqual([]);
+    expect(await store.countEntityPool(9999)).toBe(0);
+    expect(await poolPage(store, KUBE)).toHaveLength(3);
+  });
+});
+
+describe('the intention read by its own id', () => {
+  it('answers a row whatever subject it names', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    // UNSCOPED on purpose: a read narrowed to the entity would
+    // answer null for `no such row` and for `not this subject's row`
+    // alike, and only one of those is honest. What the row is FOR is
+    // the service's question, and `entityId` is what it holds
+    // against the addressed subject.
+    expect(await readPoolRow(store, ON_MESH)).toMatchObject({
+      entityId: MESH,
+    });
+    expect(await readPoolRow(store, UNATTRIBUTED)).toMatchObject({
+      entityId: null,
+    });
+  });
+
+  it('answers the row whole, its terms included', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    expect(await readPoolRow(store, QUEUED_TIED_HIGH)).toStrictEqual({
+      approvedAt: new Date(RULED_AT),
+      createdAt: new Date(RAISED_T1),
+      entityId: KUBE,
+      findingId: null,
+      id: QUEUED_TIED_HIGH,
+      researchedAt: new Date(CLOSED_AT),
+      searchTerms: ['terms for 95'],
+      status: 'done',
+    });
+  });
+
+  it('answers null for an id no intention carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    expect(await store.findPoolRowById(9999)).toBeNull();
+    expect(await store.findPoolRowById(QUEUED_FIRST)).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The check the seam holds, and the approval that keeps its first stamp
+// ---------------------------------------------------------------------------
+
+describe('the research_pool_approval_check', () => {
+  it('refuses a closed row carrying no approval', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedEntities(store);
+
+    const refusal = await refusalFrom(async () => {
+      store.setDomainPool(domain.id, [
+        queued(101, {
+          entityId: KUBE,
+          researchedAt: new Date(CLOSED_AT),
+          status: 'done',
+        }),
+      ]);
+    });
+
+    expect(refusal.reason).toBe('check-violation');
+    expect(refusal.constraint).toBe('research_pool_approval_check');
+  });
+
+  it('takes the same row once it also states an approval', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedEntities(store);
+
+    // The check read from its other side, and the control that makes
+    // the refusal above about the PAIR rather than about the stamp:
+    // the identical closing instant is stored once an approval
+    // stands beside it.
+    store.setDomainPool(domain.id, [
+      queued(101, {
+        approvedAt: new Date(RULED_AT),
+        entityId: KUBE,
+        researchedAt: new Date(CLOSED_AT),
+        status: 'done',
+      }),
+    ]);
+
+    expect(await readPoolRow(store, 101)).toMatchObject({
+      researchedAt: new Date(CLOSED_AT),
+    });
+  });
+
+  it('leaves the previous plant standing when it refuses', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedEntities(store);
+
+    await refusalFrom(async () => {
+      store.setDomainPool(domain.id, [
+        queued(101, { entityId: KUBE }),
+        queued(102, {
+          entityId: KUBE,
+          researchedAt: new Date(CLOSED_AT),
+          status: 'done',
+        }),
+      ]);
+    });
+
+    // The batch lands NOWHERE: the legal row beside the refused one
+    // is not stored either, and what was planted before is still
+    // there. A guard applied row by row as it stored would leave the
+    // collection half written, which one statement cannot produce.
+    expect(await store.findPoolRowById(101)).toBeNull();
+    expect(await poolPage(store, KUBE)).toStrictEqual([
+      QUEUED_FIRST,
+      QUEUED_TIED_LOW,
+      QUEUED_TIED_HIGH,
+    ]);
+  });
+
+  it('never consults the status the row states', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedEntities(store);
+
+    // The constraint holds the two timestamps against each other and
+    // reads nothing else, so a row calling itself done with neither
+    // stamp set is storable — and is stored.
+    store.setDomainPool(domain.id, [
+      queued(101, { entityId: KUBE, status: 'done' }),
+    ]);
+
+    expect(await readPoolRow(store, 101)).toMatchObject({
+      approvedAt: null,
+      researchedAt: null,
+      status: 'done',
+    });
+  });
+});
+
+describe('the approval that keeps the first ruling stamp', () => {
+  it('stamps the approval and moves the status', async () => {
+    const ruled = new Date('2026-05-10T10:00:00.000Z');
+    const store = createMemoryResearchStore({ now: () => ruled });
+
+    await seedEntities(store);
+
+    expect(await store.approvePoolRow(QUEUED_FIRST)).toMatchObject({
+      approvedAt: ruled,
+      id: QUEUED_FIRST,
+      status: 'approved',
+    });
+    expect(await readPoolRow(store, QUEUED_FIRST)).toMatchObject({
+      approvedAt: ruled,
+      status: 'approved',
+    });
+  });
+
+  it('keeps the first instant when it is ruled on twice', async () => {
+    let reading = new Date('2026-05-10T10:00:00.000Z');
+    const store = createMemoryResearchStore({ now: () => reading });
+
+    await seedEntities(store);
+
+    const first = await store.approvePoolRow(QUEUED_FIRST);
+
+    reading = new Date('2026-05-11T10:00:00.000Z');
+
+    // The clock has moved, so a store writing a bare `now()` answers
+    // the second reading here. `coalesce(approved_at, now())` answers
+    // the first, which is what makes ruling twice a no-op rather than
+    // a way to re-date a search already paid for.
+    const second = await store.approvePoolRow(QUEUED_FIRST);
+
+    expect(second?.approvedAt).toStrictEqual(first?.approvedAt);
+    expect(second?.approvedAt).toStrictEqual(
+      new Date('2026-05-10T10:00:00.000Z'),
+    );
+
+    // The control that says the clock did move: a row nobody has
+    // ruled on takes the SECOND reading.
+    expect(await store.approvePoolRow(ON_MESH)).toMatchObject({
+      approvedAt: new Date('2026-05-11T10:00:00.000Z'),
+    });
+  });
+
+  it('ratifies a closed row without moving its stamp', async () => {
+    const store = createMemoryResearchStore({
+      now: () => new Date('2026-05-11T10:00:00.000Z'),
+    });
+
+    await seedEntities(store);
+
+    // Nothing is asked of the row's state. An id naming a row already
+    // closed moves the status back to approved and leaves both stamps
+    // where they were, which is exactly what the constraint permits.
+    expect(await store.approvePoolRow(QUEUED_TIED_HIGH)).toStrictEqual({
+      approvedAt: new Date(RULED_AT),
+      createdAt: new Date(RAISED_T1),
+      entityId: KUBE,
+      findingId: null,
+      id: QUEUED_TIED_HIGH,
+      researchedAt: new Date(CLOSED_AT),
+      searchTerms: ['terms for 95'],
+      status: 'approved',
+    });
+  });
+
+  it('ratifies and never researches', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    await store.approvePoolRow(QUEUED_FIRST);
+
+    // Two columns of one row move and nothing else does: no research
+    // row is written, and no other intention is touched.
+    expect(await researchPage(store, KUBE)).toStrictEqual([
+      PASS_TIED_HIGH,
+      PASS_TIED_LOW,
+      PASS_OLDEST,
+    ]);
+    expect(await store.countEntityResearch(KUBE)).toBe(3);
+    expect(await readPoolRow(store, ON_MESH)).toMatchObject({
+      approvedAt: null,
+      status: 'pending',
+    });
+  });
+
+  it('answers null for an id no intention carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    expect(await store.approvePoolRow(9999)).toBeNull();
+    expect(await store.approvePoolRow(QUEUED_FIRST)).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a domain delete takes, and the citation it does not hold
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its entities', () => {
+  it('takes its registry and leaves another domain standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedEntities(store);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    expect(await store.findEntityById(KUBE)).toBeNull();
+    expect(await store.findEntityById(MESH)).toBeNull();
+    expect(await store.findEntityById(POINTER)).toBeNull();
+
+    // The other domain's subject is standing, so this is a cascade
+    // rather than a store that cleared everything.
+    expect(await readEntity(store, ELSEWHERE)).toMatchObject({
+      domainId: other.id,
+    });
+  });
+
+  it('takes the research hanging off those entities', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedEntities(store);
+
+    // The state before, so the empties below are a delete reaching
+    // them rather than reads that never answered.
+    expect(await store.countEntityResearch(KUBE)).toBe(3);
+    expect(await store.countEntityResearch(MESH)).toBe(1);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // Two levels down: `entities.domain_id` cascades and
+    // `entity_research.entity_id` cascades onto the entities.
+    expect(await researchPage(store, KUBE)).toStrictEqual([]);
+    expect(await store.countEntityResearch(KUBE)).toBe(0);
+    expect(await store.countEntityResearch(MESH)).toBe(0);
+  });
+
+  it('takes its intentions, the one naming no subject too', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedEntities(store);
+
+    // The state before, so the nulls below are a delete reaching
+    // them rather than reads that never answered.
+    expect(await store.findPoolRowById(UNATTRIBUTED)).not.toBeNull();
+    expect(await store.countEntityPool(KUBE)).toBe(3);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // `research_pool.domain_id` cascades DIRECTLY rather than through
+    // the entities, which is why the row naming nobody goes with the
+    // rest. A cascade written through the registry would leave it.
+    expect(await store.findPoolRowById(UNATTRIBUTED)).toBeNull();
+    expect(await store.findPoolRowById(QUEUED_FIRST)).toBeNull();
+    expect(await store.findPoolRowById(ON_MESH)).toBeNull();
+    expect(await poolPage(store, KUBE)).toStrictEqual([]);
+    expect(await store.countEntityPool(KUBE)).toBe(0);
+  });
+
+  it('leaves research planted under an id no entity carries', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedEntities(store);
+
+    store.setEntityResearch(9001, [passOn(103, RESEARCHED_T0)]);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // The seam takes an ID rather than a row, so research planted
+    // under a subject nothing registers has nothing to cascade FROM
+    // and survives — which is the state the findings half's own
+    // fixture is in, and the reason its cases go on reading research
+    // over a store holding no entity at all.
+    expect(await researchPage(store, 9001)).toStrictEqual([103]);
+  });
+});
+
+describe('the entity delete a cross-domain citation does not hold', () => {
+  it('takes a delete another domain intention would refuse', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedEntities(store);
+
+    store.setDomainPool(other.id, [queued(104, { entityId: KUBE })]);
+
+    // The file's SIXTH known divergence, pinned rather than left to
+    // be discovered. `research_pool.entity_id` is `ON DELETE no
+    // action`, so a deployment refuses this delete: the intention
+    // raised in the second domain is outside the first's cascade and
+    // still names one of its subjects at the end of the statement.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findEntityById(KUBE)).toBeNull();
+
+    // And the citation is left dangling here, which is what says the
+    // divergence is a delete taken rather than a row cleaned up.
+    expect(await readPoolRow(store, 104)).toMatchObject({ entityId: KUBE });
+  });
+
+  it('holds nothing when both rows go together', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedEntities(store);
+
+    // The control that makes the divergence above about the SECOND
+    // domain rather than about the key: a citation inside one domain
+    // is removed by the same statement, which is why a deployment's
+    // end-of-statement check finds nothing to refuse.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findPoolRowById(QUEUED_FIRST)).toBeNull();
+    expect(await store.findEntityById(KUBE)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the entities half copies across the boundary
+// ---------------------------------------------------------------------------
+
+describe('the entity payload crossing the boundary', () => {
+  it('does not store the attributes object a plant was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const attributes: Record<string, unknown> = { tier: 'core' };
+
+    store.setDomainEntities(domain.id, [registered(KUBE, { attributes })]);
+
+    attributes.tier = 'edge';
+
+    expect((await readEntity(store, KUBE)).attributes).toStrictEqual({
+      tier: 'core',
+    });
+  });
+
+  it('does not store the attributes object a patch was handed', async () => {
+    const store = createMemoryResearchStore();
+    const attributes: Record<string, unknown> = { tier: 'core' };
+
+    await seedEntities(store);
+    await store.updateEntity(MESH, { attributes });
+
+    attributes.tier = 'edge';
+
+    // The other direction, in its own case so the two are told apart
+    // by which one reddens: one seam and one writer, and a store
+    // keeping either lets a caller write into stored state.
+    expect((await readEntity(store, MESH)).attributes).toStrictEqual({
+      tier: 'core',
+    });
+  });
+
+  it('does not share the attributes object it answers', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedEntities(store);
+
+    const answered = await readEntity(store, KUBE);
+    const payload = answered.attributes as Record<string, unknown>;
+
+    payload.tier = 'edge';
+
+    expect((await readEntity(store, KUBE)).attributes).toStrictEqual({
+      tier: 'core',
+    });
+  });
+
+  it('does not store or answer the stamps a plant was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const raised = new Date(RAISED_T0);
+    const ruled = new Date(RULED_AT);
+
+    store.setDomainPool(domain.id, [
+      queued(101, { approvedAt: ruled, createdAt: raised, entityId: KUBE }),
+    ]);
+
+    raised.setUTCFullYear(2030);
+    ruled.setUTCFullYear(2030);
+
+    const stored = await readPoolRow(store, 101);
+
+    expect(stored.createdAt.getTime()).toBe(Date.UTC(2026, 4, 3, 9));
+    expect(stored.approvedAt?.getTime()).toBe(Date.UTC(2026, 4, 5, 9));
+
+    stored.createdAt.setUTCFullYear(2031);
+    stored.approvedAt?.setUTCFullYear(2031);
+
+    const again = await readPoolRow(store, 101);
+
+    expect(again.createdAt.getTime()).toBe(Date.UTC(2026, 4, 3, 9));
+    expect(again.approvedAt?.getTime()).toBe(Date.UTC(2026, 4, 5, 9));
+  });
+
+  it('does not share the search terms it answers', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const searchTerms = ['as raised'];
+
+    store.setDomainPool(domain.id, [
+      queued(101, { entityId: KUBE, searchTerms }),
+    ]);
+
+    searchTerms.push('added after');
+
+    const stored = await readPoolRow(store, 101);
+
+    expect(stored.searchTerms).toStrictEqual(['as raised']);
+
+    (stored.searchTerms as string[]).push('added after');
+
+    expect((await readPoolRow(store, 101)).searchTerms).toStrictEqual([
+      'as raised',
+    ]);
+  });
+
+  it('rebuilds the planted registry rather than holding it', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const rows = [registered(KUBE)];
+
+    store.setDomainEntities(domain.id, rows);
+
+    rows.push(registered(MESH));
+
+    // The seam copies row by row AND rebuilds the array, so pushing
+    // onto what was planted does not plant a second subject.
+    expect(await store.findEntityById(MESH)).toBeNull();
+
+    // A second call REPLACES rather than appends, and it replaces
+    // what a PATCH wrote as readily as what a plant did — which is
+    // the one thing this seam does that no other one here can.
+    await store.updateEntity(KUBE, { attributes: { tier: 'core' } });
+    store.setDomainEntities(domain.id, [registered(KUBE)]);
+
+    expect((await readEntity(store, KUBE)).attributes).toStrictEqual({});
+  });
+
+  it('rebuilds the planted queue rather than holding it', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const rows = [queued(101, { entityId: KUBE })];
+
+    store.setDomainPool(domain.id, rows);
+
+    rows.push(queued(102, { entityId: KUBE }));
+
+    expect(await poolPage(store, KUBE)).toStrictEqual([101]);
+
+    store.setDomainPool(domain.id, []);
+
+    expect(await poolPage(store, KUBE)).toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The runs half's fixture
+// ---------------------------------------------------------------------------
+
+/**
+ * The three instants the passes were opened across, and the one they
+ * finished at.
+ *
+ * SPELLED OUT RATHER THAN DERIVED FROM ONE ANOTHER, on the terms
+ * {@link MADE_T0} states, and kept clear of every other half's stamps:
+ * nothing else here plants a `runs` row, so these are read by this
+ * section alone.
+ */
+const STARTED_T0 = '2026-06-01T09:00:00.000Z';
+const STARTED_T1 = '2026-06-02T09:00:00.000Z';
+const STARTED_T2 = '2026-06-03T09:00:00.000Z';
+const FINISHED_AT = '2026-06-02T10:00:00.000Z';
+
+/**
+ * The three instants the ledger was written across, chosen so the
+ * summary's two axes are both readable off one fixture.
+ *
+ * `CALLED_T0` AND `CALLED_T1` STRADDLE A UTC MIDNIGHT one millisecond
+ * apart, which is what says the day bucket is a truncation rather
+ * than a rounding: a store bucketing in the process's own zone puts
+ * the pair together anywhere but UTC, and every count beside it still
+ * adds up.
+ *
+ * `CALLED_T2` LEAVES TWO WHOLE DAYS EMPTY behind it, which is what
+ * lets a case read that no bucket exists for a day nothing landed on.
+ * A contiguous run of days could not say it.
+ */
+const CALLED_T0 = '2026-06-10T23:59:59.999Z';
+const CALLED_T1 = '2026-06-11T00:00:00.000Z';
+const CALLED_T2 = '2026-06-14T09:00:00.000Z';
+
+/** The three UTC days those instants fall on, as bucket keys. */
+const DAY_BEFORE = Date.UTC(2026, 5, 10);
+const DAY_OF = Date.UTC(2026, 5, 11);
+const DAY_LATER = Date.UTC(2026, 5, 14);
+
+/**
+ * The five passes the runs fixture plants, named for what each is in
+ * the rules rather than for its id.
+ *
+ * The ids are the fixture's own, `RunStore` declaring no insert.
+ * `RUN_TIED_LOW` and `RUN_TIED_HIGH` carry ONE instant, so only `id`
+ * separates them, and they are planted LOW FIRST — a stable sort that
+ * lost the descending tiebreak answers them the wrong way round
+ * rather than reproducing the answer by accident. `RUN_OLDEST` is the
+ * HIGHEST id of the three and the OLDEST stamp, so the two keys
+ * disagree on every pair it is in and an ordering by `id` alone
+ * cannot look right.
+ *
+ * `RUN_TICK` NAMES NO DOMAIN and is the NEWEST of all five, so it
+ * heads the unfiltered page and appears in none of the narrowed ones.
+ * `RUN_ELSEWHERE` belongs to a second domain and ties with
+ * `RUN_OLDEST` on the stamp, which is what makes the unfiltered
+ * page's tiebreak a comparison across two domains rather than within
+ * one.
+ */
+const RUN_TIED_LOW = 121;
+const RUN_TIED_HIGH = 122;
+const RUN_OLDEST = 123;
+const RUN_TICK = 124;
+const RUN_ELSEWHERE = 125;
+
+/**
+ * The nine model calls the ledger fixture plants.
+ *
+ * THE THREE ON `RUN_TIED_HIGH` REPEAT THE RUNS FIXTURE'S SHAPE one
+ * table down: `CALL_TIED_LOW` and `CALL_TIED_HIGH` share `CALLED_T1`
+ * and are planted low first, and `CALL_OLDEST` is the highest id of
+ * the three with the oldest stamp.
+ *
+ * THE OTHER SIX ARE THE SUMMARY'S SUBJECTS. `CALL_UNMEASURED` records
+ * neither magnitude, `CALL_PART_MEASURED` records one of the two, and
+ * `CALL_ON_NOTHING` names no run at all — so a bucket can be read for
+ * a count that outruns its sums, for two sums taken separately, and
+ * for the two kinds of unattributed spend landing together.
+ */
+const CALL_TIED_LOW = 141;
+const CALL_TIED_HIGH = 142;
+const CALL_OLDEST = 143;
+const CALL_UNMEASURED = 144;
+const CALL_ON_TICK = 145;
+const CALL_PART_MEASURED = 146;
+const CALL_ON_NOTHING = 147;
+const CALL_ELSEWHERE_EARLY = 148;
+const CALL_ELSEWHERE = 149;
+
+/** How many calls the ledger fixture plants, all told. */
+const LEDGERED_CALLS = 9;
+
+/** The filter that narrows nothing, on {@link EVERY_KIND}'s terms. */
+const EVERY_RUN = {};
+
+/** A limit wide enough to read every call any case here plants. */
+const WHOLE_LEDGER = 50;
+
+/** What {@link madePass} defaults when a case is not about it. */
+type RunDefaults = Partial<Omit<MemoryRun, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setRuns}.
+ *
+ * A function rather than a constant, for the reason {@link planted}
+ * is one: the copy cases WRITE into the `counts` and `errors` they
+ * planted, which is the whole point of them.
+ *
+ * @param id - The pass's id, which is what `GET /runs/:id` and every
+ *   ledger read are addressed by.
+ * @param values - The seven members a case may care about.
+ *   `domainId` defaults to NULL, which is the state a case has to
+ *   name a domain to leave rather than the other way round, and
+ *   `finishedAt` defaults to null so an unfinished pass is the
+ *   cheaper fixture.
+ * @returns The row to plant.
+ */
+function madePass(id: number, values: RunDefaults = {}): MemoryRun {
+  return {
+    id,
+    domainId: values.domainId ?? null,
+    startedAt: values.startedAt ?? new Date(STARTED_T0),
+    finishedAt: values.finishedAt ?? null,
+    status: values.status ?? 'ok',
+    counts: values.counts ?? {},
+    errors: values.errors ?? [],
+    scheduledBy: values.scheduledBy ?? 'interval',
+  };
+}
+
+/** What {@link ledgered} defaults when a case is not about it. */
+type CallDefaults = Partial<Omit<MemoryLlmCall, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setLlmCalls}.
+ *
+ * @param id - The call's id, which is the ledger's tiebreak.
+ * @param values - The six members a case may care about. Both
+ *   magnitudes default to null, which is the unmeasured state, and
+ *   `runId` defaults to null on {@link madePass}'s reasoning: a case
+ *   that means a call to belong to a pass says so.
+ * @returns The row to plant.
+ */
+function ledgered(id: number, values: CallDefaults = {}): MemoryLlmCall {
+  return {
+    id,
+    runId: values.runId ?? null,
+    node: values.node ?? `node-${id}`,
+    model: values.model ?? null,
+    promptChars: values.promptChars ?? null,
+    estTokens: values.estTokens ?? null,
+    calledAt: values.calledAt ?? new Date(CALLED_T1),
+  };
+}
+
+/**
+ * Two domains, five passes across them and the ledger under four of
+ * those passes.
+ *
+ * PLANTED IN AN ORDER NO READ ANSWERS, on the terms
+ * {@link seedFindings} states, in both collections.
+ *
+ * @param store - The store to write to.
+ * @returns Both domains: the one three passes ran for, and the one
+ *   the fifth ran for.
+ */
+async function seedRuns(
+  store: MemoryResearchStore,
+): Promise<{ domain: DomainRecord; other: DomainRecord }> {
+  const domain = await store.insertDomain(domainInput(RADAR));
+  const other = await store.insertDomain(domainInput(TRANSIT));
+
+  store.setRuns([
+    madePass(RUN_TIED_LOW, {
+      counts: { findings: 4 },
+      domainId: domain.id,
+      finishedAt: new Date(FINISHED_AT),
+      startedAt: new Date(STARTED_T1),
+    }),
+    madePass(RUN_OLDEST, {
+      domainId: domain.id,
+      errors: [{ node: 'capture' }],
+      finishedAt: new Date(FINISHED_AT),
+      startedAt: new Date(STARTED_T0),
+      status: 'failed',
+    }),
+    madePass(RUN_TIED_HIGH, {
+      domainId: domain.id,
+      finishedAt: new Date(FINISHED_AT),
+      scheduledBy: 'agent',
+      startedAt: new Date(STARTED_T1),
+      status: 'partial',
+    }),
+    madePass(RUN_ELSEWHERE, {
+      domainId: other.id,
+      finishedAt: new Date(FINISHED_AT),
+      startedAt: new Date(STARTED_T0),
+    }),
+    madePass(RUN_TICK, {
+      scheduledBy: 'operator',
+      startedAt: new Date(STARTED_T2),
+      status: 'running',
+    }),
+  ]);
+
+  store.setLlmCalls([
+    ledgered(CALL_TIED_LOW, {
+      estTokens: 50,
+      promptChars: 200,
+      runId: RUN_TIED_HIGH,
+    }),
+    ledgered(CALL_OLDEST, {
+      calledAt: new Date(CALLED_T0),
+      estTokens: 25,
+      promptChars: 100,
+      runId: RUN_TIED_HIGH,
+    }),
+    ledgered(CALL_ELSEWHERE_EARLY, {
+      estTokens: 3,
+      promptChars: 7,
+      runId: RUN_ELSEWHERE,
+    }),
+    ledgered(CALL_ON_TICK, {
+      estTokens: 1,
+      promptChars: 10,
+      runId: RUN_TICK,
+    }),
+    ledgered(CALL_ON_NOTHING, {}),
+    ledgered(CALL_TIED_HIGH, {
+      estTokens: 75,
+      promptChars: 300,
+      runId: RUN_TIED_HIGH,
+    }),
+    ledgered(CALL_ELSEWHERE, {
+      calledAt: new Date(CALLED_T2),
+      runId: RUN_ELSEWHERE,
+    }),
+    ledgered(CALL_PART_MEASURED, { promptChars: 20, runId: RUN_TICK }),
+    ledgered(CALL_UNMEASURED, { runId: RUN_OLDEST }),
+  ]);
+
+  return { domain, other };
+}
+
+/**
+ * Reads one window of the passes the service has made.
+ *
+ * @param store - The store to read.
+ * @param filter - What to narrow to, nothing by default.
+ * @param window - How much to take, the whole collection by default.
+ * @returns The ids in the order they arrived.
+ */
+async function runsPage(
+  store: MemoryResearchStore,
+  filter: RunFilter = EVERY_RUN,
+  window = WHOLE_COLLECTION,
+): Promise<number[]> {
+  const page = await store.listRuns(filter, window);
+
+  return page.map((row) => row.id);
+}
+
+/**
+ * Reads the head of one pass's ledger.
+ *
+ * @param store - The store to read.
+ * @param runId - The pass to read within.
+ * @param limit - How many rows to take, the whole ledger by default.
+ * @returns The ids in the order they arrived.
+ */
+async function ledgerPage(
+  store: MemoryResearchStore,
+  runId: number,
+  limit = WHOLE_LEDGER,
+): Promise<number[]> {
+  const page = await store.listRunLedger(runId, limit);
+
+  return page.map((row) => row.id);
+}
+
+/**
+ * Reads a pass that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no run carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readRun(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<RunRecord> {
+  const row = await store.findRunById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored run under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * Names one bucket by the pair it is grouped on.
+ *
+ * The two axes and neither magnitude, so an ordering assertion reads
+ * as the grouping rather than as a wall of numbers.
+ *
+ * @param bucket - The bucket to name.
+ * @returns Its UTC day and its domain, the null spelled out.
+ */
+function bucketKey(bucket: SpendBucket): string {
+  return `${bucket.day.toISOString()}/${bucket.domainId ?? 'none'}`;
+}
+
+/**
+ * Reads the spend summary.
+ *
+ * @param store - The store to read.
+ * @param filter - What to narrow to, nothing by default.
+ * @param window - The span to summarise, unbounded by default.
+ * @returns The buckets in the order they arrived.
+ */
+async function spendPage(
+  store: MemoryResearchStore,
+  filter: RunFilter = EVERY_RUN,
+  window: TimeWindow = EVERY_INSTANT,
+): Promise<readonly SpendBucket[]> {
+  return store.summariseSpend(filter, window);
+}
+
+// ---------------------------------------------------------------------------
+// The runs page, its order and its one narrowing
+// ---------------------------------------------------------------------------
+
+describe('the runs page ordering', () => {
+  it('answers it newest first with id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const page = await runsPage(store, { domainId: domain.id });
+
+    // Planted in an order this answer is neither, so the ordering is
+    // told from the planted one and from id in either direction. The
+    // tied pair was planted LOW FIRST, which is what a stable sort
+    // with the tiebreak gone answers the wrong way round.
+    expect(page).toStrictEqual([RUN_TIED_HIGH, RUN_TIED_LOW, RUN_OLDEST]);
+
+    // The four orders it is NOT, written out: a small page agreeing
+    // with any of them would be reproducing the answer by accident.
+    expect(page).not.toStrictEqual([RUN_TIED_LOW, RUN_OLDEST, RUN_TIED_HIGH]);
+    expect(page).not.toStrictEqual([RUN_TIED_HIGH, RUN_OLDEST, RUN_TIED_LOW]);
+    expect(page).not.toStrictEqual([RUN_OLDEST, RUN_TIED_HIGH, RUN_TIED_LOW]);
+    expect(page).not.toStrictEqual([RUN_TIED_LOW, RUN_TIED_HIGH, RUN_OLDEST]);
+  });
+
+  it('breaks a tie across two domains on the unfiltered page', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    // The tick heads it, then the tied pair, then the two oldest — and
+    // those two belong to DIFFERENT domains, so the tiebreak here is a
+    // comparison the narrowed pages above cannot make.
+    expect(await runsPage(store)).toStrictEqual([
+      RUN_TICK,
+      RUN_TIED_HIGH,
+      RUN_TIED_LOW,
+      RUN_ELSEWHERE,
+      RUN_OLDEST,
+    ]);
+  });
+
+  it('windows the page and counts the whole either way', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const filter = { domainId: domain.id };
+
+    expect(
+      await runsPage(store, filter, { limit: 2, offset: 1 }),
+    ).toStrictEqual([RUN_TIED_LOW, RUN_OLDEST]);
+
+    // The window is not the count's to read, so a page past the end
+    // is empty beside a total that is not.
+    expect(
+      await runsPage(store, filter, { limit: 2, offset: 9 }),
+    ).toStrictEqual([]);
+    expect(await store.countRuns(filter)).toBe(3);
+  });
+
+  it('answers those rows whole', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const [newest] = await store.listRuns(
+      { domainId: domain.id },
+      WHOLE_COLLECTION,
+    );
+
+    // `runs` WHOLE and no member added: the eight columns the table
+    // declares, and no ninth riding along. A key set is what says so
+    // — `toMatchObject` passes over a record answering an extra one.
+    expect(Object.keys(newest ?? {}).sort()).toStrictEqual([
+      'counts',
+      'domainId',
+      'errors',
+      'finishedAt',
+      'id',
+      'scheduledBy',
+      'startedAt',
+      'status',
+    ]);
+    expect(newest).toMatchObject({
+      counts: {},
+      domainId: domain.id,
+      id: RUN_TIED_HIGH,
+      scheduledBy: 'agent',
+      status: 'partial',
+    });
+  });
+});
+
+describe('the runs page domain filter', () => {
+  it('answers every run including the tick when none is named', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    // Absent widens to the whole table rather than to the
+    // domain-scoped half of it, which is what keeps this page
+    // agreeing with `runs` about how much work the service has done.
+    expect(await runsPage(store)).toContain(RUN_TICK);
+    expect(await store.countRuns(EVERY_RUN)).toBe(5);
+  });
+
+  it('narrows to one domain and drops the tick with it', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+    const mine = await store.countRuns({ domainId: domain.id });
+    const theirs = await store.countRuns({ domainId: other.id });
+    const every = await store.countRuns(EVERY_RUN);
+
+    expect(await runsPage(store, { domainId: other.id })).toStrictEqual([
+      RUN_ELSEWHERE,
+    ]);
+    expect(await runsPage(store, { domainId: domain.id })).not.toContain(
+      RUN_TICK,
+    );
+
+    // A PARTITION reading rather than two narrowed pages: the two
+    // domains' counts plus the one tick are the whole table, so a
+    // filter that had stopped narrowing could not satisfy this even
+    // though each page above would still look plausible.
+    expect(mine).toBe(3);
+    expect(theirs).toBe(1);
+    expect(mine + theirs + 1).toBe(every);
+  });
+
+  it('answers an empty page and a zero for an unknown id', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const filter = { domainId: 9999 };
+
+    expect(await runsPage(store, filter)).toStrictEqual([]);
+    expect(await store.countRuns(filter)).toBe(0);
+
+    // Beside a control that says the store is not simply empty:
+    // nothing points at a row that is not there.
+    expect(await runsPage(store)).toHaveLength(5);
+  });
+});
+
+describe('one run read by its own id', () => {
+  it('answers a domain-scoped pass and a tick alike', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+
+    expect(await readRun(store, RUN_OLDEST)).toMatchObject({
+      domainId: domain.id,
+      status: 'failed',
+    });
+
+    // A null `domainId` is the ordinary reading for a maintenance
+    // tick rather than a row that failed to resolve, which is why the
+    // read takes no domain to scope itself by.
+    expect(await readRun(store, RUN_TICK)).toMatchObject({
+      domainId: null,
+      finishedAt: null,
+      scheduledBy: 'operator',
+      status: 'running',
+    });
+  });
+
+  it('answers null for an id no run carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    expect(await store.findRunById(9999)).toBeNull();
+    expect(await store.findRunById(RUN_TIED_LOW)).not.toBeNull();
+  });
+});
+
+describe('the ledger one run carries', () => {
+  it('answers its calls newest first with id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const page = await ledgerPage(store, RUN_TIED_HIGH);
+
+    // The runs fixture's shape one table down, and read the same way:
+    // the tied pair was planted low first, and the oldest call is the
+    // highest id of the three, so the two keys disagree on every pair
+    // it is in.
+    expect(page).toStrictEqual([CALL_TIED_HIGH, CALL_TIED_LOW, CALL_OLDEST]);
+    expect(page).not.toStrictEqual([
+      CALL_TIED_LOW,
+      CALL_OLDEST,
+      CALL_TIED_HIGH,
+    ]);
+    expect(page).not.toStrictEqual([
+      CALL_OLDEST,
+      CALL_TIED_HIGH,
+      CALL_TIED_LOW,
+    ]);
+  });
+
+  it('cuts at the limit its caller passes and counts the whole', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    // The cut drops the OLDEST end, which is what makes the order the
+    // contract rather than a presentation choice.
+    expect(await ledgerPage(store, RUN_TIED_HIGH, 2)).toStrictEqual([
+      CALL_TIED_HIGH,
+      CALL_TIED_LOW,
+    ]);
+
+    // And the full count is what makes that cut reportable: the
+    // service compares the two into a truncation flag, so a limit
+    // this method chose itself would answer a short list with nothing
+    // saying it was short.
+    expect(await store.countRunLedger(RUN_TIED_HIGH)).toBe(3);
+    expect(await ledgerPage(store, RUN_TIED_HIGH, 1)).toStrictEqual([
+      CALL_TIED_HIGH,
+    ]);
+  });
+
+  it('keeps a call naming no run out of every ledger', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    // Unreachable from every run id there is, both reads being
+    // addressed by one — the summary is the single method that sees
+    // these rows, which its own describes below read.
+    for (const runId of [RUN_TIED_HIGH, RUN_OLDEST, RUN_TICK, RUN_ELSEWHERE]) {
+      expect(await ledgerPage(store, runId)).not.toContain(CALL_ON_NOTHING);
+    }
+
+    // Beside the control that says the row IS stored: the ledgered
+    // calls a run does claim add up to one short of the fixture.
+    const claimed = await Promise.all([
+      store.countRunLedger(RUN_TIED_HIGH),
+      store.countRunLedger(RUN_OLDEST),
+      store.countRunLedger(RUN_TICK),
+      store.countRunLedger(RUN_ELSEWHERE),
+    ]);
+
+    expect(claimed).toStrictEqual([3, 1, 2, 2]);
+    expect(claimed.reduce((sum, held) => sum + held, 0)).toBe(
+      LEDGERED_CALLS - 1,
+    );
+  });
+
+  it('answers those calls one member short', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const [call] = await store.listRunLedger(RUN_TIED_HIGH, WHOLE_LEDGER);
+
+    // `run_id` is DROPPED where the sightings and the research put
+    // their own key back: the run is the PATH here, so a caller
+    // reading a run's ledger already holds it.
+    expect(Object.keys(call ?? {}).sort()).toStrictEqual([
+      'calledAt',
+      'estTokens',
+      'id',
+      'model',
+      'node',
+      'promptChars',
+    ]);
+    expect(call).toMatchObject({
+      estTokens: 75,
+      id: CALL_TIED_HIGH,
+      promptChars: 300,
+    });
+  });
+
+  it('answers an empty list and a zero either way it is empty', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+
+    store.setRuns([
+      madePass(RUN_TIED_LOW, { domainId: domain.id }),
+      madePass(RUN_OLDEST, { domainId: domain.id }),
+    ]);
+    store.setLlmCalls([]);
+
+    // A pass that called nothing and an id no run carries are one
+    // fact from these two methods' side, and the single read is what
+    // separates them.
+    expect(await ledgerPage(store, RUN_TIED_LOW)).toStrictEqual([]);
+    expect(await store.countRunLedger(RUN_TIED_LOW)).toBe(0);
+    expect(await ledgerPage(store, 9999)).toStrictEqual([]);
+    expect(await store.countRunLedger(9999)).toBe(0);
+    expect(await store.findRunById(RUN_TIED_LOW)).not.toBeNull();
+    expect(await store.findRunById(9999)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The spend summary: its two axes, its sums and its window
+// ---------------------------------------------------------------------------
+
+describe('the spend summary buckets', () => {
+  it('splits a pair one millisecond apart across a UTC midnight', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const mine = await spendPage(store, { domainId: domain.id });
+
+    // Both calls belong to ONE run and one domain, so the only thing
+    // that can separate them is the truncation — and they are one
+    // millisecond apart, so a store truncating in the process's own
+    // zone puts them together anywhere but UTC.
+    expect(mine.map(bucketKey)).toStrictEqual([
+      `${new Date(DAY_OF).toISOString()}/${domain.id}`,
+      `${new Date(DAY_BEFORE).toISOString()}/${domain.id}`,
+    ]);
+
+    // The day is the instant that OPENS the bucket rather than a
+    // label, which is what makes it comparable at all.
+    expect(mine.map((bucket) => bucket.day.getTime())).toStrictEqual([
+      DAY_OF,
+      DAY_BEFORE,
+    ]);
+  });
+
+  it('buckets the tick and the unrun call together under none', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const buckets = await spendPage(store);
+    const nobody = buckets.filter((bucket) => bucket.domainId === null);
+
+    // TWO KINDS OF UNATTRIBUTED CALL IN ONE BUCKET: two made during a
+    // tick that named no domain, and one naming no run at all. The
+    // record has no member that separates them, which is the honest
+    // limit of the property below it.
+    expect(nobody.map(bucketKey)).toStrictEqual([
+      `${new Date(DAY_OF).toISOString()}/none`,
+    ]);
+    expect(nobody.map((bucket) => bucket.calls)).toStrictEqual([3]);
+  });
+
+  it('orders the buckets newest day first with the null last', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+
+    // `day` descending, then `domainId` ASCENDING with the null
+    // bucket last. The middle day carries all three, which is what
+    // makes the ascending key readable rather than only the null
+    // rule: a store sorting the domains the other way would answer
+    // the same five buckets in a different array.
+    expect((await spendPage(store)).map(bucketKey)).toStrictEqual([
+      `${new Date(DAY_LATER).toISOString()}/${other.id}`,
+      `${new Date(DAY_OF).toISOString()}/${domain.id}`,
+      `${new Date(DAY_OF).toISOString()}/${other.id}`,
+      `${new Date(DAY_OF).toISOString()}/none`,
+      `${new Date(DAY_BEFORE).toISOString()}/${domain.id}`,
+    ]);
+  });
+
+  it('counts every call the window holds', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const buckets = await spendPage(store);
+    const counted = buckets.reduce((sum, bucket) => sum + bucket.calls, 0);
+
+    // The property a total taken from this summary rests on, and the
+    // one an INNER join would break silently: the buckets' `calls`
+    // add up to the number of calls in the window, the unattributed
+    // ones included.
+    expect(counted).toBe(LEDGERED_CALLS);
+    expect(buckets).toHaveLength(5);
+  });
+});
+
+describe('the spend summary magnitudes', () => {
+  it('sums the measured calls beside a count of them all', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const [busiest] = await spendPage(store, { domainId: domain.id });
+
+    // Three calls, two of them measured: `calls` counts ROWS and the
+    // sums cover the rows that recorded anything, so the two
+    // disagreeing is information rather than a fault — it says how
+    // much of the bucket was measured at all.
+    expect(busiest).toStrictEqual({
+      calls: 3,
+      day: new Date(DAY_OF),
+      domainId: domain.id,
+      estTokens: 125,
+      promptChars: 500,
+    });
+  });
+
+  it('answers null rather than zero where nothing was measured', async () => {
+    const store = createMemoryResearchStore();
+    const { other } = await seedRuns(store);
+    const theirs = await spendPage(store, { domainId: other.id });
+
+    // Zero is a real reading of a prompt that sent nothing, so a
+    // store coalescing an unmeasured bucket to it would report a day
+    // of calls that sent nothing — the same shape as a day nobody
+    // measured, with no member left to tell them apart.
+    expect(theirs.map((bucket) => bucket.promptChars)).toStrictEqual([
+      null,
+      7,
+    ]);
+    expect(theirs.map((bucket) => bucket.estTokens)).toStrictEqual([null, 3]);
+    expect(theirs.map((bucket) => bucket.calls)).toStrictEqual([1, 1]);
+  });
+
+  it('sums the two magnitudes separately', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const [nobody] = (await spendPage(store)).filter(
+      (bucket) => bucket.domainId === null,
+    );
+
+    // One call measured on BOTH axes, one on the characters alone and
+    // one on neither. A store summing either axis only when both were
+    // recorded would answer 10 here rather than 30, and every count
+    // beside it would still be right.
+    expect(nobody).toMatchObject({
+      calls: 3,
+      estTokens: 1,
+      promptChars: 30,
+    });
+  });
+});
+
+describe('the spend summary window', () => {
+  it('takes the lower bound and drops the upper', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+    const buckets = await spendPage(store, EVERY_RUN, {
+      sinceInclusive: new Date(CALLED_T1),
+      untilExclusive: new Date(CALLED_T2),
+    });
+
+    // Half-open, and both bounds sit exactly ON a planted call: the
+    // seven at the lower bound are IN and the one at the upper is
+    // OUT, so two adjacent windows do not both take the seam a caller
+    // paging through time crosses most often.
+    expect(buckets.map(bucketKey)).toStrictEqual([
+      `${new Date(DAY_OF).toISOString()}/${domain.id}`,
+      `${new Date(DAY_OF).toISOString()}/${other.id}`,
+      `${new Date(DAY_OF).toISOString()}/none`,
+    ]);
+    expect(
+      buckets.reduce((sum, bucket) => sum + bucket.calls, 0),
+    ).toBe(7);
+  });
+
+  it('answers no bucket for a day nothing landed on', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    const days = (await spendPage(store, EVERY_RUN, {
+      sinceInclusive: new Date(Date.UTC(2026, 5, 10)),
+      untilExclusive: new Date(Date.UTC(2026, 5, 15)),
+    })).map((bucket) => bucket.day.getTime());
+
+    // A bucket exists because calls landed in it, so the two empty
+    // days inside this five-day span are absent rather than zeroed —
+    // a caller filling a chart supplies its own zeroes, and a store
+    // inventing them would be answering a calendar nobody named.
+    expect([...new Set(days)]).toStrictEqual([DAY_LATER, DAY_OF, DAY_BEFORE]);
+    expect(days).not.toContain(Date.UTC(2026, 5, 12));
+    expect(days).not.toContain(Date.UTC(2026, 5, 13));
+  });
+
+  it('answers an empty list for a window nothing was called in', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedRuns(store);
+
+    expect(await spendPage(store, EVERY_RUN, {
+      sinceInclusive: new Date(Date.UTC(2026, 6, 1)),
+      untilExclusive: new Date(Date.UTC(2026, 6, 2)),
+    })).toStrictEqual([]);
+    expect(await spendPage(store)).toHaveLength(5);
+  });
+});
+
+describe('the spend summary domain filter', () => {
+  it('reaches the domain through the run and drops both nulls', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+    const calls = async (filter: RunFilter): Promise<number> => {
+      const buckets = await spendPage(store, filter);
+
+      return buckets.reduce((sum, bucket) => sum + bucket.calls, 0);
+    };
+    const mine = await calls({ domainId: domain.id });
+    const theirs = await calls({ domainId: other.id });
+
+    // `llm_calls` carries no domain of its own, so this narrowing is
+    // a join — and a PARTITION reading is what says so: the two
+    // domains' summaries do NOT sum to the unfiltered one, and the
+    // difference is exactly the unattributed spend rather than a
+    // rounding of it.
+    expect(mine).toBe(4);
+    expect(theirs).toBe(2);
+    expect(mine + theirs).toBe(LEDGERED_CALLS - 3);
+    expect(await calls(EVERY_RUN)).toBe(LEDGERED_CALLS);
+
+    // And an id no domain carries answers nothing rather than
+    // failing: nothing points at a row that is not there.
+    expect(await spendPage(store, { domainId: 9999 })).toStrictEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a domain delete reaches on this half, and what it does not
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its runs', () => {
+  it('takes its passes and leaves the tick and another standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+
+    // The state before, so the nulls below are a delete reaching them
+    // rather than reads that never answered.
+    expect(await store.countRuns(EVERY_RUN)).toBe(5);
+    expect(await readRun(store, RUN_TIED_LOW)).toMatchObject({
+      domainId: domain.id,
+    });
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    expect(await store.findRunById(RUN_TIED_LOW)).toBeNull();
+    expect(await store.findRunById(RUN_TIED_HIGH)).toBeNull();
+    expect(await store.findRunById(RUN_OLDEST)).toBeNull();
+
+    // The tick hangs off NO domain, so no domain delete reaches it,
+    // and the second domain's pass is standing — so this is a cascade
+    // reading the column off the row rather than a store that cleared
+    // whatever it held.
+    expect(await readRun(store, RUN_TICK)).toMatchObject({ domainId: null });
+    expect(await readRun(store, RUN_ELSEWHERE)).toMatchObject({
+      domainId: other.id,
+    });
+    expect(await runsPage(store)).toStrictEqual([RUN_TICK, RUN_ELSEWHERE]);
+  });
+
+  it('takes the ledger hanging off those passes', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+
+    // The state before, so the empties below are a delete reaching
+    // them rather than reads that never answered.
+    expect(await store.countRunLedger(RUN_TIED_HIGH)).toBe(3);
+    expect(await store.countRunLedger(RUN_OLDEST)).toBe(1);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // Two levels down: `runs.domain_id` cascades and
+    // `llm_calls.run_id` cascades onto the runs.
+    expect(await ledgerPage(store, RUN_TIED_HIGH)).toStrictEqual([]);
+    expect(await store.countRunLedger(RUN_TIED_HIGH)).toBe(0);
+    expect(await store.countRunLedger(RUN_OLDEST)).toBe(0);
+
+    // And the tick's own calls are standing beside them, which is
+    // what says the delete followed the domain rather than the table.
+    expect(await ledgerPage(store, RUN_TICK)).toStrictEqual([
+      CALL_PART_MEASURED,
+      CALL_ON_TICK,
+    ]);
+    expect(await ledgerPage(store, RUN_ELSEWHERE)).toHaveLength(2);
+  });
+
+  it('leaves a call that named no run at all', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const before = await spendPage(store);
+
+    expect(
+      before.reduce((sum, bucket) => sum + bucket.calls, 0),
+    ).toBe(LEDGERED_CALLS);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    const after = await spendPage(store);
+
+    // Four calls went with the three passes and five are left — the
+    // tick's two, the second domain's two, and the one hanging off
+    // nothing this store can delete.
+    expect(after.reduce((sum, bucket) => sum + bucket.calls, 0)).toBe(5);
+    expect(
+      after.filter((bucket) => bucket.domainId === null)
+        .map((bucket) => bucket.calls),
+    ).toStrictEqual([3]);
+  });
+
+  it('takes those passes out of the spend summary', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+
+    expect(await spendPage(store, { domainId: domain.id })).toHaveLength(2);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // The summary reaches a domain through its runs, so removing the
+    // runs is the whole of how a deleted domain's spend goes — there
+    // is no second line for `llm_calls` in the cascade and none is
+    // needed.
+    expect(await spendPage(store, { domainId: domain.id })).toStrictEqual([]);
+    expect(await spendPage(store, { domainId: other.id })).toHaveLength(2);
+  });
+});
+
+describe('the run delete a cross-domain result does not hold', () => {
+  it('takes a delete another domain research would refuse', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other } = await seedRuns(store);
+    const subject = 151;
+
+    store.setDomainEntities(other.id, [registered(subject)]);
+    store.setEntityResearch(subject, [
+      { ...passOn(152, RESEARCHED_T0), runId: RUN_TIED_LOW },
+    ]);
+
+    // The state before, so the null below is a delete reaching the
+    // run rather than a read that never answered — without it every
+    // assertion here is an absence, and the case survives a control
+    // that plants no pass at all.
+    expect(await readRun(store, RUN_TIED_LOW)).toMatchObject({
+      domainId: domain.id,
+    });
+
+    // The file's SEVENTH known divergence, pinned rather than left to
+    // be discovered. `entity_research.run_id` is `ON DELETE no
+    // action`, so a deployment refuses this delete: the result
+    // recorded in the SECOND domain is outside the first's cascade and
+    // still names one of its runs at the end of the statement — the
+    // two-hop reading `src/db/schema/entities.ts` records as verified
+    // against a real Postgres.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findRunById(RUN_TIED_LOW)).toBeNull();
+
+    // And the citation is left dangling here, which is what says the
+    // divergence is a delete taken rather than a row cleaned up.
+    expect(await researchPage(store, subject)).toStrictEqual([152]);
+    expect(
+      (await store.listEntityResearch(subject, WHOLE_COLLECTION))
+        .map((row) => row.runId),
+    ).toStrictEqual([RUN_TIED_LOW]);
+  });
+
+  it('holds nothing when the result is in the same domain', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedRuns(store);
+    const subject = 153;
+
+    store.setDomainEntities(domain.id, [registered(subject)]);
+    store.setEntityResearch(subject, [
+      { ...passOn(154, RESEARCHED_T0), runId: RUN_TIED_LOW },
+    ]);
+
+    // The state before, on the terms the case above states.
+    expect(await readRun(store, RUN_TIED_LOW)).toMatchObject({
+      domainId: domain.id,
+    });
+    expect(await researchPage(store, subject)).toStrictEqual([154]);
+
+    // The control that makes the divergence above about the SECOND
+    // domain rather than about the key: a result inside one domain is
+    // removed by the same statement, which is why a deployment's
+    // end-of-statement check finds nothing to refuse.
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await researchPage(store, subject)).toStrictEqual([]);
+    expect(await store.findRunById(RUN_TIED_LOW)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the runs half copies across the boundary
+// ---------------------------------------------------------------------------
+
+describe('the run payload crossing the boundary', () => {
+  it('does not store the payloads a plant was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const counts: Record<string, number> = { findings: 4 };
+    const errors: Record<string, unknown>[] = [{ node: 'capture' }];
+
+    store.setRuns([
+      madePass(RUN_TIED_LOW, { counts, domainId: domain.id, errors }),
+    ]);
+
+    counts.findings = 9;
+    errors.push({ node: 'parse' });
+
+    const stored = await readRun(store, RUN_TIED_LOW);
+
+    expect(stored.counts).toStrictEqual({ findings: 4 });
+    expect(stored.errors).toStrictEqual([{ node: 'capture' }]);
+  });
+
+  it('does not share the payloads it answers', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    store.setRuns([
+      madePass(RUN_TIED_LOW, {
+        counts: { findings: 4 },
+        domainId: domain.id,
+        errors: [{ node: 'capture' }],
+      }),
+    ]);
+
+    const answered = await readRun(store, RUN_TIED_LOW);
+
+    answered.counts.findings = 9;
+    (answered.errors as Record<string, unknown>[]).push({ node: 'parse' });
+
+    // The other direction, in its own case so the two are told apart
+    // by which one reddens — one seam and one projection, and a store
+    // keeping either lets a caller write into stored state through
+    // members the port declares `readonly`.
+    const again = await readRun(store, RUN_TIED_LOW);
+
+    expect(again.counts).toStrictEqual({ findings: 4 });
+    expect(again.errors).toStrictEqual([{ node: 'capture' }]);
+  });
+
+  it('does not store the stamps a plant was handed', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const startedAt = new Date(STARTED_T1);
+    const finishedAt = new Date(FINISHED_AT);
+
+    store.setRuns([
+      madePass(RUN_TIED_LOW, { domainId: domain.id, finishedAt, startedAt }),
+    ]);
+
+    startedAt.setUTCFullYear(2030);
+    finishedAt.setUTCFullYear(2030);
+
+    const stored = await readRun(store, RUN_TIED_LOW);
+
+    expect(stored.startedAt.getTime()).toBe(Date.UTC(2026, 5, 2, 9));
+    expect(stored.finishedAt?.getTime()).toBe(Date.UTC(2026, 5, 2, 10));
+
+    // A null stays a null through the copy, `finished_at` being the
+    // one nullable stamp on the table and the branch that needs one.
+    store.setRuns([madePass(RUN_OLDEST, { domainId: domain.id })]);
+
+    expect((await readRun(store, RUN_OLDEST)).finishedAt).toBeNull();
+  });
+
+  it('does not share the stamps it answers', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+
+    store.setRuns([
+      madePass(RUN_TIED_LOW, {
+        domainId: domain.id,
+        finishedAt: new Date(FINISHED_AT),
+        startedAt: new Date(STARTED_T1),
+      }),
+    ]);
+
+    const answered = await readRun(store, RUN_TIED_LOW);
+
+    answered.startedAt.setUTCFullYear(2031);
+    answered.finishedAt?.setUTCFullYear(2031);
+
+    // The other direction, in its own case body so the two are told
+    // apart by which one reddens — a claim with two directions that
+    // shares one case cannot be separated by any grid.
+    const again = await readRun(store, RUN_TIED_LOW);
+
+    expect(again.startedAt.getTime()).toBe(Date.UTC(2026, 5, 2, 9));
+    expect(again.finishedAt?.getTime()).toBe(Date.UTC(2026, 5, 2, 10));
+  });
+
+  it('does not store the stamp a call arrived with', async () => {
+    const store = createMemoryResearchStore();
+    const calledAt = new Date(CALLED_T2);
+
+    store.setRuns([madePass(RUN_TIED_LOW)]);
+    store.setLlmCalls([
+      ledgered(CALL_TIED_LOW, { calledAt, runId: RUN_TIED_LOW }),
+    ]);
+
+    calledAt.setUTCFullYear(2030);
+
+    const [stored] = await store.listRunLedger(RUN_TIED_LOW, WHOLE_LEDGER);
+
+    expect(stored?.calledAt.getTime()).toBe(Date.UTC(2026, 5, 14, 9));
+
+    // And the day bucket is taken off the STORED instant, so a caller
+    // that moved what it planted cannot move which day its spend
+    // lands on — the reading the ledger's own projection cannot make.
+    expect(
+      (await spendPage(store)).map((bucket) => bucket.day.getTime()),
+    ).toStrictEqual([DAY_LATER]);
+  });
+
+  it('does not share the stamp it answers', async () => {
+    const store = createMemoryResearchStore();
+
+    store.setRuns([madePass(RUN_TIED_LOW)]);
+    store.setLlmCalls([
+      ledgered(CALL_TIED_LOW, {
+        calledAt: new Date(CALLED_T2),
+        runId: RUN_TIED_LOW,
+      }),
+    ]);
+
+    const [answered] = await store.listRunLedger(RUN_TIED_LOW, WHOLE_LEDGER);
+
+    answered?.calledAt.setUTCFullYear(2031);
+
+    const [again] = await store.listRunLedger(RUN_TIED_LOW, WHOLE_LEDGER);
+
+    expect(again?.calledAt.getTime()).toBe(Date.UTC(2026, 5, 14, 9));
+  });
+
+  it('rebuilds the planted passes rather than holding them', async () => {
+    const store = createMemoryResearchStore();
+    const domain = await store.insertDomain(domainInput(RADAR));
+    const rows = [madePass(RUN_TIED_LOW, { domainId: domain.id })];
+
+    store.setRuns(rows);
+
+    rows.push(madePass(RUN_OLDEST, { domainId: domain.id }));
+
+    // The seam copies row by row AND rebuilds the collection, so
+    // pushing onto what was planted does not plant a second pass.
+    expect(await store.findRunById(RUN_OLDEST)).toBeNull();
+
+    // A second call REPLACES rather than appends, which is the only
+    // shape under which a deployment going back to having run nothing
+    // is expressible at all.
+    store.setRuns([madePass(RUN_OLDEST, { domainId: domain.id })]);
+
+    expect(await runsPage(store)).toStrictEqual([RUN_OLDEST]);
+
+    store.setRuns([]);
+
+    expect(await runsPage(store)).toStrictEqual([]);
+    expect(await store.countRuns(EVERY_RUN)).toBe(0);
+  });
+
+  it('rebuilds the planted ledger rather than holding it', async () => {
+    const store = createMemoryResearchStore();
+    const rows = [ledgered(CALL_TIED_LOW, { runId: RUN_TIED_LOW })];
+
+    store.setRuns([madePass(RUN_TIED_LOW)]);
+    store.setLlmCalls(rows);
+
+    rows.push(ledgered(CALL_TIED_HIGH, { runId: RUN_TIED_LOW }));
+
+    expect(await ledgerPage(store, RUN_TIED_LOW)).toStrictEqual([
+      CALL_TIED_LOW,
+    ]);
+
+    store.setLlmCalls([]);
+
+    expect(await ledgerPage(store, RUN_TIED_LOW)).toStrictEqual([]);
+    expect(await store.countRunLedger(RUN_TIED_LOW)).toBe(0);
+    expect(await spendPage(store)).toStrictEqual([]);
+  });
+
+  it('buckets a call naming a run nothing stored under none', async () => {
+    const store = createMemoryResearchStore();
+
+    store.setRuns([]);
+    store.setLlmCalls([
+      ledgered(CALL_TIED_LOW, { promptChars: 5, runId: RUN_TIED_LOW }),
+    ]);
+
+    // A state `llm_calls_run_id_runs_id_fk` forbids and this seam can
+    // reach, answered the way a LEFT JOIN answers it rather than as a
+    // refusal this store invented. It is what makes the summary's
+    // coverage claim hold over a fixture the plant is free to build.
+    expect(await spendPage(store)).toStrictEqual([{
+      calls: 1,
+      day: new Date(DAY_OF),
+      domainId: null,
+      estTokens: null,
+      promptChars: 5,
+    }]);
+
+    // AND THE LEDGER STILL ANSWERS IT, which is the half a reader
+    // predicts the other way round: that read filters on `run_id`
+    // alone and joins to `runs` for nothing, so the row is under the
+    // id it names whether or not a pass carries it. Reading the
+    // ledger is not how a caller learns the run is gone —
+    // `findRunById` answering null is, one call earlier, and that is
+    // what `src/runs/service.ts` turns into a 404 before any of this
+    // is reached.
+    expect(await ledgerPage(store, RUN_TIED_LOW)).toStrictEqual([
+      CALL_TIED_LOW,
+    ]);
+    expect(await store.countRunLedger(RUN_TIED_LOW)).toBe(1);
+    expect(await store.findRunById(RUN_TIED_LOW)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The proposals half's fixture
+// ---------------------------------------------------------------------------
+
+/**
+ * The two instants the queue is proposed across, and the two the
+ * already-ruled rows carry.
+ *
+ * SPELLED OUT RATHER THAN DERIVED FROM ONE ANOTHER, on the terms
+ * {@link RESEARCHED_T0} states, and kept clear of the other gate's
+ * stamps: the two gates are argued to be the same gate, so a shared
+ * instant would put a fixture at the centre of the comparison.
+ */
+const PROPOSED_T0 = '2026-06-01T09:00:00.000Z';
+const PROPOSED_T1 = '2026-06-02T09:00:00.000Z';
+
+/** When the fixture's already-ruled proposals were approved. */
+const AGREED_AT = '2026-06-03T09:00:00.000Z';
+
+/** When the one applied proposal was written onto its feed. */
+const WRITTEN_AT = '2026-06-04T09:00:00.000Z';
+
+/**
+ * The six proposals the fixture plants, named for what each is in
+ * the rules rather than for its id.
+ *
+ * `PROPOSED_TIED_LOW` and `PROPOSED_TIED_HIGH` carry ONE instant and
+ * are planted HIGH FIRST, the queue's tiebreak being ASCENDING — so
+ * a stable sort that lost the tiebreak answers them the wrong way
+ * round rather than reproducing the answer by accident.
+ * `PROPOSED_FIRST` is the HIGHEST id and the OLDEST stamp, so the
+ * two keys disagree on every pair it is in and an ordering by `id`
+ * alone cannot look right. `AGREED` and `APPLIED` are ruled on and
+ * are what says the queue is narrowed; `ON_ITEMS` names the sibling
+ * feed and is what says it is scoped.
+ */
+const PROPOSED_TIED_LOW = 194;
+const PROPOSED_TIED_HIGH = 195;
+const PROPOSED_FIRST = 196;
+const AGREED = 197;
+const APPLIED = 198;
+const ON_ITEMS = 199;
+
+/** The one proposal planted under the second domain. */
+const ELSEWHERE_PROPOSAL = 200;
+
+/**
+ * The two documents an approval writes, distinct from anything the
+ * sources fixture stores so that a case can tell a config that was
+ * APPLIED from one a feed was inserted with.
+ */
+const PROPOSED_PARSER = { item: 'entry', select: 'a' } as const;
+const PROPOSED_CONTRACT = { expects: 'entry', minimum: 3 } as const;
+
+/** What {@link proposed} defaults when a case is not about it. */
+type ProposalDefaults = Partial<Omit<MemorySourceProposal, 'id'>>;
+
+/**
+ * Builds one row for {@link MemoryResearchStore.setDomainProposals}.
+ *
+ * A function rather than a constant, for the reason {@link queued}
+ * is one: the copy cases WRITE into the documents they planted,
+ * which is the whole point of them.
+ *
+ * @param id - The proposal's id, which is what a ruling names and
+ *   what the queue's tiebreak reads.
+ * @param sourceId - The feed it is for. Required rather than
+ *   defaulted, `source_config_proposals.source_id` being NOT NULL
+ *   and every read here being scoped or checked by it.
+ * @param values - The seven members a case may care about. Both
+ *   stamps default to null, which is the open state every row starts
+ *   in and the one side of `source_config_proposals_approval_check`
+ *   that is always legal.
+ * @returns The row to plant.
+ */
+function proposed(
+  id: number,
+  sourceId: number,
+  values: ProposalDefaults = {},
+): MemorySourceProposal {
+  return {
+    id,
+    sourceId: values.sourceId ?? sourceId,
+    parserConfig: values.parserConfig ?? { ...PROPOSED_PARSER },
+    contract: values.contract ?? { ...PROPOSED_CONTRACT },
+    proposedBy: values.proposedBy ?? `proposer ${id}`,
+    status: values.status ?? 'pending',
+    proposedAt: values.proposedAt ?? new Date(PROPOSED_T1),
+    approvedAt: values.approvedAt ?? null,
+    appliedAt: values.appliedAt ?? null,
+  };
+}
+
+/**
+ * Two domains, two feeds in the first and one in the second, with
+ * six proposals queued against the first domain's feeds and one
+ * against the second's.
+ *
+ * PLANTED IN AN ORDER NO READ ANSWERS, on the terms
+ * {@link seedEntities} states.
+ *
+ * @param store - The store to write to.
+ * @returns Both domains and all three feeds: the queue's, the
+ *   sibling the scope is read against, and the one in the second
+ *   domain the cascade is read against.
+ */
+async function seedProposals(store: MemoryResearchStore): Promise<{
+  domain: DomainRecord;
+  other: DomainRecord;
+  feed: SourceRecord;
+  items: SourceRecord;
+  elsewhere: SourceRecord;
+}> {
+  const domain = await store.insertDomain(domainInput(RADAR));
+  const other = await store.insertDomain(domainInput(TRANSIT));
+  const feed = await addSource(store, domain.id, FEED_ENDPOINT);
+  const items = await addSource(store, domain.id, ITEMS_ENDPOINT, {
+    kind: 'api',
+  });
+  const elsewhere = await addSource(store, other.id, FEED_ENDPOINT);
+
+  store.setDomainProposals(domain.id, [
+    proposed(PROPOSED_TIED_HIGH, feed.id),
+    proposed(APPLIED, feed.id, {
+      appliedAt: new Date(WRITTEN_AT),
+      approvedAt: new Date(AGREED_AT),
+      status: 'done',
+    }),
+    proposed(PROPOSED_FIRST, feed.id, {
+      proposedAt: new Date(PROPOSED_T0),
+    }),
+    proposed(ON_ITEMS, items.id),
+    proposed(AGREED, feed.id, {
+      approvedAt: new Date(AGREED_AT),
+      status: 'approved',
+    }),
+    proposed(PROPOSED_TIED_LOW, feed.id),
+  ]);
+  store.setDomainProposals(other.id, [
+    proposed(ELSEWHERE_PROPOSAL, elsewhere.id),
+  ]);
+
+  return { domain, other, feed, items, elsewhere };
+}
+
+/**
+ * Reads one window of a feed's pending config proposals.
+ *
+ * @param store - The store to read.
+ * @param sourceId - The feed whose queue to read.
+ * @param window - How much to take, the whole collection by default.
+ * @returns The ids in the order they arrived.
+ */
+async function queuePage(
+  store: MemoryResearchStore,
+  sourceId: number,
+  window = WHOLE_COLLECTION,
+): Promise<number[]> {
+  const page = await store.listPendingProposals(sourceId, window);
+
+  return page.map((row) => row.id);
+}
+
+/**
+ * Reads a proposal that must be there.
+ *
+ * @param store - The store to read.
+ * @param id - The id to read under.
+ * @returns The row.
+ * @throws When no proposal carries the id, for the reason
+ *   {@link readDomain} throws: two absences otherwise compare equal.
+ */
+async function readProposal(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<SourceConfigProposalRecord> {
+  const row = await store.findProposalById(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored proposal under ${id}`);
+  }
+
+  return row;
+}
+
+/**
+ * Rules on a proposal that must be there.
+ *
+ * @param store - The store to write to.
+ * @param id - The proposal to rule on.
+ * @returns The row as it stands after both stamps.
+ * @throws When no proposal carries the id, so a case about an
+ *   approval cannot quietly assert over a null.
+ */
+async function ruleOn(
+  store: MemoryResearchStore,
+  id: number,
+): Promise<SourceConfigProposalRecord> {
+  const row = await store.approveAndApplyProposal(id);
+
+  if (row === null) {
+    throw new Error(`expected a stored proposal under ${id}`);
+  }
+
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// The pending queue, its order and its two narrowings
+// ---------------------------------------------------------------------------
+
+describe('the pending config queue ordering', () => {
+  it('answers it oldest first with id breaking a tie', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedProposals(store);
+    const page = await queuePage(store, feed.id);
+
+    // ASCENDING where the failures queue one table over descends,
+    // which is `listPendingProposals` in `scripts/approve.ts` member
+    // for member. The tied pair was planted HIGH FIRST, so a stable
+    // sort that lost the tiebreak answers them the wrong way round.
+    expect(page).toStrictEqual([
+      PROPOSED_FIRST,
+      PROPOSED_TIED_LOW,
+      PROPOSED_TIED_HIGH,
+    ]);
+
+    // The four orders it is NOT, written out: a three-row page
+    // agreeing with any of them would be reproducing the answer by
+    // accident rather than by the two keys.
+    expect(page).not.toStrictEqual([
+      PROPOSED_TIED_HIGH,
+      PROPOSED_FIRST,
+      PROPOSED_TIED_LOW,
+    ]);
+    expect(page).not.toStrictEqual([
+      PROPOSED_TIED_LOW,
+      PROPOSED_FIRST,
+      PROPOSED_TIED_HIGH,
+    ]);
+    expect(page).not.toStrictEqual([
+      PROPOSED_TIED_LOW,
+      PROPOSED_TIED_HIGH,
+      PROPOSED_FIRST,
+    ]);
+    expect(page).not.toStrictEqual([
+      PROPOSED_TIED_HIGH,
+      PROPOSED_TIED_LOW,
+      PROPOSED_FIRST,
+    ]);
+  });
+
+  it('narrows to the rows still waiting on a ruling', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedProposals(store);
+    const page = await queuePage(store, feed.id);
+
+    // PENDING ONLY, and the filter is the store's rather than a
+    // caller's: there is no status parameter, so the gate's history
+    // is not pageable from here. Both ruled rows are on the SAME
+    // feed and are readable by id, which the next describe reads.
+    expect(page).not.toContain(AGREED);
+    expect(page).not.toContain(APPLIED);
+    expect(await readProposal(store, AGREED)).toMatchObject({
+      status: 'approved',
+    });
+    expect(await readProposal(store, APPLIED)).toMatchObject({
+      status: 'done',
+    });
+  });
+
+  it('scopes the queue to the feed it was asked about', async () => {
+    const store = createMemoryResearchStore();
+    const { feed, items, elsewhere } = await seedProposals(store);
+
+    expect(await queuePage(store, feed.id)).not.toContain(ON_ITEMS);
+    expect(await queuePage(store, items.id)).toStrictEqual([ON_ITEMS]);
+    expect(await queuePage(store, elsewhere.id)).toStrictEqual([
+      ELSEWHERE_PROPOSAL,
+    ]);
+    expect(await store.countPendingProposals(feed.id)).toBe(3);
+    expect(await store.countPendingProposals(items.id)).toBe(1);
+  });
+
+  it('counts the queue and not the table', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedProposals(store);
+
+    // Five rows are planted against this feed and two are ruled on,
+    // so a count over the table answers five and the honest number
+    // for a backlog is three: what is closed is not waiting on
+    // anybody. The by-id reads are what say the other two are there.
+    expect(await store.countPendingProposals(feed.id)).toBe(3);
+    expect(await store.findProposalById(AGREED)).not.toBeNull();
+    expect(await store.findProposalById(APPLIED)).not.toBeNull();
+  });
+
+  it('windows the page and counts the whole either way', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedProposals(store);
+
+    expect(
+      await queuePage(store, feed.id, { limit: 1, offset: 1 }),
+    ).toStrictEqual([PROPOSED_TIED_LOW]);
+    expect(
+      await queuePage(store, feed.id, { limit: 2, offset: 9 }),
+    ).toStrictEqual([]);
+    expect(await store.countPendingProposals(feed.id)).toBe(3);
+  });
+
+  it('answers an empty list and a zero for an unknown id', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedProposals(store);
+
+    expect(await queuePage(store, 9999)).toStrictEqual([]);
+    expect(await store.countPendingProposals(9999)).toBe(0);
+    expect(await queuePage(store, feed.id)).toHaveLength(3);
+  });
+});
+
+describe('the proposal read by its own id', () => {
+  it('answers a row whatever feed it names', async () => {
+    const store = createMemoryResearchStore();
+    const { feed, items, elsewhere } = await seedProposals(store);
+
+    // UNSCOPED on purpose: a read narrowed to the source would
+    // answer null for `no such row` and for `not this feed's row`
+    // alike, and only one of those is honest. Whose row it is, is
+    // the service's question, and `sourceId` is what it holds
+    // against the addressed feed.
+    expect(await readProposal(store, PROPOSED_FIRST)).toMatchObject({
+      sourceId: feed.id,
+    });
+    expect(await readProposal(store, ON_ITEMS)).toMatchObject({
+      sourceId: items.id,
+    });
+    expect(await readProposal(store, ELSEWHERE_PROPOSAL)).toMatchObject({
+      sourceId: elsewhere.id,
+    });
+  });
+
+  it('answers the row whole, the seam key put back', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    // `domainId` is the column the plant DROPS, the seam keying on
+    // it, so a projection that forgot to put it back would answer
+    // nine members where the record declares ten.
+    expect(await readProposal(store, APPLIED)).toStrictEqual({
+      appliedAt: new Date(WRITTEN_AT),
+      approvedAt: new Date(AGREED_AT),
+      contract: { ...PROPOSED_CONTRACT },
+      domainId: domain.id,
+      id: APPLIED,
+      parserConfig: { ...PROPOSED_PARSER },
+      proposedAt: new Date(PROPOSED_T1),
+      proposedBy: `proposer ${APPLIED}`,
+      sourceId: feed.id,
+      status: 'done',
+    });
+  });
+
+  it('answers null for an id no proposal carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedProposals(store);
+
+    expect(await store.findProposalById(9999)).toBeNull();
+    expect(await store.findProposalById(PROPOSED_FIRST)).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The check the seam holds, and the ruling that applies what it ruled
+// ---------------------------------------------------------------------------
+
+describe('the source_config_proposals_approval_check', () => {
+  it('refuses an applied row carrying no approval', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    const refusal = await refusalFrom(async () => {
+      store.setDomainProposals(domain.id, [
+        proposed(201, feed.id, {
+          appliedAt: new Date(WRITTEN_AT),
+          status: 'done',
+        }),
+      ]);
+    });
+
+    expect(refusal.reason).toBe('check-violation');
+    expect(refusal.constraint).toBe('source_config_proposals_approval_check');
+  });
+
+  it('takes the same row once it also states an approval', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    // The check read from its other side, and the control that makes
+    // the refusal above about the PAIR rather than about the stamp:
+    // the identical applied instant is stored once an approval
+    // stands beside it.
+    store.setDomainProposals(domain.id, [
+      proposed(201, feed.id, {
+        appliedAt: new Date(WRITTEN_AT),
+        approvedAt: new Date(AGREED_AT),
+        status: 'done',
+      }),
+    ]);
+
+    expect(await readProposal(store, 201)).toMatchObject({
+      appliedAt: new Date(WRITTEN_AT),
+    });
+  });
+
+  it('leaves the previous plant standing when it refuses', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    await refusalFrom(async () => {
+      store.setDomainProposals(domain.id, [
+        proposed(201, feed.id),
+        proposed(202, feed.id, {
+          appliedAt: new Date(WRITTEN_AT),
+          status: 'done',
+        }),
+      ]);
+    });
+
+    // The batch lands NOWHERE: the legal row beside the refused one
+    // is not stored either, and what was planted before is still
+    // there. A guard applied row by row as it stored would leave the
+    // collection half written, which one statement cannot produce.
+    expect(await store.findProposalById(201)).toBeNull();
+    expect(await queuePage(store, feed.id)).toStrictEqual([
+      PROPOSED_FIRST,
+      PROPOSED_TIED_LOW,
+      PROPOSED_TIED_HIGH,
+    ]);
+  });
+
+  it('never consults the status the row states', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    // The constraint holds the two timestamps against each other and
+    // reads nothing else, so a row calling itself done with neither
+    // stamp set is storable — and is stored, and is out of the queue
+    // because the queue reads the status the constraint ignores.
+    store.setDomainProposals(domain.id, [
+      proposed(201, feed.id, { status: 'done' }),
+    ]);
+
+    expect(await readProposal(store, 201)).toMatchObject({
+      appliedAt: null,
+      approvedAt: null,
+      status: 'done',
+    });
+    expect(await queuePage(store, feed.id)).toStrictEqual([]);
+  });
+});
+
+describe('the ruling that applies what it approved', () => {
+  it('stamps both, moves the status and writes the feed', async () => {
+    const ruled = new Date('2026-06-10T10:00:00.000Z');
+    const store = createMemoryResearchStore({ now: () => ruled });
+    const { feed } = await seedProposals(store);
+
+    expect(await ruleOn(store, PROPOSED_FIRST)).toMatchObject({
+      appliedAt: ruled,
+      approvedAt: ruled,
+      id: PROPOSED_FIRST,
+      status: 'approved',
+    });
+
+    // BOTH TABLES, which is what makes this the one writer here that
+    // is not about a single row: the two documents land on the feed
+    // exactly as they were proposed, and neither was what the source
+    // was inserted with.
+    expect(await readSource(store, feed.id)).toMatchObject({
+      contract: { ...PROPOSED_CONTRACT },
+      parserConfig: { ...PROPOSED_PARSER },
+    });
+    expect(await readProposal(store, PROPOSED_FIRST)).toMatchObject({
+      appliedAt: ruled,
+      approvedAt: ruled,
+      status: 'approved',
+    });
+
+    // AND IT LEAVES THE QUEUE, the status having moved off the one
+    // member the queue selects on.
+    expect(await queuePage(store, feed.id)).toStrictEqual([
+      PROPOSED_TIED_LOW,
+      PROPOSED_TIED_HIGH,
+    ]);
+  });
+
+  it('keeps both first instants when it is ruled on twice', async () => {
+    let reading = new Date('2026-06-10T10:00:00.000Z');
+    const store = createMemoryResearchStore({ now: () => reading });
+
+    await seedProposals(store);
+
+    const first = await ruleOn(store, PROPOSED_FIRST);
+
+    reading = new Date('2026-06-11T10:00:00.000Z');
+
+    // The clock has moved, so a store writing a bare `now()` answers
+    // the second reading here. `coalesce` on each stamp answers the
+    // first, which is what makes ruling twice a no-op rather than a
+    // way to re-date an approval already given or an application
+    // already made.
+    const second = await ruleOn(store, PROPOSED_FIRST);
+
+    expect(second.approvedAt).toStrictEqual(first.approvedAt);
+    expect(second.appliedAt).toStrictEqual(first.appliedAt);
+    expect(second.approvedAt).toStrictEqual(
+      new Date('2026-06-10T10:00:00.000Z'),
+    );
+
+    // The control that says the clock did move: a row nobody has
+    // ruled on takes the SECOND reading on both stamps.
+    expect(await ruleOn(store, PROPOSED_TIED_LOW)).toMatchObject({
+      appliedAt: new Date('2026-06-11T10:00:00.000Z'),
+      approvedAt: new Date('2026-06-11T10:00:00.000Z'),
+    });
+  });
+
+  it('keeps the approval a row already carried', async () => {
+    const store = createMemoryResearchStore({
+      now: () => new Date('2026-06-11T10:00:00.000Z'),
+    });
+    const { feed } = await seedProposals(store);
+
+    // Nothing is asked of the row's state. A row approved and never
+    // applied takes the closing stamp alone and keeps the instant
+    // somebody else gave it — which is what separates the two
+    // `coalesce` calls: one falls through and one does not.
+    expect(await ruleOn(store, AGREED)).toMatchObject({
+      appliedAt: new Date('2026-06-11T10:00:00.000Z'),
+      approvedAt: new Date(AGREED_AT),
+    });
+    expect(await readSource(store, feed.id)).toMatchObject({
+      parserConfig: { ...PROPOSED_PARSER },
+    });
+  });
+
+  it('writes a config nothing validated', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    store.setDomainProposals(domain.id, [
+      proposed(201, feed.id, { contract: 7, parserConfig: 'not a config' }),
+    ]);
+
+    await ruleOn(store, 201);
+
+    // The approval IS the gate and this is not a second one: a
+    // malformed `parser_config` somebody agreed to is written,
+    // because the alternative is a store refusing a row the
+    // deployment stores.
+    expect(await readSource(store, feed.id)).toMatchObject({
+      contract: 7,
+      parserConfig: 'not a config',
+    });
+  });
+
+  it('leaves both tables alone when the feed is not there', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    store.setDomainProposals(domain.id, [proposed(201, 9999)]);
+
+    const before = await readSource(store, feed.id);
+    const fault = await plainErrorFrom(
+      () => store.approveAndApplyProposal(201),
+    );
+
+    // TOGETHER OR NOT AT ALL. Nothing is stored until every value
+    // exists, so neither stamp is written and the feeds are as they
+    // were — the two halves the port says are not states anybody
+    // meant. It is a plain Error and not a `StoreRefusal`, because a
+    // deployment's foreign key makes the state unreachable and
+    // answering a refusal for it would invent a rule.
+    expect(fault).not.toBeInstanceOf(StoreRefusal);
+    expect(await readProposal(store, 201)).toMatchObject({
+      appliedAt: null,
+      approvedAt: null,
+      status: 'pending',
+    });
+    expect(await readSource(store, feed.id)).toStrictEqual(before);
+  });
+
+  it('answers null for an id no proposal carries', async () => {
+    const store = createMemoryResearchStore();
+
+    await seedProposals(store);
+
+    expect(await store.approveAndApplyProposal(9999)).toBeNull();
+    expect(await store.approveAndApplyProposal(PROPOSED_FIRST)).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What a domain delete takes, and the delete a proposal holds
+// ---------------------------------------------------------------------------
+
+describe('the domain cascade over its config proposals', () => {
+  it('takes them and leaves another domain standing', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, elsewhere } = await seedProposals(store);
+
+    // The state before, so the absences below are about the delete
+    // rather than about a fixture that planted nothing.
+    expect(await store.findProposalById(PROPOSED_FIRST)).not.toBeNull();
+    expect(await store.findProposalById(APPLIED)).not.toBeNull();
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // `source_config_proposals.domain_id` cascades, so every status
+    // goes rather than the pending ones alone, and the second
+    // domain's row is untouched.
+    expect(await store.findProposalById(PROPOSED_FIRST)).toBeNull();
+    expect(await store.findProposalById(APPLIED)).toBeNull();
+    expect(await store.findProposalById(ON_ITEMS)).toBeNull();
+    expect(await queuePage(store, elsewhere.id)).toStrictEqual([
+      ELSEWHERE_PROPOSAL,
+    ]);
+  });
+
+  it('is not refused by the feeds it removes in the same act', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    // The delete of that feed on its own is refused, which is the
+    // control that says the cascade is not simply meeting nothing —
+    // and the domain delete takes both anyway, because one statement
+    // removes the sources and the proposals that were holding them.
+    await expect(store.deleteSource(feed.id)).rejects.toBeInstanceOf(
+      StoreRefusal,
+    );
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+    expect(await store.findSourceById(feed.id)).toBeNull();
+    expect(await store.findProposalById(PROPOSED_FIRST)).toBeNull();
+  });
+
+  it('leaves a proposal another domain raised on its feed', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, other, feed } = await seedProposals(store);
+
+    store.setDomainProposals(other.id, [
+      proposed(ELSEWHERE_PROPOSAL, feed.id),
+    ]);
+
+    expect(await store.deleteDomain(domain.id)).toBe(true);
+
+    // THE EIGHTH KNOWN DIVERGENCE. `source_config_proposals.source_id`
+    // is `ON DELETE no action`, so a deployment refuses this delete
+    // while a row of ANOTHER domain still names the feed; here the
+    // cascade follows `domain_id` alone and the row is left naming an
+    // id nothing carries. The module header states it, and the live
+    // suite is where the refusal is discharged.
+    expect(await store.findSourceById(feed.id)).toBeNull();
+    expect(await readProposal(store, ELSEWHERE_PROPOSAL)).toMatchObject({
+      sourceId: feed.id,
+    });
+  });
+});
+
+describe('the proposals that hold a source delete', () => {
+  it('refuses the feed a proposal still names', async () => {
+    const store = createMemoryResearchStore();
+    const { feed, items } = await seedProposals(store);
+
+    const refusal = await refusalFrom(() => store.deleteSource(feed.id));
+
+    expect(refusal.reason).toBe('foreign-key-violation');
+    expect(refusal.constraint).toBe(
+      'source_config_proposals_source_id_sources_id_fk',
+    );
+
+    // The positive control in the same body: the SAME call over a
+    // feed whose only proposal has been cleared is taken, so the
+    // refusal is about the rows rather than about the method.
+    store.setDomainProposals((await readSource(store, items.id)).domainId, []);
+
+    expect(await store.deleteSource(items.id)).toBe(true);
+  });
+
+  it('refuses it whatever status the proposal stands at', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+
+    store.setDomainProposals(domain.id, [
+      proposed(201, feed.id, {
+        appliedAt: new Date(WRITTEN_AT),
+        approvedAt: new Date(AGREED_AT),
+        status: 'done',
+      }),
+    ]);
+
+    // The key does not consult `status`, so a proposal already
+    // applied holds the delete exactly as a pending one does — a
+    // proposal is the account of what was asked for a feed, and it
+    // outlives the ruling.
+    const refusal = await refusalFrom(() => store.deleteSource(feed.id));
+
+    expect(refusal.constraint).toBe(
+      'source_config_proposals_source_id_sources_id_fk',
+    );
+    expect(await store.countPendingProposals(feed.id)).toBe(0);
+  });
+
+  it('is not reached by a feed nothing has proposed for', async () => {
+    const store = createMemoryResearchStore();
+    const { domain } = await seedProposals(store);
+    const spare = await addSource(store, domain.id, ITEMS_ENDPOINT);
+
+    // Three feeds carry proposals and this one does not, so its
+    // delete lands — which is what says the refusal above is scoped
+    // to the feed each row names rather than to the domain.
+    expect(await store.deleteSource(spare.id)).toBe(true);
+  });
+});
+
+describe('the proposal payload crossing the boundary', () => {
+  it('copies the documents and the stamps on the way in', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+    const row = proposed(201, feed.id, {
+      approvedAt: new Date(AGREED_AT),
+      parserConfig: { item: 'entry' },
+      status: 'approved',
+    });
+
+    store.setDomainProposals(domain.id, [row]);
+
+    (row.parserConfig as Record<string, unknown>).item = 'moved';
+    row.proposedAt.setUTCFullYear(1999);
+    row.approvedAt?.setUTCFullYear(1999);
+
+    expect(await readProposal(store, 201)).toMatchObject({
+      approvedAt: new Date(AGREED_AT),
+      parserConfig: { item: 'entry' },
+      proposedAt: new Date(PROPOSED_T1),
+    });
+  });
+
+  it('copies them on the way out of every read', async () => {
+    const store = createMemoryResearchStore();
+    const { feed } = await seedProposals(store);
+    const [first] = await store.listPendingProposals(
+      feed.id,
+      WHOLE_COLLECTION,
+    );
+
+    (first?.parserConfig as Record<string, unknown>).item = 'moved';
+    first?.proposedAt.setUTCFullYear(1999);
+
+    // Compared against the fixture FUNCTION rather than against the
+    // row a call answered: a store handing its own object out has
+    // aliased the two, and a comparison between two answers would
+    // hold one lie against itself and pass.
+    expect(await readProposal(store, PROPOSED_FIRST)).toMatchObject({
+      parserConfig: { ...PROPOSED_PARSER },
+      proposedAt: new Date(PROPOSED_T0),
+    });
+
+    const ruled = await ruleOn(store, PROPOSED_TIED_LOW);
+
+    ruled.appliedAt?.setUTCFullYear(1999);
+
+    expect((await readProposal(store, PROPOSED_TIED_LOW)).appliedAt)
+      .not.toStrictEqual(new Date('1999-01-01T00:00:00.000Z'));
+  });
+
+  it('rebuilds the planted queue rather than holding it', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+    const rows = [proposed(201, feed.id)];
+
+    store.setDomainProposals(domain.id, rows);
+
+    rows.push(proposed(202, feed.id));
+
+    expect(await queuePage(store, feed.id)).toStrictEqual([201]);
+
+    // A second call REPLACES the first rather than appending to it,
+    // which is what makes a domain going back to having proposed
+    // nothing expressible.
+    store.setDomainProposals(domain.id, []);
+
+    expect(await queuePage(store, feed.id)).toStrictEqual([]);
+    expect(await store.countPendingProposals(feed.id)).toBe(0);
+    expect(await store.findProposalById(201)).toBeNull();
+  });
+
+  it('writes a copy of the config onto the feed', async () => {
+    const store = createMemoryResearchStore();
+    const { domain, feed } = await seedProposals(store);
+    const row = proposed(201, feed.id, { parserConfig: { item: 'entry' } });
+
+    store.setDomainProposals(domain.id, [row]);
+    await ruleOn(store, 201);
+
+    const applied = await readSource(store, feed.id);
+
+    (applied.parserConfig as Record<string, unknown>).item = 'moved';
+
+    // The feed's own copy, so writing into what a source read
+    // answered moves neither the stored source nor the proposal the
+    // documents came from.
+    expect(await readSource(store, feed.id)).toMatchObject({
+      parserConfig: { item: 'entry' },
+    });
+    expect(await readProposal(store, 201)).toMatchObject({
+      parserConfig: { item: 'entry' },
+    });
   });
 });

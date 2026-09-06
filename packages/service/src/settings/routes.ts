@@ -52,10 +52,13 @@
  *
  * THE BODY IS NOT PARSED HERE, exactly as in the three sibling
  * routers and for the same reason. {@link putSettings} takes an
- * `unknown` and parses it itself, because wave 3 exposes that same
- * function as an MCP tool and a body validated by the router would
- * leave that caller validating against a second schema nobody would
- * notice drifting. What a router owns is what only HTTP has —
+ * `unknown` and parses it itself, because an operation owns its own
+ * input contract and a body validated by the router would leave a
+ * second caller validating against a schema nobody would notice
+ * drifting. The wave-1 MCP module exposes {@link getSettings} and
+ * NOT this write: what this row holds is the deployment's own
+ * configuration, and the API spec names term edits alone among its
+ * safe mutations. What a router owns is what only HTTP has —
  * and on this group that is the verb and the status alone.
  *
  * NEITHER ROUTE PARSES A QUERY, which is a departure from
@@ -103,10 +106,30 @@ import type { SettingsServiceStore } from './service.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
+import { z } from 'zod';
 
 import { ok } from '../http/envelope.js';
 
 import { getSettings, putSettings } from './service.js';
+
+/**
+ * What the MCP tool over `GET /settings` is called with: nothing.
+ *
+ * A tool has to declare its arguments even where the route it
+ * mirrors reads none, so a client is shown an empty object rather
+ * than a name with no signature beside it. `.strict()` is what
+ * makes that a refusal rather than a shrug — a caller sending a
+ * member here has misunderstood the endpoint, and being told so is
+ * cheaper than an answer that ignored it.
+ *
+ * THE ROUTE ITSELF PARSES NOTHING, which is the module header's
+ * point about this group having no address, no window and no body
+ * on the read. So this schema is the tool's contract alone, and it
+ * is declared here because this is where the route is registered:
+ * `src/mcp/tools/wave-1.ts` imports one authority rather than
+ * agreeing with the router by hand.
+ */
+export const settingsReadToolInputSchema = z.object({}).strict();
 
 /** Everything {@link buildSettingsRouter} needs. */
 export interface SettingsRouterOptions {

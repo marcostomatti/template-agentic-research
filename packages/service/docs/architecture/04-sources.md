@@ -306,9 +306,10 @@ nothing.
 
 ### The ruling is a row, and the CLI is a client of it
 
-`scripts/approve.ts` is the whole operator surface until the service
-and its UI take approvals over. It rules on this gate and on
-`research_pool`, because they are one job — a person's ruling
+`scripts/approve.ts` was the whole operator surface until q13 landed
+the HTTP half beside it, and is still the whole of it from a
+terminal. It rules on this gate and on `research_pool`, because they
+are one job — a person's ruling
 standing between a machine's suggestion and a machine acting on it —
 and a ruling therefore names which: `approve config 7` and
 `approve pool 7` are rulings on different rows. Both tables key on
@@ -369,35 +370,50 @@ anyway is answered, because the approval is the gate and this is not
 a second one. And nothing here writes: the answer is a value, and
 whether the UPDATE happened is known only to whoever ran it.
 
-### The HTTP half of this gate is scheduled, and q13 is when
+### The HTTP half of this gate landed with q13
 
-`scripts/approve.ts` is still the whole operator surface, and the
-sources route group wave 2 adds does not change that.
-`src/sources/routes.ts` declares four routes over a `sources` row —
-the list, the create, the patch and the delete — and rules on no
-proposal at all. `GET /sources/:id/pending-configs` and
-`POST /sources/:id/approve-config` are in the parent spec's list for
-that group and are deliberately not among them.
+`scripts/approve.ts` is no longer the whole operator surface.
+`GET /sources/:id/pending-configs` pages what is waiting on a person
+for one feed and `POST /sources/:id/approve-config` rules on one of
+those proposals, both from `src/sources/proposals-routes.ts` over
+the rules in `src/sources/proposals-service.ts`. The CLI is still a
+client of the same gate, and both remain clients of the constraint
+rather than authorities over it.
 
-They move to q13, the approvals wave, where they land beside the
-entity approvals over `research_pool`. The reason they were carved
-out of wave 2 has expired and is worth naming rather than repeating:
-this table was still arriving on the other leg when that wave was
-planned, so a route written against it would have targeted a schema
-somebody else was landing. It is in the tree now.
+They arrived beside the entity approvals over `research_pool` in the
+same wave, which is what the deferral out of wave 2 bought.
+`src/approvals/ruling.ts` is the one vocabulary both gates answer in
+— the ruling projection, the closed roster of refusal reasons, and
+the act that separates them — so a `pending-configs` route did not
+have to settle the subject word for itself, and `approve pool 7` is
+a CLI ruling with a route beside it.
 
-What has not expired is the reason the section above gives for one
-command ruling on both queues. An approval gate is one vocabulary
-and this repository has two subjects on it, so the HTTP half should
-arrive as one surface answering for both rather than as half a
-surface two waves before the other. A `pending-configs` route
-landing alone would have to settle the subject word for itself, and
-`approve pool 7` would be a CLI ruling with no route beside it.
+Neither the route nor its service is a second applier, which is what
+keeps the gap the section above describes covered by one function.
+`SourceStore.approveAndApplyProposal` stamps `approved_at` on the
+proposal, calls `proposalToSourceUpdate` on the row it just stamped,
+writes the two `sources` columns and stamps `applied_at`, all in one
+transaction — so the refusal standing between an unapproved
+arrangement and the columns every later pass reads is still that one
+function. Nothing above it reads `parser_config` off a proposal.
 
-So the pair is scheduled rather than forgotten, and this is the
-sentence a reader who reached this gate from the pipeline side finds
-it in. `docs/architecture/08-http-api.md` carries the same note from
-the API side, once under `The paths wave 2 defers` and once in its
+The two gates part on one act, and this route is where a caller sees
+it. Ratifying an intention twice is a no-op; applying a proposal
+twice is refused with a `409`, because the first application already
+wrote both documents onto the feed and a second would leave that
+stamp standing for a write it no longer describes. `RULING_ACTS`
+declares which act each gate performs, rather than an `if` in either
+of them.
+
+An approval the CLI already gave is applied rather than refused. A
+row carrying `approved_at` and no `applied_at` is what a terminal
+ruling leaves behind, and this route finishes it — which is the
+whole reason both stamps exist, and why a gate reading `status`
+instead would answer differently about a row stamped `done` with no
+approval.
+
+`docs/architecture/08-http-api.md` carries the same note from the
+API side, once under `The paths wave 2 defers` and once in its
 `Sources` group.
 
 ## The registry

@@ -35,7 +35,7 @@
  * is an UPDATE.
  */
 import { sql } from 'drizzle-orm';
-import { bigint, bigserial, boolean, check, integer, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, boolean, check, index, integer, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
 import { CONNECTOR_KINDS, RESEARCH_POOL_STATUSES, SOURCE_KINDS, checkOneOf } from './values.js';
@@ -615,6 +615,42 @@ export const sourceConfigProposals = pgTable('source_config_proposals', {
     'source_config_proposals_approval_check',
     sql`${table.appliedAt} IS NULL OR ${table.approvedAt} IS NOT NULL`,
   ),
+
+  /**
+   * What the pending queue stands on. `GET
+   * /sources/:id/pending-configs` reads one source's `status =
+   * 'pending'` rows, and `listPendingProposals` in
+   * `scripts/approve.ts` reads that same predicate across every source
+   * — one queue with two clients rather than two queues that happen to
+   * agree today. This index is the pair both of them filter on,
+   * `source_id` first because the route names one.
+   *
+   * Equality on both columns, so neither carries a sort direction. The
+   * queue's own ORDER BY is `proposed_at ASC, id ASC` and that column
+   * is deliberately not in the key: adding it would make the route's
+   * page a range scan and would leave the CLI's read — which names no
+   * source, so it cannot use a key led by `source_id` — served by
+   * nothing here. A source's pending set is bounded by how often a
+   * proposer runs against it, which is small enough that sorting what
+   * the index found costs less than an index only one of the two
+   * clients can use.
+   *
+   * Deliberately NOT partial, for the reason
+   * `documents_source_parse_status_idx` in `./documents.ts` gives at
+   * length: Postgres uses a partial index only where it can prove the
+   * query's own predicate implies the index's, so a `WHERE status =
+   * 'pending'` would serve these two readers and leave every other
+   * status read on a sequential scan, and a plan that falls back
+   * reports nothing.
+   *
+   * The read is not covered: `parser_config`, `contract` and
+   * `proposed_at` are fetched off the heap, so the index narrows which
+   * rows are visited and not what is read from each of them.
+   *
+   * Named for the reader rather than derived from its columns, for the
+   * reason the two checks above are named.
+   */
+  index('source_config_proposals_source_id_status_idx').on(table.sourceId, table.status),
 ]);
 
 /**

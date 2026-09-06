@@ -63,11 +63,14 @@
  * THE BODY IS NOT PARSED HERE, exactly as in the wave-1 routers and
  * for the same reason. {@link createTopic}, {@link patchTopic} and
  * {@link pauseTopic} take an `unknown` and parse it themselves,
- * because wave 3 exposes those same functions as MCP tools and a
- * body validated by the router would leave that caller validating
- * against a second schema nobody would notice drifting. What a
- * router owns instead is what only HTTP has: the `:slug` and the
- * `:id` in the path, and the `?page`/`?perPage` window.
+ * because a body contract belongs to the operation rather than to
+ * whichever caller reached it, and a body validated by the router
+ * would leave a second caller validating against a second schema
+ * nobody would notice drifting. `src/mcp/tools/wave-2.ts` reaches
+ * {@link runTopicNow} and none of those three, so the rule is
+ * about where the contract lives rather than about who calls it.
+ * What a router owns instead is what only HTTP has: the `:slug`
+ * and the `:id` in the path, and the `?page`/`?perPage` window.
  *
  * THIS LIST ROUTE IS PAGINATED, which is where it follows
  * `GET /domains/:slug/personas` rather than
@@ -200,6 +203,42 @@ const domainAddressSchema = z.object({ slug: slugParamSchema }).strict();
  * take, narrowed at the boundary rather than inside the rules.
  */
 const topicAddressSchema = z.object({ id: resourceIdParamSchema }).strict();
+
+/**
+ * What the MCP tool over this group's one read is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so every entry in `src/mcp/tools/wave-2.ts`
+ * names one schema covering the whole request, spread from the
+ * pieces this route already parses rather than written again.
+ *
+ * The address consts above stay private. Nothing here exports one,
+ * so the sibling routers' claim that they agree by intent rather
+ * than by derivation is untouched by this pair.
+ */
+export const topicListToolInputSchema = z.object({
+  ...domainAddressSchema.shape,
+  ...paginationQuerySchema.shape,
+}).strict();
+
+/**
+ * What the MCP tool over `POST /topics/:id/run-now` is called with.
+ *
+ * The address is the whole of this request. The route reads no
+ * body and {@link runTopicNow} takes none, so the tool declares no
+ * member beyond the id and `.strict()` refuses anything a caller
+ * added — which is the same answer the route gives a body, arrived
+ * at by refusing rather than by ignoring.
+ *
+ * THE OTHER SCHEDULE VERB IS NOT HERE. `POST /topics/:id/pause`
+ * writes the same column and is deliberately unexposed: the API
+ * spec's safe list names the run-now pair, and a pause is a
+ * deferral an operator makes against a clock they are watching.
+ */
+export const topicRunNowToolInputSchema = z.object({
+  ...topicAddressSchema.shape,
+}).strict();
 
 /** Everything {@link buildTopicsRouter} needs. */
 export interface TopicsRouterOptions {

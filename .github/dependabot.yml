@@ -62,6 +62,37 @@ updates:
       - dependency-name: playwright
       - dependency-name: playwright-core
 
+      # ESLint 10 and TypeScript 7 are both blocked UPSTREAM — measured,
+      # not assumed — so these hold the MAJOR only and keep taking every
+      # minor and patch. Each names the one package to watch.
+      #
+      # eslint 10.9.1 (PR #24): its `test` and `visual` jobs pass and only
+      # `checks` fails, and not on anything in this repo's config.
+      # eslint-plugin-react 7.37.5 is the LATEST published release, its
+      # eslint peer range stops at ^9.7, and it calls
+      # `context.getFilename()`, which ESLint 10 removed — the job dies
+      # `TypeError: context.getFilename is not a function` while loading
+      # `react/jsx-filename-extension`. typescript-eslint already accepts
+      # ^10.0.0, so eslint-plugin-react is the whole of the block. Revisit
+      # when it publishes a release declaring an eslint-10 peer.
+      - dependency-name: eslint
+        update-types:
+          - version-update:semver-major
+
+      # typescript 7.0.2 (PR #23): the native rewrite drops the JavaScript
+      # Compiler API, so @ar/ui's vite build dies inside unplugin-dts
+      # before any gate reads a type — "does not provide the JavaScript
+      # Compiler API ... and the fallback @typescript/typescript6 was not
+      # found". That fallback IS published (6.0.2), but adding it fixes
+      # only the build: typescript-eslint pins
+      # `typescript: >=4.8.4 <6.1.0`, so the entire lint fan-out is out of
+      # range on 7.x whatever the build does. Two upstreams, not one, which
+      # is why this is a hold rather than an afternoon. Revisit when
+      # typescript-eslint widens that range.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+
   # The workflow files themselves. Every action here is pinned to a major
   # tag (actions/checkout@v4, oven-sh/setup-bun@v2, actions/github-script@v7
   # and four more), and a major tag already absorbs its own patch and minor

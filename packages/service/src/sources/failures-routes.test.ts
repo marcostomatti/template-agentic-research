@@ -712,12 +712,16 @@ const META_KEYS = [
  * classification below and the case would stay green.
  */
 const PORT_METHODS = [
+  'approveAndApplyProposal',
+  'countPendingProposals',
   'countSourceDependents',
   'countSourceFailures',
   'countSources',
   'deleteSource',
+  'findProposalById',
   'findSourceById',
   'insertSource',
+  'listPendingProposals',
   'listSourceFailures',
   'listSourcesWithParseStats',
   'updateSource',
@@ -726,9 +730,11 @@ const PORT_METHODS = [
 /**
  * Exactly the three the router's own store narrows those to.
  *
- * SIX OF THE NINE ARE ABSENT, which is the router's read-only
+ * TEN OF THE THIRTEEN ARE ABSENT, which is the router's read-only
  * claim written as a type rather than promised in prose: every
- * write on `SourceStore` belongs to the router beside this one.
+ * write on `SourceStore` belongs to a router beside this one — the
+ * three `sources` writes to `./routes.ts` and the config approval
+ * to `./proposals-routes.ts`.
  */
 const QUEUE_METHODS = [
   'countSourceFailures',

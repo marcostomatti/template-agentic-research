@@ -34,7 +34,7 @@
  * the digest named above, stored as a row rather than only rendered
  * and handed on.
  */
-import { bigint, bigserial, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
 import { RUN_SCHEDULERS, RUN_STATUSES, checkOneOf } from './values.js';
@@ -304,6 +304,58 @@ export const runs = pgTable('runs', {
    * reason the status check above is.
    */
   checkOneOf('runs_scheduled_by_check', table.scheduledBy, RUN_SCHEDULERS),
+
+  /**
+   * What the runs page stands on. `GET /runs?domain=<slug>` narrows to
+   * one domain and orders `started_at DESC NULLS LAST, id DESC NULLS
+   * LAST` — this index is those three columns in that order, so a page
+   * is a range scan over that domain's newest passes rather than a
+   * sort of every run the service has ever made.
+   *
+   * `domain_id` is NULLABLE here, which is what separates this index
+   * from the domain-scoped reads elsewhere in the schema. A
+   * maintenance or cross-domain tick belongs to no domain, and those
+   * rows carry a NULL entry in this index rather than being absent
+   * from it — b-tree indexes store NULLs — which is what lets the
+   * UNFILTERED page, `GET /runs` with no domain named, read the whole
+   * table in the same order. Within that read the leading column adds
+   * no selectivity at all; it is in the key because the filtered page
+   * is the one that needs it.
+   *
+   * Both descending keys carry `NULLS LAST` though neither column is
+   * nullable, and the reader's ORDER BY has to spell it too.
+   * `findings_domain_id_score_created_at_idx` in `./findings.ts` gives
+   * that argument in full with the measurement behind it: a pathkey
+   * carries its nulls ordering and the planner matches it literally,
+   * so a bare `DESC` on either key puts a `Sort` above this scan and
+   * nothing reports it.
+   *
+   * `id` is in the key because `started_at` defaults to `now()`, which
+   * is the TRANSACTION's start time, so runs opened by one tick tie to
+   * the microsecond, and a page boundary landing inside that tie would
+   * show a run twice or skip it.
+   *
+   * Deliberately NOT partial, unlike the two dispatch-claim indexes in
+   * `./scheduling.ts`, because there is no predicate here to restrict
+   * on that both readers share. A `WHERE domain_id IS NOT NULL` would
+   * serve the filtered page and leave the unfiltered one on a
+   * sequential scan of the whole table, and a plan that falls back
+   * reports nothing.
+   *
+   * The read is not covered: `status`, `finished_at` and
+   * `scheduled_by` are fetched off the heap.
+   *
+   * Named for the reader rather than derived from its columns, the way
+   * `documents_source_parse_status_idx` in `./documents.ts` is: an
+   * index found in the generated SQL, or in a plan, says which query
+   * it was added for, and the static-SQL invariant suite greps for
+   * that name.
+   */
+  index('runs_domain_id_started_at_idx').on(
+    table.domainId,
+    table.startedAt.desc(),
+    table.id.desc(),
+  ),
 ]);
 
 /**
@@ -501,7 +553,47 @@ export const llmCalls = pgTable('llm_calls', {
    */
   calledAt: timestamp('called_at', { withTimezone: true }).defaultNow()
     .notNull(),
-});
+}, (table) => [
+  /**
+   * What the spend window stands on. `GET /spend/summary` aggregates
+   * this table over a half-open `[since, until)` range and groups what
+   * it finds by domain and by UTC day — this index is the one column
+   * that range restricts, so the scan is bounded by the window a
+   * caller asked for rather than by the size of the ledger.
+   *
+   * One column and not a pair, because neither of the summary's other
+   * two axes is a column on this table. The domain comes from a join
+   * to `runs.domain_id` a row away, and the day bucket is `date_trunc`
+   * over this same column at UTC — an expression a plain b-tree cannot
+   * narrow, and one the window has already bounded before any grouping
+   * runs.
+   *
+   * The window is what makes the table readable at all. Every model
+   * call the service makes lands here and nothing prunes it, so an
+   * unbounded summary is a scan that grows forever; the route refusing
+   * a span above its declared maximum and this index are the two
+   * halves of the same answer to that.
+   *
+   * What it does NOT serve is the per-run ledger. `GET /runs/:id`
+   * reads one run's calls ordered `called_at DESC, id DESC`, which
+   * filters on `run_id` — absent from this key, so that read is
+   * bounded by `RUN_LEDGER_CAP` and by the FK's own index if one is
+   * ever added, and not by this. Widening the key to lead on `run_id`
+   * would serve it and leave the window — which names no run — on a
+   * sequential scan, which is the trade this index declines.
+   *
+   * The read is not covered: `prompt_chars` and `est_tokens` are
+   * summed off the heap, so the index says which rows the window holds
+   * and not what is added up from each of them.
+   *
+   * Named for the reader rather than derived from its columns, the way
+   * `documents_source_parse_status_idx` in `./documents.ts` is: an
+   * index found in the generated SQL, or in a plan, says which query
+   * it was added for, and the static-SQL invariant suite greps for
+   * that name.
+   */
+  index('llm_calls_called_at_idx').on(table.calledAt),
+]);
 
 /**
  * `benchmark_cases` — inputs somebody has judged, kept so a change to

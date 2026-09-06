@@ -1,13 +1,17 @@
 /**
  * @packageDocumentation
  * The in-memory dataset every research store port is driven through
- * in the isolated suite. All eight halves are here — the domains
+ * in the isolated suite. All twelve halves are here — the domains
  * half, the taxonomy half with categories and terms together, the
  * personas beside them, the topics the dispatcher comes for, the
  * sources it reads and the review queue over what they captured, the
  * connectors the deployment reaches other services through, the
- * export subscriptions that pair the two, and the operator settings
- * it is configured by.
+ * export subscriptions that pair the two, the operator settings it
+ * is configured by, the findings a pass made with the sightings,
+ * rulings and research that hang off them, the corpus one domain has
+ * captured whatever feed it arrived through, the registry of
+ * subjects it tracks with the intentions queued against them, and
+ * the passes it has made with the model calls each one ledgered.
  *
  * ONE DATASET RATHER THAN SEVEN FAKES, which is why this file is not
  * named for any one of the ports it satisfies. `src/domains/store.ts`
@@ -247,18 +251,57 @@
  * larger thing the delete would have taken, and for no reason a case
  * could check.
  *
- * THE THIRD REFUSING KEY IS NOT IMITATED, and the reason is that the
- * state is unreachable rather than that it was overlooked.
- * `source_config_proposals_source_id_sources_id_fk` refuses a source
- * that a config proposal still names — measured in
- * `drizzle/0005_freezing_hairball.sql` — but no port here writes a
- * proposal and no seam below plants one, so there is no dataset this
- * store can be in where that key would fire. A fake refusing a state
- * it cannot reach would be inventing a rule rather than imitating
- * one. `src/sources/store.ts` declares the throw, and the live seam
- * is where it is discharged.
+ * THE THIRD REFUSING KEY IS IMITATED NOW, AND A SEAM IS WHAT MADE IT
+ * REACHABLE. `source_config_proposals_source_id_sources_id_fk`
+ * refuses a source that a config proposal still names — measured in
+ * `drizzle/0005_freezing_hairball.sql` — and while no seam here
+ * planted a proposal there was no dataset this store could be in
+ * where it would fire, so it was left alone rather than overlooked:
+ * a fake refusing a state it cannot reach invents a rule instead of
+ * imitating one. {@link MemoryResearchStore.setDomainProposals}
+ * reaches that state directly, and a fake ACCEPTING a delete the
+ * deployment refuses is the defect this file exists to prevent, so
+ * the third name joins the two above it in `deleteSource`.
  *
- * TWO SEAMS PLANT WHAT NO PORT CAN WRITE, and their shapes differ
+ * THE PROPOSALS QUEUE IS THIS FILE'S SECOND APPROVAL GATE, and it is
+ * written to read as the same gate as the first. Four methods sit on
+ * `source_config_proposals`: a page narrowed to `pending` and its
+ * count, an UNSCOPED read by id, and one writer that rules and
+ * applies. The page is ordered `proposed_at` ascending with `id`
+ * ascending — `listPendingProposals` in `scripts/approve.ts` member
+ * for member, one queue with two clients — where the failures queue
+ * one table over is newest-first, because a failure queue is about
+ * what broke most recently and a gate is about what has waited
+ * longest. `EntityStore` over `research_pool` is the other gate, and
+ * every claim in this paragraph has its counterpart there.
+ *
+ * ITS WRITER IS THE ONLY METHOD IN THIS FILE THAT TOUCHES TWO
+ * TABLES, and it is the only one that calls into `src/`.
+ * `approveAndApplyProposal` stamps `approved_at` as
+ * `coalesce(approved_at, now())`, derives the two source columns
+ * from THAT row through `proposalToSourceUpdate` in
+ * `src/sources/config-proposer.ts`, writes them onto the feed, and
+ * stamps `applied_at` the same idempotent way. Everything is
+ * computed before any stored state moves, which is what one
+ * transaction means where there is no transaction to open: a run
+ * that cannot finish leaves the proposal unruled and the feed
+ * untouched, which is the state the request can be made from again.
+ * The derivation goes through that one function so that this store
+ * and the drizzle one cannot become two appliers.
+ *
+ * AND A DOMAIN TAKES ITS PROPOSALS WITH IT, BY A ROUTE OF THEIR OWN.
+ * `source_config_proposals.domain_id` cascades, so the rows go with
+ * the domain that owns them rather than with the feed each names —
+ * which is why the seam is keyed by the domain, and why the cascade
+ * is a line of its own beside the sources rather than part of
+ * {@link dropSourcesOf}. ACROSS two domains it diverges, and this
+ * store takes a delete a deployment refuses: a proposal planted
+ * under one domain and naming another's feed does not hold that
+ * feed's removal when its domain is deleted, which is the EIGHTH
+ * known divergence and the sixth and seventh ones over a third pair
+ * of tables.
+ *
+ * THREE SEAMS PLANT WHAT NO PORT CAN INSERT, and their shapes differ
  * because what the port can ASK about each differs.
  * {@link MemoryResearchStore.setSourceDocuments} plants ROWS, because
  * three methods read documents as rows — the parse-status aggregate,
@@ -267,6 +310,11 @@
  * a COUNT, because `countSourceDependents` is the only thing on this
  * port that can ask about a sighting at all and a row would carry
  * members nothing here reads.
+ * {@link MemoryResearchStore.setDomainProposals} plants ROWS for the
+ * documents seam's reason and is keyed by the DOMAIN rather than by
+ * the feed, which is the one place a seam in this half departs from
+ * its neighbours: `source_config_proposals.domain_id` is the
+ * cascading column, and the feed rides on the row.
  *
  * THE PARSE-STATUS AGGREGATE IS COUNTED FROM THOSE ROWS, never
  * planted beside them, which is what keeps the delete guard and the
@@ -291,11 +339,12 @@
  *
  * AND A DOMAIN TAKES ITS SOURCES WITH IT, ALONG WITH EVERYTHING
  * PLANTED UNDER THEM. `sources.domain_id` is `ON DELETE CASCADE`, and
- * so are the domain columns on `documents` and on `finding_sightings`
- * — the second through `findings`, which carries its own cascade — so
- * one statement removes the sources and the rows that were refusing
- * their deletes together, and the end-of-statement check finds
- * nothing left citing a source that is gone. That is why the cascade
+ * so are the domain columns on `documents`, on `finding_sightings`
+ * and on `source_config_proposals` — the second through `findings`,
+ * which carries its own cascade — so one statement removes the
+ * sources and all three kinds of row that were refusing their
+ * deletes together, and the end-of-statement check finds nothing
+ * left citing a source that is gone. That is why the cascade
  * below drops both plants rather than running into its own guard, the
  * same care `deleteCategory` is not reused inside it for. Deleting a
  * domain is therefore permitted where deleting one of its sources is
@@ -337,8 +386,8 @@
  * plan, since that is the reading the sources half's plan got wrong.
  * `export_subscriptions_connector_id_connectors_id_fk` is the whole
  * of it. So this half has no unimitated key of its own, and the
- * sentence the sources half owes about a state it cannot reach has no
- * counterpart here.
+ * sentence the sources half owed about a state it could not reach
+ * — until a seam reached it — has no counterpart here.
  *
  * ITS ONE SEAM PLANTS A COUNT, and that is
  * {@link MemoryResearchStore.setSourceSightings}' shape taken for
@@ -445,6 +494,339 @@
  * planted number with a counted one answers neither — and
  * `tests/live/api-wave2.live.test.ts` is where the counted answer is
  * discharged.
+ *
+ * THE FINDINGS HALF WRITES ONE TABLE AND PLANTS THREE, WHICH IS THE
+ * SHAPE NO HALF ABOVE HAS. `FindingStore` declares six readers and
+ * one writer, and the writer appends a `finding_labels` row — so
+ * `findings`, `finding_sightings` and `entity_research` are supplied
+ * by seams, on the reasoning `documents` already is one table over.
+ * The consequence for a reader of this file is that the half has ONE
+ * refusal mechanism rather than the sources half's four:
+ * `finding_labels_finding_id_findings_id_fk`, refusing a ruling
+ * appended onto a finding that is not there. No CHECK, no unique key
+ * and no guarded delete, because there is nothing else a method can
+ * reach.
+ *
+ * ITS PAGE IS ORDERED BY `compareFindings`' KEYS WRITTEN OUT rather
+ * than by that comparator called, and the distinction is what one
+ * suite one layer up rests on. `src/lib/digest-assemble.ts` exports
+ * the ordering the digest selection and every renderer already agree
+ * on, and `src/findings/service.test.ts` holds a page THIS store
+ * answered against `orderFindings` over the same rows — so a store
+ * importing the library would leave that comparison holding one
+ * authority against itself. Expressing the keys here is the same
+ * decision `src/findings/db-store.ts` takes when it expresses them
+ * in SQL, and the two suites then check one rule from two sides.
+ *
+ * AN ABSENT SCORE IS THE TAIL OF THAT ORDER AND NOT ITS FLOOR, which
+ * is the half of it a store gets wrong by sorting nulls low. Two
+ * unscored findings tie on the first key and fall through to the
+ * stamp, so the tail keeps an order of its own. Both orderings end
+ * in `id` descending, `created_at` defaulting to the transaction's
+ * start time and a pass therefore writing findings that tie to the
+ * microsecond.
+ *
+ * ITS VERDICT FILTER READS THE LATEST RULING AND NOT ANY. The table
+ * carries no unique key at all, so re-judging APPENDS and the row in
+ * force is the newest by `labelled_at` with `id` breaking the tie. A
+ * store matching any label answers a page of findings an operator
+ * has already moved on from, with every count beside it agreeing,
+ * and a finding nobody has judged matches no verdict a caller can
+ * name.
+ *
+ * ITS CATEGORY FILTER IS A `jsonb` READ AND NOT A JOIN. No column
+ * links a finding to a category: a domain files one through the
+ * `fields` payload, under the member named in this file and in
+ * `ar-digest`'s assembly node and nowhere else. What is imitated is
+ * the COLUMN read `fields->>'category'` rather than the digest's own
+ * reduction of that member — `src/findings/store.ts` names that as
+ * the one place the two filings could part — so a numeric member
+ * answers its text here exactly as `->>` does, and a key the domain
+ * never declared is an empty page rather than a refusal.
+ *
+ * ITS WINDOW IS HALF-OPEN OVER `created_at`,
+ * `[sinceInclusive, untilExclusive)`, and the member names are what
+ * say which side each bound closes. A store writing `<=` on the
+ * upper bound is a bug no type could report, and two adjacent
+ * windows would then both take the seam a caller paging through time
+ * crosses most often. Neither bound is re-checked for order:
+ * `timeWindowQuerySchema` refuses an inverted window before any of
+ * this is reached.
+ *
+ * AND ITS SIGHTINGS ARE ROWS WHERE THE SOURCES HALF PLANTS A NUMBER,
+ * OVER ONE TABLE. `SourceStore.countSourceDependents` can only be
+ * asked how many `finding_sightings` rows cite a source, while
+ * `FindingStore.listFindingSightings` answers the rows themselves,
+ * so one shape cannot serve both. A row planted through the findings
+ * seam therefore does not hold its source's delete, which is a known
+ * divergence stated at both seams and pinned by a case rather than
+ * left to be discovered.
+ *
+ * THE DOCUMENTS HALF WRITES NOTHING AT ALL, WHICH IS A SHAPE NO HALF
+ * ABOVE HAS EITHER. `DocumentStore` declares two methods and both
+ * are reads, so there is no insert to burn an id on, no update, no
+ * delete, and no mechanism for this half to imitate. It throws no
+ * {@link StoreRefusal} for the settings half's reason reached by a
+ * shorter argument: that port cannot reach the `operator_settings`
+ * mechanisms, and this one has no write to reach
+ * `documents_parse_status_check`, `documents_hash_unique` or either
+ * of that table's foreign keys WITH. So the whole half is a seam,
+ * two reads, and one line in the domain cascade.
+ *
+ * AND IT PLANTS THE SAME TABLE THE SOURCES HALF PLANTS, KEYED
+ * DIFFERENTLY, which is this file's FIFTH known divergence and its
+ * second over `documents`.
+ * {@link MemoryResearchStore.setSourceDocuments} is keyed by the
+ * source a capture came through and
+ * {@link MemoryResearchStore.setDomainDocuments} by the domain that
+ * holds it, because the two ports ask different questions of the
+ * table: that one is one SOURCE's failures worked from the top, and
+ * this one is one DOMAIN's corpus whatever its status and whatever
+ * it arrived through. A row planted through either seam is invisible
+ * to the other, and both faces are pinned by a case rather than left
+ * to be discovered — the sightings divergence stated one table over,
+ * for the same reason.
+ *
+ * A NULL `source_id` IS WHAT MAKES THAT MORE THAN A BOOKKEEPING
+ * CHOICE. An ingested file and a pasted body land in the corpus
+ * carrying no source at all, and the sources seam is keyed BY a
+ * source id — so those rows are not merely planted somewhere else,
+ * they have no key to be planted under there. A fake resolving one
+ * seam through the other could not hold the collection this half
+ * exists for.
+ *
+ * ITS PAGE IS `captured_at` DESCENDING WITH `id` DESCENDING, AND THE
+ * TIE THE SECOND KEY BREAKS IS THE SERVER'S OWN. `captured_at`
+ * defaults to `now()`, which is the TRANSACTION's start time, so a
+ * batch capture writes rows tying to the microsecond and a page
+ * boundary falling inside that tie would show one document twice and
+ * another never. The failures queue orders by the same pair over the
+ * same rows; that the two agree is the column's doing rather than a
+ * shared helper's, and each ordering is expressed where its own
+ * reader can be checked against it.
+ *
+ * ITS FILTER NARROWS AND NEVER SETS, AND ABSENT IS BOTH STATUSES. A
+ * failed document is IN the corpus rather than behind a flag, which
+ * is fail-flag-keep read from the debug page's side: a default that
+ * hid them would make this collection agree with every other reader
+ * precisely where an operator is looking for the disagreement. A
+ * status no row carries is an empty page rather than a refusal, and
+ * a status outside `DOCUMENT_PARSE_STATUSES` never reaches here at
+ * all — `src/documents/service.ts` refuses it with a `422` before
+ * this port is called, which is why the filter's member is the union
+ * where the record's is `string`.
+ *
+ * THE ENTITIES HALF WRITES TWO TABLES AND PLANTS THREE, WHICH IS THE
+ * WIDEST SHAPE HERE THAT INSERTS NOTHING AT ALL. `EntityStore`
+ * declares six readers and two writers, and neither writer is an
+ * insert: `updateEntity` rewrites a registry row and `approvePoolRow`
+ * stamps an intention. So `entities`, `entity_research` and
+ * `research_pool` all arrive through seams, and two of the three are
+ * then written in place.
+ *
+ * IT READS `entity_research` THROUGH THE SEAM THE FINDINGS HALF
+ * ALREADY PLANTS, which is why there is no sixth seam over that
+ * table. {@link MemoryResearchStore.setEntityResearch} is keyed by
+ * the subject, and the subject is what both readers resolve through
+ * — the findings half through a finding's own `entity_id`, this one
+ * through the path. One table, one seam and two projections: this
+ * half's record omits `entity_id` where that one keeps it.
+ *
+ * AND IT ORDERS THAT TABLE AGAIN RATHER THAN SHARING THE ORDER,
+ * which is the decision {@link orderedDocuments} takes beside
+ * {@link failuresOf} over `documents`. Both readers promise
+ * `researched_at DESC, id DESC`, and that they agree is the column's
+ * doing rather than a helper's — so each ordering is expressed where
+ * its own reader's cases can falsify it.
+ *
+ * ITS UNIQUE KEY AND ITS FOREIGN KEY BOTH SIT ON THE REGISTRY WRITE,
+ * AND ONE CALL CAN REACH BOTH, which is the shape the term, persona
+ * and topic halves each said they did not have.
+ * `entities_domain_id_name_norm_unique` refuses a rename landing on a
+ * key another subject in this domain already holds, and
+ * `entities_alias_of_entities_id_fk` refuses an `aliasOf` naming an
+ * id no entity carries. Both are members of one `EntityPatch`, so a
+ * request can carry both faults at once and the order between them is
+ * observable. It is written key first and foreign key second, on the
+ * relation the category half MEASURED between a unique index and an
+ * end-of-statement check rather than on any reading of this table.
+ *
+ * TWO RULES THIS HALF DOES NOT HOLD, AND NEITHER IS AN OMISSION. A
+ * row pointing at itself and a row pointing into another domain are
+ * both storable — `entities.alias_of` in
+ * `src/db/schema/entities.ts` says so in as many words — so
+ * `src/entities/service.ts` refuses what the column stores and this
+ * file goes on refusing only what Postgres does. The empty
+ * `name_norm` is guarded by nothing here either: no CHECK forbids it,
+ * and what keeps it unreachable is `normalizeEntityName` throwing one
+ * layer up.
+ *
+ * `research_pool` CARRIES TWO CHECKS AND THEY ARE HELD IN DIFFERENT
+ * PLACES, which is the one split in this file between a rule a TYPE
+ * carries and a rule a call raises. `research_pool_status_check`
+ * reads a single column, so {@link MemoryResearchPoolRow} declares
+ * that member as the union and a plant outside the tuple does not
+ * compile — the way `MemoryDomainDocument.parseStatus` holds
+ * `documents_parse_status_check` one table over.
+ * `research_pool_approval_check` holds TWO columns against each
+ * other, which no type here can say, so the seam raises it: a row
+ * carrying `researched_at` and no `approved_at` is refused as a
+ * `check-violation` naming that constraint.
+ *
+ * THE SEAM IS WHERE THAT CHECK IS REACHED BECAUSE NO METHOD CAN
+ * REACH IT. {@link EntityStore.approvePoolRow} only ever moves
+ * `approved_at` from null to an instant, so it cannot produce the
+ * refused state from either side, and nothing on this port writes
+ * `researched_at` at all. A seam storing that state anyway would let
+ * a case be written against a row the database will not hold, which
+ * is the one thing this file exists to rule out — so the plant
+ * refuses the batch WHOLE, leaving the previous plant standing,
+ * rather than writing the rows that passed.
+ *
+ * THE APPROVAL IS IDEMPOTENT, AND THE SECOND CALL IS THE READING
+ * THAT SAYS SO. `approvePoolRow` writes the approved status and
+ * `coalesce(approved_at, now())`, member for member with
+ * `approveById` in `scripts/approve.ts`, so a second ruling keeps the
+ * FIRST ruling's instant rather than re-dating a search already paid
+ * for. Nothing is asked of the row's state: an id naming a closed row
+ * moves its status back to approved without moving the stamp, exactly
+ * as the constraint permits.
+ *
+ * THERE IS NO ENTITY COUNTER AND NO POOL COUNTER, which is where this
+ * half departs from every half above that inserts. Both tables carry
+ * a `bigserial` in the database and no method here reaches it: the
+ * ids are the fixture's own, as they are for `findings`, so the
+ * id-burn fidelity the inserting halves owe has no subject.
+ *
+ * AND A DOMAIN TAKES ITS ENTITIES, THEIR RESEARCH AND ITS POOL ROWS
+ * WITH IT, over three tables and by two different routes.
+ * `entities.domain_id` cascades and `entity_research.entity_id`
+ * cascades onto the entities, so the research goes two levels down
+ * the way a finding's sightings do; `research_pool.domain_id`
+ * cascades directly, so an intention naming NO subject goes with the
+ * rest rather than being left behind. There is no guarded entity
+ * delete to be careful of reusing: `EntityStore` declares no delete
+ * at all, and retiring a subject is the alias pointer.
+ *
+ * WHAT IT DOES NOT REFUSE IS A CROSS-DOMAIN CITATION, AND THAT IS
+ * THIS FILE'S SIXTH KNOWN DIVERGENCE. `research_pool.entity_id` and
+ * `findings.entity_id` are both `ON DELETE no action`, so a
+ * deployment REFUSES the delete of a domain whose entities are still
+ * named by another domain's intentions or findings, the
+ * end-of-statement check finding rows outside the cascade's reach.
+ * Every seam here takes an id rather than a row, so that state is
+ * plantable and this store takes the delete. One case pins it rather
+ * than leaving it to be discovered, and
+ * `tests/live/api-wave3.live.test.ts` is where the refusal is
+ * discharged.
+ *
+ * THE RUNS HALF WRITES NOTHING AND REFUSES NOTHING, WHICH IS THE
+ * DOCUMENTS HALF'S SHAPE OVER SIX METHODS AND TWO TABLES. `RunStore`
+ * declares six reads and no seventh, so there is no insert to burn an
+ * id on, no update, no delete, and no run counter. `runs` DOES carry
+ * two mechanisms where `documents` reached none, and both are single
+ * columns: {@link MemoryRun} declares `status` and `scheduledBy` as
+ * the unions `runs_status_check` and `runs_scheduled_by_check`
+ * enumerate, so a plant outside either tuple does not compile rather
+ * than being refused at run time. That is the split the entities half
+ * states between a rule a TYPE carries and a rule a call raises, with
+ * nothing left on this side of it: the half throws no
+ * {@link StoreRefusal} at all.
+ *
+ * AND IT IS THE ONE HALF HERE WHOSE PLANTS ARE FLAT. Every seam above
+ * is keyed by the column its rows hang off, and neither of this
+ * half's tables has one to be keyed by: `runs.domain_id` is NULLABLE
+ * because a maintenance or cross-domain tick belongs to no domain,
+ * and `llm_calls.run_id` is NULLABLE because a call may be attributed
+ * to no pass. A domain-keyed runs seam and a run-keyed ledger seam
+ * would each have no key for exactly the rows this half's most
+ * load-bearing claims are about, which is the trap
+ * {@link MemoryResearchStore.setSourceDocuments} meets one table over
+ * for a document that came through no feed. So the parent rides on
+ * the row and {@link dropRunsOf} reads it off there.
+ *
+ * ITS PAGE IS `started_at` DESCENDING WITH `id` DESCENDING, AND THE
+ * TIE THE SECOND KEY BREAKS IS THE SERVER'S OWN, the argument the
+ * corpus page makes over `captured_at`: the column defaults to
+ * `now()`, which is the TRANSACTION's start time, so passes opened
+ * together tie to the microsecond and a page boundary falling inside
+ * that tie would show one run twice and another never. The ledger's
+ * `called_at DESC, id DESC` is the same shape over the same kind of
+ * default, and it is expressed AGAIN rather than shared — the
+ * decision {@link orderedDocuments} takes beside {@link failuresOf},
+ * applied to two tables instead of one.
+ *
+ * ITS FILTER NARROWS AND ABSENT MEANS EVERY RUN, TICKS INCLUDED. That
+ * is not the corpus page's fail-flag-keep argument restated: there,
+ * absent means both members of a closed tuple, and here it means the
+ * whole table rather than the domain-scoped half of it. A filter
+ * quietly dropping the ticks would make the page disagree with `runs`
+ * about how much work the service has done, and the maintenance
+ * passes are exactly the rows a reader goes looking for after
+ * something stopped happening. There is no spelling that answers
+ * those rows ALONE, `RunFilter.domainId` being an optional `number`
+ * and never a `number | null`.
+ *
+ * ITS LEDGER IS CUT AT A LIMIT THE CALLER SUPPLIES, which is the one
+ * read here that is not a window. `listRunLedger` takes a positive
+ * `limit` and no offset, `countRunLedger` answers the full count, and
+ * `src/runs/service.ts` compares the two into a truncation flag — so
+ * a short list is never answered with nothing saying it was short.
+ * A call naming NO run is unreachable from either, both being
+ * addressed by a run id.
+ *
+ * ITS SUMMARY IS A `GROUP BY` OVER A `LEFT JOIN`, AND THE JOIN IS THE
+ * HALF A READER WOULD GET WRONG. Every call inside the window is
+ * counted, so the buckets' `calls` add up to the number of calls the
+ * window holds; a call whose run named no domain and a call naming no
+ * run at all both land in the bucket whose domain is null, and
+ * neither is separable from the other in the answer. An INNER join
+ * would drop the second kind silently, leaving a total taken from
+ * this summary under-reporting with every number beside it agreeing.
+ * {@link spendDomainOf} is where that is decided, and it answers null
+ * a THIRD way this store can reach and a deployment cannot: a call
+ * naming a run nothing stored.
+ *
+ * ITS DAY BUCKET IS UTC EXPLICITLY AND ITS SUMS ARE NULLABLE.
+ * {@link utcDayOf} reads the three UTC parts rather than truncating
+ * in whatever zone the process runs in, which is the same
+ * per-deployment difference `SpendBucket.day` says a session's
+ * `TimeZone` would make of `date_trunc`. And each magnitude sums the
+ * calls that recorded it while `calls` counts the rows — so a bucket
+ * where nothing was measured answers null rather than zero, zero
+ * being a real reading of a prompt that sent nothing, and the two
+ * sums are taken separately so a call measured on one axis alone
+ * contributes to one of them.
+ *
+ * NO MEMBER OF THAT SUMMARY IS CURRENCY, and `llm_calls` carries no
+ * column behind one. `est_tokens` is arithmetic over `prompt_chars`
+ * rather than a provider's report, per its own TSDoc in
+ * `src/db/schema/runs.ts`, so the two are one reading expressed twice
+ * and no total here reconciles with a bill.
+ *
+ * AND A DOMAIN TAKES ITS RUNS AND THEIR LEDGER WITH IT, OVER TWO
+ * LEVELS, LEAVING THE TICKS. `runs.domain_id` cascades and
+ * `llm_calls.run_id` cascades onto the runs, which is
+ * {@link dropFindingsOf}'s two levels over a different pair; a
+ * domain-less tick hangs off no domain, so no delete reaches it or
+ * its calls, and neither does anything reach a call naming no run.
+ * There is no guarded run delete to be careful of reusing:
+ * `RunStore` declares no delete at all.
+ *
+ * WHAT IT DOES NOT REFUSE IS A CROSS-DOMAIN RESEARCH CITATION, AND
+ * THAT IS THIS FILE'S SEVENTH KNOWN DIVERGENCE.
+ * `entity_research.run_id` is `ON DELETE no action`, and
+ * `src/db/schema/entities.ts` records the two-hop reading VERIFIED
+ * against a real Postgres: a result
+ * whose entity belongs to the run's own domain goes in the same
+ * statement and nothing is left orphaned, while a row pairing ONE
+ * domain's entity with ANOTHER domain's run holds that second domain
+ * open. {@link MemoryResearchStore.setEntityResearch} plants a
+ * `runId`, so the state is reachable here and this store takes the
+ * delete. One case pins it, and `tests/live/api-wave3.live.test.ts`
+ * is where the refusal is discharged. `briefings.run_id` is the same
+ * key and is left unimitated for `research_pool.finding_id`'s reason:
+ * no port here writes that table and no seam plants one.
  *
  * THE SETTINGS HALF REFUSES NOTHING, AND THAT IS A MEASUREMENT
  * RATHER THAN A SIMPLIFICATION. `operator_settings` carries two
@@ -588,7 +970,17 @@ import type {
 } from '../../src/connectors/store.js';
 import type { DomainSettings } from '../../src/db/schema/domains.js';
 import type { OperatorSettings } from '../../src/db/schema/settings.js';
-import type { DocumentParseStatus } from '../../src/db/schema/values.js';
+import type {
+  DocumentParseStatus,
+  ResearchPoolStatus,
+  RunScheduler,
+  RunStatus,
+} from '../../src/db/schema/values.js';
+import type {
+  DocumentFilter,
+  DocumentRecord,
+  DocumentStore,
+} from '../../src/documents/store.js';
 import type {
   DomainDependentCounts,
   DomainPatch,
@@ -596,17 +988,42 @@ import type {
   DomainStore,
   InsertDomainInput,
 } from '../../src/domains/store.js';
-import type { StoreWindow } from '../../src/http/schemas.js';
+import type {
+  EntityPatch,
+  EntityRecord,
+  EntityResearchRecord,
+  EntityStore,
+  ResearchPoolRecord,
+} from '../../src/entities/store.js';
+import type {
+  FindingFilter,
+  FindingLabelRecord,
+  FindingRecord,
+  FindingResearchRecord,
+  FindingSightingRecord,
+  FindingSort,
+  FindingStore,
+  InsertFindingLabelInput,
+} from '../../src/findings/store.js';
+import type { StoreWindow, TimeWindow } from '../../src/http/schemas.js';
 import type {
   InsertPersonaInput,
   PersonaPatch,
   PersonaRecord,
   PersonaStore,
 } from '../../src/personas/store.js';
+import type {
+  LlmCallRecord,
+  RunFilter,
+  RunRecord,
+  RunStore,
+  SpendBucket,
+} from '../../src/runs/store.js';
 import type { SettingsStore } from '../../src/settings/store.js';
 import type {
   InsertSourceInput,
   ParseStatusCounts,
+  SourceConfigProposalRecord,
   SourceDependentCounts,
   SourceFailureRecord,
   SourcePatch,
@@ -645,6 +1062,7 @@ import {
   SOURCE_KINDS,
 } from '../../src/db/schema/values.js';
 import { StoreRefusal } from '../../src/db/store-errors.js';
+import { proposalToSourceUpdate } from '../../src/sources/config-proposer.js';
 
 /**
  * One planted `documents` row, as the sources half reads it.
@@ -695,17 +1113,648 @@ export interface MemorySourceDocument {
 }
 
 /**
- * All eight research ports over one dataset, plus the four seams a
- * case needs that no port declares.
+ * One planted `documents` row, as the documents half reads it.
+ *
+ * {@link DocumentRecord} MEMBER FOR MEMBER, which is the one plant
+ * in this file that carries every column its record answers. The
+ * other three drop the key they are planted under; this one has
+ * nothing to drop, because the record already omits `domainId` on
+ * its own reasoning — a document is met in its domain and addressed
+ * by nothing else, so `src/documents/store.ts` leaves the scope out
+ * of the row and {@link MemoryResearchStore.setDomainDocuments}
+ * plants under exactly the member the record does not carry.
+ *
+ * ITS `parseStatus` IS THE UNION WHERE THE RECORD'S IS `string`,
+ * and the asymmetry is the point rather than a slip. A plant stands
+ * in for the WRITER that stored the row, and a writer is held to
+ * `documents_parse_status_check`; a record is what a SELECT answers,
+ * and a SELECT answers whatever is stored, including a value written
+ * before the tuple was narrowed. {@link MemorySourceDocument} takes
+ * the same view of the same column for the same reason.
+ *
+ * IT IS NOT {@link MemorySourceDocument}, AND THE DIFFERENCE IS
+ * `sourceId`. That shape omits the column because the source is its
+ * key; this one carries it, nullable, because the corpus holds
+ * documents that came through no feed at all. The two are two shapes
+ * over one table rather than one shape somebody split, on the
+ * two-ports argument `src/documents/store.ts` makes: each is scoped
+ * to what its own readers can see, and one shape serving both would
+ * put a column added for one collection into the other.
+ */
+export interface MemoryDomainDocument {
+  /** `documents.id`, and the tiebreak on the corpus page's order. */
+  readonly id: number;
+
+  /**
+   * The feed this document was captured through, or null when it
+   * came through none.
+   *
+   * NULL IS AN ORDINARY STATE rather than an edge case, and it is
+   * the state {@link MemoryResearchStore.setSourceDocuments} has no
+   * key to plant: an ingested file and a pasted body sit in the
+   * middle of this page by capture time and are unreachable through
+   * a seam keyed by a source.
+   */
+  readonly sourceId: number | null;
+
+  /** Where the document can be read at its source, or null. */
+  readonly url: string | null;
+
+  /** The document's text as captured, verbatim and possibly empty. */
+  readonly body: string;
+
+  /**
+   * Which side of `documents_parse_status_check` the row sits on,
+   * and what {@link DocumentFilter.parseStatus} narrows against.
+   */
+  readonly parseStatus: DocumentParseStatus;
+
+  /**
+   * What went wrong, or null when nothing was recorded — including
+   * on a row that is `failed`, which is storable and is the shape
+   * that costs an operator the most.
+   */
+  readonly parseError: string | null;
+
+  /**
+   * When the pipeline captured it, which is the page's first key.
+   * Copied on the way in.
+   */
+  readonly capturedAt: Date;
+}
+
+/**
+ * One planted `findings` row, as the findings half reads it.
+ *
+ * {@link FindingRecord} minus its `domainId`, which is the argument
+ * {@link MemoryResearchStore.setDomainFindings} is planting under —
+ * the same omission {@link MemorySourceDocument} makes of its
+ * `sourceId`, and for the same reason: a member repeating the key it
+ * was planted beneath is a second authority for one fact, and a plant
+ * naming a domain other than its key would leave every read here
+ * deciding which of the two it meant.
+ *
+ * A PLANT RATHER THAN A WRITE, because `FindingStore` declares no
+ * insert at all. Six of its seven methods read `findings` and the
+ * seventh appends a LABEL, so a case wanting a finding to page, to
+ * order, to filter or to judge has to be handed a seam — the
+ * decision {@link MemoryResearchStore.setSourceDocuments} already
+ * took for `documents`, one table over and for the same reason.
+ *
+ * EVERY COLUMN THE RECORD CARRIES IS HERE, INCLUDING `score` AND
+ * `scoreVersion`, and that is not a way in for a writer. Nothing on
+ * the port accepts either — `src/findings/store.ts` says so of its
+ * whole write surface — so the only thing that can set a score is a
+ * case saying what state it is asking about, which is what a fixture
+ * is for.
+ */
+export interface MemoryDomainFinding {
+  /** `findings.id`, and the last key of both orderings. */
+  readonly id: number;
+
+  /** The document this was read out of. */
+  readonly documentId: number;
+
+  /**
+   * The entity it is about, or null when it is about nobody in
+   * particular. The null is the state
+   * {@link FindingStore.listFindingResearch} answers an empty list
+   * for, and it is ordinary rather than exceptional.
+   */
+  readonly entityId: number | null;
+
+  /**
+   * What the pass extracted. The category filter reads the one
+   * member of this payload named below and nothing else, no column
+   * linking a finding to a category at all.
+   */
+  readonly fields: Record<string, unknown>;
+
+  /**
+   * What scoring made of it, or null while nothing has. Null is the
+   * TAIL of the score ordering rather than its floor, which is the
+   * one thing about that order a fixture has to be able to state.
+   */
+  readonly score: number | null;
+
+  /** Which scoring pass that was, or null beside a null score. */
+  readonly scoreVersion: number | null;
+
+  /**
+   * When it was made: the window's subject and the second key of
+   * both orderings. Copied on the way in, so a caller that goes on
+   * moving the `Date` it planted does not move a stored one.
+   */
+  readonly createdAt: Date;
+}
+
+/**
+ * One planted `finding_sightings` row, as the findings half reads
+ * it.
+ *
+ * {@link FindingSightingRecord} minus its `findingId`, which is the
+ * argument {@link MemoryResearchStore.setFindingSightings} is
+ * planting under, on the reasoning {@link MemoryDomainFinding}
+ * gives.
+ *
+ * ROWS HERE AND A NUMBER AT
+ * {@link MemoryResearchStore.setSourceSightings}, OVER ONE TABLE.
+ * That is the shape difference this file already draws between
+ * {@link MemoryResearchStore.setDomainDependents} and
+ * {@link MemoryResearchStore.setSourceDocuments}, and it lands on
+ * `finding_sightings` because the two ports ask about it
+ * differently: `SourceStore.countSourceDependents` can only be asked
+ * HOW MANY cite a source, while
+ * {@link FindingStore.listFindingSightings} answers the rows. A
+ * planted row therefore does NOT move that count, which is a known
+ * divergence rather than an oversight and is stated at both seams.
+ */
+export interface MemoryFindingSighting {
+  /** `finding_sightings.id`, and the tiebreak on the read's order. */
+  readonly id: number;
+
+  /**
+   * The feed it was seen at. Carried because
+   * {@link FindingSightingRecord} carries it: the sightings table IS
+   * the provenance record, and a projection dropping the feed would
+   * leave the rows saying only that something was seen.
+   */
+  readonly sourceId: number;
+
+  /** What the feed called it there, or null when it named nothing. */
+  readonly externalId: string | null;
+
+  /** When it was seen. Copied on the way in. */
+  readonly seenAt: Date;
+}
+
+/**
+ * One planted `entity_research` row, as the findings half reads it.
+ *
+ * {@link FindingResearchRecord} minus its `entityId`, which is the
+ * argument {@link MemoryResearchStore.setEntityResearch} is planting
+ * under, on the reasoning {@link MemoryDomainFinding} gives.
+ *
+ * PLANTED BY ENTITY AND READ BY FINDING, which is the one seam here
+ * whose key is not the key it is read back through.
+ * {@link FindingStore.listFindingResearch} takes a finding, reads
+ * its `entityId` and answers what was planted under that — so a
+ * case has to attribute a finding before any of this is reachable,
+ * and a finding attributed to nothing reaches none of it whatever
+ * was planted.
+ *
+ * NOTHING ON THIS PORT WRITES ONE. `src/findings/store.ts` states
+ * that `entity_research` is `ar-research`'s to write and that the
+ * embedding is read-only structurally rather than by convention,
+ * which is exactly why a seam is what supplies these rows.
+ */
+export interface MemoryEntityResearch {
+  /** `entity_research.id`, and the tiebreak on the read's order. */
+  readonly id: number;
+
+  /** The pass that recorded it, or null when none is named. */
+  readonly runId: number | null;
+
+  /** What it came to in prose, or null when nothing was written. */
+  readonly summary: string | null;
+
+  /**
+   * The structured findings of the pass. `unknown` rather than a
+   * record, exactly as {@link FindingResearchRecord} declares it:
+   * the column carries no `$type`, so what a pass records is that
+   * pass's business.
+   */
+  readonly payload: unknown;
+
+  /** When the research was recorded. Copied on the way in. */
+  readonly researchedAt: Date;
+}
+
+/**
+ * One planted `entities` row, as the entities half reads it.
+ *
+ * {@link EntityRecord} minus its `domainId`, which is the argument
+ * {@link MemoryResearchStore.setDomainEntities} is planting under, on
+ * the reasoning {@link MemoryDomainFinding} gives.
+ *
+ * PLANTED AND THEN WRITTEN, which is a shape no other planted row
+ * here has. `FindingStore` reads what it is given and appends to a
+ * different table; {@link EntityStore.updateEntity} rewrites THIS
+ * row, so a case plants the registry and then edits it through the
+ * port. What no method can do is add one or remove one, `EntityStore`
+ * declaring neither an insert nor a delete — so the seam is the whole
+ * of how a subject arrives and how it goes.
+ *
+ * NO STAMP, BECAUSE THE TABLE CARRIES NONE. `entities` has no
+ * `created_at` and no `updated_at`, so this is the one planted shape
+ * in this file with no `Date` to copy on the way in — the copy that
+ * matters here is the `attributes` payload instead.
+ */
+export interface MemoryDomainEntity {
+  /**
+   * `entities.id`, and the key both writers take.
+   *
+   * The fixture's own rather than a sequence's, for the reason
+   * {@link MemoryDomainFinding.id} is: nothing here inserts an
+   * entity, so a case says which row it means and the store never
+   * chooses.
+   */
+  readonly id: number;
+
+  /** `entities.name`: the subject's name as a person reads it. */
+  readonly name: string;
+
+  /**
+   * `entities.name_norm`: the same name reduced to the key the
+   * registry matches on, and the half of the pair
+   * `entities_domain_id_name_norm_unique` is declared over.
+   *
+   * Planted rather than computed, and that is the seam standing in
+   * for a writer rather than a second definition of the reduction.
+   * `normalizeEntityName` in `src/lib/entity-name-norm.ts` is the one
+   * definition, `src/entities/service.ts` is where it is called, and
+   * nothing below this line reduces a name at all — so a fixture
+   * planting a key no spelling reduces to is a fixture saying so
+   * rather than a store agreeing with it.
+   */
+  readonly nameNorm: string;
+
+  /**
+   * The subject this row turned out to be, or null when the row IS
+   * its own subject.
+   *
+   * A self-alias and an alias into another domain are both plantable
+   * here, because both are storable in the database: the two rules
+   * that refuse them are `src/entities/service.ts`'s and are held
+   * above this port.
+   */
+  readonly aliasOf: number | null;
+
+  /**
+   * Whatever the domain records about the subject beyond its name.
+   *
+   * `unknown` for the reason {@link EntityRecord.attributes} is, and
+   * copied on the way in and on the way out for the reason every
+   * `jsonb` payload here is: a caller writing through the object it
+   * planted would be writing into stored state.
+   */
+  readonly attributes: unknown;
+}
+
+/**
+ * One planted `research_pool` row: an intention queued at the gate.
+ *
+ * {@link ResearchPoolRecord} WHOLE rather than a member short, which
+ * is what separates this shape from every other planted row here.
+ * The domain is the seam's key and that record carries no `domainId`
+ * to drop, so there is nothing to omit — and every remaining member
+ * has to be plantable, the two stamps included, because the state
+ * `research_pool_approval_check` refuses is a pair of them and a case
+ * about that check has to be able to propose it.
+ *
+ * ITS `status` IS THE UNION WHERE THE RECORD'S IS `string`, which is
+ * how `research_pool_status_check` is held here:
+ * {@link MemoryDomainDocument.parseStatus} holds its own table's
+ * CHECK the same way, and a plant outside `RESEARCH_POOL_STATUSES`
+ * does not compile rather than being refused at run time. The record
+ * widens it back, because that is what a SELECT answers.
+ *
+ * PLANTED AND THEN WRITTEN, as {@link MemoryDomainEntity} is:
+ * {@link EntityStore.approvePoolRow} rewrites the status and the
+ * approval stamp of a row this seam supplied.
+ */
+export interface MemoryResearchPoolRow {
+  /** `research_pool.id`: the id an approval names and the tiebreak. */
+  readonly id: number;
+
+  /**
+   * The subject this intention is about, or null when it names none.
+   *
+   * The null is an ordinary state and it is one a case has to be able
+   * to plant: a row naming no subject appears in NO subject's page,
+   * and it still goes with its domain, which is the pair of claims
+   * that separates the pool's cascade from the registry's.
+   */
+  readonly entityId: number | null;
+
+  /** The finding that raised it, or null when nothing did. */
+  readonly findingId: number | null;
+
+  /** Where the row stands at the gate. See the interface TSDoc. */
+  readonly status: ResearchPoolStatus;
+
+  /** The exact terms the search would be issued with. */
+  readonly searchTerms: readonly string[];
+
+  /**
+   * When the intention was raised: the queue's first key, ascending,
+   * with {@link MemoryResearchPoolRow.id} breaking the tie `now()`
+   * makes inevitable. Copied on the way in.
+   */
+  readonly createdAt: Date;
+
+  /**
+   * When a person ruled in favour, or null while nobody has.
+   *
+   * Plantable so that a case can put a row on either side of the
+   * idempotence: an approval already given is what the second ruling
+   * has to keep. Copied on the way in.
+   */
+  readonly approvedAt: Date | null;
+
+  /**
+   * When the intention was closed, or null while it is open.
+   *
+   * The member `research_pool_approval_check` holds against the one
+   * above it, and the reason this shape is refusable at all: an
+   * instant here beside a null approval is the state the seam throws
+   * over. Copied on the way in.
+   */
+  readonly researchedAt: Date | null;
+}
+
+/**
+ * One planted `runs` row: the service's own account of one pass.
+ *
+ * {@link RunRecord} WHOLE with no member added and none dropped,
+ * which is a shape only {@link MemoryResearchPoolRow} shares here.
+ * Every other planted row above omits the column its seam keys on,
+ * and this one has none to omit: `runs.domain_id` is NULLABLE, so a
+ * domain-keyed seam would have no key at all for the maintenance
+ * ticks, and {@link MemoryResearchStore.setRuns} is flat.
+ *
+ * ITS TWO SINGLE-COLUMN CHECKS ARE HELD BY THIS TYPE, exactly as
+ * {@link MemoryDomainDocument.parseStatus} and
+ * {@link MemoryResearchPoolRow.status} hold their own tables'.
+ * `status` and `scheduledBy` are the unions where {@link RunRecord}
+ * widens both back to `string`, so a plant outside `RUN_STATUSES`
+ * or `RUN_SCHEDULERS` does not compile rather than being refused at
+ * run time. Between them they are the whole of what `runs` would
+ * refuse this half, which is why nothing in it throws.
+ *
+ * PLANTED AND NEVER WRITTEN, which is the shape
+ * {@link MemoryDomainDocument} has and {@link MemoryDomainEntity}
+ * does not. `RunStore` declares six reads and no writer at all, so
+ * the seam is the whole of how a pass arrives and a domain delete is
+ * the whole of how one goes.
+ */
+export interface MemoryRun {
+  /**
+   * `runs.id`: the address of `GET /runs/:id`, the key the ledger
+   * hangs off, and the tiebreak on the page's order.
+   *
+   * The fixture's own rather than a sequence's, for the reason
+   * {@link MemoryDomainFinding.id} gives: nothing here inserts a
+   * run, so a case says which pass it means and the store never
+   * chooses. There is no runs counter below and no id-burn fidelity
+   * to owe.
+   */
+  readonly id: number;
+
+  /**
+   * Whose pass it was, or null for a tick that belongs to nobody.
+   *
+   * THE NULL IS AN ORDINARY STATE AND IT IS THE ONE A CASE MUST BE
+   * ABLE TO PLANT. A maintenance or cross-domain pass names no
+   * domain, it appears in the UNFILTERED page beside the rest, its
+   * calls land in the null spend bucket, and no domain delete
+   * reaches it — four claims that a domain-keyed seam could not
+   * hold the subject of.
+   */
+  readonly domainId: number | null;
+
+  /**
+   * When the pass began: the page's first key, descending, with
+   * {@link MemoryRun.id} breaking the tie `now()` makes inevitable.
+   * Copied on the way in.
+   */
+  readonly startedAt: Date;
+
+  /**
+   * When it stopped, or null while it is still going. Copied on the
+   * way in, and a null stays a null.
+   */
+  readonly finishedAt: Date | null;
+
+  /**
+   * What the pass came to. The union where {@link RunRecord.status}
+   * is `string`, per the interface TSDoc.
+   */
+  readonly status: RunStatus;
+
+  /**
+   * What it did, as one number per thing counted.
+   *
+   * Copied one level shallower than a `jsonb` payload of unknown
+   * depth, on the reasoning `topics.search_terms` is: the column
+   * carries a `$type` of `Record<string, number>`, so there is a
+   * declared depth to copy TO and a fresh object is the whole of it.
+   */
+  readonly counts: Record<string, number>;
+
+  /**
+   * What it could not do, as one entry per failure.
+   *
+   * `unknown` for the reason {@link RunRecord.errors} declares it so
+   * — the column carries no `$type`, the entries sharing no shape —
+   * and copied through the round trip every undeclared payload here
+   * takes.
+   */
+  readonly errors: unknown;
+
+  /**
+   * What asked for the pass. The union where
+   * {@link RunRecord.scheduledBy} is `string`.
+   */
+  readonly scheduledBy: RunScheduler;
+}
+
+/**
+ * One planted `llm_calls` row: one model call the ledger recorded.
+ *
+ * {@link LlmCallRecord} PLUS the `run_id` that record omits, which
+ * makes this the whole of the table and the only planted shape here
+ * that is WIDER than the record its reads answer. The record drops
+ * the column because the run is the PATH on `GET /runs/:id`; the
+ * plant cannot, because the column is nullable and a call attributed
+ * to no run has to be plantable.
+ *
+ * FLAT LIKE THE RUNS ABOVE AND FOR THE SAME REASON. A run-keyed seam
+ * would have no key for the unattributed calls at all — the trap
+ * {@link MemoryResearchStore.setSourceDocuments} meets over a
+ * document that came through no feed — and those calls are exactly
+ * what the summary's null bucket is claimed to hold.
+ */
+export interface MemoryLlmCall {
+  /**
+   * `llm_calls.id`, and the tiebreak on the ledger's order.
+   *
+   * The fixture's own, on {@link MemoryRun.id}'s terms.
+   */
+  readonly id: number;
+
+  /**
+   * The pass this call was made during, or null when none is named.
+   *
+   * A ROW CARRYING NULL IS IN NO LEDGER AND IN EVERY SUMMARY, which
+   * is the pair of claims this member exists to make plantable.
+   * {@link RunStore.listRunLedger} and
+   * {@link RunStore.countRunLedger} are both addressed by a run id,
+   * so neither can reach it; {@link RunStore.summariseSpend} covers
+   * every row of the ledger in its window, so it lands in the null
+   * bucket beside the calls of a domain-less tick.
+   */
+  readonly runId: number | null;
+
+  /** Which step of the pass made the call. */
+  readonly node: string;
+
+  /** Which model was asked, or null when nothing recorded one. */
+  readonly model: string | null;
+
+  /**
+   * How many characters the prompt ran to, or null when the call
+   * recorded no magnitude at all.
+   *
+   * The null is what makes the summary's own null answerable: a
+   * bucket whose calls all carry one is a sum, and a bucket where
+   * none does is null rather than zero.
+   */
+  readonly promptChars: number | null;
+
+  /**
+   * The estimated tokens, or null on the terms above.
+   *
+   * Plantable INDEPENDENTLY of the characters beside it, which is
+   * what lets a case say the two sums are taken separately: a call
+   * measured on one axis and not the other is an ordinary row.
+   */
+  readonly estTokens: number | null;
+
+  /**
+   * When the call was made: the ledger's first key, descending, and
+   * the column the spend window bounds and the day bucket truncates.
+   * Copied on the way in.
+   */
+  readonly calledAt: Date;
+}
+
+/**
+ * One planted `source_config_proposals` row: one arrangement a model
+ * proposed for reading a feed, waiting on a person.
+ *
+ * {@link SourceConfigProposalRecord} MINUS the `domain_id` the seam
+ * keys on, which is the ordinary shape here and the one
+ * {@link MemoryResearchPoolRow} could not have: that record carries
+ * no domain to drop. `sourceId` STAYS, because it is what the queue
+ * is scoped by and what the containment rule one layer up reads —
+ * the seam's key and the read's key are two different columns on
+ * this table, which is what makes both of them plantable state.
+ *
+ * ITS `status` IS THE UNION WHERE THE RECORD'S IS `string`, holding
+ * `source_config_proposals_status_check` the way
+ * {@link MemoryResearchPoolRow.status} holds its own table's: both
+ * columns are generated from `RESEARCH_POOL_STATUSES`, so a plant
+ * outside it does not compile rather than being refused at run time.
+ * The record widens it back, because that is what a SELECT answers.
+ *
+ * PLANTED AND THEN WRITTEN, as {@link MemoryResearchPoolRow} is:
+ * {@link SourceStore.approveAndApplyProposal} rewrites the status
+ * and both stamps of a row this seam supplied. Every member is
+ * plantable, the two stamps included, because the state
+ * `source_config_proposals_approval_check` refuses is a pair of them
+ * and a case about that check has to be able to propose it.
+ */
+export interface MemorySourceProposal {
+  /**
+   * `source_config_proposals.id`: the id a ruling names and the
+   * queue's tiebreak.
+   *
+   * The fixture's own, no port here declaring an insert over this
+   * table — {@link MemoryRun.id}'s terms one half over.
+   */
+  readonly id: number;
+
+  /**
+   * The feed this proposal is for, and the member every read here is
+   * scoped or checked by.
+   *
+   * NOT NULL, so unlike {@link MemoryResearchPoolRow.entityId} there
+   * is no row that belongs to no parent: a proposed `parser_config`
+   * is an arrangement for reading one particular feed, and a row
+   * naming none would be a proposal with nothing to apply it to.
+   *
+   * It need not name a STORED source. Every read below answers about
+   * an id rather than about a feed, so a proposal is plantable ahead
+   * of the row it hangs off — the state
+   * {@link MemoryResearchStore.setSourceDocuments} allows for the
+   * same reason, and the one
+   * {@link SourceStore.approveAndApplyProposal} says a deployment's
+   * foreign key makes unreachable.
+   */
+  readonly sourceId: number;
+
+  /**
+   * The `parser_config` being proposed: what an approval writes onto
+   * `sources.parser_config`. Copied on the way in and out.
+   */
+  readonly parserConfig: unknown;
+
+  /**
+   * The `contract` being proposed, and the other column one approval
+   * writes. Copied on the terms above.
+   */
+  readonly contract: unknown;
+
+  /** What proposed it, as provenance and nothing addressable. */
+  readonly proposedBy: string;
+
+  /** Where the row stands at the gate. See the interface TSDoc. */
+  readonly status: ResearchPoolStatus;
+
+  /**
+   * When the proposal was made: the queue's first key, ASCENDING,
+   * with {@link MemorySourceProposal.id} breaking the tie `now()`
+   * makes inevitable. Copied on the way in.
+   */
+  readonly proposedAt: Date;
+
+  /**
+   * When a person ruled in favour, or null while nobody has.
+   *
+   * Plantable so that a case can put a row on either side of the
+   * idempotence, and so that the one state the applier refuses is
+   * reachable from a plant: a row carrying null here is what
+   * `proposalToSourceUpdate` in `src/sources/config-proposer.ts`
+   * throws over. Copied on the way in.
+   */
+  readonly approvedAt: Date | null;
+
+  /**
+   * When the two documents were written onto the source, or null
+   * while they have not been.
+   *
+   * The member `source_config_proposals_approval_check` holds
+   * against the one above it, and the reason this shape is refusable
+   * at all: an instant here beside a null approval is the state the
+   * seam throws over. Copied on the way in.
+   */
+  readonly appliedAt: Date | null;
+}
+
+/**
+ * All twelve research ports over one dataset, plus the thirteen
+ * seams a case needs that no port declares.
  *
  * EVERY ONE OF THEM WHOLE rather than a `Pick` of it. The category
  * half stood behind a narrowed alias while the term methods were
  * unwritten, which was the honest statement of what existed rather
  * than a gap papered over with stubs; all twelve taxonomy methods,
- * all six persona ones, all seven topic ones, all nine source ones,
- * all seven connector ones, all seven subscription ones and both
- * settings ones are here now, so a caller wanting any of the eight
- * ports entire can be handed this store.
+ * all six persona ones, all seven topic ones, all thirteen source
+ * ones, all seven connector ones, all seven subscription ones, both
+ * settings ones, all seven finding ones, both document ones, all
+ * eight entity ones and all six run ones are here now, so a caller
+ * wanting any of the twelve ports entire can be handed this store.
  *
  * `TopicStore` was the first member from outside wave 1 and
  * `SourceStore` is the second, and both join this file rather than
@@ -723,15 +1772,48 @@ export interface MemorySourceDocument {
  * refused by rows the half below it writes.
  *
  * `SubscriptionStore` IS THE FOURTH AND IS THE ONE THAT NEEDS BOTH
- * REASONS AT ONCE, which is why it is last and why it could not have
- * stood on its own at all. `export_subscriptions.domain_id`
- * cascades, so a domain deleted through `DomainStore` has to take its
- * subscriptions with it — the topics and sources argument — and
+ * REASONS AT ONCE, which is why it was the last of wave 2's four
+ * and why it could not have stood on its own at all.
+ * `export_subscriptions.domain_id` cascades, so a domain deleted
+ * through `DomainStore` has to take its subscriptions with it — the
+ * topics and sources argument — and
  * `export_subscriptions.connector_id` names a `connectors` row, so a
  * write here has to be able to ask whether that row is there — the
  * connectors argument, read from the writing end. A subscriptions
  * fake standing alone could answer neither question, and two fakes
  * would agree with each other until a case deleted something.
+ *
+ * `FindingStore` IS THE FIFTH AND NEEDS THE FIRST REASON ALONE,
+ * which is the topics-and-sources argument reaching two levels
+ * further than it has before. `findings.domain_id` cascades, so a
+ * domain deleted through `DomainStore` has to take its findings —
+ * and `finding_sightings.finding_id` and `finding_labels.finding_id`
+ * cascade onto those, so it has to take their sightings and their
+ * rulings too. A findings fake standing alone could not be asked
+ * about a domain at all, and one sharing no state with the sources
+ * half could not say why a sighting planted through this port is
+ * invisible to `SourceStore.countSourceDependents`.
+ *
+ * `DocumentStore` IS THE SIXTH AND NEEDS THE FIRST REASON ALONE AS
+ * WELL, on the shallowest reading of it any half here has.
+ * `documents.domain_id` cascades, so a domain deleted through
+ * `DomainStore` has to take its corpus, and nothing hangs off a
+ * document that this store can plant. What it could not do standing
+ * alone is the OTHER thing: `SourceStore` reads the same table two
+ * ways, so only a shared dataset can say why a row planted for the
+ * corpus page answers no failures queue and holds no source's
+ * delete.
+ *
+ * `EntityStore` IS THE SEVENTH AND NEEDS THE FIRST REASON REACHING
+ * ITS FURTHEST YET. `entities.domain_id` cascades, so a domain
+ * deleted through `DomainStore` has to take its registry; the
+ * research hanging off those entities cascades onto them; and
+ * `research_pool.domain_id` cascades directly, so the intentions go
+ * too whether or not they name a subject. It also reads a table
+ * ANOTHER half plants — `entity_research`, keyed by the subject — so
+ * an entities fake standing alone could not be handed the rows the
+ * findings half already supplies, and two fakes over that table
+ * would agree with each other until a case deleted a domain.
  *
  * Nothing in `src/` is handed a {@link MemoryResearchStore} — a
  * service takes the port — so the seams below cannot become a way for
@@ -745,18 +1827,33 @@ export interface MemoryResearchStore extends
   TopicStore,
   SourceStore,
   ConnectorStore,
-  SubscriptionStore {
+  SubscriptionStore,
+  FindingStore,
+  DocumentStore,
+  EntityStore,
+  RunStore {
   /**
    * Plants what a domain has ACCUMULATED, for the delete guard to
    * read back through {@link DomainStore.countDomainDependents}.
    *
-   * NOTHING HERE WRITES `findings`. No port declares an insert for
-   * it, and the pipeline that fills it arrives in a later phase — so
-   * the state the delete guard exists for is unreachable through the
-   * ports themselves, and without this seam every count answers zero
-   * and the guard is exercisable only against a real database. That
+   * NOTHING HERE WRITES `findings`, AND A SEAM NOW PLANTS THEM.
+   * No port declares an insert for that table — `FindingStore`
+   * reads it six ways and writes only a LABEL — so the state the
+   * delete guard exists for was unreachable through the ports
+   * themselves, and without this seam every count answered zero and
+   * the guard was exercisable only against a real database. That
    * would put the one rule the spec argues hardest for in the half of
    * the suite that needs a container up.
+   *
+   * {@link MemoryResearchStore.setDomainFindings} DOES NOT MOVE THIS
+   * COUNT, and that is the file's third known divergence rather than
+   * a second authority. Rows planted there are what the findings
+   * page, its total and the single lookup answer from; the number
+   * planted HERE is what `countDomainDependents` answers, because
+   * `src/domains/service.test.ts` and `src/domains/routes.test.ts`
+   * reach that guard over a store holding no finding at all. The
+   * paragraph below states the same decision for `topics` and
+   * `sources`, and that seam's own TSDoc carries the rest.
    *
    * `topics` AND `sources` ARE NOW BOTH WRITABLE AND BOTH COUNTS ARE
    * STILL PLANTED, which is the one place this file knowingly answers
@@ -895,6 +1992,335 @@ export interface MemoryResearchStore extends
    *   zero is how a case takes a plant back.
    */
   setConnectorSubscriptions(connectorId: number, count: number): void;
+
+  /**
+   * Plants the `findings` rows one domain has made, for the six
+   * reads over that table to answer from.
+   *
+   * NO PORT WRITES A `findings` ROW, and `src/findings/store.ts`
+   * states the absence IS the read-first rule rather than an
+   * omission: a handler cannot re-score a finding because there is
+   * nothing on the port to call. That leaves the page, its count,
+   * the single lookup and the three embedded reads with no reachable
+   * state, so this seam supplies it — and it supplies ROWS rather
+   * than numbers, because five of those six answer rows.
+   *
+   * THE COUNT IS COUNTED FROM WHAT WAS PLANTED, which is what keeps
+   * one dataset behind the page and its `meta.total`. A case
+   * planting four findings and asking for the second page of two
+   * gets a page of two and a total of four without saying either.
+   *
+   * IT DOES NOT MOVE {@link DomainStore.countDomainDependents},
+   * WHICH IS THIS FILE'S THIRD KNOWN DIVERGENCE and is
+   * {@link MemoryResearchStore.setConnectorSubscriptions}' decision
+   * taken again. That guard reads the number
+   * {@link MemoryResearchStore.setDomainDependents} planted and
+   * never these rows, because `src/domains/service.test.ts` and
+   * `src/domains/routes.test.ts` reach it by PLANTING over a store
+   * holding no finding at all, and a rule mixing a planted number
+   * with a counted one answers neither. So a domain holding a
+   * planted finding is offered a delete `src/domains/db-store.ts`
+   * would refuse, one case here pins that rather than leaving it to
+   * be discovered, and `tests/live/api-wave3.live.test.ts` is where
+   * the counted answer is discharged.
+   *
+   * @param domainId - The domain that made them. Need not name a
+   *   stored domain: the rows are plantable ahead of it, and every
+   *   read below answers about an id rather than about a domain.
+   * @param findings - What to record, WHOLE. A second call replaces
+   *   the first rather than appending to it — the same whole-unit
+   *   rule {@link MemoryResearchStore.setSourceDocuments} states,
+   *   for the same reason: under an append there is no way to
+   *   express a domain going back to none. Each row's `createdAt`
+   *   and each `fields` payload is copied on the way in.
+   */
+  setDomainFindings(
+    domainId: number,
+    findings: readonly MemoryDomainFinding[],
+  ): void;
+
+  /**
+   * Plants where one finding has been seen, for
+   * {@link FindingStore.listFindingSightings} to answer from.
+   *
+   * ROWS RATHER THAN THE NUMBER
+   * {@link MemoryResearchStore.setSourceSightings} PLANTS OVER THE
+   * SAME TABLE, and {@link MemoryFindingSighting} carries why: the
+   * two ports can ask different questions of `finding_sightings`, so
+   * a shape answering one cannot answer the other. The consequence
+   * is that a row planted here is invisible to
+   * `SourceStore.countSourceDependents` and cannot hold a source's
+   * delete, which is a known divergence stated at both seams and
+   * pinned by a case.
+   *
+   * @param findingId - The finding the rows cite. Need not name a
+   *   planted finding: the read answers about an id rather than
+   *   about a finding, and an id nothing carries answers an empty
+   *   list either way.
+   * @param sightings - What to record, WHOLE. A second call replaces
+   *   the first, on the terms
+   *   {@link MemoryResearchStore.setDomainFindings} states, and each
+   *   row's `seenAt` is copied on the way in.
+   */
+  setFindingSightings(
+    findingId: number,
+    sightings: readonly MemoryFindingSighting[],
+  ): void;
+
+  /**
+   * Plants what research has recorded about one entity, for
+   * {@link FindingStore.listFindingResearch} and for
+   * {@link EntityStore.listEntityResearch} to answer from.
+   *
+   * ONE SEAM AND TWO READERS, which is why no entities seam over this
+   * table exists. The entities half reads it by the KEY it is planted
+   * under, and the findings half reaches the same rows through a
+   * finding's own `entity_id` — so this is the one seam here whose
+   * key differs from the id ONE of its reads takes, and
+   * {@link MemoryEntityResearch} carries what that costs a case: a
+   * finding has to be attributed before any planted research is
+   * reachable through it.
+   *
+   * @param entityId - The subject the research is about. Need not
+   *   name a planted entity: both readers answer about an id rather
+   *   than about a row, so research is plantable ahead of the
+   *   registry — which is also what leaves it standing when a domain
+   *   delete removes entities it was never hung off.
+   * @param research - What to record, WHOLE. A second call replaces
+   *   the first, on the terms
+   *   {@link MemoryResearchStore.setDomainFindings} states, and each
+   *   row's `researchedAt` and `payload` is copied on the way in.
+   */
+  setEntityResearch(
+    entityId: number,
+    research: readonly MemoryEntityResearch[],
+  ): void;
+
+  /**
+   * Plants the `documents` rows one domain holds, for the two reads
+   * over that table to answer from.
+   *
+   * NO PORT WRITES A `documents` ROW, and `src/documents/store.ts`
+   * states the absence IS the read-first rule rather than an
+   * omission: a handler cannot offer to re-parse a failed capture
+   * because there is nothing on the port to call. That leaves the
+   * corpus page and its count with no reachable state, so this seam
+   * supplies it — and it supplies ROWS rather than a number, because
+   * one of the two answers rows and the other counts the same
+   * predicate over them.
+   *
+   * IT IS NOT {@link MemoryResearchStore.setSourceDocuments}, AND
+   * NEITHER SEES THE OTHER'S ROWS. That is this file's fifth known
+   * divergence: the two ports read `documents` differently, so each
+   * gets the seam its own readers can be driven through, and a row
+   * planted here answers no parse-status aggregate, no failures
+   * queue and no `documents` member of
+   * {@link SourceStore.countSourceDependents}. One case pins each
+   * face rather than leaving it to be discovered, and
+   * `tests/live/api-wave3.live.test.ts` is where one table behind
+   * both is discharged.
+   *
+   * @param domainId - The domain that holds them. Need not name a
+   *   stored domain: the rows are plantable ahead of it, and both
+   *   reads answer about an id rather than about a domain.
+   * @param documents - What to record, WHOLE. A second call replaces
+   *   the first rather than appending to it — the same whole-unit
+   *   rule {@link MemoryResearchStore.setDomainFindings} states, for
+   *   the same reason: under an append there is no way to express a
+   *   domain going back to none. Each row's `capturedAt` is copied
+   *   on the way in.
+   */
+  setDomainDocuments(
+    domainId: number,
+    documents: readonly MemoryDomainDocument[],
+  ): void;
+
+  /**
+   * Plants the `entities` rows one domain's registry holds, for the
+   * six reads and the registry write to work over.
+   *
+   * NO PORT INSERTS AN ENTITY AND NONE DELETES ONE, which
+   * `src/entities/store.ts` states as the shape of its write surface
+   * rather than as an omission: the two writers rewrite a subject and
+   * stamp an intention, and neither adds a row. Nothing in the tree
+   * writes an `entities` row at all today — no workflow inserts one
+   * and `scripts/approve.ts` reads the registry through joins — so
+   * this seam is not standing in for a writer the ports merely lack,
+   * it is standing in for one the repository has yet to grow.
+   *
+   * IT PLANTS ROWS AND THEN A METHOD REWRITES THEM, which is where
+   * this seam differs from every other one here.
+   * {@link EntityStore.updateEntity} edits what was planted, so a
+   * second call to this seam REPLACES what a patch has written as
+   * readily as what a previous plant did.
+   *
+   * @param domainId - The domain whose registry these are. Need not
+   *   name a stored domain: the rows are plantable ahead of it, and
+   *   every read below answers about an id rather than about a
+   *   domain.
+   * @param entities - What to record, WHOLE. A second call replaces
+   *   the first rather than appending to it — the same whole-unit
+   *   rule {@link MemoryResearchStore.setDomainFindings} states, for
+   *   the same reason: under an append there is no way to express a
+   *   registry going back to none. Each row's `attributes` payload is
+   *   copied on the way in.
+   */
+  setDomainEntities(
+    domainId: number,
+    entities: readonly MemoryDomainEntity[],
+  ): void;
+
+  /**
+   * Plants the `research_pool` rows queued under one domain, for the
+   * three reads and the approval to work over.
+   *
+   * KEYED BY THE DOMAIN AND NOT BY THE SUBJECT, which is the one
+   * thing about this seam a reader would predict the other way round.
+   * `research_pool.entity_id` is NULLABLE — an intention can be
+   * raised from a finding whose subject nothing has attributed yet —
+   * so a subject-keyed seam would have no key to plant those rows
+   * under at all — exactly as
+   * {@link MemoryResearchStore.setSourceDocuments} has none for a
+   * document that came through no feed. The domain is also what the
+   * cascade follows, `research_pool.domain_id` being the column that
+   * carries it.
+   *
+   * IT IS THE FIRST OF THE TWO SEAMS HERE THAT CAN REFUSE, the
+   * other being
+   * {@link MemoryResearchStore.setDomainProposals} over the other
+   * gate's columns. Every row is held against
+   * `research_pool_approval_check` before any is stored, so a row
+   * carrying `researched_at` and no `approved_at` throws a
+   * {@link StoreRefusal} and the batch lands nowhere. The module
+   * header carries why the check has to be reached from here rather
+   * than through a method, and why the refusal is over the WHOLE
+   * batch.
+   *
+   * @param domainId - The domain the intentions were raised under.
+   *   Need not name a stored domain, for the reason the seam above
+   *   gives.
+   * @param rows - What to record, WHOLE. A second call replaces the
+   *   first rather than appending to it, on the terms
+   *   {@link MemoryResearchStore.setDomainFindings} states. Each
+   *   row's `createdAt`, `approvedAt` and `researchedAt` is copied on
+   *   the way in, and so is its `searchTerms` list.
+   * @throws A `check-violation` {@link StoreRefusal} naming
+   *   `research_pool_approval_check` when any row states that it was
+   *   closed without stating that it was approved. Nothing is stored
+   *   when it does.
+   */
+  setDomainPool(
+    domainId: number,
+    rows: readonly MemoryResearchPoolRow[],
+  ): void;
+
+  /**
+   * Plants the `runs` rows the service has made, for the page, the
+   * single lookup and the spend summary's join to answer from.
+   *
+   * FLAT WHERE EVERY OTHER SEAM HERE IS KEYED, and that is
+   * `runs.domain_id` being NULLABLE rather than a shape chosen for
+   * convenience. Every keyed seam above plants under the column its
+   * rows hang off; a domain-keyed seam here would have no key for the
+   * maintenance and cross-domain ticks, which are precisely the rows
+   * the unfiltered page and the null spend bucket are claimed to
+   * hold. So the domain rides on {@link MemoryRun.domainId} and the
+   * cascade reads it off the row — the trap
+   * {@link MemoryResearchStore.setSourceDocuments} meets from the
+   * other side, where a document with no `source_id` has no key on
+   * that seam at all.
+   *
+   * NO PORT WRITES A RUN, AND THAT IS WHAT THIS STANDS IN FOR.
+   * `RunStore` declares six reads and no seventh method, so there is
+   * no insert to burn an id on and no update to move a status; a pass
+   * is opened by `ar-dispatch` and this seam is the whole of how one
+   * arrives here. `src/runs/store.ts` carries why the absence is the
+   * read-only rule rather than an omission.
+   *
+   * @param rows - What to record, WHOLE. A second call replaces the
+   *   first rather than appending to it — the same whole-unit rule
+   *   {@link MemoryResearchStore.setDomainFindings} states, for the
+   *   same reason: under an append there is no way to express a
+   *   deployment going back to having run nothing. Each row's
+   *   `startedAt` and `finishedAt` is copied on the way in, and so
+   *   are its `counts` and `errors` payloads. A row may name a
+   *   domain nothing stored: every read below answers about an id
+   *   rather than about a domain, so a pass is plantable ahead of
+   *   the row it hangs off.
+   */
+  setRuns(rows: readonly MemoryRun[]): void;
+
+  /**
+   * Plants the `llm_calls` rows the ledger holds, for the per-run
+   * reads and the spend summary to answer from.
+   *
+   * FLAT FOR {@link MemoryResearchStore.setRuns}' REASON one table
+   * down: `llm_calls.run_id` is nullable, so a run-keyed seam would
+   * have no key for a call attributed to no pass, and that call is
+   * one of the two kinds the null spend bucket is claimed to count.
+   *
+   * ONE SEAM AND THREE READERS, two of them addressed by a run id
+   * and the third by nothing at all. A row carrying a null `runId` is
+   * therefore in NO ledger and in EVERY summary, which is a state
+   * only a flat plant can put this store in.
+   *
+   * @param rows - What to record, WHOLE, on the terms
+   *   {@link MemoryResearchStore.setRuns} states. Each row's
+   *   `calledAt` is copied on the way in. A row may name a run
+   *   nothing stored: the summary reads a call's domain through
+   *   whatever run it finds and answers the null bucket when it
+   *   finds none, which is what a `LEFT JOIN` does and what the
+   *   foreign key makes unreachable in a deployment.
+   */
+  setLlmCalls(rows: readonly MemoryLlmCall[]): void;
+
+  /**
+   * Plants the `source_config_proposals` rows queued against one
+   * domain's feeds, for the queue, the by-id read and the approval
+   * to work over.
+   *
+   * KEYED BY THE DOMAIN AND NOT BY THE SOURCE, which is the one
+   * thing about this seam a reader inside the sources half would
+   * predict the other way round — its two neighbours,
+   * {@link MemoryResearchStore.setSourceDocuments} and
+   * {@link MemoryResearchStore.setSourceSightings}, are both keyed
+   * by the feed. `source_config_proposals.domain_id` is what the
+   * cascade follows, so keying on it is what makes a domain delete
+   * one line rather than a walk of the sources it is about to
+   * remove — and it is the key
+   * {@link MemoryResearchStore.setDomainPool} uses over the other
+   * gate, one table across, for the same reason. The source rides
+   * on {@link MemorySourceProposal.sourceId} instead, which is
+   * where every read below is scoped from.
+   *
+   * IT IS THE SECOND SEAM HERE THAT CAN REFUSE, and its refusal is
+   * {@link MemoryResearchStore.setDomainPool}'s written over the
+   * other gate's columns. Every row is held against
+   * `source_config_proposals_approval_check` before any is stored,
+   * so a row carrying `applied_at` and no `approved_at` throws a
+   * {@link StoreRefusal} and the batch lands nowhere. The module
+   * header carries why the check has to be reached from here rather
+   * than through a method: the approval writes both stamps in an
+   * order that satisfies it, and nothing on this port writes either
+   * column back to null.
+   *
+   * @param domainId - The domain whose feeds the proposals are for.
+   *   Need not name a stored domain, for the reason the seams above
+   *   give.
+   * @param rows - What to record, WHOLE. A second call replaces the
+   *   first rather than appending to it, on the terms
+   *   {@link MemoryResearchStore.setDomainFindings} states. Each
+   *   row's `proposedAt`, `approvedAt` and `appliedAt` is copied on
+   *   the way in, and so are both proposed documents.
+   * @throws A `check-violation` {@link StoreRefusal} naming
+   *   `source_config_proposals_approval_check` when any row states
+   *   that it was applied without stating that it was approved.
+   *   Nothing is stored when it does.
+   */
+  setDomainProposals(
+    domainId: number,
+    rows: readonly MemorySourceProposal[],
+  ): void;
 }
 
 /** What {@link createMemoryResearchStore} may be handed. */
@@ -1014,6 +2440,23 @@ const SOURCE_DOCUMENTS_FK = 'documents_source_id_sources_id_fk';
 const SOURCE_SIGHTINGS_FK = 'finding_sightings_source_id_sources_id_fk';
 
 /**
+ * The foreign key from `source_config_proposals.source_id`, and the
+ * THIRD of the names a refused source delete can carry.
+ *
+ * `ON DELETE no action` like the two above it, and read off
+ * `drizzle/0005_freezing_hairball.sql` rather than off a plan.
+ * `src/db/schema/sources.ts` argues it at the column: a proposal is
+ * the account of what was asked for one feed, so a cascade would
+ * drop the record of a decision along with the feed it was about.
+ *
+ * Until {@link MemoryResearchStore.setDomainProposals} there was no
+ * dataset this store could be in where the key would fire, and the
+ * module header records why it was left alone rather than imitated.
+ * A plant reaches the state directly now.
+ */
+const SOURCE_PROPOSALS_FK = 'source_config_proposals_source_id_sources_id_fk';
+
+/**
  * The natural key on `connectors`, spelled as
  * `src/db/schema/sources.ts` spells it. The one key both connector
  * writes name: `name` is patchable per `ConnectorPatch`, so an
@@ -1046,9 +2489,10 @@ const CONNECTOR_KIND_CHECK = 'connectors_kind_check';
  * Exactly one, re-derived from the generated SQL rather than taken
  * from a plan — the reading the sources half's plan got wrong by
  * one, where a sibling leg's migration had added a third refusing key
- * nobody had named. So unlike that half there is no key here left
- * unimitated, and no dataset this store can be in that a deployment
- * would refuse a delete over while this one takes it.
+ * nobody had named. That key is imitated now, a seam having reached
+ * the state it needs, so neither half leaves one unimitated — and
+ * this half is still the one with no cross-domain shape to diverge
+ * over, where the sources half now has one at its own delete.
  */
 const CONNECTOR_SUBSCRIPTIONS_FK
   = 'export_subscriptions_connector_id_connectors_id_fk';
@@ -1109,6 +2553,121 @@ const SUBSCRIPTION_DOMAIN_FK
  */
 const SUBSCRIPTION_CONNECTOR_FK
   = 'export_subscriptions_connector_id_connectors_id_fk';
+
+/**
+ * The foreign key from `finding_labels.finding_id`, and the ONE
+ * mechanism the findings half can reach.
+ *
+ * `ON DELETE cascade`, so it never holds a delete the way
+ * {@link SOURCE_DOCUMENTS_FK} does — what it refuses is the WRITE,
+ * a ruling appended onto a finding that is not there.
+ * `src/findings/store.ts` calls that a race rather than the ordinary
+ * path, the service having resolved the finding first, but a race a
+ * deployment can lose is a state this store can be put in directly.
+ *
+ * It is the half's whole refusal surface. `findings`,
+ * `finding_sightings` and `entity_research` are all PLANTED here
+ * rather than written, so no key onto any of them is reachable
+ * through a method. `research_pool_finding_id_findings_id_fk` — the
+ * one `ON DELETE no action` key onto `findings.id` — is left
+ * unimitated for a reason that has since narrowed: the entities half
+ * plants pool rows, so a row citing a finding is reachable, and what
+ * keeps the key from firing is the CASCADE rather than the absence
+ * of a row. Only a citation crossing two domains would reach it, and
+ * the module header carries that as the sixth known divergence.
+ */
+const FINDING_LABEL_FINDING_FK = 'finding_labels_finding_id_findings_id_fk';
+
+/**
+ * The member of a finding's `fields` payload naming the category it
+ * is filed under.
+ *
+ * A SECOND DECLARATION OF ONE NAME, and saying so is the honest
+ * reading rather than a gap to close here: `ar-digest`'s assembly
+ * node declares `FINDING_CATEGORY_FIELD` for the same string, and
+ * nothing in the tree exports either. `src/findings/store.ts` names
+ * that constant as the authority and this file imitates the column
+ * read rather than the digest's own reduction of it, which is the
+ * one place the two are stated to part.
+ */
+const FINDING_CATEGORY_FIELD = 'category';
+
+/**
+ * The natural key on `entities`, spelled as
+ * `src/db/schema/entities.ts` spells it.
+ *
+ * Over the PAIR rather than over the name alone, so two domains are
+ * free to track unrelated subjects under one key and only a rename
+ * inside a domain can collide. The registry write is the one call
+ * that reaches it: nothing here inserts an entity.
+ */
+const ENTITY_NAME_NORM_UNIQUE = 'entities_domain_id_name_norm_unique';
+
+/**
+ * The self-referencing foreign key on `entities.alias_of`.
+ *
+ * Unlike {@link CATEGORY_PARENT_FK}, which sits on the same kind of
+ * column, this name stands for ONE rule here: the refusal of a WRITE
+ * naming an id no entity carries. The other rule that name carries in
+ * a deployment — a subject aliases still point at holding its own
+ * delete — is unreachable, `EntityStore` declaring no delete at all.
+ */
+const ENTITY_ALIAS_FK = 'entities_alias_of_entities_id_fk';
+
+/**
+ * The CHECK on `research_pool` holding its two stamps against each
+ * other, and the fourth CHECK this file imitates.
+ *
+ * The only one reached from a SEAM rather than from a method, and the
+ * module header carries why: the approval write moves `approved_at`
+ * from null to an instant and nothing on the port writes
+ * `researched_at`, so no call can propose the state this refuses.
+ */
+const POOL_APPROVAL_CHECK = 'research_pool_approval_check';
+
+/**
+ * The status {@link EntityStore.approvePoolRow} and
+ * {@link SourceStore.approveAndApplyProposal} both write.
+ *
+ * ONE CONSTANT FOR TWO GATES, which is `scripts/approve.ts`' own
+ * shape: `research_pool.status` and `source_config_proposals.status`
+ * are two columns generated from ONE tuple, so a second constant
+ * here would be a second authority for a value neither table gets
+ * to disagree about.
+ *
+ * Annotated against {@link ResearchPoolStatus} rather than left a
+ * bare literal, for the reason `APPROVED_STATUS` in
+ * `scripts/approve.ts` records: the member belongs to
+ * `RESEARCH_POOL_STATUSES`, the tuple both status CHECKs are
+ * generated from, so renaming it there fails this file's compile
+ * instead of leaving a fake that writes a status the database would
+ * refuse.
+ */
+const APPROVED_STATUS: ResearchPoolStatus = 'approved';
+
+/**
+ * The CHECK on `source_config_proposals` holding its two stamps
+ * against each other, and the FIFTH CHECK this file imitates.
+ *
+ * {@link POOL_APPROVAL_CHECK} over the other gate's columns, spelled
+ * `applied_at IS NULL OR approved_at IS NOT NULL` where that one
+ * spells `researched_at`. The second one reached from a SEAM rather
+ * than from a method, and for the same reason: the approval below
+ * writes `approved_at` before `applied_at` and neither back to null,
+ * so no call can propose the state this refuses.
+ */
+const PROPOSAL_APPROVAL_CHECK = 'source_config_proposals_approval_check';
+
+/**
+ * The status a proposal is queued under, and the whole of what
+ * {@link SourceStore.listPendingProposals} selects on.
+ *
+ * `listPendingProposals` in `scripts/approve.ts` reads on the same
+ * member of the same tuple, which is the substance of one queue with
+ * two clients rather than a coincidence to be preserved by hand.
+ * Annotated on {@link APPROVED_STATUS}'s terms.
+ */
+const PENDING_STATUS: ResearchPoolStatus = 'pending';
 
 /** Three zeros: what a domain nothing points at has accumulated. */
 const NO_DEPENDENTS: DomainDependentCounts = {
@@ -1344,6 +2903,52 @@ function failureOf(row: MemorySourceDocument): SourceFailureRecord {
 }
 
 /**
+ * A planted corpus document whose `Date` belongs to nobody else.
+ *
+ * Used on the way IN, where the seam is handed a row a case built,
+ * and again on the way out through {@link documentOf}.
+ * {@link copyPlantedDocument} is the same shape one seam over, and
+ * the two are separate for the reason their plants are:
+ * `MemoryDomainDocument` carries a column `MemorySourceDocument`
+ * does not, so one function serving both would have to widen the
+ * narrower shape.
+ *
+ * @param row - The document to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedCorpusDocument(
+  row: MemoryDomainDocument,
+): MemoryDomainDocument {
+  return { ...row, capturedAt: copyInstant(row.capturedAt) };
+}
+
+/**
+ * The corpus page's projection of one planted document.
+ *
+ * EVERY MEMBER, unlike {@link failureOf} beside it: the record and
+ * the plant carry the same seven columns, so this is a copy with a
+ * fresh `Date` rather than a narrowing. What makes it a projection
+ * anyway is the table — `documents` carries `raw`, `features`,
+ * `feature_version`, `embedding`, `embedding_model`, `hash` and
+ * `domain_id` too, and neither shape here has ever held them.
+ *
+ * @param row - The stored document.
+ * @returns The seven members {@link DocumentRecord} declares, its
+ *   `capturedAt` copied.
+ */
+function documentOf(row: MemoryDomainDocument): DocumentRecord {
+  return {
+    id: row.id,
+    sourceId: row.sourceId,
+    url: row.url,
+    body: row.body,
+    parseStatus: row.parseStatus,
+    parseError: row.parseError,
+    capturedAt: copyInstant(row.capturedAt),
+  };
+}
+
+/**
  * A connector record whose config belongs to nobody else.
  *
  * ONE MEMBER rather than {@link copySource}'s four:
@@ -1410,6 +3015,572 @@ function copyDomain(row: DomainRecord): DomainRecord {
 }
 
 /**
+ * A `fields` payload sharing no object with the one handed in.
+ *
+ * A JSON round trip for the reason {@link copySettings} gives, and a
+ * function of its own rather than a widening of
+ * {@link copyJsonDocument} because the shape is DECLARED here:
+ * `findings.fields` carries `$type<Record<string, unknown>>()`, so
+ * what crosses the port is a record rather than the `unknown` a
+ * parser config is. The round trip is also what a `jsonb` column
+ * does in each direction, which is the behaviour being imitated
+ * rather than merely a deep copy — and it is what keeps a key
+ * spelling `__proto__` an OWN member on the way out, `JSON.parse`
+ * making one where an object literal could not.
+ *
+ * @param fields - The payload to copy.
+ * @returns An equal payload sharing nothing with it.
+ */
+function copyFields(
+  fields: Record<string, unknown>,
+): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(fields)) as Record<string, unknown>;
+}
+
+/**
+ * A planted finding whose mutable members belong to nobody else.
+ *
+ * Used on the way IN, where the seam is handed a row a case built,
+ * and its two mutable members are the `jsonb` payload and the stamp.
+ * `createdAt` is never null, unlike a source's two, so there is no
+ * branch.
+ *
+ * @param row - The finding to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedFinding(
+  row: MemoryDomainFinding,
+): MemoryDomainFinding {
+  return {
+    ...row,
+    fields: copyFields(row.fields),
+    createdAt: copyInstant(row.createdAt),
+  };
+}
+
+/**
+ * A planted sighting whose `Date` belongs to nobody else.
+ *
+ * {@link copyPlantedDocument}'s shape: one stamp and nothing one
+ * level down, `external_id` being text and `source_id` a number.
+ *
+ * @param row - The sighting to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedSighting(
+  row: MemoryFindingSighting,
+): MemoryFindingSighting {
+  return { ...row, seenAt: copyInstant(row.seenAt) };
+}
+
+/**
+ * A planted research row whose mutable members belong to nobody
+ * else.
+ *
+ * {@link copyPlantedFinding}'s shape with {@link copyJsonDocument}
+ * standing where {@link copyFields} does, for the reason
+ * {@link MemoryEntityResearch} gives: `entity_research.payload`
+ * carries no `$type`, so there is no declared depth a spread could
+ * be written to instead.
+ *
+ * @param row - The research to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedResearch(
+  row: MemoryEntityResearch,
+): MemoryEntityResearch {
+  return {
+    ...row,
+    payload: copyJsonDocument(row.payload),
+    researchedAt: copyInstant(row.researchedAt),
+  };
+}
+
+/**
+ * A label record whose `Date` belongs to nobody else.
+ *
+ * The one record in this half that a METHOD writes rather than a
+ * seam plants, so this copy runs in both directions: over the row
+ * the append answers and over every row the sequence read answers.
+ *
+ * @param row - The stored row.
+ * @returns A copy safe to hand across the port.
+ */
+function copyFindingLabel(row: FindingLabelRecord): FindingLabelRecord {
+  return { ...row, labelledAt: copyInstant(row.labelledAt) };
+}
+
+/**
+ * The port's projection of one planted finding.
+ *
+ * The domain arrives as the KEY the row was planted under rather
+ * than off the row, which is what {@link MemoryDomainFinding} omits
+ * it for.
+ *
+ * @param domainId - The domain the row was planted under.
+ * @param row - The stored finding.
+ * @returns The eight members {@link FindingRecord} declares, its
+ *   payload and its stamp copied.
+ */
+function findingOf(
+  domainId: number,
+  row: MemoryDomainFinding,
+): FindingRecord {
+  return {
+    id: row.id,
+    domainId,
+    documentId: row.documentId,
+    entityId: row.entityId,
+    fields: copyFields(row.fields),
+    score: row.score,
+    scoreVersion: row.scoreVersion,
+    createdAt: copyInstant(row.createdAt),
+  };
+}
+
+/**
+ * The port's projection of one planted sighting.
+ *
+ * @param findingId - The finding the row was planted under.
+ * @param row - The stored sighting.
+ * @returns The five members {@link FindingSightingRecord} declares,
+ *   its stamp copied.
+ */
+function sightingOf(
+  findingId: number,
+  row: MemoryFindingSighting,
+): FindingSightingRecord {
+  return {
+    id: row.id,
+    findingId,
+    sourceId: row.sourceId,
+    externalId: row.externalId,
+    seenAt: copyInstant(row.seenAt),
+  };
+}
+
+/**
+ * The port's projection of one planted research row.
+ *
+ * @param entityId - The entity the row was planted under.
+ * @param row - The stored research.
+ * @returns The six members {@link FindingResearchRecord} declares,
+ *   its payload and its stamp copied.
+ */
+function researchOf(
+  entityId: number,
+  row: MemoryEntityResearch,
+): FindingResearchRecord {
+  return {
+    id: row.id,
+    entityId,
+    runId: row.runId,
+    summary: row.summary,
+    payload: copyJsonDocument(row.payload),
+    researchedAt: copyInstant(row.researchedAt),
+  };
+}
+
+/**
+ * A planted entity whose `attributes` payload belongs to nobody
+ * else.
+ *
+ * One member rather than {@link copyPlantedFinding}'s two, and no
+ * stamp at all: `entities` carries neither `created_at` nor
+ * `updated_at`, so the payload is the whole of what a caller could
+ * otherwise write through.
+ *
+ * @param row - The row a seam or a patch is storing.
+ * @returns A copy safe to store.
+ */
+function copyPlantedEntity(row: MemoryDomainEntity): MemoryDomainEntity {
+  return { ...row, attributes: copyJsonDocument(row.attributes) };
+}
+
+/**
+ * The port's projection of one planted entity.
+ *
+ * The domain arrives as the KEY the row was planted under rather than
+ * off the row, which is what {@link MemoryDomainEntity} omits it for
+ * — and it is on the ANSWER because `PATCH /entities/:id` carries no
+ * slug, so this member is the only thing that says whose registry was
+ * edited.
+ *
+ * @param domainId - The domain the row was planted under.
+ * @param row - The stored entity.
+ * @returns The five members {@link EntityRecord} declares beyond its
+ *   key, its payload copied.
+ */
+function entityOf(domainId: number, row: MemoryDomainEntity): EntityRecord {
+  return {
+    id: row.id,
+    domainId,
+    name: row.name,
+    nameNorm: row.nameNorm,
+    aliasOf: row.aliasOf,
+    attributes: copyJsonDocument(row.attributes),
+  };
+}
+
+/**
+ * A planted pool row whose three stamps and whose term list belong to
+ * nobody else.
+ *
+ * FOUR MEMBERS, THE WIDEST COPY IN THIS FILE. Two of the stamps are
+ * nullable and a null stays a null, which matters more here than
+ * anywhere above: the pair of them IS the state
+ * {@link POOL_APPROVAL_CHECK} reads, so a copy turning either into
+ * something else would move the row across the rule. `searchTerms` is
+ * a list of strings and is copied one level, on the terms
+ * `topics.search_terms` is: there is nothing below it.
+ *
+ * @param row - The row a seam or an approval is storing.
+ * @returns A copy safe to store.
+ */
+function copyPlantedPoolRow(
+  row: MemoryResearchPoolRow,
+): MemoryResearchPoolRow {
+  return {
+    ...row,
+    searchTerms: [...row.searchTerms],
+    createdAt: copyInstant(row.createdAt),
+    approvedAt: row.approvedAt === null
+      ? null
+      : copyInstant(row.approvedAt),
+    researchedAt: row.researchedAt === null
+      ? null
+      : copyInstant(row.researchedAt),
+  };
+}
+
+/**
+ * The port's projection of one planted pool row.
+ *
+ * WHOLE RATHER THAN NARROWED, {@link ResearchPoolRecord} carrying no
+ * `domainId` for this to drop — so the projection is a copy plus the
+ * widening of `status` back to the `string` a SELECT answers.
+ *
+ * @param row - The stored intention.
+ * @returns A copy safe to hand across the port.
+ */
+function poolRowOf(row: MemoryResearchPoolRow): ResearchPoolRecord {
+  return copyPlantedPoolRow(row);
+}
+
+/**
+ * The entities half's projection of one planted research row.
+ *
+ * `entityId` IS DROPPED, WHERE {@link researchOf} ANSWERS IT. Two
+ * ports read `entity_research` and each takes the same rule from a
+ * different end: the entity is the PATH on
+ * `GET /entities/:id/research`, so answering it back would echo the
+ * request, while a caller of `listFindingResearch` named a finding
+ * and the entity is what the port resolved.
+ *
+ * @param row - The stored research.
+ * @returns The five members {@link EntityResearchRecord} declares,
+ *   its payload and its stamp copied.
+ */
+function entityResearchOf(row: MemoryEntityResearch): EntityResearchRecord {
+  return {
+    id: row.id,
+    runId: row.runId,
+    summary: row.summary,
+    payload: copyJsonDocument(row.payload),
+    researchedAt: copyInstant(row.researchedAt),
+  };
+}
+
+/**
+ * A planted run whose mutable members belong to nobody else.
+ *
+ * FOUR MEMBERS, WHICH IS THE WIDEST COPY IN THIS FILE: two stamps
+ * and two `jsonb` payloads, where {@link copySource} takes four over
+ * two stamps and two documents and {@link copyPlantedFinding} takes
+ * two. `finishedAt` is nullable and `startedAt` is not, which is the
+ * branch a source's two nullable stamps also carry.
+ *
+ * THE TWO PAYLOADS ARE COPIED TO DIFFERENT DEPTHS, and that is each
+ * column's own declaration rather than an inconsistency. `counts`
+ * carries a `$type` of `Record<string, number>`, so a fresh object
+ * is the whole of it — `topics.search_terms`' argument for a list of
+ * strings — while `errors` carries no `$type` at all and takes the
+ * round trip every undeclared payload here takes.
+ *
+ * @param row - The run to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedRun(row: MemoryRun): MemoryRun {
+  return {
+    ...row,
+    startedAt: copyInstant(row.startedAt),
+    finishedAt: row.finishedAt === null
+      ? null
+      : copyInstant(row.finishedAt),
+    counts: { ...row.counts },
+    errors: copyJsonDocument(row.errors),
+  };
+}
+
+/**
+ * A planted model call whose `Date` belongs to nobody else.
+ *
+ * {@link copyPlantedSighting}'s shape: one stamp and nothing one
+ * level down, both magnitudes being numbers and both text members
+ * strings.
+ *
+ * @param row - The call to copy.
+ * @returns A copy sharing no object with it.
+ */
+function copyPlantedLlmCall(row: MemoryLlmCall): MemoryLlmCall {
+  return { ...row, calledAt: copyInstant(row.calledAt) };
+}
+
+/**
+ * The runs page's projection of one planted pass.
+ *
+ * EVERY MEMBER, like {@link documentOf} and unlike {@link failureOf}:
+ * {@link RunRecord} is the whole row, so this is a copy with fresh
+ * mutable members rather than a narrowing. What keeps it a
+ * projection anyway is that the two CHECK-bearing members widen —
+ * the record answers the `string` a SELECT gives where the plant
+ * carries a union.
+ *
+ * @param row - The stored run.
+ * @returns The eight members {@link RunRecord} declares, its stamps
+ *   and both payloads copied.
+ */
+function runOf(row: MemoryRun): RunRecord {
+  return {
+    id: row.id,
+    domainId: row.domainId,
+    startedAt: copyInstant(row.startedAt),
+    finishedAt: row.finishedAt === null
+      ? null
+      : copyInstant(row.finishedAt),
+    status: row.status,
+    counts: { ...row.counts },
+    errors: copyJsonDocument(row.errors),
+    scheduledBy: row.scheduledBy,
+  };
+}
+
+/**
+ * The ledger's projection of one planted model call.
+ *
+ * ONE MEMBER SHORT, which is the shape {@link sightingOf} and
+ * {@link entityResearchOf} have for the opposite reason. Those two
+ * are handed the omitted key and put it BACK; this one DROPS
+ * `run_id`, because {@link RunStore.listRunLedger} is addressed by
+ * the run and a caller reading a run's ledger already holds it.
+ *
+ * @param row - The stored call.
+ * @returns The six members {@link LlmCallRecord} declares, its stamp
+ *   copied.
+ */
+function llmCallOf(row: MemoryLlmCall): LlmCallRecord {
+  return {
+    id: row.id,
+    node: row.node,
+    model: row.model,
+    promptChars: row.promptChars,
+    estTokens: row.estTokens,
+    calledAt: copyInstant(row.calledAt),
+  };
+}
+
+/**
+ * Adds one call's magnitude into a bucket's running sum.
+ *
+ * NULL PLUS A NUMBER IS THAT NUMBER AND NULL PLUS NULL IS NULL,
+ * which is `sum()` over a nullable column written out: Postgres skips
+ * the nulls and answers null for a group in which every row was
+ * null. That is the behaviour {@link SpendBucket.promptChars}
+ * requires and the one a store coalescing to zero would lose — zero
+ * is a real reading, so a day of calls that sent nothing would become
+ * indistinguishable from a day nobody measured.
+ *
+ * @param carried - The sum so far, or null while no call on this axis
+ *   has recorded anything.
+ * @param added - This call's reading, or null when it recorded none.
+ * @returns The new sum, still null when both were.
+ */
+function addMagnitude(
+  carried: number | null,
+  added: number | null,
+): number | null {
+  if (added === null) {
+    return carried;
+  }
+
+  return (carried ?? 0) + added;
+}
+
+/**
+ * The instant that opens the UTC day one call falls on.
+ *
+ * `date_trunc('day', called_at AT TIME ZONE 'UTC')` written out, and
+ * UTC EXPLICITLY rather than by inheriting a zone. `Date.UTC` over
+ * the three UTC parts reads no local offset at all, where
+ * `setHours(0, 0, 0, 0)` would truncate in whatever zone the process
+ * happens to run in — the same silent per-deployment difference
+ * `SpendBucket.day` says a session's `TimeZone` setting would make.
+ *
+ * @param at - When the call was made.
+ * @returns Midnight UTC of that day, as the bucket's own key.
+ */
+function utcDayOf(at: Date): Date {
+  return new Date(Date.UTC(
+    at.getUTCFullYear(),
+    at.getUTCMonth(),
+    at.getUTCDate(),
+  ));
+}
+
+/**
+ * The text `fields->>'category'` answers over one payload.
+ *
+ * THE COLUMN READ RATHER THAN THE DIGEST'S, which is the one place
+ * `src/findings/store.ts` says the two filings could part. Read by
+ * OWN key alone: the payload came out of a column rather than out of
+ * this file, so it carries a prototype, and an inherited member
+ * standing in for one nobody wrote would file a finding under a
+ * section on the strength of nothing.
+ *
+ * `->>` ANSWERS TEXT AND NOT A STRING MEMBER, which is why a
+ * non-string value is stringified rather than dropped: Postgres
+ * answers `5` for a numeric member and `true` for a boolean one, and
+ * a store matching strings alone would answer an empty page where a
+ * deployment answers a row. The honest limit is a COMPOSITE member,
+ * where jsonb normalises key order and whitespace and this does not,
+ * so the two spellings are not claimed to agree — no case rests on
+ * one, and a category key is text in every state a domain can
+ * declare.
+ *
+ * THE OWN-KEY READ IS AN HONEST ZERO HERE, and saying so is better
+ * than letting it read as a rule this file pins. A payload reaching
+ * this function came through {@link copyFields}, whose round trip
+ * keeps own members and drops everything else — which is what a
+ * `jsonb` column does too — so there is no inherited member left
+ * to guard against and no key on `Object.prototype` is spelled
+ * `category`. Measured: dropping the guard reddens no case in
+ * `tests/helpers/memory-research-store.test.ts`. It is kept because
+ * `ar-digest`'s assembly node reads a payload straight off a driver
+ * row, where the guard DOES have a subject, and a store spelling
+ * the read differently from the node it is imitating would be one
+ * more thing that can drift.
+ *
+ * @param fields - The stored payload.
+ * @returns The member's text, or null when the payload does not
+ *   carry it and when it carries the JSON null. Both are SQL NULL
+ *   under `->>`, and neither matches any key a caller can ask for.
+ */
+function categoryTextOf(
+  fields: Record<string, unknown>,
+): string | null {
+  if (!Object.hasOwn(fields, FINDING_CATEGORY_FIELD)) {
+    return null;
+  }
+
+  const held = fields[FINDING_CATEGORY_FIELD];
+
+  if (held === null || held === undefined) {
+    return null;
+  }
+
+  return typeof held === 'string'
+    ? held
+    : JSON.stringify(held);
+}
+
+/**
+ * One stored proposal beside the domain it was planted under.
+ *
+ * The pair every proposal read here works in, because
+ * {@link MemorySourceProposal} DROPS the column its seam keys on and
+ * {@link SourceConfigProposalRecord} answers it: the row alone
+ * cannot be projected, so the two travel together from the walk that
+ * found the row to the projection that puts the key back.
+ */
+interface PlantedProposal {
+  /** The domain the row is planted under: `domain_id`. */
+  readonly domainId: number;
+
+  /** The row itself, the seam's key dropped. */
+  readonly row: MemorySourceProposal;
+}
+
+/**
+ * A planted proposal whose mutable members belong to nobody else.
+ *
+ * FIVE MEMBERS RATHER THAN {@link copyPlantedPoolRow}'s FOUR, which
+ * is the two proposed documents taking the round trip
+ * {@link copyJsonDocument} makes and the three stamps being copied
+ * instant by instant. Both nullable stamps stay null where they are
+ * null, which matters more here than anywhere above:
+ * {@link PROPOSAL_APPROVAL_CHECK} reads the PAIR of them, so a copy
+ * turning either into something else would move the row across the
+ * rule.
+ *
+ * @param row - The row a seam or an approval is storing.
+ * @returns A copy safe to store.
+ */
+function copyPlantedProposal(
+  row: MemorySourceProposal,
+): MemorySourceProposal {
+  return {
+    ...row,
+    parserConfig: copyJsonDocument(row.parserConfig),
+    contract: copyJsonDocument(row.contract),
+    proposedAt: copyInstant(row.proposedAt),
+    approvedAt: row.approvedAt === null
+      ? null
+      : copyInstant(row.approvedAt),
+    appliedAt: row.appliedAt === null
+      ? null
+      : copyInstant(row.appliedAt),
+  };
+}
+
+/**
+ * The port's projection of one planted proposal.
+ *
+ * THE SEAM'S KEY IS PUT BACK, which is {@link sightingOf}'s shape
+ * rather than {@link poolRowOf}'s: {@link SourceConfigProposalRecord}
+ * answers its table whole and `domain_id` is a real column on it, so
+ * the domain the row was planted under is handed in and written
+ * onto the answer. `status` widens back to the `string` a SELECT
+ * gives, on {@link runOf}'s terms.
+ *
+ * @param domainId - The domain the row is planted under, which is
+ *   the column the plant drops.
+ * @param row - The stored proposal.
+ * @returns The ten members {@link SourceConfigProposalRecord}
+ *   declares, its stamps and both documents copied.
+ */
+function proposalOf(
+  domainId: number,
+  row: MemorySourceProposal,
+): SourceConfigProposalRecord {
+  return {
+    id: row.id,
+    domainId,
+    sourceId: row.sourceId,
+    parserConfig: copyJsonDocument(row.parserConfig),
+    contract: copyJsonDocument(row.contract),
+    proposedBy: row.proposedBy,
+    status: row.status,
+    proposedAt: copyInstant(row.proposedAt),
+    approvedAt: row.approvedAt === null
+      ? null
+      : copyInstant(row.approvedAt),
+    appliedAt: row.appliedAt === null
+      ? null
+      : copyInstant(row.appliedAt),
+  };
+}
+
+/**
  * Builds a store over one dataset, holding no rows.
  *
  * @param options - Where the clock comes from; see
@@ -1439,6 +3610,50 @@ export function createMemoryResearchStore(
   const sourceDocuments = new Map<number, MemorySourceDocument[]>();
   const sourceSightings = new Map<number, number>();
   const connectorSubscriptions = new Map<number, number>();
+
+  // The findings half's four collections. Three are PLANTED —
+  // `findings` keyed by the domain that made them, `finding_sightings`
+  // keyed by the finding they cite, and `entity_research` keyed by the
+  // entity it is about — because no port here writes any of the
+  // three. The fourth is WRITTEN: `finding_labels` is the one table
+  // this half appends to, so it is keyed by its own id and carries a
+  // counter beside the eight above.
+  // The documents half's whole state, and the second seam over
+  // `documents` in this file. Keyed by the DOMAIN that holds the
+  // corpus rather than by the source a capture came through, because
+  // the two ports read the table differently and a row with no
+  // `source_id` has no key on the other seam at all.
+  const domainDocuments = new Map<number, MemoryDomainDocument[]>();
+  const domainFindings = new Map<number, MemoryDomainFinding[]>();
+  const findingSightings = new Map<number, MemoryFindingSighting[]>();
+  const entityResearch = new Map<number, MemoryEntityResearch[]>();
+  const findingLabels = new Map<number, FindingLabelRecord>();
+
+  // The entities half's two collections, BOTH keyed by the domain
+  // that holds them and both planted before either writer can reach
+  // them. `entity_research` is not among them: that table is planted
+  // by the findings half above, keyed by the subject, and this half
+  // reads the same rows through a projection of its own.
+  const domainEntities = new Map<number, MemoryDomainEntity[]>();
+  const domainPool = new Map<number, MemoryResearchPoolRow[]>();
+
+  // The runs half's two collections, BOTH keyed by their own id and
+  // NEITHER keyed by a parent. `runs.domain_id` and `llm_calls.run_id`
+  // are both nullable, so a parent-keyed seam would have no key at all
+  // for a maintenance tick or a call attributed to no pass — and those
+  // are the rows the unfiltered page and the summary's null bucket are
+  // claimed to hold. The domain and the run ride on the rows instead,
+  // and the cascade reads them off there.
+  const runs = new Map<number, MemoryRun>();
+  const llmCalls = new Map<number, MemoryLlmCall>();
+
+  // The proposals half's one collection, keyed by the DOMAIN whose
+  // feeds the rows are about rather than by the feed itself. That is
+  // the cascading column, so a domain delete is one line here where a
+  // source-keyed collection would have to walk the sources first; the
+  // feed rides on `sourceId`, which is what every read is scoped or
+  // checked by. It is `setDomainPool`'s key over the other gate.
+  const domainProposals = new Map<number, MemorySourceProposal[]>();
   let nextDomainId = 1;
   let nextCategoryId = 1;
   let nextTermId = 1;
@@ -1447,6 +3662,7 @@ export function createMemoryResearchStore(
   let nextSourceId = 1;
   let nextConnectorId = 1;
   let nextSubscriptionId = 1;
+  let nextFindingLabelId = 1;
 
   // The whole of the settings half's state. Not a Map, because
   // there is no key: `src/settings/store.ts` states a second
@@ -2369,6 +4585,1183 @@ export function createMemoryResearchStore(
     }
   }
 
+  /**
+   * One planted finding and the domain it was planted under.
+   *
+   * The one lookup three reads and the half's only guard share, so
+   * that a finding a case planted is found the same way whether it
+   * is being read, resolved through to its entity, or checked for by
+   * the foreign key behind the append.
+   *
+   * @param id - The finding to look for.
+   * @returns The row and its domain, or null when nothing carries
+   *   the id. Null rather than a throw: an id no finding carries is
+   *   a fact three of the four callers answer differently.
+   */
+  function plantedFinding(
+    id: number,
+  ): { domainId: number; row: MemoryDomainFinding } | null {
+    for (const [domainId, planted] of domainFindings) {
+      const row = planted.find((held) => held.id === id);
+
+      if (row !== undefined) {
+        return { domainId, row };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * One domain's findings, as records and unordered.
+   *
+   * A fresh record every call, which is what lets the caller sort
+   * and slice without reaching into planted state.
+   *
+   * @param domainId - The domain to read.
+   * @returns Its findings. Empty for a domain that has made none AND
+   *   for an id no domain carries.
+   */
+  function findingsIn(domainId: number): FindingRecord[] {
+    return (domainFindings.get(domainId) ?? []).map(
+      (row) => findingOf(domainId, row),
+    );
+  }
+
+  /**
+   * One finding's rulings, newest first: `labelled_at` descending
+   * with `id` descending breaking a tie, as
+   * {@link FindingStore.listFindingLabels} promises.
+   *
+   * THE TIEBREAK IS NOT OPTIONAL and it is what
+   * {@link verdictInForce} rests on. `labelled_at` defaults to the
+   * transaction's start time, so two rulings written in one
+   * transaction tie to the microsecond and `id` is the only thing
+   * separating them — which, for a lookup whose whole answer is the
+   * first row, is the difference between a verdict and a coin flip.
+   * The clock this store stamps from can be held FIXED, so that tie
+   * is reachable here rather than only against a server.
+   *
+   * @param findingId - The finding to read.
+   * @returns Its rulings in that order. A fresh array, so the sort
+   *   never reaches stored state.
+   */
+  function labelsOf(findingId: number): FindingLabelRecord[] {
+    return [...findingLabels.values()]
+      .filter((row) => row.findingId === findingId)
+      .sort((left, right) => {
+        const byMoment = right.labelledAt.getTime()
+          - left.labelledAt.getTime();
+
+        if (byMoment !== 0) {
+          return byMoment;
+        }
+
+        return right.id - left.id;
+      });
+  }
+
+  /**
+   * The verdict one finding stands under, or null when nobody has
+   * judged it.
+   *
+   * THE LATEST AND NOT ANY, which is `FindingFilter.verdict`'s whole
+   * rule: a finding judged one way and re-judged another is matched
+   * by the second and not by the first, because the first is no
+   * longer in force. A store matching any label would answer a page
+   * of findings an operator has already moved on from, with every
+   * count beside it agreeing.
+   *
+   * @param findingId - The finding to read.
+   * @returns The head of {@link labelsOf}, or null. Null matches no
+   *   verdict a caller can name, which is how a finding nobody has
+   *   judged falls out of a filtered page.
+   */
+  function verdictInForce(findingId: number): string | null {
+    const [latest] = labelsOf(findingId);
+
+    return latest === undefined
+      ? null
+      : latest.verdict;
+  }
+
+  /**
+   * Whether one finding stands under a filter.
+   *
+   * The predicate the page and the count BOTH read through, written
+   * once so that a page's `meta.total` cannot come to describe a
+   * different collection than the page.
+   *
+   * THE WINDOW IS HALF-OPEN, `[sinceInclusive, untilExclusive)`. A
+   * finding made exactly at the lower bound is IN and one made
+   * exactly at the upper bound is OUT, so two adjacent windows do
+   * not both take the seam a caller paging through time crosses most
+   * often. Neither bound is re-checked for order: `FindingFilter`
+   * records that an inverted window never reaches this port.
+   *
+   * @param row - The finding to judge.
+   * @param filter - What to narrow to.
+   * @returns Whether it belongs in the collection.
+   */
+  function matchesFindingFilter(
+    row: FindingRecord,
+    filter: FindingFilter,
+  ): boolean {
+    const verdict = filter.verdict;
+
+    if (verdict !== undefined && verdictInForce(row.id) !== verdict) {
+      return false;
+    }
+
+    const category = filter.category;
+
+    if (category !== undefined && categoryTextOf(row.fields) !== category) {
+      return false;
+    }
+
+    const made = row.createdAt.getTime();
+    const since = filter.window.sinceInclusive;
+    const until = filter.window.untilExclusive;
+
+    if (since !== null && made < since.getTime()) {
+      return false;
+    }
+
+    return until === null || made < until.getTime();
+  }
+
+  /**
+   * Where one finding sorts against another under one sort key.
+   *
+   * THE KEYS OF `compareFindings` WRITTEN OUT, not that comparator
+   * called. `src/lib/digest-assemble.ts` exports it and this store
+   * could import it, but then `src/findings/service.test.ts` holding
+   * a page this store answered against `orderFindings` over the same
+   * rows would be holding one authority against itself — and the
+   * page the isolated suite reads is THIS one. So the ordering is
+   * expressed independently here, exactly as `./db-store.ts`
+   * expresses it in SQL, and the comparison in that suite is a real
+   * one between two derivations of one rule.
+   *
+   * AN ABSENT SCORE IS THE TAIL AND NOT THE FLOOR. Two unscored
+   * findings tie on the first key and fall through to the stamp,
+   * which is what keeps the tail in an order of its own rather than
+   * in whatever order the rows happened to arrive.
+   *
+   * BOTH ORDERINGS END IN `id` DESCENDING. `created_at` defaults to
+   * the transaction's start time, so findings written by one pass
+   * tie to the microsecond, and a page boundary falling inside that
+   * tie would show a row twice.
+   *
+   * @param left - The first finding.
+   * @param right - The second.
+   * @param sort - Which ordering to answer in. `recency` is this
+   *   same comparison with the score key dropped rather than a
+   *   second rule.
+   * @returns Negative when the first sorts earlier, positive when it
+   *   sorts later, zero when the two are indistinguishable to every
+   *   key — which no pair of stored rows is, `id` being unique.
+   */
+  function compareFindingRows(
+    left: FindingRecord,
+    right: FindingRecord,
+    sort: FindingSort,
+  ): number {
+    if (sort === 'score' && left.score !== right.score) {
+      if (left.score === null) {
+        return 1;
+      }
+
+      if (right.score === null) {
+        return -1;
+      }
+
+      return right.score - left.score;
+    }
+
+    const byMoment = right.createdAt.getTime() - left.createdAt.getTime();
+
+    if (byMoment !== 0) {
+      return byMoment;
+    }
+
+    return right.id - left.id;
+  }
+
+  /**
+   * One domain's findings, narrowed and ordered.
+   *
+   * @param domainId - The domain to read within.
+   * @param filter - What to narrow to.
+   * @param sort - Which ordering to answer in.
+   * @returns The rows, ordered. A fresh array of fresh records.
+   */
+  function orderedFindings(
+    domainId: number,
+    filter: FindingFilter,
+    sort: FindingSort,
+  ): FindingRecord[] {
+    return findingsIn(domainId)
+      .filter((row) => matchesFindingFilter(row, filter))
+      .sort((left, right) => compareFindingRows(left, right, sort));
+  }
+
+  /**
+   * One finding's sightings, newest first: `seen_at` descending with
+   * `id` descending breaking a tie, as
+   * {@link FindingStore.listFindingSightings} promises.
+   *
+   * @param findingId - The finding to read.
+   * @returns Its sightings in that order, possibly empty.
+   */
+  function orderedSightings(findingId: number): FindingSightingRecord[] {
+    return (findingSightings.get(findingId) ?? [])
+      .map((row) => sightingOf(findingId, row))
+      .sort((left, right) => {
+        const byMoment = right.seenAt.getTime() - left.seenAt.getTime();
+
+        if (byMoment !== 0) {
+          return byMoment;
+        }
+
+        return right.id - left.id;
+      });
+  }
+
+  /**
+   * One entity's research, newest first: `researched_at` descending
+   * with `id` descending breaking a tie, as
+   * {@link FindingStore.listFindingResearch} promises.
+   *
+   * @param entityId - The subject to read.
+   * @returns Its research in that order, possibly empty.
+   */
+  function orderedResearch(entityId: number): FindingResearchRecord[] {
+    return (entityResearch.get(entityId) ?? [])
+      .map((row) => researchOf(entityId, row))
+      .sort((left, right) => {
+        const byMoment = right.researchedAt.getTime()
+          - left.researchedAt.getTime();
+
+        if (byMoment !== 0) {
+          return byMoment;
+        }
+
+        return right.id - left.id;
+      });
+  }
+
+  /**
+   * Refuses a `findingId` that names no planted finding.
+   *
+   * @param findingId - The finding a ruling is being appended to.
+   * @throws A `foreign-key-violation` {@link StoreRefusal} naming
+   *   `finding_labels_finding_id_findings_id_fk`. Reached from the
+   *   append alone, which is the half's only write.
+   */
+  function guardLabelFinding(findingId: number): void {
+    if (plantedFinding(findingId) === null) {
+      throw new StoreRefusal({
+        reason: 'foreign-key-violation',
+        constraint: FINDING_LABEL_FINDING_FK,
+      });
+    }
+  }
+
+  /**
+   * Removes every finding of one domain, and its sightings and its
+   * rulings with it, as `ON DELETE CASCADE` does.
+   *
+   * TWO LEVELS DOWN, which is {@link dropSourcesOf}'s reach reached
+   * for a different reason. `findings.domain_id` cascades, and
+   * `finding_sightings.finding_id` and `finding_labels.finding_id`
+   * cascade onto the findings — so one statement takes all three
+   * tables. There is no guarded finding delete to reuse in any case:
+   * `FindingStore` declares no delete at all.
+   *
+   * IT IS NOT REFUSED BY THE `NO ACTION` ON
+   * `research_pool.finding_id`, AND THAT WAS UNREACHABILITY UNTIL
+   * THE ENTITIES HALF LANDED. A seam now plants pool rows, so a row
+   * citing a finding is a state this store can be in: within one
+   * domain both go in the same statement and nothing is left citing
+   * anything, and ACROSS two domains a deployment refuses the delete
+   * where this store takes it. That is the sixth known divergence,
+   * stated in the module header beside the same two columns'
+   * `entity_id` half.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropFindingsOf(domainId: number): void {
+    for (const row of domainFindings.get(domainId) ?? []) {
+      findingSightings.delete(row.id);
+
+      for (const [labelId, label] of findingLabels) {
+        if (label.findingId === row.id) {
+          findingLabels.delete(labelId);
+        }
+      }
+    }
+
+    domainFindings.delete(domainId);
+  }
+
+  /**
+   * The documents planted under one domain.
+   *
+   * @param domainId - The domain to read.
+   * @returns Its planted rows, or none. A fresh array every call, so
+   *   a caller filtering, sorting or slicing what this answers cannot
+   *   reach the planted list.
+   */
+  function corpusOf(domainId: number): MemoryDomainDocument[] {
+    return [...(domainDocuments.get(domainId) ?? [])];
+  }
+
+  /**
+   * Whether one document stands under a filter.
+   *
+   * The predicate the page and the count BOTH read through, written
+   * once so that a page's `meta.total` cannot come to describe a
+   * different collection than the page —
+   * {@link matchesFindingFilter}'s reason one group over.
+   *
+   * AN ABSENT MEMBER WIDENS, which is the whole of the default page:
+   * a failed document is IN the corpus rather than behind a flag, so
+   * a filter naming no status answers both members of
+   * `DOCUMENT_PARSE_STATUSES` rather than the `ok` half. Nothing
+   * here refuses a status outside the tuple, and nothing here can be
+   * handed one: `DocumentFilter.parseStatus` is the union, and
+   * `src/documents/service.ts` is where a `422` is decided.
+   *
+   * @param row - The document to judge.
+   * @param filter - What to narrow to.
+   * @returns Whether it belongs in the collection.
+   */
+  function matchesDocumentFilter(
+    row: MemoryDomainDocument,
+    filter: DocumentFilter,
+  ): boolean {
+    return filter.parseStatus === undefined
+      || row.parseStatus === filter.parseStatus;
+  }
+
+  /**
+   * One domain's corpus, narrowed and ordered newest first.
+   *
+   * `captured_at` descending with `id` descending breaking a tie, as
+   * {@link DocumentStore.listDocuments} promises. THE TIEBREAK IS
+   * NOT OPTIONAL AND THE TIE IS THE SERVER'S: `captured_at` defaults
+   * to the transaction's start time, so a batch capture writes rows
+   * carrying one instant and a page boundary falling inside that tie
+   * would show one document twice and another never.
+   *
+   * The same pair {@link failuresOf} orders by over the same table,
+   * expressed again rather than shared. The two collections agree
+   * because the column does, and a helper serving both would make
+   * one reader's ordering unfalsifiable from the other's cases.
+   *
+   * @param domainId - The domain to read within.
+   * @param filter - What to narrow to.
+   * @returns The rows in that order. A fresh array, so the sort
+   *   never reaches the planted list.
+   */
+  function orderedDocuments(
+    domainId: number,
+    filter: DocumentFilter,
+  ): MemoryDomainDocument[] {
+    return corpusOf(domainId)
+      .filter((row) => matchesDocumentFilter(row, filter))
+      .sort((left, right) => {
+        const byCapture = right.capturedAt.getTime()
+          - left.capturedAt.getTime();
+
+        return byCapture === 0
+          ? right.id - left.id
+          : byCapture;
+      });
+  }
+
+  /**
+   * Removes every document of one domain, as `ON DELETE CASCADE`
+   * does.
+   *
+   * ONE LEVEL AND ONE TABLE HERE, and the two keys onto
+   * `documents.id` are both worth naming for a reader checking this
+   * against the schema. `findings.document_id` is `ON DELETE
+   * cascade`, and those rows have gone in the line above either
+   * way, so the two orders are indistinguishable.
+   * `ingested_files.document_id` is `ON DELETE no action` and
+   * REFUSES the domain delete in a deployment while its rows cite
+   * these documents — left unimitated for
+   * `research_pool.finding_id`'s reason, since no port here writes
+   * that table and no seam plants one, so there is no dataset this
+   * store can be in where the key would fire.
+   *
+   * IT DOES NOT REACH {@link MemoryResearchStore.setSourceDocuments}'
+   * PLANTS, and {@link dropSourcesOf} does not reach these. The two
+   * seams hold the same table separately, so the domain delete has
+   * to clear both — which is what makes the fifth known divergence
+   * survive a cascade rather than leaking a row through it.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropDocumentsOf(domainId: number): void {
+    domainDocuments.delete(domainId);
+  }
+
+  /**
+   * The planted entity carrying one id, and the domain it was
+   * planted under.
+   *
+   * {@link plantedFinding}'s shape for {@link plantedFinding}'s
+   * reason: the seam is keyed by domain and every read here is
+   * addressed by the row's own id, so the domain has to be recovered
+   * from the key rather than from the row.
+   *
+   * @param id - The entity to look for.
+   * @returns The domain and the stored row, or null when nothing
+   *   carries the id.
+   */
+  function plantedEntity(
+    id: number,
+  ): { domainId: number; row: MemoryDomainEntity } | null {
+    for (const [domainId, planted] of domainEntities) {
+      const row = planted.find((held) => held.id === id);
+
+      if (row !== undefined) {
+        return { domainId, row };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Rewrites one stored entity in place.
+   *
+   * IN PLACE RATHER THAN THROUGH THE SEAM, because the seam replaces
+   * a whole registry and a patch replaces one subject. The row is
+   * already this store's own copy, so nothing is copied again here.
+   *
+   * @param domainId - The domain the row sits under, as
+   *   {@link plantedEntity} recovered it.
+   * @param row - What the row becomes.
+   */
+  function replaceEntity(domainId: number, row: MemoryDomainEntity): void {
+    const planted = domainEntities.get(domainId);
+
+    if (planted === undefined) {
+      return;
+    }
+
+    const at = planted.findIndex((held) => held.id === row.id);
+
+    if (at >= 0) {
+      planted[at] = row;
+    }
+  }
+
+  /**
+   * @param domainId - The registry to look within.
+   * @param nameNorm - The key to look for.
+   * @param exceptId - The row being renamed, which is not in conflict
+   *   with itself — the clause a store forgets and then refuses a
+   *   rename that changed only the display half.
+   * @returns The other row holding that key, or undefined. At most
+   *   one can, which is what `entities_domain_id_name_norm_unique`
+   *   guarantees within a domain and says nothing about across two.
+   */
+  function entityByNameNorm(
+    domainId: number,
+    nameNorm: string,
+    exceptId: number,
+  ): MemoryDomainEntity | undefined {
+    return (domainEntities.get(domainId) ?? []).find(
+      (row) => row.nameNorm === nameNorm && row.id !== exceptId,
+    );
+  }
+
+  /**
+   * Refuses an `aliasOf` naming an id no entity carries.
+   *
+   * ACROSS EVERY DOMAIN, because the column is: the foreign key is
+   * onto `entities.id` alone, so an alias into another registry is
+   * satisfied by it. That such a pointer is not a merge anybody meant
+   * is `src/entities/service.ts`'s rule and not this one's.
+   *
+   * @param aliasOf - What the patch proposes, or null to clear.
+   * @throws A `foreign-key-violation` {@link StoreRefusal} naming
+   *   {@link ENTITY_ALIAS_FK}.
+   */
+  function guardAliasTarget(aliasOf: number | null): void {
+    if (aliasOf !== null && plantedEntity(aliasOf) === null) {
+      throw new StoreRefusal({
+        reason: 'foreign-key-violation',
+        constraint: ENTITY_ALIAS_FK,
+      });
+    }
+  }
+
+  /**
+   * One subject's research, newest first: `researched_at` descending
+   * with `id` descending breaking a tie, as
+   * {@link EntityStore.listEntityResearch} promises.
+   *
+   * THE SAME PAIR {@link orderedResearch} ORDERS BY OVER THE SAME
+   * TABLE, EXPRESSED AGAIN, which is the decision
+   * {@link orderedDocuments} takes beside {@link failuresOf}. The two
+   * readers agree because the column does, and a helper serving both
+   * would make one reader's ordering unfalsifiable from the other's
+   * cases.
+   *
+   * @param entityId - The subject to read about.
+   * @returns Its research in that order, possibly empty. A fresh
+   *   array, so the sort never reaches the planted list.
+   */
+  function orderedEntityResearch(entityId: number): EntityResearchRecord[] {
+    return (entityResearch.get(entityId) ?? [])
+      .map(entityResearchOf)
+      .sort((left, right) => {
+        const byMoment = right.researchedAt.getTime()
+          - left.researchedAt.getTime();
+
+        if (byMoment !== 0) {
+          return byMoment;
+        }
+
+        return right.id - left.id;
+      });
+  }
+
+  /**
+   * Every planted intention naming one subject, across every domain.
+   *
+   * ACROSS EVERY DOMAIN, because the seam's key is the domain and the
+   * question is about the subject. A row carrying a null `entityId`
+   * matches no subject at all, the parameter being a number, which is
+   * how an intention naming nobody stays out of every page here.
+   *
+   * @param entityId - The subject to look for.
+   * @returns The stored rows, unordered.
+   */
+  function poolRowsFor(entityId: number): MemoryResearchPoolRow[] {
+    const held: MemoryResearchPoolRow[] = [];
+
+    for (const planted of domainPool.values()) {
+      for (const row of planted) {
+        if (row.entityId === entityId) {
+          held.push(row);
+        }
+      }
+    }
+
+    return held;
+  }
+
+  /**
+   * One subject's intentions, oldest first: `created_at` ascending
+   * with `id` ascending breaking a tie, as
+   * {@link EntityStore.listEntityPool} promises.
+   *
+   * ASCENDING WHERE EVERY OTHER COLLECTION HERE DESCENDS, and that is
+   * the one place this file imitates a QUEUE rather than a page:
+   * `listPending` in `scripts/approve.ts` orders the same way, and a
+   * queue worked top-down empties where a newest-first one buries
+   * whatever has waited longest.
+   *
+   * @param entityId - The subject to read.
+   * @returns Its intentions in that order, possibly empty.
+   */
+  function orderedPool(entityId: number): ResearchPoolRecord[] {
+    return poolRowsFor(entityId)
+      .map(poolRowOf)
+      .sort((left, right) => {
+        const byRaised = left.createdAt.getTime() - right.createdAt.getTime();
+
+        if (byRaised !== 0) {
+          return byRaised;
+        }
+
+        return left.id - right.id;
+      });
+  }
+
+  /**
+   * The planted intention carrying one id, and the domain it was
+   * raised under.
+   *
+   * @param id - The intention to look for.
+   * @returns The domain and the stored row, or null when nothing
+   *   carries the id.
+   */
+  function plantedPoolRow(
+    id: number,
+  ): { domainId: number; row: MemoryResearchPoolRow } | null {
+    for (const [domainId, planted] of domainPool) {
+      const row = planted.find((held) => held.id === id);
+
+      if (row !== undefined) {
+        return { domainId, row };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Rewrites one stored intention in place, on
+   * {@link replaceEntity}'s terms.
+   *
+   * @param domainId - The domain the row sits under.
+   * @param row - What the row becomes.
+   */
+  function replacePoolRow(
+    domainId: number,
+    row: MemoryResearchPoolRow,
+  ): void {
+    const planted = domainPool.get(domainId);
+
+    if (planted === undefined) {
+      return;
+    }
+
+    const at = planted.findIndex((held) => held.id === row.id);
+
+    if (at >= 0) {
+      planted[at] = row;
+    }
+  }
+
+  /**
+   * Refuses a planted intention that states it was closed without
+   * stating that it was approved.
+   *
+   * `research_pool_approval_check` READ FROM THE ONE SIDE A CALL CAN
+   * PROPOSE IT. The constraint bites both ways in a deployment —
+   * stamping `researched_at` on a row nobody approved, and clearing
+   * `approved_at` on a row already closed — and only the first is
+   * reachable here, because nothing on this port writes either column
+   * to null. The status is not consulted, exactly as the constraint
+   * does not consult it: a row stating `done` with neither stamp set
+   * is storable and is stored.
+   *
+   * @param row - The row a seam is about to store.
+   * @throws A `check-violation` {@link StoreRefusal} naming
+   *   {@link POOL_APPROVAL_CHECK}.
+   */
+  function guardPoolApproval(row: MemoryResearchPoolRow): void {
+    if (row.researchedAt !== null && row.approvedAt === null) {
+      throw new StoreRefusal({
+        reason: 'check-violation',
+        constraint: POOL_APPROVAL_CHECK,
+      });
+    }
+  }
+
+  /**
+   * Removes every entity of one domain, and its research with it, as
+   * `ON DELETE CASCADE` does.
+   *
+   * TWO LEVELS DOWN, which is {@link dropFindingsOf}'s reach over a
+   * different pair of tables. `entities.domain_id` cascades and
+   * `entity_research.entity_id` cascades onto the entities, so one
+   * statement takes both.
+   *
+   * IT REACHES ONLY THE RESEARCH PLANTED UNDER A ROW THAT IS THERE,
+   * and that is the seam's key rather than a shortcut.
+   * {@link MemoryResearchStore.setEntityResearch} takes an id and not
+   * a row, so research planted under an id no entity carries has
+   * nothing to cascade from and survives — which is the state the
+   * findings half's own fixture is in, no entity row backing the
+   * subject its findings name.
+   *
+   * IT IS NOT REFUSED BY THE `NO ACTION` ON `research_pool.entity_id`
+   * OR ON `findings.entity_id` WITHIN ONE DOMAIN, because the rows
+   * that would hold it are removed by the same statement — the
+   * cascade's own reach, which is the care `deleteDomain` below takes
+   * over `categories.parent_id` by not reusing its guarded delete.
+   * ACROSS two domains they are not, and this store takes a delete a
+   * deployment refuses: the module header carries that as the sixth
+   * known divergence.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropEntitiesOf(domainId: number): void {
+    for (const row of domainEntities.get(domainId) ?? []) {
+      entityResearch.delete(row.id);
+    }
+
+    domainEntities.delete(domainId);
+  }
+
+  /**
+   * Removes every intention raised under one domain, as
+   * `ON DELETE CASCADE` does.
+   *
+   * ONE LEVEL AND ONE TABLE, AND IT DOES NOT GO THROUGH THE ENTITIES.
+   * `research_pool.domain_id` is the cascading column, so a row
+   * naming NO subject goes with the rest rather than being left
+   * behind — which a cascade written through
+   * {@link dropEntitiesOf} could not do, there being no subject to
+   * follow.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropPoolOf(domainId: number): void {
+    domainPool.delete(domainId);
+  }
+
+  /**
+   * Every planted proposal naming one feed, across every domain,
+   * each beside the domain it was planted under.
+   *
+   * ACROSS EVERY DOMAIN, because the seam's key is the domain and
+   * the question is about the source — {@link poolRowsFor}'s shape
+   * over the other gate, where the seam keys on the domain and the
+   * reads are addressed by a subject. A proposal planted under one
+   * domain and naming a feed of another is found here, which is a
+   * state a plant can reach and the module header records as a
+   * divergence at the delete.
+   *
+   * IT CARRIES THE KEY OUT WITH THE ROW, which is what lets the page
+   * below project `domain_id` back without a second walk: the column
+   * the plant drops is the one this collection is keyed by, so the
+   * only place it can be read is here.
+   *
+   * @param sourceId - The feed to look for.
+   * @returns The stored rows, unordered and in any status.
+   */
+  function proposalsFor(sourceId: number): PlantedProposal[] {
+    const held: PlantedProposal[] = [];
+
+    for (const [domainId, planted] of domainProposals) {
+      for (const row of planted) {
+        if (row.sourceId === sourceId) {
+          held.push({ domainId, row });
+        }
+      }
+    }
+
+    return held;
+  }
+
+  /**
+   * The rows of one feed's queue: those still waiting on a ruling.
+   *
+   * PENDING ONLY, AND THE FILTER IS THE STORE'S RATHER THAN A
+   * CALLER'S. `SourceStore.listPendingProposals` declares no status
+   * parameter, so this predicate is not something a request can
+   * widen and the gate's history is not pageable from here. It is
+   * `listPendingProposals` in `scripts/approve.ts` member for
+   * member.
+   *
+   * @param sourceId - The feed whose queue to read.
+   * @returns Its pending rows, unordered.
+   */
+  function pendingProposalsFor(sourceId: number): PlantedProposal[] {
+    return proposalsFor(sourceId).filter(
+      (held) => held.row.status === PENDING_STATUS,
+    );
+  }
+
+  /**
+   * One feed's queue, oldest first: `proposed_at` ascending with
+   * `id` ascending breaking a tie, as
+   * {@link SourceStore.listPendingProposals} promises.
+   *
+   * ASCENDING, WHICH IS THE OTHER GATE'S ORDER AND NOT THE FAILURES
+   * QUEUE'S one table over. A failure queue is about what broke most
+   * recently; a gate is about what has waited longest, and the
+   * oldest pending proposal is the one whose absence of a ruling has
+   * cost the most passes. {@link orderedPool} orders the same way
+   * for the same reason.
+   *
+   * THE TIEBREAK IS NOT OPTIONAL. `now()` is the transaction's start
+   * time, so proposals written in one pass tie to the microsecond,
+   * and a tie spanning a page boundary would let two pages disagree
+   * about which row they hold.
+   *
+   * @param sourceId - The feed whose queue to read.
+   * @returns Its pending rows in that order, possibly empty.
+   */
+  function orderedPendingProposals(
+    sourceId: number,
+  ): SourceConfigProposalRecord[] {
+    return pendingProposalsFor(sourceId)
+      .map((held) => proposalOf(held.domainId, held.row))
+      .sort((left, right) => {
+        const byProposed = left.proposedAt.getTime()
+          - right.proposedAt.getTime();
+
+        if (byProposed !== 0) {
+          return byProposed;
+        }
+
+        return left.id - right.id;
+      });
+  }
+
+  /**
+   * The planted proposal carrying one id, and the domain it was
+   * planted under.
+   *
+   * @param id - The proposal to look for.
+   * @returns The domain and the stored row, or null when nothing
+   *   carries the id.
+   */
+  function plantedProposal(id: number): PlantedProposal | null {
+    for (const [domainId, planted] of domainProposals) {
+      const row = planted.find((held) => held.id === id);
+
+      if (row !== undefined) {
+        return { domainId, row };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Rewrites one stored proposal in place, on
+   * {@link replacePoolRow}'s terms.
+   *
+   * @param domainId - The domain the row sits under.
+   * @param row - What the row becomes.
+   */
+  function replaceProposal(
+    domainId: number,
+    row: MemorySourceProposal,
+  ): void {
+    const planted = domainProposals.get(domainId);
+
+    if (planted === undefined) {
+      return;
+    }
+
+    const at = planted.findIndex((held) => held.id === row.id);
+
+    if (at >= 0) {
+      planted[at] = row;
+    }
+  }
+
+  /**
+   * Refuses a planted proposal that states it was applied without
+   * stating that it was approved.
+   *
+   * `source_config_proposals_approval_check` READ FROM THE ONE SIDE
+   * A CALL CAN PROPOSE IT, which is {@link guardPoolApproval}'s
+   * argument over the other gate's columns. The constraint bites
+   * both ways in a deployment — stamping `applied_at` on a row
+   * nobody approved, and clearing `approved_at` on a row already
+   * applied — and only the first is reachable here, because nothing
+   * on this port writes either column to null. The status is not
+   * consulted, exactly as the constraint does not consult it.
+   *
+   * @param row - The row a seam is about to store.
+   * @throws A `check-violation` {@link StoreRefusal} naming
+   *   {@link PROPOSAL_APPROVAL_CHECK}.
+   */
+  function guardProposalApproval(row: MemorySourceProposal): void {
+    if (row.appliedAt !== null && row.approvedAt === null) {
+      throw new StoreRefusal({
+        reason: 'check-violation',
+        constraint: PROPOSAL_APPROVAL_CHECK,
+      });
+    }
+  }
+
+  /**
+   * Removes every proposal made about one domain's feeds, as
+   * `ON DELETE CASCADE` does.
+   *
+   * ONE LEVEL AND ONE TABLE, AND IT DOES NOT GO THROUGH THE SOURCES.
+   * `source_config_proposals.domain_id` is the cascading column, so
+   * the rows go with the domain that owns them and not with the feed
+   * each names — {@link dropPoolOf}'s argument over the other gate.
+   * `source_id` is `ON DELETE no action`, so nothing here follows
+   * it, and a row whose domain is not this one is left standing.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropProposalsOf(domainId: number): void {
+    domainProposals.delete(domainId);
+  }
+
+  /**
+   * Every stored run, as a fresh list.
+   *
+   * @returns The rows. A fresh array every call, so a caller
+   *   filtering, sorting or slicing what this answers cannot reach
+   *   the stored collection.
+   */
+  function runRows(): MemoryRun[] {
+    return [...runs.values()];
+  }
+
+  /**
+   * Whether one run stands under a filter.
+   *
+   * The predicate the page and the count BOTH read through, written
+   * once so that a page's `meta.total` cannot come to describe a
+   * different collection than the page — {@link matchesFindingFilter}
+   * and {@link matchesDocumentFilter}'s reason, two groups over.
+   *
+   * AN ABSENT MEMBER WIDENS TO EVERY RUN INCLUDING THE DOMAIN-LESS
+   * ONES, which is the whole of the unfiltered page. A named domain
+   * excludes them, and it does so BY THE COMPARISON rather than by a
+   * branch: `null === <a number>` is false, so a tick is out of one
+   * domain's page for the same reason it is out of another's.
+   *
+   * @param row - The run to judge.
+   * @param filter - What to narrow to.
+   * @returns Whether it belongs in the collection.
+   */
+  function matchesRunFilter(row: MemoryRun, filter: RunFilter): boolean {
+    return filter.domainId === undefined || row.domainId === filter.domainId;
+  }
+
+  /**
+   * The stored runs a filter selects, ordered newest first.
+   *
+   * `started_at` descending with `id` descending breaking a tie, as
+   * {@link RunStore.listRuns} promises. THE TIEBREAK IS NOT OPTIONAL
+   * AND THE TIE IS THE SERVER'S OWN: `started_at` defaults to
+   * `now()`, which is the TRANSACTION's start time, so passes opened
+   * together tie to the microsecond and a page boundary falling
+   * inside that tie would show one run twice and another never.
+   *
+   * @param filter - What to narrow to.
+   * @returns The rows in that order. A fresh array, so the sort
+   *   never reaches the stored collection.
+   */
+  function orderedRuns(filter: RunFilter): MemoryRun[] {
+    return runRows()
+      .filter((row) => matchesRunFilter(row, filter))
+      .sort((left, right) => {
+        const byStart = right.startedAt.getTime() - left.startedAt.getTime();
+
+        return byStart === 0
+          ? right.id - left.id
+          : byStart;
+      });
+  }
+
+  /**
+   * One run's model calls, newest first.
+   *
+   * `called_at` descending with `id` descending breaking a tie, as
+   * {@link RunStore.listRunLedger} promises, and expressed here
+   * rather than shared with {@link orderedRuns} above — the decision
+   * {@link orderedDocuments} takes beside {@link failuresOf} over one
+   * table, applied to two.
+   *
+   * A CALL NAMING NO RUN IS IN NO LEDGER, and that is this
+   * comparison rather than a guard: the parameter is a number and
+   * `null === <a number>` is false, so the unattributed calls are
+   * unreachable from every run id there is.
+   *
+   * @param runId - The run to read within.
+   * @returns Its calls in that order, possibly empty. A fresh array.
+   */
+  function orderedLedger(runId: number): MemoryLlmCall[] {
+    return [...llmCalls.values()]
+      .filter((row) => row.runId === runId)
+      .sort((left, right) => {
+        const byCall = right.calledAt.getTime() - left.calledAt.getTime();
+
+        return byCall === 0
+          ? right.id - left.id
+          : byCall;
+      });
+  }
+
+  /**
+   * Whose spend one call is, or null when it is nobody's.
+   *
+   * A `LEFT JOIN` TO `runs` WRITTEN OUT, and the two ways it answers
+   * null are the two kinds of unattributed call `src/runs/store.ts`
+   * says the bucket holds together: a call naming no run, and a call
+   * whose run named no domain. A join that DROPPED either would leave
+   * the buckets' `calls` adding up to less than the window holds,
+   * which is the one thing a total taken from the summary must not
+   * do.
+   *
+   * A THIRD WAY IT ANSWERS NULL IS UNREACHABLE IN A DEPLOYMENT and
+   * reachable here: a call naming a run nothing stored.
+   * `llm_calls_run_id_runs_id_fk` forbids that state, and the seam
+   * takes an id rather than a row, so this store answers what the
+   * left join would answer rather than inventing a refusal.
+   *
+   * @param row - The call to attribute.
+   * @returns The domain id, or null.
+   */
+  function spendDomainOf(row: MemoryLlmCall): number | null {
+    if (row.runId === null) {
+      return null;
+    }
+
+    return runs.get(row.runId)?.domainId ?? null;
+  }
+
+  /**
+   * Whether one call falls inside a spend window.
+   *
+   * THE WINDOW IS HALF-OPEN, `[sinceInclusive, untilExclusive)`, and
+   * the member names are what say which side each bound closes —
+   * {@link matchesFindingFilter}'s rule over `created_at`, applied to
+   * `called_at`. A store writing `<=` on the upper bound would let
+   * two adjacent windows both take the seam a caller paging through
+   * time crosses most often, and every number beside them would
+   * still add up.
+   *
+   * Neither bound is re-checked for order and either may be null:
+   * `RunStore.summariseSpend` records that `./spend-service.ts`
+   * defaults an absent window and refuses an inverted or over-wide
+   * one, so no request reaches here unbounded.
+   *
+   * @param row - The call to judge.
+   * @param window - The span to hold it against.
+   * @returns Whether it belongs in the summary.
+   */
+  function calledWithin(row: MemoryLlmCall, window: TimeWindow): boolean {
+    const made = row.calledAt.getTime();
+    const since = window.sinceInclusive;
+    const until = window.untilExclusive;
+
+    if (since !== null && made < since.getTime()) {
+      return false;
+    }
+
+    return until === null || made < until.getTime();
+  }
+
+  /**
+   * Where one bucket sorts against another.
+   *
+   * `day` DESCENDING, THEN `domainId` ASCENDING WITH THE NULL BUCKET
+   * LAST, as {@link RunStore.summariseSpend} promises. The order is
+   * contracted for the reason any listed answer needs one: two
+   * implementations free to emit their groups in whatever order the
+   * grouping produced would agree on every number and disagree on
+   * the array.
+   *
+   * THE NULL GOES LAST BY A BRANCH AND NOT BY ARITHMETIC, where
+   * `src/runs/db-store.ts` gets it from `ASC` alone: NULLS LAST is
+   * already what that word means to Postgres, so the SQL spells no
+   * qualifier and this comparator has to say the same thing out
+   * loud. It is the one place on this half where a null sorts
+   * rather than filtering: the page's two descending keys are over
+   * NOT NULL columns.
+   *
+   * @param left - The first bucket.
+   * @param right - The second.
+   * @returns Negative when the first sorts earlier, positive when it
+   *   sorts later, zero for two buckets of one domain on one day —
+   *   which the grouping makes unreachable.
+   */
+  function compareSpendBuckets(left: SpendBucket, right: SpendBucket): number {
+    const byDay = right.day.getTime() - left.day.getTime();
+
+    if (byDay !== 0) {
+      return byDay;
+    }
+
+    if (left.domainId === right.domainId) {
+      return 0;
+    }
+
+    if (left.domainId === null) {
+      return 1;
+    }
+
+    return right.domainId === null
+      ? -1
+      : left.domainId - right.domainId;
+  }
+
+  /**
+   * Adds one call into the bucket it belongs to.
+   *
+   * A GROUP BY WRITTEN OUT, keyed by the day and the domain together
+   * so that a bucket exists only because calls landed in it — there
+   * is no row here for a day nothing was called on and none for a
+   * domain that made no calls, which is what
+   * {@link RunStore.summariseSpend} says a store must not invent.
+   *
+   * `calls` COUNTS ROWS AND THE TWO MAGNITUDES SUM THE MEASURED
+   * ONES, SEPARATELY. A call carrying neither is still a call that
+   * was made, and each sum stays null until a call records that axis
+   * — so a bucket nobody measured answers null rather than the zero
+   * a real reading of nothing sent would give, and a call measured on
+   * one axis alone contributes to one sum.
+   *
+   * @param into - The buckets accumulated so far, keyed by day and
+   *   domain.
+   * @param row - The call to add.
+   */
+  function addToBucket(
+    into: Map<string, SpendBucket>,
+    row: MemoryLlmCall,
+  ): void {
+    const day = utcDayOf(row.calledAt);
+    const domainId = spendDomainOf(row);
+    const key = `${day.getTime()}:${domainId ?? 'none'}`;
+    const held = into.get(key) ?? null;
+
+    into.set(key, {
+      domainId,
+      day,
+      calls: (held?.calls ?? 0) + 1,
+      promptChars: addMagnitude(held?.promptChars ?? null, row.promptChars),
+      estTokens: addMagnitude(held?.estTokens ?? null, row.estTokens),
+    });
+  }
+
+  /**
+   * Removes every run of one domain and the ledger under it, as
+   * `ON DELETE CASCADE` does at both levels.
+   *
+   * TWO LEVELS AND TWO TABLES. `runs.domain_id` cascades and
+   * `llm_calls.run_id` cascades onto the runs, which is
+   * {@link dropFindingsOf}'s shape over a different pair.
+   *
+   * IT READS THE DOMAIN OFF THE ROW RATHER THAN OFF A KEY, which is
+   * {@link MemoryResearchStore.setRuns} being flat, and the
+   * comparison is what leaves the domain-less ticks standing: a tick
+   * hangs off no domain, so no domain delete reaches it and its
+   * ledger survives with it. So do the calls naming no run at all,
+   * which hang off nothing this store can delete.
+   *
+   * TWO KEYS ONTO `runs.id` ARE LEFT UNIMITATED AND THEY ARE LEFT SO
+   * FOR DIFFERENT REASONS. `briefings.run_id` is `ON DELETE no
+   * action` and would refuse this delete in a deployment, and it goes
+   * unimitated for `research_pool.finding_id`'s reason: no port here
+   * writes that table and no seam plants one, so there is no dataset
+   * this store can be in where the key would fire.
+   * `entity_research.run_id` is the SAME `no action` key and IS
+   * reachable, {@link MemoryEntityResearch.runId} being plantable —
+   * that is this file's SEVENTH known divergence, stated in the
+   * module header and pinned by a case.
+   *
+   * @param domainId - The domain being removed.
+   */
+  function dropRunsOf(domainId: number): void {
+    for (const [runId, row] of runs) {
+      if (row.domainId !== domainId) {
+        continue;
+      }
+
+      for (const [callId, call] of llmCalls) {
+        if (call.runId === runId) {
+          llmCalls.delete(callId);
+        }
+      }
+
+      runs.delete(runId);
+    }
+  }
+
   return {
     /** One window of the list, slug ascending. */
     async listDomains(window: StoreWindow): Promise<readonly DomainRecord[]> {
@@ -2385,6 +5778,22 @@ export function createMemoryResearchStore(
     /** One domain by its natural key, or null. */
     async findDomainBySlug(slug: string): Promise<DomainRecord | null> {
       const row = domainBySlug(slug);
+
+      return row === undefined
+        ? null
+        : copyDomain(row);
+    },
+
+    /**
+     * One domain by its surrogate key, or null.
+     *
+     * The map is keyed by id, so this is the direct read the slug
+     * lookup above has to scan for. Copied on the way out on the
+     * same terms: a caller writing into an answered `settings`
+     * payload must not move what the next read answers.
+     */
+    async findDomainById(id: number): Promise<DomainRecord | null> {
+      const row = domains.get(id);
 
       return row === undefined
         ? null
@@ -2537,6 +5946,56 @@ export function createMemoryResearchStore(
      * which is what makes `connectors` and `operator_settings` the
      * two tables no domain delete reaches.
      *
+     * ITS FINDINGS GO IN THAT SAME PLACE AND TAKE TWO TABLES WITH
+     * THEM, which is {@link dropSourcesOf}'s reach for a different
+     * reason. `findings.domain_id` cascades, and
+     * `finding_sightings.finding_id` and `finding_labels.finding_id`
+     * cascade onto the findings, so one statement clears all three.
+     * There is no guarded finding delete to be careful of reusing:
+     * `FindingStore` declares no delete at all, and the one
+     * `ON DELETE no action` key onto `findings.id` sits on a table
+     * nothing here can put a row in.
+     *
+     * ITS DOCUMENTS GO IN THAT SAME PLACE, THROUGH A SECOND LINE
+     * OVER A TABLE {@link dropSourcesOf} HAS ALREADY REACHED. The
+     * two seams over `documents` are keyed differently and neither
+     * sees the other's rows, so clearing the sources' plants leaves
+     * this domain's corpus standing and clearing the corpus leaves
+     * their plants standing — the fifth known divergence surviving
+     * the cascade rather than leaking a row through it. Both lines
+     * are needed and neither is redundant, which one case reads from
+     * each side.
+     *
+     * ITS CONFIG PROPOSALS GO IN THAT SAME PLACE AND BY A ROUTE OF
+     * THEIR OWN, which is the intentions' argument one gate over.
+     * `source_config_proposals.domain_id` cascades, so the rows go
+     * with the domain that owns them rather than with the feed each
+     * names — and {@link dropSourcesOf} above has already removed
+     * those feeds without being refused, exactly as it is not
+     * refused by the documents and the sightings. ACROSS two domains
+     * it is not so: a proposal planted under one domain and naming
+     * another's feed is left standing while its feed goes, which is
+     * a delete a deployment refuses and this file's EIGHTH known
+     * divergence.
+     *
+     * ITS ENTITIES GO IN THAT SAME PLACE AND TAKE THEIR RESEARCH
+     * WITH THEM, and ITS INTENTIONS GO BY A ROUTE OF THEIR OWN.
+     * `entities.domain_id` cascades and `entity_research.entity_id`
+     * cascades onto the entities, which is {@link dropFindingsOf}'s
+     * two levels over a different pair of tables. `research_pool`
+     * does NOT arrive through the entities: its own `domain_id`
+     * cascades, so an intention naming no subject goes with the rest
+     * rather than being left behind, and that is why the two lines
+     * below are two claims and neither is redundant.
+     *
+     * NEITHER IS REFUSED WITHIN ONE DOMAIN, though both
+     * `research_pool.entity_id` and `findings.entity_id` are
+     * `ON DELETE no action`: the rows that would hold the delete are
+     * removed by the same statement, which is the care taken with
+     * `categories.parent_id` above. ACROSS two domains they would be,
+     * and this store takes the delete — the sixth known divergence,
+     * stated in the module header and pinned by a case.
+     *
      * IT DOES NOT MOVE THE PLANTED DEPENDENT COUNTS OF ANY OTHER
      * DOMAIN, and dropping the topics does not move them at all:
      * {@link MemoryResearchStore.setDomainDependents} records what
@@ -2549,6 +6008,12 @@ export function createMemoryResearchStore(
       dropTopicsOf(id);
       dropSourcesOf(id);
       dropSubscriptionsOf(id);
+      dropFindingsOf(id);
+      dropDocumentsOf(id);
+      dropEntitiesOf(id);
+      dropPoolOf(id);
+      dropProposalsOf(id);
+      dropRunsOf(id);
 
       for (const [categoryId, row] of categories) {
         if (row.domainId === id) {
@@ -3545,23 +7010,31 @@ export function createMemoryResearchStore(
     /**
      * Deletes one source, unless something still cites it.
      *
-     * ITS DOCUMENTS AND ITS SIGHTINGS EACH REFUSE THE DELETE, which
-     * is both columns being `ON DELETE no action` rather than a rule
-     * invented here. This is the shape `deleteCategory` has and
-     * `deleteTopic` does not, and it differs from the category one in
-     * the direction the refusal points: a category is held by its own
-     * table's children, and a source is held from outside by two
-     * tables of somebody else's rows.
+     * ITS DOCUMENTS, ITS SIGHTINGS AND ITS CONFIG PROPOSALS EACH
+     * REFUSE THE DELETE, which is all three columns being
+     * `ON DELETE no action` rather than a rule invented here. This is
+     * the shape `deleteCategory` has and `deleteTopic` does not, and
+     * it differs from the category one in the direction the refusal
+     * points: a category is held by its own table's children, and a
+     * source is held from outside by three tables of somebody else's
+     * rows.
      *
      * NO CASCADE ANYWHERE. This either removes a row nothing
      * references or is refused; it never takes a second row with it,
      * which is the opposite of `deleteDomain` above.
      *
-     * THE ORDER OF THE TWO CHECKS IS NOT MEASURED AND NOT OBSERVABLE:
-     * both are end-of-statement checks over one statement, and the
-     * service reads the counts rather than the constraint name. The
-     * module header carries that whole argument, and the reason a
-     * THIRD refusing key is not imitated at all.
+     * THE ORDER OF THE THREE CHECKS IS NOT MEASURED AND NOT
+     * OBSERVABLE: all are end-of-statement checks over one statement,
+     * and the service reads the counts rather than the constraint
+     * name. The module header carries that whole argument, and why
+     * the third key was left alone until a seam could reach it.
+     *
+     * THE PROPOSALS CHECK IS OVER EVERY STATUS AND NOT THE QUEUE.
+     * `source_config_proposals_source_id_sources_id_fk` does not
+     * consult `status`, so a proposal already applied holds the
+     * delete exactly as a pending one does — which is the column's
+     * own argument that a proposal is the account of what was asked
+     * for a feed, and outlives the ruling.
      */
     async deleteSource(id: number): Promise<boolean> {
       if (documentsOf(id).length > 0) {
@@ -3575,6 +7048,13 @@ export function createMemoryResearchStore(
         throw new StoreRefusal({
           reason: 'foreign-key-violation',
           constraint: SOURCE_SIGHTINGS_FK,
+        });
+      }
+
+      if (proposalsFor(id).length > 0) {
+        throw new StoreRefusal({
+          reason: 'foreign-key-violation',
+          constraint: SOURCE_PROPOSALS_FK,
         });
       }
 
@@ -3618,6 +7098,176 @@ export function createMemoryResearchStore(
      */
     async countSourceFailures(sourceId: number): Promise<number> {
       return failuresOf(sourceId).length;
+    },
+
+    /**
+     * One window of a feed's PENDING config proposals, oldest first.
+     *
+     * READS A TABLE THIS PORT ALSO WRITES, which is where the queue
+     * differs from the failures one beside it: three of the four
+     * methods here read, and the fourth rules and applies. Every row
+     * arrived through {@link MemoryResearchStore.setDomainProposals},
+     * no port declaring an insert — a proposal is made by
+     * `proposeSourceConfig` in `src/sources/config-proposer.ts` and
+     * this seam is the whole of how one arrives here.
+     *
+     * ONE QUEUE WITH TWO CLIENTS. The predicate and both ordering
+     * keys are `listPendingProposals` in `scripts/approve.ts` member
+     * for member, and {@link orderedPendingProposals} carries the
+     * argument. What differs is the CLIENT: that function is
+     * addressed at no source and takes a ceiling, this one is scoped
+     * to a feed and takes a window that pages.
+     *
+     * AN ID NO SOURCE CARRIES ANSWERS AN EMPTY LIST rather than
+     * failing, and so do a feed with nothing pending, a feed whose
+     * proposals have all been ruled on, and a window past the end.
+     * Both proposed documents come back AS STORED, unread and uncut.
+     */
+    async listPendingProposals(
+      sourceId: number,
+      window: StoreWindow,
+    ): Promise<readonly SourceConfigProposalRecord[]> {
+      return orderedPendingProposals(sourceId)
+        .slice(window.offset, window.offset + window.limit);
+    },
+
+    /**
+     * How many proposals are waiting on a ruling for one feed,
+     * ignoring any window.
+     *
+     * COUNTS THE QUEUE AND NOT THE TABLE, selecting through the same
+     * {@link pendingProposalsFor} the page does — which is what
+     * keeps a page's total describing the page's own collection here
+     * rather than by coincidence. A feed carrying fifty applied
+     * proposals and nothing pending answers `0`, which is the honest
+     * number for a backlog.
+     */
+    async countPendingProposals(sourceId: number): Promise<number> {
+      return pendingProposalsFor(sourceId).length;
+    },
+
+    /**
+     * One proposal by its own id, whatever feed it names.
+     *
+     * UNSCOPED ON PURPOSE, AND THAT IS WHAT MAKES THE CONTAINMENT
+     * RULE DECIDABLE ONE LAYER UP — the argument
+     * {@link EntityStore.findPoolRowById} makes over the other gate.
+     * A read scoped to the source would answer null for `no such
+     * row` and for `not this feed's row` alike, which are a `404`
+     * for different reasons and only one of which is honest.
+     *
+     * ANY STATUS, NOT ONLY A PENDING ONE, which is what separates
+     * this from the queue above beyond the window: the refusal a
+     * service owes an already-applied proposal is decidable only
+     * from a read that can see one.
+     */
+    async findProposalById(
+      id: number,
+    ): Promise<SourceConfigProposalRecord | null> {
+      const held = plantedProposal(id);
+
+      return held === null
+        ? null
+        : proposalOf(held.domainId, held.row);
+    },
+
+    /**
+     * Rules in favour of one proposal AND writes its two documents
+     * onto the feed it names. THE HALF'S FOURTH WRITE AND THE ONLY
+     * ONE HERE THAT TOUCHES TWO TABLES.
+     *
+     * TOGETHER OR NOT AT ALL, which is what one transaction means
+     * where there is no transaction to open. Every value is derived
+     * first — the approved row, the two columns, the feed they are
+     * written onto — and stored state is touched only once all three
+     * exist. A source the plant never supplied therefore leaves the
+     * proposal unruled and the row it named untouched, rather than
+     * leaving an approval stamped with no config written or a config
+     * written that no proposal can account for. Those are the two
+     * halves `SourceStore.approveAndApplyProposal` says are not
+     * states anybody meant.
+     *
+     * THREE STAGES IN THE ORDER THE PORT DECLARES. The approval is
+     * computed as `coalesce(approved_at, now())` with the status
+     * moved; the two columns are derived from THAT row; the closing
+     * stamp is `coalesce(applied_at, now())`. Neither swap is
+     * available: {@link PROPOSAL_APPROVAL_CHECK} refuses an
+     * `applied_at` on a row carrying no `approved_at`, and the
+     * derivation reads `approved_at` and cannot run before the row
+     * carries one.
+     *
+     * THE DERIVATION GOES THROUGH ONE FUNCTION, and this is the one
+     * place in this file that calls into `src/`. Reading
+     * `parserConfig` and `contract` off the row here would make this
+     * a second applier, and the refusal standing between an unruled
+     * proposal and the two columns every later pass reads would then
+     * be restated once per implementation instead of being one
+     * function both go through. `proposalToSourceUpdate` also
+     * answers the SET clause itself, so nothing spread here can
+     * widen what an approval authorizes.
+     *
+     * IDEMPOTENT ON BOTH STAMPS, which is `coalesce` on each: a
+     * second ruling keeps the first one's instants rather than
+     * re-dating an approval already given or an application already
+     * made. `approveProposalById` in `scripts/approve.ts` writes
+     * `approved_at` the same way and deliberately leaves
+     * `applied_at` alone — so the CLI rules and this rules and
+     * writes, one gate with two clients.
+     *
+     * NOTHING IS ASKED OF THE ROW'S STATE and nothing validates the
+     * documents. Whether an already-applied proposal may be applied
+     * again is `RULING_ACTS` in `src/approvals/ruling.ts`, one layer
+     * up; a malformed `parser_config` somebody approved anyway is
+     * written, because the approval IS the gate and this is not a
+     * second one.
+     *
+     * @throws {Error} A plain fault, NOT a {@link StoreRefusal}, when
+     *   the proposal names a source this dataset does not hold. A
+     *   deployment cannot be in that state —
+     *   {@link SOURCE_PROPOSALS_FK} is `ON DELETE no action` and
+     *   `deleteSource` above imitates it — but the seam plants under
+     *   an id rather than a row, so this store can be, and answering
+     *   a refusal for it would invent a rule Postgres does not have.
+     */
+    async approveAndApplyProposal(
+      id: number,
+    ): Promise<SourceConfigProposalRecord | null> {
+      const held = plantedProposal(id);
+
+      if (held === null) {
+        return null;
+      }
+
+      const approved: MemorySourceProposal = {
+        ...held.row,
+        status: APPROVED_STATUS,
+        approvedAt: held.row.approvedAt ?? stamp(),
+      };
+      const update = proposalToSourceUpdate(approved);
+      const source = sources.get(approved.sourceId);
+
+      if (source === undefined) {
+        throw new Error(
+          `[memory-research-store] proposal ${id} names source `
+          + `${approved.sourceId}, which this dataset does not hold. `
+          + 'A deployment cannot reach that state, so neither stamp '
+          + 'is written and the feed is left as it was.',
+        );
+      }
+
+      const ruled: MemorySourceProposal = {
+        ...approved,
+        appliedAt: approved.appliedAt ?? stamp(),
+      };
+
+      sources.set(source.id, {
+        ...source,
+        parserConfig: copyJsonDocument(update.parserConfig),
+        contract: copyJsonDocument(update.contract),
+      });
+      replaceProposal(held.domainId, copyPlantedProposal(ruled));
+
+      return proposalOf(held.domainId, ruled);
     },
 
     /**
@@ -4156,6 +7806,617 @@ export function createMemoryResearchStore(
       return copyOperatorSettings(storedSettings);
     },
 
+    /**
+     * One window of a domain's findings, narrowed and ordered.
+     *
+     * THE ORDER IS `compareFindings`' KEYS EXPRESSED HERE rather
+     * than that comparator called, and {@link compareFindingRows}
+     * carries why: the page `src/findings/service.test.ts` holds
+     * against `orderFindings` is this one, so importing the library
+     * would leave that comparison holding one authority against
+     * itself.
+     *
+     * READS FINDINGS AND WRITES NONE. Nothing on this port inserts,
+     * patches or deletes a finding, so every row here arrived
+     * through {@link MemoryResearchStore.setDomainFindings} — which
+     * is the read-first law being structural rather than kept.
+     *
+     * FIELDS COME BACK AS STORED, unreduced and uncut. What
+     * `ar-digest` does to a payload before filing it is that
+     * pipeline's, and a store imitating it would make the column
+     * read this page filters on unreachable.
+     */
+    async listFindings(
+      domainId: number,
+      filter: FindingFilter,
+      sort: FindingSort,
+      window: StoreWindow,
+    ): Promise<readonly FindingRecord[]> {
+      return orderedFindings(domainId, filter, sort)
+        .slice(window.offset, window.offset + window.limit);
+    },
+
+    /**
+     * How many of one domain's findings the same filter selects,
+     * ignoring any window and any ordering.
+     *
+     * The same predicate the page read through — one dataset and
+     * one {@link matchesFindingFilter} behind both is what makes a
+     * page's `meta.total` describe the page's own collection here
+     * rather than by coincidence.
+     *
+     * NO SORT PARAMETER, which the port states as a claim: an
+     * ordering cannot change how many rows a predicate selects.
+     */
+    async countFindings(
+      domainId: number,
+      filter: FindingFilter,
+    ): Promise<number> {
+      return findingsIn(domainId).filter(
+        (row) => matchesFindingFilter(row, filter),
+      ).length;
+    },
+
+    /**
+     * One finding by its id, or null.
+     *
+     * TAKES NO DOMAIN, which is the addressing rule the surface
+     * keeps: a domain is met by slug and everything else by its id.
+     * The domain the row was planted under is what
+     * {@link FindingRecord.domainId} answers, so a caller learns the
+     * owner from the row rather than having to name it.
+     */
+    async findFindingById(id: number): Promise<FindingRecord | null> {
+      const held = plantedFinding(id);
+
+      return held === null
+        ? null
+        : findingOf(held.domainId, held.row);
+    },
+
+    /**
+     * Where one finding has been seen, newest first.
+     *
+     * UNBOUNDED, as the port declares: these rows are embedded in a
+     * single finding's answer rather than paged, so there is no
+     * window to take and nothing here cuts them.
+     *
+     * A ROW HERE DOES NOT HOLD ITS SOURCE'S DELETE, which is the
+     * known divergence {@link MemoryFindingSighting} states.
+     * `SourceStore.countSourceDependents` reads what
+     * {@link MemoryResearchStore.setSourceSightings} planted and
+     * never these rows.
+     */
+    async listFindingSightings(
+      findingId: number,
+    ): Promise<readonly FindingSightingRecord[]> {
+      return orderedSightings(findingId);
+    },
+
+    /**
+     * One finding's rulings, newest first and WHOLE.
+     *
+     * THE FIRST ROW IS THE VERDICT IN FORCE and the rest are the
+     * record of an operator changing their mind, which is why the
+     * sequence is answered rather than the head of it. The table
+     * carries no unique key at all, so re-judging appends and a read
+     * that forgot to order would report whichever row it reached
+     * first.
+     */
+    async listFindingLabels(
+      findingId: number,
+    ): Promise<readonly FindingLabelRecord[]> {
+      return labelsOf(findingId).map(copyFindingLabel);
+    },
+
+    /**
+     * What research has recorded about the entity one finding names,
+     * newest first.
+     *
+     * ADDRESSED BY THE FINDING, RESOLVED THROUGH ITS ENTITY. The
+     * join is this port's rather than the caller's, so a caller
+     * holding a finding does not have to read its `entityId`, branch
+     * on the nullability and address a second surface.
+     *
+     * AN UNATTRIBUTED FINDING ANSWERS AN EMPTY LIST, and so does an
+     * id no finding carries. Neither is a failure to read: a null
+     * `entity_id` is an ordinary state, and there is no entity to
+     * resolve research through either way.
+     *
+     * READS `entity_research` AND WRITES NOTHING — there is no
+     * insert, update or delete over that table anywhere on this
+     * port, so the embedding is read-only structurally. Those rows
+     * are `ar-research`'s to write, and
+     * {@link MemoryResearchStore.setEntityResearch} is what stands
+     * in for that writer here.
+     */
+    async listFindingResearch(
+      findingId: number,
+    ): Promise<readonly FindingResearchRecord[]> {
+      const held = plantedFinding(findingId);
+
+      if (held === null || held.row.entityId === null) {
+        return [];
+      }
+
+      return orderedResearch(held.row.entityId);
+    },
+
+    /**
+     * Appends one ruling to a finding. THE HALF'S ONE WRITE.
+     *
+     * APPENDS AND NEVER UPDATES. There is no upsert here and no key
+     * to upsert on — `finding_labels` carries no unique key at all
+     * — so a second ruling on one finding is a second row and both
+     * are readable afterwards.
+     *
+     * TAKES THE VERDICT AS GIVEN. The owning domain's vocabulary is
+     * read per request by `src/findings/verdict-service.ts`, one
+     * layer up, and nothing here consults one. A store refusing a
+     * verdict on its own would refuse writes the database accepts,
+     * and would move a per-domain rule into the half that cannot be
+     * exercised without a database.
+     *
+     * The id comes off the counter first, so the refusal below burns
+     * one exactly as the sequence does. No measurement of this table
+     * was taken: `personas` is where the gap of two was measured,
+     * over a key refusal and a foreign-key one, and this counter is
+     * expected to reproduce the second of that pair.
+     *
+     * THE STAMP IS READ OFF THE CLOCK AND NEVER OFF THE ARGUMENT,
+     * which {@link InsertFindingLabelInput} has no member for. A
+     * back-dated ruling is the one thing that would make the newest
+     * row stop being the verdict in force.
+     */
+    async insertFindingLabel(
+      input: InsertFindingLabelInput,
+    ): Promise<FindingLabelRecord> {
+      const id = nextFindingLabelId;
+
+      nextFindingLabelId += 1;
+      guardLabelFinding(input.findingId);
+
+      const row: FindingLabelRecord = {
+        id,
+        findingId: input.findingId,
+        verdict: input.verdict,
+        note: input.note,
+        labelledAt: stamp(),
+      };
+
+      findingLabels.set(id, row);
+
+      return copyFindingLabel(row);
+    },
+
+    /**
+     * One window of a domain's corpus, narrowed and ordered newest
+     * first.
+     *
+     * READS DOCUMENTS AND WRITES NONE — there is no insert, update
+     * or delete over that table anywhere on this port, so the corpus
+     * page is read-only structurally rather than by convention. Every
+     * row here arrived through
+     * {@link MemoryResearchStore.setDomainDocuments}.
+     *
+     * BOTH STATUSES BY DEFAULT, and the filter is the CALLER's where
+     * the failures queue's is that method's own. A failed document
+     * is in the corpus rather than behind a flag, so this collection
+     * can be asked for the corpus and for either half of it, which
+     * is the difference between a debug page and a review queue.
+     *
+     * BODIES COME BACK AS STORED, unmasked and uncut.
+     * `src/documents/service.ts` is what replaces a control byte with
+     * its text form and cuts the body at `BODY_CODE_POINT_CAP`, and
+     * keeping that out of here is what lets it be tested against a
+     * planted control byte with no database.
+     */
+    async listDocuments(
+      domainId: number,
+      filter: DocumentFilter,
+      window: StoreWindow,
+    ): Promise<readonly DocumentRecord[]> {
+      return orderedDocuments(domainId, filter)
+        .slice(window.offset, window.offset + window.limit)
+        .map(documentOf);
+    },
+
+    /**
+     * How many of one domain's documents the same filter selects,
+     * ignoring any window.
+     *
+     * The same predicate the page read through — one dataset and one
+     * {@link matchesDocumentFilter} behind both is what makes a
+     * page's `meta.total` describe the page's own collection here
+     * rather than by coincidence.
+     *
+     * A window past the end still counts the whole, and an id no
+     * domain carries counts zero. Neither is a special case: the
+     * window is not this method's to read, and nothing points at a
+     * row that is not there.
+     */
+    async countDocuments(
+      domainId: number,
+      filter: DocumentFilter,
+    ): Promise<number> {
+      return corpusOf(domainId).filter(
+        (row) => matchesDocumentFilter(row, filter),
+      ).length;
+    },
+
+    /**
+     * One subject by its own id, or null.
+     *
+     * WHERE EVERY ENTITY ROUTE ENTERS, the path carrying an id rather
+     * than a slug. The domain comes off the seam's key and reaches
+     * the answer, which is what lets a service refuse an alias
+     * pointing into another registry without a second read.
+     */
+    async findEntityById(id: number): Promise<EntityRecord | null> {
+      const held = plantedEntity(id);
+
+      return held === null
+        ? null
+        : entityOf(held.domainId, held.row);
+    },
+
+    /**
+     * Rewrites the supplied members of one subject. THE HALF'S FIRST
+     * WRITE.
+     *
+     * THE NAME MOVES AS A PAIR OR NOT AT ALL, which is
+     * `EntityNamePatch`'s doing rather than a rule checked here: a
+     * patch carrying one half is not a request this method can be
+     * handed. Nothing below reduces a name, and
+     * `src/lib/entity-name-norm.ts` stays the single definition.
+     *
+     * `attributes` REPLACES THE STORED PAYLOAD WHOLE and is never
+     * merged into it, so `{}` clears every attribute — the same
+     * whole-unit rule `DomainPatch` states for `settings`, and the
+     * only shape under which removing a member is expressible.
+     *
+     * THE KEY IS CHECKED BEFORE THE FOREIGN KEY, and this is the one
+     * half here where a single call can reach both: `name` and
+     * `aliasOf` are both patchable, so a rename onto a taken key
+     * BESIDE an alias naming nothing is a request that carries two
+     * faults. The order is the relation the category half MEASURED
+     * between a unique index and an end-of-statement check, argued
+     * across rather than measured on this table.
+     *
+     * A ROW IS NOT IN CONFLICT WITH ITSELF. The comparison excludes
+     * the row being written, so a rename that moves only the display
+     * half — or one that rewrites both to what they already were — is
+     * stored rather than refused.
+     */
+    async updateEntity(
+      id: number,
+      patch: EntityPatch,
+    ): Promise<EntityRecord | null> {
+      const held = plantedEntity(id);
+
+      if (held === null) {
+        return null;
+      }
+
+      const next: MemoryDomainEntity = {
+        id: held.row.id,
+        name: patch.name === undefined
+          ? held.row.name
+          : patch.name.display,
+        nameNorm: patch.name === undefined
+          ? held.row.nameNorm
+          : patch.name.norm,
+        aliasOf: patch.aliasOf === undefined
+          ? held.row.aliasOf
+          : patch.aliasOf,
+        attributes: patch.attributes === undefined
+          ? held.row.attributes
+          : patch.attributes,
+      };
+
+      if (entityByNameNorm(held.domainId, next.nameNorm, id) !== undefined) {
+        throw new StoreRefusal({
+          reason: 'unique-violation',
+          constraint: ENTITY_NAME_NORM_UNIQUE,
+        });
+      }
+
+      guardAliasTarget(next.aliasOf);
+      replaceEntity(held.domainId, copyPlantedEntity(next));
+
+      return entityOf(held.domainId, next);
+    },
+
+    /**
+     * One window of what has been found out about a subject, newest
+     * first.
+     *
+     * READS A TABLE THIS PORT DOES NOT WRITE. `entity_research` is
+     * `ar-research`'s, and every row here arrived through
+     * {@link MemoryResearchStore.setEntityResearch} — the seam the
+     * findings half plants through as well, one table read two ways.
+     *
+     * AN ID NO ENTITY CARRIES ANSWERS AN EMPTY LIST rather than
+     * failing, and so does a window past the end: neither is a
+     * failure to read, and nothing points at a row that is not there.
+     * Summaries come back AS STORED.
+     */
+    async listEntityResearch(
+      entityId: number,
+      window: StoreWindow,
+    ): Promise<readonly EntityResearchRecord[]> {
+      return orderedEntityResearch(entityId)
+        .slice(window.offset, window.offset + window.limit);
+    },
+
+    /**
+     * How many passes have been recorded about a subject, ignoring
+     * any window.
+     *
+     * Separate from the list rather than answered beside it, for the
+     * reason `EntityStore` gives: a page's total describes the
+     * collection and not the page.
+     */
+    async countEntityResearch(entityId: number): Promise<number> {
+      return (entityResearch.get(entityId) ?? []).length;
+    },
+
+    /**
+     * One window of the intentions queued against a subject, oldest
+     * first.
+     *
+     * NOT NARROWED TO `pending`, which is where this differs from the
+     * CLI listing it shares an order with: a subject's own queue is a
+     * history of what was ever asked about it, and an approved or
+     * closed row is the part a reader is most likely checking for.
+     *
+     * A ROW NAMING NO SUBJECT APPEARS IN NO PAGE HERE, `entityId`
+     * being nullable and the parameter a number.
+     *
+     * NO ROUTE ON THIS WAVE CALLS IT, per `src/entities/store.ts`.
+     */
+    async listEntityPool(
+      entityId: number,
+      window: StoreWindow,
+    ): Promise<readonly ResearchPoolRecord[]> {
+      return orderedPool(entityId)
+        .slice(window.offset, window.offset + window.limit);
+    },
+
+    /**
+     * How many intentions stand against a subject, in any state and
+     * ignoring any window.
+     *
+     * Selecting the same rows the list does — one
+     * {@link poolRowsFor} behind both — which is what keeps a page's
+     * total describing the page's own collection here rather than by
+     * coincidence.
+     *
+     * NO ROUTE ON THIS WAVE CALLS IT either.
+     */
+    async countEntityPool(entityId: number): Promise<number> {
+      return poolRowsFor(entityId).length;
+    },
+
+    /**
+     * One intention by its own id, whatever subject it names.
+     *
+     * UNSCOPED ON PURPOSE, AND THAT IS WHAT MAKES THE CONTAINMENT
+     * RULE DECIDABLE ONE LAYER UP. A read scoped to the entity would
+     * answer null for `no such row` and for `not this subject's row`
+     * alike, which are a `404` for different reasons and only one of
+     * which is honest.
+     */
+    async findPoolRowById(id: number): Promise<ResearchPoolRecord | null> {
+      const held = plantedPoolRow(id);
+
+      return held === null
+        ? null
+        : poolRowOf(held.row);
+    },
+
+    /**
+     * Rules in favour of one intention. THE HALF'S SECOND AND LAST
+     * WRITE.
+     *
+     * IDEMPOTENT BY CONSTRUCTION. `approved_at` is written the way
+     * `coalesce(approved_at, now())` writes it, so a second ruling
+     * keeps the FIRST one's instant rather than re-dating a search
+     * already paid for — `approveById` in `scripts/approve.ts` writes
+     * the same pair the same way, and the two are one gate with two
+     * clients.
+     *
+     * NOTHING IS ASKED OF THE ROW'S STATE. An id naming a row already
+     * closed moves its status back to approved without moving the
+     * stamp, and `research_pool_approval_check` permits that: it
+     * holds the two timestamps against each other and never consults
+     * the status. Whether a closed row may be ratified at all is
+     * `RULING_ACTS` in `src/approvals/ruling.ts`, one layer up.
+     *
+     * IT RATIFIES AND NEVER RESEARCHES. Two columns of one row move
+     * and nothing else does: no `entity_research` row is written, and
+     * `researched_at` is not touched from here at all — which is why
+     * this write cannot reach the CHECK from either side.
+     *
+     * THE STAMP IS READ OFF THE CLOCK, which stands in for the
+     * server's `now()`. That is the transaction's start time in a
+     * deployment, so approvals written together tie to the
+     * microsecond with `id` breaking the tie.
+     */
+    async approvePoolRow(id: number): Promise<ResearchPoolRecord | null> {
+      const held = plantedPoolRow(id);
+
+      if (held === null) {
+        return null;
+      }
+
+      const ruled: MemoryResearchPoolRow = {
+        ...held.row,
+        status: APPROVED_STATUS,
+        approvedAt: held.row.approvedAt ?? stamp(),
+      };
+
+      replacePoolRow(held.domainId, ruled);
+
+      return poolRowOf(ruled);
+    },
+
+    /**
+     * One window of the passes the service has made, narrowed and
+     * ordered newest first.
+     *
+     * READS RUNS AND WRITES NONE — there is no insert, update or
+     * delete over that table anywhere on this port, so a pass is
+     * read-only structurally rather than by convention, exactly as
+     * the corpus page above is. Every row here arrived through
+     * {@link MemoryResearchStore.setRuns}.
+     *
+     * EVERY RUN BY DEFAULT, THE DOMAIN-LESS TICKS INCLUDED. A filter
+     * naming no domain widens to the whole table rather than to the
+     * domain-scoped half of it, which is what keeps this page
+     * agreeing with `runs` about how much work the service has done
+     * — and the maintenance passes are exactly the rows a reader
+     * goes looking for after something stopped happening.
+     *
+     * THERE IS NO SPELLING THAT ANSWERS THE TICKS ALONE, and that is
+     * `RunFilter.domainId` being an optional `number` rather than a
+     * decision taken here: there is no value a caller could send to
+     * mean the ones belonging to nobody.
+     */
+    async listRuns(
+      filter: RunFilter,
+      window: StoreWindow,
+    ): Promise<readonly RunRecord[]> {
+      return orderedRuns(filter)
+        .slice(window.offset, window.offset + window.limit)
+        .map(runOf);
+    },
+
+    /**
+     * How many runs the same filter selects, ignoring any window.
+     *
+     * The same predicate the page read through — one dataset and one
+     * {@link matchesRunFilter} behind both is what makes a page's
+     * `meta.total` describe the page's own collection here rather
+     * than by coincidence.
+     *
+     * A window past the end still counts the whole, and an id no
+     * domain carries counts zero. Neither is a special case: the
+     * window is not this method's to read, and nothing points at a
+     * row that is not there.
+     */
+    async countRuns(filter: RunFilter): Promise<number> {
+      return runRows().filter((row) => matchesRunFilter(row, filter)).length;
+    },
+
+    /**
+     * One pass by its own id, or null.
+     *
+     * WHERE EVERY `GET /runs/:id` REQUEST ENTERS, and it takes no
+     * domain: a domain is met by slug and everything else on this
+     * surface is written by its id. A null {@link RunRecord.domainId}
+     * on the answer is the ordinary reading for a maintenance tick
+     * rather than a row that failed to resolve.
+     */
+    async findRunById(id: number): Promise<RunRecord | null> {
+      const row = runs.get(id);
+
+      return row === undefined
+        ? null
+        : runOf(row);
+    },
+
+    /**
+     * The head of one run's ledger: its model calls newest first,
+     * cut at the limit its caller passes.
+     *
+     * THE LIMIT IS THE CALLER'S AND THE CUT IS NOT SILENT.
+     * `src/runs/service.ts` passes `RUN_LEDGER_CAP`, reads
+     * {@link RunStore.countRunLedger} beside this and answers a
+     * truncation flag from the two, so nothing here chooses a limit
+     * of its own — which would answer a short list with nothing
+     * saying it was short.
+     *
+     * NEWEST FIRST, SO THE CUT DROPS THE OLDEST END. That is why the
+     * order is the contract rather than a presentation choice: a read
+     * that forgot to order would cut an arbitrary subset and report
+     * the same count beside it.
+     *
+     * A CALL NAMING NO RUN IS UNREACHABLE HERE, whatever id is asked
+     * for. {@link RunStore.summariseSpend} is the one method that
+     * sees those rows.
+     */
+    async listRunLedger(
+      runId: number,
+      limit: number,
+    ): Promise<readonly LlmCallRecord[]> {
+      return orderedLedger(runId)
+        .slice(0, limit)
+        .map(llmCallOf);
+    },
+
+    /**
+     * How many calls one pass ledgered, ignoring any limit.
+     *
+     * THE FULL COUNT IS WHAT MAKES THE CUT REPORTABLE, per
+     * `src/runs/store.ts`: it is the number the service answers
+     * beside the capped list and compares against the cap.
+     *
+     * An id no run carries answers zero, and so does a pass that
+     * called nothing: the two are one fact from this method's side,
+     * and {@link RunStore.findRunById} is what separates them.
+     */
+    async countRunLedger(runId: number): Promise<number> {
+      return [...llmCalls.values()].filter(
+        (row) => row.runId === runId,
+      ).length;
+    },
+
+    /**
+     * The ledger inside one window, aggregated into one bucket per
+     * domain per UTC day.
+     *
+     * COUNTS AND MAGNITUDES, NEVER CURRENCY. `llm_calls` carries no
+     * price, rate or amount column, so there is nothing behind a cost
+     * for a bucket to answer and no member here is named for one.
+     *
+     * EVERY ROW IN THE WINDOW IS COUNTED, which is the property that
+     * stops a total taken from this summary under-reporting: the
+     * calls of a domain-less tick and the calls attributed to no run
+     * at all both land in the null bucket, so the buckets' `calls`
+     * add up to the number of calls the window holds.
+     * {@link spendDomainOf} is the `LEFT JOIN` that makes that so.
+     *
+     * NARROWING BY DOMAIN EXCLUDES BOTH KINDS, correctly: neither is
+     * that domain's. So the summaries of every domain do NOT sum to
+     * the unfiltered one, and the difference is the unattributed
+     * spend rather than a rounding of it.
+     *
+     * A BUCKET EXISTS BECAUSE CALLS LANDED IN IT. There is no row for
+     * a day nothing was called on and none for a domain that made no
+     * calls — a caller filling a chart supplies its own zeroes, and a
+     * store inventing empty buckets would be answering a calendar it
+     * was never told which of.
+     */
+    async summariseSpend(
+      filter: RunFilter,
+      window: TimeWindow,
+    ): Promise<readonly SpendBucket[]> {
+      const buckets = new Map<string, SpendBucket>();
+
+      for (const row of llmCalls.values()) {
+        const domainId = spendDomainOf(row);
+        const wanted = filter.domainId === undefined
+          || domainId === filter.domainId;
+
+        if (wanted && calledWithin(row, window)) {
+          addToBucket(buckets, row);
+        }
+      }
+
+      return [...buckets.values()].sort(compareSpendBuckets);
+    },
+
     setDomainDependents(
       domainId: number,
       counts: Partial<DomainDependentCounts>,
@@ -4180,6 +8441,111 @@ export function createMemoryResearchStore(
 
     setConnectorSubscriptions(connectorId: number, count: number): void {
       connectorSubscriptions.set(connectorId, count);
+    },
+
+    setDomainFindings(
+      domainId: number,
+      findings: readonly MemoryDomainFinding[],
+    ): void {
+      // Copied on the way in, row by row, so a caller that goes on
+      // moving a planted `createdAt` or writing into a planted
+      // `fields` does not move stored state — and the list itself
+      // is rebuilt, so pushing onto what was planted does not plant
+      // a further finding.
+      domainFindings.set(domainId, findings.map(copyPlantedFinding));
+    },
+
+    setFindingSightings(
+      findingId: number,
+      sightings: readonly MemoryFindingSighting[],
+    ): void {
+      findingSightings.set(findingId, sightings.map(copyPlantedSighting));
+    },
+
+    setEntityResearch(
+      entityId: number,
+      research: readonly MemoryEntityResearch[],
+    ): void {
+      entityResearch.set(entityId, research.map(copyPlantedResearch));
+    },
+
+    setDomainDocuments(
+      domainId: number,
+      documents: readonly MemoryDomainDocument[],
+    ): void {
+      // Copied on the way in, row by row, so a caller that goes on
+      // moving a planted `capturedAt` does not move a stored one —
+      // and the list itself is rebuilt, so pushing onto what was
+      // planted does not plant a further document.
+      domainDocuments.set(domainId, documents.map(copyPlantedCorpusDocument));
+    },
+
+    setDomainEntities(
+      domainId: number,
+      entities: readonly MemoryDomainEntity[],
+    ): void {
+      // Copied on the way in, row by row, so a caller that goes on
+      // writing into a planted `attributes` does not move stored
+      // state — and the list itself is rebuilt, so pushing onto what
+      // was planted does not plant a further subject.
+      domainEntities.set(domainId, entities.map(copyPlantedEntity));
+    },
+
+    setDomainPool(
+      domainId: number,
+      rows: readonly MemoryResearchPoolRow[],
+    ): void {
+      // Every row held against the CHECK BEFORE any is stored, so a
+      // batch carrying one impossible state lands nowhere and the
+      // previous plant is left standing. A guard applied row by row
+      // as it stored would leave the collection half written, which
+      // is a state one statement cannot produce.
+      for (const row of rows) {
+        guardPoolApproval(row);
+      }
+
+      domainPool.set(domainId, rows.map(copyPlantedPoolRow));
+    },
+
+    setRuns(rows: readonly MemoryRun[]): void {
+      // Copied on the way in, row by row, so a caller that goes on
+      // moving a planted stamp or writing into a planted `counts`
+      // does not move stored state — and the collection is rebuilt
+      // rather than added to, so pushing onto what was planted does
+      // not plant a further pass.
+      runs.clear();
+
+      for (const row of rows) {
+        runs.set(row.id, copyPlantedRun(row));
+      }
+    },
+
+    setDomainProposals(
+      domainId: number,
+      rows: readonly MemorySourceProposal[],
+    ): void {
+      // Every row held against the CHECK BEFORE any is stored, on
+      // `setDomainPool`'s terms one gate over: a batch carrying one
+      // impossible state lands nowhere and the previous plant is
+      // left standing, where a guard applied row by row as it stored
+      // would leave the collection half written.
+      for (const row of rows) {
+        guardProposalApproval(row);
+      }
+
+      domainProposals.set(domainId, rows.map(copyPlantedProposal));
+    },
+
+    setLlmCalls(rows: readonly MemoryLlmCall[]): void {
+      // Rebuilt on the terms the seam above states. Keyed by the
+      // call's own id, so a plant naming a run nothing stored is held
+      // rather than dropped: the summary answers it in the null
+      // bucket, which is what the left join would do.
+      llmCalls.clear();
+
+      for (const row of rows) {
+        llmCalls.set(row.id, copyPlantedLlmCall(row));
+      }
     },
   };
 }

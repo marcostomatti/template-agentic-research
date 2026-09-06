@@ -10,6 +10,14 @@
  * pass through raw. And that a cut lands between characters rather
  * than inside one.
  *
+ * A fourth claim is about the cap those passes are spent on rather
+ * than about either pass: that `BODY_CODE_POINT_CAP` is ONE binding
+ * and not two literals that agree. The value the failures service
+ * forwards is held against the declaration, and both module sources
+ * are read for a second declaration — the equality alone is
+ * satisfied by a re-declared literal, and the source reading alone
+ * would be satisfied by a module that had stopped importing it.
+ *
  * Two of those are zero-hit scans, and each is paired with a live
  * control in the same case. The serialization leg reads an UNMASKED
  * string through the same reader and requires it to find what it is
@@ -34,7 +42,7 @@
  * half serialization passes through raw, and exactly the half no
  * other reading would notice. The per-character table pins the rest.
  *
- * Mutation grid, measured over the 41 cases in this file. Dropping
+ * Mutation grid, measured over the cases in this file. Dropping
  * the `u` flag reddens 3, and all three are cases about RESTRAINT:
  * the astral pair, the mixed string carrying one, and the leg
  * reading the text either side of what was masked. Dropping the
@@ -51,10 +59,37 @@
  * shape roster, the prefix check, the changed-against-unchanged
  * split — which is what says those read the table rather than the
  * rule, and would report a case list that had quietly gone empty.
+ *
+ * One further reading is what those three cap cases CANNOT report,
+ * and it is measured rather than assumed: editing the declared
+ * VALUE reddens none of them, at any value. All three derive their
+ * fixtures from the constant, which is what exporting it is for —
+ * and what makes a value edit no evidence at all that the
+ * promotion is live. Measured over `bun run test src/sources
+ * src/http`, 628 cases: 2048 reddens 0, 4097 reddens 1 and 8
+ * reddens 6, every red in the failures queue and none in this
+ * file. The 4097 red is a PARITY accident rather than a cap
+ * reading — the astral fixture stops straddling a pair, so that
+ * case's own naive-slice control is what refuses. The 8 reds are
+ * the reading that does report: six failures-queue cases carry
+ * body fixtures written as literals rather than derived, so they
+ * see this module's number through the service importing it. What
+ * reports a SECOND declaration is the source read, not a value.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
-import { maskControlBytes, takeCodePoints } from './control-bytes.js';
+import {
+  BODY_CODE_POINT_CAP as FORWARDED_CAP,
+} from '../sources/failures-service.js';
+
+import {
+  BODY_CODE_POINT_CAP,
+  maskControlBytes,
+  takeCodePoints,
+} from './control-bytes.js';
 
 /** Builds one character from its code point. */
 const charFrom = String.fromCharCode;
@@ -401,5 +436,70 @@ describe('takeCodePoints', () => {
     // boundary they sit outside.
     expect(takeCodePoints('abc', 0)).toBe('');
     expect(takeCodePoints('abc', 1)).toBe('a');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BODY_CODE_POINT_CAP
+// ---------------------------------------------------------------------------
+
+/** The module declaring the cap. */
+const SHARED_SOURCE = fileURLToPath(
+  new URL('./control-bytes.ts', import.meta.url),
+);
+
+/** The module that forwards it rather than declaring one. */
+const FAILURES_SOURCE = fileURLToPath(
+  new URL('../sources/failures-service.ts', import.meta.url),
+);
+
+/**
+ * A line binding the cap's name to a value of the module's own.
+ *
+ * The name is assembled rather than written, so this reader cannot
+ * match the line of THIS file that names it — nothing here reads
+ * its own source, but a roster grown to cover another module one
+ * day would.
+ */
+const CAP_DECLARATION = new RegExp(
+  '^\\s*(export\\s+)?const\\s+' + ['BODY', 'CODE', 'POINT', 'CAP'].join('_')
+  + '\\s*=',
+);
+
+/** Every line of `source` declaring a cap of its own. */
+function ownDeclarations(source: string): string[] {
+  const lines = source.split('\n');
+
+  return lines.filter((line) => CAP_DECLARATION.test(line));
+}
+
+describe('BODY_CODE_POINT_CAP', () => {
+  it('is the binding the failures service answers with', () => {
+    expect(FORWARDED_CAP).toBe(BODY_CODE_POINT_CAP);
+  });
+
+  it('is declared here and nowhere the failures queue reads', () => {
+    const failures = readFileSync(FAILURES_SOURCE, 'utf8');
+
+    expect(ownDeclarations(failures)).toEqual([]);
+
+    // The control: the same reader over the module that DOES
+    // declare it finds exactly one line, so the zero above is a
+    // reading rather than a pattern matching nothing anywhere.
+    const shared = readFileSync(SHARED_SOURCE, 'utf8');
+
+    expect(ownDeclarations(shared)).toHaveLength(1);
+  });
+
+  it('is a cap a stored body can actually be cut at', () => {
+    // The control on the pair above: two modules could agree on a
+    // number that means nothing. This is the one call the cap
+    // exists for, driven at the boundary it names.
+    const body = 'x'.repeat(BODY_CODE_POINT_CAP + 1);
+
+    expect(takeCodePoints(body, BODY_CODE_POINT_CAP))
+      .toHaveLength(BODY_CODE_POINT_CAP);
+    expect(takeCodePoints(body.slice(0, BODY_CODE_POINT_CAP), FORWARDED_CAP))
+      .toHaveLength(BODY_CODE_POINT_CAP);
   });
 });

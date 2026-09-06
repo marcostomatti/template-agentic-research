@@ -43,11 +43,17 @@
  * THE BODY IS NOT PARSED HERE, exactly as in the wave-1 routers
  * and for the same reason. {@link createSource} and
  * {@link patchSource} take an `unknown` and parse it themselves,
- * because wave 3 exposes those same functions as MCP tools and a
- * body validated by the router would leave that caller validating
- * against a second schema nobody would notice drifting. That is
- * also what keeps the `openPaths` argument — the two prefixes
- * below which a key is the operator's own — in the service that
+ * because a body contract belongs to the operation rather than to
+ * whichever caller reached it, and a body validated by the router
+ * would leave a second caller validating against a second schema
+ * nobody would notice drifting. Neither write is on the MCP
+ * surface — the spec's safe list names no write over a `sources`
+ * row, the one act it does name under this prefix being the
+ * config approval `./proposals-routes.ts` serves — so this is a
+ * rule about where the contract lives and not a prediction about
+ * who calls it. That is also
+ * what keeps the `openPaths` argument — the two prefixes below
+ * which a key is the operator's own — in the service that
  * declares the schemas rather than in a handler.
  *
  * THIS LIST ROUTE IS PAGINATED, which is where it follows
@@ -182,6 +188,29 @@ const domainAddressSchema = z.object({ slug: slugParamSchema }).strict();
  */
 const sourceAddressSchema = z.object({ id: resourceIdParamSchema }).strict();
 
+/**
+ * What the MCP tool over this group's one read is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so every entry in `src/mcp/tools/wave-2.ts`
+ * names one schema covering the whole request, spread from the
+ * pieces this route already parses rather than written again.
+ *
+ * ONLY THE READ IS SPREAD. The create and the two writes below are
+ * not on that protocol: a feed's `parser_config` is configuration
+ * a research pass is scored by, and the spec's safe list names no
+ * write over a `sources` row. What it does name under this prefix
+ * is the config APPROVAL, which is a ruling on a proposal somebody
+ * else raised rather than a payload a caller composed, and
+ * `./proposals-routes.ts` declares its schema. The address consts
+ * above stay private either way.
+ */
+export const sourceListToolInputSchema = z.object({
+  ...domainAddressSchema.shape,
+  ...paginationQuerySchema.shape,
+}).strict();
+
 /** Everything {@link buildSourcesRouter} needs. */
 export interface SourcesRouterOptions {
   /**
@@ -192,12 +221,14 @@ export interface SourcesRouterOptions {
    * `tests/helpers/memory-research-store.ts` can stand behind it
    * with no database up.
    *
-   * It names SIX of the nine source methods, and the three it
+   * It names SIX of the thirteen source methods, and the seven it
    * leaves out are the containment this file is handed rather than
-   * one it enforces: `listSourceFailures` and `countSourceFailures`
-   * belong to the failures router, so no handler below could serve
-   * that queue even by accident, and `findSourceById` is absent
-   * because nothing on this router decides on a stored member.
+   * one it enforces. `listSourceFailures` and `countSourceFailures`
+   * belong to the failures router and the four proposal methods to
+   * the proposals router, so no handler below could serve that
+   * queue or rule on a config even by accident. `findSourceById` is
+   * absent because nothing on this router decides on a stored
+   * member.
    *
    * NO CLOCK SITS BESIDE IT, unlike `TopicsRouterOptions`. Nothing
    * on this group reads the present: `sources` carries no

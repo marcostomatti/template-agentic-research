@@ -306,6 +306,14 @@ const SPLICED_LIBRARIES: readonly SplicedLibrary[] = [
       'id !== null && !citations.includes(id)',
     ],
   },
+  {
+    file: 'entity-name-norm.ts',
+    ownText: [
+      'name.toLowerCase().normalize(ENTITY_KEY_NORMAL_FORM)',
+      '/[^\\p{L}\\p{N}\\p{M}]+/gu',
+      'key.length === 0',
+    ],
+  },
 ];
 
 /**

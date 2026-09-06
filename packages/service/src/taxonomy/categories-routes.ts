@@ -25,11 +25,14 @@
  *
  * THE BODY IS NOT PARSED HERE, exactly as in `src/domains/routes.ts`
  * and for the same reason. `createCategory` and `patchCategory` take
- * an `unknown` and parse it themselves, because wave 3 exposes those
- * same functions as MCP tools and a body validated by the router
- * would leave that caller validating against a second schema nobody
- * would notice drifting. What a router owns instead is what only
- * HTTP has: the `:slug` and the `:id` in the path.
+ * an `unknown` and parse it themselves, because an operation owns
+ * its own input contract and a body validated by the router would
+ * leave a second caller validating against a schema nobody would
+ * notice drifting. What a router owns instead is the SPELLING only
+ * HTTP has: the `:slug` and the `:id` in a path. The wave-1 MCP
+ * module takes the same `:slug` as a member of one arguments object
+ * — see the tool-input schema below — and reads this group without
+ * writing it.
  *
  * THERE IS NO WINDOW ON THIS ROUTER AT ALL, which is the one place
  * it departs from its sibling. `GET /domains/:slug/categories`
@@ -151,6 +154,30 @@ const domainAddressSchema = z.object({ slug: slugParamSchema }).strict();
  * take, narrowed at the boundary rather than inside the rules.
  */
 const categoryAddressSchema = z.object({ id: resourceIdParamSchema }).strict();
+
+/**
+ * What the MCP tool over this group's one read is called with.
+ *
+ * ONE OBJECT WHERE A REQUEST HAS TWO HALVES. An HTTP route parses
+ * its address and its query apart, and a tool is handed a single
+ * arguments object — so every entry in `src/mcp/tools/wave-1.ts`
+ * names one schema covering the whole request, and both halves are
+ * spread here rather than written again.
+ *
+ * {@link noQuerySchema} CONTRIBUTES NOTHING, AND IS SPREAD ANYWAY.
+ * This route declares no parameter, so a tool accepting one would
+ * be answering a request the route itself refuses; taking the
+ * emptiness from the schema rather than from a comment is what
+ * keeps that true if the route ever grows one.
+ *
+ * The address const above stays private. Nothing here exports one,
+ * so its own claim that the two routers agree by intent rather than
+ * by derivation is untouched by this schema.
+ */
+export const categoryListToolInputSchema = z.object({
+  ...domainAddressSchema.shape,
+  ...noQuerySchema.shape,
+}).strict();
 
 /** Everything {@link buildCategoriesRouter} needs. */
 export interface CategoriesRouterOptions {

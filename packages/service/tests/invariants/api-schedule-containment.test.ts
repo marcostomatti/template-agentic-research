@@ -1095,12 +1095,16 @@ const SUBSCRIPTION_STORE_METHODS = [
  * say the classifier reads the names rather than the count.
  */
 const SOURCE_STORE_METHODS = [
+  'approveAndApplyProposal',
+  'countPendingProposals',
   'countSourceDependents',
   'countSourceFailures',
   'countSources',
   'deleteSource',
+  'findProposalById',
   'findSourceById',
   'insertSource',
+  'listPendingProposals',
   'listSourceFailures',
   'listSourcesWithParseStats',
   'updateSource',

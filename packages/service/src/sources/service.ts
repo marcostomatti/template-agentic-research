@@ -145,11 +145,13 @@ import { parseBody } from '../http/validation.js';
  * one method of `DomainStore`, and asking for the whole port would
  * have this module claim to need the domain writes it never issues.
  *
- * THREE OF THE NINE SOURCE METHODS ARE DELIBERATELY ABSENT, and
- * each absence is a claim. `listSourceFailures` and
- * `countSourceFailures` belong to `./failures-service.ts`, so the
- * review queue and the resource operations are separately declared
- * and neither can quietly grow into the other. `findSourceById` is
+ * SEVEN OF THE THIRTEEN SOURCE METHODS ARE DELIBERATELY ABSENT,
+ * and each absence is a claim. `listSourceFailures` and
+ * `countSourceFailures` belong to `./failures-service.ts`, and the
+ * four proposal methods to `./proposals-service.ts`, so the review
+ * queue, the approval gate and the resource operations are three
+ * separately declared surfaces and none can quietly grow into
+ * another. `findSourceById` is
  * absent because nothing here reads a row before writing it:
  * {@link patchSource} and {@link deleteSource} let the store answer
  * for an id no row carries rather than buying a second round trip
