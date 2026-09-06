@@ -55,28 +55,28 @@
  *   every wave 2 route, behind its mount    41 of 100
  *   every wave 3 route, behind its mount    27 of 100
  *   the wired service around the mounts      5 of 100
- *   the generated document behind /docs      4 of 100
+ *   the generated document behind /docs     10 of 100
  *
  * A wave describe spends two requests per row plus the one its own
  * spend case makes: 19, 20 and 13 rows against the limiter's 100. The
- * mounts describe spends four — `/health` and `/example` open, then
- * the unmatched path anonymously and with a credential — plus the
- * same one. THE `/docs` DESCRIBE IS THE ONE ROW ABOVE THAT IS COUNTED
- * RATHER THAN READ: it drives no table row and carries no spend case
- * yet, so its four — `/docs` and `/docs/` anonymously, then both
- * again with a credential — are arithmetic until a header reading
- * lands beside them. THE HEADROOM IS THE POINT, and the wave-3 group
- * is what turned it from an argument into a measurement: the widest
- * describe leaves 59, while the five describes together want 116 of
- * one window. Booting a single service for the whole file is a leg
- * below, and it now reddens EIGHT — the last three wave-3 rows
- * answering `429`, and `/health` and `/example` behind them answering
- * it too, on a file that had 18 of its one window left before this
- * wave landed. Adding rows to an EXISTING describe still spends that
- * describe's budget, and the third case in `the route table` is what
- * refuses a wave that has outgrown it: a `429` would otherwise
- * present as a flaky mount on whichever rows ran last, rather than as
- * a limit.
+ * mounts describe spends four — `/health` and `/example` open, then the
+ * unmatched path anonymously and with a credential — plus the same one.
+ * THE `/docs` DESCRIBE IS READ THE SAME WAY NOW, its own spend case
+ * having landed beside the policy one: it drives no table row either,
+ * so its NINE are written out — `/docs` and `/docs/` anonymously and
+ * then both again with a credential, plus the five the policy case
+ * makes — and the header is what holds them to it. THE HEADROOM IS THE
+ * POINT, and the wave-3 group is what turned it from an argument into a
+ * measurement: the widest describe leaves 59, while the five describes
+ * together want 122 of one window. Booting a single service for the
+ * whole file is a leg below, and it now reddens EIGHT — the last three
+ * wave-3 rows answering `429`, and `/health` and `/example` behind them
+ * answering it too, on a file that had 18 of its one window left before
+ * this wave landed. Adding rows to an EXISTING describe still spends
+ * that describe's budget, and the third case in `the route table` is
+ * what refuses a wave that has outgrown it: a `429` would otherwise
+ * present as a flaky mount on whichever rows ran last, rather than as a
+ * limit.
  *
  * THE STORE IS THE SUBSTITUTION and it is the only one. Everything
  * else on the path is the shipped module: the real routers, the real
@@ -269,8 +269,8 @@
  *
  * SIX MORE WERE RUN AGAINST THE `/docs` DESCRIBE, and the grid above
  * predates it: every figure there is failed-of-65, none of them
- * accounts for that describe's four requests, and this file now
- * carries 66 cases. Unmounting `/docs` reddens the new case ALONE, 1
+ * accounts for that describe's four requests, and this file carried
+ * 66 cases when it ran. Unmounting `/docs` reddens the new case ALONE, 1
  * of 66, and it fails through the CREDENTIALLED half — the two
  * anonymous `401`s stay green, a service with no such mount
  * answering them identically, which is the whole reason that half is
@@ -294,6 +294,40 @@
  * with it dropped, 1 of 66. So the explicit guard on that line is
  * what this case reads the moment position stops covering it, which
  * is the argument `src/index.ts` spells there.
+ *
+ * EIGHT MORE WERE RUN AGAINST THE POLICY CASE AND ITS SPEND CASE, and
+ * both grids above predate them: those figures are failed-of-65 and
+ * failed-of-66, neither accounts for the five requests the policy case
+ * makes, and this file now carries 68. Dropping the scoped
+ * `helmet.contentSecurityPolicy` from the `/docs` mount reddens the
+ * policy case ALONE, 1 of 68, and so does moving that same override
+ * ABOVE the mounts so it applies app-wide — which is the pair that
+ * makes this a SCOPING reading rather than a header one: the first leg
+ * leaves both paths on helmet's defaults and the second puts both on
+ * the override, and the case refuses each because it compares the two
+ * rather than reading either. Widening the override's `styleSrc` back
+ * to helmet's own `https:` source reddens it too, 1 of 68, which is
+ * what says the difference the case names is the NARROWING and not
+ * merely that two headers differ somewhere; and setting `scriptSrc` to
+ * anything but `'self'` reddens it as well, the one directive the
+ * override restates being the one that difference structurally cannot
+ * report. Unmounting `/docs` reddens TWO of 68 now, this case beside
+ * the guard one above it. Pricing the describe at the four requests it
+ * made before this case landed reddens the spend case alone, 1 of 68.
+ *
+ * AND A THIRD HONEST ZERO, the same POSITION reading as the two above
+ * and about the ORDER INSIDE the mount rather than the guard on it. The
+ * case asserts that an anonymous `GET /docs/` carries the APP-WIDE
+ * header, which is the claim that `ctx.requireAuth` runs ahead of the
+ * policy middleware and a refusal therefore never reaches it. Moving
+ * the policy ahead of the guard where the mount SITS reddens NOTHING, 0
+ * of 68: that request is refused by the first of the sixteen mounts at
+ * `/` and never reaches this mount in either order. The pair that makes
+ * the zero a statement is the same one the paragraph above uses — with
+ * the mount moved ABOVE the chain and the guard kept first, 0 of 68;
+ * with the policy first, 1 of 68. So the order on those two lines is
+ * what this case reads the moment position stops covering it, and it is
+ * why every other reading in the case sends a credential.
  *
  * SO THIS FILE PINS THE SURFACE RATHER THAN THE MOUNTS. What it
  * reports is that an anonymous request is refused before it reaches
@@ -463,6 +497,87 @@ const DOCS_INDEX_PATH = '/docs/';
 const SWAGGER_UI_BOOTSTRAP = 'swagger-ui-init.js';
 
 /**
+ * A static asset {@link SWAGGER_UI_BOOTSTRAP}'s page loads, under the mount.
+ *
+ * Read by the policy case because the override sits on the MOUNT
+ * rather than on a handler, so what it covers is every path under
+ * `/docs` and not only the page. A case reading the page alone
+ * could not tell that from a policy set on `swaggerUi.setup`.
+ */
+const DOCS_ASSET_PATH = '/docs/swagger-ui.css';
+
+/**
+ * A guarded route of the surface, outside the `/docs` mount.
+ *
+ * The other half of the scoping claim, and the reason the policy
+ * case cannot be about `/docs` alone: a header read off that mount
+ * says what the mount answers, never that the app-wide default is
+ * still what everything else answers. This path is behind the same
+ * guard, on the same service, and outside the mount, so the pair
+ * separates a SCOPED override from one applied app-wide.
+ *
+ * It is asserted to be a row of {@link SURFACE_ROUTES} rather than
+ * trusted: a path this file misspelt is Express's own `404`, which
+ * carries the app-wide header too and would satisfy the reading for
+ * a reason that has nothing to do with scoping.
+ */
+const SIBLING_GUARDED_PATH = '/domains';
+
+/**
+ * The `script-src` the `/docs` override names, which is helmet's own.
+ *
+ * Transcribed from the `directives` block in `src/index.ts` and
+ * mirrored in {@link bootWiredService}. It is the directive the
+ * override RESTATES: swagger-ui-express 5.0.1 emits no inline
+ * `<script>`, so the value it needs is the default value, and the
+ * case below reads it back to say the override's own two directives
+ * both landed rather than only the one that moved.
+ */
+const RESTATED_SCRIPT_SRC = '\'self\'';
+
+/**
+ * The `style-src` the `/docs` override answers, and it is a NARROWING.
+ *
+ * helmet's default carries `https:` as a third source; nothing this
+ * mount serves loads a style over it, so the override drops it. That
+ * makes the one difference between the two policies below narrower
+ * than the app-wide header rather than wider — the relaxation this
+ * mount was expected to need is not one, and `src/index.ts` carries
+ * the four measurements behind that.
+ */
+const SCOPED_STYLE_SRC = '\'self\' \'unsafe-inline\'';
+
+/**
+ * helmet's default `style-src`, which every other path keeps.
+ *
+ * Transcribed from the wire rather than from helmet's source, for
+ * the reason {@link RATE_LIMIT_MAX} is: a default that moved in a
+ * helmet bump reddens the case below instead of silently redefining
+ * what `the app-wide default` means. The name-by-name pin on the
+ * whole default set lives in `lib/express/__tests__/middleware.test.ts`.
+ */
+const APP_WIDE_STYLE_SRC = '\'self\' https: \'unsafe-inline\'';
+
+/** The one directive the `/docs` override moves off helmet's default. */
+const NARROWED_DIRECTIVE = 'style-src';
+
+/** The other directive it names, and leaves at helmet's value. */
+const RESTATED_DIRECTIVE = 'script-src';
+
+/**
+ * The policy `serve-static` writes on the `301` it answers itself.
+ *
+ * A THIRD value on this mount, neither scoped nor app-wide, and the
+ * reason the policy case reads the slashed path: serve-static 2.2.1
+ * builds its own redirect page and sets this header on it directly
+ * (`serve-static/index.js:203`), overwriting what the middleware
+ * above it wrote. So `GET /docs` carries this, `GET /docs/` carries
+ * the scoped policy, and a case asserting the scoped value on the
+ * un-slashed path reads a correctly scoped mount as broken.
+ */
+const REDIRECT_POLICY = 'default-src \'none\'';
+
+/**
  * The limiter ceiling `applyMiddleware` ships, per service.
  *
  * Transcribed from the fallback literal in
@@ -497,6 +612,17 @@ const SPEND_PROBE_COST = 1;
  * that describe drives no table rows, so nothing derives it.
  */
 const MOUNT_EDGE_REQUESTS = 4;
+
+/**
+ * What `the generated document behind /docs` spends on its cases.
+ *
+ * Four from the guard case — `/docs` and `/docs/` anonymously, then
+ * both again with a credential — and five from the policy case: the
+ * page, an asset, the un-slashed redirect and a sibling route all
+ * with a credential, then `/docs/` anonymously for the refusal. This
+ * describe drives no table row either, so nothing derives it.
+ */
+const DOCS_EDGE_REQUESTS = 9;
 
 /** {@link envelopeOf}'s answer for `{ success: true, data, meta? }`. */
 const SUCCESS_ENVELOPE = 'the resource success envelope';
@@ -829,6 +955,60 @@ function windowSpendOf(response: request.Response): WindowSpend {
   const remaining = headerNumberOf(response, 'ratelimit-remaining');
 
   return { limit, remaining, spent: limit - remaining };
+}
+
+/**
+ * One directive of a `Content-Security-Policy`, as a map entry.
+ *
+ * Hoisted to module scope rather than written inline, because
+ * `implicit-arrow-linebreak` leaves no wrapped form for a callback
+ * of this shape. A directive carrying no source list answers an
+ * EMPTY value rather than being dropped — helmet's
+ * `upgrade-insecure-requests` is the one here — so the key set of
+ * two policies stays comparable whatever their values are.
+ *
+ * @param directive - One `;`-separated directive, spaces included.
+ * @returns Its name, and its source list as written.
+ */
+function directiveEntryOf(directive: string): [string, string] {
+  const trimmed = directive.trim();
+  const cut = trimmed.indexOf(' ');
+
+  return cut === -1
+    ? [trimmed, '']
+    : [trimmed.slice(0, cut), trimmed.slice(cut + 1)];
+}
+
+/**
+ * The `Content-Security-Policy` a response carries, by directive.
+ *
+ * A MAP rather than the raw string, because the scoping case has to
+ * say WHICH directives moved: two policies compared as strings
+ * report only that they differ, which is satisfied by an override
+ * that rewrote all eleven as readily as by the one that rewrote one.
+ * helmet writes a single string value and never an array — measured
+ * on the wire, the second policy on a mount REPLACING the app-wide
+ * header rather than appending to it — so no array handling is
+ * wanted here.
+ *
+ * @param response - The response to read.
+ * @param label - What was requested, named in the throw below.
+ * @returns Its directives, keyed by name.
+ * @throws Error When the response carried no policy at all. An empty
+ *   map would otherwise turn the key-set equality below into a
+ *   comparison of two empty sets, which passes.
+ */
+function policyOf(
+  response: request.Response,
+  label: string,
+): ReadonlyMap<string, string> {
+  const raw: unknown = response.headers['content-security-policy'];
+
+  if (typeof raw !== 'string') {
+    throw new Error(`${label} carried no Content-Security-Policy`);
+  }
+
+  return new Map(raw.split(';').map(directiveEntryOf));
 }
 
 /** What {@link bootWiredService} hands back. */
@@ -1325,5 +1505,104 @@ describe('the generated document behind /docs', () => {
     expect(signedInIndex.status).toBe(200);
     expect(signedInIndex.type).toBe('text/html');
     expect(signedInIndex.text).toContain(SWAGGER_UI_BOOTSTRAP);
+  });
+
+  it('scopes its policy to the mount and nothing else', async () => {
+    const { app } = serviceOf().handle;
+    const bearer = `Bearer ${VALID_TOKEN}`;
+
+    const page = await request(app)
+      .get(DOCS_INDEX_PATH)
+      .set('Authorization', bearer);
+    const asset = await request(app)
+      .get(DOCS_ASSET_PATH)
+      .set('Authorization', bearer);
+    const redirect = await request(app)
+      .get(DOCS_PATH)
+      .set('Authorization', bearer);
+    const sibling = await request(app)
+      .get(SIBLING_GUARDED_PATH)
+      .set('Authorization', bearer);
+    const refused = await request(app).get(DOCS_INDEX_PATH);
+
+    // THE SIBLING IS A ROW OF THE TABLE, not a path chosen here. A
+    // path this file misspelt would be Express's own `404`, which
+    // carries the app-wide header too — so the app-wide half of the
+    // comparison below would read exactly the same whether or not
+    // the surface still declares anything at this address.
+    const declaresSibling = SURFACE_ROUTES
+      .filter((route) => route.path === SIBLING_GUARDED_PATH);
+
+    expect(declaresSibling.length).toBeGreaterThan(0);
+    expect(sibling.status).toBe(200);
+    expect(page.status).toBe(200);
+
+    const scoped = policyOf(page, DOCS_INDEX_PATH);
+    const appWide = policyOf(sibling, SIBLING_GUARDED_PATH);
+
+    // BOTH DIRECTIVES THE OVERRIDE NAMES, read back off the wire. The
+    // `script-src` is helmet's own value restated, so it is the one
+    // the difference below cannot report — without this line a mount
+    // whose `scriptSrc` never landed reads identically.
+    expect(scoped.get(RESTATED_DIRECTIVE)).toBe(RESTATED_SCRIPT_SRC);
+    expect(scoped.get(NARROWED_DIRECTIVE)).toBe(SCOPED_STYLE_SRC);
+
+    // AND THE SCOPING ITSELF, which is what neither half says alone.
+    // The two policies carry the SAME eleven directives and differ in
+    // exactly one, which is the measurement `src/index.ts` states:
+    // `useDefaults: true` merges the override's two over helmet's
+    // defaults, one of them restates the default and the other drops
+    // its unused `https:` source, so ten are byte-identical here.
+    // A difference of NONE is an override that never applied, and a
+    // difference of more than one is a policy this mount did not
+    // declare — the equality below refuses both by naming the set.
+    const moved = [...scoped.keys()]
+      .filter((name) => scoped.get(name) !== appWide.get(name));
+
+    expect([...scoped.keys()].sort())
+      .toStrictEqual([...appWide.keys()].sort());
+    expect(moved).toStrictEqual([NARROWED_DIRECTIVE]);
+    expect(appWide.get(NARROWED_DIRECTIVE)).toBe(APP_WIDE_STYLE_SRC);
+
+    // THE OVERRIDE IS ON THE MOUNT rather than on the page handler,
+    // and the asset is what says so: it is served by
+    // `swaggerUi.serve` and never reaches `swaggerUi.setup`, so a
+    // policy attached to the handler would leave it app-wide.
+    expect(asset.status).toBe(200);
+    expect(policyOf(asset, DOCS_ASSET_PATH).get(NARROWED_DIRECTIVE))
+      .toBe(SCOPED_STYLE_SRC);
+
+    // THE GUARD IS AHEAD OF THE POLICY, which decides what a REFUSAL
+    // carries. An anonymous request is short-circuited by
+    // `ctx.requireAuth` before the override middleware runs at all,
+    // so its `401` carries the app-wide header — which is also why
+    // every reading above had to send a credential. See `src/index.ts`.
+    expect(refused.status).toBe(401);
+    expect(policyOf(refused, DOCS_INDEX_PATH).get(NARROWED_DIRECTIVE))
+      .toBe(APP_WIDE_STYLE_SRC);
+
+    // AND A THIRD VALUE ON THE SAME MOUNT, asserted rather than left
+    // for a reader to assume the scoped one covers. `serve-static`
+    // builds the redirect page itself and sets this header on it
+    // directly, overwriting what ran above — so `GET /docs` is the
+    // one path under this mount the override does NOT reach, and the
+    // claim this case makes is about the paths that are served.
+    expect(redirect.status).toBe(301);
+    expect(redirect.headers['content-security-policy'])
+      .toBe(REDIRECT_POLICY);
+  });
+
+  it('spent a measured share of the limiter window', async () => {
+    const { app } = serviceOf().handle;
+    const spend = windowSpendOf(await request(app).get(HEALTH_PATH));
+
+    // This describe drives no table row either, so its nine requests
+    // are written out rather than derived — four from the guard case
+    // above and five from the policy case. The reading is the same
+    // one every other describe makes, against the same ceiling read
+    // off the same header.
+    expect(spend.limit).toBe(RATE_LIMIT_MAX);
+    expect(spend.spent).toBe(DOCS_EDGE_REQUESTS + SPEND_PROBE_COST);
+    expect(spend.remaining).toBeGreaterThan(0);
   });
 });

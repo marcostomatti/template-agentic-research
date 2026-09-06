@@ -827,9 +827,10 @@ describe rather than one for the file. `lib/express` mounts its limiter
 app-wide at 100 requests a minute from a literal in `middleware.ts`, each
 limiter carries a store of its own, and each table row costs TWO — so the
 budget is per `createService`, and a describe that boots one starts from a
-fresh 100. Measured at the q14 `/docs` describe: FIVE services spending 39,
-41, 27, 5 and 4 of their own 100, where the single service the file used to
-boot would want 116 of its one 100 — a leg in that file's header boots one
+fresh 100. Measured at the q14 `/docs` describe, whose CSP-scoping case
+took its spend from four requests to nine: FIVE services spending 39, 41,
+27, 5 and 10 of their own 100, where the single service the file used to
+boot would want 122 of its one 100 — a leg in that file's header boots one
 and reddens EIGHT, the last three wave-3 rows answering `429` and the two
 open routes behind them answering it too. The ceiling is now ENFORCED
 rather than recorded. The last case of each describe that has one reads
