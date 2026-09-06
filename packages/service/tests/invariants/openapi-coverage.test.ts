@@ -53,6 +53,18 @@
  * it: measured, a registry built over no tables at all reddens
  * that case and this one together.
  *
+ * ONE REWRITE, PINNED AT THE INTERMEDIATE AND NOT ONLY AT THE
+ * ROUND TRIP. The equality rests on the two spellings meeting
+ * after exactly one conversion, and a round trip cannot see a
+ * fault its two halves share: a pair that were BOTH the identity
+ * takes `/domains/:slug` out of a table, into the document still
+ * unbraced, and back unchanged, and the equality agrees at 55
+ * with nothing having been converted at all. So the table under
+ * `The conversion` carries the BRACED form of every shape beside
+ * the express one it comes back as, both written out rather than
+ * derived from either conversion. Two of its five shapes are not
+ * on this surface, and they are the two that own a leg.
+ *
  * THE TWO PLANTS BELOW ARE WHAT MAKE THAT ZERO A READING, and each
  * one goes in at the artifact its own side is derived from rather
  * than at the label set that side answers. A ROUTER built inside
@@ -88,6 +100,21 @@
  * Re-derive the whole grid rather than appending legs for a later
  * case: every denominator here moves with the next one.
  *
+ * A SECOND GRID, six legs over the five cases, aimed at the two
+ * conversions rather than at this file's report. Making
+ * `openApiPathOf` the identity reddens the conversion case ALONE,
+ * 1 of 5, and so does making BOTH conversions the identity: the
+ * equality and both plants stay green through either, which is
+ * the blind spot that case exists for and which nothing else in
+ * this package reports. Dropping the global flag and widening the
+ * parameter pattern are 1 of 5 apiece, and each moves exactly one
+ * row — the two-parameter shape and the hyphen one, in that
+ * order, measured — so a table drawn from the real surface
+ * alone would be green under both. Making `expressPathOf` the
+ * identity is 4 of 5, the recorded 3 of 4 plus this case, and is
+ * the one leg of the six the equality can already see. The
+ * no-patch control is green at 0 of 5.
+ *
  * The document is generated once, at module scope, for the reason
  * `src/openapi.test.ts` gives its own copy: generation walks all
  * seventeen binding tables, and nothing here varies the port.
@@ -110,6 +137,7 @@ import { labelsOf } from '../helpers/route-labels.js';
 import {
   declaredOperations,
   documentedOperations,
+  expressPathOf,
 } from './openapi-coverage.js';
 
 // ---------------------------------------------------------------------------
@@ -327,6 +355,120 @@ describe('OpenAPI coverage - the plants', () => {
 
     expect(coverageGaps(documented, DECLARED))
       .toEqual([PLANTED_TABLE_LABEL + ' — ' + UNDECLARED]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The conversion
+// ---------------------------------------------------------------------------
+
+/** One path shape, in both of the spellings the two sides use. */
+interface PathShape {
+  /** What the row pins, printed by a failing diff. */
+  readonly shape: string;
+  /** The path as a router declares it, `/domains/:slug`. */
+  readonly express: string;
+  /** The same path as a document carries it, `/domains/{slug}`. */
+  readonly openapi: string;
+}
+
+/**
+ * The path shapes the two conversions are read over.
+ *
+ * BOTH SPELLINGS ARE WRITTEN OUT, which is the whole of what
+ * makes the table a reading rather than a restatement: a row
+ * whose expected form came out of either conversion would agree
+ * with it whatever it did.
+ *
+ * THREE OF THE FIVE ARE ON THIS SURFACE AND TWO ARE NOT, measured
+ * over its 36 declared paths: no path here carries two
+ * parameters, and each of the five hyphens sits after a slash
+ * rather than against a parameter name. Those two absentees are
+ * exactly the rows that own a leg — the global flag, and the
+ * right edge of the parameter pattern — so a table drawn only
+ * from the real surface would pin neither.
+ */
+const PATH_SHAPES: readonly PathShape[] = [
+  {
+    shape: 'no parameter',
+    express: '/settings',
+    openapi: '/settings',
+  },
+  {
+    shape: 'one parameter',
+    express: '/domains/:slug',
+    openapi: '/domains/{slug}',
+  },
+  {
+    shape: 'two parameters',
+    express: '/categories/:id/terms/:slug',
+    openapi: '/categories/{id}/terms/{slug}',
+  },
+  {
+    shape: 'a parameter, then a literal segment',
+    express: '/domains/:slug/categories',
+    openapi: '/domains/{slug}/categories',
+  },
+  {
+    shape: 'a hyphen ending a parameter name',
+    express: '/topics/:id-summary',
+    openapi: '/topics/{id}-summary',
+  },
+];
+
+/**
+ * Whether the conversion has anything to do to this shape.
+ *
+ * @param row - One row of {@link PATH_SHAPES}.
+ * @returns `true` when the two spellings differ, which on this
+ *   table is exactly when the path carries a parameter.
+ */
+function carriesParameter(row: PathShape): boolean {
+  return row.express !== row.openapi;
+}
+
+describe('OpenAPI coverage - the path conversion', () => {
+  // What the equality below rests on. The two sides meet after
+  // exactly one rewrite, so this is the case that says the
+  // rewrite is one, and that it moves every parameter and
+  // nothing else. The BRACED form is asserted beside the round
+  // trip rather than after it: a round trip is green under a
+  // pair of conversions that are BOTH the identity, which is the
+  // one fault it structurally cannot see, and the fault the
+  // equality below cannot see either.
+  it('braces every path shape, and takes it back', () => {
+    const rewritten = PATH_SHAPES.filter(carriesParameter).length;
+
+    // A table of parameterless paths round-trips under a rewrite
+    // that does nothing, and a table without one says nothing
+    // about a literal path being left alone. Both halves are
+    // asserted present before either is read.
+    expect(rewritten).toBeGreaterThan(0);
+    expect(rewritten).toBeLessThan(PATH_SHAPES.length);
+
+    const converted = PATH_SHAPES.map((row) => {
+      const braced = parseRouteLabel(`GET ${row.express}`).path;
+
+      return {
+        shape: row.shape,
+        express: row.express,
+        braced,
+        roundTrip: expressPathOf(braced),
+      };
+    });
+
+    const expected = PATH_SHAPES.map((row) => ({
+      shape: row.shape,
+      express: row.express,
+      braced: row.openapi,
+      roundTrip: row.express,
+    }));
+
+    // The whole table in one comparison, so a shape that moved
+    // is named — by its own `shape` line, beside the two
+    // spellings — rather than stopping the case at the first
+    // row that did.
+    expect(converted).toStrictEqual(expected);
   });
 });
 
