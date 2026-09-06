@@ -138,6 +138,7 @@
  * like any other bad shape.
  */
 import type { SourceServiceStore } from './service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -154,9 +155,11 @@ import { parseBody, parseQuery } from '../http/validation.js';
 
 import {
   createSource,
+  createSourceSchema,
   deleteSource,
   listSources,
   patchSource,
+  patchSourceSchema,
 } from './service.js';
 
 /**
@@ -203,13 +206,70 @@ const sourceAddressSchema = z.object({ id: resourceIdParamSchema }).strict();
  * write over a `sources` row. What it does name under this prefix
  * is the config APPROVAL, which is a ruling on a proposal somebody
  * else raised rather than a payload a caller composed, and
- * `./proposals-routes.ts` declares its schema. The address consts
- * above stay private either way.
+ * `./proposals-routes.ts` declares its schema.
+ *
+ * The address consts above stay private either way, and the binding
+ * table below does not change that: a table exports the schema
+ * OBJECTS a route parses with rather than the NAMES they are
+ * declared under, so a sibling router still has nothing here to
+ * import and their claim that they agree by intent rather than by
+ * derivation is untouched by either export.
  */
 export const sourceListToolInputSchema = z.object({
   ...domainAddressSchema.shape,
   ...paginationQuerySchema.shape,
 }).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. The bodies are the service's, imported
+ * rather than declared, because no handler below parses one — the
+ * module header's rule, read straight off the table.
+ *
+ * THE TWO PATH SHAPES ARE VISIBLE HERE AS TWO ADDRESS SCHEMAS. The
+ * collection routes bind {@link domainAddressSchema} and the two
+ * writes bind {@link sourceAddressSchema}, which is the split the
+ * module header argues for rather than a second thing to keep in
+ * step with it: a feed is met in its domain and written by its id,
+ * so no route below binds both.
+ *
+ * ONE ROUTE BINDS A QUERY AND THREE BIND NONE, which is a fact
+ * about them rather than a gap here. `GET /domains/:slug/sources`
+ * is paginated and refuses an undeclared parameter through
+ * `paginationQuerySchema`; the two writes and the delete never read
+ * `req.query` at all, so none of them refuses anything there. A
+ * document has to keep those two apart, which is why an absent
+ * member means the second and never the first.
+ *
+ * FOUR ENTRIES AND NOT FIVE, for the reason the module header
+ * gives about the routes: `GET /sources/:id/failures` shares this
+ * prefix and belongs to `./failures-routes.ts`, so it is bound in
+ * that module's table and the coverage guard reads the two apart
+ * exactly as `src/index.ts` mounts them apart.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const sourcesRouteSchemas = {
+  'GET /domains/:slug/sources': {
+    params: domainAddressSchema,
+    query: paginationQuerySchema,
+  },
+  'POST /domains/:slug/sources': {
+    params: domainAddressSchema,
+    body: createSourceSchema,
+  },
+  'PATCH /sources/:id': {
+    params: sourceAddressSchema,
+    body: patchSourceSchema,
+  },
+  'DELETE /sources/:id': { params: sourceAddressSchema },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildSourcesRouter} needs. */
 export interface SourcesRouterOptions {
