@@ -35,7 +35,14 @@
  * half that governs the code beside it, so a reader who arrives here
  * first is not left inferring a `{ success: false }` that no route
  * writes.
+ *
+ * The last third of this module states those same two shapes a
+ * SECOND time, as zod schemas, for the OpenAPI document to carry as
+ * reusable components. Nothing there parses a response at runtime
+ * and nothing there is derived from the interfaces above; the
+ * comment over each says what holds the two declarations equal.
  */
+import { z } from 'zod';
 
 /**
  * The window a paginated list was read through, and the size of the
@@ -170,3 +177,107 @@ export function buildPaginationMeta(input: PaginationInput): PaginationMeta {
 
   return { page, perPage, total, totalPages: Math.ceil(total / perPage) };
 }
+
+// ---------------------------------------------------------------------------
+// The same shapes, as schemas
+// ---------------------------------------------------------------------------
+
+/**
+ * {@link PaginationMeta} as a schema, for the OpenAPI document to
+ * carry as a reusable component.
+ *
+ * A SECOND declaration of a shape this module already states as an
+ * interface, and that is the standing cost of documenting a
+ * response: nothing here is derived from `PaginationMeta`, and
+ * neither `lint` nor `check-types` holds the two equal. What holds
+ * them equal is `./envelope.test.ts`, which parses what
+ * {@link buildPaginationMeta} actually built rather than a literal
+ * written out beside it — so a member renamed on one side is a red
+ * case instead of a document describing a body no route writes.
+ *
+ * `total` and `totalPages` are non-negative where `page` and
+ * `perPage` are positive, and the asymmetry is the empty
+ * collection: it answers `0` for both counts, which is the one
+ * window shape a positive bound would refuse. The other two are
+ * echoes of a query `src/http/schemas.ts` has already held to being
+ * positive.
+ *
+ * The `perPage` CEILING is deliberately not restated. It is a bound
+ * on the REQUEST and it belongs to that module; a literal 200 here
+ * would be a second authority for it, kept in step with the first by
+ * nothing at all. The same argument `resourceIdParamSchema` makes
+ * for writing no `.max()` beside its `.int()`.
+ */
+export const paginationMetaSchema = z.object({
+  page: z.number().int()
+    .positive(),
+  perPage: z.number().int()
+    .positive(),
+  total: z.number().int()
+    .nonnegative(),
+  totalPages: z.number().int()
+    .nonnegative(),
+}).strict();
+
+/**
+ * {@link SuccessEnvelope} as a schema: the body every route
+ * answering ONE resource writes.
+ *
+ * `data` is `z.unknown()` and stays that way. Every record on this
+ * surface is a TypeScript interface with no schema behind it —
+ * `DomainRecord` and 24 siblings — so a schema per record would be 25
+ * more second declarations with nothing comparing them to the
+ * interfaces they restate. What this one documents is the ENVELOPE:
+ * that a success body carries these two members, that `success` is
+ * the discriminator, and that whatever was answered sits under
+ * `data`. Per-record response schemas are deferred rather than
+ * forgotten, and this paragraph is the whole of that record until the
+ * not-enforced row naming the deferral lands in the register in
+ * `docs/architecture/01-invariants.md`, which carries no such row
+ * today.
+ *
+ * An open `data` is not an ABSENT one. Measured under the zod 4.5.1
+ * in this tree, `z.unknown()` still requires the key: a body with no
+ * `data` member at all is refused, while one carrying an explicit
+ * `undefined` parses and drops it. So the openness is about what
+ * `data` holds, never about whether a route answered anything.
+ *
+ * Strict, which means the body {@link okPage} builds is NOT a member
+ * of this shape — its `meta` is an unrecognized key here. That is
+ * the point rather than an oversight: the two envelopes are
+ * documented separately, and a list route bound to this one is a red
+ * case in `./envelope.test.ts` rather than an OpenAPI document that
+ * omits the window every page it describes carries.
+ */
+export const successEnvelopeSchema = z.object({
+  success: z.literal(true),
+  data: z.unknown(),
+}).strict();
+
+/**
+ * {@link PaginatedEnvelope} as a schema: the body every route
+ * answering one PAGE writes.
+ *
+ * Extended from {@link successEnvelopeSchema} for the reason
+ * {@link okPage} is built by spreading {@link ok} — the literal
+ * `success: true` is written once on this side of the module too, so
+ * the two schemas cannot drift apart on the member that
+ * discriminates them. Strictness survives the extension, measured
+ * rather than assumed.
+ *
+ * `data` is an array of unknowns rather than a bare unknown, which
+ * is the one thing knowable about a page without knowing its rows:
+ * `okPage` takes `readonly T[]`, so a body under this schema always
+ * carries a list. The rows themselves stay as open as the single
+ * resource above.
+ *
+ * One measured consequence for anything that parses a live body
+ * rather than merely documenting it: an array schema REBUILDS the
+ * array, so this schema's parse output carries a new `data` holding
+ * the same row references, where the single-resource schema hands
+ * back the object it was given.
+ */
+export const paginatedEnvelopeSchema = successEnvelopeSchema.extend({
+  data: z.array(z.unknown()),
+  meta: paginationMetaSchema,
+});
