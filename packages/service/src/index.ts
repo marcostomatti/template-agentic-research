@@ -44,9 +44,16 @@
  *   `/spend/summary` takes the clock, and it READS the present where
  *   the wave-2 pair write it. See `src/findings/`, `src/documents/`,
  *   `src/entities/`, `src/runs/`, `src/sources/` and the same doc.
+ * - `GET /docs` — Swagger UI over the document `src/openapi.ts`
+ *   assembles from the routers' own binding tables, mounted last and
+ *   the only mount in the guarded block carrying a path of its own, so
+ *   its `ctx.requireAuth` is spelled rather than inherited. See
+ *   `src/openapi.ts` and the same doc.
  */
 import type { AuthDeps } from './auth/index.js';
 import type { ServiceConfig } from '../lib/express/index.js';
+
+import swaggerUi from 'swagger-ui-express';
 
 import { createService } from '../lib/express/index.js';
 import { createLogger } from '../lib/logger/node.js';
@@ -75,6 +82,7 @@ import {
   registerPushChannel,
   registerWebhookChannel,
 } from './notifications/index.js';
+import { generateOpenApiDocument } from './openapi.js';
 import { createDbPersonaStore } from './personas/db-store.js';
 import { buildPersonasRouter } from './personas/routes.js';
 import { createRedisDependency } from './redis/index.js';
@@ -456,6 +464,32 @@ await createService({
     app.use(
       ctx.requireAuth,
       buildSourceProposalsRouter({ store: researchStore }),
+    );
+
+    // The generated OpenAPI document, behind the same credential as the
+    // surface it describes.
+    //
+    // THE GUARD ON THIS LINE IS EXPLICIT, NOT INHERITED. Every mount
+    // above is at `/` with no path of its own, so its `ctx.requireAuth`
+    // runs for every request that reaches it, and an anonymous
+    // `GET /docs` is answered `401` by the wave-1 mount long before this
+    // line is read. That refusal is mount ORDER and nothing else: this
+    // mount carries a PATH, so it is not itself part of the
+    // fall-through chain the mounts above form, and reordering the block
+    // would take the order argument away. The `ctx.requireAuth` spelled
+    // here is what survives that, so whether `/docs` is public is
+    // answered by one line rather than by a position.
+    //
+    // The document is built ONCE, at boot: `generateOpenApiDocument`
+    // assembles a fresh registry per call and throws on a binding table
+    // it cannot describe, so a table that has drifted fails the process
+    // here rather than the first request to `/docs`. Nothing it renders
+    // varies per caller either — it reads no request.
+    app.use(
+      '/docs',
+      ctx.requireAuth,
+      swaggerUi.serve,
+      swaggerUi.setup(generateOpenApiDocument()),
     );
   },
 });
