@@ -35,7 +35,8 @@
     "build:workflows": "bun scripts/build-workflows.ts",
     "deploy:external": "bun scripts/deploy-external.ts",
     "audit:workflows": "bun scripts/audit-workflows.ts",
-    "docs:generate": "typedoc"
+    "docs:generate": "typedoc",
+    "docs:openapi": "bun scripts/export-openapi.ts"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^9.1.0",

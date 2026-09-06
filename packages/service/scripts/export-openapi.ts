@@ -32,6 +32,22 @@
  * beside the manifest when there is one — which would be a hazard
  * in a committed artifact and is a local fact in an ignored one.
  *
+ * `bun run docs:openapi` is the manifest script that runs this,
+ * and `docs:generate` is its sibling: two documentation
+ * generators over one package, each owning its own output and
+ * neither reading the other's. They do NOT share one tree, which
+ * is worth stating here because the pair of names suggests they
+ * do. This half writes the gitignored `.docs/swagger/` above. The
+ * other is a bare `typedoc` carrying no `typedoc.json` and no
+ * `typedocOptions` key in either `package.json` or
+ * `tsconfig.json` — all three measured absent — so it takes
+ * typedoc's own default `out`, which resolves to the TRACKED
+ * `docs/` tree beside this one, the `architecture/` set and the
+ * hand-written guides. So a sentence filing both generators under
+ * one ignored tree is false as configured: only this one is
+ * ignored, and a `docs:generate` run writes where a diff shows
+ * it.
+ *
  * The directory is made recursively, which is doing two jobs.
  * Being ignored, `.docs/` is absent from every fresh checkout, so
  * a first run has both levels to create; and a rerun over a

@@ -32,7 +32,7 @@ in `.claude/skills/` and are pointed to below.
 | `tools/ralph/` (umbrella root) | The agent task loop: `plan` (spec → PLAN/PREREQUISITES), `start` (tracker loop, `--plan`, `--start-at`), `usage`. |
 | `tests/` | Cross-cutting tests; `tests/live/` is the live suite (see Testing). Package-level tests are colocated (`lib/**/__tests__`, `src/**/*.test.ts`). |
 | `.specs/`, `.plans/` | UNTRACKED (gitignored) working areas — see "Plans and specs" below. |
-| `docs/` | Tracked guides (drizzle, rpc, sse, seeding). Generated output goes to gitignored `.docs/` (`bun run docs:generate`). |
+| `docs/` | Tracked guides (drizzle, rpc, sse, seeding). `bun run docs:openapi` writes the OpenAPI document to gitignored `.docs/swagger/`. `docs:generate` does NOT: it is a bare `typedoc` carrying no `typedoc.json` and no `typedocOptions` key, so its default `out` resolves to THIS tracked tree rather than to `.docs/`. |
 | `docs/architecture/` | The architecture doc set: the platform shape, the layout map, and the invariant register — indexed from `ARCHITECTURE.md` and numbered by reading order. See "Research pipeline" below. |
 
 ## Research pipeline
