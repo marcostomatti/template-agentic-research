@@ -18,15 +18,17 @@
  * handler swallowed a throw on the way. So every case below reads
  * a response and none of them reads a return value.
  *
- * TWENTY CASES IN THIRTEEN GROUPS. Four guard the fixture, the
- * two vocabularies every refusal is read against and the shapes
- * every answer is held to. Eight cover the refusals — three the
- * address, two the query, two the payload and one the delete
- * guard — and eight cover what a list, a `?kind`, a create, a
- * patch and a delete answer when they LAND. A control in the
- * refusal half is a landing answer read only as far as the axis
- * its own case is about; the positive half is where each of them
- * is read whole.
+ * TWENTY-ONE CASES IN FOURTEEN GROUPS. Four guard the fixture,
+ * the two vocabularies every refusal is read against and the
+ * shapes every answer is held to. Eight cover the refusals —
+ * three the address, two the query, two the payload and one the
+ * delete guard — and eight cover what a list, a `?kind`, a
+ * create, a patch and a delete answer when they LAND. A control
+ * in the refusal half is a landing answer read only as far as the
+ * axis its own case is about; the positive half is where each of
+ * them is read whole. The twenty-first reads no response at all:
+ * the binding table this module exports, held against the routes
+ * its factory registers.
  *
  * ONE ADDRESS SHAPE AND NOT TWO, which is where this file is
  * shorter than every other resource group's. `connectors` hangs
@@ -179,7 +181,11 @@
  * are the operator's own config key and the value a bad `?kind`
  * carries.
  *
- * MUTATION GRID, derived over all twenty cases by mutating one
+ * THE GRID BELOW PREDATES THE BINDING CASE at the foot of this
+ * file: every figure in it was measured over the cases that
+ * preceded that one.
+ *
+ * MUTATION GRID, derived over the twenty cases by mutating one
  * file one edit at a time and reading the failed `fullName` SET
  * from a `--reporter=json` run rather than a count. SIXTEEN legs,
  * each named by the EDIT it makes rather than by its effect, since
@@ -272,9 +278,13 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 import { CONNECTOR_KINDS } from '../db/schema/values.js';
 
-import { buildConnectorsRouter } from './routes.js';
+import {
+  buildConnectorsRouter,
+  connectorsRouteSchemas,
+} from './routes.js';
 import { MASKED_SECRET, SECRET_CONFIG_KEYS } from './secrets.js';
 
 /**
@@ -1885,5 +1895,43 @@ describe('a delete that lands', () => {
     expect(listed.body.meta.total).toBe(PLANTED_CONNECTORS - 1);
     expect(again.status).toBe(404);
     expect(again.body).toStrictEqual(NO_SUCH_CONNECTOR_BODY);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildConnectorsRouter({
+      store: createMemoryResearchStore(),
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'GET /connectors/:id';
+    // The SET on the router side, because `labelsOf` answers one
+    // label per HANDLER and not per route: a route carrying
+    // middleware of its own repeats its label, which a table keyed
+    // by route must not follow. The prefix is empty because
+    // `src/index.ts` mounts this router at the root with no path
+    // argument, so what it declares is already the string the wire
+    // carries.
+    const declared = [...new Set(labelsOf(router, ''))].sort();
+    const bound = Object.keys(connectorsRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('POST /connectors');
+    expect(bound).not.toContain(fabricated);
   });
 });

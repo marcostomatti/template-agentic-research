@@ -20,7 +20,7 @@
  * all. So every case below reads a response, and the one that
  * cannot reads the arguments a recording port was handed.
  *
- * FIFTEEN CASES IN ELEVEN GROUPS. Two guard the fixture, the
+ * SIXTEEN CASES IN TWELVE GROUPS. Two guard the fixture, the
  * query vocabulary and the ladder every refusal is read against,
  * one holds the shapes every answer is compared to, one is the
  * page, two are what the handler hands the port, two are the
@@ -28,7 +28,9 @@
  * route does not declare, and FOUR are the ruling: what it
  * stores, what it refuses a verdict outside the ladder with, what
  * it answers about an id no finding carries, and what it says
- * about a key the body may not name.
+ * about a key the body may not name. The sixteenth reads no
+ * response at all: the binding table this module exports, held
+ * against the routes its factory registers.
  *
  * THE PAGE. One request with no query at all beside two windows of
  * ONE over the same three rows, which is the reading a refusal
@@ -153,6 +155,10 @@
  * four cases below read one ladder and add the status, the
  * envelope and the wire text those rules reach a caller as.
  *
+ * THE GRID BELOW PREDATES THE BINDING CASE at the foot of this
+ * file: every figure in it was measured over the cases that
+ * preceded that one.
+ *
  * MUTATION GRID, taken by mutating one file one edit at a time and
  * reading the failed `fullName` SET off a `--reporter=json` run
  * rather than a count. EIGHTEEN legs, each named by the EDIT it
@@ -274,9 +280,10 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 import { DEFAULT_VERDICT_VOCABULARY } from '../db/schema/values.js';
 
-import { buildFindingsRouter } from './routes.js';
+import { buildFindingsRouter, findingsRouteSchemas } from './routes.js';
 import {
   FINDING_SORT_KEYS,
   findingListQuerySchema,
@@ -2319,5 +2326,43 @@ describe('a ruling body carrying an undeclared key', () => {
     // vocabulary one is read on.
     expect(afterRefusal).toHaveLength(PLANTED_RULINGS.length);
     expect(afterRuling).toHaveLength(PLANTED_RULINGS.length + 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildFindingsRouter({
+      store: createMemoryResearchStore(),
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'DELETE /findings/:id';
+    // The SET on the router side, because `labelsOf` answers one
+    // label per HANDLER and not per route: a route carrying
+    // middleware of its own repeats its label, which a table keyed
+    // by route must not follow. The prefix is empty because
+    // `src/index.ts` mounts this router at the root with no path
+    // argument, so what it declares is already the string the wire
+    // carries.
+    const declared = [...new Set(labelsOf(router, ''))].sort();
+    const bound = Object.keys(findingsRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('PATCH /findings/:id/verdict');
+    expect(bound).not.toContain(fabricated);
   });
 });

@@ -20,12 +20,14 @@
  * response BODY carries as a string rather than a value a function
  * returned.
  *
- * SEVEN CASES IN SIX GROUPS. Two guard the fixture and the shapes
+ * EIGHT CASES IN SEVEN GROUPS. Two guard the fixture and the shapes
  * every answer is compared to, one is the summary and the window
  * beside it, one is the span this route will not take, one is the
- * parameter it does not declare, and TWO are the structure: the
- * verb inventory read off the router's own stack, and the port
- * classified against a write vocabulary.
+ * parameter it does not declare, and TWO are the structure: the verb
+ * inventory read off the router's own stack, and the port classified
+ * against a write vocabulary. The eighth reads no response at all:
+ * the binding table this module exports, held against the routes its
+ * factory registers.
  *
  * ONE ROW PER DOMAIN AND PER DAY, READ AS A PARTITION AND NOT AS A
  * LIST. The fixture puts two calls under one domain on one day, a
@@ -114,6 +116,10 @@
  * taken over direct calls, over a recording port and over the
  * schema itself. And `/runs` is a second router in this directory,
  * read in `./routes.test.ts`.
+ *
+ * THE GRID BELOW PREDATES THE BINDING CASE at the foot of this
+ * file: every figure in it was measured over the cases that
+ * preceded that one.
  *
  * MUTATION GRID, taken by mutating one file one edit at a time and
  * reading the failed `fullName` SET off a `--reporter=json` run
@@ -206,8 +212,9 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 
-import { buildSpendRouter } from './spend-routes.js';
+import { buildSpendRouter, spendRouteSchemas } from './spend-routes.js';
 import {
   SPEND_DEFAULT_WINDOW_DAYS,
   SPEND_MAX_WINDOW_DAYS,
@@ -1440,5 +1447,44 @@ describe('what this router structurally cannot do', () => {
     // discriminates rather than answering `true` for everything.
     expect(RUN_READS_TAKE_NO_ROW).toBe(true);
     expect(A_PLANTED_CALL_WRITER_IS_REPORTED).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildSpendRouter({
+      store: createMemoryResearchStore(),
+      clock: () => CLOCK_AT,
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'GET /spend/summary/:id';
+    // The SET on the router side, because `labelsOf` answers one
+    // label per HANDLER and not per route: a route carrying
+    // middleware of its own repeats its label, which a table keyed
+    // by route must not follow. The prefix is empty because
+    // `src/index.ts` mounts this router at the root with no path
+    // argument, so what it declares is already the string the wire
+    // carries.
+    const declared = [...new Set(labelsOf(router, ''))].sort();
+    const bound = Object.keys(spendRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('GET /spend/summary');
+    expect(bound).not.toContain(fabricated);
   });
 });

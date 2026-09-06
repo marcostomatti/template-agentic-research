@@ -17,9 +17,11 @@
  * swallowed a throw on the way. So every case below reads a
  * response and none of them reads a return value.
  *
- * NINETEEN CASES IN TWO HALVES — eleven refusals, then eight
- * answers, with two of the eight guarding the shapes the other six
- * are held to.
+ * TWENTY CASES IN TWO HALVES AND A CODA — eleven refusals, then
+ * eight answers, with two of the eight guarding the shapes the
+ * other six are held to, and one case that reads no response at
+ * all: the binding table this module exports, held against the
+ * routes its factory registers.
  *
  * FIVE REFUSALS, GROUPED BY WHICH PART OF THE REQUEST WAS WRONG.
  *
@@ -120,7 +122,11 @@
  * upstream — zod puts a value in no path and no message — so its
  * zero is evidence about zod rather than about this router.
  *
- * MUTATION GRID, re-measured over all nineteen cases by mutating
+ * THE GRID BELOW PREDATES THE BINDING CASE at the foot of this
+ * file: every figure in it was measured over the cases that
+ * preceded that one.
+ *
+ * MUTATION GRID, re-measured over the nineteen cases by mutating
  * `routes.ts` and reading the failed `fullName` SET from a
  * `--reporter=json` run rather than a count. Nine legs, and every
  * figure below moved when the positive half landed — a grid is a
@@ -181,8 +187,9 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 
-import { buildDomainsRouter } from './routes.js';
+import { buildDomainsRouter, domainsRouteSchemas } from './routes.js';
 
 /**
  * A real logger with every level suppressed.
@@ -1056,5 +1063,43 @@ describe('a delete the caller confirmed', () => {
     // rather than a handler answering without acting.
     expect(afterwards.status).toBe(404);
     expect(afterwards.body).toStrictEqual(NOT_FOUND_BODY);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildDomainsRouter({
+      store: createMemoryResearchStore(),
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'GET /domains/:slug/zz-no-such-route';
+    // The SET on the router side, because `labelsOf` answers one
+    // label per HANDLER and not per route: a route carrying
+    // middleware of its own repeats its label, which a table keyed
+    // by route must not follow. The prefix is empty because
+    // `src/index.ts` mounts this router at the root with no path
+    // argument, so what it declares is already the string the wire
+    // carries.
+    const declared = [...new Set(labelsOf(router, ''))].sort();
+    const bound = Object.keys(domainsRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('GET /domains/:slug');
+    expect(bound).not.toContain(fabricated);
   });
 });

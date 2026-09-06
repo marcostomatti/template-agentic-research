@@ -18,12 +18,14 @@
  * and whether a handler swallowed a throw on the way. So every case
  * below reads a response and none of them reads a return value.
  *
- * TWENTY CASES IN FOURTEEN GROUPS. Three guard the fixture and the
- * key lists every answer is read through; ten cover the ways a
+ * TWENTY-ONE CASES IN FIFTEEN GROUPS. Three guard the fixture and
+ * the key lists every answer is read through; ten cover the ways a
  * request here can be wrong — six the address, one the window, two
  * the payload, and one the delete guard driven against both counted
  * tables in turn; and seven cover what the four routes answer when
- * they LAND.
+ * they LAND. The twenty-first reads no response at all: the binding
+ * table this module exports, held against the routes its factory
+ * registers.
  *
  * THE ADDRESS. A slug naming no domain is `404` on both operations
  * that take one, and an id naming no source is `404` on both that
@@ -209,7 +211,11 @@
  * `GET /sources/:id/failures` is not this router's route at all and
  * has a file of its own.
  *
- * MUTATION GRID, re-derived over all twenty cases by mutating
+ * THE GRID BELOW PREDATES THE BINDING CASE at the foot of this
+ * file: every figure in it was measured over the cases that
+ * preceded that one.
+ *
+ * MUTATION GRID, re-derived over the twenty cases by mutating
  * `routes.ts` one edit at a time and reading the failed `fullName`
  * SET from a `--reporter=json` run rather than a count. EIGHT legs,
  * each named by the EDIT it makes rather than by its effect, since
@@ -291,12 +297,13 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 import {
   DOCUMENT_PARSE_STATUSES,
   SOURCE_KINDS,
 } from '../db/schema/values.js';
 
-import { buildSourcesRouter } from './routes.js';
+import { buildSourcesRouter, sourcesRouteSchemas } from './routes.js';
 
 /**
  * A real logger with every level suppressed.
@@ -2181,5 +2188,43 @@ describe('a delete that lands', () => {
     expect(endpointsOf(elsewhere.body)).toStrictEqual([TRANSIT_ENDPOINT]);
     expect(again.status).toBe(404);
     expect(again.body).toStrictEqual(NO_SUCH_SOURCE_BODY);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildSourcesRouter({
+      store: createMemoryResearchStore(),
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'GET /sources/:id';
+    // The SET on the router side, because `labelsOf` answers one
+    // label per HANDLER and not per route: a route carrying
+    // middleware of its own repeats its label, which a table keyed
+    // by route must not follow. The prefix is empty because
+    // `src/index.ts` mounts this router at the root with no path
+    // argument, so what it declares is already the string the wire
+    // carries.
+    const declared = [...new Set(labelsOf(router, ''))].sort();
+    const bound = Object.keys(sourcesRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('GET /domains/:slug/sources');
+    expect(bound).not.toContain(fabricated);
   });
 });

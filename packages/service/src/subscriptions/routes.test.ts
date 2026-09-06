@@ -22,9 +22,9 @@
  * So every case below reads a response and none of them reads a
  * return value.
  *
- * TWENTY-THREE CASES IN TWO HALVES, plus three guards. TWELVE
- * cover eight ways a request to this router can be WRONG: an
- * unknown slug, an unknown id, a segment that is not an id, a
+ * TWENTY-FOUR CASES IN TWO HALVES, plus three guards and a coda.
+ * TWELVE cover eight ways a request to this router can be WRONG:
+ * an unknown slug, an unknown id, a segment that is not an id, a
  * segment that is not a slug, a `format` outside the tuple, a
  * `connectorId` naming no row, a triple the domain already holds,
  * and a disabled row met by the verb. EIGHT cover what the five
@@ -32,7 +32,9 @@
  * page, the create and the verb taking two apiece. The three
  * guards are the two the tuple and triple cases rest on and one
  * holding every shape the second half asserts against the type
- * that declares it.
+ * that declares it. The coda reads no response at all: the
+ * binding table this module exports, held against the routes its
+ * factory registers.
  *
  * THE ADDRESS. A slug naming no domain is `404` on both operations
  * that take one, and an id naming no subscription is `404` on all
@@ -169,7 +171,11 @@
  * in-memory store's `<`, so the drizzle implementation answering
  * the same order is `tests/live/api-wave2.live.test.ts`'s.
  *
- * MUTATION GRID, measured over all twenty-three cases by reading
+ * THE GRID BELOW PREDATES THE BINDING CASE at the foot of this
+ * file: every figure in it was measured over the cases that
+ * preceded that one.
+ *
+ * MUTATION GRID, measured over the twenty-three cases by reading
  * the failed `fullName` SET from a `--reporter=json` run rather
  * than a count, with each leg's collected count asserted at
  * twenty-three so an edit that broke collection cannot score a
@@ -256,9 +262,13 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 import { EXPORT_FORMATS } from '../db/schema/values.js';
 
-import { buildSubscriptionsRouter } from './routes.js';
+import {
+  buildSubscriptionsRouter,
+  subscriptionsRouteSchemas,
+} from './routes.js';
 
 /**
  * A real logger with every level suppressed.
@@ -2056,5 +2066,44 @@ describe('a run now that lands', () => {
       [pairKey(STORED_FORMAT, vaultId)]: FIXED_INSTANT,
       [pairKey(SECOND_FORMAT, vaultId)]: DUE_LATER,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildSubscriptionsRouter({
+      store: createMemoryResearchStore(),
+      clock: () => new Date(FIXED_INSTANT),
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'GET /exports/:id';
+    // The SET on the router side, because `labelsOf` answers one
+    // label per HANDLER and not per route: a route carrying
+    // middleware of its own repeats its label, which a table keyed
+    // by route must not follow. The prefix is empty because
+    // `src/index.ts` mounts this router at the root with no path
+    // argument, so what it declares is already the string the wire
+    // carries.
+    const declared = [...new Set(labelsOf(router, ''))].sort();
+    const bound = Object.keys(subscriptionsRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('POST /exports/:id/run-now');
+    expect(bound).not.toContain(fabricated);
   });
 });

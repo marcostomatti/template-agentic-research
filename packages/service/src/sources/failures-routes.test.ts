@@ -20,14 +20,16 @@
  * response carries. So every case below reads a response and none
  * of them reads a return value.
  *
- * TWELVE CASES IN NINE GROUPS. Three guard the fixture, the
+ * THIRTEEN CASES IN TEN GROUPS. Three guard the fixture, the
  * vocabulary every refusal is read against and the shapes every
  * answer is held to. Four are refusals: the address, the segment
  * that is not one, the window, and the parameter this route does
  * not declare, that last one twice. And three are what the route
  * answers when it LANDS — the page and its `meta`, a stored control
  * byte reaching the wire masked, and the read-only reading taken
- * off the router's own `stack` and off the port it is handed.
+ * off the router's own `stack` and off the port it is handed. The
+ * thirteenth reads no response at all: the binding table this
+ * module exports, held against the routes its factory registers.
  *
  * THE ADDRESS. An id naming no source is `404` asserted against
  * ONE whole body constant, and its control is the SAME operation
@@ -148,7 +150,11 @@
  * routes over a `sources` ROW are not this router's at all and
  * have a file of their own.
  *
- * MUTATION GRID, re-derived WHOLE over all twelve cases by mutating
+ * THE GRID BELOW PREDATES THE BINDING CASE at the foot of this
+ * file: every figure in it was measured over the cases that
+ * preceded that one.
+ *
+ * MUTATION GRID, re-derived WHOLE over the twelve cases by mutating
  * one file one edit at a time and reading the failed `fullName` SET
  * from a `--reporter=json` run rather than a count. FIFTEEN legs,
  * each named by the EDIT it makes rather than by its effect, since
@@ -236,9 +242,13 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 import { paginationQuerySchema } from '../http/schemas.js';
 
-import { buildSourceFailuresRouter } from './failures-routes.js';
+import {
+  buildSourceFailuresRouter,
+  sourceFailuresRouteSchemas,
+} from './failures-routes.js';
 
 /**
  * A real logger with every level suppressed.
@@ -1560,5 +1570,43 @@ describe('what this router structurally cannot do', () => {
     // rather than answering `true` for everything.
     expect(DOCUMENT_READS_TAKE_NO_ROW).toBe(true);
     expect(A_PLANTED_WRITER_IS_REPORTED).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildSourceFailuresRouter({
+      store: createMemoryResearchStore(),
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'DELETE /sources/:id/failures';
+    // The SET on the router side, because `labelsOf` answers one
+    // label per HANDLER and not per route: a route carrying
+    // middleware of its own repeats its label, which a table keyed
+    // by route must not follow. The prefix is empty because
+    // `src/index.ts` mounts this router at the root with no path
+    // argument, so what it declares is already the string the wire
+    // carries.
+    const declared = [...new Set(labelsOf(router, ''))].sort();
+    const bound = Object.keys(sourceFailuresRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('GET /sources/:id/failures');
+    expect(bound).not.toContain(fabricated);
   });
 });

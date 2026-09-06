@@ -20,7 +20,7 @@
  * something a body carries rather than something a function
  * returned.
  *
- * NINE CASES IN NINE GROUPS. Two guard the fixture and the shapes
+ * TEN CASES IN TEN GROUPS. Two guard the fixture and the shapes
  * every answer is compared to, one is the subject read whole, one
  * is the rename and the key it computed, one is the research page
  * and the `meta` beside it, one is the ruling projection, one is
@@ -28,7 +28,9 @@
  * onto a key already held, and one is the undeclared key — that
  * last one over BOTH writes in a single case, because the two
  * schemas are separate declarations answering one body and only a
- * case sending to both can say so.
+ * case sending to both can say so. The tenth reads no response at
+ * all: the binding table this module exports, held against the
+ * routes its factory registers.
  *
  * TWO REGISTRIES, AND THE SECOND EARNS ITS PLACE TWICE.
  * `entities_domain_id_name_norm_unique` is per DOMAIN, so one
@@ -73,6 +75,10 @@
  * `EntityStore` writes no `entity_research` is
  * `tests/invariants/api-read-first.test.ts`'s, derived from
  * `keyof` for the whole wave at once.
+ *
+ * THE GRID BELOW PREDATES THE BINDING CASE at the foot of this
+ * file: every figure in it was measured over the cases that
+ * preceded that one.
  *
  * MUTATION GRID, taken by mutating one file one edit at a time and
  * reading the failed `fullName` SET off a `--reporter=json` run
@@ -192,9 +198,10 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 import { normalizeEntityName } from '../lib/entity-name-norm.js';
 
-import { buildEntitiesRouter } from './routes.js';
+import { buildEntitiesRouter, entitiesRouteSchemas } from './routes.js';
 import {
   approveResearchSchema,
   patchEntitySchema,
@@ -1804,5 +1811,43 @@ describe('a body carrying a key neither write declares', () => {
       .toStrictEqual(RULING_KEY_SET);
     expect((declaredRuling.body.data as WireRuling).status)
       .toBe(APPROVED);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildEntitiesRouter({
+      store: createMemoryResearchStore(),
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'DELETE /entities/:id';
+    // The SET on the router side, because `labelsOf` answers one
+    // label per HANDLER and not per route: a route carrying
+    // middleware of its own repeats its label, which a table keyed
+    // by route must not follow. The prefix is empty because
+    // `src/index.ts` mounts this router at the root with no path
+    // argument, so what it declares is already the string the wire
+    // carries.
+    const declared = [...new Set(labelsOf(router, ''))].sort();
+    const bound = Object.keys(entitiesRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('GET /entities/:id/research');
+    expect(bound).not.toContain(fabricated);
   });
 });
