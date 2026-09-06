@@ -118,6 +118,7 @@
  */
 import type { DocumentsServiceStore } from './service.js';
 import type { DocumentFilter } from './store.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -169,14 +170,63 @@ const domainAddressSchema = z.object({ slug: slugParamSchema }).strict();
  * held to, and every body either protocol answers is masked and
  * cut by `src/documents/service.ts`.
  *
- * The address const above stays private. Nothing here exports one,
- * so the sibling routers claim that they agree by intent rather
- * than by derivation is untouched by this schema.
+ * The address const above stays private, and the binding table
+ * below does not change that: a table exports the schema OBJECTS a
+ * route parses with rather than the NAMES they are declared under,
+ * so the sibling routers still have nothing here to import and
+ * their claim that they agree by intent rather than by derivation
+ * is untouched by either export.
  */
 export const documentListToolInputSchema = z.object({
   ...domainAddressSchema.shape,
   ...documentListQuerySchema.shape,
 }).strict();
+
+/**
+ * What the one route below binds, keyed by the label the wire
+ * carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. The query is
+ * {@link documentListQuerySchema}, imported from `./service.ts`
+ * rather than declared here, which is the module header's rule
+ * about where this group's boundary lives read straight off the
+ * table.
+ *
+ * ONE ENTRY, AND IT IS THE WHOLE TABLE. That is this router's
+ * one-route claim read off a second shape: the module header
+ * states it, `./routes.test.ts` reads it off the router's own
+ * `stack`, and a route added here without an entry is what the
+ * coverage guard answers for. `GET /documents/:id` is a path that
+ * stays free, so no address schema beyond the `:slug` exists here
+ * for a second entry to bind.
+ *
+ * NO `body` MEMBER, and the absence means the route never LOOKS at
+ * one rather than that it refuses one. `express.json()` will
+ * already have parsed a body off a `GET` that sent one,
+ * {@link listDocuments} is handed nothing, and that request is
+ * answered exactly as one that did not.
+ *
+ * THE CUT, THE MASK AND THE ORDER ARE OUTSIDE THIS BINDING. Bodies
+ * reach the wire cut to `BODY_CODE_POINT_CAP` code points and
+ * masked, and the page arrives `capturedAt` descending — all three
+ * being facts about what is ANSWERED rather than about what is
+ * parsed, so no request schema can carry them and a document
+ * assembled from this table describes the request half alone.
+ * `src/documents/service.ts` owns all three.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const documentsRouteSchemas = {
+  'GET /domains/:slug/documents': {
+    params: domainAddressSchema,
+    query: documentListQuerySchema,
+  },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildDocumentsRouter} needs. */
 export interface DocumentsRouterOptions {

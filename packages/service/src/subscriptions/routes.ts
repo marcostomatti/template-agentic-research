@@ -171,6 +171,7 @@
  * refuse like any other bad shape.
  */
 import type { SubscriptionServiceStore } from './service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -187,9 +188,11 @@ import { parseBody, parseQuery } from '../http/validation.js';
 
 import {
   createSubscription,
+  createSubscriptionSchema,
   deleteSubscription,
   listSubscriptions,
   patchSubscription,
+  patchSubscriptionSchema,
   runSubscriptionNow,
 } from './service.js';
 
@@ -234,9 +237,12 @@ const subscriptionAddressSchema = z.object({
  * names one schema covering the whole request, spread from the
  * pieces this route already parses rather than written again.
  *
- * The address consts above stay private. Nothing here exports one,
- * so the sibling routers' claim that they agree by intent rather
- * than by derivation is untouched by this pair.
+ * The address consts above stay private, and the binding table
+ * below does not change that: a table exports the schema OBJECTS a
+ * route parses with rather than the NAMES they are declared under,
+ * so the sibling routers still have nothing here to import and
+ * their claim that they agree by intent rather than by derivation
+ * is untouched by either export.
  */
 export const subscriptionListToolInputSchema = z.object({
   ...domainAddressSchema.shape,
@@ -256,6 +262,76 @@ export const subscriptionListToolInputSchema = z.object({
 export const subscriptionRunNowToolInputSchema = z.object({
   ...subscriptionAddressSchema.shape,
 }).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. The bodies are the service's, imported
+ * rather than declared, because no handler below parses one — the
+ * module header's rule, read straight off the table.
+ *
+ * THE LABELS SAY `/exports` AND THIS MODULE SITS IN
+ * `src/subscriptions/`, which is the module header's first
+ * paragraph read off the table rather than a directory somebody
+ * misfiled. The keys are the strings on the wire, and the wire
+ * says `/exports` because that is what a caller asks for;
+ * `src/exports/` is the RENDERER registry and holds no route at
+ * all, so nothing under this prefix could have been declared
+ * there. A reader looking for what answers `PATCH /exports/:id`
+ * has this table's own directory as the only pointer, which is
+ * why the split is restated here as well as in
+ * `docs/architecture/08-http-api.md`.
+ *
+ * FIVE ROUTES AND TWO ADDRESS SCHEMAS. The collection pair binds
+ * {@link domainAddressSchema} and the three that address one
+ * subscription bind {@link subscriptionAddressSchema}, which is
+ * the two-path-shape split the module header argues for rather
+ * than a second thing to keep in step with it.
+ *
+ * THE SCHEDULE VERB BINDS THE ADDRESS ALONE, and that absence
+ * means the route never LOOKS at a body rather than that it
+ * refuses one. `express.json()` will have parsed one,
+ * {@link runSubscriptionNow} is handed nothing, and a request that
+ * sent a body is answered exactly as one that did not — so an
+ * empty `body` binding here would describe a refusal this route
+ * does not make.
+ *
+ * THE DELETE BINDS NO QUERY, where `DELETE /domains/:slug` binds
+ * one. Nothing in schema v2 points at `export_subscriptions`, so
+ * there is no guard for a `?cascade=confirm` to waive and no
+ * parameter for this table to name.
+ *
+ * `nextRunAt` IS IN NEITHER BODY, which is `.strict()` on the two
+ * schemas above doing its ordinary work rather than anything this
+ * table adds. The column is answered by all five routes and
+ * accepted by none, and the one route that may write it derives
+ * the instant from the injected clock — a fact about the handler
+ * that no request schema can carry, so no binding here describes
+ * it.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const subscriptionsRouteSchemas = {
+  'GET /domains/:slug/exports': {
+    params: domainAddressSchema,
+    query: paginationQuerySchema,
+  },
+  'POST /domains/:slug/exports': {
+    params: domainAddressSchema,
+    body: createSubscriptionSchema,
+  },
+  'PATCH /exports/:id': {
+    params: subscriptionAddressSchema,
+    body: patchSubscriptionSchema,
+  },
+  'DELETE /exports/:id': { params: subscriptionAddressSchema },
+  'POST /exports/:id/run-now': { params: subscriptionAddressSchema },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildSubscriptionsRouter} needs. */
 export interface SubscriptionsRouterOptions {
