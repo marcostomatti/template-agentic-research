@@ -17,13 +17,20 @@ Two kinds of documentation are maintained:
 
 | Kind | Tool | Output | When to generate |
 | --- | --- | --- | --- |
-| **Code (TypeDoc)** | `typedoc` | `.docs/typedoc/` | `bun docs:generate` |
-| **API (Swagger)** | `@asteasolutions/zod-to-openapi` + `swagger-ui-express` | `.docs/swagger/openapi.json` + served at `GET /docs` | `bun docs:generate` |
+| **Code (TypeDoc)** | `typedoc` | typedoc's default `out`, which resolves to the TRACKED `docs/` tree | `bun run docs:generate` |
+| **API (Swagger)** | `@asteasolutions/zod-to-openapi` + `swagger-ui-express` | `.docs/swagger/openapi.json` + served behind `ctx.requireAuth` at `GET /docs/` | `bun run docs:openapi` |
 
-> The OpenAPI/Swagger row is the convention to follow **when adopted** — it is
-> not wired into this template yet. `docs:generate` currently runs TypeDoc
-> only; [`rules/openapi.md`](rules/openapi.md) is the setup guide for the day
-> API docs are added.
+> Both rows are INSTALLED in `@ar/service` — the OpenAPI half is no longer a
+> convention to adopt on some later day, and [`rules/openapi.md`](rules/openapi.md)
+> records what is there rather than a setup to perform. The two scripts are
+> SIBLINGS sharing no output tree, which is worth stating because the pair of
+> names suggests they do: `docs:openapi` writes the gitignored `.docs/swagger/`,
+> while `docs:generate` is a bare `typedoc` carrying no `typedoc.json` and no
+> `typedocOptions` key in either `package.json` or `tsconfig.json` — all three
+> measured absent — so it takes typedoc's own default `out`, the TRACKED `docs/`
+> tree beside it, with `cleanOutputDir` defaulting true. Running it therefore
+> DELETES that tree before writing (measured once at typedoc 0.28.20: 14 tracked
+> files removed, at exit 0, for a site documenting nothing).
 
 Manual documentation (ADRs, design notes) lives in `docs/` and is never gitignored.
 Auto-generated outputs go in `.docs/` (dotfolder) and are always gitignored.
@@ -57,21 +64,21 @@ Before marking a documentation task done:
 - [ ] Every file has a `@packageDocumentation` comment (or is covered by a module-level JSDoc).
 - [ ] Every Express router factory is documented with `@remarks` listing its HTTP endpoints.
 - [ ] `typedoc.json`, `tsconfig.docs.json`, and a `docs:generate` script exist (see [`rules/typedoc-setup.md`](rules/typedoc-setup.md)).
-- [ ] If OpenAPI docs have been adopted: `src/openapi.ts` exists and all routes are registered in it.
-- [ ] `.docs/` is gitignored (add a `.docs` entry to the root `.gitignore` if it is missing).
+- [ ] `src/openapi.ts` exists and every route is registered in it — `tests/invariants/openapi-coverage.test.ts` is the gate that says so, and a route added without a binding-table entry reddens it.
+- [ ] `.docs/` is already gitignored twice over and needs no new entry: once at the repo root (`.gitignore`) and again at the package (`packages/service/.gitignore`), both files tracked. `git check-ignore -v packages/service/.docs/swagger/openapi.json` names the PACKAGE rule, the nearer file winning — take the source off that output rather than predicting it.
 - [ ] `docs/` (manual ADRs) is **not** gitignored.
-- [ ] `bun docs:generate` passes with 0 errors.
+- [ ] `bun run docs:openapi` passes with 0 errors. Do NOT reach for `bun run docs:generate` as a verification: it exits 0 while WIPING the tracked `docs/` tree (see the note under the table above).
 
 ---
 
 ## Toolchain
 
 ```text
-typedoc                          → HTML docs from TSDoc comments → .docs/typedoc/
-@asteasolutions/zod-to-openapi   → OpenAPI spec from Zod schemas          (when adopted)
-swagger-ui-express               → Serves the spec at GET /docs at runtime (when adopted)
-scripts/export-openapi.ts        → Writes .docs/swagger/openapi.json      (when adopted)
+typedoc                          → HTML docs from TSDoc comments → the TRACKED docs/ tree
+@asteasolutions/zod-to-openapi   → OpenAPI document from the Zod schemas the routes parse with
+swagger-ui-express               → serves that document behind ctx.requireAuth at GET /docs/
+scripts/export-openapi.ts        → writes .docs/swagger/openapi.json, via bun run docs:openapi
 ```
 
-Dependencies go in `devDependencies` — the docs toolchain is not needed at runtime,
-**except** `swagger-ui-express` when the service serves the UI at runtime (put it in `dependencies` in that case).
+Dependencies go in `devDependencies` where the toolchain is only ever a test's or a generator's — `@seriousme/openapi-schema-validator`, `@types/swagger-ui-express` and `typedoc` are all there.
+BOTH OpenAPI runtime halves sit in `dependencies` instead, and not just `swagger-ui-express`: `src/index.ts` imports `generateOpenApiDocument` at boot to build the document it serves, so `@asteasolutions/zod-to-openapi` is a runtime dependency too.
