@@ -84,6 +84,26 @@ wanted in both places must be made in both repos.
   control, and say so when that control is VACUOUS: for a package no
   manifest overrides, resolving registry latest IS the correct outcome, so
   a matching version is satisfied by construction and proves nothing.
+- A hand-resolved MERGE can leave `bun.lock` inconsistent with manifests it
+  resolved CORRECTLY, and the whole CI battery then dies at its FIRST step
+  saying nothing about the code. Measured: a merge that took the base's
+  version for every contested manifest key still carried a nested
+  `@playwright/test/playwright/playwright-core` at 1.62.1 from before the
+  tree was pinned down; root `overrides` now forced 1.61.1, bun recomputed
+  the tree, found nothing justifying the nested copy, and
+  `--frozen-lockfile` refused with `lockfile had changes, but lockfile is
+  frozen`. All three jobs failed at 8—12s with every later step SKIPPED,
+  so a reader taking that red for a test failure looks in the wrong package
+  entirely — read the STEP list (`gh api .../actions/jobs/<id>`), not the
+  job name. The one-second reproduction is `bun install --frozen-lockfile`
+  locally, and the repair is never a hand edit:
+  `git checkout origin/main -- bun.lock`, a plain `bun install` to re-add
+  the branch's own dependencies, then the frozen run again. What says the
+  repair is minimal is the diff against the BASE's lockfile — this
+  branch's new dependencies and their transitive closure and nothing else
+  (measured 24 added lines, the other 3391 byte-identical to the base's,
+  which is also the control saying the local bun writes the format the
+  runner's PINNED bun reads).
 - Three surfaces are linted by NOTHING, each measured rather than assumed.
   `.github/workflows/*.yml`: `eslint.base.mjs` scopes its blocks to
   js/mjs/ts, md and json, so ESLint answers `File ignored because no
@@ -1959,6 +1979,19 @@ docs, test, chore, perf, ci). Run the verification order before any PR.
 work) completes and lands on `main`, push and tag it `v<N>` (annotated,
 sequential — `v0` was the umbrella reintegration) so versions trace back to
 the plan that produced them.
+
+**The loop's last stage now waits for CI.** `bun run ralph start` runs the
+wrap-up session (promote findings, sync with `origin/main`, commit, push,
+open or update the PR) and THEN polls that PR's checks, spending up to
+`--ci-attempts` repair sessions on a red or conflicting result before
+escalating. It exists because a CONFLICTING PR gets no CI run at all —
+GitHub cannot build `refs/pull/<n>/merge` for a branch that does not merge
+cleanly — so without the wait the loop reported a finished plan whose
+code had never been checked once (measured: 0 check runs over a 44-commit
+branch, with `gh pr checks` answering `no checks reported`, which reads
+like a run that has not started). `--no-ci-wait` skips the stage,
+`--ci-timeout=<min>` bounds it (default 20; CI settles in 2—5 here), and
+it skips itself when `gh` is unusable so the loop still works offline.
 
 **Take the mergeability reading BEFORE the push.**
 `git merge-tree --write-tree origin/main HEAD` is one command, needs no

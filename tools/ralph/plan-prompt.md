@@ -59,10 +59,13 @@ criteria — **do not execute the plan**.
 * Keep as SEPARATE tasks: cross-cutting verification (fan-out gates,
   invariant sweeps), live-seam runs, migrations, and close-out — these
   preserve resumability where a halt is most likely.
-* The RUNNER owns the push and the pull request. After the last task it
-  runs a wrap-up session that promotes findings, compacts `progress.txt`,
-  commits, pushes and opens (or updates) the PR — so a plan must NOT
-  carry a task that opens one. Two openers race: measured, one run cut a
+* The RUNNER owns the push, the pull request, the merge with the base,
+  and the wait for CI. After the last task it runs a wrap-up session that
+  promotes findings, compacts `progress.txt`, merges `origin/main`,
+  commits, pushes and opens (or updates) the PR — and then polls that
+  PR's checks, spending repair sessions on a red or conflicting result.
+  So a plan must NOT carry a task that opens a PR, resolves a merge
+  conflict, or waits on CI. Two openers race: measured, one run cut a
   second branch and opened a second PR for a single plan. A close-out
   task SHOULD still take the mergeability reading
   (`git merge-tree --write-tree origin/main HEAD`) and assemble the body
