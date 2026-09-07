@@ -161,6 +161,48 @@ export interface DomainSettings {
    * rather than each one remembering to ask for it.
    */
   readonly minResearchIntervalSeconds?: number;
+
+  /**
+   * How many times in a row an agent may move one topic's next due
+   * time before the proposal stops being written. Consecutive is the
+   * whole of what this counts, and the bound is on a walk rather
+   * than on a rate: a topic an agent reschedules once and then
+   * leaves to its own cadence has spent nothing of it, and what a
+   * cap catches is a pass asking for a shorter gap on every round
+   * until the topic is claimed as fast as the dispatcher ticks.
+   *
+   * A refused proposal is not a pause. The topic keeps the cadence
+   * its own `interval_seconds` gives it, the increment `ar-dispatch`
+   * wrote when it claimed the row still standing, so what the cap
+   * withholds is the sooner time and never the topic.
+   *
+   * A pass that recorded every candidate it drained resets the
+   * streak, because such a pass proposes no gap at all: approved
+   * work left behind is the only ground `Propose Next Run` proposes
+   * on, so recording everything is the ordinary outcome and the one
+   * that leaves the topic on its periodic increment. That is what
+   * makes the count consecutive rather than cumulative — a
+   * cumulative one would retire a topic for a walk it had since come
+   * out of.
+   *
+   * `runs.scheduled_by` stays the attribution and is not asked to be
+   * the state. It records who set a due time, which is what makes an
+   * unexpected cadence traceable afterwards, but no `runs` row names
+   * a topic — beside its own id the columns are the domain, the two
+   * times, the status, the counts, the errors and that one — so the
+   * ledger can say an agent set a time and not which row it set. A
+   * streak read back out of it would be per domain where the walk is
+   * per topic, which is why the streak itself has to be carried on
+   * the topic.
+   *
+   * Absent falls back to a fleet default rather than to no bound at
+   * all, on the reading `minResearchIntervalSeconds` above records:
+   * the number belongs in `ENV_DEFAULTS` in
+   * `scripts/workflow-markers.ts`, one place holding it and a
+   * resolved marker carrying it into the SQL, rather than as a
+   * literal spliced into the statement that closes a research pass.
+   */
+  readonly maxAgentReschedules?: number;
 }
 
 export const domains = pgTable('domains', {
