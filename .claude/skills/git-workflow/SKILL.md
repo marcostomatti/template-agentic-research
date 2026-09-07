@@ -106,6 +106,66 @@ the type-check before the suite under `bash -e`, so the job halts and vitest nev
 runs. Report both halves, or a reader seeing a red `test` job assumes the suite
 is what failed.
 
+## Sync before the push, and wait for green
+
+Opening the PR is not the end of the work; the first green CI run is. Two
+measured failures make that a rule rather than a preference, and both are
+invisible from inside the session that pushed.
+
+**A conflicting PR has no CI evidence at all — not a red one, none.** GitHub
+builds a `pull_request` run against `refs/pull/<n>/merge` and cannot create
+that ref for a branch that does not merge cleanly, so the workflow is never
+dispatched. Measured on one branch: 0 check runs on its pre-merge tip across
+44 commits and a full plan's work. Nothing warns you — `gh pr checks` says
+`no checks reported`, which reads like a run that has not started yet.
+So bring the branch up to date with the base BEFORE pushing
+(`git fetch origin main && git merge origin/main`), where the plan's context
+is still loaded, rather than discovering it at review time.
+
+**Split conflicts by kind and only escalate one kind.** Version bumps,
+lockfiles, generated artifacts, and complementary additions (both sides
+appended different material to the same file — keep BOTH) are mechanical:
+resolve them and say in the commit which side you took and why. A genuine
+semantic conflict — two sides changing the same behaviour incompatibly — is
+not yours to guess: commit nothing, and report the paths and both sides'
+intent. The distinction matters because the mechanical kind is the common
+one and stopping for it wastes the context that makes it cheap to fix.
+
+**After a merge that touched `bun.lock` or any `package.json`, run
+`bun install --frozen-lockfile` locally before pushing.** It is a
+one-second reproduction of the CI install step, and it catches the failure
+mode where every job dies at its FIRST step and nothing downstream runs — so
+the whole battery reports red while saying nothing about the code. The
+mechanism to know: a hand-resolved merge keeps whichever lockfile lines the
+resolver chose, and a nested resolution can survive that the merged
+manifests no longer justify. Measured on one merge that correctly took the
+base's version for every contested manifest key: the lockfile still carried
+`"@playwright/test/playwright/playwright-core": ["playwright-core@1.62.1"`
+from before the branch pinned it down, root `overrides` now forced 1.61.1,
+bun recomputed the tree, found nothing justifying the nested copy, and
+`--frozen-lockfile` refused. All three jobs died at 8-12s.
+
+**Never hand-edit a lockfile to resolve a conflict.** Restore the base's
+copy and let the installer re-derive the branch's own additions:
+
+```bash
+git checkout origin/main -- bun.lock
+bun install                      # re-adds this branch's dependencies
+bun install --frozen-lockfile    # must pass before pushing
+```
+
+The diff against the base is then reviewable — it should be this branch's
+new dependencies and their transitive closure, nothing else. On the merge
+above, that produced a file differing from the hand-resolved one by exactly
+the one stale entry, with the other 3391 lines byte-identical to the base's
+— which is also the control saying the local bun writes the format the
+runner's pinned bun reads.
+
+**`bun x` resolves a different version per directory** under the isolated
+linker, so a CI step invoking a pinned tool must run from a directory that
+pins it. Relevant here because a lockfile repair that looks right locally
+can still install a version the lockfile never chose.
+
 ## `gh pr create` branch detection
 
 If `gh pr create` says `you must first push the current branch to a remote` even though `git push -u` succeeded, create the PR with an explicit head ref:

@@ -31,7 +31,9 @@ switch (command) {
       '',
       'Commands:',
       '  plan  --spec=specs/<file>.md [--stub=<name>]   Generate PLAN-<stub>.md (+ PREREQUISITES-<stub>.md) from a spec',
-      '  start [--plan=<file>] [--start-at=HH:MM]       Execute a plan task-by-task (resumes blocked tasks first)',
+      '  start [--plan=<file>] [--start-at=HH:MM]       Execute a plan task-by-task (resumes blocked tasks first),',
+      '                                                 then wrap up, open the PR and wait for CI',
+      '                                                 (--no-ci-wait, --ci-timeout=<min>, --ci-attempts=<n>)',
       '  usage                                          Show Claude usage (CLAUDE_USAGE_PERCENT override)',
     ].join('\n'));
     if (command !== undefined && command !== 'help' && command !== '--help') {
