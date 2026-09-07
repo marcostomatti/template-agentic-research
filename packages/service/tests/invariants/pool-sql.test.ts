@@ -11,7 +11,7 @@
  * script, so a default run reads a tree a real bun process wrote.
  *
  * THE VERDICT IS A ZERO, and that decides the shape of everything
- * here. Twenty two entries over thirty three fragments hold
+ * here. Twenty seven entries over thirty eight fragments hold
  * against six statements in three workflows, and what a passing
  * run reads is an empty list of offenders. An empty list is also
  * what a roster emptied of its entries answers, what a walk
@@ -23,7 +23,7 @@
  * guards and the one the others cannot stand in for. An entry
  * carrying a real entry's workflow and a real entry's fragment,
  * pointed at a node name no canvas carries, is walked beside the
- * twenty two and the answer is asserted to be its label and
+ * twenty seven and the answer is asserted to be its label and
  * nothing besides. One answer carrying the roster's zero and the
  * plant's label is the shape in which that zero cannot be a
  * reading which never ran: a walk that stopped looking reports
@@ -79,9 +79,11 @@
  * the workflow-half case, shared by the first, the third and the
  * sixth, which is three pairs on its own. Each is a case more than
  * one edit can take out rather than a leg that failed to
- * discriminate. The six splits were re-driven when the two stamp
- * entries were rostered, and every one of them held: 4, 2, 2, 1, 1
- * and 2 before the widening and after. A further widening asks for
+ * discriminate. The six splits have been re-driven at each
+ * widening since — the two stamp entries, and the five count keys
+ * over the close rows — and every one of them held: 4, 2, 2, 1, 1
+ * and 2 each time, with the same two overlapping cases and every
+ * case reddened by at least one leg. A further widening asks for
  * the same.
  *
  * WHAT IS NOT COVERED HERE, each named so a later widening is a
@@ -97,7 +99,7 @@
  * than off the artifact's text, these statements arguing their own
  * decisions in prose that runs to most of their characters —
  * `sqlWords` is what drops it, and the roster records which three
- * of its thirty three fragments a comment would otherwise carry.
+ * of its thirty eight fragments a comment would otherwise carry.
  */
 import type { PoolSqlRule } from './pool-sql.js';
 
@@ -135,9 +137,9 @@ const BUILT_WORKFLOWS = loadBuiltWorkflows();
  * Written out rather than derived from the roster, which is the
  * whole of what it is worth: a list read off the same table the
  * walk goes through agrees with that table however it was narrowed,
- * a roster whose twenty two entries had all come to point at one
+ * a roster whose twenty seven entries had all come to point at one
  * node included. That narrowing is invisible to the coverage case
- * behind the walk — twenty two ids reached is twenty two ids
+ * behind the walk — twenty seven ids reached is twenty seven ids
  * reached wherever they looked — and this is the reading that
  * reports it.
  *
@@ -241,8 +243,8 @@ const ABSENT_NODE_PLANT: PoolSqlRule = {
   property:
     'Planted. Names a node the canvas does not carry, so the ' +
     'walk over the roster has one entry it must report and the ' +
-    'zero the other twenty two answer is a reading rather than a ' +
-    'list nobody looked at.',
+    'zero the other twenty seven answer is a reading rather than ' +
+    'a list nobody looked at.',
   workflowId: SHADOWED_WORKFLOW_ID,
   nodeName: ABSENT_NODE_NAME,
   requires: SHADOWED_REQUIRES,
@@ -367,14 +369,14 @@ describe('research pool invariants — the roster', () => {
   // more than a general caution about comments would suggest: they
   // run to between seven tenths and nine tenths comment by
   // character, this port arguing its decisions inside the SQL that
-  // carries them. Three of the thirty three fragments are carried
+  // carries them. Three of the thirty eight fragments are carried
   // by their own node's prose as well, measured and recorded on
-  // the roster; none of the twenty two entries is wholly
+  // the roster; none of the twenty seven entries is wholly
   // satisfiable that way.
   //
   // Held against a written list rather than counted, because the
   // answer is already the report. Every miss is labelled
-  // `<id>: <what>`, leading with the entry and not the node: two
+  // `<id>: <what>`, leading with the entry and not the node: four
   // of these six statements carry four entries apiece and the two
   // raisers carry five and six, so a label naming only the node
   // would say which file to open and not which property went
@@ -413,8 +415,8 @@ describe('research pool invariants — the roster', () => {
   //
   // The plant is in both lists, which is what its riding along in
   // the walk costs and it is the honest spelling of it: the walk
-  // went through twenty three entries and this says which twenty
-  // three they were.
+  // went through twenty eight entries and this says which twenty
+  // eight they were.
   //
   // Held as sorted lists rather than as two sets, so an id two
   // entries share is reported rather than swallowed:
@@ -454,12 +456,12 @@ describe('research pool invariants — the roster', () => {
 
   // What the coverage case above cannot report, and the reason
   // this roster spans three artifacts rather than one: the
-  // statements it is over. Twenty two ids reached is twenty two
-  // ids reached wherever they looked, so a roster whose entries
-  // had all come to name one node — a workflow renamed and the
-  // entries repointed, a node absorbed into another — passes that
-  // case with a property of the drain and both properties of the
-  // close rows silently no longer checked by anything.
+  // statements it is over. Twenty seven ids reached is twenty
+  // seven ids reached wherever they looked, so a roster whose
+  // entries had all come to name one node — a workflow renamed and
+  // the entries repointed, a node absorbed into another — passes
+  // that case with a property of the drain and every property of
+  // the three close rows silently no longer checked by anything.
   //
   // Held as a set, the roster carrying several entries per
   // statement by design, and against a written list rather than

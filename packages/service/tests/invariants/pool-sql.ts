@@ -21,13 +21,14 @@
  * properties of this kind wants: the workflow named alongside the
  * node rather than a roster of its own, the coverage guard that
  * gives an enumerable roster its worth being over the roster
- * whole. This is that case. Twenty two entries over six statements
- * in three workflows, and the three are not interchangeable — the
- * pool is filled by two raisers, emptied by one drain, and
- * accounted for by the row each of those passes closes. A property
- * of the queue is a property of that set rather than of any one
- * artifact in it, and splitting it three ways would leave three
- * rosters none of which could be held against the whole.
+ * whole. This is that case. Twenty seven entries over six
+ * statements in three workflows, and the three are not
+ * interchangeable — the pool is filled by two raisers, emptied by
+ * one drain, and accounted for by the row each of those passes
+ * closes. A property of the queue is a property of that set rather
+ * than of any one artifact in it, and splitting it three ways
+ * would leave three rosters none of which could be held against
+ * the whole.
  *
  * These are MUST-FIND checks, the same inversion that file
  * records. An absence sweep goes vacuous when its matcher would
@@ -56,10 +57,10 @@
  * arguing its decisions inside the SQL that carries them, and the
  * prose most likely to spell a phrase an entry requires is the
  * prose explaining why the statement carries it. Of the thirty
- * three fragments the roster holds, three are also carried by the
+ * eight fragments the roster holds, three are also carried by the
  * comments of their own node, so three entries are partly
  * satisfied by prose once the strip is gone and none of the twenty
- * two is wholly. Measured over the built tree, entry by entry.
+ * seven is wholly. Measured over the built tree, entry by entry.
  *
  * What {@link sqlWords} leaves is words, so an entry can require a
  * phrase and never a SHAPE, and three limits follow that are worth
@@ -135,7 +136,7 @@ export interface PoolSqlRule {
    * entry nothing reached has no matched text to be named by. It
    * leads every label {@link unsatisfiedPoolRequirements} hands
    * back for a second reason that bites harder here than next
-   * door: two of the six nodes carry four entries apiece and the
+   * door: four of the six nodes carry four entries apiece and the
    * two raisers carry five and six, so a failure naming only the
    * node says which statement to open and not which property went
    * missing.
@@ -256,15 +257,15 @@ export interface PoolSqlRule {
  * reached fails a case of its own rather than riding along behind
  * the entries that were.
  *
- * Twenty two entries and thirty three fragments, every one of them
- * carried by the statement its entry names, measured over the tree
- * this package builds. None of the five members of any entry is a
- * hit for a needle in `naming-patterns.ts`, checked the way
+ * Twenty seven entries and thirty eight fragments, every one of
+ * them carried by the statement its entry names, measured over the
+ * tree this package builds. None of the five members of any entry
+ * is a hit for a needle in `naming-patterns.ts`, checked the way
  * `SEND_NODE_TYPES` records checking its own, with the matcher
  * first proven live against its own needles. Nothing re-runs that
  * pass — `tests/` sits outside that file's scan roots — so this
  * sentence is the whole of what records it, and it covers the
- * twenty two that landed and nothing past them.
+ * twenty seven that landed and nothing past them.
  */
 export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
   // The first raiser, and five properties of one statement held to
@@ -542,11 +543,19 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
   // `runs.counts`, which is the only place a reader looking for a
   // pass that ran away will find it.
   //
-  // Five entries over three nodes, and they are not evenly spread
-  // because the statements are not: `ar-score` closes with the
-  // searchable subjects beside what it raised, which is the
-  // denominator the raised count means anything against, and
-  // `ar-ingest` has no such key to require yet.
+  // Ten entries over three nodes and not evenly spread, because
+  // the statements are not. Each raising pass closes with four:
+  // what it raised, the subjects it found searchable, and the
+  // refusals each of the two guards made, which those statements
+  // argue as a partition — the three add to the fourth. The
+  // drain's row carries two, what it took and what it recorded,
+  // and nothing about what its own predicate passed over: a
+  // pending intention is a queue waiting on a person rather than a
+  // refusal to report. The one asymmetry between the two raising
+  // rows is what a count MEANS rather than which keys are on it —
+  // `ar-ingest`'s window guard has no live subject on that canvas,
+  // so its interval count is nought every pass, and the entry over
+  // it stands for the key being written all the same.
   {
     id: 'pool-ingest-close-counts-intentions',
     property:
@@ -556,6 +565,44 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
     workflowId: 'ar-ingest',
     nodeName: 'Close Run',
     requires: ['\'intentions_raised\', t.intentions_raised'],
+  },
+  {
+    id: 'pool-ingest-close-counts-searchable-subjects',
+    property:
+      'Writes how many subjects the pass found searchable beside ' +
+      'what it raised, which is the denominator the raised count ' +
+      'and the two refusals below it are read against.',
+    workflowId: 'ar-ingest',
+    nodeName: 'Close Run',
+    requires: ['\'subjects_searchable\', t.subjects_searchable'],
+  },
+  {
+    id: 'pool-ingest-close-counts-repeat-refusals',
+    property:
+      'Writes how many subjects the deduplication guard refused, ' +
+      'so a pass raising nothing because the pool already cites ' +
+      'every finding it met is told apart from one that found no ' +
+      'subject to raise for.',
+    workflowId: 'ar-ingest',
+    nodeName: 'Close Run',
+    requires: [
+      '\'intentions_suppressed_repeat\', ' +
+      't.intentions_suppressed_repeat',
+    ],
+  },
+  {
+    id: 'pool-ingest-close-counts-interval-refusals',
+    property:
+      'Writes how many subjects the window guard refused, on the ' +
+      'canvas where that number is nought every pass, so a reader ' +
+      'subtracting one count from another meets a member rather ' +
+      'than an absence.',
+    workflowId: 'ar-ingest',
+    nodeName: 'Close Run',
+    requires: [
+      '\'intentions_suppressed_interval\', ' +
+      't.intentions_suppressed_interval',
+    ],
   },
   {
     id: 'pool-score-close-counts-intentions',
@@ -576,6 +623,34 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
     workflowId: 'ar-score',
     nodeName: 'Close Score Run',
     requires: ['\'subjects_searchable\', t.subjects_searchable'],
+  },
+  {
+    id: 'pool-score-close-counts-repeat-refusals',
+    property:
+      'Writes how many subjects the deduplication guard refused, ' +
+      'which on a pass over findings the ingest raiser has ' +
+      'already seen is most of them, so a row reporting nothing ' +
+      'new is told apart from one reporting nothing.',
+    workflowId: 'ar-score',
+    nodeName: 'Close Score Run',
+    requires: [
+      '\'intentions_suppressed_repeat\', ' +
+      't.intentions_suppressed_repeat',
+    ],
+  },
+  {
+    id: 'pool-score-close-counts-interval-refusals',
+    property:
+      'Writes how many subjects the window guard refused, this ' +
+      'being the raiser where that number moves, so a domain ' +
+      'holding its own queue down is a count in the ledger rather ' +
+      'than a query against the pool.',
+    workflowId: 'ar-score',
+    nodeName: 'Close Score Run',
+    requires: [
+      '\'intentions_suppressed_interval\', ' +
+      't.intentions_suppressed_interval',
+    ],
   },
   {
     id: 'pool-research-close-counts-drained',
