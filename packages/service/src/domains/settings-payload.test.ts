@@ -14,8 +14,8 @@
  * number is not. That a refusal names a path a route can act on,
  * which is what `openPaths` in `src/http/validation.ts` is declared
  * against. And that the schema's key set and the interface's member
- * set are the same set, so a fifth setting added to one and not the
- * other cannot ship.
+ * set are the same set, so a setting added to one and not the other
+ * cannot ship.
  *
  * The last of those is the only claim here that no request can
  * exercise, and it is split across the two gates on purpose. A key
@@ -38,34 +38,39 @@
  * without value checking or value checking without openness.
  *
  *
- * Mutation grid, measured over the 38 cases in this file with
+ * Mutation grid, measured over the 42 cases in this file with
  * `--reporter=json` and read as failed `fullName`s rather than as a
- * count. Ten legs on the module, in two classes, because the two
- * halves of the table are reddened by opposite mutations and a grid
- * made of one class leaves the other half green while looking
+ * count. Thirteen legs on the module, in two classes, because the
+ * two halves of the table are reddened by opposite mutations and a
+ * grid made of one class leaves the other half green while looking
  * thorough.
  *
- * The six WIDENING legs each redden their own refusal and nothing
- * else: dropping `.strict()` from the settings object reddens the
- * undeclared top-level member, dropping it from the field spec
- * reddens the undeclared spec member, and replacing the weight, the
- * verdict entry and the display name with `z.unknown()` reddens one
- * row apiece. Replacing the field-type enum with `z.string()` is the
- * one that reddens two — the unknown type AND the spec naming no
- * type at all, which is what says those rows are the same check read
- * from two sides rather than two rows of one.
+ * Most of the nine WIDENING legs redden their own refusal and
+ * nothing else: dropping `.strict()` from the settings object
+ * reddens the undeclared top-level member, dropping it from the
+ * field spec reddens the undeclared spec member, and replacing the
+ * weight, the verdict entry and the display name with `z.unknown()`
+ * reddens one row apiece. Two redden more, for opposite reasons.
+ * Replacing the field-type enum with `z.string()` reddens two — the
+ * unknown type AND the spec naming no type at all, which is what
+ * says those rows are the same check read from two sides rather than
+ * two rows of one. Replacing the research floor with `z.unknown()`
+ * reddens three, and the two legs dropping one of its clauses
+ * separate them: `.int()` reddens the fractional row alone and
+ * `.nonnegative()` the negative one, which leaves the third row
+ * carrying the number check and neither of the other two.
  *
  * The four NARROWING legs are aimed at the accepted side. Requiring
  * weights to be positive reddens exactly the negative and the zero
  * row and leaves the fully configured domain green, since its own
  * weights are positive. Dropping `findingsDisplayName` from the
  * schema reddens 5 — its two accepted rows, its refusal, and both
- * drift cases. Adding a fifth key to the schema reddens exactly ONE
+ * drift cases. Adding a sixth key to the schema reddens exactly ONE
  * case, the key-set equality, which is the whole of the evidence
  * that the drift case pins the schema rather than restating it.
  *
  * The fourth is the one worth reading rather than counting. Making
- * `findingsDisplayName` REQUIRED reddens 27 of 38, and most of them
+ * `findingsDisplayName` REQUIRED reddens 31 of 42, and most of them
  * are refusal rows: a refused row asserts the whole issue list, so a
  * second issue arriving beside the one it named fails it. That is
  * the table working as intended and not over-coverage — a refusal
@@ -77,8 +82,8 @@
  * and are aimed at a later edit — an outcome side deleted whole, an
  * open record left with a row on only one of its two sides, a
  * refusal class dropped. And the two type-level pins are invisible
- * to the SUITE entirely: a fifth member on `DomainSettings` alone,
- * and a seventh member on `DomainFieldType` alone, each leave all 38
+ * to the SUITE entirely: a sixth member on `DomainSettings` alone,
+ * and a seventh member on `DomainFieldType` alone, each leave all 42
  * cases green and answer TS2322 at one line of this file, while a
  * name added to a table the interface does not carry answers TS2322
  * at the `satisfies`. All three measured.
@@ -110,6 +115,7 @@ const OUTCOMES = ['accepted', 'refused'];
 const DECLARED_MEMBERS = [
   'fieldContract',
   'findingsDisplayName',
+  'minResearchIntervalSeconds',
   'scoringWeights',
   'verdictVocabulary',
 ] as const satisfies readonly (keyof DomainSettings)[];
@@ -126,8 +132,9 @@ type UnlistedInterfaceMembers =
  *
  * The annotation is what does the work: with nothing left over the
  * conditional is `true` and the initializer type-checks, and the
- * moment a fifth member is added to `DomainSettings` alone it becomes
- * `false` and the assignment is a `check-types` error at this line.
+ * moment a further member is added to `DomainSettings` alone it
+ * becomes `false` and the assignment is a `check-types` error at
+ * this line.
  * Wrapped in tuples so a union member does not distribute the
  * conditional and answer `boolean`, which would accept the
  * initializer and pin nothing at all.
@@ -183,10 +190,13 @@ const SCHEMA_ACCEPTS_EVERY_FIELD_TYPE: FieldTypesFullyListed = true;
 const OPERATOR_KEY = 'operator chose this';
 
 /**
- * A domain that has configured all four settings, in the register
+ * A domain that has configured all five settings, in the register
  * `data/domains.json` seeds: `recency` and `novelty` are the sort of
  * signal a radar scores on, `url` and `publishedAt` the sort of field
- * its contract is written for.
+ * its contract is written for. Its research floor is a day rather
+ * than the fleet default `AR_RESEARCH_MIN_INTERVAL_SECONDS` carries,
+ * so a schema that quietly substituted that default would be visible
+ * here rather than agreeing with the row.
  *
  * One declaration, used as the payload submitted AND as the payload
  * expected back, because those are the same claim — nothing here is
@@ -202,6 +212,7 @@ const FULL_PAYLOAD: DomainSettings = {
     publishedAt: { type: 'datetime' },
   },
   findingsDisplayName: 'Signal',
+  minResearchIntervalSeconds: 86_400,
 };
 
 /**
@@ -268,6 +279,11 @@ const PAYLOAD_CASES: readonly PayloadCase[] = [
     label: 'a negative weight', outcome: 'accepted',
     input: { scoringWeights: { paywalled: -2.5 } },
     parsed: { scoringWeights: { paywalled: -2.5 } },
+  },
+  {
+    label: 'a research floor of zero', outcome: 'accepted',
+    input: { minResearchIntervalSeconds: 0 },
+    parsed: { minResearchIntervalSeconds: 0 },
   },
   {
     label: 'a weight of zero', outcome: 'accepted',
@@ -347,6 +363,21 @@ const PAYLOAD_CASES: readonly PayloadCase[] = [
     label: 'a display name that is not a string', outcome: 'refused',
     input: { findingsDisplayName: 5 },
     code: 'invalid_type', field: 'findingsDisplayName',
+  },
+  {
+    label: 'a negative research floor', outcome: 'refused',
+    input: { minResearchIntervalSeconds: -1 },
+    code: 'too_small', field: 'minResearchIntervalSeconds',
+  },
+  {
+    label: 'a fractional research floor', outcome: 'refused',
+    input: { minResearchIntervalSeconds: 1.5 },
+    code: 'invalid_type', field: 'minResearchIntervalSeconds',
+  },
+  {
+    label: 'a research floor that is not a number', outcome: 'refused',
+    input: { minResearchIntervalSeconds: 'a week' },
+    code: 'invalid_type', field: 'minResearchIntervalSeconds',
   },
 ];
 
@@ -441,7 +472,7 @@ describe('domainSettingsSchema', () => {
     const codes = [...new Set(REFUSED_CASES.map((row) => row.code))].sort();
 
     expect(codes).toEqual([
-      'invalid_type', 'invalid_value', 'unrecognized_keys',
+      'invalid_type', 'invalid_value', 'too_small', 'unrecognized_keys',
     ]);
   });
 
@@ -537,7 +568,7 @@ describe('drift against the interface', () => {
     // Every member optional is what makes an absent one mean the
     // pipeline's own default applies, and it is what the column's
     // `{}` default rests on. Driven off the full payload's own keys
-    // rather than named here, so a fifth member inherits the claim.
+    // rather than named here, so a sixth member inherits the claim.
     const members = Object.keys(FULL_PAYLOAD);
     const withoutEach = members.map((omitted) => ({
       omitted,
