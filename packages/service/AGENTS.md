@@ -159,6 +159,171 @@ held by nothing. Read it before adding a node.
   invariant files passing. A Postgres node's whole verification is the
   psql harness plus an offline drive of its `queryReplacement`; a task
   should say so rather than leaning on a suite that never opened it.
+- **The seed traps are a roster, and each fails as a column name a reader
+  would not guess.** A probe planting rows meets these before it reaches
+  the statement under test: `runs.scheduled_by` takes a `RUN_SCHEDULERS`
+  member (interval/agent/operator); `sources` has NO `name` and wants
+  `kind` + `endpoint`; `documents` wants `hash` + `body` rather than the
+  content-hash/raw pair the TSDoc prose suggests, and `documents.hash` is
+  UNIQUE across the WHOLE table rather than per domain, so one document
+  per scenario needs a distinct hash; `research_pool` REFUSES a row at
+  status `done` with no `approved_at` (`research_pool_approval_check`
+  reads `researched_at IS NULL OR approved_at IS NOT NULL`); `entities`
+  wants `name_norm` as well as `name`, both NOT NULL; `domains` wants
+  `name` and NOT `title`; and `topics` wants `name` and has neither
+  `slug` nor `title`. The misses surface as 23502 or as 42703 naming a
+  column, which reads as a schema the migrations did not apply rather
+  than as a guess. Read the newest `drizzle/meta/<idx>_snapshot.json` for
+  a table's column map, NOT the schema module, which spreads helpers and
+  hides the roster.
+- **Proving a shipped workflow statement parses, type-resolves and
+  behaves needs no `test:live` and no `AR_LIVE_DATABASE_URL`.** Create a
+  THROWAWAY database on the live cluster; the maintenance connection is
+  `postgresql://ar:ar@localhost:5433/ar_live`, read off the `test:live`
+  script definition. Apply `drizzle/*.sql` in `_journal.json` order
+  splitting each file on `--> statement-breakpoint`, drive the BUILT
+  artifact's statement looked up BY NODE NAME through `pg`, then
+  `DROP DATABASE`. That is strictly better evidence than a mutation leg
+  for an SQL claim, and it is the only reading that catches a statement
+  which does not parse before the live-suite task lands. Two cautions.
+  `ar_live` is NOT empty any more — every `test:live` migrates it — so
+  the old `count(*) from information_schema.tables` at ZERO either side
+  is a DEAD control; the readings that still discriminate are per-FACT
+  (`ar_live` must not carry the column the branch just added, must hold
+  none of the probe's seeded rows, and no `zz_tmp_*` database may
+  survive). And `count(*)` comes back from `pg` as a STRING, bigint
+  having no lossless JS number, so a count held against a numeric literal
+  is false for every count including zero.
+- **A probe that DIES mid-run leaves its `zz_tmp_*` database behind**,
+  and the next run's own "no `zz_tmp` database survives" check then reds
+  against a leftover it did not make. Read
+  `select datname from pg_database where datname like 'zz\_tmp\_%'` and
+  drop the strays before treating it as a finding; the leftover is
+  invisible to `git status`, nothing in the working tree recording that a
+  database exists.
+- **Edit a workflow source's `query` as a BYTE-level replacement of the
+  ESCAPED string, never by re-serialising the parsed JSON.**
+  `json.dumps(..., indent=2)` explodes every inline `"position": [0, 0]`
+  into three lines, so a one-clause SQL edit lands as a
+  217-insertion/51-deletion diff. `json.dumps(query,
+  ensure_ascii=False)[1:-1]` occurs EXACTLY ONCE in the raw text, so
+  `raw.replace(enc_old, enc_new)` leaves every other byte alone and the
+  diff is the `1 1` a one-JSON-line query predicts. Assert that count of
+  1 before writing — a mismatch surfaces as a count of 0 rather than as a
+  corrupted file. Anchor a mutation leg the same way and report the
+  anchor's OCCURRENCE COUNT rather than asserting it is 1: one digit
+  guard occurred FIVE times in a single source, while a guard spelled in
+  two arms of one `CASE` legitimately anchors twice.
+- **Workflow SQL has house widths of its own and they are NOT `src/`'s.**
+  Comments fill to 86 columns and code to 84, and `workflows/src/*.json`
+  is PURE ASCII (zero characters above U+007E) where `src/` and `tests/`
+  TSDoc use em dashes freely — so a paragraph moved from a TS header into
+  a node comment has to lose its dashes. The fill is reproducible and
+  worth proving before writing a paragraph:
+  `textwrap.fill(' '.join(text.split()), width=86, initial_indent='-- ',
+  subsequent_indent='-- ', break_long_words=False,
+  break_on_hyphens=False)` reproduced all 20 existing paragraphs of one
+  node byte-identically. `break_on_hyphens=False` is load-bearing, the
+  workflow ids being hyphenated. The one documented exception is a
+  paragraph quoting an identifier that carries SPACES (an
+  `$('Node Name').first().json` handle), hand-broken so the identifier
+  lands whole at a line start; mask it with an EQUAL-LENGTH no-space
+  token, fill, substitute back.
+- **A node's prose NARRATES its neighbours, and an n8n canvas's STICKY
+  NOTES narrate the statement below them in the same words.** Widening
+  one node's projection therefore falsifies a sentence in a DIFFERENT
+  node of the same artifact, and nothing reports it — not the must-find
+  roster, not the anti-join inventory, not either fan-out. Sticky notes
+  are SINGLE UNWRAPPED LINES in the source JSON, so the 86-column
+  discipline does not apply to them and a `textwrap` control over one
+  reports every paragraph as a mismatch; edit them as whole paragraphs
+  through the same escaped-string byte replacement.
+- **A workflow-source task that adds a QUERY PARAMETER reds a live test
+  that binds that node's values by hand, and nothing in the default
+  verification order reports it.** Measured: a raise statement gained a
+  second parameter three commits before the live task that owned it, and
+  the file died `bind message supplies 1 parameters, but prepared
+  statement "" requires 2` — a driver error reading like a malformed
+  statement rather than a stale fixture. `bun run test` was GREEN through
+  it (every `tests/live/` file self-skips) and so were both fast
+  fan-outs. Any stage changing a node's `queryReplacement` ARITY owes
+  `bun x vitest run tests/live/<file>` in THAT stage, which is about a
+  second. Adding KEYS to a single `JSON.stringify` envelope does NOT move
+  the arity and is a different question.
+- **An optional `queryReplacement` resolvable must go through
+  `JSON.stringify(x ?? null)`.** The bare form binds the STRING
+  `'undefined'` when the member is missing from the answering node's
+  projection — a value `nullif($n::jsonb, 'null'::jsonb)` does not catch
+  and `::bigint` refuses. The spelling that survives both id spellings is
+  `$n::jsonb #>> '{}'` behind a digit regex, `#>>` answering the text of
+  a JSON string and a JSON number alike and SQL NULL for a JSON null.
+- **`@ar/service`'s tsconfig `include` lists `tests`**, so every
+  `tests/**/*.test.ts` IS in the program `tsc` reads. Several helper
+  headers under `tests/invariants/` repeat the opposite verbatim ("a
+  `.test.ts` sits outside the program `tsc` reads"); that claim is FALSE
+  here — a throwaway `zz-tmp-*.test.ts` carrying
+  `export const planted: number = 'x';` reds `bun run check-types` with
+  TS2322 naming that file. So a roster written into a service `.test.ts`
+  IS type-checked and a tsc mutation leg can target one. Re-measure per
+  package before carrying it; `@ar/ui` and `@ar/web` have separate
+  configs.
+- **`packages/service/scripts/` is read by BOTH package gates**, unlike
+  the package-ROOT files the repo-root `AGENTS.md` documents as
+  un-targeted: the lint script's pathspec names `scripts` and tsconfig's
+  include reaches it. So a scripts-only change has two real greens rather
+  than the one a docs change has.
+- **The invariant helpers under `tests/invariants/` are drivable from a
+  standalone `/tmp` `.mjs` under bun by ABSOLUTE path, `.ts` included** —
+  they import only node builtins or each other, so a whole detector runs
+  over the real tree AND over planted samples in one command before any
+  `.test.ts` exists. Two limits. The trick reaches the HELPERS and never
+  a `.test.ts`, whose `./x.js` imports resolve against its own directory,
+  so a mutation grid over a new invariant test runs on a copy INSIDE that
+  directory (`zz-tmp-<name>.test.ts`) — which joins the suite until it is
+  deleted. And a probe importing a PACKAGE DEPENDENCY (`pg`, not a node
+  builtin) cannot live in `/tmp` at all: put it at the package ROOT as a
+  `zz-tmp-*.mjs`, which BOTH package gates are blind to.
+- **A must-find roster entry's discriminating control is an IN-MEMORY
+  mutation of the BUILT tree**, needing no source edit, no `pretest` and
+  no rebuild: `JSON.parse(JSON.stringify(loadBuiltWorkflows()))`, rewrite
+  the target node's `parameters.query`, re-drive the roster. Six legs ran
+  in under a second where the grid runner through `pretest` is ~55s, and
+  it dodges the restore trap entirely — a workflow-source leg SURVIVES in
+  the gitignored `workflows/dist/`, so `git status` printing zero bytes
+  after the source is put back is NOT evidence the artifact is back.
+  Re-run `bun scripts/build-workflows.ts` and read its stamp line: a sha
+  WITHOUT `-dirty` is what says the tree under test is HEAD's again.
+- **Two workflows carry a node under the SAME name**
+  (`Raise Research Intentions` in both `ar-ingest` and `ar-score`), so
+  any roster spanning artifacts must key on the PAIR; a node-name lookup
+  silently reads whichever it finds first.
+- **NO workflow calls the Express service.** Measured over all six
+  sources by node type: five are Postgres, Code, LLM and trigger nodes
+  alone, and the single `n8n-nodes-base.httpRequest` in the tree resolves
+  a URL expression naming a SOURCE's own endpoint. So nothing in the
+  pipeline crosses `lib/express/middleware.ts`, and the auth gate, the
+  request validation and the rate-limit window are evidence about the API
+  surface and never about a scheduled pass. The pipeline's own bounds are
+  SQL.
+- **`RESEARCH_POOL_STATUSES` in `src/db/schema/values.ts` is the domain
+  of TWO tables**, not one: `research_pool.status` and
+  `source_config_proposals.status` each take it through their own
+  `checkOneOf`. Adding a member for one widens the other's domain with a
+  value that means nothing there, and both CHECK constraints move in the
+  same migration. Expect the same shape from any other tuple in that
+  module.
+- **A `db:generate` touches exactly THREE paths and only ONE is visible
+  to `git diff`**: the new `<tag>.sql` and `meta/<idx>_snapshot.json`
+  arrive UNTRACKED and `_journal.json` is modified as a pure append. So
+  the reading that says no EXISTING migration or snapshot was rewritten
+  is a `find drizzle -type f | sort | xargs shasum` diff either side of
+  the run. Run it with stdin closed (`bun db:generate < /dev/null`),
+  which turns drizzle-kit's add-versus-rename prompt into an error rather
+  than a hang. A destructive-statement sweep over the result must be
+  statement-LEADING (`^\s*(DROP|UPDATE|DELETE|INSERT|TRUNCATE)\b`): a
+  bare `\bDELETE\b` needle fires on drizzle's own
+  `ON DELETE no action` and reports a pure ADD COLUMN file as carrying a
+  data statement.
 
 ## Conventions
 
@@ -428,6 +593,144 @@ held by nothing. Read it before adding a node.
   reading of the DECODED values (`sum()` arrives as a STRING where
   `count()` arrives as a number). See the `drizzle-recording-client-probe`
   and `pg-temp-table-shadow-probe` skills.
+- **Adding a member to `DomainSettings` is THREE edits, and the tripwire for
+  the other two is visible to `check-types` ALONE.**
+  `src/domains/settings-payload.test.ts` holds a type-level constant whose
+  annotation goes unsatisfiable the moment the interface in
+  `src/db/schema/domains.ts` gains a member the zod schema and its
+  `DECLARED_MEMBERS` roster do not name. Measured on the interface edit
+  alone: EXIT 2 with exactly ONE TS2322 at that constant, while the
+  single-file vitest run over the same file is fully GREEN — so a task
+  running only the suite reads a clean file. The error also names the TEST
+  file rather than the schema module that was edited, which reads as a
+  broken test until the annotation is read, and `domainSettingsSchema` is
+  `.strict()`, so the member is REFUSED on any write until the zod half
+  lands. That half is FIVE more edits in the same test (the roster, the full
+  payload the omit-each-member case holds SET-EQUAL to it, and the
+  refusal-class code SET), TWO prose claims in `settings-payload.ts`'s own
+  header, and the `settings` COLUMN's TSDoc back in the schema module, which
+  ENUMERATES the payload in prose. None of it is gated, no grep for a
+  numeral finds any of it, every count being spelled as a word, and the
+  interface's own header does NOT enumerate — so a task working from the
+  schema module alone sees none of it. `scripts/seed-schemas.ts` holds a
+  SECOND `.strict()` copy of the schema for `data/domains.json` and nothing
+  gates the pair.
+- **The counterpoint, worth not over-preparing for:** adding an entry to
+  `ENV_DEFAULTS` in `scripts/workflow-markers.ts` is ONE edit. Nothing pins
+  the key SET (its test guards three named settings with `toContain` and no
+  length or set equality) and no tracked prose counts or enumerates the
+  entries, so a new key reddens nothing and falsifies nothing. An entry no
+  marker NAMES is inert by design. That module imports only `node:fs`, so
+  `bun -e` drives the real resolver over the real table with no test file
+  and no build; the two controls that make such a probe discriminating are a
+  MISSPELLING still throwing, and a chain with the name in front of the
+  table returning the FRONT value.
+- **The null-vs-zero law's AUTHORITY is two hand-written lists** in
+  `tests/schema/canonical-document.test.ts`: `SIGNAL_COLUMNS` nullable, and
+  `COUNTER_COLUMNS` NOT NULL because zero is a count. A column on NEITHER
+  list is UNDECIDED rather than untested, and nothing anywhere discovers it
+  — that file's own header says so. Adding to either list is covered by
+  construction (one case per entry) and falsifies THREE counts in that same
+  file, all spelled as words. The worked precedent a new counter's TSDoc
+  should reproduce is `sources.consecutive_failures`, including the half a
+  reader omits: the NOT NULL is what makes the threshold comparison work at
+  all, a NULL comparing UNKNOWN rather than false, so such a row would
+  neither trip the detector nor turn up among the rows it passed over.
+- **A column added to a table whose store port answers a WHOLE-ROW record
+  falsifies prose in two files and NEITHER gate reports it:** the `*Record`
+  header counting the table's own columns against the ones the shared column
+  helper spreads in, and the `every column it has` clause in the
+  `tests/live/` API rosters, where three sibling rosters carry the identical
+  clause for their own tables. The type pins beside them are about the
+  RECORD and never the table, so the `satisfies readonly (keyof T)[]` and
+  the key-set conditional both stay green, as does the whole suite.
+  Line-JOIN the sweep or it finds nothing, the clause wrapping in every
+  case.
+- **A drizzle snapshot's six schema figures are one sum apiece** over the
+  per-table maps in `drizzle/meta/<idx>_snapshot.json` (`columns`,
+  `uniqueConstraints`, `checkConstraints`, `foreignKeys`, `indexes`,
+  `compositePrimaryKeys`, with `tables` the length of the top-level map).
+  Two traps: `version` is the STRING `'7'`, so a control comparing it to the
+  integer reports FAIL on a correct snapshot, and a table missing one of
+  those keys scores 0 silently — assert every table DECLARES all six before
+  reading any total. Reading a new column's NOT NULL and DEFAULT out of a
+  snapshot needs its own discrimination, since `notNull` is a boolean and
+  `default` a value: some column must read `notNull: false` and some must
+  carry no `default`, plus the leg a task omits — assert the column is
+  ABSENT from the PREVIOUS snapshot, or —the snapshot carries it— is
+  satisfied by a snapshot that always did. The index map answers more than a
+  count, too: `isUnique` per index and a non-empty `where` per index are
+  what let a doc row describe the set rather than tally it.
+- **A TSDoc cross-reference to a doc section, or to an assertion a LATER
+  task in the same plan will add, is FALSE at the commit that writes it**,
+  and nothing re-reads a header. Prefer the capability form the schema
+  modules already use — a constraint is NAMED so the static-SQL invariant
+  suite HAS a name to grep, which is true the moment the name exists — over
+  claiming the suite greps for it. Run the converse sweep as well: a header
+  can point AT a doc for material that doc does not carry, so a docs task's
+  first sweep is `git grep` for the document's own path. A section can
+  SATISFY a carried-in forward reference rather than falsify one, and a
+  pointer that is now half-right reads as fully satisfied to the next
+  reader, so say which half a section closes.
+- **Three docs-structure rules, none of them gated.**
+  `docs/architecture/01-invariants.md`'s header paragraph is an ORDERED
+  enumeration of which spec each register row came from and ends in a
+  FINALITY claim, so every task adding a row falsifies a sentence in the
+  same file and owes the repair in the same commit. `ARCHITECTURE.md`'s row
+  for a doc enumerates that doc's sections at the `###` grain and NOT the
+  `##` one, so a `###` added under an existing `##` owes the row too. And
+  these documents back-reference their PREDECESSOR by content rather than by
+  number, so inserting a `###` between two sections breaks a sentence no
+  gate reads — read the FOLLOWING heading's first sentence before inserting.
+- **A register row claiming `Implemented` rather than `Unexercised` is two
+  commands** and never a reading of the artifact's own prose:
+  `bun x vitest run <the test>` from inside the package (about a second, no
+  `pretest`), which reports the case count, plus
+  `bun x vitest list --filesOnly | grep -c <the file>` at 1, which is what
+  says an ordinary `bun run test` collects it at all.
+- **An invariant that MEASURES the absence of a live subject inverts what a
+  mutation leg's green means**, and a leg scored on the exit code reads a
+  working allowance as a broken rule. Planting the ALLOWED form (a read the
+  rule permits) leaves the VERDICT green — no finding is reported — while
+  the case recording `no such read exists in this tree` reddens, the plant
+  being exactly the subject it measures the absence of. Such a leg still
+  exits 1, and the reading is WHICH case moved. Two legs at one site whose
+  red sets are DISJOINT is what says the allowance is a branch the rule
+  takes rather than a read it never sees.
+- **A must-find roster whose LIVENESS PLANT rides in the same walk as the
+  real entries keeps its verdict GREEN through the roster being EMPTIED.**
+  Measured over one 9-case invariant file: emptying the roster reddened 4
+  cases and NOT the walk, the plant going on reporting while every property
+  the roster carried stopped being checked. The coverage case holding the
+  reached ids against the declared ones is the ONLY thing that reports it,
+  and it needs a `rosterDeclaresAny` member beside the ids — with the plant
+  in both lists, an emptied roster leaves one list equal to the other. Say
+  WHICH case moved per leg, never the exit code.
+- **`sqlWords()` in `tests/invariants/dispatch-sql.ts` cannot answer any
+  question about SQL STRUCTURE**, and reaching for it is the reflex: it
+  drops parentheses, so `NOT EXISTS (SELECT 1 FROM x)` and a bare read
+  reduce to word streams differing only by two keywords somewhere earlier in
+  the line. A subquery-containment reading needs the comment strip and the
+  case fold WITHOUT the punctuation flattening, plus its own paren-depth
+  walk — and that walk must step over single-quoted literals while treating
+  a DOUBLE-quoted identifier as code, `"entity_research"` being a read of
+  the table rather than a string. It also flattens the DOT, so a failure
+  label built from a reduced fragment spells `p abandoned_at is not null`
+  where the roster entry was written `p.abandoned_at IS NOT NULL`, and a
+  reader grepping the failure for the column finds nothing; take such a
+  literal from a probe, never from the entry. Containment is the
+  space-padded `carries` rule and not a bare `String.includes`.
+- **`@ar/service` has TWO statement surfaces and neither exercises both
+  halves of an SQL rule**, so a detector pair driven over one of them is
+  half-dead: the built workflows (read through `loadBuiltWorkflows()`) and
+  `src/`'s modules read as text. Drive BOTH, in ONE call, and say which
+  surface each half was shown live on. A SQL string-literal walk applied to
+  a TYPESCRIPT file is separately blind by APOSTROPHE PARITY — an apostrophe
+  in prose opens a single-quote literal that never closes, so every later
+  occurrence in that file reads as quoted and a structural reading reports
+  zero. A word reading and a structural reading over the same TS tree
+  therefore legitimately disagree, and the only claim a run can hold is the
+  DIRECTION (the word reading is the wider), never the two counts.
 
 ## Operator control plane
 
