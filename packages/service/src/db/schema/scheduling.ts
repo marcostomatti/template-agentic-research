@@ -274,10 +274,17 @@ export const topics = pgTable('topics', {
    * `sources.consecutive_failures`, and the opposite of the one a
    * signal gets.
    *
-   * Nothing writes it yet. The statement closing a research pass is
-   * where the increment, the cap and the reset belong, and today it
-   * moves `next_run_at` alone, so every row here reads 0 — which is a
-   * true count of the walks an agent has taken so far.
+   * `ar-research`'s `Close Research Run` is the one writer, and
+   * it moves this column and `next_run_at` in ONE `UPDATE` rather
+   * than in two. Postgres applies only one of two data-modifying
+   * CTEs that touch the same row and says nothing about which,
+   * with no error either way, so an increment written beside the
+   * move would be a counter that sometimes moved and a due time
+   * that sometimes did not. A `CASE` per column is what folds
+   * them, and the three arms are the increment, the reset, and
+   * leaving both columns as they were where the domain's ceiling
+   * refused the gap — which is the one outcome that moves neither
+   * of them.
    */
   agentReschedules: integer('agent_reschedules').default(0)
     .notNull(),
