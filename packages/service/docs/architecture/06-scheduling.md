@@ -203,6 +203,93 @@ clamp is the whole of the enforcement, which is also why the periodic
 path calls it rather than adding the interval as it stands: the number
 it brings into range may be one nobody clamped on the way in.
 
+### A ceiling bounds the agent mode, and the topic carries the count
+
+`DomainSettings.maxAgentReschedules` bounds how many times in a row an
+agent may move one topic's due time, and
+`AR_RESEARCH_MAX_AGENT_RESCHEDULES` in `scripts/workflow-markers.ts`
+stands behind a domain that set none, at three. It is the schedule
+ratchet bound `.specs/q18-runaway-control.md` asks for. What it bounds
+is a walk rather than a rate: a topic an agent reschedules once and
+then leaves to its own cadence has spent nothing of it, and what a
+ceiling catches is a pass asking for a shorter gap on every round
+until the topic is claimed as fast as the dispatcher ticks. The bounds
+above say what a gap may BE; this says how many of them in a row get
+written.
+
+`runs.scheduled_by` stays the attribution and is not asked to be the
+state. It records that an agent set a due time, which is what makes an
+unexpected cadence traceable afterwards, but no `runs` row names a
+topic — beside its own id the columns are the domain, the two times,
+the status, the counts, the errors and that one. So the ledger can say
+an agent set a time and not which row it was set on, and a streak
+counted back out of it would be per domain where the walk is per
+topic. The count is carried on the row it is about instead, as
+`topics.agent_reschedules`.
+
+That column is declared beside `schedulableColumns()` in
+`src/db/schema/scheduling.ts` rather than inside it, which is a ruling
+about the other table rather than about this one: nothing proposes a
+cadence for a delivery, so a member in the shared set would give
+`export_subscriptions` a column no writer ever bumps and no pass ever
+resets. It is a counter, and so NOT NULL with a default of 0, which is
+also what makes the comparison work at all — a NULL compares UNKNOWN
+rather than false, so a row whose count had never been set would
+neither trip the ceiling nor turn up among the rows that passed under
+it. The dispatcher reads none of it, and what makes a row due is
+unchanged.
+
+It is not a record of which mode set the time a row now carries, and
+the reading this section opened with holds. `ar-dispatch` writes its
+periodic increment inside every claim and touches no counter, so an
+`interval` write sits between any two agent writes: a topic standing
+at two has been rescheduled by two research passes in a row and may
+still be sitting on the increment the last claim wrote. What the
+number counts is consecutive passes that wrote a gap, and never
+consecutive writes to `next_run_at`.
+
+`Close Research Run` in `workflows/src/ar-research.json` is the one
+writer, and it moves the count and `next_run_at` in ONE `UPDATE` with
+a `CASE` per column rather than in two data-modifying CTEs. Postgres
+applies only one of two such CTEs touching the same row and says
+nothing about which, with no error either way, so an increment written
+beside the move would be a counter that sometimes moved and a due time
+that sometimes did not. The three arms are the increment, the reset,
+and leaving both columns exactly as they were where the ceiling
+refused the gap — which is what keeps a refusal from spending itself,
+a reset there putting the streak back at nought so the next proposal
+would be written again.
+
+What ends a walk is a pass that proposed nothing, and that is wider
+than a pass that did everything asked of it. `Propose Next Run`
+withholds where the pass recorded every candidate it drained, where
+the invocation names no topic, and where a stated interval bound is
+not a whole number of seconds, and the digit guard the write reads the
+gap through adds a fourth way to arrive with nothing to write; all
+four reach the reset arm. The alternative is that node's rule spelled
+a second time in the SQL, where nothing compares the two, and the walk
+this arm ends is one of written proposals rather than one of reasons.
+
+A refused proposal is not a pause, and that is the whole of what the
+ceiling costs a topic. The cadence its own `interval_seconds` gives it
+stands, the increment the dispatcher wrote when it claimed the row
+being what a refusal leaves alone; the topic is not disabled and not
+retired; and the approved work the pass left behind keeps its approval
+and comes round at the head of the next drain. What is withheld is one
+sooner time, once, and the streak the ceiling was reached on is one
+the next pass with nothing to propose spends back.
+
+Three readings on the run say it happened, and none of them is a query
+against the topic. `scheduled_by` is read off the write rather than
+off the intent, so a refused proposal records `interval` exactly like
+a pass that proposed none. The `schedule_proposals_suppressed` key in
+`counts` is nought or one, a pass proposing one gap at most. And a
+failure entry names the streak the topic stood at beside the ceiling
+it was held against, which is the pair a count cannot say — it is also
+what parts a refusal from a proposal naming a topic nobody holds, both
+leaving an entry saying a schedule was proposed and not written, and
+only the refusal putting the second beside it.
+
 ## The claim
 
 `ar-dispatch` claims with one statement per schedulable table, and the
