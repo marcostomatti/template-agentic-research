@@ -55,15 +55,14 @@
  * THE ALLOWANCE HAS NO LIVE SUBJECT and both sides of it rest on
  * plants, which the header next door states and this file measures:
  * across all 258 statements, not one read of `entity_research` sits
- * inside a `NOT EXISTS`. The built tree carries four anti-joins and
- * none of them is over that table — three guard a raise against
- * `research_pool` and the fourth reads a CTE — so the span walk
- * runs and reports nothing every time. A planted pair is the only
- * thing that can say the classifier tells the two apart, and it is
- * driven in the same call as the real statements rather than beside
- * them — one answer carrying the tree's zero and the plant's edge
- * is the one shape where the zero cannot be a reading that never
- * ran.
+ * inside a `NOT EXISTS`. The built tree carries five anti-joins and
+ * none of them is over that table — four guard a raise against
+ * `research_pool` and the fifth reads a CTE — so the span walk runs
+ * and reports nothing every time. A planted pair is the only thing
+ * that can say the classifier tells the two apart, and it is driven
+ * in the same call as the real statements rather than beside them —
+ * one answer carrying the tree's zero and the plant's edge is the
+ * one shape where the zero cannot be a reading that never ran.
  *
  * THE TWO HALVES WERE DRIVEN AGAINST THE SHIPPED STATEMENT and not
  * only against the plants, and the two red sets are DISJOINT, which

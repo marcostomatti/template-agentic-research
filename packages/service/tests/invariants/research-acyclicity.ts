@@ -64,10 +64,10 @@
  * the one statement naming that table names it as the target of its
  * own INSERT. So every allowance case rests on a planted sample in
  * the suite. The span walk beneath the allowance has a live
- * subject of a kind — four `NOT EXISTS` subqueries across the
- * built tree, three of them over `research_pool` and the fourth
- * over a CTE, none over `entity_research` — and not one of them
- * is visible in an answer:
+ * subject of a kind — five `NOT EXISTS` subqueries across the built
+ * tree, four of them over `research_pool` and the fifth over a CTE,
+ * none over `entity_research` — and not one of them is visible in
+ * an answer:
  * {@link classifyResearchReads} over a raise statement walks that
  * span and reports an empty list, no read sitting inside it. So
  * both halves of the allowance rest on the plants, and
@@ -546,13 +546,12 @@ interface Span {
  *
  * A depth walk rather than a search for the next parenthesis,
  * because an anti-join over this schema nests. Measured over the
- * built tree: the interval guard in `ar-ingest`'s raise carries
+ * built tree: the interval guard in both raise statements carries
  * `extract(epoch FROM now() - p.researched_at)` inside its own
  * predicate, so the first `)` closes that call and not the
- * subquery. The other three anti-joins there nest nothing, so
- * that guard is the walk's one live subject and every other span
- * would come out the same under a search for the next
- * parenthesis.
+ * subquery. The other three anti-joins there nest nothing, so those
+ * two guards are the walk's live subjects and every other span
+ * would come out the same under a search for the next parenthesis.
  *
  * An unbalanced statement answers a span running to the end of the
  * text. Deliberate, and the direction is the safe one: a statement
