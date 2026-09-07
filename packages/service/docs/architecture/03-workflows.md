@@ -171,6 +171,101 @@ reaches the instance through the environment and appears in no tracked
 file, which is the rule a URL, an API key and a container path are
 held to as well.
 
+### A refusal written into a statement is one every caller inherits
+
+`Raise Research Intentions` is one node name in two files.
+`workflows/src/ar-ingest.json` and `workflows/src/ar-score.json` each
+carry an INSERT into `research_pool` under it, and they are the only
+two INSERTs into that table anywhere in the set. Each of them is
+guarded by a `NOT EXISTS` that turns away a subject researched too
+recently, which is the per-entity minimum research interval
+`.specs/q18-runaway-control.md` asks for. The refusal is written into
+the SQL of both statements rather than into whatever invoked either of
+them, so a caller inherits it by calling and no path that raises an
+intention arrives without it.
+
+The window is the domain's.
+`DomainSettings.minResearchIntervalSeconds` in
+`src/db/schema/domains.ts` is the setting, and each statement reads it
+off the domain the finding belongs to rather than off the domain its
+caller ran for, which makes the window a fact about the row being
+cited. A domain naming none falls back to
+`AR_RESEARCH_MIN_INTERVAL_SECONDS`, written in the source as an
+`__ENVVAR:` marker and resolved when the artifact is built, so the
+fleet default stays nameable from outside the statement reading it and
+the source still writes no threshold of its own. The cast in front of
+both is guarded by `jsonb_typeof` answering `number`: `settings` is
+`jsonb` and holds whatever a writer put there, and an error raised at
+this node would leave the pass with no account of itself.
+
+A domain setting that window to zero switches the refusal off, and it
+does so by arithmetic rather than by a branch. The guard compares the
+age of a `researched_at` against the window, and no timestamp already
+in the past sits inside a window of zero length, so every candidate
+the clause would have turned away is raised instead. There is no
+second spelling of off to keep in step with the first — no flag, no
+shadow mode, nothing to leave switched the wrong way — and a domain
+that wants the refusal back sets a number. Zero on the reschedule
+ceiling in `docs/architecture/06-scheduling.md` reads the other way
+round, permitting nothing rather than refusing nothing, which is the
+one place carrying a reading from one of the two settings onto the
+other gets the opposite of what a domain asked for.
+
+The clause is live in `ar-score` and inert in `ar-ingest`, and the
+second half is the deliberate one. `Write Findings` there inserts a
+finding's domain, its document and its fields and no entity, so every
+subject that raise reads back carries a NULL one, the comparison
+against a pool row's entity is NULL for all of them, and the guard
+holds for every candidate it sees. In `ar-score` the entity is carried
+on the item `Select Scoring Subjects` built and travels the pass
+rather than being read back at the raise, so a subject attributed to
+an entity already researched inside its window is turned away by that
+statement and by nothing else in the pipeline. A subject carrying no
+entity still raises on either path, the comparison being NULL for it
+too: nothing has a research history to match it against, which is the
+right reading for a row nobody attributed and the reading every row in
+the pull path gets.
+
+Writing the clause into the inert raiser as well is what makes the
+refusal a property of the table rather than of a workflow. The
+asymmetry lasts exactly as long as `ar-ingest` writes findings with no
+entity, and nothing about that is permanent: the day attribution
+reaches that workflow the guard it needs is already in the statement,
+with no clause to reopen, no settings member to read a second time and
+no remembering which of the two raisers was the one that had it.
+
+Both read `research_pool`'s own timestamps and not `entity_research`,
+which is what keeps a raise off the terminal table. `Record Research`
+in `ar-research` writes the dossier and stamps the pool row in one
+statement, so for anything this pipeline researched the two agree by
+construction, and reading the nearer of them leaves the derivation
+graph acyclic — the property
+`tests/invariants/research-acyclicity.test.ts` holds the built set to.
+
+What a pass did with the guard is legible in that pass's own `counts`.
+Both close statements write `subjects_searchable` beside
+`intentions_raised`, `intentions_suppressed_repeat` and
+`intentions_suppressed_interval`, and the three outcomes partition the
+searchable subjects: each one is raised, repeated or inside a window,
+exactly one of the three, so the three lengths add to the count
+answered beside them. A subject can be refused by both guards at once
+and is given one reason, the repeat guard taking it, so the interval
+list holds only the subjects the window alone turned away — which is
+the one to read when a domain's window is being tuned. `ar-ingest`
+writes a zero into that key on every pass it will make until it
+attributes an entity, and from the ledger a pass that suppressed
+nothing and a pass that could not suppress anything look alike.
+
+Two checks read the guard and they read different things.
+`tests/invariants/pool-sql.ts` requires each statement to spell the
+refusal and the guarded read of the setting, over text `sqlWords()`
+has stripped the comments out of, so the paragraphs above a clause can
+never stand in for the clause.
+`tests/live/research-interval.live.test.ts` drives the two shipped
+statements against a real Postgres instead: a subject researched
+inside its window refused, the same subject outside it raised, and the
+domain's own window set to zero raising it inside.
+
 ### A decision made at a node has four homes, none of them a comment
 
 A workflow source is JSON, and JSON has no comment syntax: there is
