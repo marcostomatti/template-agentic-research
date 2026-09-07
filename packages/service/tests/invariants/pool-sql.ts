@@ -21,8 +21,8 @@
  * properties of this kind wants: the workflow named alongside the
  * node rather than a roster of its own, the coverage guard that
  * gives an enumerable roster its worth being over the roster
- * whole. This is that case. Twenty entries over six statements in
- * three workflows, and the three are not interchangeable — the
+ * whole. This is that case. Twenty two entries over six statements
+ * in three workflows, and the three are not interchangeable — the
  * pool is filled by two raisers, emptied by one drain, and
  * accounted for by the row each of those passes closes. A property
  * of the queue is a property of that set rather than of any one
@@ -55,11 +55,11 @@
  * 90 per cent of the characters of these six statements, this port
  * arguing its decisions inside the SQL that carries them, and the
  * prose most likely to spell a phrase an entry requires is the
- * prose explaining why the statement carries it. Of the twenty
- * seven fragments the roster holds, three are also carried by the
+ * prose explaining why the statement carries it. Of the thirty
+ * three fragments the roster holds, three are also carried by the
  * comments of their own node, so three entries are partly
  * satisfied by prose once the strip is gone and none of the twenty
- * is wholly. Measured over the built tree, entry by entry.
+ * two is wholly. Measured over the built tree, entry by entry.
  *
  * What {@link sqlWords} leaves is words, so an entry can require a
  * phrase and never a SHAPE, and three limits follow that are worth
@@ -129,15 +129,16 @@ export interface PoolSqlRule {
    * Stable identifier, and what failure output names the entry
    * by.
    *
-   * The reason a roster carries one is the reason `DispatchSqlRule`
-   * gives for its own: the failure a roster exists to make
-   * reportable is an entry nothing reached, and an entry nothing
-   * reached has no matched text to be named by. It leads every
-   * label {@link unsatisfiedPoolRequirements} hands back for a
-   * second reason that bites harder here than next door: three of
-   * the six nodes carry four entries apiece and a fourth carries
-   * five, so a failure naming only the node says which statement
-   * to open and not which property went missing.
+   * The reason a roster carries one is the reason
+   * `DispatchSqlRule` gives for its own: the failure a roster
+   * exists to make reportable is an entry nothing reached, and an
+   * entry nothing reached has no matched text to be named by. It
+   * leads every label {@link unsatisfiedPoolRequirements} hands
+   * back for a second reason that bites harder here than next
+   * door: two of the six nodes carry four entries apiece and the
+   * two raisers carry five and six, so a failure naming only the
+   * node says which statement to open and not which property went
+   * missing.
    *
    * Prefixed `pool-` across the roster, which is convention rather
    * than anything enforced: these ids travel into a failure message
@@ -255,7 +256,7 @@ export interface PoolSqlRule {
  * reached fails a case of its own rather than riding along behind
  * the entries that were.
  *
- * Twenty entries and twenty seven fragments, every one of them
+ * Twenty two entries and thirty three fragments, every one of them
  * carried by the statement its entry names, measured over the tree
  * this package builds. None of the five members of any entry is a
  * hit for a needle in `naming-patterns.ts`, checked the way
@@ -263,10 +264,10 @@ export interface PoolSqlRule {
  * first proven live against its own needles. Nothing re-runs that
  * pass — `tests/` sits outside that file's scan roots — so this
  * sentence is the whole of what records it, and it covers the
- * twenty that landed and nothing past them.
+ * twenty two that landed and nothing past them.
  */
 export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
-  // The first raiser, and four properties of one statement held to
+  // The first raiser, and five properties of one statement held to
   // one node. Each requires the phrase a statement dropping the
   // property would stop carrying, and each was picked with an eye
   // on what it would still be carried by.
@@ -282,7 +283,20 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
   // is what makes it the entry for where the window comes FROM
   // rather than a second entry for the guard.
   //
-  // What none of the four rests on is the comment strip: every
+  // The stamp entry is three fragments because a word stream can
+  // say a column is written and not what reached it. The first is
+  // the INSERT's own column list, which a statement dropping the
+  // stamp stops carrying; the second is the value selected into
+  // that last position, which says the stamp comes from a bound
+  // parameter rather than from a literal or a null; and the third
+  // is where that same parameter is answered onward as this pass's
+  // run id, which is what says WHICH run it is. What none of the
+  // three reaches is the binding itself, which is a property of
+  // the node's `queryReplacement` rather than of its SQL, and
+  // `tests/live/research-interval.live.test.ts` is where the built
+  // statement is driven and the stamp read off the row it raised.
+  //
+  // What none of the five rests on is the comment strip: every
   // fragment here is absent from this node's own prose, measured,
   // which is not the case further down the roster. The strip is
   // still what makes them readable rather than lucky — this
@@ -336,6 +350,22 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
     nodeName: 'Raise Research Intentions',
     requires: ['jsonb_array_length(s.search_terms) > 0'],
   },
+  {
+    id: 'pool-ingest-stamps-the-originating-run',
+    property:
+      'Stamps the run that dispatched the pass onto every ' +
+      'intention it raises, so the spend a scheduled run led to ' +
+      'is a join from the pool through runs to llm_calls rather ' +
+      'than a guess.',
+    workflowId: 'ar-ingest',
+    nodeName: 'Raise Research Intentions',
+    requires: [
+      'INSERT INTO research_pool (domain_id, finding_id, ' +
+      'search_terms, root_event_id)',
+      's.search_terms, $2::bigint',
+      '$2::bigint AS ingest_run_id',
+    ],
+  },
   // The same four properties against the other raiser, and the
   // sentences repeat because the properties do. Nothing here lets
   // one entry cover both nodes, and the node NAME is identical
@@ -356,6 +386,17 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
   // this node's own prose, so the entry is partly satisfied by
   // comment once the strip is gone and the first fragment is what
   // is holding it up.
+  //
+  // The sixth is the stamp, and the pair it makes with its
+  // `ar-ingest` twin is not symmetric either. That raiser is
+  // dispatched by a run and binds it straight into the INSERT;
+  // this one is handed a run id or nothing, so the value is read
+  // out of a guarded CTE and the column is left null where the
+  // handover named none. Its three fragments are the column list,
+  // the subselect the value comes out of, and the CASE the guard
+  // closes, and the other raiser carries none of them — which is
+  // why this entry and its twin are two of the three the swap
+  // control at the foot of `pool-sql.test.ts` moves.
   {
     id: 'pool-score-one-intention-per-finding',
     property:
@@ -415,6 +456,23 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
     workflowId: 'ar-score',
     nodeName: 'Raise Research Intentions',
     requires: ['w.value ->> \'entity_id\'', 's.entity_id'],
+  },
+  {
+    id: 'pool-score-stamps-the-originating-run',
+    property:
+      'Stamps the run the handover named onto every intention it ' +
+      'raises and leaves the column null where it named none, so ' +
+      'a capture-initiated pass raises rows recording no ' +
+      'originating run rather than rows attributed to the wrong ' +
+      'one.',
+    workflowId: 'ar-score',
+    nodeName: 'Raise Research Intentions',
+    requires: [
+      'INSERT INTO research_pool (domain_id, entity_id, ' +
+      'finding_id, search_terms, root_event_id)',
+      '(SELECT root_event_id FROM run)',
+      'END AS root_event_id',
+    ],
   },
   // The drain, and the four properties that make an approved queue
   // a gate rather than a backlog. Two are the predicate, one is

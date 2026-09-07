@@ -11,22 +11,23 @@
  * script, so a default run reads a tree a real bun process wrote.
  *
  * THE VERDICT IS A ZERO, and that decides the shape of everything
- * here. Twenty entries over twenty seven fragments hold against
- * six statements in three workflows, and what a passing run reads
- * is an empty list of offenders. An empty list is also what a
- * roster emptied of its entries answers, what a walk narrowed away
- * from the roster answers, and what a reading handed a tree with
- * nothing in it answers. So the zero is surrounded rather than
- * asserted.
+ * here. Twenty two entries over thirty three fragments hold
+ * against six statements in three workflows, and what a passing
+ * run reads is an empty list of offenders. An empty list is also
+ * what a roster emptied of its entries answers, what a walk
+ * narrowed away from the roster answers, and what a reading handed
+ * a tree with nothing in it answers. So the zero is surrounded
+ * rather than asserted.
  *
  * THE PLANT RIDES IN THE SAME ANSWER, which is the first of those
  * guards and the one the others cannot stand in for. An entry
  * carrying a real entry's workflow and a real entry's fragment,
  * pointed at a node name no canvas carries, is walked beside the
- * twenty and the answer is asserted to be its label and nothing
- * besides. One answer carrying the roster's zero and the plant's
- * label is the shape in which that zero cannot be a reading which
- * never ran: a walk that stopped looking reports neither of them.
+ * twenty two and the answer is asserted to be its label and
+ * nothing besides. One answer carrying the roster's zero and the
+ * plant's label is the shape in which that zero cannot be a
+ * reading which never ran: a walk that stopped looking reports
+ * neither of them.
  *
  * FOUR SHAPES OF LABEL, and they are four different edits rather
  * than four spellings of one. A workflow id nothing under
@@ -45,16 +46,16 @@
  * is in this file. Both raisers carry a node called
  * `Raise Research Intentions`, which is why an entry names its
  * artifact as well as its node — and also why swapping an entry
- * onto the sibling raiser is a WEAK control: eight of the nine
+ * onto the sibling raiser is a WEAK control: eight of the eleven
  * entries over those two nodes hold against either workflow, the
- * properties genuinely being shared. Exactly one moves, and the
- * case at the foot of this file is what names it.
+ * properties genuinely being shared. Three move, and the case at
+ * the foot of this file is what names them.
  *
  * THE GRID THAT SAYS THESE NINE CASES CAN FAIL, six legs over
  * `pool-sql.ts` taken from a `/tmp` hold and each run with
  * `bun x vitest run` on this file alone — which runs no `pretest`,
  * so every leg read the same artifacts a clean build had written.
- * Every case is reddened by at least one of them, and three of the
+ * Every case is reddened by at least one of them, and four of the
  * fifteen pairs of legs overlap at all.
  *
  * Emptying `POOL_SQL_RULES` reds 4 of 9 and NOT the walk, which is
@@ -73,11 +74,15 @@
  * that last one because a swapped entry then holds against either
  * raiser and no entry is left to name.
  *
- * The three overlaps are the plant's own case, shared by the first
- * two legs, and the workflow-half case, shared by the first, the
- * third and the sixth — each a case more than one edit can take
- * out rather than a leg that failed to discriminate. Counts off a
- * run of nine cases: widen the roster and re-drive them.
+ * Those four pairs are two CASES rather than four independent
+ * ones: the plant's own case, shared by the first two legs, and
+ * the workflow-half case, shared by the first, the third and the
+ * sixth, which is three pairs on its own. Each is a case more than
+ * one edit can take out rather than a leg that failed to
+ * discriminate. The six splits were re-driven when the two stamp
+ * entries were rostered, and every one of them held: 4, 2, 2, 1, 1
+ * and 2 before the widening and after. A further widening asks for
+ * the same.
  *
  * WHAT IS NOT COVERED HERE, each named so a later widening is a
  * decision rather than a discovery. A fragment reaches words and
@@ -92,7 +97,7 @@
  * than off the artifact's text, these statements arguing their own
  * decisions in prose that runs to most of their characters —
  * `sqlWords` is what drops it, and the roster records which three
- * of its twenty seven fragments a comment would otherwise carry.
+ * of its thirty three fragments a comment would otherwise carry.
  */
 import type { PoolSqlRule } from './pool-sql.js';
 
@@ -130,10 +135,11 @@ const BUILT_WORKFLOWS = loadBuiltWorkflows();
  * Written out rather than derived from the roster, which is the
  * whole of what it is worth: a list read off the same table the
  * walk goes through agrees with that table however it was narrowed,
- * a roster whose twenty entries had all come to point at one node
- * included. That narrowing is invisible to the coverage case behind
- * the walk — twenty ids reached is twenty ids reached wherever they
- * looked — and this is the reading that reports it.
+ * a roster whose twenty two entries had all come to point at one
+ * node included. That narrowing is invisible to the coverage case
+ * behind the walk — twenty two ids reached is twenty two ids
+ * reached wherever they looked — and this is the reading that
+ * reports it.
  *
  * Six, and the three workflows are not interchangeable: the pool is
  * filled by two raisers, emptied by one drain, and accounted for by
@@ -235,7 +241,7 @@ const ABSENT_NODE_PLANT: PoolSqlRule = {
   property:
     'Planted. Names a node the canvas does not carry, so the ' +
     'walk over the roster has one entry it must report and the ' +
-    'zero the other twenty answer is a reading rather than a ' +
+    'zero the other twenty two answer is a reading rather than a ' +
     'list nobody looked at.',
   workflowId: SHADOWED_WORKFLOW_ID,
   nodeName: ABSENT_NODE_NAME,
@@ -361,20 +367,20 @@ describe('research pool invariants — the roster', () => {
   // more than a general caution about comments would suggest: they
   // run to between seven tenths and nine tenths comment by
   // character, this port arguing its decisions inside the SQL that
-  // carries them. Three of the twenty seven fragments are carried
+  // carries them. Three of the thirty three fragments are carried
   // by their own node's prose as well, measured and recorded on
-  // the roster; none of the twenty entries is wholly satisfiable
-  // that way.
+  // the roster; none of the twenty two entries is wholly
+  // satisfiable that way.
   //
   // Held against a written list rather than counted, because the
   // answer is already the report. Every miss is labelled
-  // `<id>: <what>`, leading with the entry and not the node: three
-  // of these six statements carry four entries apiece and a fourth
-  // carries five, so a label naming only the node would say which
-  // file to open and not which property went missing. Every entry
-  // is driven and every fragment within an entry checked, so one
-  // run says all of it rather than finding the next miss each
-  // time.
+  // `<id>: <what>`, leading with the entry and not the node: two
+  // of these six statements carry four entries apiece and the two
+  // raisers carry five and six, so a label naming only the node
+  // would say which file to open and not which property went
+  // missing. Every entry is driven and every fragment within an
+  // entry checked, so one run says all of it rather than finding
+  // the next miss each time.
   //
   // What the case is worth is what its input, its entries and its
   // plant are worth. The tree is refused a module away, on a
@@ -407,8 +413,8 @@ describe('research pool invariants — the roster', () => {
   //
   // The plant is in both lists, which is what its riding along in
   // the walk costs and it is the honest spelling of it: the walk
-  // went through twenty one entries and this says which twenty one
-  // they were.
+  // went through twenty three entries and this says which twenty
+  // three they were.
   //
   // Held as sorted lists rather than as two sets, so an id two
   // entries share is reported rather than swallowed:
@@ -448,12 +454,12 @@ describe('research pool invariants — the roster', () => {
 
   // What the coverage case above cannot report, and the reason
   // this roster spans three artifacts rather than one: the
-  // statements it is over. Twenty ids reached is twenty ids
-  // reached wherever they looked, so a roster whose entries had
-  // all come to name one node — a workflow renamed and the entries
-  // repointed, a node absorbed into another — passes that case
-  // with a property of the drain and both properties of the close
-  // rows silently no longer checked by anything.
+  // statements it is over. Twenty two ids reached is twenty two
+  // ids reached wherever they looked, so a roster whose entries
+  // had all come to name one node — a workflow renamed and the
+  // entries repointed, a node absorbed into another — passes that
+  // case with a property of the drain and both properties of the
+  // close rows silently no longer checked by anything.
   //
   // Held as a set, the roster carrying several entries per
   // statement by design, and against a written list rather than
@@ -596,25 +602,28 @@ describe('research pool invariants — the workflow half', () => {
   // which is the whole reason an entry names its artifact and a
   // node-name lookup across the tree would read whichever it found
   // first. This is the measurement of what that buys, and it is
-  // less than the arrangement suggests: swap the nine entries over
-  // those two nodes onto the sibling raiser and eight of them
+  // less than the arrangement suggests: swap the eleven entries
+  // over those two nodes onto the sibling raiser and eight of them
   // still hold, the properties genuinely being shared between two
   // statements written to the same law.
   //
-  // Exactly one moves, and it is the one property the pair does
-  // not share. `ar-ingest` writes findings with no entity, so its
-  // raise files intentions against none; `ar-score` reads the
-  // subject off the handover it was given and files under it,
-  // which is what leaves the window guard a row to find. Named
-  // rather than counted, because a count of one is satisfied by
-  // whichever entry happened to move.
+  // Three move, and they are the three the pair does not share.
+  // `ar-ingest` writes findings with no entity, so its raise files
+  // intentions against none; `ar-score` reads the subject off the
+  // handover it was given and files under it, which is what leaves
+  // the window guard a row to find. The two stamps part company
+  // for the same kind of reason: one raiser is dispatched by a run
+  // and binds that id straight into the INSERT, the other is
+  // handed a run id or nothing and reads it out of a guarded CTE.
+  // Named rather than counted, because a count of three is
+  // satisfied by whichever three happened to move.
   //
   // A weak control reported as one. What it says is that the
-  // artifact member is load-bearing for at least one entry and
-  // that the roster would not notice eight of them being pointed
-  // at the wrong raiser — which is a limit of a phrase-shaped
-  // reading rather than of the roster, and the live seams are
-  // where a raise is driven against the rows it actually writes.
+  // artifact member is load-bearing for three entries and that the
+  // roster would not notice the other eight being pointed at the
+  // wrong raiser — which is a limit of a phrase-shaped reading
+  // rather than of the roster, and the live seams are where a
+  // raise is driven against the rows it actually writes.
   it('holds one raiser entry to the workflow it names', () => {
     const sibling: Record<string, string> = {
       'ar-ingest': 'ar-score',
@@ -636,7 +645,10 @@ describe('research pool invariants — the workflow half', () => {
     });
 
     expect(raisers.length).toBeGreaterThan(moved.length);
-    expect(moved.map((rule) => rule.id))
-      .toEqual(['pool-score-raises-against-a-subject']);
+    expect(moved.map((rule) => rule.id)).toEqual([
+      'pool-ingest-stamps-the-originating-run',
+      'pool-score-raises-against-a-subject',
+      'pool-score-stamps-the-originating-run',
+    ]);
   });
 });
