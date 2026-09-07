@@ -18,17 +18,17 @@
  * says in as many words. This file is what puts the comparison to a
  * server.
  *
- * Three rows per raiser, and the two that raise are the controls the
- * one that refuses cannot do without. A refusal is an absence, so a
- * statement that raised nothing at all — a term guard that stopped
- * matching, a payload this file spells wrongly, a batch that reached
- * no finding — satisfies it exactly as the rule does. The two
- * controls vary the two OPERANDS of the comparison and nothing else:
- * one moves the pool timestamp back past the window and must raise,
- * the other leaves the timestamp where it is and sets the domain's
- * own window to zero and must raise. Each is otherwise the same seed,
- * spread from the refusal's own literal, so the axis is visible in
- * the table rather than asserted about it.
+ * Three window rows per raiser per hand-over, and the two that raise
+ * are the controls the one that refuses cannot do without. A refusal
+ * is an absence, so a statement that raised nothing at all — a term
+ * guard that stopped matching, a payload this file spells wrongly, a
+ * batch that reached no finding — satisfies it exactly as the rule
+ * does. The two controls vary the two OPERANDS of the comparison and
+ * nothing else: one moves the pool timestamp back past the window and
+ * must raise, the other leaves the timestamp where it is and sets the
+ * domain's own window to zero and must raise. Each is otherwise the
+ * same seed, spread from the refusal's own literal, so the axis is
+ * visible in the table rather than asserted about it.
  *
  * The pair also reaches both branches of the window expression with
  * no case of its own. The refusing row's domain declares no
@@ -51,31 +51,109 @@
  * this file seeds the column to show it. What is claimed here is a
  * property of the statement, not a prediction about the pass.
  *
- * The grid this file was measured against is four legs, each
- * applied, run and reverted. Three rewrite the shipped SQL in BOTH
- * sources and the fourth rewrites the seed here, and what a leg is
- * worth is WHICH labels moved rather than that the run went red.
+ * The other axis is the run an intention is stamped with, and it is
+ * the hand-over rather than the window that moves it. Both raisers
+ * write `research_pool.root_event_id`, and both read it off a value
+ * the pass already resolved rather than looking one up: `ar-ingest`
+ * binds the run its own dispatcher opened, and `ar-score` binds
+ * whatever a caller put on the hand-over item. So the two can be
+ * handed different things, and this file drives every hand-over each
+ * of them can express.
  *
- * Removing the guard outright reddens the two `researched inside
- * the window` labels and nothing else. Dropping the window out of
- * the comparison, so that any closed row refuses, reddens the four
- * accepting labels and nothing else. Those two sets are DISJOINT,
- * and together they are every drive in the table: the refusal and
- * its two controls defend different halves of one rule rather than
- * the controls riding along on the refusal.
+ * `ar-ingest` expresses one. Its node resolves the run out of Load
+ * Domain Context and binds it bare, and that same parameter is the
+ * `ingest_run_id` it answers with, so there is no state of that
+ * canvas under which it names none. A drive binding NULL there would
+ * be driving a value the expression cannot produce: a member
+ * resolving to nothing at all binds the string `undefined` rather
+ * than a null, which the cast refuses outright. What that node says
+ * about the column is that it cannot write anything but the
+ * dispatcher's run, and this file drives that rather than a state
+ * contradicting it.
+ *
+ * `ar-score` expresses both, which is what makes the NULL reachable
+ * here at all. Its hand-over member is stringified before it is
+ * bound, so a pass carrying no run binds the JSON null literal and
+ * the CTE in front of the insert answers NULL for it. A pull-path
+ * pass carries the run `ar-ingest` opened; a capture-initiated pass
+ * carries none, `ar-capture` opening its `runs` row in the node that
+ * closes the pass. Both are ordinary, and the column says as much: a
+ * NULL there is no originating run recorded rather than a gap.
+ *
+ * The stamp is read back off the stored row rather than off the
+ * statement's `RETURNING`, for the reason the outcome above is read
+ * twice. What a statement says it raised and what the table holds are
+ * two readings, and a value that never reached the column is exactly
+ * the shape either one alone would miss.
+ *
+ * The run is planted apart from every other id its seed writes, and
+ * that is the precondition without which the stamp reading proves
+ * nothing. Sequences start at one apiece, so a seed planting one
+ * domain and one run gives both the id 1, and a statement stamping
+ * the domain would be indistinguishable from one stamping the run.
+ * Two filler runs per seed put the run ahead of every id beside it,
+ * and the case below reads that rather than assuming it. They sit on
+ * the seed's own domain as well, so the stamp naming the run handed
+ * over rather than merely some run of that domain is a reading.
+ *
+ * The grid this file was measured against is eight legs, each
+ * applied, run and reverted. Six rewrite the shipped SQL in one
+ * source or in both and two rewrite the seed here, and what a leg
+ * is worth is WHICH labels moved rather than that the run went red.
+ * Nine drives carry two readings apiece, so a label can move in the
+ * outcome table, in the stamp table, or in both.
+ *
+ * Four are the window's. Removing the guard outright reddens the
+ * three `researched inside the window` labels in both tables, and
+ * the guarded-node reading in the first case besides: the words
+ * that case looks for leave the statement along with the guard, so
+ * there is no removal of it that case can survive. Dropping the
+ * window out of the comparison, so that any closed row refuses,
+ * reddens the six accepting labels in both tables and nothing else.
+ * Those two label sets are DISJOINT and together they are every
+ * drive there is: the refusals and their controls defend different
+ * halves of one rule rather than the controls riding along on the
+ * refusals.
  *
  * Misspelling the settings member, which leaves the fallback
- * standing for every domain, reddens the two `a window of zero`
- * labels alone — and leaves the first case below GREEN, all four
- * guard words surviving it. That is the leg this file is worth: the
- * roster next door requires those same phrases and is green through
- * it too, so a window read off the wrong place is a change nothing
- * short of a server reports.
+ * standing for every domain, reddens the three `a window of zero`
+ * labels alone — and leaves the first case GREEN, the alias its
+ * guard words name surviving in the CTE above. That is the leg this
+ * file is worth: the roster next door requires those same phrases
+ * and is green through it too, so a window read off the wrong place
+ * is a change nothing short of a server reports.
  *
- * The fourth leg is the seed's rather than the pipeline's. Leaving
- * the planted pool row at `pending` reddens the closed-row reading
- * and the two `researched inside` labels together, which is what
- * says that reading is live rather than a restatement of the plant.
+ * The fourth is the seed's rather than the pipeline's. Leaving the
+ * planted pool row at `pending` reddens the closed-row reading and
+ * the three `researched inside` labels together, which is what says
+ * that reading is live rather than a restatement of the plant.
+ *
+ * Four more are the stamp's, and what those report is a
+ * RELATIONSHIP between their label sets rather than four exit
+ * codes. The nine drives carry three stamp readings between them:
+ * three raise nothing at all, four expect the run their caller
+ * named, and two expect nothing stamped.
+ *
+ * Dropping `root_event_id` out of both INSERTs reddens the four
+ * labels expecting a run and leaves the two expecting NULL alone,
+ * which is the whole of what a column that stopped being written
+ * looks like from here. Misspelling the guard in `ar-score`'s run
+ * CTE, so the value bound for it never matches and every pass
+ * stamps NULL, reddens two of those four. Binding the domain where
+ * `ar-ingest` binds the run reddens the other two. So the second
+ * and the third PARTITION the first by raiser, which is what says
+ * each raiser's stamp is defended by a reading of its own rather
+ * than by the pair riding on one.
+ *
+ * The eighth is the seed's again, and it is the one that says the
+ * apartness reading is load-bearing rather than decoration. Binding
+ * the domain a second time with the filler runs removed leaves the
+ * stamp GREEN on all nine drives, the domain and the run being the
+ * same number for a seed that planted one of each, and moves the
+ * apartness member alone — on all nine. A wrong parameter is
+ * invisible to a stamp reading whose ids were never forced apart,
+ * and this is the leg that measures that rather than the argument
+ * for it.
  *
  * The statements come out of `workflows/dist/` and never
  * `workflows/src/`. A source carries `__ENVVAR:` markers where the
@@ -193,6 +271,18 @@ const INTERVAL_GUARD_WORDS: readonly string[] = [
  */
 const RAISED = 'raised';
 const REFUSED = 'refused';
+
+/**
+ * What a raise statement can do with the run its caller named, and
+ * the whole of that too.
+ *
+ * Total for the reason the pair above is: a drive that stamped a
+ * number which is neither the run handed over nor nothing at all
+ * names what it did rather than being read as one of the two.
+ */
+const NOTHING_RAISED = 'nothing raised';
+const STAMPED_THE_RUN = 'stamped the run handed over';
+const STAMPED_NOTHING = 'stamped nothing';
 
 /**
  * The terms every seeded finding carries.
@@ -315,6 +405,55 @@ const WINDOW_SCENARIOS: readonly WindowScenario[] = [
   },
 ];
 
+/**
+ * What a caller names as the originating run of the intentions a
+ * raise writes, and what a drive under it is called.
+ *
+ * A raiser declares the hand-overs it can be driven under rather than
+ * this roster spanning both of them, because they do not both reach
+ * both. `ar-score` reads the run off an item a caller put it on, and
+ * a caller with none to put there is an ordinary pass; `ar-ingest`
+ * resolves its own dispatcher's run and binds it bare, and has no
+ * state under which it names none.
+ */
+interface Handover {
+  /** What the drive is called in a failure, and in its seed's slug. */
+  readonly id: string;
+
+  /**
+   * Whether the caller names a run at all.
+   *
+   * What the drive binds where a raiser reads one, and what the case
+   * below expects to find stamped on whatever it raised.
+   */
+  readonly namesARun: boolean;
+}
+
+/**
+ * The hand-over both raisers can be driven under: a caller naming the
+ * run this pass belongs to.
+ */
+const RUN_HANDED_OVER: Handover = {
+  id: 'a run handed over',
+  namesARun: true,
+};
+
+/**
+ * The hand-over only `ar-score` can be driven under: a caller that
+ * names no run at all.
+ *
+ * This is where the NULL stamp is reachable, and it is reachable
+ * because `ar-capture` opens its `runs` row in the node that closes
+ * its pass — so at the moment it invokes the scorer there is no run
+ * id in existence to hand over. The value bound for it is the JSON
+ * null the node's own expression produces, which is what its
+ * stringify is there for.
+ */
+const NO_RUN_HANDED_OVER: Handover = {
+  id: 'no run handed over',
+  namesARun: false,
+};
+
 /** Everything one seeded scenario wrote, as the drive reads it. */
 interface PlantedSubject {
   /** The domain the seed's rows hang off. */
@@ -323,7 +462,20 @@ interface PlantedSubject {
   /** The subject both findings name. */
   readonly entityId: string;
 
-  /** The run `ar-ingest` binds as the pass this raise belongs to. */
+  /**
+   * Every other id this seed wrote, sorted by nothing and read for
+   * one thing: whether the run above could be told from any of them.
+   *
+   * The stamp is a bigint and so is everything else here, so a
+   * statement binding the wrong parameter writes a number of the
+   * right shape. On a seed whose sequences all sat at one it would
+   * write the right number as well, which is why the run is planted
+   * past them and why the case below reads this rather than taking it
+   * on trust.
+   */
+  readonly otherIds: readonly string[];
+
+  /** The run a caller of this raise names, where the drive names one. */
   readonly runId: string;
 
   /** The finding the raise is driven over. */
@@ -343,6 +495,18 @@ interface RaiseFixture {
   /** The built artifact the statement is read out of. */
   readonly artifact: string;
 
+  /**
+   * The hand-overs a caller of this raiser can make, and so the
+   * drives this file makes over it.
+   *
+   * Declared per raiser rather than spanning both, because the two do
+   * not reach the same set. Driving `ar-ingest` under a caller naming
+   * no run would be driving a binding its own expression cannot
+   * produce, which is a claim about neither the statement nor the
+   * pass.
+   */
+  readonly handovers: readonly Handover[];
+
   /** The node running it, as the canvas spells it. */
   readonly nodeName: string;
 
@@ -356,9 +520,13 @@ interface RaiseFixture {
    * for is the `queryReplacement` on the node itself.
    *
    * @param planted - What the seed for this drive wrote.
+   * @param rootEventId - The run its caller names, or null for none.
    * @returns The bound values, in the order the statement takes them.
    */
-  parameters(planted: PlantedSubject): readonly unknown[];
+  parameters(
+    planted: PlantedSubject,
+    rootEventId: string | null,
+  ): readonly unknown[];
 }
 
 /**
@@ -373,7 +541,13 @@ interface RaiseFixture {
 const RAISE_FIXTURES: readonly RaiseFixture[] = [
   {
     artifact: 'ar-ingest.json',
+    handovers: [RUN_HANDED_OVER],
     nodeName: 'Raise Research Intentions',
+    // The run is bound as a bigint and read twice by the statement,
+    // as the stamp on each row raised and as the ingest_run_id it
+    // answers with. The hand-over is not a parameter of this one: the
+    // node resolves the run itself, so a drive naming none would be
+    // binding a value the canvas has no way to produce.
     parameters: (planted) => [
       JSON.stringify([{ finding_id: planted.subjectFindingId }]),
       planted.runId,
@@ -382,15 +556,56 @@ const RAISE_FIXTURES: readonly RaiseFixture[] = [
   },
   {
     artifact: 'ar-score.json',
+    handovers: [RUN_HANDED_OVER, NO_RUN_HANDED_OVER],
     nodeName: 'Raise Research Intentions',
-    parameters: (planted) => [
+    // The run is stringified before it is bound, exactly as the
+    // node's own expression stringifies the hand-over member it reads
+    // it off. That is what makes a caller naming none bind the JSON
+    // null literal rather than nothing at all, which is one value
+    // where an unresolved member would bind none and shift every
+    // placeholder after it.
+    parameters: (planted, rootEventId) => [
       JSON.stringify([{
         entity_id: planted.entityId,
         finding_id: planted.subjectFindingId,
       }]),
+      JSON.stringify(rootEventId),
     ],
   },
 ];
+
+/**
+ * One drive: a raiser, the hand-over it is made under, and the window
+ * row it is made over.
+ */
+interface Drive {
+  /** The raiser driven. */
+  readonly fixture: RaiseFixture;
+
+  /** What its caller names as the originating run. */
+  readonly handover: Handover;
+
+  /** The window row it is driven over. */
+  readonly scenario: WindowScenario;
+}
+
+/**
+ * Every drive this file makes, spread once and read everywhere.
+ *
+ * The loop that makes the drives and the three tables that say what
+ * each one had to do are all built off this list, so a drive present
+ * in one and absent from another is not a shape this file can take.
+ * It is not a full cross product: a raiser is driven over every
+ * window row under each hand-over IT declares, and `ar-ingest`
+ * declares one.
+ */
+const EVERY_DRIVE: readonly Drive[] = RAISE_FIXTURES.flatMap(
+  (fixture) => fixture.handovers.flatMap(
+    (handover) => WINDOW_SCENARIOS.map(
+      (scenario) => ({ fixture, handover, scenario }),
+    ),
+  ),
+);
 
 /**
  * The nodes carrying the guard, written out rather than read off
@@ -428,12 +643,37 @@ function nodeLabel(artifact: string, nodeName: string): string {
 /**
  * The label one drive is reported under.
  *
+ * Three parts rather than two, and the hand-over is the middle one.
+ * Both raisers are driven over every window row and one of them is
+ * driven over each row twice, so a label naming the artifact and the
+ * row alone would name two drives and the record a case compares
+ * would silently hold one of them.
+ *
  * @param artifact - The raiser driven.
+ * @param handoverId - What its caller named.
  * @param scenarioId - The row it was driven over.
- * @returns The pair, as one label.
+ * @returns The three, as one label.
  */
-function driveLabel(artifact: string, scenarioId: string): string {
-  return `${artifact}: ${scenarioId}`;
+function driveLabel(
+  artifact: string,
+  handoverId: string,
+  scenarioId: string,
+): string {
+  return `${artifact}: ${handoverId}: ${scenarioId}`;
+}
+
+/**
+ * The label one drive is reported under, read off the drive.
+ *
+ * @param drive - One member of {@link EVERY_DRIVE}.
+ * @returns Its label.
+ */
+function labelOf(drive: Drive): string {
+  return driveLabel(
+    drive.fixture.artifact,
+    drive.handover.id,
+    drive.scenario.id,
+  );
 }
 
 /**
@@ -442,16 +682,17 @@ function driveLabel(artifact: string, scenarioId: string): string {
  * `domains.slug` is unique and every seed here shares one
  * transaction, so two seeds under one slug would be refused on the
  * second insert — which arrives as a failed drive rather than as
- * anything about the guard. The artifact and the row together are
- * what make it distinct, both raisers being driven over all three
- * rows.
+ * anything about the guard. The drive's whole label is what makes it
+ * distinct, the hand-over included: one raiser is driven over each
+ * row twice and the two seeds have to be separate rows, or the second
+ * drive would meet the first one's pool row and be refused by the
+ * repeat guard.
  *
- * @param artifact - The raiser this seed is for.
- * @param scenarioId - The row it stands for.
+ * @param drive - The drive this seed is for.
  * @returns A slug this seed alone occupies.
  */
-function seedSlug(artifact: string, scenarioId: string): string {
-  return `research-interval-${driveLabel(artifact, scenarioId)}`
+function seedSlug(drive: Drive): string {
+  return `research-interval-${labelOf(drive)}`
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-');
 }
@@ -534,6 +775,22 @@ function intentionIdsOf(
 }
 
 /**
+ * Runs planted before the one a drive hands over, so the id a raise
+ * stamps cannot be read off anything else its seed wrote.
+ *
+ * Every sequence starts at one, so a seed planting one domain and one
+ * run gives both the id 1 and a statement stamping the domain writes
+ * the run's number by accident. Two put the run past every other id
+ * the seed writes, and they sit on that seed's own domain, so the
+ * stamp naming the run handed over rather than merely some run of the
+ * domain is a reading as well.
+ *
+ * Two rather than one because a seed writes two findings, and one
+ * filler would only put the run past the first of them.
+ */
+const FILLER_RUNS_PER_SEED = 2;
+
+/**
  * Seed one domain, subject, document, run, researched finding and
  * closed pool row, and the finding a raise is then driven over.
  *
@@ -556,13 +813,13 @@ function intentionIdsOf(
  */
 async function plantSubject(
   client: PoolClient,
-  artifact: string,
-  scenario: WindowScenario,
+  drive: Drive,
 ): Promise<PlantedSubject> {
-  const slug = seedSlug(artifact, scenario.id);
-  const settings = scenario.domainWindowSeconds === null
+  const slug = seedSlug(drive);
+  const window = drive.scenario.domainWindowSeconds;
+  const settings = window === null
     ? {}
-    : { minResearchIntervalSeconds: scenario.domainWindowSeconds };
+    : { minResearchIntervalSeconds: window };
   const domain = await client.query<{ row_id: string }>(
     `
       INSERT INTO domains (slug, name, settings)
@@ -590,6 +847,18 @@ async function plantSubject(
     [domainId, slug, `a document for ${slug}`],
   );
   const documentId = firstRow(document.rows, `the ${slug} document`).row_id;
+
+  // The fillers, written in one statement because their ids are all
+  // this seed wants of them. What they are for is the constant above.
+  await client.query(
+    `
+      INSERT INTO runs (domain_id, scheduled_by)
+      SELECT $1::bigint, 'interval'
+      FROM generate_series(1, $2::int)
+    `,
+    [domainId, FILLER_RUNS_PER_SEED],
+  );
+
   const run = await client.query<{ row_id: string }>(
     `
       INSERT INTO runs (domain_id, scheduled_by)
@@ -628,7 +897,7 @@ async function plantSubject(
       entityId,
       researchedFindingId,
       JSON.stringify(Object.values(SEEDED_FIELDS)),
-      `${scenario.researchedAgoSeconds} seconds`,
+      `${drive.scenario.researchedAgoSeconds} seconds`,
     ],
   );
 
@@ -641,14 +910,23 @@ async function plantSubject(
     [domainId, documentId, entityId, JSON.stringify(SEEDED_FIELDS)],
   );
 
+  const subjectFindingId = firstRow(
+    subject.rows,
+    `the ${slug} subject finding`,
+  ).row_id;
+
   return {
     domainId,
     entityId,
+    otherIds: [
+      domainId,
+      entityId,
+      documentId,
+      researchedFindingId,
+      subjectFindingId,
+    ],
     runId,
-    subjectFindingId: firstRow(
-      subject.rows,
-      `the ${slug} subject finding`,
-    ).row_id,
+    subjectFindingId,
   };
 }
 
@@ -679,6 +957,39 @@ interface RaiseReading {
 
   /** How many pool rows the finding had after it ran. */
   readonly poolRowsAfter: number;
+
+  /**
+   * The run this drive named as the originating one, or null where it
+   * named none.
+   *
+   * What the stamp below is held against, carried on the reading
+   * rather than looked up again: the ids a seed writes are its own,
+   * so a table written at module scope has no number to compare.
+   */
+  readonly runHandedOver: string | null;
+
+  /**
+   * The `root_event_id` on every pool row the finding carries after
+   * the statement ran, in the order they were written.
+   *
+   * Read off the stored rows rather than off the statement's own
+   * `RETURNING`, which projects the id and nothing else. A list
+   * rather than one value, so a raise that wrote two rows names its
+   * own shape rather than being read as the first of them.
+   */
+  readonly stampsOnTheRowsRaised: readonly (string | null)[];
+
+  /**
+   * Whether the run this drive named can be told apart from every
+   * other id its seed wrote.
+   *
+   * The precondition of the stamp reading rather than a claim about
+   * the statement. At false, a raise binding the domain or a finding
+   * where it should bind the run writes the same number the rule asks
+   * for, and the stamp above is satisfied by a statement reading the
+   * wrong parameter.
+   */
+  readonly theRunIsApartFromEveryOtherIdSeeded: boolean;
 }
 
 /**
@@ -704,6 +1015,36 @@ async function countRows(
 }
 
 /**
+ * The `root_event_id` on every pool row one finding carries, as text.
+ *
+ * A bigint comes back off the driver as a string, so the column is
+ * cast here and the comparison is between two strings rather than
+ * between a string and a number that would be unequal for every id
+ * including the right one. A SQL NULL still arrives as null, which is
+ * the whole of the second reading this file makes.
+ *
+ * @param client - The open transaction to read through.
+ * @param findingId - The finding whose rows to read.
+ * @returns One stamp per row, in the order they were written.
+ */
+async function stampsFor(
+  client: PoolClient,
+  findingId: string,
+): Promise<readonly (string | null)[]> {
+  const { rows } = await client.query<{ stamp: string | null }>(
+    `
+      SELECT root_event_id::text AS stamp
+      FROM research_pool
+      WHERE finding_id = $1::bigint
+      ORDER BY id
+    `,
+    [findingId],
+  );
+
+  return rows.map((row) => row.stamp);
+}
+
+/**
  * Seed one scenario, run one raise statement over it verbatim, and
  * read back what it did.
  *
@@ -718,18 +1059,16 @@ async function countRows(
  * disagree is a shape neither reading alone would report.
  *
  * @param client - The open transaction to drive through.
- * @param fixture - The raiser to drive.
- * @param statement - Its node's SQL, as the artifact carries it.
- * @param scenario - The row to drive it over.
+ * @param workflows - Every built workflow, to read the statement out of.
+ * @param drive - The raiser, hand-over and row to drive.
  * @returns Everything the cases below read for this drive.
  */
 async function driveRaise(
   client: PoolClient,
-  fixture: RaiseFixture,
-  statement: string,
-  scenario: WindowScenario,
+  workflows: readonly BuiltWorkflow[],
+  drive: Drive,
 ): Promise<RaiseReading> {
-  const planted = await plantSubject(client, fixture.artifact, scenario);
+  const planted = await plantSubject(client, drive);
   const closedRowsForTheSubject = await countRows(
     client,
     `
@@ -751,22 +1090,33 @@ async function driveRaise(
     poolRowsFor,
     [planted.subjectFindingId],
   );
-  const label = driveLabel(fixture.artifact, scenario.id);
+  const label = labelOf(drive);
+  const runHandedOver = drive.handover.namesARun
+    ? planted.runId
+    : null;
   const raise = await client.query<Record<string, unknown>>(
-    statement,
-    [...fixture.parameters(planted)],
+    raiseStatement(workflows, drive.fixture),
+    [...drive.fixture.parameters(planted, runHandedOver)],
   );
   const raised = intentionIdsOf(firstRow(raise.rows, label), label);
+  const poolRowsAfter = await countRows(
+    client,
+    poolRowsFor,
+    [planted.subjectFindingId],
+  );
 
   return {
     closedRowsForTheSubject,
     intentionIdsReturned: raised.length,
-    poolRowsAfter: await countRows(
-      client,
-      poolRowsFor,
-      [planted.subjectFindingId],
-    ),
+    poolRowsAfter,
     poolRowsBefore,
+    runHandedOver,
+    stampsOnTheRowsRaised: await stampsFor(
+      client,
+      planted.subjectFindingId,
+    ),
+    theRunIsApartFromEveryOtherIdSeeded:
+      !planted.otherIds.includes(planted.runId),
   };
 }
 
@@ -791,6 +1141,66 @@ function raiseOutcome(reading: RaiseReading): string {
 
   return `returned ${String(reading.intentionIdsReturned)} and stored ` +
     `${String(reading.poolRowsAfter)}`;
+}
+
+/**
+ * What one drive stamped on what it raised, as one word.
+ *
+ * Total the way {@link raiseOutcome} is, and for the same reason: a
+ * stamp that is neither the run handed over nor nothing at all is a
+ * third thing, and reading it as one of the two would report a
+ * statement binding the wrong parameter as one obeying the rule.
+ *
+ * A drive that raised nothing has no stamp to read and says so. That
+ * is not a weaker reading of the same claim — the three refusals in
+ * the table are the window's cases and the outcome above is what
+ * judges them.
+ *
+ * @param reading - What the drive read.
+ * @returns What it stamped.
+ */
+function stampOutcome(reading: RaiseReading): string {
+  const [stamp, ...rest] = reading.stampsOnTheRowsRaised;
+
+  if (stamp === undefined) {
+    return NOTHING_RAISED;
+  }
+
+  if (rest.length > 0) {
+    return `stamped ${String(reading.stampsOnTheRowsRaised.length)} rows`;
+  }
+
+  if (stamp === null) {
+    return STAMPED_NOTHING;
+  }
+
+  return stamp === reading.runHandedOver
+    ? STAMPED_THE_RUN
+    : `stamped ${stamp} where its caller named ` +
+      `${reading.runHandedOver ?? 'nothing'}`;
+}
+
+/**
+ * What one drive had to stamp, read off the drive rather than off
+ * what it did.
+ *
+ * The window decides whether there is a row at all and the hand-over
+ * decides what is on it, which is the whole of why the two axes are
+ * crossed: neither table alone would say that a raiser refusing a
+ * subject also stamps nothing, or that one raising it stamps whatever
+ * its caller named whichever window row it was raised under.
+ *
+ * @param drive - One member of {@link EVERY_DRIVE}.
+ * @returns The word {@link stampOutcome} has to answer for it.
+ */
+function stampExpected(drive: Drive): string {
+  if (drive.scenario.outcome !== RAISED) {
+    return NOTHING_RAISED;
+  }
+
+  return drive.handover.namesARun
+    ? STAMPED_THE_RUN
+    : STAMPED_NOTHING;
 }
 
 /** What `beforeAll` drove, and every case below reads. */
@@ -909,13 +1319,8 @@ async function driveRaises(
   try {
     await client.query('BEGIN');
 
-    for (const fixture of RAISE_FIXTURES) {
-      const statement = raiseStatement(workflows, fixture);
-
-      for (const scenario of WINDOW_SCENARIOS) {
-        readings[driveLabel(fixture.artifact, scenario.id)] =
-          await driveRaise(client, fixture, statement, scenario);
-      }
+    for (const drive of EVERY_DRIVE) {
+      readings[labelOf(drive)] = await driveRaise(client, workflows, drive);
     }
   } finally {
     // Swallowed for the reason the sibling live files swallow theirs:
@@ -934,21 +1339,36 @@ async function driveRaises(
  * raised.
  */
 const EVERY_GUARD_HAD_A_SUBJECT: Readonly<Record<string, unknown>> =
-  Object.fromEntries(RAISE_FIXTURES.flatMap(
-    (fixture) => WINDOW_SCENARIOS.map((scenario): [string, unknown] => [
-      driveLabel(fixture.artifact, scenario.id),
-      { closedRowsForTheSubject: 1, poolRowsBefore: 0 },
-    ]),
-  ));
+  Object.fromEntries(EVERY_DRIVE.map((drive): [string, unknown] => [
+    labelOf(drive),
+    { closedRowsForTheSubject: 1, poolRowsBefore: 0 },
+  ]));
 
 /** What every drive is expected to have done, by the table above. */
 const EVERY_OUTCOME: Readonly<Record<string, string>> = Object.fromEntries(
-  RAISE_FIXTURES.flatMap(
-    (fixture) => WINDOW_SCENARIOS.map((scenario): [string, string] => [
-      driveLabel(fixture.artifact, scenario.id),
-      scenario.outcome,
-    ]),
-  ),
+  EVERY_DRIVE.map((drive): [string, string] => [
+    labelOf(drive),
+    drive.scenario.outcome,
+  ]),
+);
+
+/**
+ * What every drive is expected to have stamped, and the reading that
+ * has to hold for the first half to mean anything.
+ *
+ * The two travel in one record rather than in two tables, so a stamp
+ * that is right for the wrong reason cannot be read as a stamp that
+ * is right. A seed whose run is not apart from its other ids fails on
+ * the second member whatever the first one says.
+ */
+const EVERY_STAMP: Readonly<Record<string, unknown>> = Object.fromEntries(
+  EVERY_DRIVE.map((drive): [string, unknown] => [
+    labelOf(drive),
+    {
+      stamp: stampExpected(drive),
+      theRunIsApartFromEveryOtherIdSeeded: true,
+    },
+  ]),
 );
 
 let live: IntervalDrive | null = null;
@@ -1073,23 +1493,26 @@ describeLivePg('per-entity research interval (live Postgres)', () => {
     )).toEqual(EVERY_GUARD_HAD_A_SUBJECT);
   });
 
-  // The claim. Both shipped statements, run verbatim over three seeds
-  // that differ from one another in one member each.
+  // The first claim. Both shipped statements, run verbatim over nine
+  // seeds — three window rows per raiser under each hand-over it
+  // declares — each differing from the refusal it was spread from in
+  // one member.
   //
   // Compared as one whole record rather than a case per row, so the
-  // refusal and the two controls fail in one diff and a reader sees
-  // which of the three moved. A drive that produced no reading at all
+  // refusals and their controls fail in one diff and a reader sees
+  // which of the nine moved. A drive that produced no reading at all
   // fails on its label rather than going unread.
   //
-  // What a red here means depends on which labels moved. The two
-  // raising rows going red with the refusing row green is a statement
-  // that raises nothing, which is the shape a refusal case cannot
-  // report by itself. The refusing row alone going red is the guard
-  // gone or comparing the wrong way round. One artifact's three
-  // labels moving together is a rule that landed in one raiser and not
-  // the other, which is exactly what putting both in this table is
-  // for: the property is written into both statements so that a later
-  // change to attribution cannot reopen it in one of them.
+  // What a red here means depends on which labels moved. The raising
+  // rows going red with the refusing rows green is a statement that
+  // raises nothing, which is the shape a refusal case cannot report by
+  // itself. The refusing rows alone going red is the guard gone or
+  // comparing the wrong way round. One artifact's labels moving
+  // together — three for `ar-ingest` and six for `ar-score`, which is
+  // driven under two hand-overs — is a rule that landed in one raiser
+  // and not the other, which is exactly what putting both in this
+  // table is for: the property is written into both statements so that
+  // a later change to attribution cannot reopen it in one of them.
   it('refuses a subject researched inside its window and raises it outside', () => {
     const drive = fixture();
 
@@ -1098,5 +1521,58 @@ describeLivePg('per-entity research interval (live Postgres)', () => {
         ([label, reading]) => [label, raiseOutcome(reading)],
       ),
     )).toEqual(EVERY_OUTCOME);
+  });
+
+  // The second claim, and the axis the window grid above holds still.
+  // Every drive that raised a row is asked what it stamped on it, and
+  // the answer is read off the stored row rather than off what the
+  // statement said it did.
+  //
+  // Two directions of one rule. A caller naming the run its pass
+  // belongs to gets that run on every row raised, which is the whole
+  // of what makes the attribution join answerable — this column, to
+  // `runs.id`, to `llm_calls.run_id`, for what one scheduled run
+  // ultimately spent. A caller naming none gets NULL, and that NULL is
+  // the column's own reading of itself: no originating run was
+  // recorded, rather than one that went missing.
+  //
+  // Only one raiser reaches the second direction and that is a fact
+  // about the two canvases rather than about this table. `ar-ingest`
+  // resolves its own dispatcher's run and binds it bare, so the NULL
+  // is unreachable from there and driving it would be driving a value
+  // the expression cannot produce. `ar-score` is invoked, reads the
+  // run off the item its caller handed over, and a capture-initiated
+  // pass hands none — `ar-capture` opening its `runs` row in the node
+  // that closes the pass, so at the moment it invokes the scorer there
+  // is no id in existence to hand on.
+  //
+  // The apartness member is not decoration and it is what a stamp
+  // reading is worth. Every id a seed writes is a bigint, so a
+  // statement binding the domain where it should bind the run writes a
+  // number of exactly the right shape, and on a seed whose sequences
+  // all sat at one it writes the right number as well. Two filler runs
+  // per seed put the run past every id beside it; this reading is what
+  // says they did.
+  //
+  // Compared as one record for the reason the outcome above is. A
+  // raiser whose stamp went missing moves the two labels that raised
+  // under a caller naming a run, and leaves the other raiser's pair
+  // alone: measured, dropping the column from both statements moves
+  // all four and the two per-raiser legs partition them. That is the
+  // shape that says the property landed in one canvas and not the
+  // other, which is what both raisers are in this table for.
+  it('stamps the run its caller named, and nothing where none was', () => {
+    const drive = fixture();
+
+    expect(Object.fromEntries(
+      Object.entries(drive.readings).map(([label, reading]) => [
+        label,
+        {
+          stamp: stampOutcome(reading),
+          theRunIsApartFromEveryOtherIdSeeded:
+            reading.theRunIsApartFromEveryOtherIdSeeded,
+        },
+      ]),
+    )).toEqual(EVERY_STAMP);
   });
 });
