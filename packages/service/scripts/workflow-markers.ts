@@ -336,6 +336,43 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * yet is inert rather than a build waiting to go off.
    */
   AR_RESEARCH_WORKFLOW_ID: 'ar-research',
+
+  /**
+   * The shortest gap between two research passes over one entity,
+   * in seconds, for a domain that has not said what its own floor
+   * is: the fleet fallback behind `minResearchIntervalSeconds` in
+   * `DomainSettings` in `src/db/schema/domains.ts`.
+   *
+   * A fallback and not a bound, which is the whole of what this
+   * entry does and does not decide. A domain carrying its own
+   * `minResearchIntervalSeconds` overrides this outright and in
+   * either direction — a domain asking for a day gets a day, one
+   * asking for a month gets a month, and one setting zero gets no
+   * refusal at all. Nothing here clamps what a domain may choose,
+   * so this value can neither hold a domain to a floor it did not
+   * ask for nor stop one from disabling the refusal.
+   *
+   * Seven days because a fleet default is what a domain gets
+   * before anyone has thought about the question, which is a
+   * different job from the number a domain picks once someone has.
+   * Erring long is the cheaper way to be wrong: too long delays a
+   * subject, and an operator who notices shortens it on the domain
+   * that showed them; too short spends a model call per pass on
+   * subjects nothing has changed about, which nobody sees until
+   * the bill. The value is a starting point to be moved off, and
+   * a domain that has moved off it never reads this again.
+   *
+   * `604800` is `7 * 24 * 60 * 60`, multiplied out rather than
+   * written as the product: a marker resolves to TEXT wherever it
+   * sits, on the terms this table's header states, so an
+   * expression would arrive at a raise statement as an expression
+   * and the far side parses seconds.
+   *
+   * An entry no source has named yet is inert rather than a build
+   * waiting to go off, on the terms `AR_RESEARCH_WORKFLOW_ID`
+   * above states.
+   */
+  AR_RESEARCH_MIN_INTERVAL_SECONDS: '604800',
 };
 
 /**
