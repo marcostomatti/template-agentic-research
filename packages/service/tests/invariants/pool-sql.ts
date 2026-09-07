@@ -21,14 +21,13 @@
  * properties of this kind wants: the workflow named alongside the
  * node rather than a roster of its own, the coverage guard that
  * gives an enumerable roster its worth being over the roster
- * whole. This is that case. Twenty seven entries over six
- * statements in three workflows, and the three are not
- * interchangeable — the pool is filled by two raisers, emptied by
- * one drain, and accounted for by the row each of those passes
- * closes. A property of the queue is a property of that set rather
- * than of any one artifact in it, and splitting it three ways
- * would leave three rosters none of which could be held against
- * the whole.
+ * whole. This is that case. Thirty entries over six statements in
+ * three workflows, and the three are not interchangeable — the
+ * pool is filled by two raisers, emptied by one drain, and
+ * accounted for by the row each of those passes closes. A property
+ * of the queue is a property of that set rather than of any one
+ * artifact in it, and splitting it three ways would leave three
+ * rosters none of which could be held against the whole.
  *
  * These are MUST-FIND checks, the same inversion that file
  * records. An absence sweep goes vacuous when its matcher would
@@ -56,11 +55,11 @@
  * 90 per cent of the characters of these six statements, this port
  * arguing its decisions inside the SQL that carries them, and the
  * prose most likely to spell a phrase an entry requires is the
- * prose explaining why the statement carries it. Of the thirty
- * eight fragments the roster holds, three are also carried by the
+ * prose explaining why the statement carries it. Of the forty four
+ * fragments the roster holds, three are also carried by the
  * comments of their own node, so three entries are partly
- * satisfied by prose once the strip is gone and none of the twenty
- * seven is wholly. Measured over the built tree, entry by entry.
+ * satisfied by prose once the strip is gone and none of the thirty
+ * is wholly. Measured over the built tree, entry by entry.
  *
  * What {@link sqlWords} leaves is words, so an entry can require a
  * phrase and never a SHAPE, and three limits follow that are worth
@@ -136,10 +135,10 @@ export interface PoolSqlRule {
    * entry nothing reached has no matched text to be named by. It
    * leads every label {@link unsatisfiedPoolRequirements} hands
    * back for a second reason that bites harder here than next
-   * door: four of the six nodes carry four entries apiece and the
-   * two raisers carry five and six, so a failure naming only the
-   * node says which statement to open and not which property went
-   * missing.
+   * door: three of the six nodes carry four entries apiece, the
+   * two raisers carry five and six, and the row the research pass
+   * closes carries seven, so a failure naming only the node says
+   * which statement to open and not which property went missing.
    *
    * Prefixed `pool-` across the roster, which is convention rather
    * than anything enforced: these ids travel into a failure message
@@ -257,15 +256,15 @@ export interface PoolSqlRule {
  * reached fails a case of its own rather than riding along behind
  * the entries that were.
  *
- * Twenty seven entries and thirty eight fragments, every one of
- * them carried by the statement its entry names, measured over the
- * tree this package builds. None of the five members of any entry
- * is a hit for a needle in `naming-patterns.ts`, checked the way
+ * Thirty entries and forty four fragments, every one of them
+ * carried by the statement its entry names, measured over the tree
+ * this package builds. None of the five members of any entry is a
+ * hit for a needle in `naming-patterns.ts`, checked the way
  * `SEND_NODE_TYPES` records checking its own, with the matcher
  * first proven live against its own needles. Nothing re-runs that
  * pass — `tests/` sits outside that file's scan roots — so this
  * sentence is the whole of what records it, and it covers the
- * twenty seven that landed and nothing past them.
+ * thirty that landed and nothing past them.
  */
 export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
   // The first raiser, and five properties of one statement held to
@@ -548,14 +547,17 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
   // what it raised, the subjects it found searchable, and the
   // refusals each of the two guards made, which those statements
   // argue as a partition — the three add to the fourth. The
-  // drain's row carries two, what it took and what it recorded,
-  // and nothing about what its own predicate passed over: a
-  // pending intention is a queue waiting on a person rather than a
-  // refusal to report. The one asymmetry between the two raising
-  // rows is what a count MEANS rather than which keys are on it —
-  // `ar-ingest`'s window guard has no live subject on that canvas,
-  // so its interval count is nought every pass, and the entry over
-  // it stands for the key being written all the same.
+  // drain's row carries two here, what it took and what it
+  // recorded, and nothing about what its own predicate passed
+  // over: a pending intention is a queue waiting on a person
+  // rather than a refusal to report. A third count on that row is
+  // below with the reschedule entries, what it counts being this
+  // pass's own proposal rather than a candidate it drained. The
+  // one asymmetry between the two raising rows is what a count
+  // MEANS rather than which keys are on it — `ar-ingest`'s window
+  // guard has no live subject on that canvas, so its interval
+  // count is nought every pass, and the entry over it stands for
+  // the key being written all the same.
   {
     id: 'pool-ingest-close-counts-intentions',
     property:
@@ -671,7 +673,7 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
     nodeName: 'Close Research Run',
     requires: ['\'research_recorded\', t.research_recorded'],
   },
-  // The reschedule the same statement folds in, and the two
+  // The reschedule the same statement folds in, and the five
   // entries over it are the pool roster's one reach into
   // scheduling. They are here rather than in `dispatch-sql.ts`
   // because the pass that moves this due time is the pass that
@@ -687,6 +689,30 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
   // it. `tests/live/schedule-ratchet.live.test.ts` is where that
   // is answered.
   //
+  // The counter entry is over that same write rather than beside
+  // it, which is the property it stands for: Postgres applies only
+  // one of two data-modifying CTEs that touch one row and says
+  // nothing about which, so a streak incremented in a CTE of its
+  // own is a count that sometimes moves under a due time that
+  // always does. Its three fragments are the column as a target of
+  // that write and the two arms carrying the rule — the one
+  // counting a proposal written, and the one ending the walk where
+  // a pass proposed none. The third arm leaves the column alone
+  // and a statement dropping the column drops that arm with it.
+  // What none of the three reaches is the fold itself, a statement
+  // re-expressed as two writes carrying all three, and the live
+  // seam is where the count is read back off the row.
+  //
+  // The ceiling entry takes the shape the window entries above it
+  // take, and for the reason they take it: a bound read out of a
+  // domain's settings is a jsonb member able to hold anything, so
+  // what the entry names is the type guard, and a ceiling somebody
+  // wrote as prose resolves to the fleet default rather than
+  // raising in the pass that would have closed the run. Its second
+  // fragment is the comparison the write's arms turn on, which is
+  // what makes this the entry for a ceiling APPLIED rather than a
+  // second entry for a value read.
+  //
   // The attribution entry requires the column list the row is
   // opened with and the literal a rescheduling pass writes into
   // it. Neither says the literal reached that column — a word
@@ -694,13 +720,20 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
   // dropping the column carries the first fragment no longer, and
   // one keeping the column while ceasing to distinguish an
   // agent-set cadence carries the second no longer. The literal
-  // fragment here and the column fragment of the entry above are
+  // fragment here and the update entry's own column fragment are
   // both carried by this node's prose as well, which argues the
   // schedule modes where the statement applies them; the update
   // target and the insert's own column list are what neither the
   // prose nor a rename would leave standing. Measured, and the
-  // reason each of the two entries pairs a prose-carried fragment
+  // reason those two entries each pair a prose-carried fragment
   // with one that is not.
+  //
+  // The suppressed count is required as the pair the counts object
+  // is built out of, on the reading the block above gives, and it
+  // is written last because it is not one of that block's: what it
+  // counts is this pass's own proposal where the ceiling refused
+  // to write it, nought or one and never more, a pass proposing
+  // one gap at most.
   {
     id: 'pool-research-close-moves-the-topic',
     property:
@@ -712,6 +745,36 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
     requires: ['UPDATE topics', 'next_run_at'],
   },
   {
+    id: 'pool-research-close-counts-the-streak',
+    property:
+      'Moves the streak the ceiling is read against on the ' +
+      'same write that moves the due time, so a counter that ' +
+      'never moved and a cadence that always did cannot come ' +
+      'apart.',
+    workflowId: 'ar-research',
+    nodeName: 'Close Research Run',
+    requires: [
+      'agent_reschedules = CASE',
+      'THEN t.agent_reschedules + 1',
+      'WHEN w.gap_seconds IS NULL THEN 0',
+    ],
+  },
+  {
+    id: 'pool-research-close-caps-the-streak',
+    property:
+      'Holds that streak against the domain\'s own ceiling ' +
+      'before writing a gap, so a walk of agent-set cadences ' +
+      'ends rather than running for as long as a model keeps ' +
+      'proposing one.',
+    workflowId: 'ar-research',
+    nodeName: 'Close Research Run',
+    requires: [
+      'jsonb_typeof(d.settings -> \'maxAgentReschedules\') ' +
+      '= \'number\'',
+      't.agent_reschedules < w.cap',
+    ],
+  },
+  {
     id: 'pool-research-close-attributes-the-agent',
     property:
       'Names the schedule that opened the row it writes, so a ' +
@@ -720,6 +783,20 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
     workflowId: 'ar-research',
     nodeName: 'Close Research Run',
     requires: ['INSERT INTO runs (domain_id, scheduled_by', 'agent'],
+  },
+  {
+    id: 'pool-research-close-counts-suppressed-proposals',
+    property:
+      'Writes how many of its own proposals the ceiling ' +
+      'refused into the row it closes, so a domain whose ' +
+      'research cadence is being held down is a number in the ' +
+      'ledger rather than a query against the topic.',
+    workflowId: 'ar-research',
+    nodeName: 'Close Research Run',
+    requires: [
+      '\'schedule_proposals_suppressed\', ' +
+      't.schedule_proposals_suppressed',
+    ],
   },
 ];
 
