@@ -38,12 +38,18 @@ sentinel tests in both directions over a value the surface stores. The
 MCP exposure row came next, drawn from the constraints in
 `.specs/q13-api-wave-3-mcp.md`, which asks for a test that would fail if
 a tool were registered over a banned surface, an omission nothing
-asserts being one the next contributor undoes. The last two are the
+asserts being one the next contributor undoes. After it came the
 OpenAPI pair, drawn from the deliverables in
 `.specs/q14-openapi-docs-v2.md`: the coverage row from the guard that
 spec asks for over the generated document, and the response-schema row
 from the deferral it asks to have written down rather than left absent,
-which is why that one names no artifact at all.
+which is why that one names no artifact at all. The acyclicity row is
+the newest, drawn from `.specs/q18-runaway-control.md`, which measured
+the derivation graph before building anything to bound it and found it
+already acyclic: what that spec asks for is not the generation counter
+its source review called for but the invariant that makes the counter's
+absence safe, so the row is the depth bound itself rather than a note
+standing beside one.
 
 ## The register
 
@@ -73,6 +79,7 @@ which is why that one names no artifact at all.
 | No MCP tool names a banned surface, and every route the routers declare is exposed by a tool, banned, or written out as a deliberate absence carrying its reason | `tests/invariants/mcp-exposure.test.ts`, holding `MCP_TOOLS` against the labels the sixteen research routers and the framework control plane declare — the banned classifier driven over a plant of each of its two families with a fabricated near miss beside it, the three rosters held pairwise disjoint so the covering cannot be satisfied by a label sitting in two of them, and every exposed route paired with an `inputSchema` held `Object.is`-identical to the binding its own route module exports | q13 | Implemented |
 | Every route the routers declare is an operation in the generated OpenAPI document, and every operation in the document is a route some router declares | `tests/invariants/openapi-coverage.test.ts`, holding the two label sets `tests/invariants/openapi-coverage.ts` derives — the document's operations, walked out of each path item's verb keys and rewritten into the routers' `:param` spelling, against the labels the sixteen research routers and the auth entry declare, taken as a set because a route carrying middleware of its own answers one label per handler rather than one per route — with the rewrite happening on one side only, so a conversion both sides shared cannot pass unreported; both sides asserted non-empty in the case above the equality, two empty sets being set-equal; the gap reported as named labels in both directions, undocumented first, because a table key renamed leaves both counts equal; and each direction planted at the artifact its own side is derived from, a router declaring a route no binding table names and a table entry naming a route no router declares | q14 | Implemented |
 | A documented response body describes the record it carries, and not only the envelope around it | Nothing, and deliberately: every record on this wire is a TypeScript interface with no schema behind it — `DomainRecord` and 24 siblings — so a schema per record would be 25 more second declarations with nothing comparing them to the interfaces they restate, which is the duplication the binding tables exist to avoid. What the document carries instead is the envelope: `successEnvelopeSchema`, `paginatedEnvelopeSchema` and `errorEnvelopeSchema` in `src/http/envelope.ts`, each held by `src/http/envelope.test.ts` to the body its own builder writes, with `data` left open, so a route is documented as answering a success envelope and never as answering a domain. `src/http/envelope.ts` and `src/openapi.ts` argue it at length; this row is where the deferral is registered, so it is legible to a reader who opens neither | q14 | Not enforced |
+| No statement writes `documents`, `findings` or `research_pool` out of a read of `entity_research`, so a research answer cannot become its own input | `tests/invariants/research-acyclicity.test.ts`, holding the roster, the two detectors and the anti-join classifier in `tests/invariants/research-acyclicity.ts` against both statement surfaces in one run — the workflows this package builds and the SQL text under `src/` — because neither surface carries both halves of the rule: the six upstream INSERT sites are all workflow nodes, pinned there by name, and every read of the research table is a module, so a run over either alone would be a rule with a detector that matched nothing. The verdict is a zero and is surrounded rather than asserted — each surface refused when it reads empty, both halves shown finding a real occurrence before the verdict, and both sides of the anti-join allowance driven on plants in the same call, no read of that table sitting inside a `NOT EXISTS` anywhere in either surface. What the zero buys is the absence of `max_generation`, `max_children_per_artifact` and `max_items_per_root`: while the graph cannot recurse there is no ancestry for a counter to walk, and the day this row goes red is the event that gives all three a subject to be sized against | q18 | Implemented |
 
 ## Reading the register
 
