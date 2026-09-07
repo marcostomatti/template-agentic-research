@@ -388,11 +388,11 @@ children of the row being written, which no table definition states.
 
 Ownership says nothing about the reading. `readMigrationSql()` in
 `tests/invariants/schema-sql.ts` concatenates every `.sql` under
-`drizzle/` and its assertions run over the whole text, so fifteen of
-them land in the generated migrations and two in the hand-written one
-with nothing in the roster recording which. What does follow from the
-split is what a match there is worth. A generated statement is one of
-two tracked copies of one rule, and the module it came from is the
+`drizzle/` and its assertions run over the whole text, so twenty-four
+of them land in the generated migrations and two in the hand-written
+one with nothing in the roster recording which. What does follow from
+the split is what a match there is worth. A generated statement is one
+of two tracked copies of one rule, and the module it came from is the
 other; the trigger is written down once, so that file is the only
 tracked record of it, and the live suite is the only thing anywhere
 that watches a database refuse the write.

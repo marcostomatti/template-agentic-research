@@ -265,8 +265,10 @@ export interface SchemaSqlAssertion {
  * `source_config_proposals.status`, the five holding the two auth
  * tables together — three unique keys, the session-to-user foreign key,
  * and the NOT NULL that bounds a session — the CHECK that makes
- * `operator_settings` a singleton, and the six read indexes the
- * wave-3 API pages are served from.
+ * `operator_settings` a singleton, the six read indexes the wave-3
+ * API pages are served from, and the three statements behind
+ * `research_pool.root_event_id`: the nullable column, its reference
+ * to `runs`, and the index the two readers of it go through.
  *
  * A chosen sample and not the whole schema, which is the whole reason
  * {@link EmptyMigrationFileError} exists: a migration truncated to
@@ -555,7 +557,7 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
   //
   // Measured rather than argued. Each of the six statements deleted
   // from the generated migration in turn reddens exactly one case,
-  // the one named for the index that went, at 1 failed and 33 passed
+  // the one named for the index that went, at 1 failed and 36 passed
   // every time. Deletion is the weaker half though: a name-only
   // pattern would report it identically. The three legs that reach
   // what these patterns actually pin are dropping the `NULLS LAST`
@@ -630,6 +632,72 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
       'status would serve these two readers and leave every other ' +
       'status read on a sequential scan.',
     pattern: /^[ \t]*CREATE INDEX "source_config_proposals_source_id_status_idx" ON "source_config_proposals" USING btree \("source_id","status"\);/m,
+  },
+  // The three statements behind `research_pool.root_event_id`: one
+  // column arriving in three pieces, because drizzle writes the column,
+  // its reference and its index as separate statements. Kept apart for
+  // the reason the depth guard is, each of them leaving a different
+  // database behind.
+  //
+  // Without the column there is no stamp and the attribution join has
+  // nothing to read. Without the reference the column holds whatever a
+  // writer put in it, and a stamp naming no run at all reads the same
+  // as one naming a run still on file. Without the index the two
+  // readers of the column both fall back to a scan of the whole gate:
+  // the join itself, and the check the reference performs before any
+  // run may be deleted.
+  //
+  // Nullability is pinned rather than inherited from the column
+  // declaration, on the reading that declaration states at length. NULL
+  // there means no originating run was recorded, and ar-capture opens
+  // its `runs` row when the pass closes, so a score pass it initiated
+  // has none to hand on: a NOT NULL added here refuses every one of
+  // them.
+  //
+  // Measured rather than argued. Each of the three statements deleted
+  // from the migration in turn reddens exactly one case, the one named
+  // for the piece that went, at 1 failed and 36 passed. Deletion is the
+  // weaker half, though: a name-only pattern would report it
+  // identically. The three legs that reach what these patterns pin
+  // beyond the name are a NOT NULL added to the column, a cascade
+  // written onto the reference, and a WHERE qualifying the index, and
+  // each of those reddens that one entry and nothing else.
+  {
+    id: 'research-pool-root-event-id-column',
+    description:
+      'The originating-run stamp on research_pool, nullable and wide ' +
+      'enough for the id it names. Both halves are pinned by running ' +
+      'to the terminator: a NOT NULL added here refuses every ' +
+      'intention raised with no run to name, which is the ordinary ' +
+      'case for a score pass ar-capture initiated, and a narrower ' +
+      'integer type cannot hold the bigserial runs.id it references.',
+    pattern: /^[ \t]*ALTER TABLE "research_pool" ADD COLUMN "root_event_id" bigint;/m,
+  },
+  {
+    id: 'research-pool-root-event-fk',
+    description:
+      'Foreign key from research_pool.root_event_id to runs.id, ON ' +
+      'DELETE no action, which is what makes the stamp name a run ' +
+      'that is still on file. Pins the referenced table and column ' +
+      'beside the referencing one, and pins the no action: a cascade ' +
+      'would take the intentions away with the run, and a SET NULL ' +
+      'would rewrite them into the shape that already means no run ' +
+      'was ever recorded.',
+    pattern: /^[ \t]*ALTER TABLE "research_pool" ADD CONSTRAINT "research_pool_root_event_id_runs_id_fk" FOREIGN KEY \("root_event_id"\) REFERENCES "public"\."runs"\("id"\) ON DELETE no action/m,
+  },
+  {
+    id: 'research-pool-root-event-id-index',
+    description:
+      'Index over research_pool.root_event_id, which both readers of ' +
+      'that column go through: the attribution join from a run to ' +
+      'what the research it originated spent, and the check the ' +
+      'foreign key performs before a run may be deleted. Postgres ' +
+      'builds no index for the referencing side of a reference, so ' +
+      'this one exists because it is declared. One column, no ' +
+      'direction because neither reader orders on it, and the ' +
+      'terminator pinned behind it so a WHERE qualifying this index ' +
+      'is a miss.',
+    pattern: /^[ \t]*CREATE INDEX "research_pool_root_event_id_idx" ON "research_pool" USING btree \("root_event_id"\);/m,
   },
 ];
 
