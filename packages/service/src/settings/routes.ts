@@ -103,6 +103,7 @@
  * like any other bad shape.
  */
 import type { SettingsServiceStore } from './service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -110,6 +111,7 @@ import { z } from 'zod';
 
 import { ok } from '../http/envelope.js';
 
+import { operatorSettingsSchema } from './payload.js';
 import { getSettings, putSettings } from './service.js';
 
 /**
@@ -130,6 +132,54 @@ import { getSettings, putSettings } from './service.js';
  * agreeing with the router by hand.
  */
 export const settingsReadToolInputSchema = z.object({}).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label.
+ *
+ * NO MEMBER OF THIS TABLE IS A `params`, which is the module
+ * header's one-path-and-no-address point read straight off the
+ * table. Every sibling table binds an address on the routes that
+ * address one row, and several of their routes bind none; this
+ * group has no segment for a request to get wrong ANYWHERE, so
+ * neither route below binds one and neither can answer a 422
+ * about a path.
+ *
+ * `GET /settings` BINDS NOTHING AND IS STILL HERE. `{}` is a claim
+ * about the route rather than a row waiting to be filled: the
+ * handler takes `_req` and parses no address, no window and no
+ * body. It is written out because a route missing from a table is
+ * the one thing the coverage guard exists to find, so absence
+ * cannot be the spelling for this — `src/http/openapi-bindings.ts`
+ * names this route as the reason its members are all optional.
+ *
+ * THE BODY IS THE PAYLOAD MODULE'S AND NOT THE SERVICE'S, which is
+ * where this table departs from every sibling. `operatorSettingsSchema`
+ * is declared in `./payload.ts` beside the type it narrows to, and
+ * {@link putSettings} imports it from there — so binding what the
+ * service exports would name no schema at all here.
+ *
+ * A BINDING CARRIES A SCHEMA AND NOT THE PARSE OPTIONS BESIDE IT.
+ * {@link putSettings} parses that body with an `openPaths` prefix,
+ * which is what reports an operator-chosen key inside
+ * `notificationChannels` as `notificationChannels.*` rather than by
+ * name. That governs the SPELLING of a refusal detail and not what
+ * is accepted, so nothing a document reads off this table is wrong
+ * without it — but a reader comparing a 422 against the generated
+ * schema should know the field path was shortened on the way out.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const settingsRouteSchemas = {
+  'GET /settings': {},
+  'PUT /settings': { body: operatorSettingsSchema },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildSettingsRouter} needs. */
 export interface SettingsRouterOptions {

@@ -137,6 +137,7 @@
  * a stored `parser_config` a caller did not ask for.
  */
 import type { SourceProposalsServiceStore } from './proposals-service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -212,9 +213,12 @@ const sourceAddressSchema = z
  * arguments and a shared object would let a queue read carry a
  * `proposalId` that means nothing to it.
  *
- * The address const above stays private. Nothing here exports one,
- * so the three routers under this prefix claim that they agree by
- * intent rather than by derivation is untouched by this schema.
+ * The address const above stays private, and the binding table
+ * below does not change that: a table exports the schema OBJECTS a
+ * route parses with rather than the NAMES they are declared under,
+ * so the three routers under this prefix still have nothing here to
+ * import and their claim that they agree by intent rather than by
+ * derivation is untouched by either export.
  */
 export const pendingConfigListToolInputSchema = z.object({
   ...sourceAddressSchema.shape,
@@ -245,6 +249,53 @@ export const sourceApproveConfigToolInputSchema = z.object({
   ...sourceAddressSchema.shape,
   ...approveConfigSchema.shape,
 }).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. The body is
+ * {@link approveSourceConfig}'s, imported rather than declared,
+ * because no handler below parses one — the module header's rule,
+ * read straight off the table.
+ *
+ * ONE ADDRESS SCHEMA ACROSS BOTH ENTRIES, which is
+ * {@link sourceAddressSchema}'s own claim read from the other side:
+ * the read and the write differ in what they do with the feed and
+ * not in how they name it, so a table with two address members here
+ * would be describing a distinction neither route makes.
+ *
+ * THE TWO IDS IN THE WRITE ARE IN TWO MEMBERS, exactly as the wire
+ * carries them. `params` narrows the feed a ruling is given about
+ * and `body` names the queued proposal whose two documents are
+ * written onto it — the same split
+ * {@link sourceApproveConfigToolInputSchema} has to fold into one
+ * object because a tool is handed one, and the reason that schema
+ * is the wrong binding for a document.
+ *
+ * NEITHER THE CROSS-FEED REFUSAL NOR THE `409` IS DESCRIBED BY
+ * ANYTHING HERE. That a proposal was raised for the addressed feed,
+ * and that it has not been applied already, are facts about a
+ * stored row rather than about the request — so no schema in this
+ * table can carry them and a document assembled from it describes
+ * the request half alone. `./proposals-service.ts` raises both.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const sourceProposalsRouteSchemas = {
+  'GET /sources/:id/pending-configs': {
+    params: sourceAddressSchema,
+    query: paginationQuerySchema,
+  },
+  'POST /sources/:id/approve-config': {
+    params: sourceAddressSchema,
+    body: approveConfigSchema,
+  },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildSourceProposalsRouter} needs. */
 export interface SourceProposalsRouterOptions {

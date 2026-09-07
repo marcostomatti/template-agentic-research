@@ -76,6 +76,7 @@
  * like any other bad shape.
  */
 import type { DomainStore } from './store.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -91,10 +92,12 @@ import { parseBody, parseQuery } from '../http/validation.js';
 
 import {
   createDomain,
+  createDomainSchema,
   deleteDomain,
   getDomain,
   listDomains,
   patchDomain,
+  patchDomainSchema,
 } from './service.js';
 
 /**
@@ -161,9 +164,21 @@ const domainDeleteQuerySchema = z.object({
  * beside it, where a copy that agreed today would be a second
  * authority nothing compares.
  *
- * The address consts above stay private. Nothing here exports one,
- * so the sibling routers' claim that the three agree by intent
- * rather than by derivation is untouched by this pair.
+ * The address consts above stay private, and the binding table
+ * below does not change that: a table exports the schema OBJECTS a
+ * route parses with rather than the NAMES they are declared under,
+ * so a sibling router still has nothing here to import and the
+ * claim that the three agree by intent rather than by derivation is
+ * untouched by either export.
+ *
+ * IDENTITY IS WHAT KEEPS THAT TRUE, rather than the privacy of a
+ * name. A table binding a COPY of the address would be a second
+ * declaration of it — free to drift, free to describe a request no
+ * handler parses that way, and a thing a sibling could reasonably
+ * derive from. Bound by identity there is nothing there to disagree
+ * with the const: what {@link domainsRouteSchemas} answers under
+ * `params` IS the object {@link readSlug} hands to `parseBody`, so
+ * the table can only ever describe what this router already does.
  */
 export const domainListToolInputSchema = z.object({
   ...paginationQuerySchema.shape,
@@ -179,6 +194,46 @@ export const domainListToolInputSchema = z.object({
 export const domainReadToolInputSchema = z.object({
   ...domainAddressSchema.shape,
 }).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing this table
+ * writes a second time is the label — and a label is exactly what a
+ * coverage guard can hold against the router that declares it.
+ *
+ * THE BODIES ARE THE SERVICE'S, imported rather than declared here,
+ * because the module header's rule is that an operation owns its
+ * own input contract. No handler below parses a body at all, so
+ * `createDomainSchema` and `patchDomainSchema` are what a request
+ * is actually judged by and binding anything else would document a
+ * schema no body ever meets.
+ *
+ * THREE ROUTES BIND NO QUERY, which is a fact about them rather
+ * than a gap in this table. `POST /domains`, `GET /domains/:slug`
+ * and `PATCH /domains/:slug` never read `req.query`, so none of
+ * them refuses an undeclared parameter — where `GET /domains` and
+ * `DELETE /domains/:slug` do, through the two consts above.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const domainsRouteSchemas = {
+  'GET /domains': { query: paginationQuerySchema },
+  'POST /domains': { body: createDomainSchema },
+  'GET /domains/:slug': { params: domainAddressSchema },
+  'PATCH /domains/:slug': {
+    params: domainAddressSchema,
+    body: patchDomainSchema,
+  },
+  'DELETE /domains/:slug': {
+    params: domainAddressSchema,
+    query: domainDeleteQuerySchema,
+  },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildDomainsRouter} needs. */
 export interface DomainsRouterOptions {

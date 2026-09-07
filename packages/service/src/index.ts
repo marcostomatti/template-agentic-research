@@ -44,9 +44,17 @@
  *   `/spend/summary` takes the clock, and it READS the present where
  *   the wave-2 pair write it. See `src/findings/`, `src/documents/`,
  *   `src/entities/`, `src/runs/`, `src/sources/` and the same doc.
+ * - `GET /docs` — Swagger UI over the document `src/openapi.ts`
+ *   assembles from the routers' own binding tables, mounted last and
+ *   the only mount in the guarded block carrying a path of its own, so
+ *   its `ctx.requireAuth` is spelled rather than inherited. See
+ *   `src/openapi.ts` and the same doc.
  */
 import type { AuthDeps } from './auth/index.js';
 import type { ServiceConfig } from '../lib/express/index.js';
+
+import helmet from 'helmet';
+import swaggerUi from 'swagger-ui-express';
 
 import { createService } from '../lib/express/index.js';
 import { createLogger } from '../lib/logger/node.js';
@@ -75,10 +83,10 @@ import {
   registerPushChannel,
   registerWebhookChannel,
 } from './notifications/index.js';
+import { generateOpenApiDocument } from './openapi.js';
 import { createDbPersonaStore } from './personas/db-store.js';
 import { buildPersonasRouter } from './personas/routes.js';
 import { createRedisDependency } from './redis/index.js';
-import { exampleRouter } from './routes/example.js';
 import { createDbRunStore } from './runs/db-store.js';
 import { buildRunsRouter } from './runs/routes.js';
 import { buildSpendRouter } from './runs/spend-routes.js';
@@ -349,7 +357,38 @@ await createService({
   ],
   ...authConfig,
   register(app, ctx) {
-    app.use('/example', exampleRouter);
+    // `GET /example` — the demonstrator route this package inherited from
+    // its template — was mounted HERE, first in `register`. It was
+    // removed in q14 together with `src/routes/example.ts`, which held
+    // nothing else and took the directory with it. Three reasons, none of
+    // them decisive alone:
+    //
+    // - The service now carries a real surface. The seventeen routers
+    //   wired in this block answer fifty-five routes, so a route whose
+    //   whole purpose was to show that a router can be mounted at all
+    //   demonstrates nothing this file does not now say better.
+    // - It was OPEN, on a surface where nothing else is. Every mount
+    //   below carries `ctx.requireAuth`, and the `/docs` decision at the
+    //   foot of this block spends a paragraph on keeping one
+    //   operator-only route explicitly guarded rather than guarded by
+    //   position. An unauthenticated demonstrator on that same surface is
+    //   the posture that argument is against.
+    // - Its response body put the template repository name on the wire,
+    //   to any caller. That is NOT a forbidden-name hit and never was:
+    //   `findForbiddenMatches` over `src/routes/example.ts` answered ZERO
+    //   against all five needles, measured with a derived per-line
+    //   planted control live at 5 of 5 ids and a clean sample at zero.
+    //   The needle set does not carry that name, so what the route leaked
+    //   was template IDENTITY rather than an origin name — which is why
+    //   no gate here ever reported it.
+    //
+    // The removal does not take that name out of this file. The
+    // `serviceId` on the `createService` call above and the logger name
+    // at the top of the file still carry it, and `package.json` names the
+    // template repository in its `repository.url`. Neither of the first
+    // two reaches a caller from here: the only route that reports
+    // `serviceId` is the control plane's status route, and this file
+    // passes no `control` block, so `/_control` is never mounted at all.
 
     // The session routes ride the same toggle as the verifier: with no
     // credential bootstrapped, a login could only ever be refused.
@@ -391,13 +430,13 @@ await createService({
     // at `/` with no path of its own, so its `ctx.requireAuth` runs for
     // every request that REACHES it and not only for the ones its router
     // matches. Measured against a service carrying an auth block: from
-    // here, `/example`, `/auth/*`, `/users` and `/me` answer exactly as
-    // they did, because all four are mounted above; a credentialled
-    // request runs the guard once per mount it falls through, so the
-    // LAST router below runs it once for every router above it too; and
-    // an unmatched path answers `401` rather than `404` to a caller with
-    // no credential, which is the one answer on this service these
-    // mounts change outside their own prefixes.
+    // here, `/auth/*`, `/users` and `/me` answer exactly as they did,
+    // because all three are mounted above; a credentialled request runs
+    // the guard once per mount it falls through, so the LAST router below
+    // runs it once for every router above it too; and an unmatched path
+    // answers `401` rather than `404` to a caller with no credential,
+    // which is the one answer on this service these mounts change outside
+    // their own prefixes.
     app.use(ctx.requireAuth, buildDomainsRouter({ store: researchStore }));
     app.use(ctx.requireAuth, buildCategoriesRouter({ store: researchStore }));
     app.use(ctx.requireAuth, buildTermsRouter({ store: researchStore }));
@@ -456,6 +495,88 @@ await createService({
     app.use(
       ctx.requireAuth,
       buildSourceProposalsRouter({ store: researchStore }),
+    );
+
+    // The generated OpenAPI document, behind the same credential as the
+    // surface it describes.
+    //
+    // THE GUARD ON THIS LINE IS EXPLICIT, NOT INHERITED. Every mount
+    // above is at `/` with no path of its own, so its `ctx.requireAuth`
+    // runs for every request that reaches it, and an anonymous
+    // `GET /docs` is answered `401` by the wave-1 mount long before this
+    // line is read. That refusal is mount ORDER and nothing else: this
+    // mount carries a PATH, so it is not itself part of the
+    // fall-through chain the mounts above form, and reordering the block
+    // would take the order argument away. The `ctx.requireAuth` spelled
+    // here is what survives that, so whether `/docs` is public is
+    // answered by one line rather than by a position.
+    //
+    // The document is built ONCE, at boot: `generateOpenApiDocument`
+    // assembles a fresh registry per call and throws on a binding table
+    // it cannot describe, so a table that has drifted fails the process
+    // here rather than the first request to `/docs`. Nothing it renders
+    // varies per caller either — it reads no request.
+    //
+    // A ROUTE-SCOPED `Content-Security-Policy`, on this mount alone.
+    // The app-wide `helmet()` in `lib/express/middleware.ts` has set
+    // the default header by the time a request reaches here; this
+    // middleware runs later and REPLACES it rather than appending
+    // (measured on the wire: one string value, never an array), so
+    // every other path keeps helmet's defaults untouched. That default
+    // set is pinned name-by-name and value-by-value in
+    // `lib/express/__tests__/middleware.test.ts`, which is where a
+    // drift in it is reported.
+    //
+    // WHICH DIRECTIVES WERE RELAXED: NONE. The override spells the two
+    // a Swagger UI mount is expected to need relaxed, and neither ends
+    // up wider than helmet's own value.
+    //
+    // - `script-src 'self'` is helmet's default, unchanged.
+    //   swagger-ui-express 5.0.1 emits NO inline `<script>`: measured
+    //   over `swaggerUi.generateHTML(...)`, 3106 bytes carrying three
+    //   `src`-referenced same-origin scripts and zero inline handler
+    //   attributes, the third of them (`./swagger-ui-init.js`) served
+    //   by `swaggerUi.serve` below. The bundle's one `new Function` is
+    //   webpack's `globalThis` polyfill, behind a `typeof globalThis`
+    //   check and a `try`/`catch`, so `'unsafe-eval'` is not wanted
+    //   either.
+    // - `style-src 'self' 'unsafe-inline'` is helmet's default MINUS
+    //   its `https:` source. The two inline `<style>` blocks and the
+    //   one `style=` attribute do need `'unsafe-inline'` — which the
+    //   app-wide default already carries, so it is not a relaxation
+    //   this mount introduces. Nothing here loads a style over
+    //   `https:`: the one stylesheet linked is the same-origin
+    //   `./swagger-ui.css`, whose four `url()` values are all `data:`
+    //   and which declares no `@import`, and the bundle creates no
+    //   `<style>` element at runtime.
+    //
+    // So the one difference from the app-wide header is a NARROWING
+    // rather than the relaxation this mount was expected to need — the
+    // premise that helmet's defaults leave Swagger UI blank is false at
+    // this version. The scope is a single guarded operator-only route:
+    // the `ctx.requireAuth` above gates it, and the override reaches
+    // the static assets under `/docs/` because it sits on the mount
+    // rather than on a handler.
+    //
+    // ORDER INSIDE THE MOUNT: the guard is ahead of the policy, so a
+    // refusal never reaches it. Measured over a booted service, an
+    // anonymous `GET /docs/` answers `401` carrying the APP-WIDE
+    // header, and only a request the guard let through carries the
+    // scoped one — which is what a case reading this header off the
+    // wire has to send. The 200s it does reach include the static
+    // assets: `GET /docs/swagger-ui.css` carries the scoped value too.
+    app.use(
+      '/docs',
+      ctx.requireAuth,
+      helmet.contentSecurityPolicy({
+        useDefaults: true,
+        directives: {
+          scriptSrc: ['\'self\''],
+          styleSrc: ['\'self\'', '\'unsafe-inline\''],
+        },
+      }),
+      swaggerUi.serve,
+      swaggerUi.setup(generateOpenApiDocument()),
     );
   },
 });

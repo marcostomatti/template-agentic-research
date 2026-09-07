@@ -18,14 +18,18 @@
  * matter most, a `Date` being something a response BODY carries as
  * a string rather than a value a function returned.
  *
- * TEN CASES IN SEVEN GROUPS. Two guard the fixture and the shapes
- * every answer is compared to, one is the page and the `meta`
- * beside it, one is the narrowing as the wire has it, two are the
- * pass a single get answers and the cut its ledger reports, one is
- * the id no run carries, one is the parameter this surface does not
+ * ELEVEN CASES IN NINE GROUPS. Two guard the fixture and the shapes
+ * every answer is compared to, one is the page and the `meta` beside
+ * it, one is the narrowing as the wire has it, two are the pass a
+ * single get answers and the cut its ledger reports, one is the id
+ * no run carries, one is the parameter this surface does not
  * declare, and TWO are the structure: the verb inventory read off
  * the router's own stack, and the port classified against a write
- * vocabulary.
+ * vocabulary. The eleventh reads no response at all: the binding
+ * table this module exports, held against the routes its factory
+ * registers. The group count is measured off the file rather than
+ * carried: it read SEVEN before this case landed, where the
+ * enumeration above it has always named eight.
  *
  * THE PAGE. One request with no query at all beside two windows of
  * ONE over the same five rows, which is the reading a refusal could
@@ -125,6 +129,10 @@
  * schema itself. And `/spend/summary` is a second router in this
  * directory, read in `./spend-routes.test.ts`.
  *
+ * THE GRID BELOW PREDATES THE BINDING CASE at the foot of this
+ * file: every figure in it was measured over the cases that
+ * preceded that one.
+ *
  * MUTATION GRID, taken by mutating one file one edit at a time and
  * reading the failed `fullName` SET off a `--reporter=json` run
  * rather than a count. SEVENTEEN legs: eight mutate `./routes.ts`,
@@ -221,8 +229,9 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 
-import { buildRunsRouter } from './routes.js';
+import { buildRunsRouter, runsRouteSchemas } from './routes.js';
 import { RUN_LEDGER_CAP, runListQuerySchema } from './service.js';
 
 /**
@@ -1951,5 +1960,43 @@ describe('what this router structurally cannot do', () => {
     expect(RUN_READS_TAKE_NO_ROW).toBe(true);
     expect(A_PLANTED_RUN_WRITER_IS_REPORTED).toBe(false);
     expect(A_PLANTED_CALL_WRITER_IS_REPORTED).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildRunsRouter({
+      store: createMemoryResearchStore(),
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'POST /runs';
+    // The SET on the router side, because `labelsOf` answers one
+    // label per HANDLER and not per route: a route carrying
+    // middleware of its own repeats its label, which a table keyed
+    // by route must not follow. The prefix is empty because
+    // `src/index.ts` mounts this router at the root with no path
+    // argument, so what it declares is already the string the wire
+    // carries.
+    const declared = [...new Set(labelsOf(router, ''))].sort();
+    const bound = Object.keys(runsRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('GET /runs/:id');
+    expect(bound).not.toContain(fabricated);
   });
 });

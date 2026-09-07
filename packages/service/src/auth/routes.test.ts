@@ -6,6 +6,11 @@
  * `POST /introspect`. All of them are driven over supertest against
  * a router built by the real factory.
  *
+ * A FIFTH DRIVES NOTHING. The last case here reads what the
+ * factory REGISTERED rather than what a request is answered: the
+ * binding table this module exports, held against the labels a
+ * walk over the built router declares at the `/auth` mount.
+ *
  * THREE CASES FOLLOW ONE SESSION FROM ITS MINT TO ITS REVOCATION,
  * and they are the only ones here that log in successfully. A
  * credential that verifies is answered `{ token, sub, expiresAt }`
@@ -248,9 +253,10 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryAuthStore,
 } from '../../tests/helpers/memory-auth-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 
 import { hashPassword } from './password.js';
-import { buildAuthRouter } from './routes.js';
+import { buildAuthRouter, authRouteSchemas } from './routes.js';
 
 // Tests run in test mode — no process.exit, ephemeral port. Only the
 // last describe boots a service, but the flag is read at boot time
@@ -1088,5 +1094,52 @@ describe('buildAuthRouter — the login limiter on a built service', () => {
     // router's limiter never ran at all.
     expect(loginPolicy).not.toStrictEqual(appPolicy);
     expect(refusedLogin.status).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildAuthRouter({
+      store: createMemoryAuthStore(),
+      clock: () => new Date(),
+      ttlSeconds: SESSION_TTL_SECONDS,
+      introspectSecret: INTROSPECT_SECRET,
+      logger: silentLogger,
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'POST /auth/refresh';
+    // The SET, and this is the one router on the surface where
+    // that is not a free choice: `labelsOf` answers one label per
+    // HANDLER, and the attempt limiter ahead of the login handler
+    // makes the walk answer FOUR labels of which three are
+    // distinct. A limiter is not a route, so a table keyed by
+    // route must not follow it.
+    //
+    // The prefix is the same literal {@link buildAuthApp} mounts
+    // at, and the table writes it into its keys by hand;
+    // `tests/helpers/route-labels.ts` READS it out of
+    // `src/index.ts` instead, so the two spellings disagreeing is
+    // what the roster-wide equality over both is there to catch.
+    const declared = [...new Set(labelsOf(router, '/auth'))].sort();
+    const bound = Object.keys(authRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('POST /auth/login');
+    expect(bound).not.toContain(fabricated);
   });
 });

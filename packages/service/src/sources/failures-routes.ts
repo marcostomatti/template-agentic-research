@@ -83,6 +83,7 @@
  * not.
  */
 import type { SourceFailuresServiceStore } from './failures-service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -141,6 +142,39 @@ export const sourceFailureListToolInputSchema = z.object({
   ...sourceAddressSchema.shape,
   ...paginationQuerySchema.shape,
 }).strict();
+
+/**
+ * What the one route below binds, keyed by the label the wire
+ * carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label.
+ *
+ * ONE ENTRY, AND IT IS THE WHOLE TABLE. That is this router's
+ * one-verb claim read off a second shape: the module header states
+ * it, `./failures-routes.test.ts` reads it off the router's own
+ * `stack` and off the port's method names, and a route added here
+ * without an entry is what the coverage guard answers for.
+ *
+ * NO `body` MEMBER ANYWHERE, and the absence means the route never
+ * LOOKS at one rather than that it refuses one. `express.json()`
+ * will already have parsed a body off a `GET` that sent one,
+ * {@link listSourceFailures} is handed nothing, and that request is
+ * answered exactly as one that did not — so an empty body binding
+ * here would describe a refusal this router does not make.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const sourceFailuresRouteSchemas = {
+  'GET /sources/:id/failures': {
+    params: sourceAddressSchema,
+    query: paginationQuerySchema,
+  },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildSourceFailuresRouter} needs. */
 export interface SourceFailuresRouterOptions {

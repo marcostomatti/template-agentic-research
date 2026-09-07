@@ -2,7 +2,22 @@
 
 The platform shape and the same-commit doc-update law live in
 [`docs/architecture/00-overview.md`](docs/architecture/00-overview.md);
-this file is the index of that directory and holds nothing else.
+this file is the index of that directory and holds nothing else
+but the note below on what that index does not reach.
+
+The table below names nine of the ten documents in
+`docs/architecture/` and has never carried a row for
+`docs/architecture/05-exports.md`. Absent in all twenty revisions of
+this file, and absent at the merge-base of the branch that recorded
+this as well as at its tip, across which the file is byte-identical
+and untouched by any of that branch's commits. The gap is reported
+here rather than closed, because every row is an enumeration of what
+its document covers written from a reading of it, and the work that
+measured the gap opened no exports document. What is missing is this
+index's entry rather than the document itself: the behaviour-area map
+in `docs/architecture/00-overview.md` carries an `Exports` row naming
+that path, so the exports contract stays reachable from the overview
+while being unreachable from here.
 
 | Document | What it covers |
 | --- | --- |

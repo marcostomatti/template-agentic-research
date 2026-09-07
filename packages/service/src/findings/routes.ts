@@ -133,6 +133,7 @@
 import type { FindingsServiceStore } from './service.js';
 import type { FindingFilter } from './store.js';
 import type { VerdictServiceStore } from './verdict-service.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -213,9 +214,12 @@ const findingAddressSchema = z
  * but that one request able to say so, and the direction of the
  * composition is what keeps the two protocols answering alike.
  *
- * The address const above stays private. Nothing here exports one,
- * so the sibling routers claim that they agree by intent rather
- * than by derivation is untouched by this pair.
+ * The address const above stays private, and the binding table
+ * below does not change that: a table exports the schema OBJECTS a
+ * route parses with rather than the NAMES they are declared under,
+ * so the sibling routers still have nothing here to import and
+ * their claim that they agree by intent rather than by derivation
+ * is untouched by either export.
  */
 export const findingListToolInputSchema = findingListQuerySchema
   .extend(domainAddressSchema.shape);
@@ -261,6 +265,62 @@ export const findingVerdictToolInputSchema = z.object({
   ...findingAddressSchema.shape,
   ...verdictBodySchema.shape,
 }).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. The query and the body are the two
+ * service modules', imported rather than declared, because no
+ * handler below parses either — the module header's rule, read
+ * straight off the table.
+ *
+ * THREE ROUTES AND TWO ADDRESS SCHEMAS. The list binds
+ * {@link domainAddressSchema} and the single get and the ruling
+ * bind {@link findingAddressSchema}, which is the two-path-shape
+ * split the module header argues for rather than a second thing to
+ * keep in step with it.
+ *
+ * ONE QUERY BINDING, AND IT COVERS THREE NARROWINGS.
+ * {@link findingListQuerySchema} is what the one paginated route
+ * parses, and the window over time, the window over the collection
+ * and the sort key all come out of that single parse — so a
+ * document assembled from this table describes all three from one
+ * member, exactly as the handler reads them.
+ *
+ * THE SINGLE GET BINDS NO QUERY, and the absence means it never
+ * READS one rather than that it refuses one. It parses no query at
+ * all, so a `?page` sent to `GET /findings/:id` is IGNORED, where
+ * the same parameter sent to a route binding a strict query would
+ * be a 422. {@link findingReadToolInputSchema} is the stricter face
+ * of that route for the same reason, and its own comment says so.
+ *
+ * THE LADDER IS OUTSIDE THIS TABLE AND CANNOT BE PUT IN IT.
+ * `verdictBodySchema` narrows the SHAPE of a ruling and no value
+ * rule travels with `verdict`, because the accepted set is the
+ * OWNING DOMAIN's and is not knowable until the finding has been
+ * read. So the 422 a verdict outside the ladder earns is
+ * {@link recordVerdict}'s, a document built from this binding
+ * describes the shape half alone, and a `z.enum` composed here
+ * would name one domain's set for every domain.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const findingsRouteSchemas = {
+  'GET /domains/:slug/findings': {
+    params: domainAddressSchema,
+    query: findingListQuerySchema,
+  },
+  'GET /findings/:id': { params: findingAddressSchema },
+  'PATCH /findings/:id/verdict': {
+    params: findingAddressSchema,
+    body: verdictBodySchema,
+  },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildFindingsRouter} needs. */
 export interface FindingsRouterOptions {

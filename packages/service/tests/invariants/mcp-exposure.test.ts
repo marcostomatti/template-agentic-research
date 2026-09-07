@@ -14,20 +14,25 @@
  * "nothing exposes it yet" and "nobody has looked" stop being the
  * same state.
  *
- * A ROUTE IS A LABEL, in the vocabulary `McpToolEntry.route`
- * already uses: the verb uppercased, one space, then the express
- * path TEMPLATE with its parameters intact. `tests/api/wiring.
- * test.ts` builds the same string off the same `stack` for a
- * different subject — that every mounted route sits behind the auth
- * guard — so the two files share a vocabulary and nothing else.
+ * A ROUTE IS A LABEL, in the vocabulary `McpToolEntry.route` already
+ * uses: the verb uppercased, one space, then the express path
+ * TEMPLATE with its parameters intact. That spelling and the walk
+ * producing it are IMPORTED rather than declared here, from
+ * `tests/helpers/route-labels.ts` — `tests/api/wiring.test.ts` reads
+ * the same walk for a different subject, that every mounted route
+ * sits behind the auth guard, and while each file kept its own copy
+ * a fix to one spelling reached one caller while the others went on
+ * agreeing with themselves. The rosters below are still this file's
+ * own; only the vocabulary is shared.
  *
  * DECLARED, NOT MOUNTED, and the two sets are free to differ: a
  * router can be built and not yet mounted, or mounted and later
- * taken down. Sixteen routers are built below, and how many of them
- * `src/index.ts` mounts is deliberately not a number this file
- * carries — `tests/api/wiring.test.ts` is where the mounted set is
- * held honest. What a tool reaches is a service function rather than
- * a mount — a handler calls the same function the route handler
+ * taken down. The sixteen research routers that
+ * {@link buildResearchRouters} builds are walked here, and how many
+ * of them `src/index.ts` mounts is deliberately not a number this
+ * file carries — `tests/api/wiring.test.ts` is where the mounted set
+ * is held honest. What a tool reaches is a service function rather
+ * than a mount — a handler calls the same function the route handler
  * calls, with no express in between — so the surface a tool COULD
  * name is what the routers declare. Reading the mounted set instead
  * would go green over a router that had been unmounted, which is a
@@ -124,7 +129,7 @@
 
 import type { ControlConfig } from '../../lib/express/control/types.js';
 import type { McpToolEntry } from '../../src/mcp/tools/registry.js';
-import type { Router } from 'express';
+import type { DeclaredRouter } from '../helpers/route-labels.js';
 import type { ZodType } from 'zod';
 
 import { readFileSync } from 'node:fs';
@@ -134,85 +139,59 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { createControlRouter } from '../../lib/express/control/routes.js';
+import { connectorListToolInputSchema } from '../../src/connectors/routes.js';
+import { documentListToolInputSchema } from '../../src/documents/routes.js';
 import {
-  buildConnectorsRouter,
-  connectorListToolInputSchema,
-} from '../../src/connectors/routes.js';
-import {
-  buildDocumentsRouter,
-  documentListToolInputSchema,
-} from '../../src/documents/routes.js';
-import {
-  buildDomainsRouter,
   domainListToolInputSchema,
   domainReadToolInputSchema,
 } from '../../src/domains/routes.js';
 import {
-  buildEntitiesRouter,
   entityApproveResearchToolInputSchema,
   entityReadToolInputSchema,
   entityResearchListToolInputSchema,
 } from '../../src/entities/routes.js';
 import {
-  buildFindingsRouter,
   findingListToolInputSchema,
   findingReadToolInputSchema,
   findingVerdictToolInputSchema,
 } from '../../src/findings/routes.js';
 import { MCP_TOOLS } from '../../src/mcp/tools/registry.js';
+import { personaListToolInputSchema } from '../../src/personas/routes.js';
 import {
-  buildPersonasRouter,
-  personaListToolInputSchema,
-} from '../../src/personas/routes.js';
-import {
-  buildRunsRouter,
   runListToolInputSchema,
   runReadToolInputSchema,
 } from '../../src/runs/routes.js';
+import { spendSummaryToolInputSchema } from '../../src/runs/spend-routes.js';
+import { settingsReadToolInputSchema } from '../../src/settings/routes.js';
 import {
-  buildSpendRouter,
-  spendSummaryToolInputSchema,
-} from '../../src/runs/spend-routes.js';
-import {
-  buildSettingsRouter,
-  settingsReadToolInputSchema,
-} from '../../src/settings/routes.js';
-import {
-  buildSourceFailuresRouter,
   sourceFailureListToolInputSchema,
 } from '../../src/sources/failures-routes.js';
 import {
-  buildSourceProposalsRouter,
   pendingConfigListToolInputSchema,
   sourceApproveConfigToolInputSchema,
 } from '../../src/sources/proposals-routes.js';
+import { sourceListToolInputSchema } from '../../src/sources/routes.js';
 import {
-  buildSourcesRouter,
-  sourceListToolInputSchema,
-} from '../../src/sources/routes.js';
-import {
-  buildSubscriptionsRouter,
   subscriptionListToolInputSchema,
   subscriptionRunNowToolInputSchema,
 } from '../../src/subscriptions/routes.js';
 import {
-  buildCategoriesRouter,
   categoryListToolInputSchema,
 } from '../../src/taxonomy/categories-routes.js';
 import {
-  buildTermsRouter,
   termCreateToolInputSchema,
   termListToolInputSchema,
   termPatchToolInputSchema,
 } from '../../src/taxonomy/terms-routes.js';
 import {
-  buildTopicsRouter,
   topicListToolInputSchema,
   topicRunNowToolInputSchema,
 } from '../../src/topics/routes.js';
 import {
-  createMemoryResearchStore,
-} from '../helpers/memory-research-store.js';
+  buildResearchRouters,
+  labelFor,
+  labelsOf,
+} from '../helpers/route-labels.js';
 
 // ---------------------------------------------------------------------------
 // Scan surface
@@ -285,102 +264,6 @@ const CONTROL_SECRET = 'zz-not-a-secret';
 
 /** The service id the control router reports. Never read here. */
 const CONTROL_SERVICE_ID = 'zz-exposure-invariant';
-
-/**
- * One router, and the labels it declares at the mount it is read at.
- */
-interface DeclaredRouter {
-  /** What the failure message calls it. */
-  readonly name: string;
-
-  /** Its labels, per {@link labelsOf}. */
-  readonly labels: readonly string[];
-}
-
-/**
- * The one spelling of a route label, so the registry, the rosters
- * and the routers are all compared in one vocabulary.
- *
- * @param method - The verb, in whatever case its source spells it.
- * @param path - The express path template, mount prefix included.
- * @returns `GET /domains/:slug` and the like.
- */
-function labelFor(method: string, path: string): string {
-  return `${method.toUpperCase()} ${path}`;
-}
-
-/**
- * The labels of every route a router registered.
- *
- * `router.stack` carries one layer per registered path and that
- * layer's own `stack` carries one layer per handler, which is where
- * the verb is legible at all. A `router.use` middleware layer has no
- * `route` and contributes nothing, which is what keeps the control
- * plane's two guards out of the answer.
- *
- * @param router - A built router.
- * @param prefix - Where the host application mounts it, or the empty
- *   string for a router mounted at the root.
- * @returns One label per verb-and-path pair it declares, duplicates
- *   included: a path registered with two handlers on one verb
- *   answers twice, and the set the partition is taken over is what
- *   collapses them.
- */
-function labelsOf(router: Router, prefix: string): string[] {
-  return router.stack.flatMap((layer) => {
-    const route = layer.route;
-
-    if (route === undefined) return [];
-
-    const path = `${prefix}${route.path}`;
-
-    return route.stack.map((inner) => labelFor(inner.method, path));
-  });
-}
-
-/**
- * The sixteen routers serving the research surface, each read at the
- * root.
- *
- * Built over one in-memory store rather than a wired service: a
- * router factory registers its routes at construction and reads
- * nothing, so what this answers is the routers' own declaration and
- * not a fact about a running deployment. Which of them
- * `src/index.ts` mounts is a separate question, asked in
- * `tests/api/wiring.test.ts`; see the header for why the two sets
- * being free to differ is the point rather than a gap.
- *
- * @returns One entry per router, in the order `src/index.ts` mounts
- *   them.
- */
-function buildResearchRouters(): readonly DeclaredRouter[] {
-  const store = createMemoryResearchStore();
-  const clock = (): Date => new Date();
-
-  const routers = [
-    { name: 'domains', router: buildDomainsRouter({ store }) },
-    { name: 'categories', router: buildCategoriesRouter({ store }) },
-    { name: 'terms', router: buildTermsRouter({ store }) },
-    { name: 'personas', router: buildPersonasRouter({ store }) },
-    { name: 'settings', router: buildSettingsRouter({ store }) },
-    { name: 'topics', router: buildTopicsRouter({ store, clock }) },
-    { name: 'sources', router: buildSourcesRouter({ store }) },
-    { name: 'source-failures', router: buildSourceFailuresRouter({ store }) },
-    { name: 'connectors', router: buildConnectorsRouter({ store }) },
-    { name: 'exports', router: buildSubscriptionsRouter({ store, clock }) },
-    { name: 'findings', router: buildFindingsRouter({ store }) },
-    { name: 'documents', router: buildDocumentsRouter({ store }) },
-    { name: 'entities', router: buildEntitiesRouter({ store }) },
-    { name: 'runs', router: buildRunsRouter({ store }) },
-    { name: 'spend', router: buildSpendRouter({ store, clock }) },
-    { name: 'proposals', router: buildSourceProposalsRouter({ store }) },
-  ];
-
-  return routers.map((entry) => ({
-    name: entry.name,
-    labels: labelsOf(entry.router, ''),
-  }));
-}
 
 /**
  * The framework control plane, read at the mount it is served from.
@@ -550,7 +433,7 @@ const BANNED_PLANTS: readonly string[] = [
   'POST /connectors',
   'PATCH /connectors/:id',
   'DELETE /domains/:slug',
-  `POST ${CONTROL_MOUNT}/stop`,
+  labelFor('POST', `${CONTROL_MOUNT}/stop`),
 ];
 
 /**
@@ -566,7 +449,7 @@ const BANNED_NEAR_MISSES: readonly string[] = [
   'POST /connectors/:id',
   'PATCH /connectors/:id/notes',
   'DELETE /domains/:slug/findings',
-  `POST ${CONTROL_MOUNT}s/stop`,
+  labelFor('POST', `${CONTROL_MOUNT}s/stop`),
 ];
 
 // ---------------------------------------------------------------------------

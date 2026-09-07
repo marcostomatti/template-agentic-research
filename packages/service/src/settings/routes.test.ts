@@ -19,8 +19,10 @@
  * handler swallowed a throw on the way. So every case below reads
  * a response and none reads a return value.
  *
- * TEN CASES IN THREE GROUPS — four refusals, three answers,
- * and three guards over the tables the other seven are held to.
+ * ELEVEN CASES IN FOUR GROUPS — four refusals, three answers,
+ * three guards over the tables the other seven are held to, and
+ * one case that reads no response at all: the binding table this
+ * module exports, held against the routes its factory registers.
  *
  * THE UNDECLARED KEY. A misspelt top-level member is `422` whose
  * ONE detail names `body` and never the key, asserted as the WHOLE
@@ -137,7 +139,11 @@
  * confirms rather than hides — it is the one request case
  * that only the two widest legs reach.
  *
- * MUTATION GRID, re-derived over all ten cases by mutating
+ * THE GRID BELOW PREDATES THE BINDING CASE at the foot of this
+ * file: every figure in it was measured over the cases that
+ * preceded that one.
+ *
+ * MUTATION GRID, re-derived over the ten cases by mutating
  * `routes.ts` and reading the failed `fullName` SET from a
  * `--reporter=json` run rather than a count, with the base run's
  * total asserted non-zero and every anchor asserted to match
@@ -209,8 +215,9 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 
-import { buildSettingsRouter } from './routes.js';
+import { buildSettingsRouter, settingsRouteSchemas } from './routes.js';
 
 /**
  * A real logger with every level suppressed.
@@ -953,5 +960,43 @@ describe('a read taken after the write', () => {
     // bytes still says which payload they carried.
     expect(keysOf(after.body)).toStrictEqual(RESOURCE_KEY_SET);
     expect(after.body.data).toStrictEqual(FULL_SETTINGS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildSettingsRouter({
+      store: createMemoryResearchStore(),
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'PATCH /settings';
+    // The SET on the router side, because `labelsOf` answers one
+    // label per HANDLER and not per route: a route carrying
+    // middleware of its own repeats its label, which a table keyed
+    // by route must not follow. The prefix is empty because
+    // `src/index.ts` mounts this router at the root with no path
+    // argument, so what it declares is already the string the wire
+    // carries.
+    const declared = [...new Set(labelsOf(router, ''))].sort();
+    const bound = Object.keys(settingsRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('PUT /settings');
+    expect(bound).not.toContain(fabricated);
   });
 });

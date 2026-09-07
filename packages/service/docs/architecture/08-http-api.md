@@ -34,6 +34,13 @@ but one per router. The routes land against this document; where
 one of them departs from it, the departure is argued here in the
 same commit rather than left for a reader to find in a response.
 
+The foot of this document carries one section that is not a wave and
+not a rule the routes obey. `The documentation surface` came after all
+three of them, in q14, and is about the OpenAPI document generated
+FROM this surface: what a router module exports for a route to appear
+in it, what holds the two in step, and the rules stated above that no
+document assembled that way can carry.
+
 It is the document the HTTP API row of the behaviour table in
 `docs/architecture/00-overview.md` names, so a change to an
 envelope, to the pagination contract, to the guard or to a declared
@@ -490,11 +497,34 @@ established that.
 ### The paths wave 1 does not take
 
 `GET /health` and `ALL /_control/*` belong to the framework
-(`lib/express/builtin-routes.ts`), `/auth/*` to q07, and `/me` and
-`/example` are declared in `src/index.ts` today. Wave 1 adds
+(`lib/express/builtin-routes.ts`), `/auth/*` to q07, and `/users`
+and `/me` are declared in `src/index.ts` today. Wave 1 adds
 nothing under any of them, and none of its five prefixes —
 `/domains`, `/categories`, `/terms`, `/personas`, `/settings` —
 collides with one.
+
+`GET /example` sat in that list until 2026-09-06, when q14 removed
+it together with `src/routes/example.ts` — the demonstrator this
+package inherited from its template, which held nothing else and
+took the directory with it. Three reasons, argued at the head of
+`register` in `src/index.ts`: the service now carries a real
+surface; the mount was open where every mount in the guarded block
+below it carries `ctx.requireAuth`; and its body put the template
+repository name in front of any caller. Nothing replaced it, so
+the prefix is free rather than reassigned.
+
+That leaves three declarations above the guarded block, in
+`register`'s own order: the `/auth` mount, conditional on a
+bootstrapped credential where nothing else here is; `GET /users`,
+open; and `GET /me`, which carries `ctx.requireAuth` on the route
+itself rather than inheriting it from a mount. The framework's
+`GET /health` sits above all three, `mountBuiltinRoutes` running
+before `register` is called, and `ALL /_control/*` is mounted by
+nothing here — its config block is optional with no default and
+`src/index.ts` passes none. Read that inventory off `src/index.ts`
+rather than off `bootWiredService` in `tests/api/wiring.test.ts`,
+which is a deliberately partial mirror and has never carried the
+`/auth` mount.
 
 Waves 2 and 3 extend the same root on the same terms. Wave 2 takes
 four of those prefixes and the table below names them; `/findings`,
@@ -3630,3 +3660,255 @@ rather than dropped. Both `runs.domain_id` and `llm_calls.run_id` are
 nullable, so a call can reach no domain by two routes and both land
 there — which is what makes the buckets' `calls` add up to the number
 of calls the window holds.
+
+## The documentation surface
+
+### One binding table per router module, and a label is all it restates
+
+Every router module exports one `*RouteSchemas` table, keyed by the
+labels of the routes it declares — `GET /domains/:slug` and its
+fifty-four siblings — each key naming what that route parses a request
+with, under `params`, `query` and `body`.
+`src/http/openapi-bindings.ts` declares the shape; the tables sit in
+the router modules, beside the routes they describe.
+
+Nothing in a table is a schema written for the document. Every member
+is the const the handler already parses with, bound BY IDENTITY, and
+that rule is the whole of the design. Roughly half the consts those
+modules declare are deliberately private — the `:slug` address objects
+`src/domains/routes.ts` argues at length for keeping out of its
+exports, the per-route query shapes — and every schema they DO export
+is an MCP tool input, which merges params and query into ONE arguments
+object and is therefore the wrong binding for a document that has to
+keep the two apart.
+
+`GET /spend/summary` is the one exception to that last clause. It has
+no address to merge, so `src/runs/spend-routes.ts` declares its tool
+input as an ALIAS of the query const rather than a fresh object spread
+off it, which is what keeps the object-level check zod carries
+outwards only. The table binds that same object. Everywhere else the
+two are different schemas and a table binds the one a request is
+parsed with.
+
+So the label is the one thing this surface writes down twice, and a
+label is exactly what a coverage invariant can hold against the router
+that declares it. Nothing in a table runs on a request, which means a
+wrong binding cannot break a route: it can only make the document lie.
+That is why the cases comparing a table to its router use `toBe`
+rather than a structural compare, and why the guard below is not an
+extra.
+
+An EMPTY binding is legal, and it means this route binds nothing.
+`GET /settings` reads no address, no window and no body, and it still
+owes a key. An absent entry already means something else — a route
+nobody wrote a binding for, which is the one thing the guard exists to
+find — so `{}` is what a route parsing nothing says.
+
+### The registry is assembly, and declares no route of its own
+
+`src/openapi.ts` walks the seventeen tables in one pass: it splits
+each label into a method and a path, rewrites the express `:slug`
+spelling as the OpenAPI `{slug}` one, and registers the result under a
+tag named for the path base. It declares no route, no parameter and no
+schema of its own, and the document that comes out carries one
+operation per table key — fifty-five today, over 36 path keys, the
+verbs collapsing under one path item apiece.
+
+`extendZodWithOpenApi` is deliberately never called. It mutates
+`z.ZodType.prototype` on the single zod instance the root manifest
+pins, which is the same import every request validator and every MCP
+tool input in this package holds, and a documentation generator has no
+business changing how the service parses requests. From v8 the library
+reads zod 4's native `.meta()` instead, so the three envelopes are
+named by a tagged CLONE in the assembly and the consts
+`src/http/envelope.ts` exports carry no id at all.
+
+Two facts the document states live elsewhere and are read rather than
+written down here. `info.version` is `readServiceVersion`, the same
+function `GET /_control/status` reports through, so the version a
+document claims and the version a running service reports cannot drift
+apart; the one `servers` entry is built from the port `src/index.ts`
+hands `createService`.
+
+A table this module cannot describe is a THROW and never a skip. A
+label that does not split into a verb and a path, a verb the library
+cannot register, and a `params` or `query` binding that is not an
+object schema each raise a `TypeError` out of the assembly. Dropping
+one silently would leave a route out of the document, or in it with
+its parameters undescribed, which is the fault a document is least
+able to show.
+
+### `GET /docs` sits behind the guard on a line of its own
+
+The mount is last in `register` and spells `ctx.requireAuth` itself.
+It does not have to for an anonymous request to be refused: the
+sixteen research mounts sit at `/`, so the first of them answers `401`
+long before this line is read, exactly as the unmatched-path claim
+above describes. That refusal is mount ORDER and nothing else, and
+this mount carries a path, so it is not itself part of the
+fall-through chain those mounts form. The guard spelled here is what
+survives a reordering — whether the document is public is answered by
+one line rather than by a position.
+
+The document is built ONCE, at boot. `generateOpenApiDocument`
+assembles a fresh registry per call and throws on a table it cannot
+describe, so a table that has drifted fails the process on that line
+rather than the first request; nothing it renders varies per caller
+either, the document reading no request.
+
+`GET /docs` answers `301` to `/docs/`, from the static handler
+`swaggerUi.serve` installs. The page is at the slashed path, and a
+case asserting `200` on the un-slashed one reads a working mount as
+broken.
+
+### The policy scoped to that mount relaxes nothing, and that is measured
+
+A route-scoped `helmet.contentSecurityPolicy` sits on the `/docs`
+mount alone. It REPLACES the app-wide header rather than appending
+to it — measured on the wire, the value is one string and never an
+array — so every other path keeps the helmet defaults that
+`lib/express/__tests__/middleware.test.ts` pins name by name.
+
+Which directives were relaxed: NONE. The premise that Swagger UI needs
+an inline-script allowance is false at swagger-ui-express 5.0.1, which
+emits no inline `<script>` at all: three `src`-referenced same-origin
+scripts, two inline `<style>` blocks and one `style=` attribute. So
+`script-src 'self'` restates helmet's own value, and
+`style-src 'self' 'unsafe-inline'` is helmet's default MINUS its
+unused `https:` source, nothing this mount serves loading a style over
+it. The one difference from the app-wide header is a NARROWING, and
+`src/index.ts` carries the four measurements behind it.
+
+Three policies are on the wire under that one mount, and only one of
+them is the scoped value. The guard runs AHEAD of the policy, so an
+anonymous `401` carries the app-wide header and a reading of the
+scoped one has to send a credential. The scoped value does reach the
+static assets as well as the page, sitting on the mount rather than on
+a handler. And the `301` above carries neither: `serve-static` builds
+that redirect itself and writes `default-src 'none'` on it,
+overwriting what ran above. `tests/api/wiring.test.ts` reads all
+three.
+
+### `bun run docs:openapi` writes the document where no diff sees it
+
+`scripts/export-openapi.ts` writes that same document to
+`.docs/swagger/openapi.json`, resolving the path from its own module
+location and never from the working directory — a cwd-derived path
+names this tree only while the process was started from the package,
+and the recursive mkdir would create the wrong one rather than refuse.
+`.docs/` is gitignored at the package and at the repo root, the
+package rule being the one that governs.
+
+Two consequences are worth stating rather than meeting. A stale
+artifact is invisible: there is nothing to dirty, and nothing in this
+package reads those bytes back — what holds the document to the code
+is `src/openapi.test.ts` over the registrations and the coverage
+invariant below over the routes, both against a document generated in
+process rather than over these bytes. And the `servers` entry carries
+whatever port that run resolved, which is a local fact in an ignored
+file and would be a hazard in a committed one.
+
+`docs:generate` is not the other half of one tree. It is a bare
+`typedoc` carrying no `typedoc.json` and no `typedocOptions` key
+anywhere, so it takes typedoc's own default `out`, which resolves to
+the TRACKED `docs/` tree this file sits in and wipes it. The pair of
+names suggests one output where there are two, and
+`packages/service/AGENTS.md` carries the measurement and the repair.
+
+### The coverage guard is what makes writing a label twice safe
+
+A route reaches the document only through a binding table, and a table
+is keyed BY HAND. So a route added to a router without a key is simply
+absent: nothing refuses to build, the artifact is smaller and still
+valid, and every reading over a route that IS registered stays green.
+`tests/invariants/openapi-coverage.test.ts` is the one reading that
+reports it.
+
+It holds two label sets equal — the operations the generated document
+declares, walked out of each path item's verb keys, against the labels
+the sixteen research routers and the auth entry declare. The
+conversion between the two spellings happens ONCE and on ONE side: the
+document is rewritten into the routers' `:param` spelling and the
+router side is converted by nothing, which is what stops a rewrite
+both sides shared from passing unreported.
+
+A gap is reported as named labels in BOTH directions, undocumented
+first, because a key renamed leaves both counts equal and only the
+names say what moved. Both sides are asserted non-empty in the case
+above the equality, two empty sets being set-equal: a generator that
+registered nothing and a roster that walked nothing would otherwise
+pass exactly as a correct surface does. The router side is taken as a
+SET, a route carrying middleware of its own answering one label per
+handler — the login limiter is why the declared list is one longer
+than its set.
+
+### A response is documented at the envelope, and no further
+
+What a route READS is described per route; what it ANSWERS is
+described once for the whole surface. The status lives in the handler,
+where no generator can see it, and it is not uniform: the deletes
+answer `204`, the creates `201`, the rest `200`. A per-route status
+map in the assembly would be a second authority for that, kept in step
+with the handlers by nothing at all, which is the one thing this
+design forbids.
+
+So the success side is declared uniformly — a `2XX` carrying either
+success envelope, an explicit `204` with no content, since an explicit
+code outranks its range and a delete is therefore not documented as
+answering a body, a `401` also without content, a `500`, and a `422`
+only where the table names a member, a route that parses nothing
+having nothing to refuse. The cost is over-declaration, and it is the
+honest half to state: the document names the shapes this SURFACE
+answers, not the subset one route answers.
+
+`data` is open, and stays open. `successEnvelopeSchema`,
+`paginatedEnvelopeSchema` and `errorEnvelopeSchema` in
+`src/http/envelope.ts` are the three components the document carries,
+each held by `src/http/envelope.test.ts` to the body its own builder
+writes rather than to a literal written out beside it. Every record on
+this wire is a TypeScript interface with no schema behind it —
+`DomainRecord` and its siblings — so a schema per record would be that
+many more second declarations with nothing comparing them to the
+interfaces they restate, which is the duplication the binding tables
+exist to avoid. Per-record response schemas are DEFERRED rather than
+forgotten: `docs/architecture/01-invariants.md` carries the
+not-enforced row that records the deferral, and `src/http/envelope.ts`
+the argument that row points back at.
+
+### Four rules of this surface no binding table can state
+
+A table says what a route ACCEPTS, and four rules of this surface
+therefore sit outside every one of them. A reader of the generated
+document meets none of the four there. The first two are argued above;
+the other two belong to the `/auth` mount, which this document has so
+far described only as a path.
+
+Strictness on a QUERY is unrepresentable. A request body renders
+`additionalProperties: false` at every level, so the `.strict()` above
+is visible there; a query object is SPLIT into one parameter per
+member, where that keyword has nowhere to land. The `422` an
+undeclared `?pge` earns is a rule about this document's own subject
+that the document cannot carry.
+
+A refusal that reads a VALUE is outside a table by construction. The
+connector mask is the live case: `createConnectorSchema` accepts a
+`config` carrying the mask literal and the `422` is raised in
+`src/connectors/service.ts` after the parse, no schema here being
+allowed to read a value into an issue. Composing one that expressed
+the rule would be a schema no handler parses with, which is what the
+identity rule forbids.
+
+A gate on a HEADER has no member to bind. `RouteSchemas` declares a
+params, a query and a body and nothing else, so the `Authorization`
+secret that closes `POST /auth/introspect` and the `429` ahead of
+`POST /auth/login` are invisible to it: one is a handler and the other
+a limiter, and neither is a schema.
+
+And the `/auth` mount answers outside all three envelopes, on the
+success half as much as on the refusal half, so its three operations
+declare descriptions and no content at all. Login writes a bare
+`{ token, sub, expiresAt }`, logout `{ ok: true }` and introspect
+`{ active, sub? }`, none of them wrapped by `ok()`; each refusal is
+the single-key `{ error }` shape at `400`, `401` or `429`.
+`src/auth/routes.ts` argues all four of these beside the table this
+surface reads.

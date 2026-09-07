@@ -18,10 +18,12 @@
  * swallowed a throw on the way. So every case below reads a
  * response and none of them reads a return value.
  *
- * TWENTY-EIGHT CASES IN THREE GROUPS. Fifteen cover the ways a
+ * TWENTY-NINE CASES IN FOUR GROUPS. Fifteen cover the ways a
  * request to this router can be wrong; nine cover what the six
  * routes answer when they LAND; four are guards over the two
- * fixtures and over the key lists every half is read through.
+ * fixtures and over the key lists every half is read through; and
+ * one reads no response at all, holding the binding table this
+ * module exports against the routes its factory registers.
  *
  * TWO FIXTURES, BECAUSE THE VERBS NEED A STATE THE LIST CASES
  * COUNT. {@link withTopics} is the collection every case above the
@@ -201,7 +203,11 @@
  * below is scoped to the one channel these routes open, which is
  * the value a refused pipeline-owned member carries.
  *
- * MUTATION GRID, re-derived over all twenty-eight cases by
+ * THE GRID BELOW PREDATES THE BINDING CASE at the foot of this
+ * file: every figure in it was measured over the cases that
+ * preceded that one.
+ *
+ * MUTATION GRID, re-derived over the twenty-eight cases by
  * mutating `routes.ts` one edit at a time and reading the failed
  * `fullName` SET from a `--reporter=json` run rather than a count.
  * THIRTEEN legs, each named by the EDIT it makes rather than by
@@ -312,8 +318,9 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 
-import { buildTopicsRouter } from './routes.js';
+import { buildTopicsRouter, topicsRouteSchemas } from './routes.js';
 
 /**
  * A real logger with every level suppressed.
@@ -2284,5 +2291,44 @@ describe('a pause that lands', () => {
       [DISABLED_NAME]: DUE_LATER,
       [CLAMPED_NAME]: instantAfter(DUE_LATER, TEN_MINUTES),
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildTopicsRouter({
+      store: createMemoryResearchStore(),
+      clock: fixedClock,
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'POST /topics/:id/resume';
+    // The SET on the router side, because `labelsOf` answers one
+    // label per HANDLER and not per route: a route carrying
+    // middleware of its own repeats its label, which a table keyed
+    // by route must not follow. The prefix is empty because
+    // `src/index.ts` mounts this router at the root with no path
+    // argument, so what it declares is already the string the wire
+    // carries.
+    const declared = [...new Set(labelsOf(router, ''))].sort();
+    const bound = Object.keys(topicsRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('POST /topics/:id/run-now');
+    expect(bound).not.toContain(fabricated);
   });
 });

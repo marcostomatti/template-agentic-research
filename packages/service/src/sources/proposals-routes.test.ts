@@ -20,7 +20,7 @@
  * reads a response, and the only store reads any of them takes are
  * of the state a write did or did not leave.
  *
- * NINE CASES IN EIGHT GROUPS. Three of them guard: two the fixture
+ * TEN CASES IN NINE GROUPS. Three of them guard: two the fixture
  * every case is read through, one the shapes every answer is held
  * to. Then the six this file is scoped to: the paginated queue and
  * its `meta`, the `200` approval carrying the ruling projection,
@@ -28,6 +28,8 @@
  * for one already applied, the `422` for a body key this write
  * does not declare, and the containment row holding that no answer
  * carries part of a stored arrangement its caller did not ask for.
+ * The tenth reads no response at all: the binding table this
+ * module exports, held against the routes its factory registers.
  *
  * THE QUEUE. One request with no window at all beside three
  * windows of ONE over the same three rows — the first, the last
@@ -114,7 +116,11 @@
  * every needle, which is what makes the zeros a reading rather
  * than a search that could only ever come back empty.
  *
- * MUTATION GRID, derived WHOLE over all nine cases by mutating one
+ * THE GRID BELOW PREDATES THE BINDING CASE at the foot of this
+ * file: every figure in it was measured over the cases that
+ * preceded that one.
+ *
+ * MUTATION GRID, derived WHOLE over the nine cases by mutating one
  * file one edit at a time and reading the failed `fullName` SET
  * from a `--reporter=json` run rather than a count. TWENTY LEGS,
  * each named by the EDIT it makes rather than by its effect, since
@@ -217,8 +223,12 @@ import { createLogger } from '../../lib/logger/node.js';
 import {
   createMemoryResearchStore,
 } from '../../tests/helpers/memory-research-store.js';
+import { labelsOf } from '../../tests/helpers/route-labels.js';
 
-import { buildSourceProposalsRouter } from './proposals-routes.js';
+import {
+  buildSourceProposalsRouter,
+  sourceProposalsRouteSchemas,
+} from './proposals-routes.js';
 
 /**
  * A real logger with every level suppressed.
@@ -1865,5 +1875,43 @@ describe('what an answer carries of a stored arrangement', () => {
     );
     expect(countOccurrences(queue.text, SENTINEL_SELECTOR))
       .toBeGreaterThan(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The binding table, against the routes this router declares
+// ---------------------------------------------------------------------------
+
+describe('the request bindings this module exports', () => {
+  it('keys its table by exactly the labels the router declares', () => {
+    // Built here rather than reached through a fixture: a factory
+    // registers its routes at construction and reads nothing, so
+    // what this reads is the router's own DECLARATION, and no
+    // request is involved in the answer.
+    const router = buildSourceProposalsRouter({
+      store: createMemoryResearchStore(),
+    });
+    // A label in the same register as one this router really
+    // declares, naming a route it does not.
+    const fabricated = 'POST /sources/:id/reject-config';
+    // The SET on the router side, because `labelsOf` answers one
+    // label per HANDLER and not per route: a route carrying
+    // middleware of its own repeats its label, which a table keyed
+    // by route must not follow. The prefix is empty because
+    // `src/index.ts` mounts this router at the root with no path
+    // argument, so what it declares is already the string the wire
+    // carries.
+    const declared = [...new Set(labelsOf(router, ''))].sort();
+    const bound = Object.keys(sourceProposalsRouteSchemas).sort();
+
+    // Both directions in one comparison: a route this table does
+    // not name is as red as a key naming no route.
+    expect(bound).toStrictEqual(declared);
+    // And the absence below is a reading rather than a membership
+    // test that answers false for everything, because a label the
+    // table really carries is asserted present through the same
+    // call.
+    expect(bound).toContain('POST /sources/:id/approve-config');
+    expect(bound).not.toContain(fabricated);
   });
 });

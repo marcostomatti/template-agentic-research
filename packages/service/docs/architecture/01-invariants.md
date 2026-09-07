@@ -35,10 +35,15 @@ shape again, drawn from the binding constraints in
 `.specs/q08-api-wave-1.md`, and the connector-secret row likewise, from
 the constraints section of `.specs/q11-api-wave-2.md`, which asks for
 sentinel tests in both directions over a value the surface stores. The
-MCP exposure row is the last of them, drawn from the constraints in
+MCP exposure row came next, drawn from the constraints in
 `.specs/q13-api-wave-3-mcp.md`, which asks for a test that would fail if
 a tool were registered over a banned surface, an omission nothing
-asserts being one the next contributor undoes.
+asserts being one the next contributor undoes. The last two are the
+OpenAPI pair, drawn from the deliverables in
+`.specs/q14-openapi-docs-v2.md`: the coverage row from the guard that
+spec asks for over the generated document, and the response-schema row
+from the deferral it asks to have written down rather than left absent,
+which is why that one names no artifact at all.
 
 ## The register
 
@@ -66,17 +71,26 @@ asserts being one the next contributor undoes.
 | No request body content reaches a response body or a log line through a validation detail | `tests/api/request-echo.test.ts`, submitting one sentinel through every write route the service mounts as a field value, as an unrecognized key, as an open-record key and as a query parameter, and counting it in each answer and in everything the process wrote — with a third boot mounting a route that leaks the same sentinel through every channel this surface is forbidden to leak through, as the control on the count | q08 | Implemented |
 | No stored connector secret reaches a response body, a log line or an error detail | `tests/api/connector-secret.test.ts`, booting the assembled service over a sentinel credential written through `POST /connectors`, rotated through `PATCH /connectors/:id`, read back through `GET /connectors` and submitted once more to a create the store refuses, and counting it in every answer and in everything the process wrote — with a second boot whose route reads the stored config back and leaks it to the console, to stderr and into what it answers, as the control on both counts | q11 | Implemented |
 | No MCP tool names a banned surface, and every route the routers declare is exposed by a tool, banned, or written out as a deliberate absence carrying its reason | `tests/invariants/mcp-exposure.test.ts`, holding `MCP_TOOLS` against the labels the sixteen research routers and the framework control plane declare — the banned classifier driven over a plant of each of its two families with a fabricated near miss beside it, the three rosters held pairwise disjoint so the covering cannot be satisfied by a label sitting in two of them, and every exposed route paired with an `inputSchema` held `Object.is`-identical to the binding its own route module exports | q13 | Implemented |
+| Every route the routers declare is an operation in the generated OpenAPI document, and every operation in the document is a route some router declares | `tests/invariants/openapi-coverage.test.ts`, holding the two label sets `tests/invariants/openapi-coverage.ts` derives — the document's operations, walked out of each path item's verb keys and rewritten into the routers' `:param` spelling, against the labels the sixteen research routers and the auth entry declare, taken as a set because a route carrying middleware of its own answers one label per handler rather than one per route — with the rewrite happening on one side only, so a conversion both sides shared cannot pass unreported; both sides asserted non-empty in the case above the equality, two empty sets being set-equal; the gap reported as named labels in both directions, undocumented first, because a table key renamed leaves both counts equal; and each direction planted at the artifact its own side is derived from, a router declaring a route no binding table names and a table entry naming a route no router declares | q14 | Implemented |
+| A documented response body describes the record it carries, and not only the envelope around it | Nothing, and deliberately: every record on this wire is a TypeScript interface with no schema behind it — `DomainRecord` and 24 siblings — so a schema per record would be 25 more second declarations with nothing comparing them to the interfaces they restate, which is the duplication the binding tables exist to avoid. What the document carries instead is the envelope: `successEnvelopeSchema`, `paginatedEnvelopeSchema` and `errorEnvelopeSchema` in `src/http/envelope.ts`, each held by `src/http/envelope.test.ts` to the body its own builder writes, with `data` left open, so a route is documented as answering a success envelope and never as answering a domain. `src/http/envelope.ts` and `src/openapi.ts` argue it at length; this row is where the deferral is registered, so it is legible to a reader who opens neither | q14 | Not enforced |
 
 ## Reading the register
 
 **Enforced by** names the artifact a violation surfaces in — the file
 that goes red, not the rule in prose. **Owning phase** is the phase
 accountable for the row: the one that lands the artifact, or, where the
-artifact is already written, the one that lands what it judges.
-**Status** is `Implemented` when the artifact exists, runs on an
+artifact is already written, the one that lands what it judges, or,
+where nothing enforces the row at all, the one that decided it would
+not. **Status** is `Implemented` when the artifact exists, runs on an
 ordinary `bun run test` today, and reads something the rule applies to;
 `Unexercised` when it exists and runs over nothing the rule applies to;
-and `Pending` when the row is still a reservation.
+`Pending` when the row is still a reservation; and `Not enforced` when
+the property is decided and deliberately left unchecked, the reason
+sitting in the **Enforced by** cell where it would otherwise name a
+file. `Pending` and `Not enforced` are not one reading: a pending row
+makes a phase accountable for landing the check, where a not-enforced
+one records that nobody is, which is what keeps a deferral from reading
+as an omission.
 
 An **Enforced by** cell can name an artifact from a phase other than
 the owning one. That happens where a property splits into halves that

@@ -137,6 +137,7 @@
  */
 import type { ConnectorServiceStore } from './service.js';
 import type { ConnectorFilter } from './store.js';
+import type { RouteSchemas } from '../http/openapi-bindings.js';
 import type { Router as RouterType } from 'express';
 
 import { Router } from 'express';
@@ -153,9 +154,11 @@ import { parseBody, parseQuery } from '../http/validation.js';
 
 import {
   createConnector,
+  createConnectorSchema,
   deleteConnector,
   listConnectors,
   patchConnector,
+  patchConnectorSchema,
 } from './service.js';
 
 /**
@@ -239,6 +242,65 @@ const connectorListQuerySchema = paginationQuerySchema.extend({
 export const connectorListToolInputSchema = z.object({
   ...connectorListQuerySchema.shape,
 }).strict();
+
+/**
+ * What each route below binds, keyed by the label the wire carries.
+ *
+ * `src/http/openapi-bindings.ts` carries the argument for the shape
+ * and for the rule: every member names the const the request is
+ * really parsed against, BY IDENTITY, so the only thing written a
+ * second time is the label. The bodies are the service's, imported
+ * rather than declared, because no handler below parses one — the
+ * module header's rule, read straight off the table.
+ *
+ * ONE PATH SHAPE AND A ROUTE WITH NO ADDRESS AT ALL, which is where
+ * this table differs in shape from every other group's rather than
+ * in subject. The two writes bind {@link connectorAddressSchema};
+ * `POST /connectors` and `GET /connectors` are met at the root and
+ * name no row, so their missing `params` is the module header's
+ * `connectors` carries no `domain_id` read off a second shape.
+ *
+ * `GET /connectors` IS THE ONE LIST ROUTE ON THIS SURFACE THAT
+ * BINDS MORE THAN A WINDOW. {@link connectorListQuerySchema} is
+ * `paginationQuerySchema` extended with `?kind`, so what a document
+ * shows for this route is one schema carrying all three parameters
+ * — and `.strict()` survives the extension, which is what keeps an
+ * undeclared parameter a refusal rather than an unfiltered page.
+ * The other three routes never read `req.query` at all.
+ *
+ * THE TWO `config` MEMBERS ARE BOUND TO THE SCHEMAS THE REQUEST IS
+ * PARSED WITH ON THE WAY IN, and those schemas hold `config` to an
+ * OPEN RECORD. {@link createConnectorSchema} and
+ * {@link patchConnectorSchema} share one record declared once in
+ * `src/connectors/service.ts`, whose key slot is a string and whose
+ * value slot is unknown — so what they refuse there is a `config`
+ * that is not an object, plus any undeclared key beside it.
+ *
+ * THE MASK REFUSAL IS NOT IN EITHER SCHEMA, and a document built
+ * from this table therefore does not describe it. Submitting the
+ * `MASKED_SECRET` literal back is a 422 carrying `masked_secret`
+ * per place the literal sat, raised by `src/connectors/service.ts`
+ * AFTER the parse and before the write — no schema on this surface
+ * can raise it, that module states, because the rule reports a
+ * VALUE and every schema here is forbidden to read one into an
+ * issue. Composing a schema that expressed it would be a schema no
+ * handler parses with, which is the one thing the identity rule
+ * above forbids, so the gap is recorded here rather than closed by
+ * a second authority nothing compares.
+ *
+ * `satisfies` and not a bare `as const`: it is what makes a member
+ * this shape does not declare a failed `check-types` rather than a
+ * document that lies about a route nothing else compares.
+ */
+export const connectorsRouteSchemas = {
+  'GET /connectors': { query: connectorListQuerySchema },
+  'POST /connectors': { body: createConnectorSchema },
+  'PATCH /connectors/:id': {
+    params: connectorAddressSchema,
+    body: patchConnectorSchema,
+  },
+  'DELETE /connectors/:id': { params: connectorAddressSchema },
+} as const satisfies Readonly<Record<string, RouteSchemas>>;
 
 /** Everything {@link buildConnectorsRouter} needs. */
 export interface ConnectorsRouterOptions {

@@ -144,6 +144,25 @@ wanted in both places must be made in both repos.
   sibling imports being two groups. Write it, run `lint`, and take the
   order from the MESSAGE — every attempt to reason it out of the `groups`
   array has been wrong here.
+- Three further orderings measured off the message, so a new module can skip
+  the round trip. Inside the single `type` group a SIBLING outranks an
+  EXTERNAL as well as a parent, so a router module's three-way order is
+  SIBLING, then PARENT, then EXTERNAL (`./x.js` type import should occur
+  before type import of `../http/y.js`, and before `express`). A `tests/`
+  file importing package modules AND a sibling-of-tests helper directory
+  writes ONE unbroken value block, `../../src/x.js` and `../helpers/y.js`
+  both being `parent` — the blank line the eye wants there is
+  `There should be no empty line within import group`. But a
+  `tests/invariants/*.test.ts` importing a package module AND its own
+  SIBLING helper writes THREE value blocks (`vitest`, `../../src/x.js`,
+  `./y.js`), parent and sibling being distinct groups.
+- Naming the commits that installed something, for a status banner or a
+  close-out, is TWO git readings and neither is a range walk:
+  `git log --oneline --diff-filter=A -- <the artifact paths>` names the
+  commit that ADDED each file (several paths in one call, one line apiece),
+  and `git log -S'<the specifier>' --oneline -- <the manifest>` names a
+  dependency add, which no `--diff-filter=A` can reach because the manifest
+  already existed.
 - Two `@stylistic` rules put a hard ARITHMETIC ceiling on a vitest title and
   on any supertest chain, and `lint:fix` repairs neither the way you want.
   `function-paren-newline` refuses the two-line `it('long title',\n
@@ -310,6 +329,16 @@ wanted in both places must be made in both repos.
   `playwright-core: ">= 1.0.0"` — exactly the constraint worth knowing
   in a repo pinning playwright twice at two versions). Query the field by
   NAME before predicting a lockfile delta or reading a green type-check.
+- That by-NAME query EXITS 1 with `error: Property <field> not found`
+  whenever the field is simply ABSENT, so it ABORTS an `&&` chain and
+  silently skips every later query in it, with a message reading exactly
+  like a broken query. Measured on one package: `peerDependencies` and
+  `engines` both answered it while `dependencies` was fine. Separate the
+  queries with `;`, echo `$?` per query, and pair any absence with a
+  package that DOES declare the field as the live control
+  (`@axe-core/playwright` still answers `playwright-core` here) — an
+  unpaired `not found` cannot tell a genuine absence from a query that
+  never worked.
 - Walking a dependency chain under the isolated linker is realpath, then
   the SIBLING, then realpath again. A package's `node_modules/<dep>` is a
   symlink into `.bun/<name>@<ver>+<hash>/node_modules/<name>`, and a
@@ -368,6 +397,20 @@ manufactures a second authority for the same fact. Say in the report which
 sibling rows you measured stale and where the current values live
 (`diff <other-checkout>/.specs/README.md .specs/README.md` is the whole
 reading).
+
+That staleness runs in BOTH DIRECTIONS, so a leg that only pulls from the
+sibling copy overwrites a row it was right about: measured at one close-out,
+`diff` answered 10 lines across 5 hunks with SEVEN rows stale here and ONE
+stale there. Neither file is authoritative and the adjudicator is GIT, per
+row — the tag resolves, `git log -1 --format=%s <tag>` names the claimed
+PR, and `git merge-base --is-ancestor <tag> origin/main` exits 0. Its
+controls are one command: a fabricated `v99` not resolving, and one real tag
+asserted to name its own PR and NOT a sibling one. A row's FIGURES go stale
+the same way its status word does, so a close-out updating a row re-derives
+every number in the cell — one row here read `12 routers / 43 routes`
+throughout a build that ended at 17 and 55, the superseded pair being a
+correct reading of the wrong denominator (a `src/*/routes.ts` glob) rather
+than a typo.
 
 ## Security posture (carried from the templates, incident-derived)
 
@@ -851,6 +894,28 @@ red package never masks another and a single run gives the whole picture.
   merge-base main HEAD)..HEAD -- packages/web packages/ui` answering empty
   closes it. Distinct from the `@ar/service` flake — different package,
   DETERMINISTIC while the sibling runs, and no `socket hang up`.
+- The `@ar/service` flake has TWO further shapes beyond the recorded
+  timeout and `socket hang up`, and both read as ordinary regressions. It
+  answers WRONG-SERVICE STATUSES (`expected 401 to be 422`,
+  `expected 404 to be 201`) when another service in the same run answers
+  the request, and it can answer a body that is not this service's
+  envelope AT ALL — a foreign server on the machine, whose error JSON
+  the assertion prints. A non-HTTP peer gives `Error: Parse Error:
+  Expected HTTP/`, and the SAME describe's written-out spend case then
+  fails `expected 26 to be 27`, one lost request being exactly one short:
+  a derived-count assertion is a DOWNSTREAM reporter of the flake, so a
+  task reading it alone attributes a stolen port to its own edit. It
+  re-rolls across FILES as well as within one, with EMPTY overlap between
+  two runs' failure sets at identical file and case totals.
+- Where a branch legitimately EDITED the files a flake names, the
+  `git log <base>..HEAD -- <file>` attribution leg is DEAD (it answers
+  `the branch touched it` for all of them), and the leg that still
+  discriminates costs one `git show`: test the failing CASE TITLE for
+  presence in `git show <base>:<path>`, with a title the branch DID add as
+  the control. Measured — three failing titles present at the
+  merge-base and the branch's own added title absent there and present at
+  HEAD, so the reds were carried-in cases. It composes with the solo-run
+  and failure-set-overlap legs rather than replacing them.
 - Do NOT grep a `test:all` capture for `failed`/`FAIL`. A fully green run
   is ~3700 lines — over half of it the `@ar/ui` library build, printed
   TWICE now that `@ar/web`'s pretest builds it as well, and elided to the
@@ -1201,6 +1266,70 @@ red package never masks another and a single run gives the whole picture.
   the origin checkout and with no resolved path entering any file. Assert
   the armed target really is absent or closed in the SAME command; an
   accidental hit is a control that proved the opposite of what it reads as.
+- The closed-target control flips the FILE line for all four helpers, but
+  its CASE line splits three ways, so a leg scored on the case counters
+  reads two live gates as dead. Measured one file apiece, every one at
+  `Test Files 1 failed (1)`: `describeLivePg` answered `Tests 19 skipped`,
+  `describeLiveN8n` `3 skipped`, `describeLiveOllama` `1 failed`, and
+  `describePortParity` `2 failed | 6 passed`. Score the FILE line.
+- A PLAIN `bun run test` capture carries NO per-file line at all, so the
+  `Test Files N skipped` membership reading has nothing to read in it, and
+  the flag pair that supplies one is cheaper than `--reporter=verbose`:
+  measured at one commit, `bun run test` alone answered 304 lines with ZERO
+  file-level pass or skip lines where the same script plus
+  `--reporter=default --reporter=json --outputFile.json=<f>` answered 535
+  with 26 down-glyph (U+2193) and 165 check-glyph FILE lines, equalling
+  that run's own `26 skipped` and `165 passed` segments exactly. bun
+  forwards the flags through the script, so `pretest` still runs and the
+  `N built, stamped <sha>` line sits in the same capture. The COMBINATION
+  was measured; which half supplies the per-file lines was not.
+- Do NOT derive a skipped-FILE set from the JSON reporter's own counters:
+  it answers a FILE-level `status` of `passed` for a fully-SKIPPED file and
+  `numPendingTestSuites` is `0` on a run whose summary reports 26 skipped
+  files, so the membership question silently has no subject. Derive it from
+  the ASSERTION statuses (every member `skipped`), and note
+  `numTotalTestSuites` counts DESCRIBE blocks (1562 against 192 files) so
+  it is no file denominator either.
+- A vitest JSON report makes a RED run usable evidence for the specific
+  files a claim names, which is what saves re-running a 6400-case suite for
+  a close-out: every OTHER file still carries its own `status` plus a
+  per-case `assertionResults` list, so a DoD item backed by three named
+  files is dischargeable out of a capture whose exit was 1. Two conditions
+  make it honest — NAME the failing file and its attribution beside the
+  verdict, and read the per-CASE statuses rather than the file `status`
+  alone, which the fully-skipped-file trap above already shows is `passed`
+  for a file that ran nothing.
+- The package-scope six-invariant-line law is a GREEN-run law, and a
+  classifier applying its blank-line rule to a RED capture reports that
+  bucket at 14 where the law says 6 — eight unexplained lines landing in
+  precisely the bucket asserted by MEMBERSHIP. The four invariant blanks do
+  survive, but the failure block INTERLEAVES eight of its own between the
+  third and the fourth, so NO positional scope recovers exactly four and
+  cutting at the `Failed Tests` banner answers 3. Classify the failure
+  block as its own bucket and take the membership reading off a GREEN
+  capture. At package scope vitest's DEFAULT reporter DOES emit a per-case
+  glyph for FAILING cases alone, so the failure-glyph half is LIVE there
+  (2 on a red capture, 0 on a green one, agreeing with ` FAIL ` both
+  times) and only the missing POSITIVE control is what the recorded
+  `uninformative in both directions` is about.
+- The Playwright half of the pass-glyph decomposition carries an IN-BAND
+  three-way cross-check — the glyph count must equal the
+  `Running N tests using M workers` banner AND the summary's own
+  `N passed (<duration>)` — and the recorded both-runners anchor trap
+  lands precisely on it. Anchored on the bare `\d+ passed \(` the
+  comparison instead picks up vitest's `Test Files 49 passed (49)`, which
+  sits EARLIER in the capture, and answers `170 == 170 == 49`: a correct
+  decomposition reported as broken. Anchor on the trailing DURATION and
+  assert in the same probe that the vitest `Test Files` lines are NOT
+  matched by it.
+- Whether to run `test:all` BEFORE the two fast fan-outs is MEASURABLE
+  rather than the fresh-clone/worktree heuristic recorded below: compare
+  `packages/ui/dist`'s mtime against `git log -1 --format=%cd --
+  packages/ui`, then confirm that commit is an ANCESTOR of HEAD. The
+  ancestor leg is load-bearing rather than ceremony — `git log -1 --
+  <path>` walks from HEAD, so it can name a MERGE commit whose subject is
+  another leg's branch, which reads as a sibling checkout's work until
+  `merge-base --is-ancestor` answers.
 - The `--reporter=verbose` per-case regex above must make the trailing
   ` <n>ms` OPTIONAL: a line carries its duration only when the case RAN, so
   a regex REQUIRING it silently drops every SKIPPED line and the damage
@@ -1313,6 +1442,26 @@ matching anything prints exactly the same five lines.
   script edit, never an ignore-pattern change, and `--no-ignore` is a
   misleading reflex that presumes the half nobody measured. Ask with a plain
   explicit-path `-f json` run first.
+- CORRECTION to the sentence above: which of the four shapes an
+  explicit-path run answers is a function of the CONFIG the cwd selects and
+  NOT of the file, so any run reporting a shape owes the directory it ran
+  from. `packages/service/package.json` is the member that shows it —
+  covered-and-clean at 0 errors and 0 warnings from INSIDE the package,
+  where the same explicit path taken from the ROOT answers the IGNORED
+  shape, the root leaf config ignoring `packages/**`. Measured over one
+  branch, all six changed package markdown files plus the manifest answered
+  covered-and-clean from `packages/service`, so the repair for any of them
+  is a one-word pathspec edit rather than an ignore change — the
+  opposite of what the root-taken reading implies. There is a FOURTH shape
+  besides covered-and-clean, ignored and a real finding, and `bun.lock` is a
+  member: `File ignored because no matching configuration was supplied` at 0
+  errors and ONE warning, the base config scoping its blocks to js/mjs/ts,
+  md and json. A classifier keying on `"messages":[{` scores it as a
+  FINDING. The `bun x` per-directory trap does NOT bite eslint here (v9.39.5
+  from both the root and the package), so choosing the directory is about
+  the config and never the binary — measure it in the same command
+  anyway, or a reader carrying the playwright precedent attributes a shape
+  difference to the tool.
 - BOTH not-covered shapes exist here and they need OPPOSITE repairs, so
   classify before proposing either. Measured over eleven paths in
   `packages/service` that neither package gate reads: the eight markdown
@@ -1485,6 +1634,36 @@ matching anything prints exactly the same five lines.
   `git rev-list --count <range>` — equal is what says every commit was
   classified, so a commit touching nothing any bucket names is NAMED rather
   than silently absent.
+- That sum reconciles ONLY when each commit lands in exactly ONE bucket, so
+  key the bucket on the commit's whole SET of top-level segments joined and
+  never add the commit once per segment. Measured over 41 commits: three
+  touched two areas at once, so the per-segment spelling answered 44 against
+  41 and read as three double-counted commits — landing precisely on the
+  arithmetic that IS the reconciliation. The set-keyed form also keeps a
+  commit no bucket names visible as its own empty-set bucket.
+- A per-commit walk over a range containing MERGES is silently BLIND, and it
+  answers an exclusion claim CLEAN for the merge that brought the excluded
+  package in: `git show --format= --name-only <merge>` prints ZERO paths
+  (measured 0 against 6 for that same commit under `-m --first-parent`).
+  Branch the walk on the parent count from
+  `git rev-list --parents -n 1 <sha>`.
+- All three widenings of a never-touched claim can be VACUOUS BY
+  CONSTRUCTION, and the honest close-out says which proved nothing: zero
+  renames makes `--no-renames` agree with the default, zero merges makes
+  `--full-history` agree, and a range whose paths all still exist at HEAD
+  makes the per-commit UNION equal the tree-to-tree changed set (measured
+  62 == 62 with ZERO transient paths over 41 commits). What makes the walk a
+  reading anyway is two SET comparisons rather than its own bucket sum —
+  the union held as a SUPERSET of the changed set (a walk that resolved
+  nothing answers an empty union and reports every changed path as missing),
+  plus the TRANSIENT set printed, which is the only population the
+  tree-to-tree diff structurally cannot see.
+- The repo-ROOT untracked plant cannot prove a PATHSPEC-scoped
+  `git status --short -uall -- <dir>` zero: the root plant says `-uall`
+  reports untracked files at all, where a plant INSIDE the excluded
+  directory is the only one saying the pathspec resolves to it. Measured 0
+  bytes at rest, 42 naming the plant, 0 after removal, with the whole-tree
+  status byte-identical either side as the revert check.
 - `git ls-files --error-unmatch` gives such a claim a THIRD control the
   fabricated-sibling one cannot: a nonexistent file UNDER a real tracked
   prefix. `packages/webx` exits 1 for the trivial reason, where
@@ -1611,6 +1790,14 @@ matching anything prints exactly the same five lines.
   Filtering `git ls-files` through `isScannable` then closes the loop for
   free: the trio is in NEITHER the tracked nor the scanned set, which is a
   stronger statement than the ignores alone.
+- That path-SET assertion fails on a CORRECT ignore whenever the trio is
+  spelled with trailing slashes: `git check-ignore -v` echoes each path
+  ARGUMENT back verbatim while the PATTERN it names carries the slash, so
+  `.plans` in answers path `.plans` and pattern `.plans/` on one
+  TAB-separated record. Assert the set against the ARGUMENT spelling and
+  keep the pattern for the cross-read against the named `.gitignore` line
+  — they are different strings by construction and only the second is
+  comparable to the file.
 - That `--root <throwaway repo>` liveness control has TWO failure modes
   which each read as a RESULT rather than as a broken probe, and both land
   precisely on the exit code the control is read by. A RELATIVE script path
@@ -1674,6 +1861,20 @@ matching anything prints exactly the same five lines.
   (all of them `tests/workflows`, which IS in the include). Report all four
   numbers — the substring figure is what shows the prefix form is
   load-bearing rather than pedantry.
+- A per-path membership probe structurally CANNOT report a root a task
+  quietly dropped from the lint script whenever the changed set happens not
+  to touch it, so hold a per-ROOT non-zero count beside it and parse the
+  roots out of the MANIFEST rather than transcribing them. Measured off the
+  script's own read list: src 220, lib 61, workflows 13, tests 120, scripts
+  13, summing to 427. The same parse asserts every declared root is a
+  directory on disk, which catches a root renamed in the tree and left
+  standing in the script. And a changed set carrying markdown and a manifest
+  has no `N of N covered` reading at all — the shape that IS a
+  measurement is a REASON per miss with an UNEXPLAINED bucket asserted
+  EMPTY (measured 51 of 58 in eslint's read list and 50 of 58 in tsc's, with
+  all 50 changed `.ts` files in BOTH and every miss classifying as
+  outside-the-pathspec or not-a-TypeScript-file; the two gates differing by
+  exactly one path is the healthy shape rather than a gap).
 - A changed-set membership reading must split the DELETED half out or every
   deletion reads as a missing member: `git diff --name-only <base>..HEAD`
   lists paths that no longer exist and both gates correctly never list
@@ -1861,6 +2062,58 @@ zero and one command: `git merge-base --is-ancestor origin/main HEAD`
 exiting 0 says the merge is a FAST-FORWARD, under which no conflict is
 possible at all.
 
+Only the clean/conflict PAIR needs that /tmp repo. The UNRESOLVABLE-REF leg
+needs nothing at all: measured against the REAL repo,
+`refs/heads/zz-no-such-branch` answered EXIT 1 with
+`merge-tree: <ref> - not something we can merge` as a NON-OID first line,
+writing nothing (`git status --short -uall` at 0 bytes, HEAD and
+`origin/main` unmoved either side). Run all three legs in one command and
+classify on the FIRST LINE, so the real reading lands in a named cell rather
+than being read off an exit code that cannot separate them.
+
+**On a CONFLICTED merge the marker sweep is an EXPECTED non-zero**, and
+reading it as a finding inverts the check — the merged blob carries the
+markers by construction. The cross-check that turns it back into a reading
+is arithmetic and free: marker lines divided by three is that path's own
+conflict REGION count, which must be at least 1 and which you read
+against the hunks rather than against the narrative — `merge-tree`
+prints ONE `CONFLICT (content)` line per PATH however many regions that
+path carries, so the two agree only for a single-region path and a check
+holding them equal reports a correct multi-region conflict as broken
+(measured 6/3 == 2 regions in `bun.lock` against 1 narrative line, and
+3/3 == 1 against 1 in a manifest). The stage entries in the same capture
+tell the conflict KIND apart in one line — all THREE stages per path is
+a content conflict, where the add/add shape carries stages 2 and 3 alone.
+And the whole-tree diff against the merged oid survives a conflicted merge
+intact, so it is available here too and not only as the fast-forward
+replacement: merged-versus-HEAD must answer exactly the OTHER side's
+changed paths and merged-versus-`origin/main` exactly your own (measured 6
+and 62), which is the one reading saying the merge took BOTH sides rather
+than one winning. Where the both-touched set EQUALS the conflicted set no
+blob was three-way merged at all, so the line-arithmetic reading is
+UNAVAILABLE rather than skipped, and the duplicated-heading reader can be
+VACUOUS on a both-touched set carrying no markdown while its planted
+control still fires LIVE — a control proves the READER and never the
+subject, so say which of the two a zero is.
+
+**A dependency-adding branch meeting Dependabot on `main` conflicts on
+exactly the two manifest paths**, and the conflict is ADJACENT-LINE rather
+than semantic: ours inserted a dependency immediately above a package theirs
+BUMPED, once in the manifest and again in the lockfile's copy of the same
+block. The repair is taking both manifest edits and RE-INSTALLING; a
+hand-merged `bun.lock` is a lockfile no resolver ever wrote.
+
+**`git rev-parse --short <a> <b>` with TWO revisions dies**
+`fatal: Needed a single revision`, `--short` carrying `--verify` semantics,
+which reads as a missing ref rather than as a wrong call — the exact
+misreading the stale-`origin/main` trap wants to avoid. Ask one revision per
+call, or drop `--short` and shorten afterwards. And the
+`<base>..main` versus `<base>..origin/main` count pair reproduces with a
+NON-ZERO gap rather than only in principle: measured, both merge-bases
+answered the IDENTICAL sha while the two counts split 3 against 5, local
+`main` sitting two commits behind an `origin/main` `ls-remote` confirmed
+CURRENT.
+
 **That fast-forward corroboration is UNAVAILABLE on a branch BEHIND main**,
 and reaching for it reports a correct clean merge as broken. Where
 `git merge-base --is-ancestor origin/main HEAD` exits 1 the merged tree oid
@@ -1898,6 +2151,18 @@ broken, where a MERGED PR cannot serve. Pair it with
 `git ls-remote --heads origin` for the branch, which answers nothing when it
 was never pushed — two independent reasons for the same `[]`, and a body
 claiming no hosted green owes both.
+
+**But that `--state open` control is itself DEAD on a remote with no open
+PRs**, which is the steady state here between merges: measured, `--state
+open` with no head filter answered `[]`, so it could not tell a genuine
+absence from a broken filter either. `--state all` with no head filter is
+the form that stays live (it returned three merged PRs), and the merged-PR
+caveat above is about the merge-REF reading, not about this one. Pick the
+`ls-remote` half's control the same way: off `git ls-remote --heads origin`
+itself, never off `git for-each-ref refs/remotes/origin/`, where 29 of this
+clone's 33 remote-tracking refs named branches the remote no longer has.
+One real head asserted present at 1 line, the subject at 0, and a
+fabricated sibling at 0 is the discriminating trio.
 
 **A conflicting PR dispatches NO workflow at all**, so `no checks reported`
 on a fresh PR is a MERGE-STATE reading and not a trigger or changed-path
