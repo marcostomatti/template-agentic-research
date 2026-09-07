@@ -3,8 +3,10 @@
 Schema v2 is the whole of the pipeline's storage: what a domain is,
 what it is looking for, where its raw material comes from, what was
 made of that material, and what each pass did. This document is the
-map of it — the tables by area, and the rules the database enforces
-itself rather than leaving to whoever writes the row.
+map of it — the tables by area, the rules the database enforces
+itself rather than leaving to whoever writes the row, and the one
+total a reader assembles out of the keys with no rule behind it at
+all.
 
 It is the document the Schema row of the behaviour table in
 `docs/architecture/00-overview.md` names, so a change to the shape of
@@ -351,6 +353,92 @@ domain rule is asked at the child, so it binds every write naming a
 parent and nothing else: moving a root that already has children into
 another domain is accepted, and strands them across the boundary the
 rule otherwise refuses to create.
+
+## What one run spent
+
+Three columns make one question answerable.
+`research_pool.root_event_id` names the run an intention traces back
+to, `llm_calls.run_id` names the run a model call was made inside,
+and both reference `runs.id`. So a reader holding one run holds two
+things at once: the intentions that pass raised, and the ledger rows
+it wrote. Research is the expensive half of this pipeline, and the
+ledger on its own totals per pass and per day without saying what
+caused a pass to spend anything — this key is what makes a total
+attributable to the scheduled event behind it.
+
+Two statements write the stamp and both are raises. `ar-ingest`'s
+`Raise Research Intentions` stamps the run the dispatcher handed it,
+and `ar-score`'s stamps the run its own hand-over named, read off the
+incoming item behind a digit test. Nothing under `src/` inserts a
+`research_pool` row at all, so those two are the whole of what can
+put a run on one. `research_pool_root_event_id_idx` is what makes the
+read cheap from the run's side: given a run, the intentions it
+originated, without a scan of the gate.
+
+It is a join a reader writes rather than a rule the database holds,
+and nothing above bounds a spend. There is no ceiling column here, no
+trigger, and no CHECK comparing a raise against anything; the bound
+that does exist sits a long way from this schema, in the
+`Apply Call Ceiling` node three of the six workflows carry, whose cap
+is a literal in that node's code. So a total taken over this join
+reports what a pass spent and never what it was allowed to, and it
+reports it afterwards rather than while it is being spent.
+
+What the foreign key does hold is the attribution itself. A stamp
+names a run that exists, the column referencing `runs.id`; and
+`ON DELETE no action` means a run cannot be removed while an
+intention still cites it, so an attribution cannot quietly become a
+number pointing at nothing. That is integrity of the key rather than
+a budget, and the two are worth keeping apart in the reading.
+
+A row whose stamp is NULL drops out of the join altogether rather
+than joining to nothing, and the NULL is an ordinary state rather
+than a lost write: it means no originating run was recorded.
+`ar-score`'s raise is where it is reachable inside the pipeline — a
+score pass `ar-capture` initiated has no run id to hand on, that
+workflow opening its `runs` row when the pass closes — and a row
+inserted by an operator at a psql prompt names none either. So a
+total over the join is a total over the attributed part of the gate,
+and nothing anywhere reports the size of the rest:
+`root_event_id IS NULL` is the count worth taking beside any such
+total.
+
+The ledger end is nullable for its own version of the same reason, so
+the join loses rows from both sides: a call made inside no pass
+carries a NULL `run_id`, and `GET /spend/summary` keeps those in its
+answer only because it reads the ledger with a LEFT join and buckets
+them under no domain. Neither leg is unique on `runs.id` either — a
+run with twelve intentions and three calls joins to thirty-six rows —
+so a sum taken across all three tables at once multiplies the ledger
+by the queue. Aggregate the ledger per run first, or take the two
+legs as two reads.
+
+What a later pass spends on those intentions is not reachable from
+this key. `ar-research`'s drain projects the pool row it claimed
+without carrying `root_event_id` forward, and its `Record Research`
+writes the `entity_research` row and stamps the pool row in one
+statement with neither row carrying the other's id, so the research
+run's ledger hangs off the research run and nothing joins it back to
+the pass that queued the work. Reaching it means going by subject and
+time through `entity_research.entity_id`, which is a weaker join than
+this one. The payoff as the column and its raiser state it — what a
+scheduled run ultimately cost — is therefore the originating pass's
+own ledger read beside the queue it left behind, with the downstream
+half an attribution a reader argues rather than one these keys make.
+
+Two more limits. No member of the total is money: `llm_calls` carries
+`node`, `model`, `prompt_chars`, `est_tokens` and `called_at` and no
+price, rate or amount column at all, and `est_tokens` is arithmetic
+over `prompt_chars` rather than a provider's report, so what the join
+answers is a count and two magnitudes that do not reconcile with a
+bill — `src/runs/spend-service.ts` argues that at length for the
+surface that already totals the same table. And the two keys take
+opposite delete actions on purpose: the ledger cascades, a run owning
+its own account of itself, while an intention outlives the pass that
+raised it. One domain removal still takes both, `research_pool` by
+its own `domain_id` and the ledger through the runs it cascades from,
+so a total spanning a domain that no longer exists has to have been
+taken while it still did.
 
 ## Which migration owns which constraint
 
