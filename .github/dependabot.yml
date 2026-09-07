@@ -61,6 +61,15 @@ updates:
     ignore:
       - dependency-name: playwright
       - dependency-name: playwright-core
+      # `@playwright/test` belongs with the two above and was missed:
+      # it carries its OWN pinned `playwright-core`, so bumping it alone
+      # SPLITS the tree rather than moving it. Measured when `@ar/web`
+      # sat at 1.62.1 against `@ar/ui`'s 1.61.1 — a storybook bump then
+      # stopped deduping `@storybook/test-runner`'s playwright onto the
+      # pinned copy and pulled 1.62.1 nested, so the visual job asked the
+      # self-hosted runner for a chromium build it has no reason to hold.
+      # All three move together, by hand, cache key first.
+      - dependency-name: "@playwright/test"
 
       # ESLint 10 and TypeScript 7 are both blocked UPSTREAM — measured,
       # not assumed — so these hold the MAJOR only and keep taking every
