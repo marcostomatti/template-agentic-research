@@ -65,8 +65,9 @@
  * own INSERT. So every allowance case rests on a planted sample in
  * the suite. The span walk beneath the allowance has a live
  * subject of a kind — three `NOT EXISTS` subqueries across the
- * built tree, each over `research_pool` rather than over
- * `entity_research` — and not one of them is visible in an answer:
+ * built tree, two of them over `research_pool` and the third over a
+ * CTE, none over `entity_research` — and not one of them is
+ * visible in an answer:
  * {@link classifyResearchReads} over a raise statement walks that
  * span and reports an empty list, no read sitting inside it. So
  * both halves of the allowance rest on the plants, and
