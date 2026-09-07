@@ -64,6 +64,13 @@
       "when": 1788773506672,
       "tag": "0008_vengeful_the_hunter",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788786769955,
+      "tag": "0009_sparkling_red_hulk",
+      "breakpoints": true
     }
   ]
 }
