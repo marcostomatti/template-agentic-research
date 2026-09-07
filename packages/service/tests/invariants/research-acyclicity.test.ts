@@ -64,6 +64,31 @@
  * one answer carrying the tree's zero and the plant's edge is the
  * one shape where the zero cannot be a reading that never ran.
  *
+ * THE TWO HALVES WERE DRIVEN AGAINST THE SHIPPED STATEMENT and not
+ * only against the plants, and the two red sets are DISJOINT, which
+ * is what says the allowance is a branch this rule takes rather
+ * than a read it never sees. Both legs edited one site, the
+ * `Raise Research Intentions` node of `ar-ingest` under
+ * `workflows/src/`, which `pretest` rebuilt into the tree read
+ * here.
+ *
+ * A `JOIN entity_research er` added to that write — reading the
+ * answers already recorded and inserting from them — reddens the
+ * two cases under the verdict, `writes nothing upstream out of a
+ * research read` and `reports a planted read that feeds an
+ * upstream write`, each naming
+ * `ar-ingest.json:Raise Research Intentions`, and leaves both
+ * anti-join cases alone.
+ *
+ * The same table read inside a second `NOT EXISTS` beside the guard
+ * already there leaves the VERDICT green, no edge being reported,
+ * and moves exactly one case: `finds no anti-joined read in either
+ * surface`. That is the measurement working rather than the rule
+ * failing — the plant is the live subject that case records the
+ * absence of — so WHICH case moved is the reading there, and a
+ * red suite is not. Measured over the fifteen cases here, each
+ * leg against a green run of this package.
+ *
  * WHAT THIS FILE DOES NOT COVER, each named so a later widening is
  * a decision rather than a discovery. The reading over `src/` is a
  * reading of SQL TEXT, so a row written through the drizzle builder
