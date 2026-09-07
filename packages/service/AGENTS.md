@@ -657,7 +657,7 @@ held by nothing. Read it before adding a node.
   snapshot needs its own discrimination, since `notNull` is a boolean and
   `default` a value: some column must read `notNull: false` and some must
   carry no `default`, plus the leg a task omits — assert the column is
-  ABSENT from the PREVIOUS snapshot, or —the snapshot carries it— is
+  ABSENT from the PREVIOUS snapshot, or "the snapshot carries it" is
   satisfied by a snapshot that always did. The index map answers more than a
   count, too: `isUnique` per index and a non-empty `where` per index are
   what let a doc row describe the set rather than tally it.
