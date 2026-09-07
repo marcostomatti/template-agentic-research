@@ -286,7 +286,7 @@ export const POOL_SQL_RULES: readonly PoolSqlRule[] = [
   // fragment here is absent from this node's own prose, measured,
   // which is not the case further down the roster. The strip is
   // still what makes them readable rather than lucky — this
-  // statement is 86 per cent comment by character.
+  // statement is 87 per cent comment by character.
   {
     id: 'pool-ingest-one-intention-per-finding',
     property:
