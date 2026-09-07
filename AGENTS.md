@@ -600,14 +600,16 @@ than a typo.
   note-app-without-scheme 33 across 16, path-segment-without-slashes 27
   across 3. Re-measured at 1038, after phase 6's export and renderer
   modules landed: 15 / 1 UNCHANGED, then 162 hits across 44 files and
-  202 across 16. Only the first is stable, so a stage holding either of
-  the others against a quoted figure reports a correct control as a
-  regression. Mind the shape too — a `git grep` figure counts LINES
-  while a `findForbiddenMatches` probe counts one record per HIT (150
-  and 187 lines respectively for those two). So say which zeros are
-  backed by a live control and which rest on the planted sample ALONE
-  — a blanket "the controls proved the guards discriminate" is false
-  of the host needle every time.
+  202 across 16. Re-measured at 1134 tracked files: prefix 24 across
+  4, uri 166 across 48, path 202 across 16 — so the PREFIX moved after
+  three readings at 15 while the PATH held, and no member of the set
+  is stable. A stage holding any of them against a quoted figure
+  reports a correct control as a regression. Mind the shape too — a
+  `git grep` figure counts LINES while a `findForbiddenMatches` probe
+  counts one record per HIT (150 and 187 lines respectively for those
+  two). So say which zeros are backed by a live control and which rest
+  on the planted sample ALONE — a blanket "the controls proved the
+  guards discriminate" is false of the host needle every time.
 - The `packages/ui` bucket is a SEPARATE probe from `findForbiddenMatches`
   and needs its OWN fragment-built planted control, taken from
   `packages/ui/eslint.config.mjs`'s `BANNED_SOURCE_SCOPE` and
