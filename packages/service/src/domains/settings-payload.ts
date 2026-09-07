@@ -24,7 +24,7 @@
  * `unrecognized_keys` issue names the object that refused and never
  * the key it refused, so strictness here costs no containment there.
  *
- * TWO OF THE FIVE MEMBERS ARE OPEN BY KEY, AND THAT IS THE POINT OF
+ * TWO OF THE SIX MEMBERS ARE OPEN BY KEY, AND THAT IS THE POINT OF
  * THEM. The keys of `scoringWeights` are the signals one domain
  * scores on and the keys of `fieldContract` are the fields its
  * findings carry; both are the domain's own vocabulary, which is
@@ -143,18 +143,26 @@ const domainFieldSpecSchema = z.object({
  * behaviour so a zod version that starts refusing instead is a red
  * test rather than a route that quietly changed status.
  *
- * `minResearchIntervalSeconds` is the one member with a numeric
- * domain rather than a shape of its own, and it is NONNEGATIVE
- * rather than positive because zero is the off switch: a domain
- * setting it to zero is asking for every candidate to be raised,
- * and a schema refusing that value would leave the setting no way
- * to say so. Integer seconds is the vocabulary
- * `schedulableColumns()` in `../db/schema/scheduling.ts` already
- * sets, so this floor and a topic's own `min_interval_seconds` are
- * two numbers a reader compares rather than two units. A fractional
- * window is refused rather than rounded — the rounding would be
- * this module's own invention, and a 422 naming the member is what
- * an operator can act on.
+ * TWO MEMBERS CARRY A NUMERIC DOMAIN RATHER THAN A SHAPE OF THEIR
+ * OWN, and both are NONNEGATIVE rather than positive because zero
+ * says something in each of them — opposite things, which is why
+ * neither borrows the other's argument. A
+ * `minResearchIntervalSeconds` of zero asks for every candidate to
+ * be raised, and a `maxAgentReschedules` of zero refuses every agent
+ * proposal, so the loosest setting and the tightest are spelled the
+ * same way and a schema refusing the value would leave both of them
+ * unable to say what they mean. Absent is a third answer again in
+ * either: the fleet default applies, which is what neither zero asks
+ * for.
+ *
+ * Integer in both, and a fractional value is refused rather than
+ * rounded. Seconds is the vocabulary `schedulableColumns()` in
+ * `../db/schema/scheduling.ts` already sets, so the floor and a
+ * topic's own `min_interval_seconds` are two numbers a reader
+ * compares rather than two units; the cap counts passes, which has
+ * no fractional value to round. The rounding would be this module's
+ * own invention either way, and a 422 naming the member is what an
+ * operator can act on.
  */
 export const domainSettingsSchema = z.object({
   scoringWeights: z.record(z.string(), z.number()).optional(),
@@ -162,6 +170,9 @@ export const domainSettingsSchema = z.object({
   fieldContract: z.record(z.string(), domainFieldSpecSchema).optional(),
   findingsDisplayName: z.string().optional(),
   minResearchIntervalSeconds: z.number().int()
+    .nonnegative()
+    .optional(),
+  maxAgentReschedules: z.number().int()
     .nonnegative()
     .optional(),
 }).strict();
