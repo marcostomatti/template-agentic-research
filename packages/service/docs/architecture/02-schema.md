@@ -3,8 +3,10 @@
 Schema v2 is the whole of the pipeline's storage: what a domain is,
 what it is looking for, where its raw material comes from, what was
 made of that material, and what each pass did. This document is the
-map of it — the tables by area, and the rules the database enforces
-itself rather than leaving to whoever writes the row.
+map of it — the tables by area, the rules the database enforces
+itself rather than leaving to whoever writes the row, and the one
+total a reader assembles out of the keys with no rule behind it at
+all.
 
 It is the document the Schema row of the behaviour table in
 `docs/architecture/00-overview.md` names, so a change to the shape of
@@ -233,10 +235,12 @@ skipped and not-yet-due are indistinguishable from outside.
 
 ### One index serves both per-source document readers
 
-Three indexes are declared in the schema modules. Every other access
+Ten indexes are declared in the schema modules. Every other access
 path in schema v2 is a primary key, a unique key, or a sequential scan
 — Postgres builds an index for each of the first two on its own, so
-only these three were a decision somebody took.
+every one of the ten was a decision somebody took. Three of them are
+the subject of this section; the rest carry their own arguments in the
+TSDoc beside each declaration.
 
 | Index | Over | What reads it |
 | --- | --- | --- |
@@ -352,6 +356,92 @@ parent and nothing else: moving a root that already has children into
 another domain is accepted, and strands them across the boundary the
 rule otherwise refuses to create.
 
+## What one run spent
+
+Three columns make one question answerable.
+`research_pool.root_event_id` names the run an intention traces back
+to, `llm_calls.run_id` names the run a model call was made inside,
+and both reference `runs.id`. So a reader holding one run holds two
+things at once: the intentions that pass raised, and the ledger rows
+it wrote. Research is the expensive half of this pipeline, and the
+ledger on its own totals per pass and per day without saying what
+caused a pass to spend anything — this key is what makes a total
+attributable to the scheduled event behind it.
+
+Two statements write the stamp and both are raises. `ar-ingest`'s
+`Raise Research Intentions` stamps the run the dispatcher handed it,
+and `ar-score`'s stamps the run its own hand-over named, read off the
+incoming item behind a digit test. Nothing under `src/` inserts a
+`research_pool` row at all, so those two are the whole of what can
+put a run on one. `research_pool_root_event_id_idx` is what makes the
+read cheap from the run's side: given a run, the intentions it
+originated, without a scan of the gate.
+
+It is a join a reader writes rather than a rule the database holds,
+and nothing above bounds a spend. There is no ceiling column here, no
+trigger, and no CHECK comparing a raise against anything; the bound
+that does exist sits a long way from this schema, in the
+`Apply Call Ceiling` node three of the six workflows carry, whose cap
+is a literal in that node's code. So a total taken over this join
+reports what a pass spent and never what it was allowed to, and it
+reports it afterwards rather than while it is being spent.
+
+What the foreign key does hold is the attribution itself. A stamp
+names a run that exists, the column referencing `runs.id`; and
+`ON DELETE no action` means a run cannot be removed while an
+intention still cites it, so an attribution cannot quietly become a
+number pointing at nothing. That is integrity of the key rather than
+a budget, and the two are worth keeping apart in the reading.
+
+A row whose stamp is NULL drops out of the join altogether rather
+than joining to nothing, and the NULL is an ordinary state rather
+than a lost write: it means no originating run was recorded.
+`ar-score`'s raise is where it is reachable inside the pipeline — a
+score pass `ar-capture` initiated has no run id to hand on, that
+workflow opening its `runs` row when the pass closes — and a row
+inserted by an operator at a psql prompt names none either. So a
+total over the join is a total over the attributed part of the gate,
+and nothing anywhere reports the size of the rest:
+`root_event_id IS NULL` is the count worth taking beside any such
+total.
+
+The ledger end is nullable for its own version of the same reason, so
+the join loses rows from both sides: a call made inside no pass
+carries a NULL `run_id`, and `GET /spend/summary` keeps those in its
+answer only because it reads the ledger with a LEFT join and buckets
+them under no domain. Neither leg is unique on `runs.id` either — a
+run with twelve intentions and three calls joins to thirty-six rows —
+so a sum taken across all three tables at once multiplies the ledger
+by the queue. Aggregate the ledger per run first, or take the two
+legs as two reads.
+
+What a later pass spends on those intentions is not reachable from
+this key. `ar-research`'s drain projects the pool row it claimed
+without carrying `root_event_id` forward, and its `Record Research`
+writes the `entity_research` row and stamps the pool row in one
+statement with neither row carrying the other's id, so the research
+run's ledger hangs off the research run and nothing joins it back to
+the pass that queued the work. Reaching it means going by subject and
+time through `entity_research.entity_id`, which is a weaker join than
+this one. The payoff as the column and its raiser state it — what a
+scheduled run ultimately cost — is therefore the originating pass's
+own ledger read beside the queue it left behind, with the downstream
+half an attribution a reader argues rather than one these keys make.
+
+Two more limits. No member of the total is money: `llm_calls` carries
+`node`, `model`, `prompt_chars`, `est_tokens` and `called_at` and no
+price, rate or amount column at all, and `est_tokens` is arithmetic
+over `prompt_chars` rather than a provider's report, so what the join
+answers is a count and two magnitudes that do not reconcile with a
+bill — `src/runs/spend-service.ts` argues that at length for the
+surface that already totals the same table. And the two keys take
+opposite delete actions on purpose: the ledger cascades, a run owning
+its own account of itself, while an intention outlives the pass that
+raised it. One domain removal still takes both, `research_pool` by
+its own `domain_id` and the ledger through the runs it cascades from,
+so a total spanning a domain that no longer exists has to have been
+taken while it still did.
+
 ## Which migration owns which constraint
 
 `drizzle/` holds two mechanisms. All but one of its files were
@@ -362,7 +452,7 @@ migration here that was.
 
 | Owner | What it carries |
 | --- | --- |
-| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_jittery_talos.sql`, `0005_freezing_hairball.sql`, `0006_tearful_kabuki.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 26 tables, 177 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 12 CHECK — the nine value-set checks generated from the tuples in `src/db/schema/values.ts`, the two spanning two columns, `research_pool_approval_check` and `source_config_proposals_approval_check`, and the singleton bound pinning `operator_settings.id` to 1. All 34 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. All three indexes: the two partial dispatch-claim ones, and `documents_source_parse_status_idx`, which is not partial. |
+| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_jittery_talos.sql`, `0005_freezing_hairball.sql`, `0006_tearful_kabuki.sql`, `0007_big_cardiac.sql`, `0008_vengeful_the_hunter.sql`, `0009_sparkling_red_hulk.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 26 tables, 179 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 12 CHECK — the nine value-set checks generated from the tuples in `src/db/schema/values.ts`, the two spanning two columns, `research_pool_approval_check` and `source_config_proposals_approval_check`, and the singleton bound pinning `operator_settings.id` to 1. All 35 foreign keys, each emitted as its own `ALTER TABLE ... ADD CONSTRAINT` rather than inline in a table body. All ten indexes: the two partial dispatch-claim ones over (`enabled`, `next_run_at`), and eight that are not partial — the four keyset page keys `documents_domain_id_captured_at_idx`, `findings_domain_id_score_created_at_idx`, `finding_labels_finding_id_labelled_at_idx` and `runs_domain_id_started_at_idx`, each ending its key in `id`; `llm_calls_called_at_idx` over the spend window; `documents_source_parse_status_idx` and `source_config_proposals_source_id_status_idx`; and `research_pool_root_event_id_idx` over the cost-attribution key. None of the ten is unique, and no table here carries a composite primary key. |
 | Hand-written — `0002_category_depth_guard.sql` | `categories_enforce_depth()` and the `BEFORE INSERT OR UPDATE` trigger on `categories` that calls it. Two statements, one rule, and the whole of the custom-owned DDL. |
 
 The snapshot decides that split, not taste. A table's entry in
@@ -388,11 +478,11 @@ children of the row being written, which no table definition states.
 
 Ownership says nothing about the reading. `readMigrationSql()` in
 `tests/invariants/schema-sql.ts` concatenates every `.sql` under
-`drizzle/` and its assertions run over the whole text, so fifteen of
-them land in the generated migrations and two in the hand-written one
-with nothing in the roster recording which. What does follow from the
-split is what a match there is worth. A generated statement is one of
-two tracked copies of one rule, and the module it came from is the
+`drizzle/` and its assertions run over the whole text, so twenty-five
+of them land in the generated migrations and two in the hand-written
+one with nothing in the roster recording which. What does follow from
+the split is what a match there is worth. A generated statement is one
+of two tracked copies of one rule, and the module it came from is the
 other; the trigger is written down once, so that file is the only
 tracked record of it, and the live suite is the only thing anywhere
 that watches a database refuse the write.

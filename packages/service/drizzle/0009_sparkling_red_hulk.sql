@@ -1,0 +1,1 @@
+ALTER TABLE "topics" ADD COLUMN "agent_reschedules" integer DEFAULT 0 NOT NULL;

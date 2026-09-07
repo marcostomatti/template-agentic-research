@@ -620,14 +620,16 @@ than a typo.
   note-app-without-scheme 33 across 16, path-segment-without-slashes 27
   across 3. Re-measured at 1038, after phase 6's export and renderer
   modules landed: 15 / 1 UNCHANGED, then 162 hits across 44 files and
-  202 across 16. Only the first is stable, so a stage holding either of
-  the others against a quoted figure reports a correct control as a
-  regression. Mind the shape too — a `git grep` figure counts LINES
-  while a `findForbiddenMatches` probe counts one record per HIT (150
-  and 187 lines respectively for those two). So say which zeros are
-  backed by a live control and which rest on the planted sample ALONE
-  — a blanket "the controls proved the guards discriminate" is false
-  of the host needle every time.
+  202 across 16. Re-measured at 1134 tracked files: prefix 24 across
+  4, uri 166 across 48, path 202 across 16 — so the PREFIX moved after
+  three readings at 15 while the PATH held, and no member of the set
+  is stable. A stage holding any of them against a quoted figure
+  reports a correct control as a regression. Mind the shape too — a
+  `git grep` figure counts LINES while a `findForbiddenMatches` probe
+  counts one record per HIT (150 and 187 lines respectively for those
+  two). So say which zeros are backed by a live control and which rest
+  on the planted sample ALONE — a blanket "the controls proved the
+  guards discriminate" is false of the host needle every time.
 - The `packages/ui` bucket is a SEPARATE probe from `findForbiddenMatches`
   and needs its OWN fragment-built planted control, taken from
   `packages/ui/eslint.config.mjs`'s `BANNED_SOURCE_SCOPE` and
@@ -836,6 +838,121 @@ red package never masks another and a single run gives the whole picture.
   echo occupies the same slot `lint:all` fills with `$ eslint .`. Classify
   every line, because an unaccounted line IS the tool's own output, and that
   is the only reading that makes "prints nothing" a measurement.
+- CORRECTION to "both fan-outs are exactly five lines": that is true of
+  `check-types:all` and NOT of `lint:all`, because ESLint WARNINGS leave
+  the exit code at 0. Measured on a clean tree, `lint:all` came back at
+  13 lines and exit 0, `@ar/ui` printing two carried-in
+  `Unused eslint-disable directive` warnings against
+  `packages/ui/src/atoms/Menu/Menu.tsx`. So a classifier applying the
+  five-line SHAPE to both reports a green run as carrying eight
+  unexplained lines. The per-package `Exited with code` SET is the
+  verdict; a warning block is a carried-in reading worth recording in a
+  baseline, never a failure.
+- The sibling clause above — the two fan-outs listing their package lines
+  in DIFFERENT ORDERS, "a live control that costs nothing" — is a
+  SNAPSHOT and not a property. Measured at another sha, BOTH fan-outs put
+  `@ar/ui` first. The order is nondeterministic rather than reliably
+  different, so a run finding the two orders EQUAL has lost a control
+  rather than found a fault, and the read-it-as-a-SET rule has to stand
+  on its own.
+- Both fast fan-out captures can come back BYTE-IDENTICAL to a baseline
+  taken before the branch had a single commit — measured, `diff` at ZERO
+  lines against both `/tmp` baselines across 42 commits, at 695 and 200
+  bytes. That is this file's own "a green SHAPE is invariant under what
+  it COVERS" law as a measurement, so byte-identity is the EXPECTED
+  result and never a corroboration: a capture task recording an exit-code
+  SET without a per-PATH coverage reading beside it hands the wrap-up a
+  capture indistinguishable from the pre-branch one.
+- A LOCAL INSTALL PREDATING A MERGED PR reds `test:all` as FILE-level
+  COLLECTION failures reading exactly like a code regression: measured,
+  four files answered `Cannot find package '<name>' imported from ...`
+  for three packages a just-merged PR had added to a manifest. NEITHER
+  fast fan-out warns first — both were GREEN while `test:all` was red,
+  the missing module never being imported by a type-checked path. The
+  discriminator is two readings in one command: the manifest DECLARES it
+  at HEAD, and it is ABSENT from `packages/<pkg>/node_modules` (the
+  isolated linker means the ROOT one is not where to look). Repair is
+  `bun install --frozen-lockfile`, which resolves what the lockfile
+  already says and rewrites nothing — `git status --short -uall` at ZERO
+  bytes afterwards is the whole check.
+- Collection and CASE failures are DIFFERENT populations inside one
+  summary, and holding the two against each other separates them free:
+  `Test Files 5 failed` beside `Tests 1 failed` means four files never
+  collected, the failure GLYPH count scores only the case-level one, and
+  the uncollected files' cases are missing from the case TOTAL too — so
+  the repair moves the case total while the FILE total holds (measured
+  192 files both sides, 6299 then 6406 cases).
+- A `test:all` case-total delta has a FOURTH population beyond added,
+  modified and skipped test files, and no changed-set reading of
+  `*.test.ts` can find it: a test file the branch NEVER TOUCHED whose
+  cases are GENERATED per entry of a roster module that it DID change.
+  Measured reconciling 6406 to 6453 — 34 cases from four ADDED files, 9
+  from three MODIFIED ones, and 4 from an unchanged
+  `tests/invariants/schema-sql.test.ts` whose `SCHEMA_SQL_ASSERTIONS`
+  went 23 entries to 27. Without that member the sum is short by exactly
+  the roster delta and reads as cases nobody can account for, which is
+  the shape a real regression has. Sweep the changed set for roster
+  MODULES beside the `.test.ts` files.
+- The BASE-side case count of a MODIFIED test file needs no worktree, no
+  stash and no install: `git show <base>:<path>` written to a
+  `zz-tmp-base-<name>.test.ts` in the SAME directory resolves its own
+  relative imports and runs, so `bun x vitest run` over the base copy
+  beside the HEAD copy answers both counts in one command (measured 73 to
+  82 over three files, ~2s, `git status --short -uall` at zero bytes
+  after the `rm`). Expect the base copy to RED where its roster disagrees
+  with HEAD's `src` — the case COUNT is the reading and the red is not a
+  finding.
+- A summary-line classifier over a `test:all` capture silently drops the
+  ROOT vitest block, and the omission is invisible because the
+  per-package lines it does find look complete. The root summary carries
+  LEADING WHITESPACE and no `@ar/` prefix (` Test Files 3 passed (3)`),
+  and the per-package form has TWO spaces after its colon — so a
+  reflexive `^(?:(@ar/\S+ \S+:)\s+)?(Test Files|Tests)` matches nothing
+  at the root, and a single-space `\S+: ` anchor drops every package line
+  as well and answers only the Playwright ones. Allow `^\s*` in front and
+  `\s+` after the colon, and hold the block COUNT at four (root, ui, web,
+  service).
+- A NEW shape of the `@ar/service` supertest port steal, and it reads as
+  a null-safety bug in the test rather than as the flake: `TypeError:
+  Cannot read properties of undefined (reading 'find')` from a helper
+  destructuring the response body, the request having been answered by
+  something that is not this service. Its sibling in the same run was the
+  recorded `socket hang up`. The failure set can also re-roll to EMPTY
+  rather than to a different set — run 2 at the same commit was fully
+  green with IDENTICAL file and case totals (196 / 6453) and the two
+  failed cases crossing into passed member for member, which is a
+  stronger attribution leg than either solo run and costs one more
+  `test:all`.
+- `gate:control-bytes` is a ROOT script and not a package one: run from
+  `packages/service` it answers `error: Script not found` at exit 1,
+  which reads like the gate having been removed rather than like a wrong
+  working directory.
+- Which CI workflow a branch dispatches is DERIVABLE rather than
+  assertable, and it is one `yaml.safe_load` over `.github/workflows/`:
+  hold the branch's changed set against each workflow's own
+  `pull_request` `paths` list with `fnmatch`. Measured over one branch of
+  32 changed paths — `back.yml` matched 31 and `front.yml` matched NONE,
+  so an absent Front job is a path-filter reading rather than a missing
+  check, and the single unmatched path was the repo-root `AGENTS.md`,
+  which matches neither. The same parse prints each job's resolved `run`
+  list, which is what says a hosted green covers the ROOT and
+  `@ar/service` halves of `lint`/`check-types`/`test` and NOT `test:all`
+  — so `@ar/ui`, `@ar/web` and every `tests/live/` file have no hosted
+  evidence at all.
+- An EXTERNAL process can reformat a tracked markdown file mid-task, and
+  the damage lands on exactly the cell this file warns about. A
+  prettier-style table rewrite appeared in the root `AGENTS.md` between a
+  clean `git status` and a python write that touched only ten lines six
+  hundred lines below the table, with NO PostToolUse hook configured
+  here; it padded every column and CORRUPTED the workspace-map row whose
+  cell carries a bare `|` inside a code span, splitting the row into
+  extra columns and dropping a `(`. The tell is `git diff --stat`
+  reporting more lines than the edit wrote (16/14 against the 10/8 the
+  script produced), so read the whole `git diff` after any tracked-file
+  write and never the stat alone. The repair is
+  `git checkout HEAD -- <file>` followed by re-running the edit as a
+  DETERMINISTIC /tmp script, which is the second reason to build a doc
+  edit that way rather than by hand.
 - Read a RED `check-types:all` by its shape, not by an exit code: `tsc
   --noEmit` exits **2** on a type error, so the per-package line reads
   `@ar/<pkg> check-types: Exited with code 2` and a driver keying on 1
@@ -2249,6 +2366,57 @@ than assuming — import `findNextTask` under bun and drive it over the
 edited tracker; it must still name the same open task at the same line
 number. Verify the pair with
 `diff <(sed 's/^- \[x\]/- [ ]/' <tracker>) <plan>` at zero lines.
+
+**But "it is safe" covers the PARSER and not the LOOP, and the loop cannot
+tick a task that appends to its own plan.** `tools/ralph/start.ts` reads the
+tracker and computes `taskInfo.lineNum` BEFORE dispatching the agent, then
+calls `updateTrackerLine(trackerPath, taskInfo.lineNum, 'done')` AFTER it
+returns. Every close-out task appends under the `## Close-out notes`
+heading, which sits ABOVE the whole task list, so the append shifts every
+checkbox down by however many lines it wrote and that captured index is
+stale by exactly that much. `updateTrackerLine` re-reads the file but
+indexes it positionally, and its `line.replace(/^- \[ \]/, '- [x]')` is a
+silent NO-OP on a non-checkbox line, so the tracker is rewritten
+byte-identical and the SAME task is dispatched again forever. Measured: a
+160-line append moved the task from 0-idx 573 to 733 and left the loop
+aiming at a code-fence line. The repair is for the appending task to tick
+its OWN box in the TRACKER (never the plan — the pair is byte-identical
+APART from checkbox state).
+
+**The safety property that owes is about the BLOCK, not the arithmetic.**
+The stale index routinely lands INSIDE the appended block rather than on
+shifted old content (measured, offset 68 of a 151-line block), so assert
+the appended block carries NO checkbox line ANYWHERE and the loop's later
+positional write is a guaranteed no-op wherever in it it lands. A probe
+holding `pre[captured - inserted] == post[captured]` FAILS on a correct
+append and reads as broken arithmetic, the shift formula only applying at
+or beyond the block's END; `inserted` is `anchor - start`, the block
+INCLUDING its blank separator.
+
+**`findNextTask` takes the tracker's CONTENT, not its path**, and handing
+it a path returns `null` rather than throwing — which reads exactly like a
+tracker whose edit broke the parser, the shape the probe exists to rule
+out. Its `TaskInfo` fields are `task`, `lineNum` (ZERO-indexed) and
+`status`, NOT `text`/`lineNumber`, and the open status VALUE is
+`'unchecked'` rather than the `'pending'` a reader assumes (blocked is
+`'blocked'`). Reconstruct the pre-edit side by REVERSING the edit in
+memory: `.plans/` is untracked, so `git show HEAD:<the plan>` dies and
+there is no committed before-side to diff against at all. And the usual
+controls go UNINFORMATIVE the moment your own tick leaves the tracker with
+no open task — `null` is then the correct answer, and the
+path-instead-of-content and every-box-ticked controls both answer `null`
+for the trivial reason. The discriminating drive is to UN-TICK your own box
+in memory and require the parser to name THIS task at THIS index.
+
+**A deterministic doc-appender's splice must remove the block AND the blank
+separator it wrote**, or the file GROWS BY ONE LINE per run and the fault
+surfaces three places away from its cause. Measured: backing the end off
+over blanks removed 118 of the 119 lines it had inserted, so run 2 left a
+doubled blank, the reconstruct-the-pre-edit-file sha MISSED — which reads
+exactly like the retouched-neighbouring-line finding that check exists to
+report — and the ralph index arithmetic went off by one with every other
+assertion still passing. Take `lines[:start] + lines[anchor:]`, and let a
+second run's sha equality be the reading.
 
 **A PR-opening task's own verification is `gh pr checks`**, and it can
 find a defect no local gate could — run it rather than treating the

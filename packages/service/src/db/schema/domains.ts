@@ -130,6 +130,79 @@ export interface DomainSettings {
    * `docs/architecture/00-overview.md` for the rule in full.
    */
   readonly findingsDisplayName?: string;
+
+  /**
+   * The shortest gap between two research passes over one entity, in
+   * seconds. A subject whose `research_pool` row was completed
+   * inside this window is not raised again, and zero disables the
+   * refusal outright: a domain that sets it to zero is asking for
+   * every candidate to be raised, which is the same switch a
+   * shadow-mode boolean would have given at the cost of a second
+   * setting to read and keep consistent with this one.
+   *
+   * Seconds rather than days or a Postgres `interval`, because that
+   * is the vocabulary `schedulableColumns()` in `./scheduling.ts`
+   * already sets: every cadence bound in the pipeline is integer
+   * seconds, so a reader holding this floor against a topic's own
+   * `min_interval_seconds` compares two numbers instead of
+   * converting one of them first.
+   *
+   * Absent does not mean unbounded. It falls back to the build
+   * setting `AR_RESEARCH_MIN_INTERVAL_SECONDS`, whose fleet default
+   * lives in `ENV_DEFAULTS` in `scripts/workflow-markers.ts` and
+   * reaches a raise statement as a resolved marker rather than as a
+   * literal written into it. That is what keeps one number in one
+   * place: a window spliced into each raiser is two values to edit
+   * and nothing to report when only one of them moves, and a
+   * literal is not nameable from outside the SQL that carries it.
+   *
+   * The refusal belongs in the SQL of the raise, beside the
+   * `finding_id` guard already there, so every caller inherits it
+   * rather than each one remembering to ask for it.
+   */
+  readonly minResearchIntervalSeconds?: number;
+
+  /**
+   * How many times in a row an agent may move one topic's next due
+   * time before the proposal stops being written. Consecutive is the
+   * whole of what this counts, and the bound is on a walk rather
+   * than on a rate: a topic an agent reschedules once and then
+   * leaves to its own cadence has spent nothing of it, and what a
+   * cap catches is a pass asking for a shorter gap on every round
+   * until the topic is claimed as fast as the dispatcher ticks.
+   *
+   * A refused proposal is not a pause. The topic keeps the cadence
+   * its own `interval_seconds` gives it, the increment `ar-dispatch`
+   * wrote when it claimed the row still standing, so what the cap
+   * withholds is the sooner time and never the topic.
+   *
+   * A pass that recorded every candidate it drained resets the
+   * streak, because such a pass proposes no gap at all: approved
+   * work left behind is the only ground `Propose Next Run` proposes
+   * on, so recording everything is the ordinary outcome and the one
+   * that leaves the topic on its periodic increment. That is what
+   * makes the count consecutive rather than cumulative — a
+   * cumulative one would retire a topic for a walk it had since come
+   * out of.
+   *
+   * `runs.scheduled_by` stays the attribution and is not asked to be
+   * the state. It records who set a due time, which is what makes an
+   * unexpected cadence traceable afterwards, but no `runs` row names
+   * a topic — beside its own id the columns are the domain, the two
+   * times, the status, the counts, the errors and that one — so the
+   * ledger can say an agent set a time and not which row it set. A
+   * streak read back out of it would be per domain where the walk is
+   * per topic, which is why the streak itself has to be carried on
+   * the topic.
+   *
+   * Absent falls back to a fleet default rather than to no bound at
+   * all, on the reading `minResearchIntervalSeconds` above records:
+   * the number belongs in `ENV_DEFAULTS` in
+   * `scripts/workflow-markers.ts`, one place holding it and a
+   * resolved marker carrying it into the SQL, rather than as a
+   * literal spliced into the statement that closes a research pass.
+   */
+  readonly maxAgentReschedules?: number;
 }
 
 export const domains = pgTable('domains', {

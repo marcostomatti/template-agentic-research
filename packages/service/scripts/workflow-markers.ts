@@ -336,6 +336,103 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * yet is inert rather than a build waiting to go off.
    */
   AR_RESEARCH_WORKFLOW_ID: 'ar-research',
+
+  /**
+   * The shortest gap between two research passes over one entity,
+   * in seconds, for a domain that has not said what its own floor
+   * is: the fleet fallback behind `minResearchIntervalSeconds` in
+   * `DomainSettings` in `src/db/schema/domains.ts`.
+   *
+   * A fallback and not a bound, which is the whole of what this
+   * entry does and does not decide. A domain carrying its own
+   * `minResearchIntervalSeconds` overrides this outright and in
+   * either direction — a domain asking for a day gets a day, one
+   * asking for a month gets a month, and one setting zero gets no
+   * refusal at all. Nothing here clamps what a domain may choose,
+   * so this value can neither hold a domain to a floor it did not
+   * ask for nor stop one from disabling the refusal.
+   *
+   * Seven days because a fleet default is what a domain gets
+   * before anyone has thought about the question, which is a
+   * different job from the number a domain picks once someone has.
+   * Erring long is the cheaper way to be wrong: too long delays a
+   * subject, and an operator who notices shortens it on the domain
+   * that showed them; too short spends a model call per pass on
+   * subjects nothing has changed about, which nobody sees until
+   * the bill. The value is a starting point to be moved off, and
+   * a domain that has moved off it never reads this again.
+   *
+   * `604800` is `7 * 24 * 60 * 60`, multiplied out rather than
+   * written as the product: a marker resolves to TEXT wherever it
+   * sits, on the terms this table's header states, so an
+   * expression would arrive at a raise statement as an expression
+   * and the far side parses seconds.
+   *
+   * An entry no source has named yet is inert rather than a build
+   * waiting to go off, on the terms `AR_RESEARCH_WORKFLOW_ID`
+   * above states.
+   */
+  AR_RESEARCH_MIN_INTERVAL_SECONDS: '604800',
+
+  /**
+   * The most times in a row an agent may move one topic's next due
+   * time before the proposal stops being written, for a domain
+   * that has not said what its own ceiling is: the fleet fallback
+   * behind `maxAgentReschedules` in `DomainSettings` in
+   * `src/db/schema/domains.ts`.
+   *
+   * A fallback and not a bound, on the terms
+   * `AR_RESEARCH_MIN_INTERVAL_SECONDS` above states. A domain
+   * carrying its own `maxAgentReschedules` overrides this outright
+   * and in either direction, and nothing here holds a domain to a
+   * ceiling it did not ask for. Zero is where the two entries part
+   * company and a reader carrying one reading onto the other gets
+   * the opposite of what a domain asked for: zero on the interval
+   * above switches a refusal off, where zero here permits no agent
+   * reschedule at all, a count of none being a count.
+   *
+   * WHAT A BREACH COSTS IS THE SOONER TIME AND NEVER THE TOPIC.
+   * The proposal stops being written, so what stands is the
+   * increment `ar-dispatch` wrote in the same statement that
+   * claimed the row, before anything was invoked, and the topic
+   * comes round on the cadence its own `interval_seconds` gives
+   * it. That is the same outcome a pass with nothing to propose
+   * already leaves behind, which `ar-research`'s
+   * `Propose Next Run` names as the ordinary one rather than a
+   * failure.
+   *
+   * So a breach is not a pause, and nothing about it is sticky.
+   * The topic is not disabled, not retired and not moved off its
+   * own cadence; the approved work the pass left behind keeps its
+   * approval and comes round at the head of the next drain; and
+   * the count itself is consecutive, so the streak a domain
+   * reaches this ceiling on is one the next pass with nothing to
+   * propose spends back. What the cap withholds is one sooner
+   * time, once.
+   *
+   * Three because the walk worth catching is the one that does not
+   * stop. A pass proposes only where it recorded fewer candidates
+   * than it drained, so one proposal is a backlog being worked at
+   * and two is that backlog outlasting the sooner pass it asked
+   * for; a third in a row is the pattern rather than the incident.
+   * Erring low is the cheaper way to be wrong here, which is the
+   * other way round from the interval above: too low leaves a real
+   * backlog to drain at the ordinary cadence, which is slower and
+   * costs nothing, where too high is the compounding case the cap
+   * exists for, each granted proposal claiming the topic sooner,
+   * which dispatches another pass, which proposes again.
+   *
+   * A count of proposals and not of passes, and a ceiling on how
+   * many are WRITTEN rather than on how many may be made: what
+   * resets the streak is a pass that proposes nothing, which
+   * `maxAgentReschedules` in `DomainSettings` states as the rule
+   * this number is counted against.
+   *
+   * An entry no source has named yet is inert rather than a build
+   * waiting to go off, on the terms `AR_RESEARCH_WORKFLOW_ID`
+   * above states.
+   */
+  AR_RESEARCH_MAX_AGENT_RESCHEDULES: '3',
 };
 
 /**

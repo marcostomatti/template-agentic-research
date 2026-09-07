@@ -105,15 +105,22 @@
 import type { StoreWindow } from '../http/schemas.js';
 
 /**
- * One `topics` row, whole — the four columns the table declares for
- * itself and the five `schedulableColumns()` spreads into it.
+ * One `topics` row as the API answers it — the four columns the
+ * table declares for itself and the five `schedulableColumns()`
+ * spreads into it. Nine of its ten; `agent_reschedules` is the one
+ * the record leaves off, for the reason below.
  *
- * Whole rather than column-scoped, for the reason `DomainRecord` in
- * `src/domains/store.ts` gives: this record IS the resource the
- * route group answers with, and there is nothing on `topics` a
- * reader of the API may not have. No hash, no secret, no
- * operator-invisible bookkeeping — a topic is configuration
- * somebody wrote plus a due time the dispatcher moves.
+ * Near-whole rather than column-scoped, for the reason
+ * `DomainRecord` in `src/domains/store.ts` gives: this record IS
+ * the resource the route group answers with, and nothing is
+ * withheld here because a reader of the API may not have it. No
+ * hash and no secret — a topic is configuration somebody wrote plus
+ * a due time the dispatcher moves. The single exception is the
+ * pipeline's own bookkeeping: `agent_reschedules` counts how many
+ * times in a row an agent moved the due time, which is state the
+ * closing pass keeps about itself rather than anything an operator
+ * set, and answering it on this record would put a counter on the
+ * resource with no verb entitled to move it.
  *
  * THE SCHEDULABLE SET IS ON THE RECORD IN FULL, which is not the
  * same as being writable in full. {@link TopicRecord.nextRunAt} is

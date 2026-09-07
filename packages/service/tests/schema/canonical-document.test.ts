@@ -84,7 +84,7 @@ import type { Column, Table } from 'drizzle-orm';
 import { getTableColumns, getTableName } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { documents, findings, sources } from '../../src/db/schema.js';
+import { documents, findings, sources, topics } from '../../src/db/schema.js';
 
 import {
   CANONICAL_DOCUMENT_COLUMN_TIES,
@@ -153,25 +153,41 @@ const SIGNAL_COLUMNS: readonly ClassedColumn[] = [
  * The columns declared as counters — NOT NULL, because zero is a
  * count rather than the absence of one.
  *
- * One today, and a list rather than a constant so the second is an
- * entry instead of a rewrite, and so the two cases below stay
- * symmetrical: the classes are two answers to one question, and
- * reading them side by side is most of what the pair is for.
+ * Two entries from two tables, which is what the list shape was
+ * for: the second joined as an entry rather than as a rewrite, and
+ * the two cases below stay symmetrical either way. The classes are
+ * two answers to one question, and reading them side by side is
+ * most of what the pair is for.
+ *
+ * Both are read against a bound, which is where the NOT NULL earns
+ * its place rather than merely being tidy.
+ * `sources.consecutive_failures` is compared against the health
+ * detector's threshold and `topics.agent_reschedules` against the
+ * domain's cap on consecutive agent-initiated reschedules; a NULL
+ * on either side answers UNKNOWN rather than false, so such a row
+ * would neither be caught by the comparison nor turn up among the
+ * rows it passed over.
  */
 const COUNTER_COLUMNS: readonly ClassedColumn[] = [
   { table: 'sources', column: 'consecutive_failures' },
+  { table: 'topics', column: 'agent_reschedules' },
 ];
 
 /**
  * The tables the two lists name.
  *
  * Written out rather than discovered from the barrel, which would
- * offer every table in the schema to lists that name three. An
- * entry naming a table absent from here fails as a column nothing
+ * offer every table in the schema to lists that name four. An entry
+ * naming a table absent from here fails as a column nothing
  * resolves, and the failure prints what was there to choose from,
  * so the fix reads off the message: add the table beside the entry.
  */
-const CLASSED_TABLES: readonly Table[] = [documents, findings, sources];
+const CLASSED_TABLES: readonly Table[] = [
+  documents,
+  findings,
+  sources,
+  topics,
+];
 
 /**
  * Every column of those tables, keyed `<table>.<column>` with both
@@ -272,7 +288,7 @@ describe('null-vs-zero — discovery', () => {
   });
 
   // Lists to assert, and no columns to assert them against, which
-  // would fail every case below for one cause wearing four names.
+  // would fail every case below for one cause wearing five names.
   it('resolves the columns of the tables both lists name', () => {
     expect(CLASSED_COLUMNS.size).toBeGreaterThan(0);
   });
