@@ -235,10 +235,12 @@ skipped and not-yet-due are indistinguishable from outside.
 
 ### One index serves both per-source document readers
 
-Three indexes are declared in the schema modules. Every other access
+Ten indexes are declared in the schema modules. Every other access
 path in schema v2 is a primary key, a unique key, or a sequential scan
 — Postgres builds an index for each of the first two on its own, so
-only these three were a decision somebody took.
+every one of the ten was a decision somebody took. Three of them are
+the subject of this section; the rest carry their own arguments in the
+TSDoc beside each declaration.
 
 | Index | Over | What reads it |
 | --- | --- | --- |
@@ -450,7 +452,7 @@ migration here that was.
 
 | Owner | What it carries |
 | --- | --- |
-| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_jittery_talos.sql`, `0005_freezing_hairball.sql`, `0006_tearful_kabuki.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 26 tables, 177 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 12 CHECK — the nine value-set checks generated from the tuples in `src/db/schema/values.ts`, the two spanning two columns, `research_pool_approval_check` and `source_config_proposals_approval_check`, and the singleton bound pinning `operator_settings.id` to 1. All 34 foreign keys, each emitted as its own `ALTER TABLE` after the last `CREATE TABLE` rather than inline. All three indexes: the two partial dispatch-claim ones, and `documents_source_parse_status_idx`, which is not partial. |
+| Generated — `0000_talented_proteus.sql`, `0001_lethal_paibok.sql`, `0003_motionless_nova.sql`, `0004_jittery_talos.sql`, `0005_freezing_hairball.sql`, `0006_tearful_kabuki.sql`, `0007_big_cardiac.sql`, `0008_vengeful_the_hunter.sql`, `0009_sparkling_red_hulk.sql` | Every table and column, and with them every PRIMARY KEY, NOT NULL and DEFAULT: 26 tables, 179 columns. Every named key and constraint over a stored row: 16 UNIQUE, and 12 CHECK — the nine value-set checks generated from the tuples in `src/db/schema/values.ts`, the two spanning two columns, `research_pool_approval_check` and `source_config_proposals_approval_check`, and the singleton bound pinning `operator_settings.id` to 1. All 35 foreign keys, each emitted as its own `ALTER TABLE ... ADD CONSTRAINT` rather than inline in a table body. All ten indexes: the two partial dispatch-claim ones over (`enabled`, `next_run_at`), and eight that are not partial — the four keyset page keys `documents_domain_id_captured_at_idx`, `findings_domain_id_score_created_at_idx`, `finding_labels_finding_id_labelled_at_idx` and `runs_domain_id_started_at_idx`, each ending its key in `id`; `llm_calls_called_at_idx` over the spend window; `documents_source_parse_status_idx` and `source_config_proposals_source_id_status_idx`; and `research_pool_root_event_id_idx` over the cost-attribution key. None of the ten is unique, and no table here carries a composite primary key. |
 | Hand-written — `0002_category_depth_guard.sql` | `categories_enforce_depth()` and the `BEFORE INSERT OR UPDATE` trigger on `categories` that calls it. Two statements, one rule, and the whole of the custom-owned DDL. |
 
 The snapshot decides that split, not taste. A table's entry in
