@@ -37,7 +37,7 @@
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { sql } from 'drizzle-orm';
-import { bigint, bigserial, check, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, check, index, jsonb, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 import { domains } from './domains.js';
 import { findings } from './findings.js';
@@ -485,6 +485,53 @@ export const researchPool = pgTable('research_pool', {
     .references(() => findings.id),
 
   /**
+   * The run this intention traces back to, when a caller named one.
+   *
+   * A stamp, not a depth counter. The tempting reading of a column
+   * like this one is distance — how far a derivation has walked from
+   * whatever started it — and here there is nothing to walk: nothing
+   * this pipeline writes is derived from a research result, so the
+   * derivation graph carries no cycle and every intention sits
+   * exactly one step from its origin. That shape is held by
+   * `tests/invariants/research-acyclicity.test.ts` rather than
+   * assumed, and the day that test goes red is the day a generation
+   * counter has something to count. Until then this column names an
+   * origin and says nothing at all about distance from it.
+   *
+   * What it buys is attribution. `llm_calls.run_id` in `./runs.ts`
+   * records what each model call cost and which run made it, and
+   * research is the expensive half of this pipeline, so joining this
+   * column to `runs.id` and on to that ledger answers what one
+   * scheduled run ultimately spent — the searches a later pass made
+   * on the intentions it raised included. That is a join a reader
+   * writes rather than a rule the database holds: nothing here bounds
+   * a spend, and a row this column left NULL drops out of the join
+   * altogether rather than joining to nothing.
+   *
+   * NULL means no originating run was RECORDED, which is not a gap in
+   * the ledger. An intention raised by hand, or by a sweep over the
+   * registry rather than over a document, has no run to name; and
+   * `ar-capture` makes that case concrete rather than hypothetical,
+   * opening its `runs` row when the pass closes, so a score pass it
+   * initiated has no run id to hand on at the moment the intention is
+   * raised. Reading a NULL here as a lost stamp would make every one
+   * of those look like a fault. `entity_research.run_id` above takes
+   * the same answer for the same reason and states it at length.
+   *
+   * No `onDelete`, so it emits `ON DELETE no action`, on this
+   * schema's rule that cascade follows ownership: a run does not own
+   * the intentions raised during it, and `domain_id` at the head of
+   * this row is what takes them away. `ON DELETE SET NULL` is refused
+   * for the reason `entity_research.run_id` records — the NULL it
+   * would write already means no run was recorded, so deleting a run
+   * out from under the intentions citing it would silently reclassify
+   * them as having had no origin at all, and the attribution join
+   * would come back short with nothing anywhere saying why.
+   */
+  rootEventId: bigint('root_event_id', { mode: 'number' })
+    .references(() => runs.id),
+
+  /**
    * Where the row stands in the gate: `pending` until it is ruled on,
    * then `approved` and `done` along the accepted path, or `skipped`
    * where it is refused or closed without a search — the refusal is
@@ -691,4 +738,35 @@ export const researchPool = pgTable('research_pool', {
     'research_pool_approval_check',
     sql`${table.researchedAt} IS NULL OR ${table.approvedAt} IS NOT NULL`,
   ),
+
+  /**
+   * The attribution read, from the run's side: given one run, the
+   * intentions it originated. That is the entry point to the join
+   * `root_event_id` above sets out — run, to intentions, to the
+   * `llm_calls` rows their research spent — and without a key here it
+   * is a sequential scan of the whole gate for one run's worth of
+   * rows.
+   *
+   * Declared rather than inherited. Postgres builds an index for a
+   * PRIMARY KEY and for a UNIQUE constraint and not for a foreign
+   * key's referencing side, which is therefore unindexed unless
+   * somebody says so — and that is what makes this key worth more
+   * than the one join. The `ON DELETE no action` above has to
+   * establish that no intention still cites a run before that run can
+   * be deleted, and it establishes it by reading this column; with no
+   * index that is a scan of the whole table per run removed, and runs
+   * are removed a domain at a time.
+   *
+   * Single column, and nothing is covered. What the join reads off
+   * these rows — the subject, the terms, the stamps — is fetched from
+   * the heap, so the index says which rows a run owns and nothing
+   * about what they hold.
+   *
+   * Named for its column rather than for a reader, unlike
+   * `documents_source_parse_status_idx` in `./documents.ts`: this one
+   * serves the constraint as much as any query, so the column is what
+   * a plan or a migration should be able to name, and so the
+   * static-SQL invariant suite has a name to grep.
+   */
+  index('research_pool_root_event_id_idx').on(table.rootEventId),
 ]);
