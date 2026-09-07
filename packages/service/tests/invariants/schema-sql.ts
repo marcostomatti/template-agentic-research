@@ -266,9 +266,10 @@ export interface SchemaSqlAssertion {
  * tables together — three unique keys, the session-to-user foreign key,
  * and the NOT NULL that bounds a session — the CHECK that makes
  * `operator_settings` a singleton, the six read indexes the wave-3
- * API pages are served from, and the three statements behind
- * `research_pool.root_event_id`: the nullable column, its reference
- * to `runs`, and the index the two readers of it go through.
+ * API pages are served from, the three statements behind
+ * `research_pool.root_event_id` — the nullable column, its reference to
+ * `runs`, and the index the two readers of it go through — and the
+ * counter the schedule ratchet keeps on `topics`.
  *
  * A chosen sample and not the whole schema, which is the whole reason
  * {@link EmptyMigrationFileError} exists: a migration truncated to
@@ -557,7 +558,7 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
   //
   // Measured rather than argued. Each of the six statements deleted
   // from the generated migration in turn reddens exactly one case,
-  // the one named for the index that went, at 1 failed and 36 passed
+  // the one named for the index that went, at 1 failed and 37 passed
   // every time. Deletion is the weaker half though: a name-only
   // pattern would report it identically. The three legs that reach
   // what these patterns actually pin are dropping the `NULLS LAST`
@@ -656,7 +657,7 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
   //
   // Measured rather than argued. Each of the three statements deleted
   // from the migration in turn reddens exactly one case, the one named
-  // for the piece that went, at 1 failed and 36 passed. Deletion is the
+  // for the piece that went, at 1 failed and 37 passed. Deletion is the
   // weaker half, though: a name-only pattern would report it
   // identically. The three legs that reach what these patterns pin
   // beyond the name are a NOT NULL added to the column, a cascade
@@ -698,6 +699,33 @@ export const SCHEMA_SQL_ASSERTIONS: readonly SchemaSqlAssertion[] = [
       'terminator pinned behind it so a WHERE qualifying this index ' +
       'is a miss.',
     pattern: /^[ \t]*CREATE INDEX "research_pool_root_event_id_idx" ON "research_pool" USING btree \("root_event_id"\);/m,
+  },
+  // The counter behind the schedule ratchet, and the one entry here
+  // whose subject is a column class rather than a constraint.
+  // `tests/schema/canonical-document.test.ts` carries the same column
+  // as a counter and asserts its NOT NULL; it states among its own
+  // limits that the default completing that class is asserted by
+  // nothing there, and running this pattern to the terminator is where
+  // that half is pinned.
+  //
+  // Both halves leave a different database behind. Without the NOT NULL
+  // a streak may be absent, and the comparison against the domain's cap
+  // answers UNKNOWN rather than false: such a topic is neither refused
+  // at the cap nor counted among the ones under it, so the walk a cap
+  // exists to end is bounded by nothing. Without the default an insert
+  // that does not name the column is refused outright, which turns a
+  // counter the ratchet maintains into one every writer of a topic has
+  // to know about.
+  {
+    id: 'topics-agent-reschedules-column',
+    description:
+      'The consecutive agent-reschedule streak on topics, NOT NULL ' +
+      'with a default of 0 because zero is a count rather than the ' +
+      'absence of one. Pins both halves by running to the terminator: ' +
+      'a nullable streak compares UNKNOWN against the cap and so is ' +
+      'bounded by nothing, and one that lost its default refuses every ' +
+      'insert of a topic that does not name it.',
+    pattern: /^[ \t]*ALTER TABLE "topics" ADD COLUMN "agent_reschedules" integer DEFAULT 0 NOT NULL;/m,
   },
 ];
 
