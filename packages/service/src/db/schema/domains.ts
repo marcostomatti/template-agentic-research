@@ -130,6 +130,37 @@ export interface DomainSettings {
    * `docs/architecture/00-overview.md` for the rule in full.
    */
   readonly findingsDisplayName?: string;
+
+  /**
+   * The shortest gap between two research passes over one entity, in
+   * seconds. A subject whose `research_pool` row was completed
+   * inside this window is not raised again, and zero disables the
+   * refusal outright: a domain that sets it to zero is asking for
+   * every candidate to be raised, which is the same switch a
+   * shadow-mode boolean would have given at the cost of a second
+   * setting to read and keep consistent with this one.
+   *
+   * Seconds rather than days or a Postgres `interval`, because that
+   * is the vocabulary `schedulableColumns()` in `./scheduling.ts`
+   * already sets: every cadence bound in the pipeline is integer
+   * seconds, so a reader holding this floor against a topic's own
+   * `min_interval_seconds` compares two numbers instead of
+   * converting one of them first.
+   *
+   * Absent does not mean unbounded. It falls back to the build
+   * setting `AR_RESEARCH_MIN_INTERVAL_SECONDS`, whose fleet default
+   * lives in `ENV_DEFAULTS` in `scripts/workflow-markers.ts` and
+   * reaches a raise statement as a resolved marker rather than as a
+   * literal written into it. That is what keeps one number in one
+   * place: a window spliced into each raiser is two values to edit
+   * and nothing to report when only one of them moves, and a
+   * literal is not nameable from outside the SQL that carries it.
+   *
+   * The refusal belongs in the SQL of the raise, beside the
+   * `finding_id` guard already there, so every caller inherits it
+   * rather than each one remembering to ask for it.
+   */
+  readonly minResearchIntervalSeconds?: number;
 }
 
 export const domains = pgTable('domains', {
