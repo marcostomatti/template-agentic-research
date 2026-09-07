@@ -819,7 +819,7 @@ const UNIQUE_VIOLATION = '23505';
 
 /**
  * Every member `TOPIC_COLUMNS` in `src/topics/db-store.ts` projects,
- * which on this table is every column it has.
+ * which on this table is every column but `agent_reschedules`.
  *
  * Four of the nine are the table's own and five arrive through the
  * `schedulableColumns()` spread, which is why this list is asserted

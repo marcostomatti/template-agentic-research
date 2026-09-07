@@ -226,6 +226,61 @@ export const topics = pgTable('topics', {
     .notNull(),
 
   ...schedulableColumns(),
+
+  /**
+   * How many times in a row an agent has moved this topic's next due
+   * time, rather than leaving it to the periodic increment the
+   * dispatcher writes. A pass that proposes no gap ends the walk and
+   * sets this back to 0, so it counts the current run of agent-chosen
+   * times and not the topic's history.
+   *
+   * Declared beside `schedulableColumns()` above rather than inside
+   * it, which is a ruling about the other table rather than about this
+   * one. The set spread there is all-or-nothing on purpose, and a
+   * counter is no part of what makes a row due — the dispatcher reads
+   * none of it. `export_subscriptions` is the other table taking that
+   * spread, and nothing proposes a cadence for a delivery, so a member
+   * in the set would give that table a column no writer ever bumps and
+   * no pass ever resets: a column whose 0 would be honest for the
+   * wrong reason, and which a later reader would have to be told to
+   * ignore.
+   *
+   * The bound it is read against sits at the other grain.
+   * `DomainSettings.maxAgentReschedules` in `./domains.ts` is
+   * configured once for a domain's whole research path, while the walk
+   * it caps is one topic's — which is the arrangement the runaway
+   * wants, since what a cap catches is always a single row asking for
+   * a shorter gap on every round.
+   *
+   * `runs.scheduled_by` in `./runs.ts` stays the attribution and is
+   * not asked to be the state. It records that an agent set a due
+   * time, which is what makes an unexpected cadence traceable
+   * afterwards, but no `runs` row names a topic — beside its own id
+   * the columns are the domain, the two times, the status, the counts,
+   * the errors and that one — so the ledger can say an agent set a
+   * time and not which row it set. A streak read back out of it would
+   * be per domain where the walk is per topic, which is why the streak
+   * is carried here.
+   *
+   * A counter, and so NOT NULL with a default of 0, the treatment a
+   * count gets and the one a measurement never does. Zero here is a
+   * count rather than the absence of one: a topic no agent has
+   * rescheduled and a topic whose walk has just ended both genuinely
+   * stand at none, and there is no earlier state in which the number
+   * is unknown. The NOT NULL is also what makes the cap work at all, a
+   * comparison against NULL being UNKNOWN rather than false — a row
+   * whose counter had never been set would neither trip the bound nor
+   * turn up among the rows that passed under it. Same reading as
+   * `sources.consecutive_failures`, and the opposite of the one a
+   * signal gets.
+   *
+   * Nothing writes it yet. The statement closing a research pass is
+   * where the increment, the cap and the reset belong, and today it
+   * moves `next_run_at` alone, so every row here reads 0 — which is a
+   * true count of the walks an agent has taken so far.
+   */
+  agentReschedules: integer('agent_reschedules').default(0)
+    .notNull(),
 }, (table) => [
   /**
    * A name identifies one topic within its domain, and that pair is
