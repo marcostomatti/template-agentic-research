@@ -46,6 +46,45 @@ criteria — **do not execute the plan**.
   Stage-end test tasks cover cross-module/integration behavior — a module's
   own unit tests ride inside its module task (Task sizing below).
 
+## Task declarations (routing)
+
+* A task line may carry a trailing declaration naming what the loop should
+  dispatch it with. Give one to every task.
+
+```text
+- [ ] Add the Zod schema for `CreateJobRequest`  {agent=loop-implementer}
+- [ ] Rewrite the gates page  {agent=doc-updater}
+- [ ] Sweep the changed set  {tools=Read,Grep,Glob model=haiku effort=low}
+```
+
+* The block is the LAST brace group on the line, anchored at end of line,
+  holding no nested braces and at least one recognised key, and it is
+  never the whole task text. Two spaces separate it from the text.
+  Anything failing one of those rules stays task text — a task ending on
+  a code span carrying `{ "a": 1 }` is not a declaration.
+* Its tokens are space-separated `key=value` pairs. Recognised keys are
+  `agent`, `model`, `effort` and `tools`; an unrecognised key is kept for
+  telemetry and maps to no flag.
+* `agent=<name>` outranks the other three — the loop passes only
+  `--agent`, the agent definition supplying its own model and tool set.
+  The three are still recorded, so the effort collector can report what
+  the plan asked for against what the agent supplied.
+* Otherwise `model` takes an alias (`opus`, `sonnet`, `haiku`, `fable`),
+  `effort` one of `low`, `medium`, `high`, `xhigh`, `max`, and `tools` a
+  comma-separated list of tool names with no spaces.
+* A value the loop cannot use maps to no flag rather than failing the
+  task, so a misspelled level costs the routing silently. Spell each one
+  from the lists above.
+* The loop strips the block before the task text reaches the agent's
+  prompt, the operator log and the commit message: a declaration is a
+  planning annotation, never an instruction.
+* Pick the agent by the task's SHAPE — not its subject or its verb —
+  from the `### Task shape to agent` table in `context/workflow.md`.
+  Prefer a row whose third column names a tracked
+  `.claude/agents/<name>.md` file, since a `user-level` row does not
+  travel with a fresh clone. Where no row fits, declare the granular
+  keys instead of an agent.
+
 ## Task sizing (session economics)
 
 * One task = one full agent session, so task COUNT is the plan's
