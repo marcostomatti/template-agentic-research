@@ -31,9 +31,15 @@
  *     record must tolerate their absence rather than treat it as a
  *     fault.
  *   - `effort` rides on assistant records and on exactly those, the
- *     way `message.usage` does. Every record without one is a
- *     synthetic turn — measured 84053 of 84091 at one reading, which
- *     is a SNAPSHOT and not a constant: the tree grows while it is
+ *     way `message.usage` does. A record without one is NOT
+ *     necessarily a synthetic turn, which is the reading this
+ *     line used to carry: measured over 905 logs, 38 assistant
+ *     turns carry no `effort` against 28 whose model is
+ *     `<synthetic>`, and the missing 10 are exactly the
+ *     `claude-haiku-4-5-20251001` turns, whose records carry no
+ *     `effort` field at all. The identity that holds is
+ *     `effortless == synthetic + haiku` (measured 38 == 38), and
+ *     every figure in it is a SNAPSHOT: the tree grows while it is
  *     being scanned, this session's own log included, so re-derive
  *     the pair rather than holding a run against it. What has not
  *     moved is the SHAPE, and the histogram being ONE-VALUED
