@@ -99,17 +99,20 @@ criteria — **do not execute the plan**.
   invariant sweeps), live-seam runs, migrations, and close-out — these
   preserve resumability where a halt is most likely.
 * The RUNNER owns the push, the pull request, the merge with the base,
-  and the wait for CI. After the last task it runs a wrap-up session that
+  and the wait for CI. It also compacts `progress.txt` BETWEEN tasks, on
+  its own decision, once the file outgrows what the next task should
+  have to read. After the last task it runs a wrap-up session that
   promotes findings, compacts `progress.txt`, merges `origin/main`,
   commits, pushes and opens (or updates) the PR — and then polls that
   PR's checks, spending repair sessions on a red or conflicting result.
   So a plan must NOT carry a task that opens a PR, resolves a merge
-  conflict, or waits on CI. Two openers race: measured, one run cut a
-  second branch and opened a second PR for a single plan. A close-out
-  task SHOULD still take the mergeability reading
-  (`git merge-tree --write-tree origin/main HEAD`) and assemble the body
-  material — the gate captures, the test plan, the recorded debt — into
-  the plan's close-out notes for that wrap-up session to use.
+  conflict, waits on CI, or compacts `progress.txt`. Two openers race:
+  measured, one run cut a second branch and opened a second PR for a
+  single plan. A close-out task SHOULD still take the mergeability
+  reading (`git merge-tree --write-tree origin/main HEAD`) and assemble
+  the body material — the gate captures, the test plan, the recorded
+  debt — into the plan's close-out notes for that wrap-up session to
+  use.
 
 ## Spec
 

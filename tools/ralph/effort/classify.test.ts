@@ -31,6 +31,8 @@ import { join } from 'node:path';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
+import { buildCompactionPrompt } from '../start.js';
+
 import {
   classifyPromptContent,
   classifySessionLines,
@@ -60,6 +62,13 @@ const PLAN_PROMPT = [
 const WRAPUP_PROMPT = [
   '* Read `@progress.txt` in full.',
   '* If there is anything worth keeping, promote it.',
+].join('\n');
+
+/** A compaction prompt, as `buildCompactionPrompt` assembles it. */
+const COMPACTION_PROMPT = [
+  '* Compact `@progress.txt` per'
+  + ' `.claude/skills/progress-hygiene/SKILL.md`, and change NOTHING else.',
+  '* This is a MID-RUN compaction, not the end-of-run one.',
 ].join('\n');
 
 /** A CI-repair prompt, assembled as `repairPullRequest` assembles it. */
@@ -117,7 +126,7 @@ function plantLog(name: string, lines: readonly string[]): string {
   return path;
 }
 
-describe('classifyPromptContent over the four shapes', () => {
+describe('classifyPromptContent over the five shapes', () => {
   it('reads a scoped-task prompt as a task session', () => {
     expect(classifyPromptContent(TASK_PROMPT)).toBe('task');
   });
@@ -132,6 +141,20 @@ describe('classifyPromptContent over the four shapes', () => {
 
   it('reads the mergeability prompt as a CI-repair session', () => {
     expect(classifyPromptContent(CI_PROMPT)).toBe('ci-repair');
+  });
+
+  it('reads the mid-run prompt as a compaction session', () => {
+    expect(classifyPromptContent(COMPACTION_PROMPT)).toBe('compaction');
+  });
+
+  it('keeps the wrap-up and compaction shapes apart', () => {
+    // Both prompts are bullet lists opening on `@progress.txt`, and the
+    // wrap-up's own list carries a compaction bullet further down. Only
+    // the FIRST line separates them, which is what this pins.
+    expect(WRAPUP_PROMPT).toContain('@progress.txt');
+    expect(COMPACTION_PROMPT).toContain('@progress.txt');
+    expect(classifyPromptContent(WRAPUP_PROMPT)).toBe('wrap-up');
+    expect(classifyPromptContent(COMPACTION_PROMPT)).toBe('compaction');
   });
 
   it('buckets hand-driven traffic as other, not as a fault', () => {
@@ -156,7 +179,7 @@ describe('the shape table', () => {
     const kinds = PROMPT_SHAPES.map((shape) => shape.kind);
 
     expect(new Set(kinds).size).toBe(kinds.length);
-    expect(kinds).toHaveLength(4);
+    expect(kinds).toHaveLength(5);
   });
 
   it('holds no prefix that is a prefix of another', () => {
@@ -184,6 +207,35 @@ describe('the shape table', () => {
     }
 
     expect(misses).toEqual([]);
+  });
+
+  it('anchors the compaction prefix at line 1 of its own builder', () => {
+    // The guard above is `source.includes(prefix)` over the WHOLE file,
+    // so a bullet PREPENDED above the compaction prompt's first line
+    // keeps it green while re-bucketing every later compaction session
+    // as residue — measured, that leg reddens nothing here. Driving the
+    // real builder is what closes it: this reads the prompt the loop
+    // would actually send, and `startsWith` is the same test
+    // `classifyPromptContent` applies to it. The other four shapes have
+    // no equivalent leg; theirs are string literals with no builder to
+    // call.
+    const shape = PROMPT_SHAPES.find((s) => s.kind === 'compaction');
+    const prompt = buildCompactionPrompt({
+      due: true,
+      reason: 'hard-cap',
+      sizeBytes: 20_000,
+      tasksSinceCompaction: 1,
+      thresholds: {
+        hardCapBytes: 16_000,
+        softCapBytes: 8_000,
+        cadenceTasks: 10,
+      },
+    });
+
+    expect(shape?.prefix).toBeDefined();
+    expect(prompt.split('\n')[0]).toContain(shape?.prefix ?? '');
+    expect(prompt.startsWith(shape?.prefix ?? '')).toBe(true);
+    expect(classifyPromptContent(prompt)).toBe('compaction');
   });
 
   it('proves that guard fails on a prefix nothing injects', () => {
@@ -229,7 +281,7 @@ describe('the reference implementation loop needle', () => {
     expect(FOREIGN_NEEDLE).not.toBe(REPO_TASK_PREFIX.toLowerCase());
   });
 
-  it('matches none of the four shapes, either way round', () => {
+  it('matches none of the five shapes, either way round', () => {
     const hits: string[] = [];
     for (const shape of PROMPT_SHAPES) {
       const prefix = shape.prefix.toLowerCase();
@@ -255,6 +307,7 @@ describe('the reference implementation loop needle', () => {
     expect(classifyPromptContent(PLAN_PROMPT)).toBe('plan-generation');
     expect(classifyPromptContent(WRAPUP_PROMPT)).toBe('wrap-up');
     expect(classifyPromptContent(CI_PROMPT)).toBe('ci-repair');
+    expect(classifyPromptContent(COMPACTION_PROMPT)).toBe('compaction');
   });
 });
 
