@@ -404,9 +404,9 @@ the shape discriminates where the verb does not.
 | Implementation — a module plus its TSDoc plus its colocated tests | `loop-implementer` | `.claude/agents/loop-implementer.md` |
 
 **`user-level` in the third column is a portability warning and not a
-footnote.** Those five definitions live outside the repo, so a fresh
+footnote.** Those six definitions live outside the repo, so a fresh
 clone receives none of them and the name resolves against whatever that
-machine happens to hold — or against nothing. The four tracked rows
+machine happens to hold — or against nothing. The three tracked rows
 travel. A project file also SHADOWS a user-level agent of the same name
 rather than merging with it, and the roster is blind to the difference:
 a shadowed name appears exactly ONCE in the CLI's own list of available
