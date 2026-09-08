@@ -87,6 +87,7 @@ const FIXTURE_LINES = [
     gitBranch: BRANCH,
     entrypoint: 'sdk-cli',
     isSidechain: false,
+    effort: 'xhigh',
     unknownFutureField: 'ignored',
     message: { model: 'claude-opus-5', usage: USAGE_A },
   }),
@@ -107,6 +108,7 @@ const FIXTURE_LINES = [
     gitBranch: BRANCH,
     entrypoint: 'sdk-cli',
     isSidechain: true,
+    effort: 'low',
     message: { model: 'claude-fable-5', usage: USAGE_B },
   }),
   JSON.stringify({
@@ -206,6 +208,17 @@ describe('accumulateSessionStats over the planted log', () => {
     expect(row.gitBranchCounts).toEqual({ [BRANCH]: 4, [OTHER_BRANCH]: 1 });
     expect(row.entrypointCounts).toEqual({ 'sdk-cli': 4, 'claude-desktop': 1 });
     expect(row.sidechainRecordCount).toBe(1);
+  });
+
+  it('histograms top-level effort, which a synthetic turn omits', async () => {
+    const row = await accumulateSessionStats(fromLines(FIXTURE_LINES), IDENTITY);
+
+    // Two DISTINCT values on purpose: a fold that bumped a constant
+    // key, or read the field off `message`, answers one key or none
+    // while every other count in the row stays right.
+    expect(row.effortCounts).toEqual({ xhigh: 1, low: 1 });
+    // Three assistant records, one of them synthetic and effortless.
+    expect(row.assistantRecordCount).toBe(3);
   });
 
   it('histograms message.model, synthetic turns included', async () => {

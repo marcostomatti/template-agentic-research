@@ -24,11 +24,23 @@
  *     `bridge-session`, `system`). The row bins by whatever type it
  *     finds rather than against a fixed list, so a kind that has not
  *     been seen yet is counted rather than dropped.
- *   - `timestamp`, `gitBranch`, `entrypoint` and `isSidechain` sit at
- *     the record's TOP level, not under `message`. `queue-operation`
- *     and `last-prompt` records carry none of the last three, so a
- *     reader keying branch attribution on every record must tolerate
- *     their absence rather than treat it as a fault.
+ *   - `timestamp`, `gitBranch`, `entrypoint`, `isSidechain` and
+ *     `effort` sit at the record's TOP level, not under `message`.
+ *     `queue-operation` and `last-prompt` records carry none of the
+ *     last four, so a reader keying branch attribution on every
+ *     record must tolerate their absence rather than treat it as a
+ *     fault.
+ *   - `effort` rides on assistant records and on exactly those, the
+ *     way `message.usage` does. Every record without one is a
+ *     synthetic turn — measured 84053 of 84091 at one reading, which
+ *     is a SNAPSHOT and not a constant: the tree grows while it is
+ *     being scanned, this session's own log included, so re-derive
+ *     the pair rather than holding a run against it. What has not
+ *     moved is the SHAPE, and the histogram being ONE-VALUED
+ *     (`xhigh` throughout) is what makes the field worth collecting
+ *     rather than what makes it pointless: a task declaration asking
+ *     for a cheaper level shows up here as a second key, and nothing
+ *     else in the tree records what a dispatched session ran at.
  *   - `message.model` and `message.usage` ride on `assistant`
  *     records, and on exactly those: over the live tree the count of
  *     records carrying a `usage` equals the count of assistant
@@ -99,6 +111,8 @@ export interface SessionStats {
   gitBranchCounts: Record<string, number>;
   /** Records per `entrypoint`; separates loop from hand-driven traffic. */
   entrypointCounts: Record<string, number>;
+  /** Records per top-level `effort`; what a session actually ran at. */
+  effortCounts: Record<string, number>;
   /** Records carrying `isSidechain: true`, which are subagent turns. */
   sidechainRecordCount: number;
   /** Records per `message.model`. */
@@ -205,6 +219,9 @@ function applyIdentityFields(acc: Accumulator, record: JsonObject): void {
 
   const entrypoint = asLabel(record['entrypoint']);
   if (entrypoint !== null) bump(acc.entrypointCounts, entrypoint);
+
+  const effort = asLabel(record['effort']);
+  if (effort !== null) bump(acc.effortCounts, effort);
 }
 
 /**
@@ -318,6 +335,7 @@ function createAccumulator(identity: SessionIdentity): Accumulator {
     lastTimestamp: null,
     gitBranchCounts: {},
     entrypointCounts: {},
+    effortCounts: {},
     sidechainRecordCount: 0,
     modelCounts: {},
     usage: emptyUsageTotals(),
@@ -345,6 +363,7 @@ function toRow(acc: Accumulator): SessionStats {
     lastTimestamp: acc.lastTimestamp,
     gitBranchCounts: acc.gitBranchCounts,
     entrypointCounts: acc.entrypointCounts,
+    effortCounts: acc.effortCounts,
     sidechainRecordCount: acc.sidechainRecordCount,
     modelCounts: acc.modelCounts,
     usage: acc.usage,
