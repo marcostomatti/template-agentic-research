@@ -268,7 +268,7 @@ held by nothing. Read it before adding a node.
   package before carrying it; `@ar/ui` and `@ar/web` have separate
   configs.
 - **`packages/service/scripts/` is read by BOTH package gates**, unlike
-  the package-ROOT files the repo-root `AGENTS.md` documents as
+  the package-ROOT files `context/gates.md` documents as
   un-targeted: the lint script's pathspec names `scripts` and tsconfig's
   include reaches it. So a scripts-only change has two real greens rather
   than the one a docs change has.

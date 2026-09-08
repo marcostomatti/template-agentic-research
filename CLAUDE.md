@@ -1,5 +1,6 @@
-Refer to @AGENTS.md for the umbrella map, shared tooling, plans/specs law,
-security posture, and verification order.
+Refer to @AGENTS.md for the umbrella map and the `context/` page index —
+shared tooling, the plans/specs law and security posture, verification
+order, gate coverage and workflow each live on their own page there.
 
 Quick orientation:
 

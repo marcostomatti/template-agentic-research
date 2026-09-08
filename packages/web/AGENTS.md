@@ -6,10 +6,10 @@ end to end (no database, no `@ar/service`, no network), which is what
 makes the shell demonstrable before the API exists, and what the data
 layer below is shaped around.
 
-Read the root `AGENTS.md` first: the umbrella map, the shared tooling,
-the plans/specs law, the de-origination sweep and the fan-out reading
-rules all live there. This file carries what is specific to this
-package.
+Read the root `AGENTS.md` first for the umbrella map and the pointer
+to each `context/` page: the shared tooling, the plans/specs law, the
+de-origination sweep and the fan-out reading rules each live on a page
+there. This file carries what is specific to this package.
 
 ## Layout
 
@@ -692,7 +692,7 @@ and the alternatives are ruled OUT rather than merely not chosen:
 
 - `Wordmark` renders the origin project's two brand words straight
   into the DOM. Using it would put another project's name in the
-  shipped UI and trip the de-origination sweep the root `AGENTS.md`
+  shipped UI and trip the de-origination sweep `context/security.md`
   describes.
 - `TomatoMark`'s own docblock restricts the mascot to `EmptyState` and
   the auth screens.
@@ -784,10 +784,10 @@ Reading a run:
   the ABSENCE of a Playwright section from a capture is not evidence
   that it passed. Read BOTH summaries.
 - This package is the only source of the fan-out's VARIABLE pass-glyph
-  ticks, so growing THIS suite is what moves a figure the root
-  `AGENTS.md` discusses as invariant under vitest growth. It is NOT the
-  only source outright, and a decomposition says so: measured at
-  `b510833`, the 174 split by prefix as `@ar/web test:` 170 (Playwright
+  ticks, so growing THIS suite is what moves a figure
+  `context/verification.md` discusses as invariant under vitest growth. It
+  is NOT the only source outright, and a decomposition says so: measured
+  at `b510833`, the 174 split by prefix as `@ar/web test:` 170 (Playwright
   per-case lines, every one carrying `[chromium]`), `@ar/web pretest:
   @ar/ui build:` 2, and `@ar/ui pretest:` 2 — that last pair being
   `@ar/ui`'s own script, which no run of this package emits. Three
@@ -1102,7 +1102,7 @@ bun run lint && bun run check-types && bun run test
 
 The root fan-out (`lint:all`, `check-types:all`, `test:all`) is the
 gate before a PR — read the per-package lines rather than the exit
-code, per the root `AGENTS.md`. Four properties of this package's
+code, per `context/verification.md`. Four properties of this package's
 gates are worth knowing before calling a change verified:
 
 - `lint` uses the explicit-path form (`eslint src tests *.ts *.mjs`),
