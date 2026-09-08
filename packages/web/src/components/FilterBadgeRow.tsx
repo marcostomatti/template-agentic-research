@@ -43,9 +43,9 @@
  * second story matrix, a second visual baseline to seed against a
  * suite that fails a run it has to create one for, and a second
  * component contract guessed from a single call site — this one.
- * `../../AGENTS.md` records what that restraint left standing:
- * `PageHead` is still a stand-in waiting to be promoted, and this row
- * is not waiting for anything.
+ * `../../context/components.md` records what that restraint left
+ * standing: `PageHead` is still a stand-in waiting to be promoted,
+ * and this row is not waiting for anything.
  *
  * What a promotion would have to take over, on the day it happens:
  *
