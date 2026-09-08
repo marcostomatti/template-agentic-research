@@ -151,7 +151,7 @@ Two ways to combine them:
 - **Operator control plane** — with `control` configured, `/_control` exposes
   status/pause/resume/restart behind a shared token, and `stop` as well when
   `control.allowStop` opts in (see `lib/express/control/`; hardening notes
-  in AGENTS.md — "Operator control plane").
+  in `context/control-plane.md`).
 
 ## Testing: isolated vs live
 
@@ -191,9 +191,9 @@ lives in `tools/ralph/PROMPT.md` at the umbrella root (a repo-root `PROMPT.md` o
 
 Working plans and specs live in the **gitignored** `.plans/` and `.specs/`
 directories — they can describe unpatched privacy/security bugs, so they
-stay out of the remote by design (see AGENTS.md — "Plans and specs").
+stay out of the remote by design (see `context/security.md`).
 There is no tracked `specs/` directory here: design prose whose subject is
-already public lands in `docs/` or AGENTS.md instead.
+already public lands in `docs/` or on a `context/` page instead.
 
 ## CI & deploy
 

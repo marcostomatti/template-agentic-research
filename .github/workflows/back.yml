@@ -4,7 +4,7 @@ name: Back
 # only, on GitHub-hosted runners: no databases, no external dependencies, no
 # credentials. The live/integration suite (packages/service/tests/live/,
 # `bun run test:live`) is deliberately NOT run here — it needs docker-compose
-# services. Run it locally (see packages/service/AGENTS.md "Testing") or wire
+# services. Run it locally (see packages/service/context/testing.md) or wire
 # a self-hosted job.
 
 on:

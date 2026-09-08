@@ -49,7 +49,7 @@
  * measured, a file written under this gate has its module scope run
  * even on a pass that answered no instance. What stands between a
  * case and a real instance is this one ternary, and what it is
- * holding is the rule `AGENTS.md` states under
+ * holding is the rule `context/testing.md` states under
  * `Testing — isolated vs live`: the default suite touches no
  * database, no network and no credentials, which is incident-derived
  * rather than stylistic. A case reaching an instance outside the gate
