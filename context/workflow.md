@@ -454,3 +454,75 @@ separate task under one of the rows above. `security-reviewer` is NOT
 one of them whatever its name suggests: it carries Write and Edit, so
 routing a review there hands a reviewer the ability to land the change
 it is reviewing.
+**A FAST-FORWARD makes `git merge-tree --write-tree` trivially clean**, and a
+close-out quoting the clean answer without saying so overstates it. Measured
+with `origin/main` an ancestor of HEAD: exit 0, 41 bytes, one 40-hex OID —
+and that OID EQUALS `HEAD^{tree}`, THEIRS is zero paths, and the both-touched
+set is empty BY CONSTRUCTION. So the two readings a real three-way merge owes
+are UNAVAILABLE rather than skipped: no auto-merged blob to take line
+arithmetic over, and no disjoint-hunk argument to make. What keeps the
+mechanism live is the `/tmp` throwaway CLEAN control's own arithmetic — two
+branches appending to DIFFERENT files, the merged tree carrying both sides'
+line counts — beside the CONFLICT and NOT-RUN legs. Say that the answer is
+only true while the base has not moved.
+
+**A plan's own Description predicts which CI workflows its changes will
+trigger, nothing re-reads that prediction, and it is routinely FALSE by the
+tip.** Measured on q19, whose Description said no package under `packages/` is
+touched: 26 changed paths sat under `packages/` and BOTH workflows' `paths:`
+filters matched. Derive the match by holding each filter glob against
+`git diff --name-only <base>..HEAD` rather than against what the plan
+remembered, and read the matching job's STEPS too — `back.yml`'s test step is
+`bun run test` at the root, which IS the ralph suite. The filter to check
+FIRST is the one the two workflows SHARE: `bun.lock` sits in both, so any plan
+that adds a dependency dispatches the front-end workflow on a branch that
+changes no file under `packages/ui` or `packages/web`.
+
+**Regenerating a plan from its spec is not an annotate-in-place job**, and
+`ralph plan` cannot do it in place either: `plan.ts` REFUSES when
+`.plans/PLAN-<stub>.md` already exists (exit 1), and `.plans/` being
+gitignored means the file has no HEAD side to recover from — so a copy in
+`/tmp` taken before the write is the only undo, and its sha is what says the
+installed file is the one that was verified. What makes it a REGENERATION
+rather than a retrofit is re-deriving the plan's own anchors: measured
+regenerating q16a, every CODE figure still held while the prose anchors had
+all moved, so take the code figures as the cross-check that the plan is still
+about this tree and re-derive every file/line citation and every count. A
+task-count breakdown in a Description drifts the same way and in the
+direction that flatters the plan; the arithmetic that closes it is code plus
+operator runs plus captures equalling the task total.
+
+**A plan whose task lines carry declarations has ONE reading and it is
+hand-run**, `.plans/` sitting outside every gate: drive each `- [ ] ` line's
+captured text through the real `parseTaskDeclaration` and
+`resolveDeclarationFlags` under bun, and take the RESOLVED FLAG HISTOGRAM
+rather than a declared/undeclared count. The histogram is what shows two
+spellings of one tool set reading as two routes, which no per-line check
+sees. Pair it with `findNextTask` over the same text and with two negative
+controls in the same run — a line with no block, and a line ending on a code
+span holding braces — both required to answer null.
+
+**Four guards make a close-out block writable without a gate**, and all four
+are cheap to run BEFORE the append rather than after: the file's own measured
+prose width, backtick parity per PARAGRAPH (and per ROW inside a table),
+pipe count per contiguous table block against that block's own header, and no
+byte under 0x20. Each owes a PLANTED violation in the same run, and the plant
+itself needs measuring — a line planted as "much much much too long" came out
+at 67 characters and the width guard correctly ignored it, reporting the
+guard as dead when it was the control that was. A guard that aborts the
+appender leaves both the plan and its tracker byte-identical, which is a far
+cheaper failure than a repair edit.
+
+**A multi-line substring replacement inside hand-wrapped prose whose `old`
+ends MID-LINE silently joins its tail onto the rest of that line.** Measured:
+a five-line replacement that preserved its own line count produced a
+93-character line because the source line ran on past the replaced text. The
+width check catches it and nothing else does — the sha reconstruction still
+matches and the join is word-identical. Re-wrap the joined remainder and hold
+`' '.join(wrapped)` against the original join.
+
+**Locate a table row to edit by its LEADING CELL with a uniqueness assertion**
+rather than by line number, then assert the changed-line SET equals exactly
+those rows. That is what makes "touched no sibling row" a reading instead of a
+promise, and it composes with the reconstruct-and-compare-sha check that
+`.specs/` and `.plans/` files owe for having no HEAD side.

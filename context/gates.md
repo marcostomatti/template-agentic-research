@@ -525,3 +525,61 @@ matching anything prints exactly the same five lines.
   like a measurement. Append every check's label to a list and print that
   list's length — one line, and it also makes a leg that silently stopped
   running visible as a total that moved.
+- The root `.gitignore` is read by NO lint rule — an explicit-path
+  `bun x eslint -f json .gitignore` answers the fourth shape (`File ignored
+  because no matching configuration was supplied`) — while
+  `isScannable('.gitignore')` is TRUE, its dot sitting at index 0 where the
+  predicate keys on `lastIndexOf('.') <= 0`. So a dotfile edit's only
+  automated green is `gate:control-bytes`.
+- A markdown file under `tools/` has TWO automated greens, unlike the
+  package-root docs: the root `eslint .` pathspec reaches it (measured,
+  `tools/ralph/PROMPT.md` present in a 45-entry `-f json` read list at 0
+  errors with a fabricated sibling absent) and `gate:control-bytes` opens it
+  once tracked. A markdown page at the REPO ROOT is reached the same way
+  (measured, `context/tooling.md` in a 54-entry read list at 0 errors).
+- A `packages/<pkg>/context/` page is reached by NEITHER: the root pathspec
+  ignores `packages/**` and a package's own script is a fixed pathspec
+  (`eslint src lib workflows tests scripts` for `@ar/service`), so a new
+  package-root directory is un-targeted by both and its whole automated
+  reading is `gate:control-bytes`. The sibling control's WORDING differs
+  from the root run's — a cross-package path answers `File ignored because
+  outside of base path.` rather than the ignore-pattern message.
+- A file under the tracked `.claude/` tree has ONE automated green and
+  eslint is not it: an explicit-path run answers the IGNORED shape, so the
+  languageless-fence plant that rescues a covered-and-clean zero elsewhere
+  has NO SUBJECT there. The substitute is a control BYTE planted in a COPY
+  of the real content and staged: `gate:control-bytes --staged` reds at
+  exit 1 naming the planted line, and the same run is back at exit 0 with
+  scanned == staged == 1 once the copy is removed.
+- "This gate does not target the file" is provable POSITIVELY, which turns
+  an assumption a close-out rests on into a reading: run the gate's OWN
+  script argv under `-f json` and assert the path is ABSENT from the read
+  list it answers (measured over `@ar/web`'s fixed `eslint src tests *.ts
+  *.mjs` — a 149-entry list holding no `AGENTS.md` and no `context/` page).
+  The absence and the explicit-path green are two different claims and both
+  are owed.
+- `gate:control-bytes` cannot be run "with everything staged" on a CLEAN
+  tree, and what comes back is the one exit-0 shape that is not a pass:
+  `git add -A` stages nothing, so `--staged` prints `nothing staged to scan`
+  and exits 0. The mode that reads every file is the FULL one, and what ties
+  the two subjects together is `git ls-files` being SET-EQUAL to
+  `git ls-tree -r --full-tree HEAD`, true exactly while the tree is clean
+  (measured 1192 == 1192) — so on a committed branch the full run IS the
+  everything-staged run. Say so, or a vacuous staged answer enters a
+  close-out as evidence.
+- `isScannable` is TOTAL over this tree, so the gate's `N file(s) scanned`
+  IS the tracked file count and any scanned-count delta is the raw
+  file-count delta (measured 13 distinct tracked extensions, none in
+  `BINARY_EXTENSIONS`, `ALLOWLISTED_PATHS` empty). The natural predicate
+  control — count what it refused — therefore answers 0 and reports the live
+  predicate as dead. Make it live off SYNTHETIC paths through the IMPORTED
+  function instead (`x.png`, `LOGO.PNG`, `bun.lockb` false; `Makefile`,
+  `.gitignore`, `a/.eslintrc.json` true), which pins the case-folding and
+  dot-at-index-0 branches in the same pass.
+- A "no path on both sides changes answer" leg over a path-only predicate is
+  a TAUTOLOGY the moment it is spelled `f(p) !== f(p)`, and it prints a
+  confident 0 whatever the predicate does. Build the two sides as two
+  INDEPENDENT filter passes and hold their intersections SET-EQUAL; the free
+  cross-check on the decomposition is `git diff --name-status -M
+  <base>..HEAD`, whose A and D rows must be set-equal to the derived added
+  and removed sets (M rows contribute zero by construction).

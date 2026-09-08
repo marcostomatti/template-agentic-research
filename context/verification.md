@@ -751,3 +751,49 @@ red package never masks another and a single run gives the whole picture.
   ternary produced the skip (rather than a hardcoded `describe.skip` or cases
   gutted to stubs) and the refusal happens before any request, so it reaches
   no service.
+- A pre/post GATE-CAPTURE diff is two zero-hit readings at once — the
+  expected answer is `added=[] removed=[]` on BOTH sides — so a matcher that
+  has stopped matching reports the perfect result. Drive both sides through
+  ONE failure-set function, since a difference between two parsers reads as
+  a difference between two trees, and plant one line per SHAPE it owns (a
+  nonzero `Exited with code`, an ESLint tally carrying errors, an
+  `error TS<n>`, a ` FAIL ` line, a failure glyph, an `N failed` summary
+  segment). The half that bites is the NEAR-MISS, and this tree emits three
+  of them on a GREEN run: `@ar/service`'s deliberate pino `failed` records,
+  ESLint's `0 errors, 2 warnings` tally, and
+  `@ar/web pretest: @ar/ui build: Exited with code 0` under the DOUBLED
+  prefix. A matcher scoring those still scores every plant, so the positive
+  half alone cannot see it (measured 8 plants against 8 near-misses).
+- A gate's failure SET mixes members that NAME a subject with members that
+  only COUNT one, and a re-roll leg is unreadable until the two are
+  PARTITIONED: two runs each failing once share the `exit:` member and both
+  `1 failed` segments BY CONSTRUCTION, so a whole-set overlap answered 3 of
+  5 and read as the same failure twice. The IDENTITY members — the ` FAIL `
+  line and the glyph line — overlapped at ZERO across different files, which
+  is the reading that says flake. Take the overlap on the identity half and
+  print the aggregate half as identical-by-construction.
+- Running a package gate in the FOREGROUND beside a backgrounded `test:all`
+  reds it as an ESLint CRASH rather than as a finding: `Oops! Something went
+  wrong!` over `ENOENT: ... packages/web/node_modules/@ar/ui/dist/index.js`,
+  thrown from inside the `import/namespace` rule, at exit 2 with a stack
+  trace and no rule violation printed. Same cause as the recorded race
+  (`@ar/web`'s pretest wiping `@ar/ui`'s dist mid-run), and `check-types:all`
+  runs GREEN through it. Re-run once the suite finishes.
+- Whether a branch's package touches are COMMENT-ONLY is a structural
+  attribution leg for a red `test:all`, and it costs one diff parse
+  (measured here, all 26 changed lines across five non-`.md` files under
+  `packages/` sat inside block comments, so no package suite's behaviour can
+  have moved). It is strictly stronger than the branch-never-touched-the-
+  failing-file leg. The caveat is this tree specifically: 10 of the 26 files
+  in `packages/service/tests/invariants/` read SOURCE TEXT as data, so a
+  comment IS an input to them — name that roster as what the leg does not
+  cover rather than calling comments inert.
+- `tools/` is an interior directory NAME here as well as a repo-root path,
+  so an unanchored roster needle scores package files and the two sides of a
+  suite-count delta disagree for a reason that is not the branch. The HEAD
+  side spelled as a PATHSPEC (`git ls-files -- 'tools/**/*.test.ts'`) is
+  anchored by construction; the base side spelled as a grep over
+  `git ls-tree` is not, and answered 11 against the root summary's own 4 —
+  the seven extras being `packages/service/src/mcp/tools/` and
+  `packages/web/src/pages/tools/` files. Anchor both sides through one
+  predicate and the delta is exact.

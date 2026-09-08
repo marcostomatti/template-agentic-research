@@ -467,3 +467,18 @@ leaves the run fully green and moves only the two denominators, which nobody
 holds against a prior run — `bun x vitest list --filesOnly` collects without
 running, so a grep over it answers membership directly and its count against
 the run's own parenthesised denominator ties collection to the run.
+
+The bare-`.skip` sweep that runs beside the gate-helper histogram must be
+scoped to the ROSTER `*.test.ts` files and NOT to the `tests/live/`
+DIRECTORY. Three gate helpers live inside that directory alongside the
+roster — `live-postgres.ts`, `live-n8n.ts`, `live-ollama.ts` — each carrying
+a legitimate `describe.skip` in its own ternary plus several more in TSDoc,
+and the tracked guidance names only `tests/helpers/port-parity.ts` as the
+helper to exclude, which is the one helper NOT inside the sweep's own
+directory. So the natural `-- packages/service/tests/live/` pathspec reads
+as if the gates had been hardcoded: measured 11 hits across those three
+helpers against ZERO across the 28 roster files. Build the roster with a
+DEPTH-ANCHORED regex over the listing
+(`^packages/service/tests/(live|parity)/[^/]+\.test\.ts$`), since a pathspec
+`*` crosses `/`, and pair the roster's zero with a planted control through
+the identical matcher.

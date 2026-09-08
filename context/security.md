@@ -58,6 +58,32 @@ throughout a build that ended at 17 and 55, the superseded pair being a
 correct reading of the wrong denominator (a `src/*/routes.ts` glob) rather
 than a typo.
 
+`.specs/2026-08-19-research-pipeline-port.md` is the authority for the
+service pipeline, BY SECTION: 1 core vocabulary (locked), 2 the schema-v2
+table roster, 3 scheduling (four modes, the claim query, `next_run_at` as
+the single truth), 4 outputs plus parsing/validation and the send-free
+invariant, 5 the invariant register and test-runner rationale, 6 the port
+inventory, 7 the seven-phase order. Read the section before writing prose
+citing it — the phase numbers are load-bearing, and "record decision X"
+usually means the spec already states the reason. UI work has the same pair
+in `.specs/2026-08-19-ui-shell-and-pages.md`, whose per-page component
+rosters are the contract. Derive pipeline STATE rather than quoting it
+(`ls packages/service/workflows/src/*.json`,
+`git ls-files -- 'packages/service/tests/live/*.test.ts'`).
+
+Cross-phase debt lives in `.specs/2026-08-19-integration-followups.md`.
+Items are cited BY NUMBER from other specs and plans and nothing checks a
+citation, so a new item goes at the END; an insertion silently re-points
+every one of them. That file is swept by NOTHING — untracked, so outside
+both fan-outs and outside `gate:control-bytes` — so a spec-writing task's
+whole verification is hand-run: the seven needles over the edited file, its
+own measured wrap, and the dangling-`specs/` needle. An item body runs its
+paragraphs as CONSECUTIVE indented lines with NO blank line between them,
+so joining a multi-paragraph item with a blank line closes the list item
+and renders every later paragraph as a sibling block. And an item naming a
+FUTURE WAVE as its owner goes stale the day that wave lands without it,
+while still reading as scheduled.
+
 ## Security posture (carried from the templates, incident-derived)
 
 - Isolated vs live test split is structural: the default suite touches no
@@ -430,3 +456,61 @@ than a typo.
   were correct `.specs/` references; the negative-context form
   `-E '(^|[^.])specs/'` returns only the dangling ones. That is a false
   POSITIVE where the liveness controls above guard false negatives.
+- Both needle sources spell their fragments the same way (`^const NAME =
+  ['a', 'b'].join('<sep>');` at module top level), so ONE `matchAll` over
+  each file's TEXT derives all seven needles with their arities. Two field
+  reads cost a run there and both are silent: a `FORBIDDEN_PATTERNS` entry
+  carries its id as `id` and NOT as `patternId` (that is the
+  `ForbiddenMatch` field, and the misread printed `[undefined]` five times
+  while the COUNT leg passed), and the compiled entry's regex text is
+  `p.source`, a STRING carrying its own lookbehind, NOT `p.pattern.source`.
+- The fragment-count control needs NO expected arity typed anywhere: run the
+  fragment regex over the WHOLE declaration match as well as over the
+  bracket body alone and assert `naiveArity === arity + 1` for every needle.
+  The naive side IS the separator-capturing mis-derivation, so one parse
+  yields the arity guard, the mis-derived needle and the live/vacuous split
+  together. Pair it with each text-derived constant equalling exactly ONE
+  lookbehind-stripped compiled `source`, which is the leg that ties the text
+  parse to the invariant's own compilation.
+- That mis-derivation control is VACUOUS for any needle whose separator is
+  EMPTY (`[...frags, ''].join('')` is byte-identical to the real needle), and
+  the live/vacuous split is a PER-BUCKET figure: 3 of 7 live over both
+  buckets, but only ONE of the five `naming-patterns.ts` needles. A probe
+  holding a five-needle run against 3 aborts on its own correct control —
+  print the split with the BUCKET named.
+- Both buckets have a REAL-TREE positive control available in the same probe
+  as the fragment-built plant, and it is what separates `the matcher runs`
+  from `the needles still bite THIS tree`: `NOTICE` for the five and
+  `packages/ui/AGENTS.md` for the two. The ui bucket's case SPLIT is a
+  whole-tree reading by contrast and is vacuous over most changed sets, its
+  single case-insensitive-only member being
+  `packages/ui/scripts/compare-design.mjs`.
+- The four near-neighbour controls' LIVE-or-DEAD verdict is a property of
+  the SUBJECT and not of the guard, so a sweep taking them over its own
+  changed set reports as dead what the tree has live (measured at 1192
+  tracked files: `origin-prefix` 24 hits LIVE, `vault-uri` 166 LIVE,
+  `vault-path` 202 LIVE, `origin-host` 2 DEAD — while over a 76-path changed
+  set only two survived). Run every near-neighbour control over
+  `git ls-files` and NAME the denominator.
+- Take the WHOLE-TREE diff as the containing reading whatever a task's named
+  subject is: a merge-base hit-set diff scoped to the CHANGED SET cannot
+  settle a completed MOVE whose source file sits outside that set, and the
+  failure MANUFACTURES a finding — the added path carries a head-side hit,
+  the removed path contributes no base-side one, and the diff answers
+  ADDED=1 REMOVED=0 reading as introduced. `git archive <base> | tar -x`
+  plus two disk walks ran 1192 + 1137 files through all seven needles in
+  4.3s, cheaper than the argument about whether it was owed.
+- Settle a MOVE on the SENTENCE and never on the key: the diff key is
+  per-path, so no row relates the removed hit to the added one. Compare the
+  two sides' line DIGESTS across the two keys, plus the source path
+  answering zero at HEAD. That composes with the never-print-a-
+  `ForbiddenMatch` rule, which is enforced by WHERE the record is narrowed —
+  map the matcher's output down to `patternId`/`filePath`/`lineNumber` AT
+  THE MATCHER BOUNDARY, then a `createHash('sha256')` over each side's line
+  gives the same reading with nothing banned held past the matcher.
+- A new package-root directory sits outside `naming-patterns.ts`'s
+  `SCAN_ROOTS` (six shipped surfaces plus two named `SCAN_FILES`), so
+  `packages/<pkg>/context/` pages inherit that package's `AGENTS.md` status
+  exactly — read by no invariant, so the seven needles over them are
+  hand-run. Widening the roster would be wrong for the reason its own TSDoc
+  gives for excluding `docs/` and `README.md`.

@@ -22,7 +22,7 @@ wanted in both places must be made in both repos.
 
 One page per tag, each the authority for its own subject; read the page your
 task touches. The pointers below are plain paths on purpose — written in
-the import form `CLAUDE.md` uses for this file, they would pull all five
+the import form `CLAUDE.md` uses for this file, they would pull all six
 pages back into every turn and the split would save nothing.
 
 - `context/tooling.md` — shared config (the root eslint/tsconfig layering,
@@ -41,6 +41,10 @@ pages back into every turn and the split would save nothing.
 - `context/workflow.md` — branch, PR and merge, the task-shape routing
   table, the loop's CI wait, the mergeability readings to take before a
   push, and the close-out discipline.
+- `context/loop.md` — the ralph loop's own architecture: the module map,
+  the per-task tail and its two control-flow laws, the five injected
+  prompts and the first-line rule that classifies them, the task
+  declaration grammar, the effort store, and how the loop is tested.
 
 ## This file is capped
 

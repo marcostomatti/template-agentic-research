@@ -339,3 +339,58 @@
   walk. `ls` the store dir's own `node_modules` before trusting a chain
   — its sibling list is also the free reading of what that consumer
   can see.
+- Prose wrap is a PER-FILE measurement here and the doc families differ: 74
+  cols in `packages/web/AGENTS.md`, 77 in `packages/service/AGENTS.md`, 78
+  at the repo root and in `CLAUDE.md` and the root `context/` pages, 72 in
+  `progress.txt`, and whatever a given `.plans/` file measures (74 in one
+  `PLAN-*.md`, 72 in the `PREREQUISITES-*.md` beside it, 69 in a close-out
+  block). Measure the file's own non-table lines first, never take the root
+  figure. `.claude/agents/` is not one family at all — the vendored
+  component personas are unwrapped entirely (to 764 cols) while the files
+  written for this loop sit at 75, so match the SIBLING written for the same
+  purpose rather than the directory.
+- The paired trap is a repair that LENGTHENS a code span (`AGENTS.md` to
+  `context/verification.md` is +14 characters): it pushes the line over and a
+  naive re-wrap cascades through the rest of the paragraph. The contained
+  repair absorbs the overflow into the NEXT line's own slack so the bullet's
+  LINE COUNT is preserved and nothing after it moves.
+- No fenced line anywhere in the four `AGENTS.md` maps, the 22 `context/`
+  pages or `tools/ralph/PROMPT.md` exceeds 78 cols, so a fence obeys the
+  prose cap here rather than being exempt like a table row. A fence INDENTED
+  inside a list item hands that indentation to whatever reads it, so a
+  multi-line `python3 -c` snippet under a bullet dies on IndentationError and
+  belongs at column 0.
+- The `_` prefix does NOT rescue the omit-a-key destructure: measured at the
+  repo root, both `const { a, ...rest } = obj` and
+  `const { a: _a, ...rest } = obj` error as assigned-but-never-used, so
+  `varsIgnorePattern` is unset here even though the parameter-position `_`
+  convention is established. Project a record onto a narrower one FIELD BY
+  FIELD, which also doubles as the enumeration of what the narrower type is
+  allowed to carry.
+- A one-line ternary inside an arrow callback trips TWO stylistic rules at
+  once and reports as THREE errors on the one line, so the count reads as
+  three faults where the repair is one reshape: `@stylistic/multiline-ternary`
+  is `always` (one for the `?`, one for the `:`) and
+  `@stylistic/implicit-arrow-linebreak` is `beside` (one for the body
+  starting on the next line). The shape satisfying both keeps an open paren
+  beside the arrow and breaks inside it; both are `--fix`-able.
+- A markdown heading scanner over this tree's docs needs the SPACE in
+  `^#{1,6} ` and needs no fence tracking at all: across all four `AGENTS.md`
+  files and all `context/` pages there are ZERO `#`-prefixed lines inside
+  fenced blocks, so the only column-0 hash a range derivation can trip over
+  is a `#!`-style snippet line, which the space excludes for free.
+- A markdown scanner must pair backtick runs ACROSS line breaks and not per
+  line: a WRAPPED code span leaves an odd count on both its lines, so a
+  per-line masker pairs that span's CLOSING backtick with the next OPENING
+  one and leaves the real content unmasked (measured, 12 bare `@` tokens
+  reported against 5 for a cross-line masker — eight of the twelve were the
+  second half of a wrapped span). Reset any unclosed run at a BLANK line, or
+  one dangling opener masks every later line.
+- A pipe-count guard run over a whole markdown FILE reports a false fault as
+  soon as that file holds two tables of different widths (measured, a
+  2-column and a 3-column table in one skill answered {3, 4}). Group rows
+  into contiguous blocks and take each block against its own header. Take
+  backtick parity per ROW as well wherever the subject is a table: a table
+  block carries no blank line, so the whole block is ONE paragraph and two
+  rows with odd counts sum to even while both render broken. The width cap
+  does not apply to a table row.
