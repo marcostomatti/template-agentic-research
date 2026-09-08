@@ -545,15 +545,16 @@ export function buildCompactionPrompt(decision: CompactionDecision): string {
  * deliberate choice: a file nobody can read must not pass for a small
  * one and silently suppress every compaction the run needed.
  *
- * Legs for the integration test that follows this task, named so it
- * can re-drive them rather than guess: return before the run when the
- * decision is not due, dispatch on a `due` decision that is not
- * hard-cap, reset the counter to zero on a FAILED session as well as a
- * passing one, keep the counter unchanged when nothing was dispatched,
- * and hand `run` a prompt built from THIS decision rather than a
- * constant. The under-cap case is the control that keeps them honest:
- * it must reach the runner zero times, which no assertion on a
- * returned record can say by itself.
+ * `tests/progress-compaction.test.ts` is the integration over this,
+ * and it re-drove every leg named here as its own landing check:
+ * return before the run when the decision is not due, dispatch on a
+ * `due` decision that is not hard-cap, reset the counter to zero on a
+ * FAILED session as well as a passing one, keep the counter unchanged
+ * when nothing was dispatched, and hand `run` a prompt built from
+ * THIS decision rather than a constant. All five redden there. The
+ * under-cap case is the control that keeps them honest: it must reach
+ * the runner zero times, which no assertion on a returned record can
+ * say by itself.
  */
 export async function maybeCompactProgress(
   options: CompactionOptions,
