@@ -20,11 +20,19 @@
  * and a marker changed to something a numstat line can begin with
  * would stay green through the whole file.
  *
- * One case runs REAL git. No planted capture can say the format string
+ * Two cases run REAL git. No planted capture can say the format string
  * is one git accepts — a typo there produces a capture nobody would
- * ever compare against — so that case takes its own capture through
+ * ever compare against — so the first takes its own capture through
  * {@link commitLogArgs} and requires the module's parse of it to equal
  * what {@link readCommitLog} answers.
+ *
+ * The second reads a repository this file PLANTS rather than the
+ * checkout it runs in. Reading the checkout asserts a property of the
+ * ENVIRONMENT, not of the module: CI clones at `fetch-depth: 1`, where
+ * one commit is reachable and a `--max-count=3` read correctly answers
+ * a single row. The planted repository holds four commits, so the
+ * three rows it answers say the cap actually holds rather than that
+ * the checkout happened to be deep enough to hide a missing one.
  *
  * Twenty-two module mutations were driven against this file and
  * TWENTY-ONE reddened at least one case, with the restored module
@@ -53,8 +61,11 @@
  * a guard would overstate it.
  */
 import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 import {
   COMMIT_LOG_FORMAT,
@@ -513,6 +524,40 @@ describe('elapsed minutes across a capture', () => {
 });
 
 describe('readCommitLog against real git', () => {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'ralph-commits-'));
+
+  afterAll(() => {
+    rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  let planted = 0;
+
+  /** A repository holding `count` commits on one linear branch. */
+  function plantRepo(count: number): string {
+    planted += 1;
+    const dir = join(tempRoot, `repo-${planted}`);
+    mkdirSync(dir, { recursive: true });
+    function git(...args: string[]): string {
+      return execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
+    }
+
+    git('init', '-q', '.');
+    git('config', 'user.email', 'loop@example.test');
+    git('config', 'user.name', 'Ralph Loop');
+    git('config', 'commit.gpgsign', 'false');
+    for (let n = 1; n <= count; n += 1) {
+      writeFileSync(join(dir, `file-${n}.txt`), `body ${n}\n`, 'utf8');
+      git('add', '-A');
+      git('commit', '-q', '-m', `commit ${n}`);
+    }
+    return dir;
+  }
+
+  /** Reads back from the repository, never through the module. */
+  function inRepo(dir: string, ...args: string[]): string {
+    return execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+  }
+
   it('parses what the argv it builds actually returns', () => {
     const args = commitLogArgs({ maxCount: 3 });
     const raw = execFileSync('git', args, {
@@ -526,13 +571,13 @@ describe('readCommitLog against real git', () => {
   });
 
   it('answers HEAD as its first row, with a full sha', () => {
-    const head = execFileSync('git', ['rev-parse', 'HEAD'], {
-      encoding: 'utf8',
-    }).trim();
-    const rows = readCommitLog({ maxCount: 3 }).rows;
+    const dir = plantRepo(4);
+    const head = inRepo(dir, 'rev-parse', 'HEAD');
+    const rows = readCommitLog({ maxCount: 3, cwd: dir }).rows;
 
     expect(rows).toHaveLength(3);
     expect(rows[0]?.sha).toBe(head);
+    expect(rows[0]?.sha).toMatch(/^[0-9a-f]{40}$/);
     expect(rows[0]?.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 });
