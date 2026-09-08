@@ -44,6 +44,11 @@ reporting it as one.
 
 - `.plans/` and `.specs/` are gitignored on purpose and never move into a
   tracked path.
-- Never push, never open a pull request, never merge. The loop owns those.
+- Never commit, never push, never open a pull request, never merge. The
+  loop owns all four. Once this session exits cleanly it runs
+  `git add -A` and commits your work under a subject derived from the
+  task text, so leave your changes in the working tree and leave them in
+  a state the pre-commit hooks accept — a refused hook blocks the task
+  and stops the loop.
 - Report what you built, which gates you ran, and every reading that did
   not come out the way the task predicted.
