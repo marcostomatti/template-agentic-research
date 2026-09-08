@@ -14,7 +14,11 @@
  * braces, a trailing code span, an empty block, a block that is not
  * anchored at end of line, an unrecognised key on its own), and the
  * flag-mapping matrix (an `agent` suppressing the granular keys, and
- * the three mapping onto their flags in its absence). What IS asserted
+ * the three mapping onto their flags in its absence). The negative
+ * shapes now live in `tests/declaration-negatives.test.ts`, each with
+ * its own positive control; the one line of overlap left here is the
+ * block of unrecognised keys below, which that file widens into the
+ * lone key, the case split and a near miss of all four. What IS asserted
  * of {@link resolveDeclarationFlags} here is the one claim this task
  * owns: no declaration means no flags, which is today's behaviour
  * exactly.
@@ -39,13 +43,14 @@
  * unrecorded.
  *
  * The two that stayed GREEN are named rather than dropped, and they
- * are not no-ops — both are real holes, and both belong to the
- * negative-path task above rather than to this one. DROPPING THE END
- * ANCHOR (`/\{([^{}]*)\}$/` to `/\{([^{}]*)\}/`) and ALLOWING A
- * NESTED BRACE (`[^{}]*` to `[\s\S]*`) each need a fixture whose
- * braces are somewhere other than a well-formed trailing block, and
- * every fixture here puts them exactly there. Re-driving those two
- * legs is how that task knows its cases reached the module.
+ * are not no-ops — both are real holes, and both belong to
+ * `tests/declaration-negatives.test.ts` rather than to this file.
+ * DROPPING THE END ANCHOR (`/\{([^{}]*)\}$/` to `/\{([^{}]*)\}/`)
+ * and ALLOWING A NESTED BRACE (`[^{}]*` to `[\s\S]*`) each need a
+ * fixture whose braces are somewhere other than a well-formed trailing
+ * block, and every fixture here puts them exactly there. Both were
+ * re-driven against that file when it landed and redden 5 and 4 of its
+ * 15 cases, which is how it knows its own fixtures reached the module.
  */
 import type { TaskDeclaration } from './declaration.js';
 
