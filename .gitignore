@@ -35,3 +35,11 @@ packages/service/.exports/
 # by every run and neither is ever committed.
 test-results/
 playwright-report/
+
+# The effort collector's append-only store, spelled once in code at
+# tools/ralph/effort/store.ts (EFFORT_STORE_DIR). Never committed: the
+# rows measure ONE checkout's runs, are regenerable from the session
+# logs at any time, and carry plan stubs and dispatched task text
+# derived from the gitignored `.plans/` — committing them would put
+# on the remote the very thing that entry exists to hold back.
+.ralph/
