@@ -20,7 +20,10 @@
  * inside `taskInfo.task` and would otherwise reach the injected prompt
  * verbatim; `updateTrackerLine` rewrites only the checkbox prefix, so
  * the block survives a tick byte-identical. Neither needs a change —
- * the stripping happens here, at the point the text is used.
+ * the stripping happens here, at the point the text is used. Both
+ * halves are driven over real trackers in
+ * `tests/tracker-declarations.test.ts`, which is where that claim is
+ * measured rather than stated.
  *
  * Four rules keep a brace that a task WROTE ABOUT from being read as a
  * declaration, and each one is a shape that occurs in this repo's own
