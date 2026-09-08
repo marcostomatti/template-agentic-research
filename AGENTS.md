@@ -38,8 +38,9 @@ pages back into every turn and the split would save nothing.
 - `context/gates.md` — which gate actually opens which file, the four
   shapes an explicit-path run answers, and how to prove a gate covered your
   change rather than that it merely exited 0.
-- `context/workflow.md` — branch, PR and merge, the loop's CI wait, the
-  mergeability readings to take before a push, and the close-out discipline.
+- `context/workflow.md` — branch, PR and merge, the task-shape routing
+  table, the loop's CI wait, the mergeability readings to take before a
+  push, and the close-out discipline.
 
 ## This file is capped
 
