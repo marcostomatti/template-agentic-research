@@ -9,6 +9,11 @@
  * on a failed or interrupted session, and on a commit git refused. Re-running
  * resumes: blocked tasks are retried first.
  *
+ * A task line may carry a trailing routing declaration (`utils/declaration.ts`).
+ * The loop reads it, dispatches that task under the flags it names, and keeps
+ * the block out of everything downstream — the prompt, the operator's log and
+ * the commit message all see the task sentence alone.
+ *
  *   bun tools/ralph/ralph.ts start [--plan=PLAN-foo.md] [--start-at=HH:MM]
  *
  * --plan        plan file to execute (default: PLAN.md at the repo root). The
@@ -29,6 +34,7 @@
  * never checked once.
  */
 import type { CommitAttempt, CommitOptions } from './utils/commit.js';
+import type { TaskDeclaration } from './utils/declaration.js';
 import type { TaskInfo } from './utils/tracker.js';
 
 import fs from 'fs';
@@ -37,6 +43,11 @@ import { fileURLToPath } from 'url';
 
 import { runClaude, checkUsage } from './utils/claude.js';
 import { commitTaskWork } from './utils/commit.js';
+import {
+  parseTaskDeclaration,
+  resolveDeclarationFlags,
+  stripTaskDeclaration,
+} from './utils/declaration.js';
 import { getCurrentBranch, getRepoRoot } from './utils/git.js';
 import {
   failingRows,
@@ -239,6 +250,125 @@ export interface FinishedTaskOptions {
   commit?: TaskCommitRunner;
 }
 
+/** How one task's Claude session is spawned. */
+export type TaskSessionRunner = (
+  prompt: string,
+  flags: readonly string[],
+) => Promise<number>;
+
+/** What {@link dispatchTask} needs to run one task. */
+export interface TaskDispatchOptions {
+  /** The task the tracker just handed the loop, declaration and all. */
+  taskInfo: TaskInfo;
+  /** `PROMPT.md`, read once before the loop. */
+  promptContent: string;
+  /** The plan file, read once before the loop. */
+  planContent: string;
+  /** Session seam. Defaults to the real CLI. */
+  run?: TaskSessionRunner;
+}
+
+/** What one dispatched task actually ran as. */
+export interface TaskDispatch {
+  /** The task sentence, with any declaration block taken off. */
+  taskText: string;
+  /** The prompt the session was given, on stdin. */
+  prompt: string;
+  /** Flags the declaration resolved to. Empty without one. */
+  flags: readonly string[];
+  /** What the block declared, or null when there was none. */
+  declaration: TaskDeclaration | null;
+  /** The session's exit code. */
+  exitCode: number;
+}
+
+/**
+ * Assembles the prompt one task's session is given.
+ *
+ * `taskText` is the sentence a declaration has already been taken off,
+ * and that stripping is the whole reason this is a function rather
+ * than three lines inside the loop. The block is an instruction to the
+ * LOOP about how to spawn, never to the session about what to build:
+ * a session handed `{agent=doc-updater effort=low}` reads it as part
+ * of the task, so the routing would be described to the agent instead
+ * of applied to it — and the block would then travel on into every
+ * artifact that quotes the task back, the plan's own close-out
+ * included.
+ *
+ * The `Your scoped task is: ` prefix is what `effort/classify.ts`
+ * buckets a session log by. It is asserted against this file's source
+ * by that module's own drift guard, so it must stay spelled here.
+ */
+export function buildTaskPrompt(
+  taskText: string,
+  promptContent: string,
+  planContent: string,
+): string {
+  return [
+    `Your scoped task is: ${taskText}`,
+    'Consider tasks listed above this one in the plan checklist as completed. Do not re-evaluate or re-do them. Focus only on the scoped task.',
+    '',
+    promptContent,
+    planContent,
+  ].join('\n');
+}
+
+/**
+ * Runs one task's session, routed by whatever its own line declared.
+ *
+ * Everything a declaration changes happens here: the block comes off
+ * the text before the prompt is built, and the flags it resolved to go
+ * to the spawn. A task carrying no block resolves to no flags at all,
+ * so `runClaude` is called with the empty list it defaults to and the
+ * session is byte-for-byte the one the loop spawned before
+ * declarations existed. That is the compatibility promise, and it is
+ * kept by the resolver rather than by a branch here.
+ *
+ * The routing is announced because it is otherwise invisible. A
+ * session dispatched under an agent looks exactly like one dispatched
+ * at the loop's defaults in the operator's terminal, and a key whose
+ * value did not parse deliberately falls back to those defaults rather
+ * than stalling the plan on a CLI that refuses `--effort medum`. So
+ * each dropped token is named as well: without that line a typo costs
+ * a task its routing and nothing anywhere says so.
+ */
+export async function dispatchTask(
+  options: TaskDispatchOptions,
+): Promise<TaskDispatch> {
+  const { taskInfo } = options;
+  const run = options.run ?? runClaude;
+
+  const { text: taskText, declaration } = parseTaskDeclaration(taskInfo.task);
+  const { args: flags, suppressed } = resolveDeclarationFlags(declaration);
+
+  if (taskInfo.status === 'blocked') {
+    console.log(`\n⚠️  Resuming blocked task: ${taskText}`);
+  } else {
+    console.log(`\n🔄 Executing task: ${taskText}`);
+  }
+
+  if (flags.length > 0) {
+    const note = suppressed.length === 0
+      ? ''
+      : ` (${suppressed.join(', ')} left to the agent)`;
+    console.log(`   Routed as: ${flags.join(' ')}${note}`);
+  }
+
+  for (const issue of declaration?.issues ?? []) {
+    console.warn(`   Declaration: ignoring ${issue.reason} \`${issue.text}\`.`);
+  }
+
+  const prompt = buildTaskPrompt(
+    taskText,
+    options.promptContent,
+    options.planContent,
+  );
+
+  const exitCode = await run(prompt, flags);
+
+  return { taskText, prompt, flags, declaration, exitCode };
+}
+
 /** Indents every line, so a multi-line git message reads as one block. */
 function indentBlock(text: string): string {
   return text
@@ -260,6 +390,10 @@ function indentBlock(text: string): string {
  * asked; blocking it would stall a plan on its most ordinary shape. See
  * `utils/commit.ts` for the rest of that reasoning.
  *
+ * The declaration comes off the text first. A commit subject is derived
+ * from the task sentence, so a block left on it would reach the git
+ * history — where nothing here can ever go back and take it out.
+ *
  * A failure blocks the task, and the caller stops the loop rather than
  * moving on. It has to: `findNextTask` resumes a blocked task FIRST, so
  * carrying on would re-dispatch this same task immediately and forever,
@@ -271,8 +405,9 @@ function indentBlock(text: string): string {
 export function commitFinishedTask(options: FinishedTaskOptions): CommitAttempt {
   const { taskInfo, trackerPath } = options;
   const commit = options.commit ?? commitTaskWork;
+  const taskText = stripTaskDeclaration(taskInfo.task);
 
-  const attempt = commit({ taskText: taskInfo.task, cwd: options.repoRoot });
+  const attempt = commit({ taskText, cwd: options.repoRoot });
 
   if (attempt.outcome === 'failed') {
     updateTrackerLine(trackerPath, taskInfo.lineNum, 'blocked');
@@ -284,7 +419,7 @@ export function commitFinishedTask(options: FinishedTaskOptions): CommitAttempt 
   }
 
   updateTrackerLine(trackerPath, taskInfo.lineNum, 'done');
-  console.log(`✅ Task done: ${taskInfo.task}`);
+  console.log(`✅ Task done: ${taskText}`);
   if (attempt.outcome === 'committed') {
     const sha = attempt.sha?.slice(0, 7) ?? 'unknown sha';
     console.log(`   Committed ${sha} ${attempt.subject}`);
@@ -363,21 +498,7 @@ export default async function start(args: string[]): Promise<void> {
       break;
     }
 
-    if (taskInfo.status === 'blocked') {
-      console.log(`\n⚠️  Resuming blocked task: ${taskInfo.task}`);
-    } else {
-      console.log(`\n🔄 Executing task: ${taskInfo.task}`);
-    }
-
-    const prompt = [
-      `Your scoped task is: ${taskInfo.task}`,
-      'Consider tasks listed above this one in the plan checklist as completed. Do not re-evaluate or re-do them. Focus only on the scoped task.',
-      '',
-      promptContent,
-      planContent,
-    ].join('\n');
-
-    const exitCode = await runClaude(prompt);
+    const { exitCode } = await dispatchTask({ taskInfo, promptContent, planContent });
 
     if (interrupted) {
       updateTrackerLine(trackerPath, taskInfo.lineNum, 'blocked');

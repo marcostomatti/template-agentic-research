@@ -9,10 +9,13 @@
  * ```
  *
  * The block is the planner's half of a decision the loop otherwise has
- * no way to make. Every task in this tree is dispatched identically
- * today — one model, one effort, every tool — so a prose task and a
- * schema migration cost the same, and the only place that knows they
- * should not is the document that wrote them.
+ * no way to make. A task carrying none is dispatched exactly as every
+ * task was before this module existed — one model, one effort, every
+ * tool — so a prose task and a schema migration cost the same, and
+ * the only place that knows they should not is the document that
+ * wrote them. `start.ts` reads the block off each task on its way to
+ * the prompt, which is what makes a declared task the one that runs
+ * differently.
  *
  * Two parsers were never told about the block and both had to keep
  * working unchanged, which is what shapes the grammar. `findNextTask`
