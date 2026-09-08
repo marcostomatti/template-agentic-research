@@ -263,9 +263,13 @@ function lowerFirstWord(text: string): string {
 }
 
 /**
- * Cuts a description to fit, at a word boundary and never inside a
- * word. Trailing punctuation left dangling by the cut goes with it,
- * so the subject does not end on a comma.
+ * Cuts a description to fit, at a word boundary wherever there is one
+ * inside the budget. Trailing punctuation left dangling by the cut
+ * goes with it, so the subject does not end on a comma.
+ *
+ * A first word LONGER than the budget has no boundary to cut at, and
+ * that case is a hard cut mid-word rather than an empty description:
+ * a truncated name still says more than nothing does.
  */
 function truncateDescription(description: string, budget: number): string {
   if (budget <= 0) return '';
@@ -381,11 +385,16 @@ export function stagedChangesArgs(): string[] {
 /**
  * Argv that makes the commit.
  *
- * `--cleanup=whitespace` rather than the default `strip`, because
- * strip DELETES every line beginning with `#` — and a task text is
- * free to quote a shell comment, a markdown heading or an issue
- * reference. Whitespace mode trims and collapses blank lines and
- * touches nothing else.
+ * `--cleanup=whitespace` is spelled out because strip DELETES every
+ * line beginning with `#`, and a task text is free to open on a shell
+ * comment or a markdown heading. It is NOT defending against git's
+ * default: for a `-m` message the default already behaves as
+ * whitespace, strip being the default only when the message is to be
+ * edited. What it defends against is a `commit.cleanup=strip`
+ * CONFIGURATION, which a machine's global git config is free to set
+ * (measured, git 2.50.1). Since {@link buildCommitMessage} collapses
+ * the task text to one line, the whole reachable difference is a task
+ * text that OPENS on a hash.
  *
  * Two `-m` arguments rather than one joined string: git inserts the
  * blank line between subject and body itself, so the separator
@@ -454,9 +463,12 @@ const MAX_GIT_BUFFER = 16 * 1024 * 1024;
 /**
  * Joins what a failed invocation printed, stderr first.
  *
- * Both streams, because a hook is free to use either: this repo's
- * control-byte gate writes its findings to stderr, and a hook that
- * used stdout would otherwise fail with no reason attached.
+ * Both streams, because which one carries the reason depends on the
+ * invocation rather than on the hook. A HOOK cannot choose: git
+ * funnels a hook's stdout onto its own stderr, so a pre-commit
+ * refusal arrives entirely on `stderr` however the hook printed it
+ * (measured, git 2.50.1). Reading both is for git's other failure
+ * paths, and the ordering matters only there.
  */
 function failureMessage(result: GitRunResult): string {
   const combined = [result.stderr, result.stdout]
