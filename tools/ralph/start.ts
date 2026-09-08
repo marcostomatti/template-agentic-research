@@ -322,7 +322,11 @@ export function buildTaskPrompt(
  * so `runClaude` is called with the empty list it defaults to and the
  * session is byte-for-byte the one the loop spawned before
  * declarations existed. That is the compatibility promise, and it is
- * kept by the resolver rather than by a branch here.
+ * kept by the resolver rather than by a branch here. Both halves are
+ * driven through the real `runClaude` in
+ * `tests/declaration-dispatch.test.ts`, which is the only place the
+ * flags a block resolved to are read off an argument list rather
+ * than off this function's own record.
  *
  * The routing is announced because it is otherwise invisible. A
  * session dispatched under an agent looks exactly like one dispatched
