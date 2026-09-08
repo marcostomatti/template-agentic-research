@@ -18,7 +18,7 @@ not migrate — is argued below rather than left as a gap.
 Two other documents hold halves of this and are worth reading beside
 it. `docs/architecture/02-schema.md` carries `auth_users` and
 `auth_sessions` as storage, in the roster with every other table, and
-the migration that created them. This package's `AGENTS.md` carries
+the migration that created them. This package's `context/auth.md` carries
 the same strategy as a working convention, for somebody about to edit
 `src/auth/` rather than somebody trying to understand it. What is
 here is the strategy itself: what the columns mean, what turns it on,

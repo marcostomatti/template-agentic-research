@@ -26,9 +26,9 @@
  * environment for itself would run cases the gate had already decided
  * to skip, and prose repeating the name is a second thing to keep in
  * step. The claim is scoped to the files below on purpose — the
- * package `AGENTS.md` names the variable where it documents the seam,
- * which is documentation OF the gate rather than a second reader of
- * it.
+ * package's `context/testing.md` names the variable where it
+ * documents the seam, which is documentation OF the gate rather than
+ * a second reader of it.
  *
  * Both are zero-hit readings, so both carry a liveness leg. The path
  * detector runs over a planted sample first and then over a sample of

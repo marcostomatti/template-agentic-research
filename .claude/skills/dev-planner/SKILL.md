@@ -25,7 +25,7 @@ Execute a plan with `bun run ralph start --plan=PLAN-<stub>.md`.
 
 ## PLAN.md format
 
-`PLAN-<stub>.md` is the human-readable plan. Its task lines are injected directly into agent prompts by the loop.
+`PLAN-<stub>.md` is the human-readable plan. Its task lines are injected into agent prompts by the loop, with any trailing routing declaration stripped off first (Task declarations below).
 
 ```markdown
 # Plan: {Feature Title}
@@ -45,9 +45,10 @@ Execute a plan with `bun run ralph start --plan=PLAN-<stub>.md`.
 Rules:
 - Stage labels use `# Stage: {name}` (top-level heading, not `##`).
 - Tasks use `- [ ]` checkbox syntax.
+- A task line may carry a trailing routing declaration — `{agent=doc-updater}` — naming what the loop should dispatch it with. See Task declarations (routing) below.
 - Keep the plan focused on tasks and technical context only. Link to relevant `.claude/skills/` files where they clarify a task, but do not embed behavioral prose.
 - Code snippets are allowed to illustrate a desired pattern. Keep them minimal and directly relevant to the task.
-- Do not use words like "current", "previous", or "next" in task descriptions. The loop injects the task text directly into agent prompts; relative references confuse the agent about what has already been done.
+- Do not use words like "current", "previous", or "next" in task descriptions. The loop injects the task text into agent prompts; relative references confuse the agent about what has already been done.
 - If the plan is long, add a `PLAN_SUMMARY-<stub>.md` with a high-level overview of stages for quick reference.
 
 ### Plan header: `Implements`
@@ -87,6 +88,45 @@ Important notes:
 - There is one space between `]` and the task text for both `- [ ]` and `- [BLOCKED]`.
 - Stage heading lines (`# Stage: ...`) are **not parsed** by the loop. They are visual separators only and do not affect task selection — as is any other prose or code between task lines.
 - `findNextTask()` prefers blocked tasks over unchecked ones — it resumes interrupted work before starting new tasks.
+- A trailing declaration block is invisible to both parsers: `findNextTask()` hands it through inside the captured task text, and `updateTrackerLine()` rewrites only the checkbox prefix — so a ticked declared line differs from its unticked spelling in exactly `- [ ]` → `- [x]`.
+
+---
+
+## Task declarations (routing)
+
+A task line may carry a trailing declaration block naming what the loop should dispatch it with. It is written on the PLAN line, travels into the tracker with it, and is read at dispatch by `parseTaskDeclaration()` in `tools/ralph/utils/declaration.ts`.
+
+```text
+- [ ] Add the Zod schema for `CreateJobRequest`  {agent=loop-implementer}
+- [ ] Rewrite the gates page  {agent=doc-updater}
+- [ ] Sweep the changed set  {tools=Read,Grep,Glob model=haiku effort=low}
+```
+
+### Declaration grammar
+
+| Key | Value | Flag it maps to |
+| --- | --- | --- |
+| `agent` | An agent name, spelled as a file under `.claude/agents/` is named | `--agent <name>` |
+| `model` | An alias (`opus`, `sonnet`, `haiku`, `fable`) or a full name (`claude-fable-5`) | `--model <model>` |
+| `effort` | One of `low`, `medium`, `high`, `xhigh`, `max` | `--effort <level>` |
+| `tools` | Comma-separated tool names with no spaces (`Read,Write,Edit`) | `--tools <list>` |
+
+Rules:
+- The block is the LAST brace group on the line, anchored at end of line, carrying no nested braces, holding at least one recognised key, and never the whole task text. Two spaces separate it from the task text.
+- Anything failing one of those rules is ordinary task text — a task ending on a code span holding `{ "a": 1 }` is not a declaration.
+- Tokens inside the block are space-separated `key=value` pairs. An unrecognised key parses and is retained for telemetry, but maps to no flag.
+- `agent` outranks `model`, `effort` and `tools`: with an agent named the loop passes only `--agent`, because the agent definition supplies its own model and tool set. The other three are still recorded, so the effort collector can report what the plan asked for against what the agent supplied.
+- A recognised key whose value the loop cannot use maps to no flag rather than failing the task, so a misspelled effort level costs the routing silently. Spell values from the table above.
+- A task line with no block is dispatched exactly as every task was before declarations existed: the loop's defaults, with nothing stripped.
+- The loop strips the block before the task text reaches the agent's prompt, the operator log and the commit message. A declaration is a planning annotation, never an instruction.
+
+### Choosing the agent
+
+Route by the task's SHAPE rather than its subject or its verb — a documentation task's verb is whatever the edit happens to be (`Remove ...`, `Rewrite ...`, `Split ...`) while the thing it names is reliably a markdown file. The `### Task shape to agent` table in `context/workflow.md` is the authority: it maps prose to `doc-updater`, tests to `tdd-guide`, migrations to `database-reviewer`, repair to `build-error-resolver`, cleanup to `refactor-cleaner`, review to the read-only reviewers, and implementation to `loop-implementer`.
+
+- Prefer a row whose third column names a tracked `.claude/agents/<name>.md` file. A `user-level` row resolves against whatever the machine happens to hold, and a fresh clone receives none of them.
+- An agent name that resolves to nothing STOPS the dispatch — exit 1 with the whole roster on stderr and no model call — so a wrong name is loud rather than a silent downgrade.
+- Where no row fits the task's shape, declare the granular keys instead of an agent: a narrow `tools=` list beside a `model=`/`effort=` pair routes a task the table has no row for.
 
 ---
 

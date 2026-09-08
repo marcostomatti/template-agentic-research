@@ -291,7 +291,7 @@
  * twenty-five cases of that commit, the extra being a delete case
  * that drives no verb; three re-runs answered THREE with an
  * identical set. That is the macOS supertest port-steal flake,
- * which `packages/service/AGENTS.md` describes and which no helper
+ * which `packages/service/context/testing.md` describes and no helper
  * in `tests/helpers/` closes on this HEAD. A leg answering one
  * case more than its edit can reach is worth re-running before it
  * is written down. The re-derivation above produced no such red:

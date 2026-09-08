@@ -24,8 +24,8 @@
  * that names them has made none of them. That is what keeps it
  * importable by the default suite, which touches no external service
  * at all — one doing its HTTP at load could not be reached from there
- * at any price, and that rule is one `AGENTS.md` states with an
- * incident behind it rather than a preference of style.
+ * at any price, and that rule is one `context/testing.md` states
+ * with an incident behind it rather than a preference of style.
  *
  * Two of the three instance-facing commands in this directory call
  * in, and both of them now do. `deploy-external.ts` uploads built
@@ -173,9 +173,9 @@ export type HttpFetch = (url: string, init: HttpRequest) => Promise<HttpReply>;
  * isolated suite's isolation a matter of every case remembering to
  * override it; required, a case that forgot would not compile if
  * `*.test.ts` were checked and does not run if it is not. The
- * property `AGENTS.md` states — the default suite touches no external
- * service — is then a consequence of the signature rather than of
- * discipline.
+ * property `context/testing.md` states — the default suite touches
+ * no external service — is then a consequence of the signature
+ * rather than of discipline.
  *
  * Nothing here is validated. An empty key or a base URL naming
  * nothing reaches the instance and comes back as whatever it answers,
