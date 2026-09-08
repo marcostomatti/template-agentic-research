@@ -29,7 +29,7 @@ still broadly true.
 | Finding | Destination |
 | --- | --- |
 | A reusable pattern, gotcha, or technique | A skill: invoke the learn/learn-eval skill when available in the session; otherwise write `.claude/skills/<name>/SKILL.md` by hand |
-| A repo convention or architectural fact | `AGENTS.md` (or the pertinent existing skill) |
+| A repo convention or architectural fact | The `context/` page that owns the subject — repo-root for tree-wide law, `packages/<pkg>/context/` for one package's — or the pertinent existing skill. `AGENTS.md` is a capped map: add a pointer there, never the finding |
 | Consumer-facing behaviour | `README.md` / `docs/` |
 | A defect or follow-up too big for now | A spec — `.specs/` if sensitive (unpatched privacy/security), tracked `specs/` + index otherwise |
 
