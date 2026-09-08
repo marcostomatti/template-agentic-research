@@ -1,4 +1,4 @@
-# AGENTS — @ar/web
+# AGENTS — `@ar/web`
 
 The web app: Vite + React 19 + react-router v8 over `@ar/ui`. It runs
 with `bun run dev` against NO backend — every surface is fixture-backed
