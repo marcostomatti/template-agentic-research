@@ -86,24 +86,12 @@ wanted in both places must be made in both repos.
   a matching version is satisfied by construction and proves nothing.
 - A hand-resolved MERGE can leave `bun.lock` inconsistent with manifests it
   resolved CORRECTLY, and the whole CI battery then dies at its FIRST step
-  saying nothing about the code. Measured: a merge that took the base's
-  version for every contested manifest key still carried a nested
-  `@playwright/test/playwright/playwright-core` at 1.62.1 from before the
-  tree was pinned down; root `overrides` now forced 1.61.1, bun recomputed
-  the tree, found nothing justifying the nested copy, and
-  `--frozen-lockfile` refused with `lockfile had changes, but lockfile is
-  frozen`. All three jobs failed at 8—12s with every later step SKIPPED,
-  so a reader taking that red for a test failure looks in the wrong package
-  entirely — read the STEP list (`gh api .../actions/jobs/<id>`), not the
-  job name. The one-second reproduction is `bun install --frozen-lockfile`
-  locally, and the repair is never a hand edit:
-  `git checkout origin/main -- bun.lock`, a plain `bun install` to re-add
-  the branch's own dependencies, then the frozen run again. What says the
-  repair is minimal is the diff against the BASE's lockfile — this
-  branch's new dependencies and their transitive closure and nothing else
-  (measured 24 added lines, the other 3391 byte-identical to the base's,
-  which is also the control saying the local bun writes the format the
-  runner's PINNED bun reads).
+  saying nothing about the code (measured: all three jobs at 8-12s, every
+  later step SKIPPED, on a nested `playwright-core` the merged manifests no
+  longer justified). Run `bun install --frozen-lockfile` locally after any
+  merge touching a manifest or the lockfile; the repair is never a hand edit.
+  Mechanism, repair and the minimality reading: the `lockfile-bump-split-vs-
+  dedupe` skill, plus `.claude/skills/git-workflow/SKILL.md`.
 - Three surfaces are linted by NOTHING, each measured rather than assumed.
   `.github/workflows/*.yml`: `eslint.base.mjs` scopes its blocks to
   js/mjs/ts, md and json, so ESLint answers `File ignored because no
