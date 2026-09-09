@@ -68,6 +68,7 @@
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.69.0",
         "vitest": "^4.1.7",
+        "yaml": "^2.9.0",
       },
     },
     "packages/ui": {
