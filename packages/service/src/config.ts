@@ -101,10 +101,11 @@ const EnvSchema = z.object({
    */
   AR_N8N_API_KEY: z.string().optional(),
   /**
-   * Base URL of the model server this deployment's passes call. No
-   * module reads it yet, here or under `scripts/`: it is declared ahead
-   * of the operator command that writes the one `connectors` row of kind
-   * `llm` a deployment carries, which is where the value is destined.
+   * Base URL of the model server this deployment's passes call.
+   * Nothing reads it through this schema. `scripts/llm-connector.ts`
+   * reads it off an environment directly, when it writes the one
+   * `connectors` row of kind `llm` a deployment carries, which is
+   * where the value is destined.
    * On that row it is `config.endpoint`, and the `Model Endpoint` node
    * in each of `ar-digest`, `ar-ingest` and `ar-research` takes it from
    * there as an expression over what that workflow's
@@ -122,13 +123,16 @@ const EnvSchema = z.object({
    * No floor, deliberately, and for a sharper reason than `AR_N8N_URL`'s:
    * a floor would refuse a blank at BOOT, in a process that never opens
    * the setting, on behalf of a pipeline that runs somewhere else
-   * entirely. Blankness is answered where the value is used instead: the
-   * projection above wraps its read in `nullif`, so an empty endpoint
+   * entirely. Blankness is answered twice where the value is used, and
+   * neither answer is this schema's: the command reads a blank as unset
+   * and refuses to write a row at all, and the projection above wraps
+   * its read in `nullif`, so an endpoint that got stored empty anyway
    * reaches a pass as null rather than as an address of zero length.
    */
   AR_LLM_ENDPOINT: z.string().optional(),
   /**
-   * Model name those passes ask that endpoint for, and unread here for
+   * Model name those passes ask that endpoint for, read off the same
+   * environment by the same command and not through this schema for
    * the same reason. It is destined for the same `llm` row's
    * `config.model`, projected by the same node, and read by the same
    * `Model Endpoint` nodes as their `model` parameter.
@@ -138,9 +142,11 @@ const EnvSchema = z.object({
    * endpoint commonly serves several models, so moving between them is
    * an edit to one member of one row and not to an address.
    *
-   * No floor, for the endpoint's reason, and the projection treats an
-   * empty value the same way — null rather than a request for a model
-   * whose name is the empty string.
+   * No floor, for the endpoint's reason, and blank is read as unset
+   * there too — the difference being that an unset model is not a
+   * refusal but a row written without the member. The projection
+   * treats an empty value the same way: null rather than a request
+   * for a model whose name is the empty string.
    */
   AR_LLM_MODEL: z.string().optional(),
   /**
