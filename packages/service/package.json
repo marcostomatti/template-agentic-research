@@ -37,6 +37,7 @@
     "build:workflows": "bun scripts/build-workflows.ts",
     "deploy:external": "bun scripts/deploy-external.ts",
     "audit:workflows": "bun scripts/audit-workflows.ts",
+    "llm:connector": "bun scripts/llm-connector.ts",
     "docs:generate": "typedoc",
     "docs:openapi": "bun scripts/export-openapi.ts"
   },
