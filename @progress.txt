@@ -16,3 +16,16 @@ All warnings in `@ar/ui` are **carried-in** (pre-existing):
 - Root eslint: exit 0 (no issues found)
 - All three packages: passing with no errors
 - Total warnings: 2 (all carried-in, none new)
+
+## Check-Types Capture (bun run check-types:all)
+
+### Exit codes by package (read as set against package.json names):
+- Root `tsc --noEmit`: exit code 0
+- `@ar/ui`: exit code 0
+- `@ar/service`: exit code 0
+- `@ar/web`: exit code 0
+
+### Overall status:
+- All three packages present and reporting clean exit codes
+- No type errors across the monorepo
+- Root typescript compilation clean
