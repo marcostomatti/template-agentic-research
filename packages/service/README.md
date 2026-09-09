@@ -34,6 +34,32 @@ bun run lint
 bun run check-types
 ```
 
+## Local stack (n8n workflows)
+
+The research pipeline runs on a local n8n instance when this package's
+`docker-compose.yml` brings up the `n8n` service (normally off; enable it
+with `--profile n8n`). One command brings the whole stack up from a cold
+tree and arms all six workflows; one command stops it.
+
+To run locally:
+
+1. Copy `.env.example` to `.env` (done in Quickstart above).
+2. Set the three model settings in `.env`: `AR_LLM_ENDPOINT`,
+   `AR_LLM_MODEL` (optional), and `AR_LLM_API_KEY`.
+3. Run `scripts/bootstrap.sh` — it brings up both compose services,
+   applies migrations, builds and imports the workflows, creates the llm
+   connector row, activates every workflow that declares a Schedule
+   Trigger, and restarts n8n so the triggers register.
+
+To stop:
+
+Run `scripts/panic.sh` — it disarms all active workflows and stops every
+container in this project that can spend. Both services stay running
+(migrations and data survive); `docker compose up` brings them back.
+
+See `scripts/README.md` for details on every step `bootstrap.sh` and
+`panic.sh` carry out.
+
 ## Entry points (API and/or MCP)
 
 The template ships two entry points sharing the modules under `src/`:
