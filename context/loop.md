@@ -208,6 +208,44 @@ such a value with `Date.parse` and refuses what it cannot read; the
 capability lost is git's relative forms, and the alternative is a silent
 empty run.
 
+### The branch rule, and what telemetry can see
+
+`ralph start` REFUSES to run a plan on `main` or `master`. A plan run
+needs its own branch: that is what gives it a PR to review, and what
+lets the wrap-up's CI stage have something to wait on — on main both
+are silently skipped, and silence is the only signal the mistake
+produces. `--any-branch` is the whole of the escape hatch.
+
+Measured on the one run that happened on main before the guard existed:
+21 commits, 74 sessions, no PR, no review, and the CI stage taking its
+"no open PR, nothing to verify" path.
+
+A branch whose name does not match the plan stub is a WARNING and never
+a refusal. A branch stub is not a plan stub — five of eleven
+plan-driven branches named their plan differently
+(`feat/q17-dynamic-forms` against `q17-dynamic-form-provider-v1`) —
+so a refusal keyed on the name would reject the project's own
+convention.
+
+**Every prompt the loop dispatches carries a plan stamp.** An HTML
+comment, `<!-- ralph:plan=<stub> -->`, APPENDED to the prompt and never
+prepended: `effort/classify.ts` buckets a session by
+`content.startsWith(...)` over the whole prompt, so one line above the
+body re-buckets all five shapes as `other` while that module's own
+drift guard stays green. `utils/plan-stamp.ts` owns the format and
+`attribution.ts` reads it as the FIRST resolution tier, ahead of the
+branch, which is what makes attribution independent of where a run
+happened. A stamp naming a plan the store does not know is ignored
+rather than trusted.
+
+**A hand change on main is outside telemetry by design.** The effort
+store records what the LOOP dispatched; a patch, a merge-conflict
+resolution or any edit made directly is neither stamped nor
+branch-resolvable, and reporting it would mean inventing a plan for
+work no plan drove. Expect those to be absent, and read a plan's
+figures as what the loop spent rather than as everything the branch
+cost.
+
 ### Testing the loop
 
 - The root vitest `include` is `tools/**/*.test.ts`, so a test COLOCATED

@@ -58,6 +58,7 @@ import {
   stripTaskDeclaration,
 } from './utils/declaration.js';
 import { getCurrentBranch, getRepoRoot } from './utils/git.js';
+import { planStubFromPath, stampPrompt } from './utils/plan-stamp.js';
 import {
   failingRows,
   findOpenPullRequest,
@@ -78,6 +79,86 @@ import { findNextTask, trackerPathFor, updateTrackerLine } from './utils/tracker
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let interrupted = false;
+
+/**
+ * The plan this run is executing, or null when nothing set one.
+ *
+ * Module state rather than a threaded argument because it is read by
+ * four prompt builders whose signatures are driven directly by tests,
+ * and a fifth parameter on each would change every one of those call
+ * sites to carry a value none of them is about. Null is the default
+ * and {@link withStamp} is then the identity, so a builder called
+ * from a test dispatches the exact bytes it dispatched before
+ * stamping existed.
+ */
+let activePlanStub: string | null = null;
+
+/** Sets the plan every prompt this run dispatches is stamped with. */
+export function setActivePlanStub(stub: string | null): void {
+  activePlanStub = stub;
+}
+
+/** Stamps a prompt with the active plan, or returns it unchanged. */
+function withStamp(prompt: string): string {
+  return activePlanStub === null
+    ? prompt
+    : stampPrompt(activePlanStub, prompt);
+}
+
+/** Branches a plan run is refused on. */
+const DEFAULT_BRANCHES: readonly string[] = ['main', 'master'];
+
+/**
+ * Refuses to run a plan on the default branch, and warns on a branch
+ * that names no plan.
+ *
+ * Measured: one run executed on `main`. It produced 21 commits and 74
+ * sessions and cost three things — no PR, so the wrap-up's CI stage
+ * found nothing to verify and skipped itself; no review; and, before
+ * prompts carried a plan stamp, no per-plan attribution, its sessions
+ * landing in the `main` group beside every other main-branch session
+ * ever recorded.
+ *
+ * A refusal rather than a warning, because the only signal the mistake
+ * produced at the time was silence, and a warning in a loop nobody
+ * watches is the same silence one line longer. `--any-branch` is the
+ * whole of the escape hatch, so an operator who means it says so once.
+ *
+ * The branch-names-the-plan check is only a WARNING, and deliberately.
+ * A branch stub is not a plan stub — measured across eleven
+ * plan-driven branches, five named their plan differently
+ * (`feat/q17-dynamic-forms` against `q17-dynamic-form-provider-v1`) —
+ * so a refusal keyed on it would reject the project's own convention.
+ * Attribution no longer depends on it either, the stamp having taken
+ * that job over.
+ */
+export function guardRunBranch(
+  planStub: string | null,
+  branch: string,
+  args: readonly string[],
+): boolean {
+  if (args.includes('--any-branch')) {
+    console.warn(`\n⚠️  --any-branch: running on \`${branch}\` without the branch check.`);
+    return true;
+  }
+
+  if (DEFAULT_BRANCHES.includes(branch)) {
+    const name = planStub ?? 'this-plan';
+    console.error(`\n❌ Refusing to run a plan on \`${branch}\`.`);
+    console.error('   A plan run needs its own branch: that is what gives it a PR to');
+    console.error('   review, and what lets the wrap-up\'s CI stage have something to');
+    console.error('   wait on. Run on main and both are silently skipped.');
+    console.error(`\n   git checkout -b feat/${name}`);
+    console.error('\n   Pass --any-branch to run here anyway.');
+    return false;
+  }
+
+  if (planStub !== null && !branch.includes('/')) {
+    console.warn(`\n⚠️  Branch \`${branch}\` carries no \`<type>/\` prefix.`);
+    console.warn('   The run proceeds; the convention is `feat/<plan-stub>`.');
+  }
+  return true;
+}
 
 async function preserveProgress(): Promise<void> {
   const branch = getCurrentBranch();
@@ -100,7 +181,7 @@ async function preserveProgress(): Promise<void> {
     '* Do not include Claude attribution in the commit or PR message.',
   ].join('\n');
 
-  const exitCode = await runClaude(prompt);
+  const exitCode = await runClaude(withStamp(prompt));
   if (exitCode !== 0) {
     console.error(`\n❌ Failed to preserve progress (exit ${exitCode}). Please try again.`);
   } else {
@@ -144,7 +225,7 @@ async function repairPullRequest(
     '* Do not include Claude attribution in the commit message.',
   ].join('\n');
 
-  return runClaude(prompt);
+  return runClaude(withStamp(prompt));
 }
 
 /**
@@ -377,11 +458,11 @@ export async function dispatchTask(
     console.warn(`   Declaration: ignoring ${issue.reason} \`${issue.text}\`.`);
   }
 
-  const prompt = buildTaskPrompt(
+  const prompt = withStamp(buildTaskPrompt(
     taskText,
     options.promptContent,
     options.planContent,
-  );
+  ));
 
   const exitCode = await run(prompt, flags);
 
@@ -560,7 +641,7 @@ export async function maybeCompactProgress(
   options: CompactionOptions,
 ): Promise<CompactionRun> {
   const readSize = options.readSizeBytes ?? readProgressSizeBytes;
-  const run = options.run ?? ((prompt: string) => runClaude(prompt));
+  const run = options.run ?? ((prompt: string) => runClaude(withStamp(prompt)));
   const filePath = progressFilePath(options.repoRoot);
 
   const decision = isCompactionDue(
@@ -634,6 +715,10 @@ export default async function start(args: string[]): Promise<void> {
     console.error(`❌ Plan file not found: ${planPath}`);
     process.exit(1);
   }
+
+  const planStub = planStubFromPath(planPath);
+  if (!guardRunBranch(planStub, getCurrentBranch(), args)) process.exit(1);
+  setActivePlanStub(planStub);
 
   const planContent = fs.readFileSync(planPath, 'utf8');
   const promptContent = fs.readFileSync(promptPath, 'utf8');

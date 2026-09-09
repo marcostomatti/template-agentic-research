@@ -71,6 +71,8 @@
 import type { SessionKind } from './classify.js';
 import type { SessionStats } from './session-log.js';
 
+import { planStubFromPrompt } from '../utils/plan-stamp.js';
+
 import {
   classifyPromptContent,
   matchesShape,
@@ -87,8 +89,21 @@ export interface BranchAttribution {
   stub: string | null;
 }
 
-/** How a branch stub was matched against the known plan stubs. */
-export type PlanStubMatch = 'exact' | 'queue-id' | 'none' | 'ambiguous';
+/**
+ * How a session was matched to a plan.
+ *
+ * `stamped` is the only member that does not come from a branch name:
+ * the loop writes the stub into every prompt it dispatches, so it is
+ * read back directly and outranks the branch. The rest describe the
+ * branch-stub path, which is the fallback for a session recorded
+ * before stamping existed, or one the loop did not dispatch.
+ */
+export type PlanStubMatch =
+  | 'stamped'
+  | 'exact'
+  | 'queue-id'
+  | 'none'
+  | 'ambiguous';
 
 /** The plan a branch stub resolved to, and how it got there. */
 export interface PlanStubResolution {
@@ -320,6 +335,27 @@ export function dominantBranch(
  * directory — and a caller that forgot to pass one would otherwise get
  * the identical all-`none` result with nothing saying which it was.
  */
+/**
+ * Resolves a session's plan, stamp first and branch second.
+ *
+ * A stamp naming a plan the store does not know does NOT win. It is
+ * ignored and the branch answers instead, because a stub nobody can
+ * corroborate is a guess wearing a derivation's clothes — a renamed
+ * or deleted plan would otherwise mint a group of one that no plan
+ * file backs.
+ */
+export function resolveSessionPlan(
+  enqueueContent: string | null,
+  branchStub: string | null | undefined,
+  planStubs: readonly string[],
+): PlanStubResolution {
+  const stamped = planStubFromPrompt(enqueueContent);
+  if (stamped !== null && planStubs.includes(stamped)) {
+    return { stub: stamped, match: 'stamped', candidates: [stamped] };
+  }
+  return resolvePlanStub(branchStub, planStubs);
+}
+
 export function attributeSession(
   stats: Pick<SessionStats, 'sessionId' | 'gitBranchCounts'>,
   enqueueContent: string | null,
@@ -327,7 +363,7 @@ export function attributeSession(
 ): SessionAttribution {
   const dominant = dominantBranch(stats.gitBranchCounts);
   const branch = attributeBranch(dominant.branch);
-  const plan = resolvePlanStub(branch.stub, planStubs);
+  const plan = resolveSessionPlan(enqueueContent, branch.stub, planStubs);
 
   return {
     sessionId: stats.sessionId,
