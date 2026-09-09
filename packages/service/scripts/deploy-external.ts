@@ -374,12 +374,13 @@ function isSet(value: string | undefined): value is string {
  * two, and it is why {@link UnconfiguredInstanceError.settings} is
  * a list rather than a name.
  *
- * It is raised for two commands and not one. `audit-workflows.ts`
- * reaches {@link requireInstance} for the same reason a deploy does
- * and stops on the same refusal, which is why nothing in the message
- * names a deploy or a build: what an operator holding it has to do
- * is the same either way, and a sentence naming the wrong command
- * would be the one thing in it they could not act on.
+ * It is raised for three commands and not one. `audit-workflows.ts`
+ * and `panic-external.ts` each reach {@link requireInstance} for the
+ * same reason a deploy does and stop on the same refusal, which is
+ * why nothing in the message names a deploy or a build: what an
+ * operator holding it has to do is the same whichever of the three
+ * they ran, and a sentence naming the wrong command would be the one
+ * thing in it they could not act on.
  *
  * A distinct class rather than a bare `Error`, so a case covering a
  * deploy that was never configured can pin the refusal to it. The

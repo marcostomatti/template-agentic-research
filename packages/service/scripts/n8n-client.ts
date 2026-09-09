@@ -27,24 +27,29 @@
  * at any price, and that rule is one `context/testing.md` states
  * with an incident behind it rather than a preference of style.
  *
- * Two of the three instance-facing commands in this directory call
- * in, and both of them now do. `deploy-external.ts` uploads built
- * artifacts and `audit-workflows.ts` reads back what an instance is
- * holding, both over the API; `activate-workflows.sh` is the one that
- * does not, activation going through the n8n CLI against a local
- * container rather than over HTTP, and its steps that reach an
+ * Three of the four instance-facing commands in this directory call
+ * in, and all three of them now do. `deploy-external.ts` uploads
+ * built artifacts, `audit-workflows.ts` reads back what an instance
+ * is holding, and `panic-external.ts` stops everything one has
+ * armed, all three over the API; `activate-workflows.sh` is the one
+ * that does not, activation going through the n8n CLI against a
+ * local container rather than over HTTP, and its steps that reach an
  * instance have landed. `deploy` lists what an instance holds and
  * creates or replaces each workflow against it. The audit lists the
  * same instance to judge it, and then, only where it was asked to and
  * told twice, disarms or removes what nothing in this repository
- * accounts for. {@link activateWorkflow} is the one call here still
- * waiting for a caller, arming being the CLI path's to do on a local
- * instance and nothing either of those two does. So `n8n-workflow.ts`
- * answers for three commands where this module serves two, and what
- * parts them is a transport rather than an omission. The live seam
- * under `tests/live/` reads {@link listWorkflows} against a real
- * instance and is no command at all, its gate opening only for a
- * setting a run exported.
+ * accounts for. The panic lists it to act on all of it, judging
+ * nothing and asking nothing, which is why the two are separate
+ * commands rather than a flag: the audit's acting walk is barred
+ * from the workflows this repository declares and a stop has to
+ * reach them first. {@link activateWorkflow} is the one call here
+ * still waiting for a caller, arming being the CLI path's to do on a
+ * local instance and nothing any of those three does. So
+ * `n8n-workflow.ts` answers for two of these commands where this
+ * module serves three, and what parts them is a transport rather
+ * than an omission. The live seam under `tests/live/` reads
+ * {@link listWorkflows} against a real instance and is no command at
+ * all, its gate opening only for a setting a run exported.
  *
  * {@link listWorkflows}, {@link createWorkflow},
  * {@link updateWorkflow}, {@link activateWorkflow},
