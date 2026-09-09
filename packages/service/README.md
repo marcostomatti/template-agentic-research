@@ -57,6 +57,13 @@ Run `scripts/panic.sh` — it disarms all active workflows and stops every
 container in this project that can spend. Both services stay running
 (migrations and data survive); `docker compose up` brings them back.
 
+### Verify with CHECKPOINT 2
+
+To verify the local stack is fully operational end-to-end, follow the
+**CHECKPOINT 2** runbook in `docs/CHECKPOINT-2.md`. It covers seeding the
+example domain, creating sources and export targets, running a dispatch,
+and checking that documents, findings, and briefings were produced.
+
 See `scripts/README.md` for details on every step `bootstrap.sh` and
 `panic.sh` carry out.
 
