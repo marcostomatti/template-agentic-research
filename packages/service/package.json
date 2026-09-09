@@ -24,6 +24,8 @@
     "test:parity": "vitest run tests/parity",
     "stress:start": "docker compose --profile stress up -d --wait postgres-live",
     "stress:stop": "docker compose --profile stress rm --stop --force postgres-live",
+    "n8n:start": "docker compose --profile n8n up -d --wait ar-n8n",
+    "n8n:stop": "docker compose --profile n8n rm --stop --force ar-n8n",
     "db:start": "docker compose up -d postgres",
     "db:stop": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d postgres",
