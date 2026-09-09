@@ -5,6 +5,7 @@
 #
 #   --profile redis    dev Redis (the service ignores it unless REDIS_URL is set)
 #   --profile stress   the live-test database (see tests/live/ and AGENTS.md)
+#   --profile n8n      the n8n this package's workflows are armed on
 #
 # The live-test instance is one digit away from dev on 5433, with a DIFFERENT
 # database name (ar_live) and NO volume — the live suite's
@@ -59,5 +60,131 @@ services:
       timeout: 3s
       retries: 5
 
+  # The n8n this package's built workflows are imported into and armed on,
+  # and the only service in this file that can spend money: `ar-dispatch`
+  # carries a Schedule Trigger baked to `0 * * * *`, so once its workflows
+  # are published this container drives an LLM pass every hour with nobody
+  # watching. That is the whole reason it sits behind a profile instead of
+  # beside dev Postgres in the default set. `docker compose up -d` brings a
+  # database up, and starting an hourly spend is not something that command
+  # should be able to do by accident; `scripts/panic.sh` is the counterpart
+  # that stops it once it is running.
+  n8n:
+    profiles: ["n8n"]
+
+    # Pinned, and to the registry and tag every measurement behind this port
+    # was taken against. Nothing here treats this image's CLI or its HTTP
+    # surface as a contract: the id-preserving imports `import-workflows.sh`
+    # depends on, the publish path `activate-workflows.sh` ends on and the
+    # readiness route below were each read off THIS version, and the notes
+    # written against 2.3.0 before it did not carry across. A floating tag
+    # would move all of that silently.
+    image: docker.n8n.io/n8nio/n8n:2.15.1
+
+    # `docker exec` addresses a CONTAINER where the rest of this package
+    # addresses a compose SERVICE, and `AR_N8N_CONTAINER` in
+    # `scripts/activate-workflows.sh` defaults to `ar-n8n`. So the name is
+    # fixed here rather than left to the `<project>-n8n-1` compose would
+    # derive: that project half is the checkout's directory name, which
+    # moves with a clone under another path and with `docker compose -p`.
+    container_name: ar-n8n
+
+    # No `restart:` here, where `postgres` above carries `unless-stopped`.
+    # A restarted database is a database. A restarted n8n re-registers every
+    # armed trigger, so `unless-stopped` would put the hourly pass back on
+    # after a reboot or a daemon restart with nobody having asked for it.
+    # Bringing this up is one command and is meant to be a decision each
+    # time.
+
+    # Not this container's own datastore: that is the sqlite in the volume
+    # below. This is what the `ar-postgres` credential dials. n8n resolves
+    # that credential's host from INSIDE the container, so it names the
+    # compose service `postgres` rather than `localhost` (which in here is
+    # this container), and the first node of any imported workflow opens a
+    # socket to it. `postgres` carries no profile, so bringing this profile
+    # up brings it along.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # Three settings are ABSENT on purpose, and they are the ones most
+    # likely to be added back by someone tidying: `DB_TYPE`,
+    # `DB_SQLITE_DATABASE` and `N8N_USER_FOLDER`. Each of them moves the
+    # sqlite file, and `scripts/activate-workflows.sh` opens
+    # `/home/node/.n8n/database.sqlite` by that literal path through
+    # `node:sqlite`, which CREATES a database at a path holding none. A
+    # moved file is therefore not a refusal, it is an empty database and a
+    # failure one statement later.
+    #
+    # `N8N_ENCRYPTION_KEY` is absent for a different reason, and the volume
+    # below is what makes that safe. n8n generates a key into
+    # `/home/node/.n8n` when the setting is unset, so of the two ways to
+    # keep stored credentials decryptable across the restart a bootstrap
+    # ends on, an explicit key or a persisted directory, this service
+    # relies on the DIRECTORY. Getting that wrong is expensive to diagnose
+    # rather than loud: measured on this image, an import whose ciphertext
+    # the instance cannot decrypt still reports success at exit 0, and the
+    # breakage surfaces only at the next read.
+    environment:
+      # Crons are evaluated in the INSTANCE timezone, which this version
+      # defaults to `America/New_York`. `AR_DISPATCH_CRON` defaults to
+      # `0 * * * *`, which pins a minute and no hour and so reads the same
+      # under any zone, but a cron pinning an hour would be silently hours
+      # off. UTC so a baked schedule means the same thing on every machine,
+      # overridable from the environment for an operator who wants digests
+      # on local time.
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
+
+    # Loopback only, where every service above publishes on all interfaces.
+    # They hold a dev database; this one holds armed triggers and the
+    # credentials that pay for them, and a fresh instance has no owner set
+    # up, so the editor is open to whoever reaches the port. The deployment
+    # this pipeline was ported from published n8n on every interface with
+    # the dashboard insecure, which the port spec names as a posture not to
+    # import. Loopback also keeps the editor on a secure-context origin, so
+    # nothing here has to relax `N8N_SECURE_COOKIE` to be able to log in.
+    ports:
+      - "127.0.0.1:5678:5678"
+
+    # The `llm` connector's endpoint is dialled by THIS container, so a
+    # model server running on the host is reached at `host.docker.internal`
+    # and never at `localhost`. Docker Desktop maps that name implicitly and
+    # Linux does not, so the entry is what lets one `AR_LLM_ENDPOINT` mean
+    # the same thing on both.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # `/home/node/.n8n` holds the sqlite `activate-workflows.sh` opens, the
+    # generated encryption key argued above, and every row an import writes.
+    # A named volume rather than a bind mount, matching `ar_pg_data`: that
+    # directory is the container's state and not something the working tree
+    # should carry, which matters more than usual here because the agent
+    # loop runs `git add -A` after every task.
+    volumes:
+      - ar_n8n_data:/home/node/.n8n
+
+    # `/healthz/readiness` and not `/healthz`. Read off this image's own
+    # `abstract-server.js`: `/healthz` answers `{status:'ok'}` as soon as
+    # express is listening, while readiness answers 503 until the database
+    # connection is up, the migrations are applied and the server has marked
+    # itself fully ready. Measured on this image, the first poll exits 1 on
+    # `HTTP/1.1 503` and the next exits 0 — so an `up -d --wait` over this
+    # check means the CLI verbs a bootstrap runs next have somewhere to
+    # write, where a check on `/healthz` would have said yes to both polls.
+    #
+    # `wget` because the image ships busybox wget and no curl at all.
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --spider
+        - -q
+        - http://127.0.0.1:5678/healthz/readiness
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
 volumes:
   ar_pg_data:
+  ar_n8n_data:

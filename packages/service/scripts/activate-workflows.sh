@@ -24,17 +24,19 @@
 # publish against, and the publish that arms them. Each step carries
 # its own reasoning where it stands.
 #
-# Nothing in this repository stands that container up. The compose
-# file in this package declares postgres, redis and postgres-live and
-# no n8n service at all, `bootstrap.sh` is phase 7 in the roster next
-# door, and no tracked file anywhere runs an `import:workflow` — so
-# both the instance this arms and the import that puts workflows on
-# it are an operator's to supply until that phase lands. What stands
-# behind the branches below is therefore a run against a container
-# started by hand, and that is the only evidence a shell script in
-# this package ever gets: `lint` and `check-types` open no `.sh` at
-# all, and the naming invariant, which does read this one, reads
-# names rather than behaviour.
+# This repository stands that container up now. The compose file in
+# this package declares an `n8n` service behind `--profile n8n`,
+# container name `ar-n8n`, so the default read further down names
+# the instance the project itself starts. What has no owner yet is
+# the step between a build and this command: no tracked file
+# anywhere runs an `import:workflow`, and `bootstrap.sh`, which the
+# refusal below points at, is still phase 7 in the roster next door.
+# So the instance this arms is the project's and the import that
+# puts workflows on it is still an operator's, until the rest of
+# that phase lands. Either way a RUN is the only evidence a shell
+# script in this package ever gets: `lint` and `check-types` open no
+# `.sh` at all, and the naming invariant, which does read this one,
+# reads names rather than behaviour.
 #
 # The pair of steps this file ends on — seed a `workflow_history`
 # row, then publish — is written up in
@@ -103,9 +105,10 @@ cd "$(dirname "$0")/.."
 # clone under another path: a default built on it would be a name
 # nobody chose.
 #
-# No compose file here declares an n8n service, so today the default
-# names a container nothing in this repository creates, and the
-# environment is how an operator points this at one that exists.
+# `docker-compose.yml` here declares that container behind
+# `--profile n8n` and fixes its name to match, so the default names
+# the container this package starts and the environment is how an
+# operator points this at a different one.
 # There is no entry to make for it in `src/config.ts` either: that
 # schema is a module a process reads by importing it, which is how
 # `AR_N8N_URL` and `AR_N8N_API_KEY` reach the TypeScript commands
@@ -282,14 +285,18 @@ done <<<"$PLAN"
 # That command is `bootstrap.sh`, which the roster in `README.md`
 # here describes as bringing the stack up and importing credentials —
 # the credentials clause is why the message names it rather than a
-# bare compose command. It arrives in phase 7, so what the message
-# points at is a command an operator cannot run yet: the same shape
-# as the container default above, and the roster is where a reader
-# looks either of them up.
+# bare compose command. Half of what it will do exists already, so
+# the message carries both: the compose command that starts the
+# container named above is what gets an operator past this refusal
+# today, and `bootstrap.sh` is what will get them past it without
+# also having to import and arm by hand. It arrives in phase 7, and
+# saying so in the message is the difference between naming a
+# command a reader cannot find and naming one that is not there yet.
 RUNNING="$(docker inspect -f '{{.State.Running}}' "$AR_N8N_CONTAINER" 2>/dev/null || echo false)"
 [ "$RUNNING" = "true" ] || {
   echo "activate: the n8n container $AR_N8N_CONTAINER is not running" >&2
-  echo "          bring the stack up and try again: scripts/bootstrap.sh" >&2
+  echo "          bring it up: docker compose --profile n8n up -d --wait n8n" >&2
+  echo "          (scripts/bootstrap.sh will do that and the imports, once it lands)" >&2
   exit 1
 }
 

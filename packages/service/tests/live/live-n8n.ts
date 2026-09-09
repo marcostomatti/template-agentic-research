@@ -64,19 +64,22 @@
  * answered, and that is where this seam can be broken without
  * touching this file at all.
  *
- * No compose stack in this repository ships an instance to point it
- * at. `docker-compose.yml` here declares postgres, redis and
- * postgres-live and no n8n service, and the script that stands one
- * up, `bootstrap.sh`, is phase 7 in the roster in
- * `scripts/README.md`. So the sibling's arrangement has no
- * counterpart here: `bun run stress:start` brings up the
- * `postgres-live` service that `bun run test:live` then points
- * `AR_LIVE_DATABASE_URL` at, that command sets no other setting, and
- * `.env.example` carries `AR_N8N_URL` commented and without a value.
- * Rule 3 under `Testing — isolated vs live`, that live tests run only
- * against the `--profile stress` services, is one an n8n case cannot
- * satisfy for the same reason, so the instance a case here needs is
- * an operator's own, started by hand, until that phase lands.
+ * The compose stack here ships an instance now, and what is still
+ * missing is the arming rather than the instance.
+ * `docker-compose.yml` declares an `n8n` service behind
+ * `--profile n8n`, container `ar-n8n`, published on loopback 5678 —
+ * so the address a case under this gate needs is one the project
+ * starts rather than an operator's own container. The sibling's
+ * arrangement still has no counterpart, and for the narrower reason:
+ * `bun run stress:start` brings up the `postgres-live` service that
+ * `bun run test:live` then points `AR_LIVE_DATABASE_URL` at, that
+ * command sets no other setting, and `.env.example` carries
+ * `AR_N8N_URL` commented and without a value. Rule 3 under
+ * `Testing — isolated vs live` names that profile beside the stress
+ * one, so an n8n case can satisfy it now — but only where an
+ * operator has pointed the setting at the local instance, which is
+ * the deliberate act the paragraph above describes and no command
+ * here performs.
  *
  * A run of a file under this gate is therefore not a gate for this
  * plan. Every command this package ships leaves such a case skipped —

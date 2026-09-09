@@ -11,9 +11,18 @@ hour. The rules:
    `describeLive*` in that directory keys on the service they need (env-var
    opt-in → `describe.skip` otherwise; keep the explicit type annotation —
    inference breaks `tsc` with TS2742).
-3. Live tests run only against the `--profile stress` compose services
+3. Live tests run only against compose services THIS package stands up
+   behind a profile. Two exist: the `--profile stress` database
    (`bun run stress:start / test:live / stress:stop`) — separate port,
-   separate database name, no volume.
+   separate database name, no volume — and the `--profile n8n` instance
+   on loopback 5678 that the n8n cases want. The second differs in kind
+   and the difference is the point. It KEEPS its state (a named volume
+   over `/home/node/.n8n`, without which every stored credential stops
+   decrypting on the next restart), and it is the one service here that
+   can spend money once its workflows are armed. So a case pointed at it
+   runs against state an operator built rather than against something
+   the suite may truncate, and arming that gate is a deliberate act:
+   nothing in this package exports `AR_N8N_URL`.
 4. Destructive helpers must call `assertLiveDatabase` (refuses any database
    but `ar_live`). Never widen the truncate list implicitly.
    That name is also the reason the live Postgres is SHARED across every
@@ -207,19 +216,21 @@ silently stopped being armed. Note also that a skipped file is still
 IMPORTED, so collection proves the module parses and nothing more — never
 read a `1 skipped` as evidence about a change under `tests/live/`.
 
-There is also nothing here to point that gate at, which is why rule 3 is one
-an n8n case cannot satisfy rather than one it breaks. `docker-compose.yml`
-declares postgres, redis and postgres-live and no n8n service, and
-`scripts/bootstrap.sh`, which would stand one up, is phase 7 in
-`scripts/README.md`'s roster, so until that phase the instance an n8n case
-needs is an operator's own, started by hand. Every command this package
+There is something here to point that gate at now, and still no command that
+points it. `docker-compose.yml` declares an `n8n` service behind
+`--profile n8n`, container `ar-n8n`, on loopback 5678 — the instance rule 3
+names beside the stress database — while `scripts/bootstrap.sh`, which will
+import the workflows onto it and arm them, is still phase 7 in
+`scripts/README.md`'s roster. So an n8n case can satisfy rule 3 the moment
+an operator points `AR_N8N_URL` at that instance, and until somebody does,
+the reading of a run is unchanged. Every command this package
 ships leaves those cases skipped, which makes what is written under that
 gate debt recorded rather than behaviour a gate here proves: treat a case
 added there as unrun until somebody runs it. `tests/live/live-n8n.ts`
 carries the rest — what a skipped-but-collected case still reports, and the
 one place the seam can be broken without touching the gate.
-`tests/live/live-ollama.ts` records the same arrangement for the
-config-proposer case: no compose service supplies a model server either,
+`tests/live/live-ollama.ts` records a stricter version of it for the
+config-proposer case: no compose service supplies a model server at all,
 nothing starts one, and `.env.example` names neither of its two settings.
 
 A seam of another kind sits beside the live ones, in `tests/parity/`, gated

@@ -73,8 +73,8 @@
  *
  * ## Nothing here stands a server up
  *
- * `docker-compose.yml` declares postgres, redis and postgres-live and
- * no model server, no script in `scripts/` starts one, and no command
+ * `docker-compose.yml` declares postgres, redis, postgres-live and
+ * n8n and no model server, no script in `scripts/` starts one, and no command
  * this package ships sets `AR_OLLAMA_URL` — `test:live` sets
  * `AR_LIVE_DATABASE_URL` in its own script definition and sets
  * nothing else. So the steady state of a file under this gate is
