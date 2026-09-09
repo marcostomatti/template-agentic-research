@@ -16,10 +16,12 @@ import { z } from 'zod';
  *   routes and a DB-backed verifier that takes precedence over the
  *   introspection pair above.
  *
- * Not every optional entry is an integration toggle. `AR_N8N_URL` and
- * `AR_N8N_API_KEY` are read by an operator command rather than by the
- * service, so their absence changes nothing a boot does, and the command that
- * wants them is what refuses.
+ * Not every optional entry is an integration toggle. The `AR_N8N_*` pair and
+ * the `AR_LLM_*` trio below belong to operator commands rather than to the
+ * service — the pair to the ones that talk to an n8n instance over its REST
+ * API, the trio to the ones that arm a local stack with a model to call — so
+ * their absence changes nothing a boot does, and the command that wants one
+ * is what refuses.
  */
 const EnvSchema = z.object({
   PORT: z.coerce.number().int()
@@ -98,6 +100,74 @@ const EnvSchema = z.object({
    * looks like.
    */
   AR_N8N_API_KEY: z.string().optional(),
+  /**
+   * Base URL of the model server this deployment's passes call. No
+   * module reads it yet, here or under `scripts/`: it is declared ahead
+   * of the operator command that writes the one `connectors` row of kind
+   * `llm` a deployment carries, which is where the value is destined.
+   * On that row it is `config.endpoint`, and the `Model Endpoint` node
+   * in each of `ar-digest`, `ar-ingest` and `ar-research` takes it from
+   * there as an expression over what that workflow's
+   * `Select Model Connector` node projected — so the address reaches a
+   * pass as DATA on a row rather than as a setting anything in this
+   * process resolves.
+   *
+   * Which is why the host written here is the container's view and not
+   * this machine's: the socket is opened from inside the n8n container,
+   * so a model server listening on the host is reached at
+   * `host.docker.internal` — `docker-compose.yml` carries the
+   * `host-gateway` entry that makes that name resolve on Linux — while
+   * `localhost` here is n8n talking to itself.
+   *
+   * No floor, deliberately, and for a sharper reason than `AR_N8N_URL`'s:
+   * a floor would refuse a blank at BOOT, in a process that never opens
+   * the setting, on behalf of a pipeline that runs somewhere else
+   * entirely. Blankness is answered where the value is used instead: the
+   * projection above wraps its read in `nullif`, so an empty endpoint
+   * reaches a pass as null rather than as an address of zero length.
+   */
+  AR_LLM_ENDPOINT: z.string().optional(),
+  /**
+   * Model name those passes ask that endpoint for, and unread here for
+   * the same reason. It is destined for the same `llm` row's
+   * `config.model`, projected by the same node, and read by the same
+   * `Model Endpoint` nodes as their `model` parameter.
+   *
+   * Declared beside the endpoint rather than folded into it because the
+   * row keeps the two apart and the nodes read them separately: one
+   * endpoint commonly serves several models, so moving between them is
+   * an edit to one member of one row and not to an address.
+   *
+   * No floor, for the endpoint's reason, and the projection treats an
+   * empty value the same way — null rather than a request for a model
+   * whose name is the empty string.
+   */
+  AR_LLM_MODEL: z.string().optional(),
+  /**
+   * Key those passes authenticate to that endpoint with. Unlike the two
+   * above it never touches the `llm` row: it is the single field of the
+   * `ar-model` n8n credential, and `scripts/n8n-credentials.ts` is where
+   * the name is spelled for that build. The model nodes read only
+   * `endpoint` and `model` off the row, so a key written there would be
+   * a stored secret with no reader, which `src/connectors/secrets.ts`
+   * would then have to mask on every read.
+   *
+   * Declared here as a matter of record rather than as the path the
+   * value travels, which is what parts it from `AR_N8N_API_KEY` above:
+   * that one is read as `config.AR_N8N_API_KEY` by
+   * `scripts/deploy-external.ts`, while the credential builder is handed
+   * an environment directly by the shell that drives it. Both end up
+   * reading the same `.env`; this entry is what says the name is one
+   * this deployment configures at all, which is the convention
+   * `context/conventions.md` states for every setting here.
+   *
+   * No length floor, for `AR_N8N_API_KEY`'s reason: a bound written here
+   * would refuse whatever the model server decided a key of its own
+   * looks like. An endpoint wanting no key at all is still configured
+   * with something rather than with nothing — the credential builder
+   * reads a blank as unset and refuses it by name.
+   */
+  AR_LLM_API_KEY: z.string().optional(),
 });
 
 export type Config = z.infer<typeof EnvSchema>;

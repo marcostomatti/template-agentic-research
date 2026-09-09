@@ -270,11 +270,14 @@ export type CredentialEnv = Readonly<Record<string, string | undefined>>;
  * read.
  *
  * Both are read off an environment rather than through
- * `src/config.ts`, which declares its own n8n entries optional
- * because the running service opens none of them. The refusal for
- * an absent one is therefore this module's
- * ({@link UnsetCredentialSettingError}), exactly as the refusal for
- * an absent `AR_N8N_URL` is `deploy-external.ts`'s.
+ * `src/config.ts`, even though that schema declares each of them:
+ * `DATABASE_URL` because the running service opens it too, and
+ * `AR_LLM_API_KEY` optional beside the n8n entries, as the record
+ * of a name this deployment configures for an operator command
+ * rather than for a boot. Declaring a name there and resolving one
+ * here are different jobs, so the refusal for an absent setting is
+ * this module's ({@link UnsetCredentialSettingError}), exactly as
+ * the refusal for an absent `AR_N8N_URL` is `deploy-external.ts`'s.
  *
  * Keyed by the member of {@link CredentialSettings} each one
  * answers for, so the two live side by side and a rename cannot
