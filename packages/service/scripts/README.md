@@ -63,6 +63,21 @@ instance, and the refusal for a reply that is not a success.
 call in, and `activate-workflows.sh` is the one that does not, activation
 going through the CLI inside the container rather than over the API.
 
+`n8n-credentials.ts` is one of those halves too, and the first not to
+sit under a phase-3 row. It holds the two credentials this port
+declares — their ids, names and types, in one place because n8n
+resolves a credential by id and every credential-bearing node in
+`workflows/src/` spells one of exactly two of them — and it turns an
+environment into the content of the file `n8n import:credentials`
+reads, refusing a setting nothing was set for by name. It is a half
+rather than a command for the reason `activate-workflows.sh` splits the
+same way: the import step it belongs to writes a file into a container,
+runs a CLI verb and removes the file again, none of which is drivable
+without one, while what the credentials ARE and what the file says are
+answerable from a value. The file it builds carries a database password
+and a model API key, so it is a value and never a path — nothing here
+writes it anywhere, least of all under the working tree.
+
 Database migrations stay drizzle's end to end (`drizzle/`,
 `drizzle.config.ts`, `bun run db:generate` / `db:migrate`): a script here
 that also moved schema would be a second engine. `scaffold.ts`'s
