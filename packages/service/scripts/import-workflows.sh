@@ -222,7 +222,7 @@ AR_RUNNING="$(docker inspect -f '{{.State.Running}}' "$AR_N8N_CONTAINER" 2>/dev/
 [ "$AR_RUNNING" = "true" ] || {
   echo "import-workflows: the n8n container $AR_N8N_CONTAINER is not running" >&2
   echo "                  bring it up: bun run n8n:start" >&2
-  echo "                  (scripts/bootstrap.sh will do that and this, once it lands)" >&2
+  echo "                  or run the whole sequence: scripts/bootstrap.sh" >&2
   exit 1
 }
 

@@ -33,13 +33,16 @@
 # instance at the ids they declare, and it must run BEFORE this one
 # every time — measured, an import remints every `versionId`, which
 # orphans the `workflow_history` row the seeding step below writes
-# under the version it reads. What is still missing is the one
-# command that runs the whole sequence: `bootstrap.sh`, which the
-# refusal below points at, is phase 7 in the roster next door and
-# has not landed. Either way a RUN is the only evidence a shell
-# script in this package ever gets: `lint` and `check-types` open no
-# `.sh` at all, and the naming invariant, which does read this one,
-# reads names rather than behaviour.
+# under the version it reads. The whole sequence has one command
+# over it now as well: `bootstrap.sh`, which the refusal below
+# points at, brings the stack up, migrates, builds, imports both
+# halves, ensures the model connector, calls this file, and then
+# restarts the container — the step this one deliberately does not
+# take and the only thing that registers a trigger. Either way a
+# RUN is the only evidence a shell script in this package ever
+# gets: `lint` and `check-types` open no `.sh` at all, and the
+# naming invariant, which does read this one, reads names rather
+# than behaviour.
 #
 # The pair of steps this file ends on — seed a `workflow_history`
 # row, then publish — is written up in
@@ -285,21 +288,19 @@ done <<<"$PLAN"
 # installed at all, gets them too and is not, and finds out when the
 # command named below refuses in its turn.
 #
-# That command is `bootstrap.sh`, which the roster in `README.md`
-# here describes as bringing the stack up and importing credentials —
-# the credentials clause is why the message names it rather than a
-# bare compose command. Half of what it will do exists already, so
-# the message carries both: the compose command that starts the
-# container named above is what gets an operator past this refusal
-# today, and `bootstrap.sh` is what will get them past it without
-# also having to import and arm by hand. It arrives in phase 7, and
-# saying so in the message is the difference between naming a
-# command a reader cannot find and naming one that is not there yet.
+# That command is `bootstrap.sh`, which brings the stack up, imports
+# both halves and calls this file — so the message carries two lines
+# rather than one. The compose command is the smaller edit for an
+# operator who has already imported and only wants to re-arm; the
+# bootstrap is what gets a cold checkout past this refusal without
+# anything else being typed. Naming the compose command first is
+# therefore not a fallback, it is the narrower answer to the
+# narrower question this refusal usually means.
 RUNNING="$(docker inspect -f '{{.State.Running}}' "$AR_N8N_CONTAINER" 2>/dev/null || echo false)"
 [ "$RUNNING" = "true" ] || {
   echo "activate: the n8n container $AR_N8N_CONTAINER is not running" >&2
   echo "          bring it up: docker compose --profile n8n up -d --wait n8n" >&2
-  echo "          (scripts/bootstrap.sh will do that and the imports, once it lands)" >&2
+  echo "          or run the whole sequence: scripts/bootstrap.sh" >&2
   exit 1
 }
 

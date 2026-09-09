@@ -216,19 +216,20 @@ silently stopped being armed. Note also that a skipped file is still
 IMPORTED, so collection proves the module parses and nothing more — never
 read a `1 skipped` as evidence about a change under `tests/live/`.
 
-There is something here to point that gate at now, and still no command that
-points it. `docker-compose.yml` declares an `n8n` service behind
+There is something here to point that gate at now, and a command that
+stands it up. `docker-compose.yml` declares an `n8n` service behind
 `--profile n8n`, container `ar-n8n`, on loopback 5678 — the instance rule 3
-names beside the stress database — while `scripts/bootstrap.sh`, which will
-import the workflows onto it and arm them, is still phase 7 in
-`scripts/README.md`'s roster. So an n8n case can satisfy rule 3 the moment
-an operator points `AR_N8N_URL` at that instance, and until somebody does,
-the reading of a run is unchanged. Every command this package
-ships leaves those cases skipped, which makes what is written under that
-gate debt recorded rather than behaviour a gate here proves: treat a case
-added there as unrun until somebody runs it. `tests/live/live-n8n.ts`
-carries the rest — what a skipped-but-collected case still reports, and the
-one place the seam can be broken without touching the gate.
+names beside the stress database — and `scripts/bootstrap.sh` takes a cold
+tree to that instance holding the six workflows, armed and registered. What
+is still missing is a command that points the GATE at it: nothing sets
+`AR_N8N_URL`, so an n8n case satisfies rule 3 only once an operator exports
+it, and until somebody does, the reading of a run is unchanged. No command
+this package ships leaves those cases anything but skipped, which makes what
+is written under that gate debt recorded rather than behaviour a gate here
+proves: treat a case added there as unrun until somebody runs it.
+`tests/live/live-n8n.ts` carries the rest — what a skipped-but-collected
+case still reports, and the one place the seam can be broken without
+touching the gate.
 `tests/live/live-ollama.ts` records a stricter version of it for the
 config-proposer case: no compose service supplies a model server at all,
 nothing starts one, and `.env.example` names neither of its two settings.
