@@ -9,10 +9,13 @@
  * and whatever `AR_N8N_URL` names. An armed schedule trigger drives
  * model passes on its own, against whatever it was built from, for
  * as long as the instance is up. This command is the second of
- * those two surfaces. `scripts/panic.sh` is the shell that will
- * stop the first and run this one beside it, and it has NOT landed
- * yet — so today this command is run by path on its own, and the
- * local stack is still stopped by hand. Nothing here touches a
+ * those two surfaces. `scripts/panic.sh` is the shell that covers
+ * both: it runs this command FIRST and stops the local stack
+ * behind it, that order being what keeps a container from coming
+ * back armed at the next start and what lets an `AR_N8N_URL`
+ * naming this stack's own instance still be reachable when the
+ * call is made. Running this by path on its own remains the way
+ * to reach an instance somewhere else. Nothing here touches a
  * container, a compose file or a shell on the host being reached,
  * which is the same reach `deploy-external.ts` has and for the same
  * reason: an instance somebody else operates is the case the API
@@ -73,7 +76,7 @@
  * the end and reported there. {@link PanicOutcome.refused} is that
  * list, and it is what the exit code is taken from: a run that
  * reached the instance and left something armed exits 1, so the
- * shell that will call this can tell it from one that finished.
+ * shell that calls this can tell it from one that finished.
  *
  * WHAT COUNTS AS ARMED IS THE INSTANCE'S OWN `active`, read as
  * exactly `true` and nothing looser — the same reading
