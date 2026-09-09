@@ -27,13 +27,16 @@
 # This repository stands that container up now. The compose file in
 # this package declares an `n8n` service behind `--profile n8n`,
 # container name `ar-n8n`, so the default read further down names
-# the instance the project itself starts. What has no owner yet is
-# the step between a build and this command: no tracked file
-# anywhere runs an `import:workflow`, and `bootstrap.sh`, which the
-# refusal below points at, is still phase 7 in the roster next door.
-# So the instance this arms is the project's and the import that
-# puts workflows on it is still an operator's, until the rest of
-# that phase lands. Either way a RUN is the only evidence a shell
+# the instance the project itself starts. The step between a build
+# and this command has an owner now too: `import-workflows.sh` next
+# door runs the `import:workflow` that puts the artifacts on that
+# instance at the ids they declare, and it must run BEFORE this one
+# every time — measured, an import remints every `versionId`, which
+# orphans the `workflow_history` row the seeding step below writes
+# under the version it reads. What is still missing is the one
+# command that runs the whole sequence: `bootstrap.sh`, which the
+# refusal below points at, is phase 7 in the roster next door and
+# has not landed. Either way a RUN is the only evidence a shell
 # script in this package ever gets: `lint` and `check-types` open no
 # `.sh` at all, and the naming invariant, which does read this one,
 # reads names rather than behaviour.
