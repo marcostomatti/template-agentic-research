@@ -41,6 +41,19 @@ red package never masks another and a single run gives the whole picture.
   unexplained lines. The per-package `Exited with code` SET is the
   verdict; a warning block is a carried-in reading worth recording in a
   baseline, never a failure.
+- To CLASSIFY such a warning as carried-in, compare the BLOB and not the
+  text: `git rev-parse origin/main:<path>` against `git rev-parse
+  HEAD:<path>`, equal object ids being proof no edit of yours produced it.
+  Reading the two warning LINES and finding them the same is the weaker
+  version — it says nothing about the rest of the file, and the rule that
+  fires may key on something further up.
+- A capture asserting "stderr empty" has to say HOW the command was
+  invoked, because `bun run <script>` echoes the command it is about to run
+  to STDERR (51 bytes for `gate:control-bytes`): the same file invoked
+  directly as `bun <path>` writes nothing there. So that assertion fails
+  under the package script and passes under the direct run, off one binary.
+  Capture BOTH ways — the wrapper run is what an operator types, the direct
+  run is the one whose stderr is the tool's own.
 - The sibling clause above — the two fan-outs listing their package lines
   in DIFFERENT ORDERS, "a live control that costs nothing" — is a
   SNAPSHOT and not a property. Measured at another sha, BOTH fan-outs put
@@ -600,8 +613,15 @@ red package never masks another and a single run gives the whole picture.
   its CASE line splits three ways, so a leg scored on the case counters
   reads two live gates as dead. Measured one file apiece, every one at
   `Test Files 1 failed (1)`: `describeLivePg` answered `Tests 19 skipped`,
-  `describeLiveN8n` `3 skipped`, `describeLiveOllama` `1 failed`, and
-  `describePortParity` `2 failed | 6 passed`. Score the FILE line.
+  `describeLiveOllama` `1 failed`, and `describePortParity`
+  `2 failed | 6 passed`. Score the FILE line, and never hold a CASE figure
+  from here against a later run: `describeLiveN8n` was recorded at
+  `3 skipped` and re-measured `3 failed` at the same target, its FILE line
+  `1 failed (1)` both times. Port 9 is refused by undici at the FETCH
+  layer (`TypeError: fetch failed` / `Caused by: Error: bad port`) and
+  never as a connection attempt — which is what makes the control provably
+  reach no service, and equally makes every case count it produces a
+  property of that rejection rather than of the gate.
 - A PLAIN `bun run test` capture carries NO per-file line at all, so the
   `Test Files N skipped` membership reading has nothing to read in it, and
   the flag pair that supplies one is cheaper than `--reporter=verbose`:
@@ -718,13 +738,23 @@ red package never masks another and a single run gives the whole picture.
   `schedule-clamp.live.test.ts`'s `artifactsBuilt` equality in a file the
   branch never edited, and a prose sweep's needles are aimed at sentences
   and structurally cannot reach an assertion. Attribute with
-  `git ls-tree -r --name-only <merge-base> -- packages/service/workflows/src/`
+  `git ls-tree -r --name-only origin/main -- packages/service/workflows/src/`
   against `git ls-files` over the same path, plus
-  `git log <base>..HEAD -- <the test file>` answering empty. The repair is
-  the count-free move applied to an ASSERTION rather than to prose
-  (`includes(...)` held against `true`). Run `test:live` BEFORE a phase's
-  prose sweep rather than as its last verification task, or the finding
-  arrives with nothing left to bundle it into.
+  `git log origin/main..HEAD -- <the test file>` answering empty — the base
+  is `origin/main` and never `git merge-base main HEAD`, which is degenerate
+  for the whole life of a plan whose commits the loop lands on local `main`.
+  The repair is the count-free move applied to an ASSERTION rather than to
+  prose (`includes(...)` held against `true`). Run `test:live` BEFORE a
+  phase's prose sweep rather than as its last verification task, or the
+  finding arrives with nothing left to bundle it into.
+- That `artifactsBuilt` red is now a worked example and NOT a live hazard:
+  the count-free repair landed, so the assertion is
+  `artifactsBuiltCarryTheDispatcher: drive.artifactsBuilt.includes(...)`
+  held against `true` and a newly landed workflow no longer falsifies it.
+  Hunting it wastes a stage. Run the two roster diffs on a GREEN capture as
+  well as on a red: a workflow-source or live-file roster that GREW makes
+  every figure recorded here stale, and comparing a correct run against a
+  quoted count reports phantom regressions.
 
 - On a tree already RED from an earlier stage, "is this red mine?" is answered
   by a before/after SET diff, never by a figure this file or an earlier commit
@@ -741,12 +771,16 @@ red package never masks another and a single run gives the whole picture.
 - A before/after failure-set diff can also SHRINK, and a vanished failure
   needs the same attribution as an added one: a `socket hang up` present
   before and absent after turned out to be a flake, 3/3 green when the file
-  ran alone. supertest over a built service is where the flake lives here.
+  ran alone. supertest over a built service is where the flake lives here —
+  in `tests/api/`, which is OUTSIDE `test:live`'s `tests/live` pathspec, so
+  its absence from a green live capture is not evidence it is fixed, only
+  that it was never reachable there.
 - An env-gated live suite's CASE-level skip count cannot tell a CLOSED gate
   from an armed-but-unusable one — read the FILE status instead. Measured on
   `describeLiveN8n`: with `AR_N8N_URL` unset the file reports `1 skipped`, and
   with it pointed at a closed loopback port (`http://127.0.0.1:9`) the file
-  flips to `1 failed` while the case line still reads `3 skipped`. The
+  flips to `1 failed`; the case line under that target drifts and is not a
+  reading (see the closed-target control above). The
   closed-port form is the safe control for any env-gated suite: it proves the
   ternary produced the skip (rather than a hardcoded `describe.skip` or cases
   gutted to stubs) and the refusal happens before any request, so it reaches

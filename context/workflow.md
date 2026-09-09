@@ -38,7 +38,12 @@ indistinguishable from a conflict at the exit code alone. The
 discriminator is the FIRST LINE — a 40-hex OID means the merge RAN
 (conflicted if stage entries follow, clean if the capture is that one
 line), anything else means it never started. Read the first line, never
-`$?`. A CLEAN reading is then a zero-hit shape owing a liveness control,
+`$?`. But that message is on STDERR: on git 2.50.1 an unresolvable ref
+leaves STDOUT at ZERO bytes rather than writing a non-OID first line, so
+a stdout-only capture reads `head -1` as the empty string and the branch
+reports as unclassifiable. Fold `2>&1` into the capture, or key the leg
+on stdout being zero bytes. A CLEAN reading is then a zero-hit shape
+owing a liveness control,
 and that control needs nothing written into the shared object database
 (which matters with a parallel leg on the same `.git`): `git init` a
 `/tmp` dir, commit a three-line file, branch twice off that base
@@ -174,6 +179,16 @@ NON-ZERO gap rather than only in principle: measured, both merge-bases
 answered the IDENTICAL sha while the two counts split 3 against 5, local
 `main` sitting two commits behind an `origin/main` `ls-remote` confirmed
 CURRENT.
+
+**`git merge-base main HEAD` is DEGENERATE for the whole life of a plan
+whose commits the loop lands on local `main`** — not merely at a baseline
+with no commits yet. `main` IS `HEAD`, so their merge-base follows the tip,
+and a close-out or sweep taking its base from there diffs the tip against
+itself and reports 0 ADDED / 0 REMOVED by construction: the identical
+output a branch that leaked everything would produce. The base that works
+is `origin/main`. Print `merge-base`, `origin/main` and `HEAD` side by
+side, and re-derive a recorded base rather than reading it out of a
+measurements file, which checks the transcription in the same line.
 
 **That fast-forward corroboration is UNAVAILABLE on a branch BEHIND main**,
 and reaching for it reports a correct clean merge as broken. Where

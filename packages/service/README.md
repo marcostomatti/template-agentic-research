@@ -51,11 +51,22 @@ To run locally:
    connector row, activates every workflow that declares a Schedule
    Trigger, and restarts n8n so the triggers register.
 
+   The workflows it reports `manual-only, left inactive` are left
+   UNPUBLISHED, and a SCHEDULED pass cannot load an unpublished
+   sub-workflow — only a hand-started one can, because being manual is
+   what lets it run off the draft. Publish them
+   (`docker exec ar-n8n n8n publish:workflow --id=<id>`) before reading a
+   scheduled pass as end-to-end evidence; `context/local-stack.md` carries
+   the mechanism.
+
 To stop:
 
 Run `scripts/panic.sh` — it disarms all active workflows and stops every
-container in this project that can spend. Both services stay running
-(migrations and data survive); `docker compose up` brings them back.
+container in this compose project, the profiled `ar-n8n` included (it
+passes `--profile '*'`; a bare `docker compose stop` would reach only the
+unprofiled `postgres`). The containers are STOPPED rather than removed, so
+migrations, volumes and data all survive and
+`docker compose --profile n8n up -d` brings them back.
 
 ### Verify with CHECKPOINT 2
 

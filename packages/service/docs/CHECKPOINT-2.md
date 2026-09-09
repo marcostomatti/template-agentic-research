@@ -117,16 +117,17 @@ Create a session by logging in:
 ```bash
 curl -X POST http://localhost:3000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"emailOrLdapLoginId":"operator","password":"yourpassword"}' \
-  -c cookies.txt
+  -d '{"user":"operator","password":"yourpassword"}'
 ```
 
-This stores the session cookie. Extract the bearer token from the response
-or from the session (the token is a JWT in the `token` field of the login
-response if returned). For curl, using the cookie file is simpler:
+This service issues a BEARER TOKEN, not a cookie: a `200` answers
+`{ token, sub, expiresAt }`, and every later call carries the token in an
+`Authorization` header. (The `emailOrLdapLoginId`-plus-cookie shape is
+n8n's login, not this one.) Hold it in a variable the rest of this file
+uses:
 
 ```bash
-COOKIES="-b cookies.txt"
+TOKEN=<the token from the response>
 ```
 
 ### Create a source
@@ -134,31 +135,30 @@ COOKIES="-b cookies.txt"
 Post a new source row for the example domain:
 
 ```bash
-curl -X POST http://localhost:3000/domains/example/sources \
-  $COOKIES \
+curl -X POST http://localhost:3000/domains/example-tech-radar/sources \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "id": "example-source",
-    "kind": "listing-api",
-    "name": "Example News Feed",
-    "parser_config": {
-      "endpoints": [
-        "https://newsapi.org/v2/everything?q=AI&sortBy=publishedAt&pageSize=10"
-      ],
-      "field_map": {
+    "kind": "api",
+    "endpoint": "https://newsapi.org/v2/everything?q=AI&pageSize=10",
+    "parserConfig": {
+      "fieldMap": {
         "title": "title",
         "body": "description",
-        "source": "source.name",
         "date": "publishedAt"
-      },
-      "start_date": "2024-01-01"
+      }
     }
   }'
 ```
 
-The response should be a 201 with the created source. The `id` must be
-unique within the domain. The `kind` must match an adapter this service
-knows about (`listing-api` or `push`).
+The seeded domain's slug is `example-tech-radar`, not `example`.
+
+`createSourceSchema` in `src/sources/service.ts` is `.strict()`, so read
+the members off it rather than off this file: `kind`, `endpoint`,
+`parserConfig`, `contract`, `enabled`, and nothing else — a `name`, an
+`id` or a snake_cased `parser_config` is a 400. `kind` is one of
+`SOURCE_KINDS` (`url`, `api`, `rss`, `push`); the id is assigned by the
+service and comes back in the response.
 
 Record the source id — you'll reference it when setting up the export
 below.
@@ -174,7 +174,7 @@ this checkpoint, create one for Markdown export.
 
 ```bash
 curl -X POST http://localhost:3000/connectors \
-  $COOKIES \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "kind": "export_target",
@@ -200,17 +200,29 @@ When a briefing is generated for that domain, the subscription's renderer
 produces an artifact and the connector receives it.
 
 ```bash
-curl -X POST http://localhost:3000/domains/example/exports \
-  $COOKIES \
+curl -X POST http://localhost:3000/domains/example-tech-radar/exports \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "connector_id": <CONNECTOR_ID>,
-    "format": "obsidian_md"
+    "format": "obsidian_md",
+    "connectorId": <CONNECTOR_ID>,
+    "intervalSeconds": 86400
   }'
 ```
 
-Replace `<CONNECTOR_ID>` with the id from Part 4. The response includes
-the subscription id. The subscription is now active.
+Replace `<CONNECTOR_ID>` with the id from Part 4. `createSubscriptionSchema`
+in `src/subscriptions/service.ts` is `.strict()` and REQUIRES all three of
+`format`, `connectorId` and `intervalSeconds` — a snake_cased
+`connector_id` is a 400, and so is omitting the interval. `format` is one
+of `EXPORT_FORMATS` (`obsidian_md`, `notion_md`, `rss`, `pdf`,
+`email_draft`).
+
+The response includes the subscription id. Note it is created UNSCHEDULED
+(`next_run_at = NULL`) and `Claim Due Topics` filters `next_run_at <=
+now()`, which NULL never satisfies — so a dispatch pass claims nothing
+until `POST /exports/:id/run-now` (and `POST /topics/:id/run-now` for the
+topic half) brings it forward. That column is pipeline-owned and appears in
+no patch schema; those two routes are the only doors.
 
 ## Part 6: Run an On-Demand Dispatch
 
@@ -234,6 +246,20 @@ docker exec ar-n8n curl -X POST http://localhost:5678/rest/workflows/ar-dispatch
 This invokes the dispatch workflow manually. The name `Manual Trigger` is
 ignored by the n8n internal API — it accepts any string. The response is
 a 200 with the execution id if successful.
+
+A manual pass is not the same test as a scheduled one, and the difference
+is not cosmetic. On this n8n version a sub-workflow invoked from a MANUAL
+execution runs off its DRAFT, while one invoked from any other mode
+(`trigger`, `integrated`) is loaded from its PUBLISHED version and throws
+`Workflow is not active and cannot be executed.` when the row carries no
+`activeVersion`. `scripts/activate-workflows.sh` publishes only the
+trigger-carrying workflows and reports the rest `manual-only, left
+inactive` — so Option A can succeed while Option B's identical pass cannot
+reach its children at all. Worse, an `executeWorkflow` node whose child
+failed to LOAD still reports `executionStatus: success` and hands the error
+on as an ordinary item, so both the parent execution and the node list read
+green. `docker exec ar-n8n n8n publish:workflow --id=<id>` publishes one,
+and `context/local-stack.md` carries the mechanism.
 
 ### Option B: Wait for the schedule
 
@@ -263,7 +289,7 @@ The `runs` table tracks each execution of the pipeline. Query it:
 
 ```bash
 curl http://localhost:3000/runs \
-  $COOKIES
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Look for a recent row with `status: "completed"` and `cost` > 0 (indicating
@@ -278,8 +304,8 @@ The `documents` table holds items ingested from sources. If `ar-ingest`
 ran, documents should be present:
 
 ```bash
-curl "http://localhost:3000/domains/example/documents" \
-  $COOKIES
+curl "http://localhost:3000/domains/example-tech-radar/documents" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 You should see at least one document with a `body`, a `source`, and a
@@ -291,8 +317,8 @@ source was active or ingest did not reach that source.
 The `findings` table holds scored documents. If ingest and scoring ran:
 
 ```bash
-curl "http://localhost:3000/domains/example/findings" \
-  $COOKIES
+curl "http://localhost:3000/domains/example-tech-radar/findings" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Each finding should have a `topic_id` (linking it to a topic), a `score`
@@ -308,8 +334,8 @@ The `briefings` table holds digests. If digest ran after documents and
 findings were present:
 
 ```bash
-curl "http://localhost:3000/domains/example/briefings" \
-  $COOKIES
+curl "http://localhost:3000/domains/example-tech-radar/briefings" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 A recent briefing should exist with an `assembled_at` timestamp matching
@@ -357,15 +383,32 @@ its own entry in the execution list.
 
 The `Select Active Topics` node queries `WHERE enabled = true AND
 next_run_at <= now()`. Check that:
-- At least one topic exists: `curl $COOKIES http://localhost:3000/domains/example/topics`
-- That topic has `enabled: true` and a past `next_run_at`
+- At least one topic exists:
 
-If topics are missing or all are disabled, seed them or enable one
-manually:
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3000/domains/example-tech-radar/topics
+```
+
+- That topic has `enabled: true` AND a past `next_run_at`
+
+A SEEDED topic has neither guaranteed. It is inserted UNSCHEDULED
+(`next_run_at = NULL`), and NULL never satisfies `next_run_at <= now()`,
+so a freshly seeded domain claims nothing however many topics it has.
+`next_run_at` is pipeline-owned and is in NO patch schema, so a `PATCH`
+cannot set it — the only door is the run-now route, which moves the column
+to the clock's instant:
+
+```bash
+curl -X POST http://localhost:3000/topics/<ID>/run-now \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+If a topic is merely disabled, enable it first:
 
 ```bash
 curl -X PATCH http://localhost:3000/topics/<ID> \
-  $COOKIES \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"enabled": true}'
 ```
@@ -373,7 +416,13 @@ curl -X PATCH http://localhost:3000/topics/<ID> \
 ### Ingest does not run or claims nothing
 
 Check that:
-- A source exists: `curl $COOKIES http://localhost:3000/domains/example/sources`
+- A source exists:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3000/domains/example-tech-radar/sources
+```
+
 - That source has `enabled: true` and is not flagged for failure
 - The source's endpoint is reachable (test it with `curl` from the n8n
   container: `docker exec ar-n8n curl <endpoint>`)
@@ -393,16 +442,13 @@ If documents exist but findings don't:
 
 ### Auth token expired or invalid
 
-Cookies expire. Regenerate a token with the login endpoint (Part 3) and
-update the `$COOKIES` variable:
+A session expires at the `expiresAt` the login answered. Mint a new one
+with the login endpoint (Part 3) and re-read `$TOKEN` from the response:
 
 ```bash
 curl -X POST http://localhost:3000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"emailOrLdapLoginId":"operator","password":"yourpassword"}' \
-  -c cookies.txt
-
-COOKIES="-b cookies.txt"
+  -d '{"user":"operator","password":"yourpassword"}'
 ```
 
 ### Service or container crashed
@@ -458,13 +504,23 @@ create a fresh stack from migrations.
 CHECKPOINT 2 passes when all of the following are true:
 
 1. ✅ **Bootstrap completes** — `scripts/bootstrap.sh` exits 0
-2. ✅ **Workflows are active** — `docker exec ar-n8n n8n list:workflows`
-   shows all six with `active: true`
+2. ✅ **Workflows are active** — the verb is `list:workflow` (singular);
+   `list:workflows` does not exist. It prints no active flag either, so
+   read `active` and `activeVersionId` out of the instance's own database
+   rather than from that command's output
 3. ✅ **Dispatch runs** — A run record exists with `status: "completed"`
 4. ✅ **Ingest ingests** — At least one document exists in the example
    domain
 5. ✅ **Scoring scores** — At least one finding exists with a non-null
-   `score`
+   `score`. NOTE: the seeded example domain cannot reach this as shipped,
+   whatever the model. `promptFrame` adds no JSON contract — a persona's
+   `system_text` IS the whole system prompt — while `data/personas.json`'s
+   researcher opens with the word "Placeholder" and asks for prose, and
+   `Validate Finding Fields` requires an object matching
+   `domains.settings.fieldContract`. `findings` therefore stays 0 with
+   `finding_refusal` "the answer is not JSON" on every document. Rewrite
+   persona 1 through `PATCH /personas/:id` to name the contract's members
+   first; a 3B local model then answers acceptably
 6. ✅ **Digest assembles** — A briefing exists for the domain
 7. ✅ **Export exports** — A markdown file exists in the export
    destination

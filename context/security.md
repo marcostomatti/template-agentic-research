@@ -191,7 +191,9 @@ while still reading as scheduled.
   `packages/ui/eslint.config.mjs` return SEVEN more, and those SEVEN
   decompose THREE ways rather than the two a reader expects: legitimate
   origin prose under the README/NOTICE clause, LAW STATEMENTS naming their
-  own subject (root `AGENTS.md`'s import ban spells the scope it bans;
+  own subject (THIS file's own import ban above spells the scope it bans —
+  it moved here when root `AGENTS.md` was capped and split, so a sweep
+  keyed on that path reads a correctly-attributed hit as unaccounted;
   `packages/ui/AGENTS.md`'s reference-free rule spells the repo whose prose
   it restricts), and the pre-existing comment leak this file records below
   as the third shape both automated halves miss

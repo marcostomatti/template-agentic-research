@@ -114,7 +114,14 @@ held by nothing. Read it before adding a node.
 - **A mutation leg over a built artifact goes in `workflows/dist/` and is
   run with `bun x vitest run <file>` DIRECTLY**, never through the package
   script, whose `pretest` rebuilds the plant away; `bun run
-  build:workflows` restores byte-for-byte. A LIVE file that rebuilds dist
+  build:workflows` restores byte-for-byte -- but that holds WITHIN one
+  commit only, and only for `ar-dispatch.json`. The HEAD-sha stamp the
+  build writes reaches exactly ONE of the six artifacts (`grep -c` for
+  the short sha answers 1 for `ar-dispatch.json`, `AR_BUILD_TAG`'s only
+  consumer, and 0 for the other five), so the other five reproduce
+  hash-for-hash across ANY commit that does not touch their sources and
+  are usable as a rebuild control where the dispatch artifact is not.
+  A LIVE file that rebuilds dist
   in its own `beforeAll` inverts this — the plant goes in
   `workflows/src/` and the restore is a `cp` from a /tmp hold.
 - **Know what the invariants do NOT read.** Every per-node case keys on a
@@ -220,6 +227,18 @@ held by nothing. Read it before adding a node.
   and `::bigint` refuses. The spelling that survives both id spellings is
   `$n::jsonb #>> '{}'` behind a digit regex, `#>>` answering the text of
   a JSON string and a JSON number alike and SQL NULL for a JSON null.
+- **Every artifact passing a NULLABLE column through `queryReplacement`
+  has the renders-`null`-as-TEXT shape latent**, and it only fires on
+  live data. A Postgres node casting such a parameter dies
+  `invalid input syntax for type timestamp with time zone: "null"` --
+  `ar-ingest`'s `Apply Source Health` hits it on the FIRST successful
+  fetch of any source, because a source that has never failed carries
+  `last_failure_at = null`. The sibling failure is the EMPTY STRING:
+  `ar-research`'s `Select Model Connector` renders `={{ $json.run_id }}`
+  to nothing when the pool drained empty, and the node refuses with
+  `Query Parameters must be a string of comma-separated values or an
+  array of values`. Audit both shapes whenever a nullable or
+  possibly-absent column enters a resolvable.
 - **`@ar/service`'s tsconfig `include` lists `tests`**, so every
   `tests/**/*.test.ts` IS in the program `tsc` reads. Several helper
   headers under `tests/invariants/` repeat the opposite verbatim ("a
@@ -287,3 +306,60 @@ held by nothing. Read it before adding a node.
   bare `\bDELETE\b` needle fires on drizzle's own
   `ON DELETE no action` and reports a pure ADD COLUMN file as carrying a
   data statement.
+
+### Running a pass against the live stack
+
+- **Whether a sub-workflow runs at all is decided by the PARENT's
+  execution mode**, off the 2.15.1 image
+  (`dist/workflow-execute-additional-data.js`):
+  `useDraftVersion = isManualOrChatExecution(options.executionMode)`. A
+  sub-workflow invoked from a MANUAL execution runs off its DRAFT; one
+  invoked from any other mode (`trigger`, `integrated`) is loaded by
+  `getPublishedWorkflowData`, which throws `Workflow is not active and
+  cannot be executed.` when the row carries no `activeVersion`. Two
+  consequences bite here. `activate-workflows.sh` publishes only the
+  trigger-carrying workflows and reports the rest `manual-only, left
+  inactive`, so nothing a SCHEDULED `ar-dispatch` invokes can load --
+  and a hand-started pass is NOT evidence about that, being manual is
+  exactly what let it reach them. And one level down is already "not
+  manual": an `ar-ingest` running as `integrated` cannot reach
+  `ar-score` or `ar-research` even when the pass that started it was
+  manual. `n8n publish:workflow --id=<id>` fixes it per workflow and
+  sets `active=1` with it.
+- **An `executeWorkflow` node whose child failed to LOAD reports
+  `executionStatus: success`** and hands the error on as an ordinary
+  item (`{"json":{"error":"Workflow is not active and cannot be
+  executed."}}`), so a green parent execution and a green node list are
+  both consistent with the child never having run. The only reading is
+  the node's OUTPUT DATA, and `execution_data.data` is `flatted`: an
+  array in which a numeric STRING is a reference back into the same
+  array. Walk it with a recursive deref, find the runData map (the one
+  object whose keys are node names and whose values are all numeric
+  strings), and follow the node's `data` ref down 20-odd levels before
+  believing anything.
+- **A seeded topic and a created export subscription are inserted
+  UNSCHEDULED** (`next_run_at = NULL`), and `Claim Due Topics` filters
+  `next_run_at <= now()`, which NULL never satisfies -- so a dispatch
+  pass against a freshly seeded domain claims nothing. `next_run_at` is
+  pipeline-owned and absent from every patch schema; the only doors are
+  `POST /topics/:id/run-now` and `POST /exports/:id/run-now`.
+- **The seeded example domain cannot produce a finding, whatever the
+  model.** `promptFrame` in `src/lib/prompt-frame.ts` adds NO JSON
+  contract -- a persona's `system_text` IS the entire system prompt --
+  while `data/personas.json`'s researcher opens with the word
+  "Placeholder" and asks for prose, and `Validate Finding Fields`
+  requires an object matching `domains.settings.fieldContract`. So
+  `findings` stays 0 with `finding_refusal` "the answer is not JSON" on
+  every document. Rewrite persona 1 through `PATCH /personas/:id` to
+  name the contract's members before expecting any pipeline reading
+  that depends on a finding; a 3B local model then answers acceptably.
+- **A reachability reading for the pipeline must be taken from INSIDE
+  the container.** The sandbox's own outbound reach to loopback is PER
+  PORT and is not the containers': `curl` to `127.0.0.1:11434`
+  succeeded while `127.0.0.1:8909` answered `000` with `lsof` finding
+  no listener, and the n8n container reached BOTH through
+  `host.docker.internal`. So a host probe that cannot reach a local
+  server is not evidence a workflow cannot -- use `docker exec
+  <container> wget -qO-`. Related: ollama binds `127.0.0.1` only and is
+  still reachable at `host.docker.internal` from a container on Docker
+  Desktop for Mac.

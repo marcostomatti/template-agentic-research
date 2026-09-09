@@ -404,3 +404,54 @@
   zero. A word reading and a structural reading over the same TS tree
   therefore legitimately disagree, and the only claim a run can hold is the
   DIRECTION (the word reading is the wider), never the two counts.
+
+- **A new `scripts/` command owes tracked prose homes, and no gate reads
+  any of them.** The ones a grep for the script's own NAME never finds are
+  the ones missed: its roster row in `scripts/README.md`, the `scripts/`
+  row in the package `AGENTS.md`, the TWIN of that row in
+  `docs/architecture/00-overview.md` (which carries the same "arrive in
+  phase 7" sentence in different words), and the refusal MESSAGE of every
+  sibling script that pointed forward at it. A command reading SETTINGS
+  owes two more: the `src/config.ts` docblock of every setting it reads,
+  whose `AR_*` entries each say WHICH module reads that name and are
+  written "no module reads it yet" until one does, and the `.env.example`
+  block beside them, which states what a blank value does. Search for the
+  sentence's CLAIM, not for the filename.
+- **An instance-facing command imports the shared pre-flight rather than
+  spelling the settings twice**: `requireInstance`,
+  `UnconfiguredInstanceError` and `InstanceSettings` are exported from
+  `scripts/deploy-external.ts`, and importing that module is safe -- its
+  `INVOKED_AS_CLI` guard compares its OWN `import.meta.url` against
+  `process.argv[1]` and answers false in an importing process. The cost is
+  prose, and it is all COUNTS, so every new caller falsifies all three: the
+  caller ROSTER in `scripts/n8n-client.ts`'s `@packageDocumentation`, the
+  roster in `UnconfiguredInstanceError`'s block, and the "three commands
+  that call in" sentence in `scripts/README.md`.
+- **`set -e` is a PER-SCRIPT decision here, not a house style.** A script
+  whose steps are preconditions of each other wants it; one covering two
+  INDEPENDENT surfaces must not have it, or a failure on the first leaves
+  the second untouched -- which for anything stop-shaped is the whole
+  failure. Turning it off makes shellcheck's SC2164 live on the
+  `cd "$(dirname "$0")/.."` every script here opens with: the siblings only
+  escape that warning because `-e` aborts the run for them, so a
+  no-`set -e` script owes the `|| exit` explicitly.
+- **Every `.sh` here resolves its root as `$(dirname "$0")/..`**, so a COPY
+  of one placed under `/tmp` makes the root `/` and dies at the first
+  `bun -e` import with `Cannot find module` -- reading as a broken script
+  rather than as a misplaced probe. A probe sliced out of a script belongs
+  under the package's own `scripts/`, and is deleted in the same command
+  the loop's `git add -A` would otherwise commit it from. That slicing is
+  how a script whose last step is IRREVERSIBLE (a restart, a teardown) gets
+  both verdict branches walked before it is ever run whole: drop the
+  irreversible command, set the wait ceiling to 0 so the refusal branch
+  fires on its own, and force the "before" reading to a value the "after"
+  must beat for the success branch. Build the probe with python rather than
+  `sed` when the text carries `$`, `|` or backslashes.
+- **Read this service's accepted request bodies off the exported
+  `create*Schema` / `patch*Schema` in `src/<area>/service.ts`, never off
+  prose.** They are `.strict()`, so a member the docs invented is a 400.
+  Measured against `docs/CHECKPOINT-2.md`, which gets the domain slug, the
+  login body, the source kind set, the parser-config key names and the
+  export body all wrong; this service takes `{user, password}` and answers
+  a BEARER token, where the `emailOrLdapLoginId`-plus-cookie shape is
+  n8n's.

@@ -60,7 +60,15 @@
   entries with a BLANK line a correctly-deduped one-package add lands as a
   THREE-line diff — predict CONTENT lines, or the separator reads as
   the one line unaccounted for, which is exactly the shape a SPLIT would
-  have. Pair it with `bun pm view <name> version` as the discriminating
+  have. But THREE-line is not the prediction to make blind: there is a
+  THIRD outcome beside dedupe and split, and predicting three reads the
+  correct one as an anomaly. Where the package is ALREADY hoisted in
+  `bun.lock` as a transitive dependency at the version the add resolves,
+  NO `packages` entry is written at all and the whole diff is ONE line —
+  the workspace's own new range (measured on `yaml`, already hoisted for
+  three other consumers: `git diff --stat` read `bun.lock | 1 +`). Grep
+  the lockfile for the package BEFORE the add and predict off what you
+  find. Pair it with `bun pm view <name> version` as the discriminating
   control, and say so when that control is VACUOUS: for a package no
   manifest overrides, resolving registry latest IS the correct outcome, so
   a matching version is satisfied by construction and proves nothing.
@@ -309,6 +317,16 @@
   foreground `sleep`, so the poll is `until [ -f <f>.exit ]; do sleep 5;
   done` launched the same way — which then notifies on completion, so
   no polling call is needed at all.
+- The permission layer DENIES `nc -z` outright, which matters because every
+  closed-loopback control owes a closed-target PRECONDITION. The permitted
+  form is `lsof -nP -iTCP:<port> -sTCP:LISTEN -t`: exit 1 with ZERO stdout
+  bytes is nothing listening, and the same command naming a pid is the
+  positive control that shows it can see one.
+- A `const` shadowing a node builtin imported at the top of a probe script
+  throws `Cannot access '<name>' before initialization` pointing at the
+  IMPORT'S USE dozens of lines ABOVE the shadowing declaration, so it reads
+  as a broken import rather than as a name collision. `join` from
+  `node:path` is the one that bites here. Prefix probe locals.
 - `bun pm view <pkg>` SUMMARY omits peerDependencies entirely: it prints a
   `deps: N` line and a `dependencies (N)` block and stops, so a package
   whose only constraint on the tree is a PEER reads as unconstrained
@@ -354,7 +372,7 @@
   naive re-wrap cascades through the rest of the paragraph. The contained
   repair absorbs the overflow into the NEXT line's own slack so the bullet's
   LINE COUNT is preserved and nothing after it moves.
-- No fenced line anywhere in the four `AGENTS.md` maps, the 22 `context/`
+- No fenced line anywhere in the four `AGENTS.md` maps, the 24 `context/`
   pages or `tools/ralph/PROMPT.md` exceeds 78 cols, so a fence obeys the
   prose cap here rather than being exempt like a table row. A fence INDENTED
   inside a list item hands that indentation to whatever reads it, so a

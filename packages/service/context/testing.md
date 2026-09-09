@@ -494,3 +494,85 @@ DEPTH-ANCHORED regex over the listing
 (`^packages/service/tests/(live|parity)/[^/]+\.test\.ts$`), since a pathspec
 `*` crosses `/`, and pair the roster's zero with a planted control through
 the identical matcher.
+
+### What the isolated suite cannot reach, and what stands in
+
+A script's unit tests colocate in `tests/scripts/<name>.test.ts`, never
+beside the module: there is no `scripts/*.test.ts` anywhere in the package.
+
+Nothing in the isolated suite reaches a script's `INVOKED_AS_CLI` block or
+its real connection opener, so a NEW command owes ONE hand run. Two shapes
+cost nothing. The REFUSAL path opens the pool, issues the real statements,
+closes in the `finally` and writes no row — a process that RETURNS rather
+than hanging is also the reading that the pool was ended. And a scratch
+database created and dropped in the same session works because the drizzle
+store only needs the one table it touches, not a migrated schema.
+
+A change to `src/config.ts` is likewise provable without adding a test file,
+which matters because nothing in the isolated suite imports that module.
+Import it by ABSOLUTE path from a directory holding no `.env` (`cd /tmp`)
+and take three readings: UNSET (the key is absent from the parsed object and
+the parse still exits 0), SET (value carried verbatim), and BLANK (an entry
+with no floor parses as `''` rather than failing the boot). Two controls
+make it non-vacuous — an UNDECLARED `AR_*` name exported into the same
+environment must be ABSENT from the parsed object, proving presence is
+declaration-driven and not an echo of `process.env`; and the same probe run
+against `git show HEAD:packages/service/src/config.ts`, written to a
+throwaway path inside the package and deleted in the same command, must
+report every new name absent.
+
+`packages/service/.env` does not exist on a fresh checkout and nothing
+creates it — the `cp .env.example .env` it owes is in the package README and
+in `docs/CHECKPOINT-2.md` — and every `AR_LLM_*` line in `.env.example` is
+COMMENTED and valueless, so the copy carries their names as prose and none
+of them as a setting. Running the consumer FIRST, before anything is
+supplied, is a free live control on the builder's guard, and its refusal
+names the unset settings. Supply what a command needs in the LAUNCHING
+SHELL rather than by editing the file: the tree stays clean and `.env` is
+left as an earlier session wrote it.
+
+WHICH names a `.env` carries is probeable even though the permission layer
+refuses to read that file, and the probe must never NAME it: a `bun -e` in
+the package root loads `.env` from the cwd, so printing each name's PRESENCE
+and LENGTH off `process.env` answers "is this gate armed" directly instead
+of having to run a consumer and parse its refusal. Print LENGTHS, never
+values — the same sweep turns up `AR_LLM_API_KEY`. The reading is VACUOUS
+without a positive control in the same probe, and that is the trap: every
+name coming back UNSET is equally consistent with the file not carrying them
+and with the load never happening (wrong cwd, no file), so widen the filter
+to the `AR_` prefix and show at least one name the probe DID pick up from
+the file rather than from the launching shell. It doubles as the cheap way
+to predict an env-gated suite's skipped set before running it. The same load
+happens for a `bun -e` inside a `.sh` that has already `cd`ed to the package
+root, which is what lets a script hand `process.env` to a builder module
+instead of re-declaring settings of its own.
+
+Two seams worth knowing when writing a case against the connectors area.
+`src/connectors/store.ts`'s `insertConnector` (and its `db-store.ts`
+implementation) has NO schema in front of `config` — the zod boundary
+(`connectorConfigSchema = z.record(z.string(), z.unknown())`) lives one
+layer up, in `src/connectors/service.ts`'s `createConnector` — so a case
+calling the STORE directly can plant a `config` member of any JSON type (a
+bare number, `null`, an array) to probe how a reader handles a value the
+HTTP boundary would never accept but that could already be sitting in a row
+from before a rule tightened. `scripts/llm-connector.ts` is one such reader
+(`configText`'s `jsonb_typeof(...) = 'string'` re-implementation). And
+`connectors` carries NO timestamp columns (`id`, `kind`, `name`, `config`
+and nothing else), so a first query naming `created_at` dies `ERROR: column
+"created_at" does not exist` and the `updatedAt` witness is unavailable
+there. What stands in: the row count, the `id`, the `config` read back
+verbatim, and `connectors_id_seq.last_value`, which advances for an insert
+that was ATTEMPTED even where a constraint or a rollback swallowed it — a
+witness the row count alone cannot give.
+
+Two commands whose difference IS a refusal can be measured against each
+other in ONE case rather than described in prose. `assertNotExpected` and
+`expectedNames` are exported from `scripts/audit-workflows.ts` and
+`WORKFLOW_SOURCE_DIR` from `scripts/build-workflows.ts`, so a fixture can
+take a display name the real `workflows/src/` declares, drive the new
+command over it, and assert in the same guard that the audit's own act
+would raise `ExpectedWorkflowError` over the identical workflow. Reading the
+name rather than writing it keeps the fixture correct under a rename; guard
+it with an explicit "the sources were read" member, since a read that failed
+and answered an empty list otherwise satisfies every other half of the
+guard.

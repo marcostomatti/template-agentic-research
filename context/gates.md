@@ -349,6 +349,23 @@ matching anything prints exactly the same five lines.
   0 deleted, 0 unscanned), with the fabricated-absent control asserted NOT
   in that set in the same command. Under a predicate that is the identity
   over the tracked set, a count cannot say anything at all.
+- Membership in the path list a scanner is HANDED is still not evidence
+  the scanner OPENED those paths: `scanFiles` skips SILENTLY wherever its
+  reader answers null (a submodule, a path that vanished between the
+  `ls-files` and the read). The leg that closes it drives the real
+  function with an INSTRUMENTED reader and counts the opens, the nulls and
+  the BYTES -- 33 opens and 1,177,944 bytes is a coverage reading where
+  "33 paths were in the list" is not. This is the cheap general form of
+  the prove-it-covered-your-change rule this page opens with, and it
+  applies to any gate whose reader can decline a file without saying so.
+- A gate capture is evidence about the tree AT ITS OWN SHA, and on a
+  loop-driven branch the tip moves under it: measured, both tracked-tree
+  gates (the de-origination sweep and `gate:control-bytes`) had run one
+  commit below the tip and each covered 33 of the branch's 34 changed
+  paths. The check is the capture-sha-against-HEAD form of the per-PATH
+  SET diff above. Re-running the GATE at HEAD is cheap and closes it;
+  re-running a whole SWEEP is not, so run the seven needles over the ADDED
+  paths alone, with the same planted controls in the same command.
 - The clause beside it — "confirm the ignored trio is absent from
   `git status --short --untracked-files=all`" — is evaluated against an
   EMPTY capture on a clean tree, where a grep returns 0 for every needle
@@ -397,6 +414,18 @@ matching anything prints exactly the same five lines.
   as missing coverage. Measured across one wave: 1038 to 1090 is +52 net,
   decomposing as 54 ADDED and 2 REMOVED. Report ADDED and REMOVED as SETS
   beside the net.
+- A branch that DELETES NOTHING makes every deleted-path control vacuous,
+  and this repo's plans mostly add -- so the REMOVED half above is usually
+  a zero proving nothing. Two substitutes carry real members. Take the
+  deletions from the whole history instead: `git log --diff-filter=D
+  --name-only --pretty=format: --no-renames` answers 5 paths here, none
+  later restored, so the absences are unambiguous. Or delete a file in the
+  `--root <throwaway repo>` fixture above and watch the count move -- which
+  also supplies readings the real tree cannot: tracked != scanned, and the
+  tool's OTHER exit codes (an empty repo trips the 0-scannable vacuity
+  guard at 2, a non-repo trips the git-failed path at 2), so a recorded 0
+  can be shown to be one branch of three rather than the only thing the
+  binary prints.
 - `.github/**` joins package-root `AGENTS.md` in the read-by-no-fan-out-gate
   set, for a different reason: ESLint here has no YAML plugin at all, so
   `lint:all` never opens a `.yml` whatever the ignore patterns say, and
@@ -406,6 +435,10 @@ matching anything prints exactly the same five lines.
   hand-check is `python3 -c "import yaml"` (PyYAML is present here): parse
   the file and DUMP the parsed structure rather than reading the exit code,
   because a comment-only mistake and a mis-indented key both parse.
+- Every `.sh` in the tree is a FOURTH member of that set: ESLint has no
+  shell plugin, nothing type-checks or tests a script, and `shellcheck` is
+  INSTALLED here while no gate runs it. So run it by hand on any new or
+  edited `.sh` -- it is the only thing that reads them.
 - The tracked `.claude/` tree is the THIRD member, and it is IGNORED rather
   than un-targeted: an explicit-path `bun x eslint -f json
   .claude/skills/**/*.md` returns the *File ignored because of a matching

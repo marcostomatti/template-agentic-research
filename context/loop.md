@@ -151,6 +151,24 @@ request and the merge. `nothing-to-commit` is a SUCCESS: a task writing only
 to `.plans/`, `.specs/`, `progress.txt` or `/tmp` legitimately changes no
 tracked file.
 
+The corollary bites a whole family of tasks: where the deliverable IS a
+`.plans/` measurements section, neither a commit stat nor a ticked tracker
+box is evidence the section was written. Before appending a new one, grep
+the measurements file for the PRIOR task's own COMMAND STRING — the heading
+numbers stay contiguous across a gap, so reading them makes a file with a
+hole in it look complete.
+
+**Check for a PRIOR ATTEMPT in BOTH shapes before starting a scoped task.**
+It is either uncommitted in the WORKING TREE, or already COMMITTED at the
+branch tip — and the second leaves a clean tree with the task reading as
+untouched, its only tell being the tip commit's SUBJECT against the task
+sentence. Re-drive one leg per claim the prior note makes: case COUNTS
+drift where error CODES re-drive as written. The uncommitted shape is
+visible ONLY in the session-start `git status`, so capture that BEFORE
+editing — `git add -A` otherwise bundles the leftover into a commit whose
+subject describes only the current work, and the repair is two commits with
+their own accurate subjects.
+
 Deriving the commit's conventional-commit TYPE from the task sentence needs
 a BOUNDED window, not a keyword search: every module task in this tree ends
 `plus its TSDoc and colocated unit tests`, so an unbounded search for the

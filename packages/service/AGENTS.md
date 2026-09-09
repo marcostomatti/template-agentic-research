@@ -40,7 +40,7 @@ in `.claude/skills/` and are pointed to from the `context/` pages below.
 One page per tag, each the authority for its own subject; read the page your
 task touches. The pointers below are plain paths on purpose — in the `@`
 import form a `CLAUDE.md` uses, an agent that read this map would pull all
-eight pages in with it and the split would save nothing.
+nine pages in with it and the split would save nothing.
 
 - `context/pipeline.md` — where the pipeline design is written down
   (`ARCHITECTURE.md`, `docs/architecture/`), the two rules binding every
@@ -50,6 +50,9 @@ eight pages in with it and the split would save nothing.
   logger; the doc, wrap-width and derived-figure laws; the two layout maps
   and the discharge sweep a new row owes; and the store/port rules the db
   layer rests on.
+- `context/local-stack.md` — the compose stack this package stands up
+  (`postgres` plus the profiled `ar-n8n`), what its wrapper scripts prove
+  and what they cannot, and how to read the n8n instance's own state.
 - `context/control-plane.md` — the `/_control` surface `createService`
   mounts, what it exposes, and each point this fork diverges from the
   template it is vendored from.
