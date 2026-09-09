@@ -10,7 +10,13 @@ The build landed with that first workflow, which is what makes the rules
 below a description of what runs rather than a plan:
 `bun run build:workflows` reads every file here, and
 `tests/invariants/workflows.test.ts` holds the set-wide invariants against
-what it wrote.
+what it wrote. One set-wide property reaches outside that tree and lives
+in its own file: `tests/invariants/workflow-credentials.test.ts` collects
+every credential these sources bind and holds it set-equal against the
+roster the local bootstrap creates in `scripts/n8n-credentials.ts`, so a
+node added here and bound to a third credential reddens instead of
+importing, activating and publishing cleanly onto an instance that never
+created it.
 
 Phase numbers throughout refer to the 7-phase sequencing in the parent
 design, `.specs/2026-08-19-research-pipeline-port.md` §7.

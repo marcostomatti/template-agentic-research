@@ -201,6 +201,13 @@ export interface CredentialRosterEntry {
  * being able to report: a workflow that gained a node bound to a
  * third credential is a workflow this bootstrap cannot arm, and a
  * roster derived from it would report a clean run.
+ *
+ * Where that disagreement IS reported is
+ * `tests/invariants/workflow-credentials.test.ts`, which holds this
+ * array set-equal against the triples every built artifact binds and
+ * names the difference in both directions. So an entry edited here
+ * is an entry some canvas has to bind, and an entry removed is one
+ * no canvas may.
  */
 export const CREDENTIAL_ROSTER: readonly CredentialRosterEntry[] = [
   {
