@@ -1,10 +1,12 @@
 ## The ralph loop
 
-`tools/ralph` is the agent task loop: `bun run ralph plan/start/usage/effort`
-from the repo root, with plans and trackers in the gitignored `.plans/`.
-This page is the authority for the loop's own architecture — what each
-module owns, what the loop does per task, and which of its literals are
-copied into a second file that nothing ties back to the first.
+The ralph loop's source code lives in the `@open-tomato/rafa` package
+(`src/` directory). The loop runs via `bun run ralph` (aliased as `rafa` in
+`package.json`), invoked as `bun run ralph plan/start/usage/effort` from
+the repo root; plans and trackers live in the gitignored `.plans/`. This
+page documents the loop's architecture — what each module owns, what the
+loop does per task, and which of its literals are copied into a second file
+that nothing ties back to the first.
 
 **The loop's own code is frozen at PROCESS LAUNCH.** Node loads the module
 graph once, so a task that lands a change to `start.ts` or anything it
@@ -23,21 +25,21 @@ before its `while` loop and re-reads only the TRACKER per iteration. An
 edit to the injected prompt or to the plan text takes effect on the next
 `ralph start`; a tracker edit is visible immediately. A task can tell which
 generation dispatched it by holding the instructions in its own injected
-prompt against the tracked `tools/ralph/PROMPT.md` — read the INJECTED copy
-as the authority for what that session must do itself.
+prompt against the tracked `@open-tomato/rafa/src/PROMPT.md` — read the
+INJECTED copy as the authority for what that session must do itself.
 
 ### Module map
 
 | Module | What it owns, and the seam a test drives |
 |---|---|
-| `ralph.ts` | The CLI dispatcher. EXECUTES on import (a top-level `switch` over `process.argv`), so nothing unit-tests it by importing it; the seams are the subcommand modules' default exports, uniformly `(args: string[]) => Promise<void>`. Two levels deep for `effort collect` / `effort report`, with `HELP` and `isHelpRequest` shared by both levels. |
-| `start.ts` | The loop. SAFE to import (module scope computes a `__dirname` and one `let`), but `start()` itself spawns Claude, so every per-task decision has to be lifted out of it to be testable: `buildTaskPrompt`, `dispatchTask`, `commitFinishedTask`, `maybeCompactProgress`. |
-| `utils/claude.ts` | The ONE door onto the CLI. `runClaude(prompt, flags?, spawn?)` keeps the no-flags call shape byte-for-byte, `claudeArgs` is the pure argv seam, `CLAUDE_BASE_ARGS` is the `-p` + `--dangerously-skip-permissions` pair no declaration can reach. |
-| `utils/commit.ts` | Staging and committing a finished task. `commitTaskWork(options)` takes a `runGit` seam; `deriveCommitSubject` / `buildCommitMessage` are the pure derivation; `stageAllArgs` / `stagedChangesArgs` / `commitArgs` / `headShaArgs` are exported argv. |
-| `utils/declaration.ts` | The trailing routing block on a task line. `parseTaskDeclaration` answers the text with the block removed plus the record, `resolveDeclarationFlags` maps it onto CLI flags. |
-| `utils/progress.ts` | Whether `progress.txt` is due for compaction, from a byte size and a task counter alone — the file's CONTENT never reaches the decision or a log line. |
-| `utils/tracker.ts` | `findNextTask` / `updateTrackerLine`. Both survive a declaration block unchanged: `findNextTask` hands it through inside `taskInfo.task`, and a ticked line differs from its pre-tick spelling in exactly `- [ ]` -> `- [x]`. |
-| `effort/` | The cost pipeline: `session-log.ts` (streaming JSONL reader), `classify.ts` (session kind from its first enqueue), `attribution.ts` (branch -> plan stub, enqueue -> task text), `store.ts` (append-only NDJSON), `commits.ts` (one row per commit), `collect.ts` (the orchestrator), `report.ts` (per-plan rollup). |
+| `@open-tomato/rafa/src/ralph.ts` | The CLI dispatcher. EXECUTES on import (a top-level `switch` over `process.argv`), so nothing unit-tests it by importing it; the seams are the subcommand modules' default exports, uniformly `(args: string[]) => Promise<void>`. Two levels deep for `effort collect` / `effort report`, with `HELP` and `isHelpRequest` shared by both levels. |
+| `@open-tomato/rafa/src/start.ts` | The loop. SAFE to import (module scope computes a `__dirname` and one `let`), but `start()` itself spawns Claude, so every per-task decision has to be lifted out of it to be testable: `buildTaskPrompt`, `dispatchTask`, `commitFinishedTask`, `maybeCompactProgress`. |
+| `@open-tomato/rafa/src/utils/claude.ts` | The ONE door onto the CLI. `runClaude(prompt, flags?, spawn?)` keeps the no-flags call shape byte-for-byte, `claudeArgs` is the pure argv seam, `CLAUDE_BASE_ARGS` is the `-p` + `--dangerously-skip-permissions` pair no declaration can reach. |
+| `@open-tomato/rafa/src/utils/commit.ts` | Staging and committing a finished task. `commitTaskWork(options)` takes a `runGit` seam; `deriveCommitSubject` / `buildCommitMessage` are the pure derivation; `stageAllArgs` / `stagedChangesArgs` / `commitArgs` / `headShaArgs` are exported argv. |
+| `@open-tomato/rafa/src/utils/declaration.ts` | The trailing routing block on a task line. `parseTaskDeclaration` answers the text with the block removed plus the record, `resolveDeclarationFlags` maps it onto CLI flags. |
+| `@open-tomato/rafa/src/utils/progress.ts` | Whether `progress.txt` is due for compaction, from a byte size and a task counter alone — the file's CONTENT never reaches the decision or a log line. |
+| `@open-tomato/rafa/src/utils/tracker.ts` | `findNextTask` / `updateTrackerLine`. Both survive a declaration block unchanged: `findNextTask` hands it through inside `taskInfo.task`, and a ticked line differs from its pre-tick spelling in exactly `- [ ]` -> `- [x]`. |
+| `@open-tomato/rafa/src/effort/` | The cost pipeline: `session-log.ts` (streaming JSONL reader), `classify.ts` (session kind from its first enqueue), `attribution.ts` (branch -> plan stub, enqueue -> task text), `store.ts` (append-only NDJSON), `commits.ts` (one row per commit), `collect.ts` (the orchestrator), `report.ts` (per-plan rollup). |
 
 ### The per-task tail
 
@@ -75,17 +77,19 @@ task's, under a subject describing something else. See
 
 The loop injects FIVE prompt shapes and each literal lives in exactly one
 place: the task prompt, `preserveProgress`, `repairPullRequest` and the
-compaction prompt in `start.ts`, plan generation at `plan-prompt.md` line 1.
+compaction prompt in `@open-tomato/rafa/src/start.ts`, plan generation at
+`@open-tomato/rafa/src/plan-prompt.md` line 1.
 
-**The FIRST LINE of each is a classifier key.** `effort/classify.ts` matches
-each kind on a prefix, so a bullet added ABOVE line 1 re-buckets every later
-session of that kind as residue. Nothing enforces it: the drift guard in
-`classify.test.ts` is `source.includes(shape.prefix)` over the whole file,
-so a prepend keeps it green (measured — two lines planted above
-`plan-prompt.md` line 1 left all 34 cases passing). Assert line 1 EXPLICITLY
-inside any script editing an injected prompt. For a prompt built by an
-exported FUNCTION the hole is closable in four lines: call the real builder
-from the classifier's own test and assert `prompt.startsWith(shape.prefix)`.
+**The FIRST LINE of each is a classifier key.**
+`@open-tomato/rafa/src/effort/classify.ts` matches each kind on a prefix,
+so a bullet added ABOVE line 1 re-buckets every later session of that kind
+as residue. Nothing enforces it: the drift guard in `classify.test.ts` is
+`source.includes(shape.prefix)` over the whole file, so a prepend keeps it
+green (measured — two lines planted above `plan-prompt.md` line 1 left all
+34 cases passing). Assert line 1 EXPLICITLY inside any script editing an
+injected prompt. For a prompt built by an exported FUNCTION the hole is
+closable in four lines: call the real builder from the classifier's own test
+and assert `prompt.startsWith(shape.prefix)`.
 
 Two consequences worth knowing before editing one. Adding a shape is never a
 one-file change — a fifth shape landed without a fifth entry in
@@ -96,22 +100,23 @@ the source text, so a containment guard over the whole first line fails
 while the prompt is fine — assert a fragment that stops before the first
 backtick.
 
-`start.ts` must keep spelling `Your scoped task is: ` itself however the
-tail is refactored: the drift guard reads that file's source, so hoisting
-the prefix into a sibling module reds it.
+`@open-tomato/rafa/src/start.ts` must keep spelling `Your scoped task is: `
+itself however the tail is refactored: the drift guard reads that file's
+source, so hoisting the prefix into a sibling module reds it.
 
 ### The task declaration
 
 A task line may end in a brace block resolving to CLI flags —
 `{agent=... model=... effort=... tools=...}`. The grammar is documented in
-`tools/ralph/plan-prompt.md` and `.claude/skills/dev-planner/SKILL.md`, and
-`context/workflow.md` carries the task-shape to agent routing table it draws
-from. Four rules keep a brace a task WROTE ABOUT from being read as a
-declaration, and the first three all exist in this tree's own plans:
-anchored at end of text, no nested braces, at least one RECOGNISED key, and
-not the whole text. Nothing throws — an unusable value lands in `issues` and
-emits no flag, and an unrecognised KEY is retained in `extras`, which is
-what lets the grammar grow without reddening older plans.
+`@open-tomato/rafa/src/plan-prompt.md` and
+`.claude/skills/dev-planner/SKILL.md`, and `context/workflow.md` carries
+the task-shape to agent routing table it draws from. Four rules keep a brace
+a task WROTE ABOUT from being read as a declaration, and the first three
+all exist in this tree's own plans: anchored at end of text, no nested
+braces, at least one RECOGNISED key, and not the whole text. Nothing throws
+— an unusable value lands in `issues` and emits no flag, and an
+unrecognised KEY is retained in `extras`, which is what lets the grammar
+grow without reddening older plans.
 
 An `agent` outranks `model`, `effort` and `tools`: the three stay on the
 record and `ResolvedFlags.suppressed` names them. Documenting that rule
@@ -139,12 +144,13 @@ cannot be taken back out of.
 ### What the LOOP owns rather than the session
 
 Asserted in five TRACKED places that drift independently and that no test
-reads: `tools/ralph/PROMPT.md`, `tools/ralph/plan-prompt.md`'s RUNNER
-bullet, the boundaries section of `.claude/agents/loop-implementer.md`, the
-tracker sentence in `.claude/skills/dev-planner/SKILL.md`, and
-`context/workflow.md`. A `(loop|runner)` near-`owns` sweep finds four of the
-five and misses the workflow one, which spells the same fact as what the
-last stage DOES — so sweep that boundary by SUBJECT.
+reads: `@open-tomato/rafa/src/PROMPT.md`,
+`@open-tomato/rafa/src/plan-prompt.md`'s RUNNER bullet, the boundaries
+section of `.claude/agents/loop-implementer.md`, the tracker sentence in
+`.claude/skills/dev-planner/SKILL.md`, and `context/workflow.md`. A
+`(loop|runner)` near-`owns` sweep finds four of the five and misses the
+workflow one, which spells the same fact as what the last stage DOES — so
+sweep that boundary by SUBJECT.
 
 The loop owns staging and committing each finished task, the push, the pull
 request and the merge. `nothing-to-commit` is a SUCCESS: a task writing only
@@ -190,11 +196,11 @@ while the thing it names is reliably a markdown file.
 ### The effort stack
 
 The store is append-only NDJSON under a gitignored `.ralph/effort/`, and
-`openEffortStore(path, keyOf)` binds a file to ONE key projection — the set
-a collector SKIPS by and the set an append DEDUPES by must be the same
-projection, or the store grows a duplicate per run while looking like it
-works. `effortStorePath(root, kind)` is the only place `.ralph/effort` is
-spelled.
+`openEffortStore(path, keyOf)` (in `@open-tomato/rafa/src/effort/store.ts`)
+binds a file to ONE key projection — the set a collector SKIPS by and the
+set an append DEDUPES by must be the same projection, or the store grows a
+duplicate per run while looking like it works. `effortStorePath(root, kind)`
+is the only place `.ralph/effort` is spelled.
 
 Three properties to know before quoting a figure from it:
 
@@ -210,10 +216,10 @@ Three properties to know before quoting a figure from it:
   every desktop and probe session too.
 
 `git`'s approxidate resolves an UNREADABLE `--since` to NOW rather than
-failing, so a typo collects zero rows and exits 0. `collect.ts` resolves
-such a value with `Date.parse` and refuses what it cannot read; the
-capability lost is git's relative forms, and the alternative is a silent
-empty run.
+failing, so a typo collects zero rows and exits 0.
+`@open-tomato/rafa/src/effort/collect.ts` resolves such a value with
+`Date.parse` and refuses what it cannot read; the capability lost is git's
+relative forms, and the alternative is a silent empty run.
 
 ### The branch rule, and what telemetry can see
 
@@ -236,14 +242,14 @@ convention.
 
 **Every prompt the loop dispatches carries a plan stamp.** An HTML
 comment, `<!-- ralph:plan=<stub> -->`, APPENDED to the prompt and never
-prepended: `effort/classify.ts` buckets a session by
+prepended: `@open-tomato/rafa/src/effort/classify.ts` buckets a session by
 `content.startsWith(...)` over the whole prompt, so one line above the
 body re-buckets all five shapes as `other` while that module's own
-drift guard stays green. `utils/plan-stamp.ts` owns the format and
-`attribution.ts` reads it as the FIRST resolution tier, ahead of the
-branch, which is what makes attribution independent of where a run
-happened. A stamp naming a plan the store does not know is ignored
-rather than trusted.
+drift guard stays green. `@open-tomato/rafa/src/utils/plan-stamp.ts` owns
+the format and `@open-tomato/rafa/src/effort/attribution.ts` reads it as
+the FIRST resolution tier, ahead of the branch, which is what makes
+attribution independent of where a run happened. A stamp naming a plan the
+store does not know is ignored rather than trusted.
 
 **A hand change on main is outside telemetry by design.** The effort
 store records what the LOOP dispatched; a patch, a merge-conflict
@@ -255,9 +261,10 @@ cost.
 
 ### Testing the loop
 
-- The root vitest `include` is `tools/**/*.test.ts`, so a test COLOCATED
-  beside a module under `tools/` is collected with no config change and the
-  root suite's totals move by exactly that file.
+- Tests for the loop live alongside the source in
+  `@open-tomato/rafa/src/**/*.test.ts`. The root vitest `include` includes
+  `tools/**/*.test.ts` for tools-local tests; loop tests run as part of the
+  rafa package's own test suite.
 - The root `tsconfig.json` EXCLUDES `**/*.test.ts`, so a test file is
   LINTED but never type-checked. The repair is two commands: a
   `zz-tmp-*.json` at the repo root extending `./tsconfig.json` with
