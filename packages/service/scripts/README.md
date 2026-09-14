@@ -107,6 +107,22 @@ goes through a fetch handed in, so
 stub and reads each request back off it. Nothing in `n8n-client.ts` is
 called: its calls are made with a key, and these are made to get one.
 
+`migration-ledger.ts` is a half with no command above it yet. It holds
+drizzle's two records of a schema and nothing that changes either: the
+journal under `drizzle/meta/`, read off disk; the ledger a database
+keeps in `drizzle.__drizzle_migrations`, read with one `SELECT` sent
+over a client handed in; and a pure comparison naming the journal tags
+the ledger holds no row for, the ledger rows the journal carries no tag
+for, and the rows applied out of journal order. The two readers were
+written for the live suite and moved here, so that a script reading a
+deployment's ledger names a row the way
+`tests/live/schema.live.test.ts` names one of `ar_live`'s, and
+`tests/live/live-postgres.ts` re-exports them rather than keeping a
+copy. It imports no migrator, which keeps it clear of the second engine
+the paragraph below rules out, and
+`tests/scripts/migration-ledger.test.ts` drives all three with no
+database.
+
 Database migrations stay drizzle's end to end (`drizzle/`,
 `drizzle.config.ts`, `bun run db:generate` / `db:migrate`): a script here
 that also moved schema would be a second engine. `scaffold.ts`'s
