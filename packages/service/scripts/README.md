@@ -63,10 +63,11 @@ different ones; `deploy-external.ts` and `activate-workflows.sh` read it,
 and so does `deployment-verdict.ts`, set out below.
 `n8n-client.ts` is the half that opens a socket and wants the key: every
 keyed call this package makes against an instance, and the refusal for a
-reply that is not a success. `deploy-external.ts`, `audit-workflows.ts`
-and `panic-external.ts` are the three commands that call in, and
+reply that is not a success. `deploy-external.ts`, `audit-workflows.ts`,
+`panic-external.ts` and `read-deployment.ts` are the four commands that
+call in, the last of them through the listing alone, and
 `activate-workflows.sh` is the one that does not, activation going
-through the CLI inside the container rather than over the API. The three
+through the CLI inside the container rather than over the API. The four
 that call in also share one refusal: `requireInstance` in
 `deploy-external.ts` is where the two settings become something a call
 can be made with, so none of them can make a request that has not been
@@ -108,8 +109,9 @@ goes through a fetch handed in, so
 stub and reads each request back off it. Nothing in `n8n-client.ts` is
 called: its calls are made with a key, and these are made to get one.
 
-`migration-ledger.ts` is a half with no command above it yet. It holds
-drizzle's two records of a schema and nothing that changes either: the
+`migration-ledger.ts` is a half, and `read-deployment.ts`, set out
+below, is the reader above it. It holds drizzle's two records of a
+schema and nothing that changes either: the
 journal under `drizzle/meta/`, read off disk; the ledger a database
 keeps in `drizzle.__drizzle_migrations`, read with one `SELECT` sent
 over a client handed in; and a pure comparison naming the journal tags
@@ -124,8 +126,9 @@ the paragraph below rules out, and
 `tests/scripts/migration-ledger.test.ts` drives all three with no
 database.
 
-`deployment-verdict.ts` is a half with no command above it yet either.
-It holds what a verification of an external-mode deployment makes of
+`deployment-verdict.ts` is the half `read-deployment.ts` hands its
+readings to. It holds what a verification of an external-mode deployment
+makes of
 its readings, and takes none of them: a verdict per leg — the
 instance's readiness status, its workflow listing against the workflow
 sources, a migration comparison, and the `llm` connector projection —
@@ -142,6 +145,28 @@ a deployment answered through `maskControlBytes` so a workflow name
 cannot rewrite the terminal printing its verdict, and prints no
 connector value. `tests/scripts/deployment-verdict.test.ts` drives
 every verdict from literals.
+
+`read-deployment.ts` is the reader above both, and a half of the kind
+`scratch-instance.ts` is: it carries the `INVOKED_AS_CLI` block, no
+`package.json` script names it, and it is run by path, one process per
+leg — `bun scripts/read-deployment.ts <leg>`, the leg being `instance`,
+`workflows`, `schema` or `connector`. Each takes its one reading, hands
+it to the verdict of the same name, prints that verdict's lines and
+exits 0 healthy, 1 unhealthy or 2 unreadable. Every leg is behind
+`requireInstance`, the two database legs included, so an unset
+`AR_N8N_URL` or `AR_N8N_API_KEY` exits 2 before any request, statement
+or connection, and so does a command line naming no single leg. It
+sends `GET` requests and `SELECT` statements and nothing else: readiness
+at the instance root with no key, the paged listing through
+`listWorkflows`, the ledger `SELECT` `migration-ledger.ts` sends, and one
+`SELECT` of the `llm` connectors, whose rows it hands to
+`projectModelConnector`. Whatever a reading throws becomes an unreadable
+leg with a reason naming no address, because `pg`'s message for a
+refused connection carries the host and port it dialled. No leg probes
+the model server, and with `DATABASE_URL` unset the two database legs
+read the compose default rather than refusing.
+`tests/scripts/read-deployment.test.ts` records every method and every
+statement off the fetch and the database client a run is handed.
 
 Database migrations stay drizzle's end to end (`drizzle/`,
 `drizzle.config.ts`, `bun run db:generate` / `db:migrate`): a script here

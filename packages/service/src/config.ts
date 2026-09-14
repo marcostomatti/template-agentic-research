@@ -30,7 +30,15 @@ const EnvSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
-  /** Postgres — the default datastore. The fallback matches docker-compose. */
+  /**
+   * Postgres — the default datastore. The fallback matches docker-compose.
+   *
+   * `scripts/read-deployment.ts` reads it too, for its `schema` and
+   * `connector` legs, each sending one `SELECT`. The fallback is the one
+   * thing that reader cannot see past: with nothing set, those legs read
+   * the compose dev database rather than refusing, so a verification
+   * exports the value for the deployment it reads.
+   */
   DATABASE_URL: z
     .string()
     .default('postgresql://ar:ar@localhost:5432/ar'),
@@ -89,6 +97,11 @@ const EnvSchema = z.object({
    * present but blank as nothing set. The running service never opens it at
    * all, which is what makes the entry optional: unset, it leaves a boot
    * exactly as it was.
+   *
+   * `scripts/read-deployment.ts` reads it as well, refusing on it through
+   * the same pre-flight before any of its legs reads anything. It asks for
+   * readiness at the instance root, taking the API path off a value that
+   * carries one, and lists workflows under the API.
    */
   AR_N8N_URL: z.string().optional(),
   /**
@@ -98,6 +111,12 @@ const EnvSchema = z.object({
    * floor is a demand this schema is in a position to make, while a bound
    * written here would refuse whatever the instance decided a key of its own
    * looks like.
+   *
+   * `scripts/read-deployment.ts` sends it on the workflow listing and on
+   * nothing else, the readiness route taking no key. The listing is the one
+   * route it needs a scope for, and `workflow:list` alone is enough: n8n
+   * 2.15.1 answers a key minted with only that scope 200 on the listing and
+   * 403 on a deactivation, refused on the scope before any handler runs.
    */
   AR_N8N_API_KEY: z.string().optional(),
   /**

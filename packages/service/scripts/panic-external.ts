@@ -58,7 +58,7 @@
  * something a call can be made with, and this command reaches it
  * the way an audit does rather than spelling a second refusal:
  * `AR_N8N_URL` and `AR_N8N_API_KEY` are one pair, an operator who
- * has set neither has configured none of the three commands that
+ * has set neither has configured none of the four commands that
  * want them, and a refusal naming one of two buys a second run to
  * learn the other. Nothing is requested before it clears, which is
  * a property of the signature — every call in `n8n-client.ts`
