@@ -221,9 +221,20 @@ actually DO when read closely, measured against the pinned n8n 2.15.1 image.
   and the restart read `AR_N8N_CONTAINER`, each script taking `ar-n8n`
   only as its default. It still wants `AR_LLM_API_KEY` and
   `AR_LLM_ENDPOINT` from `.env` or the shell, which the env file does not
-  carry, and it leaves `ar-dispatch`'s hourly Schedule Trigger armed on
-  `ar-scratch-n8n` until the scratch stack is taken down. Only step 1 was
-  measured here, as a dry run; the rest is what each script reads.
+  carry. Measured from a shell that sourced the file, a full run exited 0:
+  step 1's stderr named only the two scratch containers, step 8 restarted
+  `ar-scratch-n8n`, and the dev project's two containers, already stopped,
+  stayed `exited` with their `State.StartedAt` and volumes unmoved. The
+  same run with `AR_LLM_ENDPOINT` unset imported both credentials and all
+  six workflows, then refused at step 6 and exited 1 before activating
+  anything, which leaves an UNARMED instance that
+  `scripts/verify-external.sh` reads as unhealthy. A complete run leaves
+  `ar-dispatch`'s hourly Schedule Trigger armed on `ar-scratch-n8n` until
+  the scratch stack is taken down, so an execution count taken either side
+  of anything moves on the hour by itself. Attribute a change by its
+  `execution_entity` rows (`workflowId`, `mode`, `startedAt`), read from
+  the instance's sqlite opened read-only inside `ar-scratch-n8n`: the
+  minted key carries `workflow:list` alone, no scope over executions.
 - **`down` removes the file and not a shell's copy of it.** A shell that
   sourced the file keeps all six settings after the teardown, so its
   compose calls go on addressing an `ar-scratch` project that holds

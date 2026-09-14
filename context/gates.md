@@ -446,9 +446,15 @@ matching anything prints exactly the same five lines.
   the file and DUMP the parsed structure rather than reading the exit code,
   because a comment-only mistake and a mis-indented key both parse.
 - Every `.sh` in the tree is a FOURTH member of that set: ESLint has no
-  shell plugin, nothing type-checks or tests a script, and `shellcheck` is
+  shell plugin, nothing type-checks or runs a script, and `shellcheck` is
   INSTALLED here while no gate runs it. So run it by hand on any new or
-  edited `.sh` -- it is the only thing that reads them.
+  edited `.sh`. It is not the only reader: a case may open a script as
+  TEXT, and two do, so `test` gates a structural claim about those two
+  files and behaviour in none of them --
+  `packages/service/tests/invariants/compose-service.test.ts` holds
+  literals in `packages/service/scripts/activate-workflows.sh`, and
+  `packages/service/tests/invariants/verify-external-readonly.test.ts`
+  holds what `packages/service/scripts/verify-external.sh` invokes.
 - The tracked `.claude/` tree is the THIRD member, and it is IGNORED rather
   than un-targeted: an explicit-path `bun x eslint -f json
   .claude/skills/**/*.md` returns the *File ignored because of a matching
