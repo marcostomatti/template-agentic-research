@@ -30,7 +30,13 @@ red package never masks another and a single run gives the whole picture.
   one: both fan-outs are exactly five lines, and the root `tsc --noEmit`
   echo occupies the same slot `lint:all` fills with `$ eslint .`. Classify
   every line, because an unaccounted line IS the tool's own output, and that
-  is the only reading that makes "prints nothing" a measurement.
+  is the only reading that makes "prints nothing" a measurement. Run ALONE,
+  a green root `bun run lint` or `bun run check-types` is that echo and
+  nothing else — one line on stderr, zero bytes on stdout — so the LAST
+  LINE a close-out task is asked to record reads `$ eslint .` or
+  `$ tsc --noEmit`, exactly as a run that opened no files would. The exit
+  code is the verdict there, and the file set (`-f json`,
+  `--listFilesOnly`, per `gates.md`) is the liveness reading.
 - CORRECTION to "both fan-outs are exactly five lines": that is true of
   `check-types:all` and NOT of `lint:all`, because ESLint WARNINGS leave
   the exit code at 0. Measured on a clean tree, `lint:all` came back at

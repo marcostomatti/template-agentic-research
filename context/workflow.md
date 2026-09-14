@@ -42,8 +42,13 @@ line), anything else means it never started. Read the first line, never
 leaves STDOUT at ZERO bytes rather than writing a non-OID first line, so
 a stdout-only capture reads `head -1` as the empty string and the branch
 reports as unclassifiable. Fold `2>&1` into the capture, or key the leg
-on stdout being zero bytes. A CLEAN reading is then a zero-hit shape
-owing a liveness control,
+on stdout being zero bytes. The COMPOUND form plans here prescribe,
+`git fetch origin main && git merge-tree ...` under one `2>&1`, puts the
+fetch's own stderr FIRST — `From <remote>`, the `-> FETCH_HEAD` line, and
+a `main -> origin/main` line only when the fetch moved the ref — so
+`head -1` reads a clean merge as never started. Take the first line
+matching `^[0-9a-f]{40}$`, or re-run merge-tree alone. A CLEAN reading is
+then a zero-hit shape owing a liveness control,
 and that control needs nothing written into the shared object database
 (which matters with a parallel leg on the same `.git`): `git init` a
 `/tmp` dir, commit a three-line file, branch twice off that base
@@ -268,6 +273,13 @@ reading that surfaces the gap at all is the `pretest` stamp line inside the
 test capture, whose sha is the tree the artifacts were built from; without
 it a close-out silently reports a battery against the wrong commit. Say
 which sha each row was taken at rather than quoting one for all three.
+The gap opens only when a LATER task commits: a close-out task whose whole
+output lands in `.plans/` or `progress.txt` commits nothing, because the
+loop's `git add -A` stages no gitignored path, and the loop moves on to
+the next task regardless. So an earlier note's sha can stay HEAD through
+the whole close-out stage (measured: two close-out notes, one sha, and it
+was the branch tip) — confirm with `git rev-parse HEAD` and an empty
+`git status --porcelain` before reusing it.
 
 **Two markdown faults bite close-out prose specifically**, and no width
 check, link sweep or gate reports either. A bare vertical bar inside a TABLE

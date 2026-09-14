@@ -167,7 +167,14 @@ drift where error CODES re-drive as written. The uncommitted shape is
 visible ONLY in the session-start `git status`, so capture that BEFORE
 editing — `git add -A` otherwise bundles the leftover into a commit whose
 subject describes only the current work, and the repair is two commits with
-their own accurate subjects.
+their own accurate subjects. The same `git add -A` strands a plan's
+context across RUNS: an edit the context calls "already in the working
+tree" rides into the FIRST task commit of the run that saw it, on that
+run's branch, so a replay of the plan on a fresh branch cut from `main`
+starts without it (measured: the `ralph` script a context said was
+already repointed came back at its pre-cutover body). `git show --stat`
+the earlier run's first task commit and restore what it carried before
+the first task.
 
 Deriving the commit's conventional-commit TYPE from the task sentence needs
 a BOUNDED window, not a keyword search: every module task in this tree ends
