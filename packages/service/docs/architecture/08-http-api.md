@@ -504,7 +504,7 @@ nothing under any of them, and none of its five prefixes —
 collides with one.
 
 `GET /example` sat in that list until 2026-09-06, when q14 removed
-it together with `src/routes/example.ts` — the demonstrator this
+it together with <!-- doc-links-skip: src/routes/example.ts -- removed in q14 -->`src/routes/example.ts` — the demonstrator this
 package inherited from its template, which held nothing else and
 took the directory with it. Three reasons, argued at the head of
 `register` in `src/index.ts`: the service now carries a real
@@ -640,7 +640,7 @@ Six routers over five prefixes, because neither a prefix nor a
 directory maps one to one onto them. `GET /spend/summary` is served
 from `src/runs/` rather than from a directory of its own: the
 aggregation is over `llm_calls`, that table hangs off `runs`, and a
-`src/spend/` holding one read over somebody else's table would be a
+<!-- doc-links-skip: src/spend/ -- counterfactual path: pattern describes why this directory doesn't exist -->`src/spend/` holding one read over somebody else's table would be a
 directory named for a question rather than for a subject. It is a
 second router in the same directory instead — `spend-routes.ts`
 beside `routes.ts` — so the mount list stays one line per prefix.

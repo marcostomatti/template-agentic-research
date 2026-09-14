@@ -158,11 +158,11 @@ broken prose that every mechanical check passes.
 
 The seam each over-cap file wants is recorded here rather than in the file:
 split the LOADER out of
-`seed.ts` into `scripts/seed-load.ts` (no import cycle, and it leaves
+`seed.ts` into <!-- doc-links-skip: scripts/seed-load.ts -- forward-looking refactor seam -->`scripts/seed-load.ts` (no import cycle, and it leaves
 `seed.ts` a thin entry point — moving `runSeedCli` out instead does cycle,
 since the guard must stay in the file `bun scripts/seed.ts` runs), and
 move `formatPendingTable` / `formatRuling` / `PENDING_COLUMNS` out of
-`approve.ts` into `scripts/approve-render.ts`, re-exported from it. Both
+`approve.ts` into <!-- doc-links-skip: scripts/approve-render.ts -- forward-looking refactor seam -->`scripts/approve-render.ts`, re-exported from it. Both
 follow the `seed-schemas.ts` / `seed-apply.ts` precedent — a bare
 `export * from './<x>.js';` beside the normal import — and a move of that
 size lands as its OWN refactor commit, never alongside new behaviour.

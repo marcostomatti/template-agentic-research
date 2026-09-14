@@ -1,0 +1,79 @@
+# Scratch stack overlay. Merged OVER `docker-compose.yml` and never used
+# alone: it declares no image, so on its own it is not a stack at all.
+#
+#   docker compose -p ar-scratch \
+#     -f docker-compose.yml -f docker-compose.scratch.yml \
+#     --profile n8n up -d --wait n8n
+#
+# EVERY call names the project with `-p ar-scratch` AND both files, `down`
+# and `rm` above all. The base project's `ar_n8n_data` volume holds the dev
+# n8n's generated encryption key, and a `down -v` that reaches it destroys
+# that key with nothing to restore it from.
+#
+# What a second compose PROJECT does not give you is a second STACK. A
+# `container_name` fixed in the base follows the copy into any project, and
+# an overlay's `ports` and `volumes` lists are APPENDED to the base's rather
+# than replacing them. So this file renames both containers, and it tags
+# every list it replaces. Measured with compose v2.31.0, untagged, the
+# merged stack still published dev `5432` and `127.0.0.1:5678` and still
+# mounted both named volumes. Tagged, only the lines below remained.
+#
+# `tests/invariants/scratch-stack.test.ts` holds this file against
+# `docker-compose.yml`. It reads each node's TAG, because a YAML reader that
+# drops unknown tags hands back exactly the list an untagged overlay holds.
+
+services:
+  postgres:
+    container_name: ar-scratch-postgres
+
+    # `PGPORT` and not `command: postgres -p 55432`. The server takes its
+    # port from `PGPORT`, and so does every client run inside this
+    # container: the healthcheck, and any `docker exec ... psql`.
+    # Measured on this image, the server listened on 55432 and answered
+    # nothing on 5432. A `psql` with `PGPORT` unset looked for the 5432
+    # socket and failed. So a `-p` flag on the server alone leaves every
+    # exec'd client dialling a port nothing listens on.
+    #
+    # Why the port moves INSIDE the container at all, where the dev stack
+    # publishes `5432:5432`: `postgresCredentialData` in
+    # `scripts/n8n-credentials.ts` rewrites a loopback host to `postgres`
+    # and KEEPS the URL's port. A scratch URL on `127.0.0.1:55432` becomes
+    # an `ar-postgres` credential dialling `postgres:55432` from inside the
+    # n8n container. With a `55432:5432` mapping, that is a port nothing on
+    # the scratch network listens on.
+    environment:
+      POSTGRES_DB: ar_scratch
+      PGPORT: "55432"
+
+    # Loopback only, where the base publishes dev Postgres on every
+    # interface. `!override` because an untagged list here is APPENDED to
+    # the base's `5432:5432`.
+    ports: !override
+      - "127.0.0.1:55432:55432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ar -d ar_scratch -p 55432"]
+
+    # `!reset` drops the base's `ar_pg_data` mount. An untagged `[]` merges
+    # as nothing and leaves that mount in place. The image itself still
+    # declares `VOLUME /var/lib/postgresql/data`, and this file mounts
+    # nothing over that path. So `up` mints a fresh ANONYMOUS volume there
+    # that no dev container mounts. A `down` without `-v` leaves that
+    # volume behind.
+    volumes: !reset []
+
+  n8n:
+    # The base fixes `ar-n8n`, which would collide with the dev container
+    # whatever `-p` says.
+    container_name: ar-scratch-n8n
+
+    # n8n still listens on 5678 inside its container, which is what the
+    # base healthcheck polls. Only the published half moves.
+    ports: !override
+      - "127.0.0.1:55678:5678"
+
+    # `!reset` drops `ar_n8n_data`. The image declares no `VOLUME`, so
+    # `/home/node/.n8n`, holding the sqlite and a freshly generated
+    # encryption key, lives in the container layer and dies with the
+    # container.
+    volumes: !reset []

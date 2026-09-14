@@ -60,15 +60,18 @@ the root `src/index.tsx`. Styling is variants-only: axes live in
 `<Name>.variants.ts`, call sites pass variants and flags — not class strings.
 
 ## Exports
+<!-- doc-links-skip: @ar/ui/styles.css -- package export, not file path -->
+<!-- doc-links-skip: @ar/ui/theme.css -- package export, not file path -->
+<!-- doc-links-skip: @ar/ui/fonts.css -- package export, not file path -->
 
 | Import | Contents |
 | --- | --- |
-| `components-library` | every component, `cn()` |
-| `components-library/styles.css` | the styles entry: fonts + default theme + component contract + Tailwind `@source` scan |
-| `components-library/theme.css` | the default theme definition alone (semantic variables, light + dark) |
-| `components-library/fonts.css` | the type-face layer alone |
-| `components-library/cache` | browser cache: `useCache`, `QueryProvider`, `defaultQueryClient`, re-exported TanStack Query core |
-| `components-library/cache/server` | server cache: `createServerCache` (Redis cache-aside; `ioredis` optional peer) |
+| `@ar/ui` | every component, `cn()` |
+| `@ar/ui/styles.css` | the styles entry: fonts + default theme + component contract + Tailwind `@source` scan |
+| `@ar/ui/theme.css` | the default theme definition alone (semantic variables, light + dark) |
+| `@ar/ui/fonts.css` | the type-face layer alone |
+| `@ar/ui/cache` | browser cache: `useCache`, `QueryProvider`, `defaultQueryClient`, re-exported TanStack Query core |
+| `@ar/ui/cache/server` | server cache: `createServerCache` (Redis cache-aside; `ioredis` optional peer) |
 
 ## Setup (Tailwind 4 consumers)
 
@@ -77,7 +80,7 @@ exactly the classes the components use. In your Tailwind CSS entry:
 
 ```css
 @import "tailwindcss";
-@import "components-library/styles.css";
+@import "@ar/ui/styles.css";
 ```
 
 That single import brings in, layer by layer:
@@ -90,7 +93,7 @@ That single import brings in, layer by layer:
 | source scan            | `@source`                              | points your Tailwind build at the package's JS so the components' classes are generated              |
 
 ```tsx
-import { Button, Touchable } from 'components-library';
+import { Button, Touchable } from '@ar/ui';
 
 <Button variant="accent" size="lg">Run agent</Button>
 ```
@@ -134,7 +137,7 @@ it.
 Browser (TanStack Query wrapper with stale-while-revalidate defaults):
 
 ```tsx
-import { QueryProvider, useCache } from 'components-library/cache';
+import { QueryProvider, useCache } from '@ar/ui/cache';
 
 // once at the root
 <QueryProvider>{children}</QueryProvider>
@@ -147,7 +150,7 @@ Server (Redis cache-aside; `ioredis` is an optional peer dependency):
 
 ```ts
 import Redis from 'ioredis';
-import { createServerCache } from 'components-library/cache/server';
+import { createServerCache } from '@ar/ui/cache/server';
 
 const cache = createServerCache(new Redis(process.env.REDIS_URL!));
 const value = await cache.get('agents:1', 300, () => fetchAgent('1'));

@@ -110,11 +110,16 @@
   blank-line-separated block.
 - Four more `sharedRules.mjs` behaviours, each invisible until `lint` runs
   and each the likeliest single finding on a new module. `import/order`
-  treats parent (`../x`) and sibling (`./y`) as SEPARATE groups, so a module
-  importing both needs a blank line between them, and within the single
-  `type` group the order is by GROUP first and alphabetical only inside it
-  (a sibling `./store.js` type import sorts BEFORE a parent `../db/index.js`
-  one — the opposite of a string compare). `no-unused-vars` does NOT have
+  treats parent (`../x`) and sibling (`./y`) as SEPARATE groups, so a
+  module importing both needs a blank line between them, and within the
+  single `type` group the order is by GROUP first and alphabetical only
+  inside it (a sibling `./store.js` type import sorts BEFORE a parent
+  `../db/index.js` one — the opposite of a string compare). `no-unused-vars`
+  does NOT have
+  <!-- doc-links-skip: ../x -- illustrative import example -->
+  <!-- doc-links-skip: ./y -- illustrative import example -->
+  <!-- doc-links-skip: ./store.js -- illustrative import example -->
+  <!-- doc-links-skip: ../db/index.js -- illustrative import example -->
   `ignoreRestSiblings` on, so the idiomatic omit-a-key `const { key,
   ...rest } = obj;` is an error. `@stylistic/newline-per-chained-call` is
   `{ ignoreChainWithDepth: 2 }`, so a TWO-deep chain is legal on one line
@@ -152,6 +157,11 @@
   `tests/invariants/*.test.ts` importing a package module AND its own
   SIBLING helper writes THREE value blocks (`vitest`, `../../src/x.js`,
   `./y.js`), parent and sibling being distinct groups.
+  <!-- doc-links-skip: ./x.js -- illustrative import example -->
+  <!-- doc-links-skip: ../http/y.js -- illustrative import example -->
+  <!-- doc-links-skip: ../../src/x.js -- illustrative import example -->
+  <!-- doc-links-skip: ../helpers/y.js -- illustrative import example -->
+  <!-- doc-links-skip: ./y.js -- illustrative import example -->
 - Naming the commits that installed something, for a status banner or a
   close-out, is TWO git readings and neither is a range walk:
   `git log --oneline --diff-filter=A -- <the artifact paths>` names the

@@ -74,7 +74,7 @@
  * is what leaves the refusal for an absent one to this command.
  *
  * Neither the calls nor the projection is written again here.
- * `n8n-client.ts` holds every HTTP call this package makes against an
+ * `n8n-client.ts` holds every keyed call this package makes against an
  * instance and the refusal for a reply that is not a success, three
  * of which a deploy uses; `toApiWorkflow` in `n8n-workflow.ts` cuts a
  * built artifact down to the members the API accepts; this module is
@@ -374,13 +374,13 @@ function isSet(value: string | undefined): value is string {
  * two, and it is why {@link UnconfiguredInstanceError.settings} is
  * a list rather than a name.
  *
- * It is raised for three commands and not one. `audit-workflows.ts`
- * and `panic-external.ts` each reach {@link requireInstance} for the
- * same reason a deploy does and stop on the same refusal, which is
- * why nothing in the message names a deploy or a build: what an
- * operator holding it has to do is the same whichever of the three
- * they ran, and a sentence naming the wrong command would be the one
- * thing in it they could not act on.
+ * It is raised for four commands and not one. `audit-workflows.ts`,
+ * `panic-external.ts` and `read-deployment.ts` each reach
+ * {@link requireInstance} for the same reason a deploy does and stop
+ * on the same refusal, which is why nothing in the message names a
+ * deploy or a build: what an operator holding it has to do is the
+ * same whichever of the four they ran, and a sentence naming the
+ * wrong command would be the one thing in it they could not act on.
  *
  * A distinct class rather than a bare `Error`, so a case covering a
  * deploy that was never configured can pin the refusal to it. The

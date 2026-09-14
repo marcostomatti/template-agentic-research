@@ -49,9 +49,12 @@
  * {@link toApiWorkflow}, and the plan step of `activate-workflows.sh`
  * puts every built artifact through {@link activatableTriggers},
  * sorting the ones an activation would arm from the ones it would
- * leave inactive. `audit-workflows.ts` asks nothing here, judging an
- * instance by what it holds rather than by what it would start, and
- * {@link isActivatableTrigger} is reached through
+ * leave inactive. `deployment-verdict.ts` puts every workflow source
+ * through {@link activatableTriggers} as well, holding a workflow
+ * whose source would arm it to being armed on the instance a
+ * verification reads. `audit-workflows.ts` asks nothing here,
+ * judging an instance by what it holds rather than by what it would
+ * start, and {@link isActivatableTrigger} is reached through
  * {@link activatableTriggers} rather than by a command of its own.
  */
 

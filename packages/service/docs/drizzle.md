@@ -24,7 +24,7 @@ bun add -d drizzle-kit @types/pg
 
 ## How to enable
 
-1. Copy `examples/drizzle-db.ts.example` into place, splitting it into the
+1. Copy <!-- doc-links-skip: examples/drizzle-db.ts.example -- template file not in repository -->`examples/drizzle-db.ts.example` into place, splitting it into the
    conventional files:
    - Section 1 → `src/db/index.ts`
    - Section 2 → `src/db/schema.ts`

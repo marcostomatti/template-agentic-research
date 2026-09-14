@@ -10,9 +10,9 @@ Drop design references here per source mode:
 
 | Mode        | Path                        | Contract |
 | ----------- | --------------------------- | -------- |
-| `bundle`    | `design/bundle/index.html`  | A component-catalog page where each spec renders inside an element with id `prim-<SpecName>`, its live demo in `.prim-body > div:first-child > div:first-child`, and segmented controls (one labeled button per variant value) for `--set key=value`. |
-| `auth`      | `design/pages/auth.html`    | Full-screen artboards: `<section class="screen-card">` per screen, title in the header, the screen rendered inside `.frame > div` at 85% scale (the script neutralizes the scale). |
-| `topbar`    | `design/pages/topbar.html`  | Showcase cards: one `<section>` per card, title in its header, live demo inside a `.check-bg` body. |
+| `bundle`    | `design/bundle/index.html` <!-- doc-links-skip: design/bundle/index.html -- drop-zone directory for design sources --> | A component-catalog page where each spec renders inside an element with id `prim-<SpecName>`, its live demo in `.prim-body > div:first-child > div:first-child`, and segmented controls (one labeled button per variant value) for `--set key=value`. |
+| `auth`      | `design/pages/auth.html` <!-- doc-links-skip: design/pages/auth.html -- drop-zone directory for design sources --> | Full-screen artboards: `<section class="screen-card">` per screen, title in the header, the screen rendered inside `.frame > div` at 85% scale (the script neutralizes the scale). |
+| `topbar`    | `design/pages/topbar.html` <!-- doc-links-skip: design/pages/topbar.html -- drop-zone directory for design sources --> | Showcase cards: one `<section>` per card, title in its header, live demo inside a `.check-bg` body. |
 | `dashboard` | `design/pages/<file>.html`  | Whole-app screens mounting into `#root`; captured full-page, or crop with `--selector`. |
 
 Any static assets a page needs (JS, CSS, images, fonts) can sit next to it —

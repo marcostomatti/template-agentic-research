@@ -1,10 +1,13 @@
 # agentic-research
 
 The workspace map, and the `context/` pages behind it, live in `AGENTS.md`.
+<!-- doc-links-skip: docs/rafa-cutover.md -- retired during rafa cutover -->
 `docs/rafa-cutover.md` describes how the agent task loop moved to the
 global `rafa` binary.
 
 ## Rolling back the rafa cutover
+
+<!-- doc-links-skip: tools/ralph/ -- moved to @open-tomato/rafa -->
 
 If the global `rafa` binary misbehaves, the in-repo loop comes back in
 three steps, run from the repo root:

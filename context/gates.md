@@ -246,6 +246,7 @@ matching anything prints exactly the same five lines.
 - `git ls-files --error-unmatch` gives such a claim a THIRD control the
   fabricated-sibling one cannot: a nonexistent file UNDER a real tracked
   prefix. `packages/webx` exits 1 for the trivial reason, where
+  <!-- doc-links-skip: packages/web/zz-no-such-file.ts -- illustrative test path -->
   `packages/web/zz-no-such-file.ts` exits 1 though its whole directory is
   tracked — which is what says the pathspec resolves to FILES and not to a
   directory prefix that merely exists — and the bare prefix exits 0 by
@@ -300,7 +301,9 @@ matching anything prints exactly the same five lines.
   the PLAN's base (`git merge-base main HEAD`), never against a figure an
   earlier stage recorded — the two disagree by construction. Carry two
   controls: a definitely-absent but scannable path (in NEITHER set, so
-  membership is discriminating) and a binary-allowlist path (`a/b.png`,
+  membership is discriminating) and a binary-allowlist path (
+  <!-- doc-links-skip: a/b.png -- synthetic control path -->
+  `a/b.png`,
   false, so the predicate is not simply answering true for everything).
   That second control is necessarily SYNTHETIC here and saying so is part
   of the reading: ZERO tracked files carry any of the 40
@@ -443,9 +446,15 @@ matching anything prints exactly the same five lines.
   the file and DUMP the parsed structure rather than reading the exit code,
   because a comment-only mistake and a mis-indented key both parse.
 - Every `.sh` in the tree is a FOURTH member of that set: ESLint has no
-  shell plugin, nothing type-checks or tests a script, and `shellcheck` is
+  shell plugin, nothing type-checks or runs a script, and `shellcheck` is
   INSTALLED here while no gate runs it. So run it by hand on any new or
-  edited `.sh` -- it is the only thing that reads them.
+  edited `.sh`. It is not the only reader: a case may open a script as
+  TEXT, and two do, so `test` gates a structural claim about those two
+  files and behaviour in none of them --
+  `packages/service/tests/invariants/compose-service.test.ts` holds
+  literals in `packages/service/scripts/activate-workflows.sh`, and
+  `packages/service/tests/invariants/verify-external-readonly.test.ts`
+  holds what `packages/service/scripts/verify-external.sh` invokes.
 - The tracked `.claude/` tree is the THIRD member, and it is IGNORED rather
   than un-targeted: an explicit-path `bun x eslint -f json
   .claude/skills/**/*.md` returns the *File ignored because of a matching
@@ -573,13 +582,15 @@ matching anything prints exactly the same five lines.
   automated green is `gate:control-bytes`.
 - A markdown file under `tools/` has TWO automated greens, unlike the
   package-root docs: the root `eslint .` pathspec reaches it (measured,
+  <!-- doc-links-skip: tools/ralph/PROMPT.md -- retired during rafa cutover -->
   `tools/ralph/PROMPT.md` present in a 45-entry `-f json` read list at 0
   errors with a fabricated sibling absent) and `gate:control-bytes` opens it
   once tracked. A markdown page at the REPO ROOT is reached the same way
   (measured, `context/tooling.md` in a 54-entry read list at 0 errors).
-- The ROOT `check-types` is almost wholly the old loop. `tsconfig.json`
+- The ROOT `check-types` was configured for the old loop. `tsconfig.json`
   includes `tools`, `*.ts` and `*.mjs` and excludes `packages` and
   `**/*.test.ts`, and that reads 22 files in the repo, 20 of them under
+  <!-- doc-links-skip: tools/ralph/ -- retired during rafa cutover, loop moved to @open-tomato/rafa -->
   `tools/ralph/` (measured at `88faa65`). The other two are
   `tools/control-byte-gate/control-byte-gate.ts` and `vitest.config.ts`,
   so deleting `tools/ralph/` leaves the root `tsc` gating two files, still
@@ -623,7 +634,8 @@ matching anything prints exactly the same five lines.
   control — count what it refused — therefore answers 0 and reports the live
   predicate as dead. Make it live off SYNTHETIC paths through the IMPORTED
   function instead (`x.png`, `LOGO.PNG`, `bun.lockb` false; `Makefile`,
-  `.gitignore`, `a/.eslintrc.json` true), which pins the case-folding and
+  `.gitignore`, <!-- doc-links-skip: a/.eslintrc.json -- synthetic control path -->
+  `a/.eslintrc.json` true), which pins the case-folding and
   dot-at-index-0 branches in the same pass.
 - A "no path on both sides changes answer" leg over a path-only predicate is
   a TAUTOLOGY the moment it is spelled `f(p) !== f(p)`, and it prints a
@@ -632,3 +644,23 @@ matching anything prints exactly the same five lines.
   cross-check on the decomposition is `git diff --name-status -M
   <base>..HEAD`, whose A and D rows must be set-equal to the derived added
   and removed sets (M rows contribute zero by construction).
+- `bun run gate:doc-links` opens every TRACKED `.md` file in the repo and
+  no other document: `git ls-files` filtered on the extension, so the
+  package-root `AGENTS.md` and `README.md` files and the package
+  `context/` pages no lint gate targets are all read, and so is the
+  tracked `.claude/` tree, whose findings print in a section of their own
+  that never moves the exit code. Its read count is the first line it
+  prints, `N tracked document(s)`. Beside the docs it opens each TRACKED
+  `.gitignore`, and only those, as an ignore source, through one
+  `git check-ignore --no-index --verbose` call. Being a tracked-set
+  reader, it fails in OPPOSITE directions on the two halves of a sitting's
+  new work: a doc not yet added is not read at all, the false green
+  `gate:control-bytes` also gives, while a reference to a file created in
+  the same sitting resolves against nothing until that file is added, a
+  false RED naming a path that is right there on disk. The checker's own
+  source, `packages/service/scripts/check-doc-links.ts`, is opened by
+  `@ar/service`'s `lint`, `check-types` and `test` like any file under
+  `packages/service/scripts/`, and no CI job runs the check. The three
+  workflows DO run a gate — the control-byte one, by its file path rather
+  than through its `gate:*` name — so finding no `gate:*` name under
+  `.github/workflows/` is no evidence that CI gates nothing.

@@ -430,7 +430,7 @@ clean tree. Give the run-alone leg the ` RUN  v<version>` banner equality:
 it is a hand-invoked `bun x vitest` against a package-script fan-out, and
 `bun x` resolves a different vitest per working directory.
 
-`tests/helpers/loopback-bind.ts` does NOT exist on this HEAD, so the
+<!-- doc-links-skip: tests/helpers/loopback-bind.ts -- counterfactual: proposed fix location not yet implemented -->`tests/helpers/loopback-bind.ts` does NOT exist on this HEAD, so the
 mitigation is genuinely unreachable rather than merely unverified: `ls
 tests/helpers/` is the one-command check before assuming any
 supertest-bearing work is protected.

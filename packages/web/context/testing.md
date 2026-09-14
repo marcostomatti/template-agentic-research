@@ -22,6 +22,9 @@ no decision the unit runner would have wanted. Anything touching
 `document` at import time crashes the unit runner outright and takes
 its whole file with it.
 
+<!-- doc-links-skip: pages/filters.ts -- package-local path -->
+<!-- doc-links-skip: app-shell/theme.ts -- package-local path -->
+
 Four scripts drive them, and only the first two are ever a gate:
 
 | Script | What it is |

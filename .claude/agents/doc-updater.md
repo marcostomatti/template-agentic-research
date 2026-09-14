@@ -83,8 +83,8 @@ derive which one you have rather than assuming it:
   `@` import form is spelled in exactly two tracked files, `CLAUDE.md`
   and `packages/ui/CLAUDE.md`, both on line 1; an `@`-prefixed pointer
   pulls that page into every turn and undoes the whole saving of the
-  split. `tools/ralph/tests/context-page-imports.test.ts` reads the live
-  maps and is the guard.
+  split. `@open-tomato/rafa/tests/context-page-imports.test.ts` reads the
+  live maps and is the guard.
 - The root, `@ar/service` and `@ar/web` maps are each capped at 80 lines
   and nothing enforces the cap, so count before you finish. A promoted
   finding goes to the `context/` page that owns its subject, never
@@ -106,9 +106,9 @@ file's wrapped lines before searching.
   commit. A stale sentence your change did not touch is reported, not
   repaired.
 - Never commit, never push, never open a pull request, never merge. The
-  loop owns all four, and `tools/ralph/PROMPT.md` states what it does
-  once this session exits cleanly. Leave your work in the tree in a
-  state the pre-commit hooks accept.
+  loop owns all four, and `@open-tomato/rafa/src/PROMPT.md` states what
+  it does once this session exits cleanly. Leave your work in the tree in
+  a state the pre-commit hooks accept.
 - Report what you edited, which greens you actually had, which laws you
   ran by hand, and every reading that did not come out the way the task
   predicted.

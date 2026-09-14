@@ -93,10 +93,9 @@ export const ENV_DEFAULTS: Readonly<Record<string, string>> = {
    * one trigger — and then charged once per tick for as long as
    * nobody looks at it, which is the asymmetry this default is set
    * against. Both targets carry a model node now, so what a tick
-   * reaches is a real call rather than a projected one, and what is
-   * still ahead of it is the stack that imports them, in phase 7.
-   * Choosing the cadence before the first bill rather than after it
-   * is the point.
+   * reaches is a real call, and the stack this repository provides
+   * to import and run them is in place. Choosing the cadence before
+   * the first bill rather than after it is the point.
    *
    * A rate, not a ceiling. Ticking hourly bounds how often spending
    * can start and says nothing about what one pass costs:

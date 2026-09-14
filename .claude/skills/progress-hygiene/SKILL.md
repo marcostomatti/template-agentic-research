@@ -9,13 +9,13 @@ description: Use when compacting progress.txt — the loop dispatches a compacti
 appended between tasks. Since `ralph plan` injects it into plan generation
 as advisory context, it earns its size — every stale or duplicated line is
 context bloat for every future plan. The injection truncates at 16,000
-characters, oldest findings first (see `tools/ralph/plan.ts`), and the loop
+characters, oldest findings first (see `@open-tomato/rafa/src/plan.ts`), and the loop
 enforces that same number itself so the truncation never has to act.
 
 ## When to compact
 
-Compaction is no longer an end-of-run step. `tools/ralph/start.ts` asks
-`tools/ralph/utils/progress.ts` between every pair of tasks — after the
+Compaction is no longer an end-of-run step. `@open-tomato/rafa/src/start.ts` asks
+`@open-tomato/rafa/src/utils/progress.ts` between every pair of tasks — after the
 finished task is committed and ticked, before the usage gate — and
 dispatches a compaction session when the answer is due. Four rules,
 decided in this order:

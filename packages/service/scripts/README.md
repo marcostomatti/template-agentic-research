@@ -32,10 +32,10 @@ design, `.specs/2026-08-19-research-pipeline-port.md` §7.
 | `llm-connector.ts` | phase 7 — landed in q16a | `bun scripts/llm-connector.ts`. Writes the one `connectors` row of kind `llm` a deployment calls, where it has none, and reports what the pipeline would read off it either way. That row has no seed file and wants none: `connectors` is deployment-level rather than domain-scoped, an endpoint is a per-machine address, and the general case — a kind whose config carries a credential, which `SECRET_CONFIG_KEYS` already enumerates — would put a secret in a tracked file. It is written THROUGH `src/connectors/service.ts`, so the kind enum, the name floor, the config default and the conflict translation are the rules the HTTP surface already holds a request to rather than a second set over one table. Idempotency is keyed on the KIND and never on the name, because that is what the pipeline selects on: `Select Model Connector` reads `WHERE c.kind = 'llm' ORDER BY c.id LIMIT 1`, so any `llm` row stops the write and a rerun reports the row it found — one keyed on the name would write a second row, younger than the first and never read. The read half is a pure re-implementation of that node: the selection, the one-item answer a deployment with no row at all still gets, and the string-only, non-empty reading of each config member, leaving out only the statement's `run_id`, which is a parameter rather than anything on a row. That is what answers whether a deployment projects a non-null endpoint and model without opening n8n. `AR_LLM_ENDPOINT` is required and `AR_LLM_MODEL` optional, on the node's own reading that a null endpoint is a refusal and a null model an ordinary state; `AR_LLM_API_KEY` belongs to the `ar-model` credential and never to this row. |
 | `bootstrap.sh` | phase 7 — landed in q16a | `scripts/bootstrap.sh`. The one command that takes a cold checkout to an n8n holding this port's six workflows, armed and registered: both compose services up and waited to healthy, migrations, a build, the credentials, the workflows, the `llm` connector row, the activation, and a restart. Every step already existed as something an operator could type; what did not is the ORDER, and the order is what is easy to get wrong in ways nothing reports — an activation ahead of an import arms the previous build, an import behind one silently unarms what it lands on, and a publish with no restart after it sets an active version no trigger is registered for. That last step is why this command exists rather than being a note telling an operator to run the other three in order: `activate-workflows.sh` is handed a container it did not start and does not bounce it, so until this landed the final step of the local path was a line the CLI printed once per workflow and a human carried out. Idempotent in the sense that a second run converges and exits 0, which is not the same as every step being a no-op: the stack, the migrations and the connector do nothing on a rerun, the build rewrites a directory that is not the instance's state, and the two imports, the activation and the restart run in full every time because an import rewrites and unarms. The verdict at the end is a read-back and not the restart's exit code — the instance is asked which workflows it holds active, and each has to print an `Activated workflow` line AFTER the restart, counted per id rather than found, since the log survives a restart and a search matches the previous boot's copy. It does not seed, it does not create the `sources` row or the `export_target` connector a full pass needs, and it opens no socket to the database or the model server on their behalf. `AR_N8N_CONTAINER` names the container it restarts, defaulting to `ar-n8n`. |
 | `panic-external.ts` | phase 7 — landed in q16a | `bun scripts/panic-external.ts`. Disarms every workflow an n8n instance has armed, over the public REST API — the external half of the panic stop, and the step `panic.sh` runs ahead of the local stack's teardown. It reads no sources and judges nothing: the target set is whatever the instance says it has armed, this repository's own six workflows first, which is exactly the set `audit-workflows.ts --deactivate` refuses to touch and the reason this is a command of its own rather than a flag over there. It takes no flags and asks for no confirmation, the whole command being the act and a disarmed workflow staying on the instance under the same id for an activation to put back; `deleteWorkflow` is reached from nowhere in it. Refuses an unset `AR_N8N_URL` or `AR_N8N_API_KEY` before any request, through the same `requireInstance` a deploy and an audit stop on. It does not stop at the first failure — one workflow the instance will not let go of leaves every one behind it still reachable — and the verdict per workflow is a read-back of the reply's own `active` rather than the call's exit, so a 200 handing the workflow back still armed is reported as still armed. One line per workflow in the order the instance listed, then the counts and a verdict; exit 1 where anything is still armed, which is what a caller reads. |
-| `panic.sh` | phase 7 — landed in q16a | `scripts/panic.sh`. The stop: every surface in this project that can spend, made to stop spending in one command. Two of them and no third — whatever `AR_N8N_URL` names, disarmed through `panic-external.ts`, and this compose project's containers, stopped whatever profile gates them. The row this replaces promised "every reachable host", which is broader than what landed: there is no discovery here, and an operator with a second deployment runs this once per instance with the setting pointed at each. `--profile '*'` is the whole difference between stopping the stack and stopping the part of it that cannot spend — measured, a bare `docker compose stop` reaches `service-postgres-1` and not `ar-n8n`. Everything it does is meant to be undone: `stop` rather than `down`, so the containers and the named volume with the encryption key in it survive, and a disarm rather than a delete, so a workflow stays under its id for an activation to put back. The API side runs FIRST, because `.env.example` tells an operator `AR_N8N_URL` can name this stack's own container — stopping the containers first would make every correctly configured run end on a connection failure — and because disarming before stopping is what keeps the stop from expiring at the next `up`. It is the one script here with no `-e`: a failure on one surface must not leave the other one running, so both are attempted and the failures are carried to the end. Safe to run when nothing is up at every step, an unset `AR_N8N_URL` skipping the API leg rather than failing on it, and the verdict is a read-back of what is still running rather than the stop's exit code. Exit 1 where anything is still able to spend. |
-| `test-stack.sh` | phase 7 | Creates and destroys a disposable scratch stack, so verifying never touches anything live. |
-| `verify-external.sh` | phase 7 | Read-only verification of an external-mode deployment: the workflows exist and are active, the dependencies answer, the schema is migrated. |
-| `check-doc-links.ts` | phase 7 | Asserts every relative markdown link in the tracked docs resolves to a file that exists. |
+| `panic.sh` | phase 7 — landed in q16a | `scripts/panic.sh`. The stop: every surface in this project that can spend, made to stop spending in one command. Two of them and no third — whatever `AR_N8N_URL` names, disarmed through `panic-external.ts`, and this compose project's containers, stopped whatever profile gates them. The row this replaces promised "every reachable host", which is broader than what landed: there is no discovery here, and an operator with a second deployment runs this once per instance with the setting pointed at each. `--profile '*'` is the whole difference between stopping the stack and stopping the part of it that cannot spend — measured, a bare `docker compose stop` reaches `service-postgres-1` and not `ar-n8n`. Everything it does is meant to be undone: `stop` rather than `down`, so the containers and the named volume with the encryption key in it survive, and a disarm rather than a delete, so a workflow stays under its id for an activation to put back. The API side runs FIRST, because `.env.example` tells an operator `AR_N8N_URL` can name this stack's own container — stopping the containers first would make every correctly configured run end on a connection failure — and because disarming before stopping is what keeps the stop from expiring at the next `up`. It is one of the two scripts here with no `-e`, `verify-external.sh` being the other: a failure on one surface must not leave the other one running, so both are attempted and the failures are carried to the end. Safe to run when nothing is up at every step, an unset `AR_N8N_URL` skipping the API leg rather than failing on it, and the verdict is a read-back of what is still running rather than the stop's exit code. Exit 1 where anything is still able to spend. |
+| `test-stack.sh` | phase 7 — landed in q16b | `scripts/test-stack.sh up`, `env` and `down`. A disposable copy of this package's compose stack beside the dev one, so a verification run reads an n8n and a Postgres nobody's work lives in: the compose project `ar-scratch`, merged from `docker-compose.yml` and the `docker-compose.scratch.yml` overlay, with containers `ar-scratch-postgres` and `ar-scratch-n8n` on loopback 55432 and 55678 and no named volume. Every compose call names that project and both files, spelled once, because the dev project's `ar_n8n_data` volume holds the dev n8n's generated encryption key and a `down --volumes` that resolved to the dev project would take it; measured, `-p` and `-f` outrank the `COMPOSE_PROJECT_NAME` and `COMPOSE_FILE` a sourced shell carries. `up` creates nothing until each refusal has had its turn — a daemon that does not answer, asked through `docker version` because `docker info --format` was measured exiting 0 against a dead socket; no `bun` to mint with; anything at all already under the project's label, since the scratch n8n takes one owner and could not be handed a second key; and either port accepting a connection. Then it brings both services up with `--wait`, runs `scratch-instance.ts` for a `workflow:list` key, and only once the key is in hand writes `.tmp/scratch/env` at mode 600, exporting `DATABASE_URL`, `AR_N8N_URL`, `AR_N8N_API_KEY`, `AR_N8N_CONTAINER`, `COMPOSE_PROJECT_NAME` and `COMPOSE_FILE`, the last in absolute paths because a relative one resolves against whatever directory reads it. `env` prints that file's path, and prints nothing unless both containers are running under the project's label, so `. "$(scripts/test-stack.sh env)"` sources a live stack or fails on an empty name. `down` removes the file, runs `down --volumes --remove-orphans` under `--profile '*'` — measured, without it the teardown reaches Postgres and not n8n — and rules on a read-back rather than on compose's exit: every container, volume and network under the project label, and the volumes those containers mounted, read before the teardown and asked after by name, because the anonymous volume the postgres image mints carries no project label and a label filter answers empty whether it survived or not. Exit 1 on any survivor. It migrates, imports and arms nothing; a shell that sourced the file sends `bootstrap.sh` and `panic.sh` into this project rather than the dev one, which `context/local-stack.md` sets out. |
+| `verify-external.sh` | phase 7 — landed in q16b | `scripts/verify-external.sh`. Read-only verification of an external-mode deployment — the instance ready, the declared workflows present once each and armed wherever their sources would arm them, the schema migrated, the model connector a pass would select — and the gate `audit-workflows.ts` deliberately is not: that command exits 0 whatever it finds, where this one exits 0 only for a deployment that verified. It runs `bun scripts/read-deployment.ts <leg>` once for each of `instance`, `workflows`, `schema` and `connector`, each as a process of its own, and invokes nothing else — no `docker`, no `curl`, no `bun -e` — so every request and statement a verification causes is a leg's `GET` or `SELECT`. No `-e`, for `panic.sh`'s reason: a leg that fails, or dies before its own report, leaves the legs after it running, and every leg's code is carried to the end, where one verdict line per leg names the code and what it means. A 1 says two things there, because a leg that dies before its verdict ends on 1 as well — measured, one handed an environment `src/config.ts` refuses exits 1 printing no verdict line — and the leg's own output says which. Before any leg runs it exits 2 naming every one of `AR_N8N_URL`, `AR_N8N_API_KEY` and `DATABASE_URL` that is not exported or is blank, and exits 2 as well on any argument, taking none. Exported is the point: the test reads its own environment rather than `src/config.ts`, so a value set only in `.env` is refused, which is what keeps the two database legs from reading that file's database or the compose default as though it were the deployment's. Measured under Bun, an exported value outranks `.env` and an exported blank stays blank, so what is tested is what each leg reads. Exit 0 only when every leg answered 0, and 1 otherwise, an unreadable leg included — the rule `aggregateExitCode` in `deployment-verdict.ts` states, spelled again because running it would be invoking something other than a leg. It adds no deadline, and no leg probes the model server, a limit the `connector` leg prints. |
+| `check-doc-links.ts` | phase 7 — landed in q16b | `bun run gate:doc-links`, from the repository root, which is the tree it reads; `--root <dir>` points it at another work tree's top and refuses a directory below one. Holds every path the tracked markdown names against the tracked set: the path-shaped backtick spans this repository names a file with, which are most of them, and the relative markdown links, both read out of each tracked `.md` file by `doc-references.ts`, the pure reading half beneath it rather than a command of its own. Resolution is against `git ls-files` plus every directory above a tracked file, never against the disk, under three bases: the repository root, the doc's own directory, and the doc's `packages/<name>` root, the last because a package's docs name its files package-relative — which is also why a root doc gets no such base and a package-relative path named from the root reports. A reference no base resolves passes as untracked by design, and is counted rather than reported, when a TRACKED `.gitignore` ignores it under one of those bases; `.git/info/exclude`, a global excludes file and an untracked `.gitignore` answer for one clone only and pass nothing, a negated pattern passes nothing, and a typo inside an ignored tree passes, which is the limit that choice leaves. A path meant not to exist is named under `<!-- doc-links-skip: <path> -- <reason> -->`, file-scoped, matched by exact spelling and refused without its reason; a marker naming no reference in its document, a marker over a reference that passes without it and a marker attempt the reader refused are each a finding, so no marker outlives what it was written for. A reason is free text nothing holds against the path, so one calling a path package-local is a tell rather than a reason: a path relative to its package resolves under the package base and never needs a marker, and what such a reason usually covers is `src/`-relative shorthand to repair — check `git ls-files` for `packages/<name>/src/<path>` before accepting it. `.claude/` is read and reported in a section of its own that never moves the exit code: most of it is vendored agent and skill files carrying the paths of the projects they came from, and repairing those would fork them, so a stale path in a file native to this repository shows there without failing the gate. Exit 0 clean, 1 on any finding outside `.claude/`, and 2 when it could not run — a root that is not a work tree's top, a tracked doc it cannot read, a git call that fails, or a tree tracking no markdown at all. No CI job runs it. |
 
 Not every `.ts` file here is a command. `workflow-markers.ts`,
 `n8n-workflow.ts` and `n8n-client.ts` landed with the phase-3 rows of the
@@ -59,13 +59,15 @@ command asks along the line where the instance itself is needed.
 `n8n-workflow.ts` answers from a workflow value alone — which of its nodes
 would arm it, which envelope members the public API takes — and holds
 those answers in one place so that no two instance-facing commands give
-different ones; `deploy-external.ts` and `activate-workflows.sh` read it.
+different ones; `deploy-external.ts` and `activate-workflows.sh` read it,
+and so does `deployment-verdict.ts`, set out below.
 `n8n-client.ts` is the half that opens a socket and wants the key: every
-HTTP call this package makes against an instance, and the refusal for a
-reply that is not a success. `deploy-external.ts`, `audit-workflows.ts`
-and `panic-external.ts` are the three commands that call in, and
+keyed call this package makes against an instance, and the refusal for a
+reply that is not a success. `deploy-external.ts`, `audit-workflows.ts`,
+`panic-external.ts` and `read-deployment.ts` are the four commands that
+call in, the last of them through the listing alone, and
 `activate-workflows.sh` is the one that does not, activation going
-through the CLI inside the container rather than over the API. The three
+through the CLI inside the container rather than over the API. The four
 that call in also share one refusal: `requireInstance` in
 `deploy-external.ts` is where the two settings become something a call
 can be made with, so none of them can make a request that has not been
@@ -86,6 +88,87 @@ the file says are answerable from a value. The file it builds carries a database
 and a model API key, so it is a value and never a path — nothing here
 writes it anywhere, least of all under the working tree.
 
+`scratch-instance.ts` is a half as well, and unlike the halves above it
+carries the `INVOKED_AS_CLI` block: `test-stack.sh` runs it by path
+rather than importing it, and is the only command that does. It keeps
+a paragraph here rather than a clause in that script's row because what
+it sends, holds and prints is more than a row carries. It takes a fresh
+scratch n8n to a public-API key with nobody at the editor, over
+`POST /rest/owner/setup`, `POST /rest/login` and `POST /rest/api-keys`
+— the editor's own routes as the pinned image answers them, which is a
+reading and not a contract — and what it prints on stdout is the one
+`AR_N8N_API_KEY=` line an env file takes, or nothing. It refuses every
+base URL but `http://127.0.0.1:55678` before any request, because the
+owner it sets up sits behind a password that ends with the run: that
+password is generated per run and held in memory only, and a case
+reads the module's own source for anything that could keep it. The key
+carries `workflow:list` alone, the smallest scope set the baseline
+found, which lists workflows and is refused a deactivation. Every call
+goes through a fetch handed in, so
+`tests/scripts/scratch-instance.test.ts` drives the sequence against a
+stub and reads each request back off it. Nothing in `n8n-client.ts` is
+called: its calls are made with a key, and these are made to get one.
+
+`migration-ledger.ts` is a half, and `read-deployment.ts`, set out
+below, is the reader above it. It holds drizzle's two records of a
+schema and nothing that changes either: the
+journal under `drizzle/meta/`, read off disk; the ledger a database
+keeps in `drizzle.__drizzle_migrations`, read with one `SELECT` sent
+over a client handed in; and a pure comparison naming the journal tags
+the ledger holds no row for, the ledger rows the journal carries no tag
+for, and the rows applied out of journal order. The two readers were
+written for the live suite and moved here, so that a script reading a
+deployment's ledger names a row the way
+`tests/live/schema.live.test.ts` names one of `ar_live`'s, and
+`tests/live/live-postgres.ts` re-exports them rather than keeping a
+copy. It imports no migrator, which keeps it clear of the second engine
+the paragraph below rules out, and
+`tests/scripts/migration-ledger.test.ts` drives all three with no
+database.
+
+`deployment-verdict.ts` is the half `read-deployment.ts` hands its
+readings to. It holds what a verification of an external-mode deployment
+makes of
+its readings, and takes none of them: a verdict per leg — the
+instance's readiness status, its workflow listing against the workflow
+sources, a migration comparison, and the `llm` connector projection —
+each answering healthy, unhealthy or unreadable, the lines a leg
+prints, and the exit code the legs add up to. A leg that could not
+read answers 2 and one that read a fault answers 1, because the two
+send an operator to different repairs. A missing workflow, a declared
+name the instance holds more than once and a workflow whose source
+would arm it sitting inactive are unhealthy; a stray is reported and
+never fails, the instance being someone else's to host workflows of
+their own on. It sorts through `classify` and asks
+`activatableTriggers` rather than restating either, masks every value
+a deployment answered through `maskControlBytes` so a workflow name
+cannot rewrite the terminal printing its verdict, and prints no
+connector value. `tests/scripts/deployment-verdict.test.ts` drives
+every verdict from literals.
+
+`read-deployment.ts` is the reader above both, and a half of the kind
+`scratch-instance.ts` is: it carries the `INVOKED_AS_CLI` block, no
+`package.json` script names it, and it is run by path, one process per
+leg — `bun scripts/read-deployment.ts <leg>`, the leg being `instance`,
+`workflows`, `schema` or `connector`. Each takes its one reading, hands
+it to the verdict of the same name, prints that verdict's lines and
+exits 0 healthy, 1 unhealthy or 2 unreadable. Every leg is behind
+`requireInstance`, the two database legs included, so an unset
+`AR_N8N_URL` or `AR_N8N_API_KEY` exits 2 before any request, statement
+or connection, and so does a command line naming no single leg. It
+sends `GET` requests and `SELECT` statements and nothing else: readiness
+at the instance root with no key, the paged listing through
+`listWorkflows`, the ledger `SELECT` `migration-ledger.ts` sends, and one
+`SELECT` of the `llm` connectors, whose rows it hands to
+`projectModelConnector`. Whatever a reading throws becomes an unreadable
+leg with a reason naming no address, because `pg`'s message for a
+refused connection carries the host and port it dialled. No leg probes
+the model server, and with `DATABASE_URL` unset the two database legs
+read the compose default rather than refusing.
+`tests/scripts/read-deployment.test.ts` records every method and every
+statement off the fetch and the database client a run is handed.
+`verify-external.sh` runs it by path, once per leg.
+
 Database migrations stay drizzle's end to end (`drizzle/`,
 `drizzle.config.ts`, `bun run db:generate` / `db:migrate`): a script here
 that also moved schema would be a second engine. `scaffold.ts`'s
@@ -95,7 +178,7 @@ index, the timestamp and the snapshot that would make its output part of
 that chain unfilled, because a generator that is a pure function of a name
 knows none of them.
 
-The phase-7 group was deferred on purpose, and most of it has now
+The phase-7 group was deferred on purpose, and all of it has now
 landed. Each of those scripts drives a stack — compose, credentials, a
 live instance — that did not exist until the pipeline it serves did, so
 writing one earlier would have meant writing it against a shape still
@@ -103,12 +186,11 @@ being decided. q16a stood that stack up and filled the rows it made
 writable: the two imports, the connector row, `bootstrap.sh` and the two
 halves of the panic stop.
 
-What is still deferred is the three rows above that carry no `landed`
-mark, and the reason has changed for them. `verify-external.sh` and
-`test-stack.sh` are verification tooling for the EXTERNAL mode, which
-nothing here exercises yet — the local path has the `stress` profile
-already — and `check-doc-links.ts` belongs to the docs-completion
-remainder. All three are q16b's.
+q16b filled the rest, so no row above is left without a `landed`
+mark. It landed `check-doc-links.ts` first, then `test-stack.sh`, the
+disposable stack a verification can be read against rather than
+anything live, and last `verify-external.sh`, the verification of the
+EXTERNAL mode itself, over the three halves set out above.
 
 ## `scaffold.ts` generators
 
