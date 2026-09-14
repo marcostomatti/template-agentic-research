@@ -5,8 +5,8 @@ dependency-injected service core with health/control endpoints, Drizzle +
 Postgres by default, optional Redis, an interval cron runner, a
 preference-aware notification layer with channel stubs, a first-party
 credential strategy behind token-wired auth middleware, an isolated-vs-live
-testing harness, and an agent task loop (`ralph`) with the skills/agents
-context to drive it.
+testing harness, and integration with the global `@open-tomato/rafa` task
+loop for agent-driven operations.
 
 ## Overview & origins
 

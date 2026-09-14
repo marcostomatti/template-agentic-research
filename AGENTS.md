@@ -11,7 +11,7 @@ expose/export results over multiple formats/protocols (MCP, Markdown, RSS, …).
 | `packages/ui` | `@ar/ui` | Component library (CVA + Tailwind 4 + Radix), Storybook workbench, visual regression harness. Vendored fork of the `components-library` template. |
 | `packages/web` | `@ar/web` | The web app (Vite + React 19 + react-router v8), consumes `@ar/ui`. Fixture-backed: the shell, all six surfaces and the seven modal sub-routes run with no backend, writes included — an editor's save lands in a session draft store that lives for the tab and is deleted with the fixture modules. `src/dynamic-form/` draws an editable value from a `FieldDef` list and a zod schema — a tree of the value's structure beside ONE flat form for the selected node, over `@ar/ui`'s `TreeNav`. The lexicon term editor is the only caller so far, drawing it as the middle of three presentations over one draft, between the fixed template and the JSON fallback that still stands beside it. The package's own `context/` pages carry the two route bases, the API swap seam, and the test seam's two runners and two Playwright configs. |
 | `packages/service` | `@ar/service` | Express + MCP service (drizzle/Postgres), vendored fork of the `template-service-express` template. Future home of the research pipeline stack (workflows, sources, exports). |
-| `tools/ralph` | — | The agent task loop (`bun run ralph plan/start/usage/effort` from the repo root). Plans/trackers live in `.plans/`. |
+| `tools/ralph` | — | The agent task loop runs via the global `@open-tomato/rafa` package. Plans/trackers live in `.plans/`. |
 
 Each package keeps its own `AGENTS.md` with package-specific conventions —
 read it before working inside that package. Both vendored packages are
@@ -41,7 +41,7 @@ pages back into every turn and the split would save nothing.
 - `context/workflow.md` — branch, PR and merge, the task-shape routing
   table, the loop's CI wait, the mergeability readings to take before a
   push, and the close-out discipline.
-- `context/loop.md` — the ralph loop's own architecture: the module map,
+- `context/loop.md` — the task loop's own architecture: the module map,
   the per-task tail and its two control-flow laws, the five injected
   prompts and the first-line rule that classifies them, the task
   declaration grammar, the effort store, and how the loop is tested.

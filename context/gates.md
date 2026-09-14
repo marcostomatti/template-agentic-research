@@ -573,13 +573,15 @@ matching anything prints exactly the same five lines.
   automated green is `gate:control-bytes`.
 - A markdown file under `tools/` has TWO automated greens, unlike the
   package-root docs: the root `eslint .` pathspec reaches it (measured,
+  <!-- doc-links-skip: tools/ralph/PROMPT.md -- retired during rafa cutover -->
   `tools/ralph/PROMPT.md` present in a 45-entry `-f json` read list at 0
   errors with a fabricated sibling absent) and `gate:control-bytes` opens it
   once tracked. A markdown page at the REPO ROOT is reached the same way
   (measured, `context/tooling.md` in a 54-entry read list at 0 errors).
-- The ROOT `check-types` is almost wholly the old loop. `tsconfig.json`
+- The ROOT `check-types` was configured for the old loop. `tsconfig.json`
   includes `tools`, `*.ts` and `*.mjs` and excludes `packages` and
   `**/*.test.ts`, and that reads 22 files in the repo, 20 of them under
+  <!-- doc-links-skip: tools/ralph/ -- retired during rafa cutover, loop moved to @open-tomato/rafa -->
   `tools/ralph/` (measured at `88faa65`). The other two are
   `tools/control-byte-gate/control-byte-gate.ts` and `vitest.config.ts`,
   so deleting `tools/ralph/` leaves the root `tsc` gating two files, still

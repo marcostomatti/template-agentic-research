@@ -6,7 +6,8 @@ Quick orientation:
 
 - Bun-workspaces monorepo: `@ar/ui` (component library + visual harness),
   `@ar/web` (app), `@ar/service` (Express/MCP service + future research
-  pipelines). Ralph loop at `tools/ralph`, run from the repo root.
+  pipelines). The task loop runs via the global `@open-tomato/rafa` package;
+  see `context/loop.md` for its architecture.
 - Working inside a package? Read that package's `AGENTS.md` first — each has
   its own conventions (ui: variants-only styling + baseline-safe verification;
   service: isolated/live test seam + framework-vs-app split).

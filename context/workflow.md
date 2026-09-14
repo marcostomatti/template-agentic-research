@@ -3,23 +3,22 @@
 Feature-branch → PR → merge. Conventional commit types (feat, fix, refactor,
 docs, test, chore, perf, ci). Run the verification order before any PR.
 
-**Tag on every completed plan**: when a ralph plan (or an equivalent chunk of
-work) completes and lands on `main`, push and tag it `v<N>` (annotated,
-sequential — `v0` was the umbrella reintegration) so versions trace back to
-the plan that produced them.
+**Tag plans**: when a task loop plan (or chunk of work) completes and lands on
+`main`, push and tag it `v<N>` (annotated, sequential — `v0` was the umbrella
+reintegration) so versions trace back to the plan that produced them.
 
-**The loop's last stage now waits for CI.** `bun run ralph start` runs the
-wrap-up session (promote findings, sync with `origin/main`, commit, push,
-open or update the PR) and THEN polls that PR's checks, spending up to
-`--ci-attempts` repair sessions on a red or conflicting result before
-escalating. It exists because a CONFLICTING PR gets no CI run at all —
-GitHub cannot build `refs/pull/<n>/merge` for a branch that does not merge
-cleanly — so without the wait the loop reported a finished plan whose
-code had never been checked once (measured: 0 check runs over a 44-commit
-branch, with `gh pr checks` answering `no checks reported`, which reads
-like a run that has not started). `--no-ci-wait` skips the stage,
-`--ci-timeout=<min>` bounds it (default 20; CI settles in 2—5 here), and
-it skips itself when `gh` is unusable so the loop still works offline.
+**The loop's last stage now waits for CI.** The wrap-up session runs
+(promote findings, sync with `origin/main`, commit, push, open or update
+the PR) and THEN polls that PR's checks, spending up to `--ci-attempts`
+repair sessions on a red or conflicting result before escalating. It
+exists because a CONFLICTING PR gets no CI run at all — GitHub cannot
+build `refs/pull/<n>/merge` for a branch that does not merge cleanly — so
+without the wait the loop reported a finished plan whose code had never
+been checked once (measured: 0 check runs over a 44-commit branch, with
+`gh pr checks` answering `no checks reported`, which reads like a run that
+has not started). `--no-ci-wait` skips the stage, `--ci-timeout=<min>`
+bounds it (default 20; CI settles in 2—5 here), and it skips itself when
+`gh` is unusable so the loop still works offline.
 
 **Take the mergeability reading BEFORE the push.**
 `git merge-tree --write-tree origin/main HEAD` is one command, needs no
@@ -293,22 +292,21 @@ check is one line — a line whose BACKTICK COUNT IS ODD has a span crossing
 the newline, and it is a fault only when that line ends in an identifier
 character.
 
-**Appending a close-out section to a ralph plan must write BOTH**
+**Appending a close-out section to a plan must write BOTH**
 `PLAN-<stub>.md` and `PLAN_TRACKER-<stub>.md`, or the two stop being
 byte-identical apart from checkbox state and a wrap-up session reading
-either one may miss it. It is safe: `findNextTask` in
-`tools/ralph/utils/tracker.ts` matches only `^- \[ \] ` and
-`^- \[BLOCKED\] `, so headings, tables and plain `- ` bullets are ignored,
-and nothing in the loop parses a `# Stage:` heading at all. Prove it rather
-than assuming — import `findNextTask` under bun and drive it over the
-edited tracker; it must still name the same open task at the same line
-number. Verify the pair with
+either one may miss it. It is safe: `findNextTask` in the loop's utils
+matches only `^- \[ \] ` and `^- \[BLOCKED\] `, so headings, tables and
+plain `- ` bullets are ignored, and nothing in the loop parses a `#
+Stage:` heading at all. Prove it rather than assuming — the loop's own
+`findNextTask` under bun must still name the same open task at the same
+line number when driven over the edited tracker. Verify the pair with
 `diff <(sed 's/^- \[x\]/- [ ]/' <tracker>) <plan>` at zero lines.
 
 **But "it is safe" covers the PARSER and not the LOOP, and the loop cannot
-tick a task that appends to its own plan.** `tools/ralph/start.ts` reads the
-tracker and computes `taskInfo.lineNum` BEFORE dispatching the agent, then
-calls `updateTrackerLine(trackerPath, taskInfo.lineNum, 'done')` AFTER it
+tick a task that appends to its own plan.** The loop reads the tracker and
+computes `taskInfo.lineNum` BEFORE dispatching the agent, then calls
+`updateTrackerLine(trackerPath, taskInfo.lineNum, 'done')` AFTER it
 returns. Every close-out task appends under the `## Close-out notes`
 heading, which sits ABOVE the whole task list, so the append shifts every
 checkbox down by however many lines it wrote and that captured index is
@@ -331,10 +329,10 @@ append and reads as broken arithmetic, the shift formula only applying at
 or beyond the block's END; `inserted` is `anchor - start`, the block
 INCLUDING its blank separator.
 
-**`findNextTask` takes the tracker's CONTENT, not its path**, and handing
-it a path returns `null` rather than throwing — which reads exactly like a
-tracker whose edit broke the parser, the shape the probe exists to rule
-out. Its `TaskInfo` fields are `task`, `lineNum` (ZERO-indexed) and
+**The loop's `findNextTask` takes the tracker's CONTENT, not its path**, and
+handing it a path returns `null` rather than throwing — which reads exactly
+like a tracker whose edit broke the parser, the shape the probe exists to
+rule out. Its `TaskInfo` fields are `task`, `lineNum` (ZERO-indexed) and
 `status`, NOT `text`/`lineNumber`, and the open status VALUE is
 `'unchecked'` rather than the `'pending'` a reader assumes (blocked is
 `'blocked'`). Reconstruct the pre-edit side by REVERSING the edit in
