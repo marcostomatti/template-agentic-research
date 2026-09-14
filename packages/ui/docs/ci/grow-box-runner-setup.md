@@ -31,8 +31,8 @@ gh variable set VISUAL_CI_RUNNER --body '["self-hosted","my-runner"]'
 
 Only proceed with the steps below when you actually want the gate live.
 
-**Context.** The grow-box runner (see grow-box `docs/runbooks/cicd.md` and
-`migrations/0008-github-runner.sh`) is a native systemd runner on the Ubuntu host:
+**Context.** The grow-box runner (see grow-box `docs/runbooks/cicd.md` <!-- doc-links-skip: docs/runbooks/cicd.md -- grow-box repository path --> and
+`migrations/0008-github-runner.sh` <!-- doc-links-skip: migrations/0008-github-runner.sh -- grow-box repository path -->) is a native systemd runner on the Ubuntu host:
 unprivileged `actions-runner` user, labels `self-hosted, grow-box`, **no Docker
 access** (by design). If it is still registered repo-scoped, that scope is the one
 thing blocking this repo from using it. The visual suite here runs natively
@@ -85,7 +85,7 @@ this repo (or all repos).
 > fine-grained permission: `gh auth refresh -s admin:org`.
 > `scripts/verify-visual-ci.sh` uses the org endpoint for this reason.
 
-> If grow-box's runner registration is managed by its `ci/runner.env` +
+> If grow-box's runner registration is managed by its `ci/runner.env` <!-- doc-links-skip: ci/runner.env -- grow-box repository path --> +
 > `make upgrade` flow, prefer updating `GITHUB_REPO_URL` there to the org URL and
 > re-running the migration, so the repo stays the source of truth.
 

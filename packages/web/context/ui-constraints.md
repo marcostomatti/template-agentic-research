@@ -57,6 +57,8 @@ They are here because every one of them is invisible to `lint`,
   a shared link cannot carry — which contradicts this app's URL-as-state
   rule. The accessor's own ordering is part of what a surface MEANS and
   belongs in `data/`, not in a column.
+
+<!-- doc-links-skip: data/ -- package-local path -->
 - **`renderCellContent('status')` names the dot** `text == null ? label
   ?? tone : label`, so passing BOTH gives the indicator a `role="status"`
   name a screen reader reads on top of the visible text. Pass `label`

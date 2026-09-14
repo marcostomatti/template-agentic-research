@@ -219,7 +219,7 @@ declaration is at `dist/<layer>/<Name>.d.ts`. That matters because
 package's `check-types` until this one is BUILT, and the failure is a
 plain TS2305 naming the export as if it did not exist. `bun run build`
 (—1 min) is the fix. The entry file is `src/index.tsx` and not
-`src/index.ts`, so a reflexive `head src/index.ts` reports the package
+`src/index.ts` <!-- doc-links-skip: src/index.ts -- illustrative incorrect path (not the actual entry file) -->, so a reflexive `head src/index.ts` reports the package
 as having no barrel at all.
 
 **The `offline-react-render-probe` skill works UNCHANGED here** — `bun
