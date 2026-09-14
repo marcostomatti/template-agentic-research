@@ -9,7 +9,7 @@ global `rafa` binary.
 If the global `rafa` binary misbehaves, the in-repo loop comes back in
 three steps, run from the repo root:
 
-1. `git revert <cutover-commit-SHA>`. The cutover commit deletes
+1. `git revert SHA`. The cutover commit deletes
    `tools/ralph/`, and reverting it brings the directory back.
 2. Restore the `ralph` script in `package.json` to
    `"ralph": "bun tools/ralph/ralph.ts"`. The script was repointed at
@@ -22,6 +22,6 @@ three steps, run from the repo root:
 The global `rafa` install can stay where it is: once the script is
 restored, `bun run ralph` no longer reaches it.
 
-`<cutover-commit-SHA>` is a placeholder. Fill in the real SHA at step 7 of
+`SHA` is a placeholder. Fill in the real SHA at step 7 of
 the rafa cutover runbook, the step that makes the commit deleting
 `tools/ralph/`.
