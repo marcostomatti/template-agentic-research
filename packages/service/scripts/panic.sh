@@ -82,14 +82,14 @@
 # string, and `-o pipefail` so a failure at the head of a pipeline
 # is not answered for by whatever it was piped into.
 #
-# `-e` is deliberately NOT here, and this is the one script in
-# this directory that leaves it off. Every step in `bootstrap.sh`
-# is a precondition of the next, so stopping at a failure is the
-# right thing there. Here the two steps are independent surfaces
-# and stopping at a failure is the wrong thing: the whole point is
-# that everything gets attempted. Each step below therefore
-# captures its own status instead, and `AR_FAILED` carries them to
-# the verdict.
+# `-e` is deliberately NOT here, and the one other script in this
+# directory that leaves it off is `verify-external.sh`, for the
+# same reason. Every step in `bootstrap.sh` is a precondition of
+# the next, so stopping at a failure is the right thing there.
+# Here the two steps are independent surfaces and stopping at a
+# failure is the wrong thing: the whole point is that everything
+# gets attempted. Each step below therefore captures its own
+# status instead, and `AR_FAILED` carries them to the verdict.
 set -uo pipefail
 
 # This package's own root, resolved from this file's location

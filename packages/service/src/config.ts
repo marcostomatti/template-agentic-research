@@ -36,8 +36,9 @@ const EnvSchema = z.object({
    * `scripts/read-deployment.ts` reads it too, for its `schema` and
    * `connector` legs, each sending one `SELECT`. The fallback is the one
    * thing that reader cannot see past: with nothing set, those legs read
-   * the compose dev database rather than refusing, so a verification
-   * exports the value for the deployment it reads.
+   * the compose dev database rather than refusing, which is why
+   * `scripts/verify-external.sh`, running those legs, refuses to start
+   * one until the value is exported for the deployment it reads.
    */
   DATABASE_URL: z
     .string()
@@ -102,6 +103,11 @@ const EnvSchema = z.object({
    * the same pre-flight before any of its legs reads anything. It asks for
    * readiness at the instance root, taking the API path off a value that
    * carries one, and lists workflows under the API.
+   *
+   * `scripts/verify-external.sh`, which runs those legs, reads the name
+   * off its own environment instead of through this schema, and refuses
+   * before any leg runs where it or `AR_N8N_API_KEY` is not exported or
+   * is blank, so a value set only in `.env` is refused there.
    */
   AR_N8N_URL: z.string().optional(),
   /**
