@@ -176,3 +176,73 @@ actually DO when read closely, measured against the pinned n8n 2.15.1 image.
   run can exercise at all, and a cold one cannot reach the branch the
   scripts' verdicts rest on. Run each command TWICE and take the second
   run's reading too.
+
+### What sourcing the scratch env file does to the other scripts
+
+- **`scripts/test-stack.sh up` writes `.tmp/scratch/env`, and a shell that
+  sources it sends every flagless compose call to the `ar-scratch`
+  project.** The file exports `COMPOSE_PROJECT_NAME=ar-scratch` and a
+  `COMPOSE_FILE` naming both compose files by absolute path, which compose
+  reads whenever a call carries no `-p` and no `-f`. A RELATIVE
+  `COMPOSE_FILE` would not do: measured, it rendered the scratch stack
+  from this package's root and refused from `/tmp` with `stat
+  /tmp/docker-compose.yml`. With the stack up and the file sourced, a
+  `--dry-run` of the stop `scripts/panic.sh` takes, of step 1 of
+  `scripts/bootstrap.sh` and of `bun run n8n:start`'s command each named
+  `ar-scratch-postgres` and `ar-scratch-n8n` and no dev container, from
+  this root and from the repository root alike. Flags still win over both
+  settings, which is why `test-stack.sh` itself passes `-p ar-scratch` and
+  both `-f` on every call. The file also exports `DATABASE_URL`,
+  `AR_N8N_URL`, `AR_N8N_API_KEY` and `AR_N8N_CONTAINER`, and an exported
+  `DATABASE_URL` is the one a `bun` run reads over the one in `.env`,
+  measured with `bun -e` from this root.
+- **`scripts/panic.sh` run from that shell stops the SCRATCH stack and not
+  the dev one.** Measured from `/tmp` against a freshly brought-up scratch
+  stack: the API leg took `AR_N8N_URL` as naming an instance and listed
+  the scratch n8n (`0 on the instance, 0 disarmed, 0 already inactive, 0
+  still armed`), the stop named the two scratch containers and both read
+  `exited` afterwards, the run exited 0, and `ar-n8n` and
+  `service-postgres-1` kept their ids, `Created` and `State.StartedAt`. So
+  a panic meant for the dev stack comes from a shell that never sourced
+  the file. Its closing lines still say `bun run n8n:start` puts the stack
+  back, which from that shell starts the scratch copy. Read off the code
+  and not run: on a scratch instance holding ARMED workflows, the API leg
+  meets a key minted with `workflow:list` alone, which answered 403 on a
+  deactivation, so `panic-external.ts` reports each armed workflow STILL
+  ARMED and `panic.sh` exits 1 after stopping the containers regardless.
+  The stop that holds for the scratch stack is `down`.
+- **`scripts/bootstrap.sh` run from that shell bootstraps the SCRATCH
+  instance.** Each of its steps reaches the scratch project through a
+  setting the file exports. Step 1 is the flagless compose call above. The
+  migration, the `llm` connector row and the `ar-postgres` credential read
+  `DATABASE_URL`, whose `127.0.0.1` host `postgresCredentialData` rewrites
+  to `postgres` while keeping 55432, the port the overlay has the scratch
+  Postgres listen on inside its container. The two imports, the activation
+  and the restart read `AR_N8N_CONTAINER`, each script taking `ar-n8n`
+  only as its default. It still wants `AR_LLM_API_KEY` and
+  `AR_LLM_ENDPOINT` from `.env` or the shell, which the env file does not
+  carry, and it leaves `ar-dispatch`'s hourly Schedule Trigger armed on
+  `ar-scratch-n8n` until the scratch stack is taken down. Only step 1 was
+  measured here, as a dry run; the rest is what each script reads.
+- **`down` removes the file and not a shell's copy of it.** A shell that
+  sourced the file keeps all six settings after the teardown, so its
+  compose calls go on addressing an `ar-scratch` project that holds
+  nothing and its `AR_N8N_URL` names a port nothing listens on. Close that
+  shell, or unset the six, before running anything from it that is meant
+  for the dev stack. The `env` verb is the guard on the way in: it prints
+  the path only while both scratch containers are running under the
+  project's label, and measured after that panic it refused with nothing
+  on stdout, so `. "$(scripts/test-stack.sh env)"` fails on an empty name
+  rather than sourcing a stale file.
+- **The anonymous volume an image's `VOLUME` mints carries no compose
+  project label**, so a teardown read-back filtering volumes on
+  `com.docker.compose.project` answers empty whether that volume survived
+  or not. Measured on the scratch Postgres: its volume carried
+  `com.docker.volume.anonymous` and nothing else, while the network and
+  both containers carried the project label. So `scripts/test-stack.sh`
+  also reads, in `down`, which volumes the project's containers mount
+  before removing them, and asks after each by name; a copy of it with
+  `--volumes` dropped exited 1 naming the survivor while the label filter
+  read zero. What neither reading reaches is a volume orphaned by an
+  EARLIER teardown that took its container without it, which only a sorted
+  `docker volume ls -q` taken either side of the run shows.
