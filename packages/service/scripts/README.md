@@ -59,7 +59,8 @@ command asks along the line where the instance itself is needed.
 `n8n-workflow.ts` answers from a workflow value alone — which of its nodes
 would arm it, which envelope members the public API takes — and holds
 those answers in one place so that no two instance-facing commands give
-different ones; `deploy-external.ts` and `activate-workflows.sh` read it.
+different ones; `deploy-external.ts` and `activate-workflows.sh` read it,
+and so does `deployment-verdict.ts`, set out below.
 `n8n-client.ts` is the half that opens a socket and wants the key: every
 keyed call this package makes against an instance, and the refusal for a
 reply that is not a success. `deploy-external.ts`, `audit-workflows.ts`
@@ -122,6 +123,25 @@ copy. It imports no migrator, which keeps it clear of the second engine
 the paragraph below rules out, and
 `tests/scripts/migration-ledger.test.ts` drives all three with no
 database.
+
+`deployment-verdict.ts` is a half with no command above it yet either.
+It holds what a verification of an external-mode deployment makes of
+its readings, and takes none of them: a verdict per leg — the
+instance's readiness status, its workflow listing against the workflow
+sources, a migration comparison, and the `llm` connector projection —
+each answering healthy, unhealthy or unreadable, the lines a leg
+prints, and the exit code the legs add up to. A leg that could not
+read answers 2 and one that read a fault answers 1, because the two
+send an operator to different repairs. A missing workflow, a declared
+name the instance holds more than once and a workflow whose source
+would arm it sitting inactive are unhealthy; a stray is reported and
+never fails, the instance being someone else's to host workflows of
+their own on. It sorts through `classify` and asks
+`activatableTriggers` rather than restating either, masks every value
+a deployment answered through `maskControlBytes` so a workflow name
+cannot rewrite the terminal printing its verdict, and prints no
+connector value. `tests/scripts/deployment-verdict.test.ts` drives
+every verdict from literals.
 
 Database migrations stay drizzle's end to end (`drizzle/`,
 `drizzle.config.ts`, `bun run db:generate` / `db:migrate`): a script here
