@@ -74,7 +74,7 @@
  * is what leaves the refusal for an absent one to this command.
  *
  * Neither the calls nor the projection is written again here.
- * `n8n-client.ts` holds every HTTP call this package makes against an
+ * `n8n-client.ts` holds every keyed call this package makes against an
  * instance and the refusal for a reply that is not a success, three
  * of which a deploy uses; `toApiWorkflow` in `n8n-workflow.ts` cuts a
  * built artifact down to the members the API accepts; this module is

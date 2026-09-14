@@ -61,7 +61,7 @@ would arm it, which envelope members the public API takes — and holds
 those answers in one place so that no two instance-facing commands give
 different ones; `deploy-external.ts` and `activate-workflows.sh` read it.
 `n8n-client.ts` is the half that opens a socket and wants the key: every
-HTTP call this package makes against an instance, and the refusal for a
+keyed call this package makes against an instance, and the refusal for a
 reply that is not a success. `deploy-external.ts`, `audit-workflows.ts`
 and `panic-external.ts` are the three commands that call in, and
 `activate-workflows.sh` is the one that does not, activation going
@@ -85,6 +85,26 @@ which is drivable without one, while what the credentials ARE and what
 the file says are answerable from a value. The file it builds carries a database password
 and a model API key, so it is a value and never a path — nothing here
 writes it anywhere, least of all under the working tree.
+
+`scratch-instance.ts` is a half as well, and unlike the halves above it
+carries the `INVOKED_AS_CLI` block: `test-stack.sh` runs it by path
+rather than importing it, and it is named here because the row it
+belongs to is that script's, which has not landed. It takes a fresh
+scratch n8n to a public-API key with nobody at the editor, over
+`POST /rest/owner/setup`, `POST /rest/login` and `POST /rest/api-keys`
+— the editor's own routes as the pinned image answers them, which is a
+reading and not a contract — and what it prints on stdout is the one
+`AR_N8N_API_KEY=` line an env file takes, or nothing. It refuses every
+base URL but `http://127.0.0.1:55678` before any request, because the
+owner it sets up sits behind a password that ends with the run: that
+password is generated per run and held in memory only, and a case
+reads the module's own source for anything that could keep it. The key
+carries `workflow:list` alone, the smallest scope set the baseline
+found, which lists workflows and is refused a deactivation. Every call
+goes through a fetch handed in, so
+`tests/scripts/scratch-instance.test.ts` drives the sequence against a
+stub and reads each request back off it. Nothing in `n8n-client.ts` is
+called: its calls are made with a key, and these are made to get one.
 
 Database migrations stay drizzle's end to end (`drizzle/`,
 `drizzle.config.ts`, `bun run db:generate` / `db:migrate`): a script here

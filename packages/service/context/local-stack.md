@@ -133,7 +133,9 @@ actually DO when read closely, measured against the pinned n8n 2.15.1 image.
 - **The editor can be driven for real with the playwright installed in
   `packages/ui`** (a probe must LIVE in that package to resolve it, and be
   deleted in the command that finishes with it). Two pieces of instance
-  state no script here creates are needed first: an owner
+  state are needed first, and the one script here creating either is
+  `scripts/scratch-instance.ts`, which sets an owner up on the scratch
+  instance alone and dismisses no survey: an owner
   (`POST /rest/owner/setup`, else `/setup` redirects) and a dismissed
   personalization survey (`POST /rest/me/survey`, else the modal covers the
   canvas and a screenshot shows only the modal). Node handles are
