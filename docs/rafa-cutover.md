@@ -22,7 +22,11 @@ binary.
 To confirm it on a given machine, read the line `bun run` echoes before it
 runs a script: `bun run ralph --help` prints `$ rafa --help`, then the
 loop's usage. Without a global install on `PATH` the script fails with
-exit 127; it never falls back to the in-repo loop.
+exit 127; it never falls back to the in-repo loop. Where `rafa` sits in
+`~/.bun/bin`, the directory `bun` itself runs from, a trimmed `PATH` hides
+both, so call `bun` by absolute path to see that case:
+`env PATH=/usr/bin:/bin "$(command -v bun)" run ralph usage` echoes
+`$ rafa usage`, then ends `error: script "ralph" exited with code 127`.
 
 ## `tools/ralph/` is retired by the cutover commit
 
@@ -37,5 +41,10 @@ sweep of it:
 
 - `context/loop.md`, which maps the old loop's modules;
 - the header comment of `.github/workflows/back.yml`;
-- the note in the root `vitest.config.ts`, whose `tools/**/*.test.ts` glob
-  runs the old loop's tests for as long as the directory exists.
+- the root `vitest.config.ts`, and this one is more than prose, so it
+  changes in the cutover commit itself: its note calls the root suite the
+  old loop's, and its only `include` glob, `tools/**/*.test.ts`, matches no
+  file once the directory is gone. `vitest run` then prints
+  `No test files found, exiting with code 1`, which reds the root
+  `bun run test`, the `test:all` fan-out it gates, and the test step of
+  `back.yml`.

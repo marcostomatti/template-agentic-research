@@ -71,11 +71,14 @@ matching anything prints exactly the same five lines.
   ZERO fenced code blocks, so the one markdown rule measured to fire here
   has nothing to read there and `messages: []` is the answer whether the
   block matched or not. Close it with a planted control in the same
-  sitting — append a languageless fence, re-run, read the exit 1 and
-  the named rule, restore — and pair that with the IGNORED shape from a
-  sibling path (`packages/web/AGENTS.md` handed to the same root-run
-  command). The plant proves a rule COULD fire; the sibling proves the run
-  is not ignoring its subject. Neither alone is the reading.
+  sitting that writes nothing: pipe the file plus a languageless fence to
+  `./node_modules/.bin/eslint --stdin --stdin-filename <path> -f json`,
+  whose filename selects the path's own config block, and read the exit 1
+  and the named rule (measured over the root `README.md`) — and pair that
+  with the IGNORED shape from a sibling path (`packages/web/AGENTS.md`
+  handed to the same root-run command). The plant proves a rule COULD
+  fire; the sibling proves the run is not ignoring its subject. Neither
+  alone is the reading.
 - A "this directory was never touched" claim has a needle-liveness half,
   and BOTH git commands fail silently without it: `git diff --name-only
   <range> -- packages/servicx` and `git log --oneline <range> --
@@ -269,10 +272,14 @@ matching anything prints exactly the same five lines.
   count either way, so "the scanned count moved by the files I added" is a
   false green until `git add`. It walks TRACKED files, and an untracked new
   file is not one (measured 677 with a new file present AND with it stashed,
-  then 678 the moment it was staged). Stage first, then read the count as
-  the coverage proof. The pre-commit hook is NOT the same reading: its
-  `--staged` mode reports the STAGED file count, which says the hook ran and
-  nothing about repo-wide coverage.
+  then 678 the moment it was staged). Naming the file does not help either:
+  the gate reads only `--staged`, `--include-untracked` and `--root` and
+  drops every other argument unread, so a path argument prints `OK` over
+  the same tracked set (measured with a path that does not exist: exit 0,
+  1214 scanned). Stage first, or pass `--include-untracked`, then read the
+  count as the coverage proof. The pre-commit hook is NOT the same reading:
+  its `--staged` mode reports the STAGED file count, which says the hook
+  ran and nothing about repo-wide coverage.
   `--staged` also has NO liveness control of its own in the vacuous shape:
   `nothing staged to scan` at 0 staged is byte-identical to a `--staged`
   mode that had stopped scanning, and the scanned-equals-staged rule reads
@@ -570,6 +577,15 @@ matching anything prints exactly the same five lines.
   errors with a fabricated sibling absent) and `gate:control-bytes` opens it
   once tracked. A markdown page at the REPO ROOT is reached the same way
   (measured, `context/tooling.md` in a 54-entry read list at 0 errors).
+- The ROOT `check-types` is almost wholly the old loop. `tsconfig.json`
+  includes `tools`, `*.ts` and `*.mjs` and excludes `packages` and
+  `**/*.test.ts`, and that reads 22 files in the repo, 20 of them under
+  `tools/ralph/` (measured at `88faa65`). The other two are
+  `tools/control-byte-gate/control-byte-gate.ts` and `vitest.config.ts`,
+  so deleting `tools/ralph/` leaves the root `tsc` gating two files, still
+  green and with no TS18003, since `tools` still matches. Expect the
+  shrink: read `./node_modules/.bin/tsc --noEmit --listFilesOnly` before
+  and after, rather than the green.
 - A `packages/<pkg>/context/` page is reached by NEITHER: the root pathspec
   ignores `packages/**` and a package's own script is a fixed pathspec
   (`eslint src lib workflows tests scripts` for `@ar/service`), so a new
