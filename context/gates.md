@@ -632,3 +632,23 @@ matching anything prints exactly the same five lines.
   cross-check on the decomposition is `git diff --name-status -M
   <base>..HEAD`, whose A and D rows must be set-equal to the derived added
   and removed sets (M rows contribute zero by construction).
+- `bun run gate:doc-links` opens every TRACKED `.md` file in the repo and
+  no other document: `git ls-files` filtered on the extension, so the
+  package-root `AGENTS.md` and `README.md` files and the package
+  `context/` pages no lint gate targets are all read, and so is the
+  tracked `.claude/` tree, whose findings print in a section of their own
+  that never moves the exit code. Its read count is the first line it
+  prints, `N tracked document(s)`. Beside the docs it opens each TRACKED
+  `.gitignore`, and only those, as an ignore source, through one
+  `git check-ignore --no-index --verbose` call. Being a tracked-set
+  reader, it fails in OPPOSITE directions on the two halves of a sitting's
+  new work: a doc not yet added is not read at all, the false green
+  `gate:control-bytes` also gives, while a reference to a file created in
+  the same sitting resolves against nothing until that file is added, a
+  false RED naming a path that is right there on disk. The checker's own
+  source, `packages/service/scripts/check-doc-links.ts`, is opened by
+  `@ar/service`'s `lint`, `check-types` and `test` like any file under
+  `packages/service/scripts/`, and no CI job runs the check. The three
+  workflows DO run a gate — the control-byte one, by its file path rather
+  than through its `gate:*` name — so finding no `gate:*` name under
+  `.github/workflows/` is no evidence that CI gates nothing.
