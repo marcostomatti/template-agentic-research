@@ -5,7 +5,7 @@ description: Use when producing or parsing a plan document (PLAN-<stub>.md, PLAN
 
 # dev-planner — Plan Document Format Specification
 
-This skill specifies the format of plan documents produced for feature development work and consumed by the ralph agent loop (`tools/ralph/`). It does not define agent behavior, personas, or workflow — those belong in agent profiles.
+This skill specifies the format of plan documents produced for feature development work and consumed by the ralph agent loop (in the `@open-tomato/rafa` package). It does not define agent behavior, personas, or workflow — those belong in agent profiles.
 
 ---
 
@@ -17,7 +17,7 @@ This skill specifies the format of plan documents produced for feature developme
 | `PLAN_TRACKER-<stub>.md` | Loop-parsed checklist; must use the exact format the parser expects |
 | `PREREQUISITES-<stub>.md` | Non-automatable setup steps required before the plan can run (only when any exist) |
 
-Plans are generated with `bun run ralph plan --spec=specs/<file>.md` (optionally `--stub=<name>`; the stub defaults to the spec's basename) and live at the repo root. The tracker is derived from the plan file by `trackerPathFor()` in `tools/ralph/utils/tracker.ts` (`PLAN-foo.md` → `PLAN_TRACKER-foo.md`) — never create or edit the tracker by hand during planning; the loop owns it. The unstubbed forms `PLAN.md` / `PLAN_TRACKER.md` / `PREREQUISITES.md` are also valid and are the loop's default (`bun run ralph start` with no `--plan`).
+Plans are generated with `bun run ralph plan --spec=specs/<file>.md` (optionally `--stub=<name>`; the stub defaults to the spec's basename) and live at the repo root. The tracker is derived from the plan file by `trackerPathFor()` in `@open-tomato/rafa/src/utils/tracker.ts` (`PLAN-foo.md` → `PLAN_TRACKER-foo.md`) — never create or edit the tracker by hand during planning; the loop owns it. The unstubbed forms `PLAN.md` / `PLAN_TRACKER.md` / `PREREQUISITES.md` are also valid and are the loop's default (`bun run ralph start` with no `--plan`).
 
 Execute a plan with `bun run ralph start --plan=PLAN-<stub>.md`.
 
@@ -65,7 +65,7 @@ so the work stays traceable back to the issue it delivers.
 
 ## PLAN_TRACKER.md format
 
-`PLAN_TRACKER-<stub>.md` is consumed line-by-line by `findNextTask()` in `tools/ralph/utils/tracker.ts`. The parser applies strict prefix matching — any deviation in syntax will cause tasks to be skipped or misread.
+`PLAN_TRACKER-<stub>.md` is consumed line-by-line by `findNextTask()` in `@open-tomato/rafa/src/utils/tracker.ts`. The parser applies strict prefix matching — any deviation in syntax will cause tasks to be skipped or misread.
 
 ```markdown
 # Stage: {Stage Name}
@@ -94,7 +94,7 @@ Important notes:
 
 ## Task declarations (routing)
 
-A task line may carry a trailing declaration block naming what the loop should dispatch it with. It is written on the PLAN line, travels into the tracker with it, and is read at dispatch by `parseTaskDeclaration()` in `tools/ralph/utils/declaration.ts`.
+A task line may carry a trailing declaration block naming what the loop should dispatch it with. It is written on the PLAN line, travels into the tracker with it, and is read at dispatch by `parseTaskDeclaration()` in `@open-tomato/rafa/src/utils/declaration.ts`.
 
 ```text
 - [ ] Add the Zod schema for `CreateJobRequest`  {agent=loop-implementer}
@@ -190,4 +190,4 @@ The `[BLOCKED]` marker is written by the loop (via `updateTrackerLine()`) when a
 
 ## Format validation
 
-Before changing checkbox syntax or stage heading format, verify compatibility against `findNextTask()` and `updateTrackerLine()` in `tools/ralph/utils/tracker.ts`. The parser uses simple prefix regex matching with no tolerance for whitespace variations or casing differences.
+Before changing checkbox syntax or stage heading format, verify compatibility against `findNextTask()` and `updateTrackerLine()` in `@open-tomato/rafa/src/utils/tracker.ts`. The parser uses simple prefix regex matching with no tolerance for whitespace variations or casing differences.
