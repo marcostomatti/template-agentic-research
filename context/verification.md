@@ -728,6 +728,7 @@ red package never masks another and a single run gives the whole picture.
   the module RESOLVES and the symbol is simply not in the built `.d.ts`,
   `@ar/ui`'s exports map pointing `types` at `./dist/index.d.ts`. The
   repair is a rebuild and nothing else, so the gate ORDER matters —
+  <!-- doc-links-skip: ./dist/index.d.ts -- relative path in context -->
   `@ar/web`'s `pretest` runs `bun run --filter '@ar/ui' build`, which means
   `test:all` silently regenerates the artifact `check-types:all` just
   failed on (same command, no tracked change, exit 2 then exit 0). On any

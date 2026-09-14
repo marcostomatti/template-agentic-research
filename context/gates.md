@@ -246,6 +246,7 @@ matching anything prints exactly the same five lines.
 - `git ls-files --error-unmatch` gives such a claim a THIRD control the
   fabricated-sibling one cannot: a nonexistent file UNDER a real tracked
   prefix. `packages/webx` exits 1 for the trivial reason, where
+  <!-- doc-links-skip: packages/web/zz-no-such-file.ts -- illustrative test path -->
   `packages/web/zz-no-such-file.ts` exits 1 though its whole directory is
   tracked — which is what says the pathspec resolves to FILES and not to a
   directory prefix that merely exists — and the bare prefix exits 0 by
@@ -300,7 +301,9 @@ matching anything prints exactly the same five lines.
   the PLAN's base (`git merge-base main HEAD`), never against a figure an
   earlier stage recorded — the two disagree by construction. Carry two
   controls: a definitely-absent but scannable path (in NEITHER set, so
-  membership is discriminating) and a binary-allowlist path (`a/b.png`,
+  membership is discriminating) and a binary-allowlist path (
+  <!-- doc-links-skip: a/b.png -- synthetic control path -->
+  `a/b.png`,
   false, so the predicate is not simply answering true for everything).
   That second control is necessarily SYNTHETIC here and saying so is part
   of the reading: ZERO tracked files carry any of the 40
@@ -625,7 +628,8 @@ matching anything prints exactly the same five lines.
   control — count what it refused — therefore answers 0 and reports the live
   predicate as dead. Make it live off SYNTHETIC paths through the IMPORTED
   function instead (`x.png`, `LOGO.PNG`, `bun.lockb` false; `Makefile`,
-  `.gitignore`, `a/.eslintrc.json` true), which pins the case-folding and
+  `.gitignore`, <!-- doc-links-skip: a/.eslintrc.json -- synthetic control path -->
+  `a/.eslintrc.json` true), which pins the case-folding and
   dot-at-index-0 branches in the same pass.
 - A "no path on both sides changes answer" leg over a path-only predicate is
   a TAUTOLOGY the moment it is spelled `f(p) !== f(p)`, and it prints a
