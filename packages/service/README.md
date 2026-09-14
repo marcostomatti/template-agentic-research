@@ -241,11 +241,11 @@ already public lands in `docs/` or on a `context/` page instead.
 
 ## CI & deploy
 
-- [.github/workflows/test.yml](.github/workflows/test.yml) — lint,
+- <!-- doc-links-skip: .github/workflows/test.yml -- workflows are at root level, not package level -->[.github/workflows/test.yml](.github/workflows/test.yml) — lint,
   type-check, and the isolated suite on every PR (GitHub-hosted; no external
   dependencies by design — integration/live tests stay local or on your own
   runner).
-- [.github/workflows/deploy.yml](.github/workflows/deploy.yml) — manually
+- <!-- doc-links-skip: .github/workflows/deploy.yml -- workflows are at root level, not package level -->[.github/workflows/deploy.yml](.github/workflows/deploy.yml) — manually
   triggered; builds the Docker image and stops where your infrastructure
   begins (an on-merge trigger is included, commented out).
 - **Self-hosted runners**: nothing here requires one. If you have a homelab
