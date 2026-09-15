@@ -382,8 +382,8 @@
   naive re-wrap cascades through the rest of the paragraph. The contained
   repair absorbs the overflow into the NEXT line's own slack so the bullet's
   LINE COUNT is preserved and nothing after it moves.
-- No fenced line anywhere in the four `AGENTS.md` maps, the 24 `context/`
-  pages or `tools/ralph/PROMPT.md` exceeds 78 cols, so a fence obeys the
+- No fenced line anywhere in the four `AGENTS.md` maps or the 24 `context/`
+  pages exceeds 78 cols, so a fence obeys the
   prose cap here rather than being exempt like a table row. A fence INDENTED
   inside a list item hands that indentation to whatever reads it, so a
   multi-line `python3 -c` snippet under a bullet dies on IndentationError and

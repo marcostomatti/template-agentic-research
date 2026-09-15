@@ -5,8 +5,8 @@ dependency-injected service core with health/control endpoints, Drizzle +
 Postgres by default, optional Redis, an interval cron runner, a
 preference-aware notification layer with channel stubs, a first-party
 credential strategy behind token-wired auth middleware, an isolated-vs-live
-testing harness, and integration with the global `@open-tomato/rafa` task
-loop for agent-driven operations.
+testing harness, and integration with the `rafa` task loop CLI
+(`@open-tomato/rafa`) for agent-driven operations.
 
 ## Overview & origins
 
@@ -82,10 +82,10 @@ See `scripts/README.md` for details on every step `bootstrap.sh` and
 
 The template ships two entry points sharing the modules under `src/`:
 
-| Entry | Command | What it serves |
-| --- | --- | --- |
-| `src/index.ts` | `bun run start` / `bun run dev` | the Express API (`createService`) |
-| `src/mcp/index.ts` | `bun run start:mcp` | the MCP server (`createMCP`; stdio or HTTP via `MCP_TRANSPORT`) |
+| Entry              | Command                         | What it serves                                                  |
+| ------------------ | ------------------------------- | --------------------------------------------------------------- |
+| `src/index.ts`     | `bun run start` / `bun run dev` | the Express API (`createService`)                               |
+| `src/mcp/index.ts` | `bun run start:mcp`             | the MCP server (`createMCP`; stdio or HTTP via `MCP_TRANSPORT`) |
 
 Two ways to combine them:
 
@@ -217,21 +217,20 @@ under an hour.
 bun run stress:start && bun run test:live && bun run stress:stop
 ```
 
-## The agent loop (ralph)
+## The agent loop
 
-Ralph is hoisted to the umbrella root (`tools/ralph/`); run the commands below from the repo root.
+`rafa` is the task loop CLI from `@open-tomato/rafa`; run the commands below from the repo root.
 
 ```bash
-bun run ralph plan  --spec=.specs/my-feature.md         # spec → .plans/PLAN-my-feature.md (+ PREREQUISITES-…)
-bun run ralph start --plan=.plans/PLAN-my-feature.md    # execute task-by-task; resumes blocked tasks
-bun run ralph start --plan=.plans/PLAN-my-feature.md --start-at=23:00   # queue for off-hours
+rafa plan  --spec=.specs/my-feature.md         # spec → .plans/PLAN-my-feature.md (+ PREREQUISITES-…)
+rafa start --plan=.plans/PLAN-my-feature.md    # execute task-by-task; resumes blocked tasks
+rafa start --plan=.plans/PLAN-my-feature.md --start-at=23:00   # queue for off-hours
 ```
 
 Plans follow the format in `.claude/skills/dev-planner/SKILL.md` (flat
 `- [ ]` checklists under `# Stage:` headings; per-plan trackers). When a
-`progress.txt` exists, `ralph plan` feeds its accumulated findings to the
-planner as advisory context (`--no-progress` to skip). The loop prompt
-lives in `tools/ralph/PROMPT.md` at the umbrella root (a repo-root `PROMPT.md` overrides it).
+`progress.txt` exists, `rafa plan` feeds its accumulated findings to the
+planner as advisory context (`--no-progress` to skip).
 
 Working plans and specs live in the **gitignored** `.plans/` and `.specs/`
 directories — they can describe unpatched privacy/security bugs, so they

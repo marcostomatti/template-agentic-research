@@ -6,7 +6,7 @@ description: Use when compacting progress.txt — the loop dispatches a compacti
 # progress-hygiene — keep progress.txt small and true
 
 `progress.txt` is the loop's scratch memory: broadly-applicable findings
-appended between tasks. Since `ralph plan` injects it into plan generation
+appended between tasks. Since `rafa plan` injects it into plan generation
 as advisory context, it earns its size — every stale or duplicated line is
 context bloat for every future plan. The injection truncates at 16,000
 characters, oldest findings first (see `@open-tomato/rafa/src/plan.ts`), and the loop

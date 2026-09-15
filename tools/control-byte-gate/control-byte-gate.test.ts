@@ -103,7 +103,7 @@ describe('renderSafe', () => {
 describe('isScannable', () => {
   it('scans source, config and docs', () => {
     for (const p of [
-      'tools/ralph/ralph.ts',
+      'tools/control-byte-gate/control-byte-gate.ts',
       'packages/service/src/index.ts',
       'README.md',
       'package.json',
@@ -124,7 +124,7 @@ describe('isScannable', () => {
     expect(isScannable('weird/thing.qqq')).toBe(true);
     expect(isScannable('Makefile')).toBe(true);
     expect(isScannable('.gitignore')).toBe(true);
-    expect(isScannable('bin/ralph')).toBe(true);
+    expect(isScannable('bin/tool')).toBe(true);
   });
 
   it('matches extensions case-insensitively', () => {

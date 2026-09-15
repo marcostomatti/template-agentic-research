@@ -581,22 +581,17 @@ matching anything prints exactly the same five lines.
   predicate keys on `lastIndexOf('.') <= 0`. So a dotfile edit's only
   automated green is `gate:control-bytes`.
 - A markdown file under `tools/` has TWO automated greens, unlike the
-  package-root docs: the root `eslint .` pathspec reaches it (measured,
-  <!-- doc-links-skip: tools/ralph/PROMPT.md -- retired during rafa cutover -->
-  `tools/ralph/PROMPT.md` present in a 45-entry `-f json` read list at 0
-  errors with a fabricated sibling absent) and `gate:control-bytes` opens it
-  once tracked. A markdown page at the REPO ROOT is reached the same way
+  package-root docs: the root `eslint .` pathspec reaches it (measured on a
+  markdown file under `tools/`, present in a 45-entry `-f json` read list at
+  0 errors with a fabricated sibling absent) and `gate:control-bytes` opens
+  it once tracked. A markdown page at the REPO ROOT is reached the same way
   (measured, `context/tooling.md` in a 54-entry read list at 0 errors).
-- The ROOT `check-types` was configured for the old loop. `tsconfig.json`
-  includes `tools`, `*.ts` and `*.mjs` and excludes `packages` and
-  `**/*.test.ts`, and that reads 22 files in the repo, 20 of them under
-  <!-- doc-links-skip: tools/ralph/ -- retired during rafa cutover, loop moved to @open-tomato/rafa -->
-  `tools/ralph/` (measured at `88faa65`). The other two are
-  `tools/control-byte-gate/control-byte-gate.ts` and `vitest.config.ts`,
-  so deleting `tools/ralph/` leaves the root `tsc` gating two files, still
-  green and with no TS18003, since `tools` still matches. Expect the
-  shrink: read `./node_modules/.bin/tsc --noEmit --listFilesOnly` before
-  and after, rather than the green.
+- The ROOT `check-types` gates two files. `tsconfig.json` includes `tools`,
+  `*.ts` and `*.mjs` and excludes `packages` and `**/*.test.ts`, which reads
+  `tools/control-byte-gate/control-byte-gate.ts` and `vitest.config.ts` and
+  nothing else — green, and with no TS18003 since `tools` matches. Read
+  `./node_modules/.bin/tsc --noEmit --listFilesOnly` before trusting that
+  green with a new file, rather than the exit code.
 - A `packages/<pkg>/context/` page is reached by NEITHER: the root pathspec
   ignores `packages/**` and a package's own script is a fixed pathspec
   (`eslint src lib workflows tests scripts` for `@ar/service`), so a new

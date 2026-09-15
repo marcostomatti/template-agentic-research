@@ -6,12 +6,12 @@ Quick orientation:
 
 - Bun-workspaces monorepo: `@ar/ui` (component library + visual harness),
   `@ar/web` (app), `@ar/service` (Express/MCP service + future research
-  pipelines). The task loop runs via the global `@open-tomato/rafa` package;
+  pipelines). The task loop runs on the `rafa` CLI (`@open-tomato/rafa`);
   see `context/loop.md` for its architecture.
 - Working inside a package? Read that package's `AGENTS.md` first — each has
   its own conventions (ui: variants-only styling + baseline-safe verification;
   service: isolated/live test seam + framework-vs-app split).
 - `.plans/` and `.specs/` are untracked on purpose (unpatched security/privacy
   content). Never move their contents into tracked paths.
-- Specs feed the loop: `bun run ralph plan --spec=.specs/<file>.md`, then
-  `bun run ralph start --plan=.plans/PLAN-<stub>.md`.
+- Specs feed the loop: `rafa plan --spec=.specs/<file>.md`, then
+  `rafa start --plan=.plans/PLAN-<stub>.md`.

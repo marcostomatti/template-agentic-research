@@ -1,10 +1,10 @@
 ## The loop
 
-`bun run ralph plan --spec=.specs/<file>.md` writes
+`rafa plan --spec=.specs/<file>.md` writes
 `.plans/PLAN-<stub>.md` (+ `.plans/PREREQUISITES-<stub>.md` when needed) per
 the `dev-planner` skill; when a `progress.txt` exists, its findings are
 injected as advisory planning context (skip with `--no-progress`).
-`bun run ralph start --plan=.plans/PLAN-<stub>.md` executes it task-by-task
+`rafa start --plan=.plans/PLAN-<stub>.md` executes it task-by-task
 with a per-plan tracker, marking `[x]`/`[BLOCKED]` and resuming blocked
 tasks first. `--start-at=HH:MM` defers a run. On completion the loop
 promotes general findings from `progress.txt` into the repo docs/skills and

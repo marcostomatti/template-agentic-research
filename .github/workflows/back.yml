@@ -1,6 +1,6 @@
 name: Back
 
-# Backend pipeline: root tooling <!-- doc-links-skip: tools/ralph -- retired during rafa cutover, loop moved to @open-tomato/rafa --> + @ar/service. Isolated suite
+# Backend pipeline: root tooling + @ar/service. Isolated suite
 # only, on GitHub-hosted runners: no databases, no external dependencies, no
 # credentials. The live/integration suite (packages/service/tests/live/,
 # `bun run test:live`) is deliberately NOT run here — it needs docker-compose
@@ -64,5 +64,5 @@ jobs:
       - name: Type-check (root + service)
         run: bun run check-types && bun run --filter '@ar/service' check-types
 
-      - name: Tests (ralph + service isolated suite)
+      - name: Tests (root tools + service isolated suite)
         run: bun run test && bun run --filter '@ar/service' test
