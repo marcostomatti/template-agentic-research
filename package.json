@@ -29,8 +29,7 @@
     "test": "vitest run",
     "test:all": "bun run test && bun run --filter '@ar/*' test",
     "gate:control-bytes": "bun tools/control-byte-gate/control-byte-gate.ts",
-    "gate:doc-links": "bun packages/service/scripts/check-doc-links.ts",
-    "ralph": "rafa"
+    "gate:doc-links": "bun packages/service/scripts/check-doc-links.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

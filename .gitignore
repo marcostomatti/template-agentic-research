@@ -36,9 +36,8 @@ packages/service/.exports/
 test-results/
 playwright-report/
 
-# The effort collector's append-only store, spelled once in code at
-# <!-- doc-links-skip: tools/ralph/effort/store.ts -- retired during rafa cutover -->
-# tools/ralph/effort/store.ts (EFFORT_STORE_DIR). Never committed: the
+# The effort store `rafa effort collect` appends to, under `.ralph/effort/`
+# (the directory name is rafa's, not this repo's). Never committed: the
 # rows measure ONE checkout's runs, are regenerable from the session
 # logs at any time, and carry plan stubs and dispatched task text
 # derived from the gitignored `.plans/` — committing them would put

@@ -1,9 +1,9 @@
 ## The ralph loop
 
 The ralph loop's source code lives in the `@open-tomato/rafa` package
-(`src/` directory). The loop runs via `bun run ralph` (aliased as `rafa` in
-`package.json`), invoked as `bun run ralph plan/start/usage/effort` from
-the repo root; plans and trackers live in the gitignored `.plans/`. This
+(`src/` directory) and runs through that package's `rafa` CLI, invoked as
+`rafa plan/start/usage/effort` from the repo root; plans and trackers live
+in the gitignored `.plans/`. This
 page documents the loop's architecture — what each module owns, what the
 loop does per task, and which of its literals are copied into a second file
 that nothing ties back to the first.
@@ -12,7 +12,7 @@ that nothing ties back to the first.
 graph once, so a task that lands a change to `start.ts` or anything it
 imports is dispatched by the loop that was already running. Measured with
 `dispatchTask`, `parseTaskDeclaration` and `commitFinishedTask` all present
-on disk: a task dispatched by a `ralph start` launched seven hours earlier
+on disk: a task dispatched by a `rafa start` launched seven hours earlier
 ran with its declaration block UNSTRIPPED in the prompt, on the loop's
 default model rather than the declared one, and with no commit made on its
 behalf. So a plan that lands its own dispatcher change cannot discharge a
@@ -23,7 +23,7 @@ itself as evidence that routing applied.
 The narrower companion: `start.ts` reads `PROMPT.md` and the PLAN once
 before its `while` loop and re-reads only the TRACKER per iteration. An
 edit to the injected prompt or to the plan text takes effect on the next
-`ralph start`; a tracker edit is visible immediately. A task can tell which
+`rafa start`; a tracker edit is visible immediately. A task can tell which
 generation dispatched it by holding the instructions in its own injected
 prompt against the tracked `@open-tomato/rafa/src/PROMPT.md` — read the
 INJECTED copy as the authority for what that session must do itself.
@@ -59,7 +59,7 @@ must STOP the loop**: `findNextTask` resumes a BLOCKED task first, so
 carrying on re-dispatches the same task immediately and forever.
 
 The compaction step sits after the commit and before the usage gate for a
-reason: the counter lives in `start()`'s own scope and a fresh `ralph start`
+reason: the counter lives in `start()`'s own scope and a fresh `rafa start`
 begins at zero, so a run that paused at the usage gate without compacting
 would hand the whole oversized file to the next run's first task, which
 cannot compact either. The counter resets on DISPATCH and not on success —
@@ -177,8 +177,8 @@ their own accurate subjects. The same `git add -A` strands a plan's
 context across RUNS: an edit the context calls "already in the working
 tree" rides into the FIRST task commit of the run that saw it, on that
 run's branch, so a replay of the plan on a fresh branch cut from `main`
-starts without it (measured: the `ralph` script a context said was
-already repointed came back at its pre-cutover body). `git show --stat`
+starts without it (measured: a `package.json` script a context said was
+already repointed came back at its previous body). `git show --stat`
 the earlier run's first task commit and restore what it carried before
 the first task.
 
@@ -223,7 +223,7 @@ relative forms, and the alternative is a silent empty run.
 
 ### The branch rule, and what telemetry can see
 
-`ralph start` REFUSES to run a plan on `main` or `master`. A plan run
+`rafa start` REFUSES to run a plan on `main` or `master`. A plan run
 needs its own branch: that is what gives it a PR to review, and what
 lets the wrap-up's CI stage have something to wait on — on main both
 are silently skipped, and silence is the only signal the mistake

@@ -2,7 +2,7 @@
 
 1. `bun run lint:all` — zero problems.
 2. `bun run check-types:all` — clean.
-3. `bun run test:all` — root (ralph) + every package's default suite.
+3. `bun run test:all` — root (`tools/`) + every package's default suite.
 4. UI work additionally follows `packages/ui/AGENTS.md` (visual baselines
    FIRST, then the rest — baselines are per-environment, regenerate, never
    copy).

@@ -498,13 +498,13 @@ touched: 26 changed paths sat under `packages/` and BOTH workflows' `paths:`
 filters matched. Derive the match by holding each filter glob against
 `git diff --name-only <base>..HEAD` rather than against what the plan
 remembered, and read the matching job's STEPS too — `back.yml`'s test step is
-`bun run test` at the root, which IS the ralph suite. The filter to check
+`bun run test` at the root, which IS the `tools/` suite. The filter to check
 FIRST is the one the two workflows SHARE: `bun.lock` sits in both, so any plan
 that adds a dependency dispatches the front-end workflow on a branch that
 changes no file under `packages/ui` or `packages/web`.
 
 **Regenerating a plan from its spec is not an annotate-in-place job**, and
-`ralph plan` cannot do it in place either: `plan.ts` REFUSES when
+`rafa plan` cannot do it in place either: `plan.ts` REFUSES when
 `.plans/PLAN-<stub>.md` already exists (exit 1), and `.plans/` being
 gitignored means the file has no HEAD side to recover from — so a copy in
 `/tmp` taken before the write is the only undo, and its sha is what says the
