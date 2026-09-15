@@ -264,6 +264,19 @@ already public lands in `docs/` or on a `context/` page instead.
 - <!-- doc-links-skip: .github/workflows/deploy.yml -- workflows are at root level, not package level -->[.github/workflows/deploy.yml](.github/workflows/deploy.yml) — manually
   triggered; builds the Docker image and stops where your infrastructure
   begins (an on-merge trigger is included, commented out).
+- **One container, API and web app**: `Dockerfile`, built from the repo
+  root, has four stages. `deps` and `build` install and type-check
+  `@ar/service` alone. `web` is its own stage: it installs the `@ar/ui`
+  and `@ar/web` workspaces, builds `@ar/ui` first (the app resolves it
+  through `workspace:*` against its `dist/`), then builds `@ar/web` with
+  `VITE_AR_API_URL=''` (same-origin API) and `VITE_AR_BASE_PATH=/app/`.
+  `runtime` copies only `packages/web/dist` out of it and sets
+  `AR_WEB_DIST` to that directory, so the one image serves the API at `/`
+  and mounts the build at `/app`. No other stage reads `packages/ui` or
+  `packages/web`, so dropping the app from the image is deleting the
+  `web` stage plus the copy and the `ENV` line. There is no
+  `.dockerignore`: every `COPY` names source paths, never a package
+  whole, so no `node_modules` or `dist` reaches the build context.
 - **Self-hosted runners**: nothing here requires one. If you have a homelab
   runner (this stack's origin used one labeled `grow-box`), point `runs-on`
   at its labels to give jobs access to private registries or long-lived test
