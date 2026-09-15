@@ -28,7 +28,7 @@
  *
  * `paths` KEYS ARE PATHS AND NOT OPERATIONS, which is this walk's
  * one trap and it is measured rather than assumed: the document
- * carries 36 path keys over 55 registered routes, the verbs
+ * carries 37 path keys over 56 registered routes, the verbs
  * collapsing under one path item apiece. A set built from
  * `Object.keys(document.paths)` is nineteen short and reads as a
  * registry that dropped routes, so the walk descends into each
@@ -38,7 +38,7 @@
  * it. `labelsOf` answers one label per HANDLER rather than per
  * route, so the attempt limiter ahead of the login handler makes
  * `POST /auth/login` answer twice: the declared LIST is one longer
- * than its set, against 55 operations in the document. A
+ * than its set, against 56 operations in the document. A
  * comparison of counts reads a complete surface as one route short
  * before it is ever imprecise.
  *
@@ -48,7 +48,8 @@
  * research tables, so the document describes those three routes —
  * a roster walking only the sixteen would report all three as
  * documented-and-not-declared, which is the opposite of what is
- * wrong.
+ * wrong. The identity entry is in for the same reason: `GET /me` is
+ * registered from `meRouteSchemas`, so the document describes it.
  *
  * A PATH-ITEM KEY THE ROSTER DOES NOT NAME IS A REFUSAL rather
  * than a skip. Measured over this document, the only keys at that
@@ -71,6 +72,7 @@ import type { RouteConfig } from '@asteasolutions/zod-to-openapi';
 
 import {
   buildAuthRouterEntry,
+  buildMeRouterEntry,
   buildResearchRouters,
   labelFor,
 } from '../helpers/route-labels.js';
@@ -156,7 +158,7 @@ export function expressPathOf(path: string): string {
  *   generated here, so a caller chooses between the one this
  *   process assembles and one already written out.
  * @returns One label per operation, `GET /domains/:slug` and its
- *   fifty-four siblings, with every path converted back.
+ *   fifty-five siblings, with every path converted back.
  * @throws TypeError - When a path item carries a key
  *   {@link OPERATION_KEYS} does not name. Per the header: dropping
  *   it silently would surface at the equality as a missing route
@@ -191,11 +193,12 @@ export function documentedOperations(
 }
 
 /**
- * Every label the seventeen routers declare.
+ * Every label the eighteen routers declare.
  *
- * @returns The sixteen research routers read at the root and the
- *   auth router read at the mount `src/index.ts` gives it, their
- *   labels collapsed into one set.
+ * @returns The sixteen research routers read at the root, the auth
+ *   router read at the mount `src/index.ts` gives it and the
+ *   identity router read at the root, their labels collapsed into
+ *   one set.
  *
  * @remarks
  * A SET, and the duplicate it collapses is real rather than
@@ -207,7 +210,11 @@ export function documentedOperations(
  * {@link expressPathOf} runs on the other one.
  */
 export function declaredOperations(): ReadonlySet<string> {
-  const declared = [...buildResearchRouters(), buildAuthRouterEntry()];
+  const declared = [
+    ...buildResearchRouters(),
+    buildAuthRouterEntry(),
+    buildMeRouterEntry(),
+  ];
 
   return new Set(declared.flatMap((entry) => entry.labels));
 }

@@ -44,7 +44,7 @@
  * identity.
  *
  * Two readings keep that zero from being a zero over less. The
- * seventeen tables are transcribed here a second time rather than
+ * eighteen tables are transcribed here a second time rather than
  * read back out of the module under test, and every label the
  * registry registered is asserted to come from one of them — a
  * module dropped from the roster would otherwise shrink the
@@ -96,7 +96,7 @@
  * through arrays and objects alike — and refuses one naming a member
  * the connector mask covers, one under a `config` property that is
  * not the mask, and one whose text is credential-shaped. Measured
- * over this document: 83 documented values of which 55 are strings,
+ * over this document: 84 documented values of which 55 are strings,
  * the longest thirteen characters, and no fault at all. The
  * population is asserted non-empty in the same case, because a walk
  * that collected nothing answers the same zero.
@@ -239,6 +239,7 @@ import {
   successEnvelopeSchema,
 } from './http/envelope.js';
 import { slugParamSchema } from './http/schemas.js';
+import { meResponseSchema, meRouteSchemas } from './me/routes.js';
 import {
   buildOpenApiRegistry,
   generateOpenApiDocument,
@@ -434,7 +435,7 @@ interface ExportedTable {
 }
 
 /**
- * The seventeen tables, under the modules that declare them.
+ * The eighteen tables, under the modules that declare them.
  *
  * Transcribed here a second time on purpose. A roster read back out
  * of `./openapi.ts` could only ever agree with the module under
@@ -449,6 +450,7 @@ const EXPORTED_TABLES: readonly ExportedTable[] = [
   { module: 'domains', table: domainsRouteSchemas },
   { module: 'entities', table: entitiesRouteSchemas },
   { module: 'findings', table: findingsRouteSchemas },
+  { module: 'me', table: meRouteSchemas },
   { module: 'personas', table: personasRouteSchemas },
   { module: 'runs', table: runsRouteSchemas },
   { module: 'runs/spend', table: spendRouteSchemas },
@@ -601,7 +603,7 @@ const RESTATED_BINDING = 'domains GET /domains/:slug params';
 /**
  * The document every case below reads, generated once.
  *
- * Once rather than per case because generation walks all seventeen
+ * Once rather than per case because generation walks all eighteen
  * tables, and because the two cases that vary the port build their
  * own anyway.
  */
@@ -1214,6 +1216,26 @@ describe('buildOpenApiRegistry', () => {
   it('tags a route with the group its path belongs to', () => {
     expect(routeLabelled('POST /auth/login').tags).toStrictEqual(['auth']);
     expect(routeLabelled('GET /domains').tags).toStrictEqual(['domains']);
+    expect(routeLabelled('GET /me').tags).toStrictEqual(['me']);
+  });
+
+  // `GET /me` answers outside both envelopes and, unlike `/auth`,
+  // has a schema for the body it writes. The `200` binds that export
+  // BY IDENTITY and untagged, so the document names the object the
+  // handler parses its answer through and no fourth component is
+  // hoisted. The status set is compared whole: a route handed the
+  // envelope responses instead gains a `2XX` and a `204` here.
+  it('documents the identity body by identity, outside the envelopes', () => {
+    const me = routeLabelled('GET /me');
+    const body = bodySchemaOf(responseOf(me, '200'));
+
+    expect(Object.keys(me.responses).sort())
+      .toStrictEqual(['200', '401', '500']);
+    expect(body).toBe(meResponseSchema);
+    expect(componentIdOf(body)).toBeUndefined();
+    expect(bodySchemaOf(responseOf(me, '401'))).toBeUndefined();
+    expect(componentIdOf(bodySchemaOf(responseOf(me, '500'))))
+      .toBe('ErrorEnvelope');
   });
 
   it('names the three envelope components on its responses', () => {
@@ -1255,7 +1277,7 @@ describe('buildOpenApiRegistry', () => {
     expect(request?.query).toBeUndefined();
   });
 
-  // Identity, over every schema all seventeen tables bind, and the
+  // Identity, over every schema all eighteen tables bind, and the
   // one rule this assembly has. A table names the const its handler
   // parses with BY IDENTITY, so a registration that RESTATED one —
   // wrote the same members out a second time instead of binding the
@@ -1392,7 +1414,7 @@ describe('generateOpenApiDocument', () => {
 
     expect(credentialsIn(DOCUMENT)).toStrictEqual([]);
     // What keeps that zero from being a zero over nothing: the
-    // walk really did collect this document. 83 and 55, measured.
+    // walk really did collect this document. 84 and 55, measured.
     expect(documented.length).toBeGreaterThan(0);
     expect(texts.length).toBeGreaterThan(0);
     // And it DESCENDED. An `enum` is an array and an `examples` an

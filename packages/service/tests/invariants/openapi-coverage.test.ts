@@ -21,7 +21,7 @@
  * report. The two sides are the same size today, so a comparison
  * of counts is satisfied by a document that dropped one route and
  * grew another — which is exactly what renaming a table key does.
- * Measured: that rename leaves both sides at 55 and this case
+ * Measured: that rename leaves both sides at 56 and this case
  * fails naming `GET /domains` on one side and `GET /domainz` on
  * the other, where every count reading agrees.
  *
@@ -58,7 +58,7 @@
  * after exactly one conversion, and a round trip cannot see a
  * fault its two halves share: a pair that were BOTH the identity
  * takes `/domains/:slug` out of a table, into the document still
- * unbraced, and back unchanged, and the equality agrees at 55
+ * unbraced, and back unchanged, and the equality agrees at 56
  * with nothing having been converted at all. So the table under
  * `The conversion` carries the BRACED form of every shape beside
  * the express one it comes back as, both written out rather than
@@ -117,7 +117,7 @@
  *
  * The document is generated once, at module scope, for the reason
  * `src/openapi.test.ts` gives its own copy: generation walks all
- * seventeen binding tables, and nothing here varies the port.
+ * eighteen binding tables, and nothing here varies the port.
  */
 import type { RouteSchemas } from '../../src/http/openapi-bindings.js';
 import type { OpenApiDocument } from '../../src/openapi.js';
@@ -150,7 +150,7 @@ import {
  */
 const DOCUMENTED = documentedOperations(generateOpenApiDocument());
 
-/** Every label the seventeen routers declare. */
+/** Every label the eighteen routers declare. */
 const DECLARED = declaredOperations();
 
 /** Why a label appears in the report's leading block. */

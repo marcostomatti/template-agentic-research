@@ -500,9 +500,9 @@ established that.
 ### The paths wave 1 does not take
 
 `GET /health` and `ALL /_control/*` belong to the framework
-(`lib/express/builtin-routes.ts`), `/auth/*` to q07, and `/users`
-and `/me` are declared in `src/index.ts` today. Wave 1 adds
-nothing under any of them, and none of its five prefixes —
+(`lib/express/builtin-routes.ts`), `/auth/*` to q07, `/users` to
+`src/index.ts` and `/me` to `src/me/routes.ts`, which it mounts.
+Wave 1 adds nothing under any of them, and none of its five prefixes —
 `/domains`, `/categories`, `/terms`, `/personas`, `/settings` —
 collides with one.
 
@@ -519,8 +519,8 @@ the prefix is free rather than reassigned.
 That leaves three declarations above the guarded block, in
 `register`'s own order: the `/auth` mount, conditional on a
 bootstrapped credential where nothing else here is; `GET /users`,
-open; and `GET /me`, which carries `ctx.requireAuth` on the route
-itself rather than inheriting it from a mount. The framework's
+open; and `GET /me`, mounted from `src/me/routes.ts` at `/` behind
+`ctx.requireAuth` on the research mounts' terms. The framework's
 `GET /health` sits above all three, `mountBuiltinRoutes` running
 before `register` is called, and `ALL /_control/*` is mounted by
 nothing here — its config block is optional with no default and
@@ -3670,7 +3670,7 @@ of calls the window holds.
 
 Every router module exports one `*RouteSchemas` table, keyed by the
 labels of the routes it declares — `GET /domains/:slug` and its
-fifty-four siblings — each key naming what that route parses a request
+fifty-five siblings — each key naming what that route parses a request
 with, under `params`, `query` and `body`.
 `src/http/openapi-bindings.ts` declares the shape; the tables sit in
 the router modules, beside the routes they describe.
@@ -3709,12 +3709,12 @@ find — so `{}` is what a route parsing nothing says.
 
 ### The registry is assembly, and declares no route of its own
 
-`src/openapi.ts` walks the seventeen tables in one pass: it splits
+`src/openapi.ts` walks the eighteen tables in one pass: it splits
 each label into a method and a path, rewrites the express `:slug`
 spelling as the OpenAPI `{slug}` one, and registers the result under a
 tag named for the path base. It declares no route, no parameter and no
 schema of its own, and the document that comes out carries one
-operation per table key — fifty-five today, over 36 path keys, the
+operation per table key — fifty-six today, over 37 path keys, the
 verbs collapsing under one path item apiece.
 
 `extendZodWithOpenApi` is deliberately never called. It mutates
@@ -3745,13 +3745,13 @@ able to show.
 
 The mount is last in `register` and spells `ctx.requireAuth` itself.
 It does not have to for an anonymous request to be refused: the
-sixteen research mounts sit at `/`, so the first of them answers `401`
-long before this line is read, exactly as the unmatched-path claim
-above describes. That refusal is mount ORDER and nothing else, and
-this mount carries a path, so it is not itself part of the
-fall-through chain those mounts form. The guard spelled here is what
-survives a reordering — whether the document is public is answered by
-one line rather than by a position.
+identity mount and the sixteen research mounts sit at `/`, so the
+first of them answers `401` long before this line is read, exactly as
+the unmatched-path claim above describes. That refusal is mount ORDER
+and nothing else, and this mount carries a path, so it is not itself
+part of the fall-through chain those mounts form. The guard spelled
+here is what survives a reordering — whether the document is public is
+answered by one line rather than by a position.
 
 The document is built ONCE, at boot. `generateOpenApiDocument`
 assembles a fresh registry per call and throws on a table it cannot
@@ -3829,8 +3829,9 @@ reports it.
 
 It holds two label sets equal — the operations the generated document
 declares, walked out of each path item's verb keys, against the labels
-the sixteen research routers and the auth entry declare. The
-conversion between the two spellings happens ONCE and on ONE side: the
+the sixteen research routers, the auth entry and the identity entry
+declare. The conversion between the two spellings happens ONCE and on
+ONE side: the
 document is rewritten into the routers' `:param` spelling and the
 router side is converted by nothing, which is what stops a rewrite
 both sides shared from passing unreported.
@@ -3877,6 +3878,24 @@ exist to avoid. Per-record response schemas are DEFERRED rather than
 forgotten: `docs/architecture/01-invariants.md` carries the
 not-enforced row that records the deferral, and `src/http/envelope.ts`
 the argument that row points back at.
+
+### `GET /me` names its own body, because a schema for it exists
+
+`GET /me` answers `{ ok: true, sub }`, a bare object in neither
+envelope. `sub` is the verified session's subject, and `null` where
+the guard is a passthrough: that service checks no credential, and
+the `null` says so where an absent key would hide it. Under an auth
+block the `null` is unreachable, the guard answering `401` before the
+route runs.
+
+Unlike the `/auth` mount, that body HAS a schema. The handler in
+`src/me/routes.ts` builds its answer through `meResponseSchema`, and
+`src/openapi.ts` binds that export to the `200` by identity, so the
+document names the object the route writes rather than a copy. It is
+left untagged and inlined, which keeps `components/schemas` at the
+three envelopes. The route also declares the guard's `401` and the
+failure envelope at `500`, and neither a `204` nor a `422`: it
+deletes nothing and parses nothing.
 
 ### Four rules of this surface no binding table can state
 

@@ -1,13 +1,13 @@
 /**
- * The seventeen binding tables read as ONE surface, held against the
- * seventeen routers this package declares.
+ * The eighteen binding tables read as ONE surface, held against the
+ * eighteen routers this package declares.
  *
- * WHAT THIS FILE ASKS THAT THE SEVENTEEN COLOCATED CASES DO NOT is
+ * WHAT THIS FILE ASKS THAT THE EIGHTEEN COLOCATED CASES DO NOT is
  * the union. Every `*routes.test.ts` already holds its own table
  * against its own router, so a route added to a router without a
  * binding fails in that module before anything here runs. What none
  * of them can see is the surface those tables add up to, which is
- * what an assembled document reads: whether the seventeen together
+ * what an assembled document reads: whether the eighteen together
  * cover the whole declared API, whether two of them claim one
  * label, and whether a member said to hold a schema holds one at
  * RUNTIME.
@@ -62,6 +62,7 @@ import { domainsRouteSchemas } from '../../src/domains/routes.js';
 import { entitiesRouteSchemas } from '../../src/entities/routes.js';
 import { findingsRouteSchemas } from '../../src/findings/routes.js';
 import { routeSchemasFor } from '../../src/http/openapi-bindings.js';
+import { meRouteSchemas } from '../../src/me/routes.js';
 import { personasRouteSchemas } from '../../src/personas/routes.js';
 import { runsRouteSchemas } from '../../src/runs/routes.js';
 import { spendRouteSchemas } from '../../src/runs/spend-routes.js';
@@ -83,6 +84,7 @@ import { termsRouteSchemas } from '../../src/taxonomy/terms-routes.js';
 import { topicsRouteSchemas } from '../../src/topics/routes.js';
 import {
   buildAuthRouterEntry,
+  buildMeRouterEntry,
   buildResearchRouters,
 } from '../helpers/route-labels.js';
 
@@ -127,20 +129,23 @@ const BOUND_ROUTERS: readonly BoundRouter[] = [
   { name: 'spend', table: spendRouteSchemas },
   { name: 'proposals', table: sourceProposalsRouteSchemas },
   { name: 'auth', table: authRouteSchemas },
+  { name: 'me', table: meRouteSchemas },
 ];
 
 /**
- * The seventeen routers, walked: the sixteen research ones at the
- * root and the auth one at the mount `src/index.ts` gives it.
+ * The eighteen routers, walked: the sixteen research ones at the
+ * root, the auth one at the mount `src/index.ts` gives it, and the
+ * identity one at the root.
  *
- * The auth entry is a separate export so that a consumer chooses
- * whether to walk it, and this surface is one that wants it — the
- * document describes those three routes, so the tables have to
- * cover them.
+ * The auth and identity entries are separate exports so that a
+ * consumer chooses whether to walk them, and this surface is one
+ * that wants both — the document describes those four routes, so
+ * the tables have to cover them.
  */
 const DECLARED_ROUTERS: readonly DeclaredRouter[] = [
   ...buildResearchRouters(),
   buildAuthRouterEntry(),
+  buildMeRouterEntry(),
 ];
 
 /** Every label those routers declare, duplicates included. */
@@ -406,7 +411,7 @@ describe('route bindings - the plants', () => {
 // ---------------------------------------------------------------------------
 
 describe('route bindings - the surface', () => {
-  // Seventeen as a measurement rather than a numeral in a header.
+  // Eighteen as a measurement rather than a numeral in a header.
   // The roster above is a literal, so a module renamed out from
   // under it would leave a whole table unread and the coverage
   // equality would then report every one of that router's labels;
@@ -416,11 +421,13 @@ describe('route bindings - the surface', () => {
     const declared = DECLARED_ROUTERS.map((entry) => entry.name).sort();
 
     expect(bound).toStrictEqual(declared);
-    // The seventeenth is the one a consumer has to opt into, so it
-    // is asserted present rather than left to the equality above to
-    // imply: a roster built from `buildResearchRouters` alone would
-    // satisfy that equality and cover three routes fewer.
+    // The seventeenth and eighteenth are the two a consumer has to
+    // opt into, so each is asserted present rather than left to the
+    // equality above to imply: a roster built from
+    // `buildResearchRouters` alone would satisfy that equality and
+    // cover four routes fewer.
     expect(bound).toContain('auth');
+    expect(bound).toContain('me');
   });
 
   // Why the equality below takes a SET on the router side, as a
@@ -457,7 +464,7 @@ describe('route bindings - the surface', () => {
   // Pairwise disjoint, named with the tables that would share a
   // label. The colocated cases reach this fault from the other
   // side — a table keying a label its own router does not declare
-  // reddens in that module — but only if all seventeen of them
+  // reddens in that module — but only if all eighteen of them
   // exist, and an assembled document needs the answer whether they
   // do or not.
   it('keys no label in two tables', () => {

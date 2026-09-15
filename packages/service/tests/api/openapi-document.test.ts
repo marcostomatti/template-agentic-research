@@ -5,7 +5,7 @@
  * `generateOpenApiDocument()` is read against the OpenAPI 3.1 JSON
  * Schema through `@seriousme/openapi-schema-validator`, an
  * independent implementation of the specification that knows
- * nothing about this package, its seventeen binding tables or the
+ * nothing about this package, its eighteen binding tables or the
  * generator that assembled them.
  *
  * WHAT THIS FILE ASKS THAT `src/openapi.test.ts` DOES NOT is

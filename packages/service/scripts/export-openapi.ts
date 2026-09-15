@@ -3,7 +3,7 @@
  * Writes the OpenAPI 3.1 document this service publishes into
  * `.docs/swagger/openapi.json`.
  *
- * The document is `src/openapi.ts`'s, assembled from the seventeen
+ * The document is `src/openapi.ts`'s, assembled from the eighteen
  * binding tables the router modules export and from nothing else.
  * This file is the half that reaches the filesystem: where the
  * artifact lands, how the directory it lands in gets there, and
