@@ -32,6 +32,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "bun scripts/seed.ts",
+    "seed:integration": "bun scripts/seed-integration.ts",
     "approve": "bun scripts/approve.ts",
     "scaffold": "bun scripts/scaffold.ts",
     "build:workflows": "bun scripts/build-workflows.ts",
