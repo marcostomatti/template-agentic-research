@@ -43,3 +43,7 @@ playwright-report/
 # derived from the gitignored `.plans/` — committing them would put
 # on the remote the very thing that entry exists to hold back.
 .ralph/
+
+# >>> rafa tracking: rafa rewrites the lines up to the end marker
+.rafa/
+# <<< rafa tracking
