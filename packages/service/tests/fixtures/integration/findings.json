@@ -1,0 +1,189 @@
+{
+  "_readme": [
+    "INTEGRATION FIXTURE. A test asset, not a seed: `data/` stays the",
+    "only seed directory and `scripts/seed.ts` its only reader. The",
+    "integration seed reads this directory and nothing under `data/`,",
+    "on top of a `db:seed` pass that has already written the domain.",
+    "",
+    "This file carries `findings` rows for the example domain and, nested",
+    "under each, its `finding_labels` rows. Each is transcribed from the",
+    "web fixture module named in its `_comment`, so the web's fixture",
+    "path and a seeded `ar_live` tell one story. Keys beginning with an",
+    "underscore are commentary, not columns.",
+    "",
+    "`fixtureId` is not a column. The database issues `findings.id`, and",
+    "the table carries no natural key, so the member keeps the `id` the",
+    "web fixture gave the row. `documentFixtureId` names a row of",
+    "`documents.json` and `entityFixtureId` one of `entities.json`, each",
+    "by its `fixtureId`; the entity is null where the finding is about",
+    "no subject the domain tracks by name.",
+    "",
+    "`labels` is not a column either: each entry is a `finding_labels`",
+    "row whose `finding_id` is the finding it sits under. The web",
+    "fixture flattens a finding's labels to one `verdict`, so a finding",
+    "carries one label holding that verdict, or none where the web's",
+    "verdict is null. Every verdict is in the domain's",
+    "`verdictVocabulary`. The web fixture records no label time, so",
+    "`labelledAt` is fixed to the finding's own `createdAt` rather than",
+    "left to the column's wall-clock default, and `note` is null."
+  ],
+  "findings": [
+    {
+      "_comment": "Mirrors FINDINGS id 1 in packages/web/src/data/digest.ts.",
+      "fixtureId": 1,
+      "domainSlug": "example-tech-radar",
+      "documentFixtureId": 2,
+      "entityFixtureId": null,
+      "fields": {
+        "summary": "A public sector programme describes moving onto an event streaming platform.",
+        "firstSeenAt": "2026-06-08T00:00:00.000Z",
+        "mentions": 3,
+        "tags": [
+          "public sector"
+        ]
+      },
+      "score": null,
+      "scoreVersion": null,
+      "createdAt": "2026-06-08T15:40:00.000Z",
+      "labels": []
+    },
+    {
+      "_comment": "Mirrors FINDINGS id 2 in packages/web/src/data/digest.ts.",
+      "fixtureId": 2,
+      "domainSlug": "example-tech-radar",
+      "documentFixtureId": 3,
+      "entityFixtureId": 3,
+      "fields": {
+        "summary": "End of life announced for the proprietary runtime edition, with no successor named.",
+        "maturity": "deprecated",
+        "firstSeenAt": "2025-11-04T00:00:00.000Z",
+        "mentions": 2,
+        "isOpenSource": false,
+        "tags": [
+          "end of life",
+          "proprietary runtime"
+        ],
+        "links": {
+          "announcement": "https://example.com/object-cache/eol"
+        }
+      },
+      "score": 1.5,
+      "scoreVersion": 2,
+      "createdAt": "2026-06-09T09:20:00.000Z",
+      "labels": [
+        {
+          "verdict": "avoid",
+          "note": null,
+          "labelledAt": "2026-06-09T09:20:00.000Z"
+        }
+      ]
+    },
+    {
+      "_comment": "Mirrors FINDINGS id 3 in packages/web/src/data/digest.ts.",
+      "fixtureId": 3,
+      "domainSlug": "example-tech-radar",
+      "documentFixtureId": 4,
+      "entityFixtureId": 2,
+      "fields": {
+        "summary": "Beta notes for a graph database, with a migration path from the earlier name.",
+        "maturity": "beta",
+        "firstSeenAt": "2026-03-23T00:00:00.000Z",
+        "mentions": 4,
+        "isOpenSource": true,
+        "tags": [
+          "graph database",
+          "benchmark results"
+        ],
+        "links": {
+          "docs": "https://example.net/graph-store/docs"
+        }
+      },
+      "score": 5,
+      "scoreVersion": 2,
+      "createdAt": "2026-06-10T18:55:00.000Z",
+      "labels": [
+        {
+          "verdict": "caution",
+          "note": null,
+          "labelledAt": "2026-06-10T18:55:00.000Z"
+        }
+      ]
+    },
+    {
+      "_comment": "Mirrors FINDINGS id 4 in packages/web/src/data/digest.ts.",
+      "fixtureId": 4,
+      "domainSlug": "example-tech-radar",
+      "documentFixtureId": 4,
+      "entityFixtureId": 4,
+      "fields": {
+        "summary": "The earlier name is retired in favour of the current one; benchmark results are unchanged.",
+        "maturity": "beta",
+        "mentions": 1,
+        "isOpenSource": true,
+        "tags": []
+      },
+      "score": 0,
+      "scoreVersion": 2,
+      "createdAt": "2026-06-10T18:56:00.000Z",
+      "labels": [
+        {
+          "verdict": "neutral",
+          "note": null,
+          "labelledAt": "2026-06-10T18:56:00.000Z"
+        }
+      ]
+    },
+    {
+      "_comment": "Mirrors FINDINGS id 5 in packages/web/src/data/digest.ts.",
+      "fixtureId": 5,
+      "domainSlug": "example-tech-radar",
+      "documentFixtureId": 5,
+      "entityFixtureId": 1,
+      "fields": {
+        "summary": "A logistics operator reports a year of running the message queue in production."
+      },
+      "score": 2.5,
+      "scoreVersion": 2,
+      "createdAt": "2026-06-11T06:05:00.000Z",
+      "labels": [
+        {
+          "verdict": "caution",
+          "note": null,
+          "labelledAt": "2026-06-11T06:05:00.000Z"
+        }
+      ]
+    },
+    {
+      "_comment": "Mirrors FINDINGS id 6 in packages/web/src/data/digest.ts.",
+      "fixtureId": 6,
+      "domainSlug": "example-tech-radar",
+      "documentFixtureId": 6,
+      "entityFixtureId": 1,
+      "fields": {
+        "summary": "The message queue reaches general availability, with a reference implementation beside it.",
+        "maturity": "stable",
+        "firstSeenAt": "2026-02-17T00:00:00.000Z",
+        "mentions": 12,
+        "isOpenSource": true,
+        "tags": [
+          "message queue",
+          "generally available"
+        ],
+        "links": {
+          "release": "https://example.com/stream-broker/releases/4-0",
+          "docs": "https://example.com/stream-broker/docs"
+        }
+      },
+      "score": 8.5,
+      "scoreVersion": 2,
+      "createdAt": "2026-06-11T06:20:00.000Z",
+      "labels": [
+        {
+          "verdict": "interested",
+          "note": null,
+          "labelledAt": "2026-06-11T06:20:00.000Z"
+        }
+      ]
+    }
+  ]
+}

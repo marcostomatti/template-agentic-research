@@ -1,0 +1,103 @@
+{
+  "_readme": [
+    "INTEGRATION FIXTURE. A test asset, not a seed: `data/` stays the",
+    "only seed directory and `scripts/seed.ts` its only reader. The",
+    "integration seed reads this directory and nothing under `data/`,",
+    "on top of a `db:seed` pass that has already written the domain.",
+    "",
+    "This file carries `documents` rows for the example domain, each",
+    "transcribed from the web fixture module named in its `_comment`,",
+    "so the web's fixture path and a seeded `ar_live` tell one story.",
+    "Keys beginning with an underscore are commentary, not columns.",
+    "",
+    "`fixtureId` is not a column. The database issues `documents.id`;",
+    "the member keeps the `id` the web fixture gave the row, and is what",
+    "`findings.json` names a document by. `hash` is the natural key",
+    "`documents_hash_unique` holds. `domainSlug` names the domain by the",
+    "slug `data/domains.json` seeds. `sourceFixtureId` names a row of",
+    "`sources.json` by its `fixtureId`, or is null for a document added",
+    "by hand rather than fetched.",
+    "",
+    "`hash` is copied from the web fixture as written. It is NOT the",
+    "digest the service's capture adapters compute from `url` and",
+    "`body`; it only has to be unique, which is all the column asks.",
+    "",
+    "`raw`, `features`, `feature_version`, `embedding` and",
+    "`embedding_model` are absent because the web fixture carries none",
+    "of them, so each row takes the column's NULL."
+  ],
+  "documents": [
+    {
+      "_comment": "Mirrors DOCUMENTS id 1 in packages/web/src/data/digest.ts.",
+      "fixtureId": 1,
+      "domainSlug": "example-tech-radar",
+      "sourceFixtureId": 3,
+      "hash": "3045960151a7fd9d09ab73a67cddd30127bd7e2378d07a4a3207703b5ca4ce4b",
+      "url": "https://example.org/feeds/infrastructure/2026-06-07-digest",
+      "body": "Weekly roundup. The payload came back truncated mid-record and no usable item could be read from it.",
+      "capturedAt": "2026-06-07T21:10:00.000Z",
+      "parseStatus": "failed",
+      "parseError": "Response body ended mid-record after 12 of 30 items."
+    },
+    {
+      "_comment": "Mirrors DOCUMENTS id 2 in packages/web/src/data/digest.ts.",
+      "fixtureId": 2,
+      "domainSlug": "example-tech-radar",
+      "sourceFixtureId": null,
+      "hash": "af342635c5837d51aa9453b4036cf857e35f17e9ece07a66d225c60437ad07ea",
+      "url": null,
+      "body": "Conference notes pasted by an operator. A public sector programme described its move onto an event streaming platform.",
+      "capturedAt": "2026-06-08T15:22:00.000Z",
+      "parseStatus": "ok",
+      "parseError": null
+    },
+    {
+      "_comment": "Mirrors DOCUMENTS id 3 in packages/web/src/data/digest.ts.",
+      "fixtureId": 3,
+      "domainSlug": "example-tech-radar",
+      "sourceFixtureId": 1,
+      "hash": "5f68ec6c35a57eb9882d4d1bea825f914641f4c12dc1170d7578d133e5ac3600",
+      "url": "https://example.com/object-cache/announcements/end-of-life",
+      "body": "The maintainers announce end of life for the proprietary runtime edition and name no successor.",
+      "capturedAt": "2026-06-09T09:05:00.000Z",
+      "parseStatus": "ok",
+      "parseError": null
+    },
+    {
+      "_comment": "Mirrors DOCUMENTS id 4 in packages/web/src/data/digest.ts.",
+      "fixtureId": 4,
+      "domainSlug": "example-tech-radar",
+      "sourceFixtureId": 2,
+      "hash": "4994af0916b06c270fe9a5160df627b30e90bfcdea891089d26ebbd7bb04a4a1",
+      "url": "https://example.net/graph-store/blog/2026/beta-notes",
+      "body": "Beta notes for a graph database, including benchmark results and a migration path from the earlier name.",
+      "capturedAt": "2026-06-10T18:40:00.000Z",
+      "parseStatus": "ok",
+      "parseError": null
+    },
+    {
+      "_comment": "Mirrors DOCUMENTS id 5 in packages/web/src/data/digest.ts.",
+      "fixtureId": 5,
+      "domainSlug": "example-tech-radar",
+      "sourceFixtureId": 3,
+      "hash": "832e2179b66f063f21e7091f26f0e69ca8e48bba712df16cce01cb94b0b08ee9",
+      "url": "https://example.org/feeds/infrastructure/2026-06-11-items",
+      "body": "A logistics operator reports running a message queue in production for a year.",
+      "capturedAt": "2026-06-11T05:58:00.000Z",
+      "parseStatus": "failed",
+      "parseError": "Contract field published_at missing from 1 of 4 items."
+    },
+    {
+      "_comment": "Mirrors DOCUMENTS id 6 in packages/web/src/data/digest.ts.",
+      "fixtureId": 6,
+      "domainSlug": "example-tech-radar",
+      "sourceFixtureId": 1,
+      "hash": "19d3a235099a53b02c659b7fbbe55de48c5350c240fddf00a6772719d3253d39",
+      "url": "https://example.com/stream-broker/releases/4-0",
+      "body": "Release notes: the message queue is generally available, and a reference implementation ships beside it.",
+      "capturedAt": "2026-06-11T06:12:00.000Z",
+      "parseStatus": "ok",
+      "parseError": null
+    }
+  ]
+}
