@@ -146,6 +146,15 @@ Two ways to combine them:
   or `*` refused at boot. With the max unset the framework's limiter allows
   100 requests per client per minute; set, it replaces the count and the
   window stays a minute. See `docs/architecture/08-http-api.md`.
+- **The web app (off by default)** — `AR_WEB_DIST`, the directory a
+  `packages/web` build made with the `/app` base wrote. Set, `src/index.ts`
+  serves it at `/app` through `mountWebApp` in `src/web/static.ts`, mounted
+  above `/users` and every guarded mount so a browser with no credential
+  can load the shell it signs in from; unset, nothing is mounted there. The
+  prefix is fixed, because the app's own paths (`/settings`,
+  `/sources/:id/failures`) are API routes at `/`. A directory holding no
+  `index.html`, or a blank value, fails the boot. See
+  `docs/architecture/08-http-api.md`.
 - **The HTTP resource surface** — twelve resource groups over schema v2,
   wired from `src/index.ts` as sixteen routers, because the taxonomy
   contributes two, the sources group three and the runs group two. Wave 1 is

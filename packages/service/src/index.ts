@@ -49,6 +49,10 @@
  *   the only mount in the guarded block carrying a path of its own, so
  *   its `ctx.requireAuth` is spelled rather than inherited. See
  *   `src/openapi.ts` and the same doc.
+ * - The built web app at `/app` — presence-toggled on `AR_WEB_DIST`,
+ *   and mounted first in `register`, above `/users` and every guarded
+ *   mount, so a browser with no credential yet can load the shell it
+ *   signs in from. See `src/web/static.ts` and the same doc.
  */
 import type { AuthDeps } from './auth/index.js';
 import type { ServiceConfig } from '../lib/express/index.js';
@@ -105,6 +109,7 @@ import { createDbTaxonomyStore } from './taxonomy/db-store.js';
 import { buildTermsRouter } from './taxonomy/terms-routes.js';
 import { createDbTopicStore } from './topics/db-store.js';
 import { buildTopicsRouter } from './topics/routes.js';
+import { mountWebApp } from './web/static.js';
 
 const logger = createLogger('template-service-express');
 
@@ -394,6 +399,27 @@ await createService({
     // two reaches a caller from here: the only route that reports
     // `serviceId` is the control plane's status route, and this file
     // passes no `control` block, so `/_control` is never mounted at all.
+
+    // The built web app at `/app`, only when `AR_WEB_DIST` names a
+    // build. `mountWebApp` throws here, at boot, when that directory
+    // holds no `index.html`.
+    //
+    // ABOVE `/users` AND EVERY `ctx.requireAuth` MOUNT, and the position
+    // is the point. The guarded mounts below sit at `/` with no path of
+    // their own, so each one's guard runs for every request that
+    // reaches it — an anonymous `GET /app/` mounted below them would be
+    // answered `401` JSON by the first, and the browser that has to
+    // load the shell to sign in could never load it. Mounted here it is
+    // answered before any guard runs. It carries a path, so it joins no
+    // fall-through chain: a request outside `/app` never enters it, and
+    // a non-read under `/app` leaves it for the mounts below.
+    //
+    // No guard of its own, deliberately: the shell and its assets are
+    // the same bytes for every caller and hold no data, and every data
+    // request the app makes lands on a guarded route below.
+    if (config.AR_WEB_DIST !== undefined) {
+      mountWebApp(app, { dir: config.AR_WEB_DIST });
+    }
 
     // The session routes ride the same toggle as the verifier: with no
     // credential bootstrapped, a login could only ever be refused.

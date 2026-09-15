@@ -24,6 +24,9 @@ import {
  *   allowed. `AR_RATE_LIMIT_MAX` unset (the default) → the framework's
  *   100-per-minute limiter. Both are translated for `createService` by
  *   `src/http/service-options.ts`.
+ * - `AR_WEB_DIST` unset (the default) → nothing is mounted at `/app`.
+ *   Set → the built web app in that directory is served there, from
+ *   `src/web/static.ts`.
  *
  * Not every optional entry is an integration toggle. The `AR_N8N_*` pair and
  * the `AR_LLM_*` trio below belong to operator commands rather than to the
@@ -127,6 +130,25 @@ const EnvSchema = z.object({
    * `X-RateLimit-Limit` rather than `RateLimit-Limit`.
    */
   AR_RATE_LIMIT_MAX: rateLimitMaxSchema.optional(),
+  /**
+   * Directory holding the built web app, served under `/app` when set.
+   * Unset leaves `/app` unmounted, so a boot is exactly what it was
+   * and the path falls through to the guarded mounts like any other
+   * unmatched one.
+   *
+   * A path, resolved against the working directory the process starts
+   * in. The floor of 1 makes a present-but-blank value a boot failure
+   * rather than a reading of the working directory itself. Whether the
+   * directory holds a build is checked by `mountWebApp` in
+   * `src/web/static.ts`, which throws at mount time when it finds no
+   * `index.html` there, so a mistyped path fails the boot rather than
+   * every page load.
+   *
+   * The build must have been made for the `/app` base, and the prefix
+   * is not a setting — `WEB_APP_PREFIX` in the same module says why.
+   */
+  AR_WEB_DIST: z.string().min(1)
+    .optional(),
   /**
    * Base URL of the n8n instance `scripts/deploy-external.ts` uploads built
    * workflows to, over the public REST API that instance exposes. That script

@@ -516,9 +516,10 @@ below it carries `ctx.requireAuth`; and its body put the template
 repository name in front of any caller. Nothing replaced it, so
 the prefix is free rather than reassigned.
 
-That leaves three declarations above the guarded block, in
-`register`'s own order: the `/auth` mount, conditional on a
-bootstrapped credential where nothing else here is; `GET /users`,
+That leaves four declarations above the guarded block, in
+`register`'s own order: the `/app` mount, conditional on
+`AR_WEB_DIST` and argued in the next section; the `/auth` mount,
+conditional on a bootstrapped credential; `GET /users`,
 open; and `GET /me`, mounted from `src/me/routes.ts` at `/` behind
 `ctx.requireAuth` on the research mounts' terms. The framework's
 `GET /health` sits above all three, `mountBuiltinRoutes` running
@@ -534,6 +535,42 @@ four of those prefixes and the table below names them; `/findings`,
 `/documents`, `/entities`, `/runs` and `/spend` arrive with wave 3
 as further routers, mounted the same way and answering under every
 rule above.
+
+### The web app answers under `/app`, because its paths collide here
+
+With `AR_WEB_DIST` set, `mountWebApp` in `src/web/static.ts` serves
+the built web app from that directory at `/app`, first in
+`register`. A read under the prefix answers the file it names, and a
+miss on a path that is not asset-shaped answers `index.html`, so a
+deep link loads the shell the client router takes over from. Unset,
+nothing is mounted and `/app` is an unmatched path like any other.
+
+The prefix is forced by a collision rather than chosen. The web app's
+own route spellings include `/settings` and `/sources/:id/failures`,
+and both are API routes at `/` in the tables here. One spelling
+cannot answer a browser's deep link with the shell and an API
+client's request with JSON, so the two namespaces need a prefix
+between them, and `/` is the one mount that would break both. It is
+`WEB_APP_PREFIX`, a constant and not a setting: the build writes its
+base into every asset URL the shell carries, so a server told another
+prefix would serve a shell whose assets land nowhere.
+
+The mount sits ABOVE `/users` and every `ctx.requireAuth` mount
+because of the unmatched-path rule above. Below the guarded mounts,
+an anonymous `GET /app/` would be answered `401` JSON by the first of
+them, and a browser has to load the shell before it can sign in.
+Measured over a booted service carrying an auth block and one guarded
+router at `/`: mounted above it, an anonymous `GET /app/` and
+`GET /app/settings` answer `200` `text/html`; mounted below it, both
+answer `401` JSON. In both orders an anonymous `GET /settings`, a
+`POST /app/x` and an unmatched `/nope` answer `401`, because the
+mount carries a path and passes on every method but `GET` and `HEAD`.
+
+The mount carries no guard of its own. The shell and its assets are
+the same bytes for every caller and hold no data; every request the
+app makes for data lands on a guarded route. Its scoped
+`Content-Security-Policy`, its cache headers and its refusals are
+argued in the TSDoc of `src/web/static.ts`.
 
 ### The four prefixes wave 2 adds, and the two it borrows
 
