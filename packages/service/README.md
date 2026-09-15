@@ -138,6 +138,14 @@ Two ways to combine them:
   `AUTH_INTROSPECT_URL`/`AUTH_INTROSPECT_SECRET` point the middleware at
   somebody else's RFC 7662 endpoint instead; with neither pair set both are
   no-op passthroughs. Configured either way, they fail closed.
+- **Cross-origin reads and the rate limit** — `AR_CORS_ORIGINS` and
+  `AR_RATE_LIMIT_MAX`, both unset by default and translated for
+  `createService` by `src/http/service-options.ts`. With the origins unset
+  no cross-origin read is allowed; set, they are the only origins a browser
+  may read a response from, each a bare `http(s)` origin, with a blank entry
+  or `*` refused at boot. With the max unset the framework's limiter allows
+  100 requests per client per minute; set, it replaces the count and the
+  window stays a minute. See `docs/architecture/08-http-api.md`.
 - **The HTTP resource surface** — twelve resource groups over schema v2,
   wired from `src/index.ts` as sixteen routers, because the taxonomy
   contributes two, the sources group three and the runs group two. Wave 1 is

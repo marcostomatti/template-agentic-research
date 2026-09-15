@@ -2,6 +2,11 @@ import process from 'node:process';
 
 import { z } from 'zod';
 
+import {
+  corsOriginsSchema,
+  rateLimitMaxSchema,
+} from './http/service-options.js';
+
 /**
  * Environment configuration — parsed once at import time; the process fails
  * fast on invalid env instead of limping into a broken state.
@@ -15,6 +20,10 @@ import { z } from 'zod';
  *   is exactly what it was. Both set → the bootstrap upsert, the `/auth`
  *   routes and a DB-backed verifier that takes precedence over the
  *   introspection pair above.
+ * - `AR_CORS_ORIGINS` unset (the default) → no cross-origin read is
+ *   allowed. `AR_RATE_LIMIT_MAX` unset (the default) → the framework's
+ *   100-per-minute limiter. Both are translated for `createService` by
+ *   `src/http/service-options.ts`.
  *
  * Not every optional entry is an integration toggle. The `AR_N8N_*` pair and
  * the `AR_LLM_*` trio below belong to operator commands rather than to the
@@ -90,6 +99,34 @@ const EnvSchema = z.object({
   AUTH_SESSION_TTL_SECONDS: z.coerce.number().int()
     .positive()
     .default(86400),
+  /**
+   * Origins a browser may let read this service's responses,
+   * comma-separated — the web app's own origin when it is served from
+   * somewhere other than this port. Unset leaves the framework
+   * answering every cross-origin request with no
+   * `Access-Control-Allow-Origin` at all.
+   *
+   * Each entry must be a bare `http` or `https` origin, written as a
+   * browser sends it in `Origin`. A blank entry (a blank value, a
+   * doubled or trailing comma) and `*` are boot failures rather than
+   * readings of "nothing" or "everything": see `corsOriginsSchema` in
+   * `src/http/service-options.ts`, which is also where the parsed list
+   * becomes the `cors` member `createService` takes.
+   */
+  AR_CORS_ORIGINS: corsOriginsSchema.optional(),
+  /**
+   * Requests one client may make per minute, app-wide. Unset leaves
+   * the framework's own limit of 100. The window is fixed at a minute
+   * in `src/http/service-options.ts`, so this is the only knob.
+   *
+   * A positive integer; a blank value coerces to 0 and is a boot
+   * failure, as it is for `AUTH_SESSION_TTL_SECONDS` above. Setting it
+   * changes the limiter's response headers as well as its count: a
+   * block supplied here reaches the limiter without the draft-6 header
+   * choice the framework fallback carries, so responses answer
+   * `X-RateLimit-Limit` rather than `RateLimit-Limit`.
+   */
+  AR_RATE_LIMIT_MAX: rateLimitMaxSchema.optional(),
   /**
    * Base URL of the n8n instance `scripts/deploy-external.ts` uploads built
    * workflows to, over the public REST API that instance exposes. That script

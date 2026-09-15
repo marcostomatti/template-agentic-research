@@ -34,12 +34,15 @@ but one per router. The routes land against this document; where
 one of them departs from it, the departure is argued here in the
 same commit rather than left for a reader to find in a response.
 
-The foot of this document carries one section that is not a wave and
-not a rule the routes obey. `The documentation surface` came after all
-three of them, in q14, and is about the OpenAPI document generated
+The foot of this document carries two sections that are not a wave
+and not a rule the routes obey. `The documentation surface` came after
+all three of them, in q14, and is about the OpenAPI document generated
 FROM this surface: what a router module exports for a route to appear
 in it, what holds the two in step, and the rules stated above that no
-document assembled that way can carry.
+document assembled that way can carry. `App-wide settings` came in q20
+and is about two settings every route sits under without declaring:
+which cross-origin callers may read a response, and how many requests
+a client may make in a minute.
 
 It is the document the HTTP API row of the behaviour table in
 `docs/architecture/00-overview.md` names, so a change to an
@@ -3912,3 +3915,55 @@ declare descriptions and no content at all. Login writes a bare
 the single-key `{ error }` shape at `400`, `401` or `429`.
 `src/auth/routes.ts` argues all four of these beside the table this
 surface reads.
+
+## App-wide settings
+
+### Two entries, and each leaves the framework default when unset
+
+`AR_CORS_ORIGINS` and `AR_RATE_LIMIT_MAX` are declared in
+`src/config.ts` and translated by `serviceHttpOptions` in
+`src/http/service-options.ts` into the `cors` and `rateLimit` members
+`createService` takes. A member is omitted, not defaulted, when its
+entry is unset, so what answers then is `lib/express/middleware.ts`
+itself: a CORS middleware at `origin: false`, and a limiter at 100
+requests per client per minute. No route reads either setting, and no
+router can loosen or tighten one for itself.
+
+### A listed origin is the only kind a browser may read from
+
+With `AR_CORS_ORIGINS` set, the CORS middleware answers an allowed
+origin's request with `Access-Control-Allow-Origin` naming it, and a
+preflight from it with `204`, reflecting the requested headers, which
+is how `Authorization` reaches a bearer-guarded route from a page
+served elsewhere. An origin outside the list gets no allow-origin
+header on either, so the browser withholds the response. The server
+still ANSWERS it: this is a read restriction a browser enforces, not
+an access control, and every route keeps its own guard.
+
+Each entry has to be a bare `http` or `https` origin written as a
+browser sends it, because the `cors` package matches the `Origin`
+header by string equality. A trailing slash, a path or an upper-case
+scheme would be an entry nobody ever matches, so all three are
+refused at boot rather than normalised. So are a blank entry and `*`.
+A blank value is not a way to say no origin, which unset already
+says, and `*` handed to the framework would be a literal matching
+nothing, or, read as intended, every page on the web reading an API
+whose token a browser holds.
+
+### The rate limit is a count, and the window is a minute
+
+`AR_RATE_LIMIT_MAX` is a positive integer replacing the fallback's
+100; `windowMs` is fixed at `60_000`, so the entry always reads as
+requests per minute. A request over it answers the `429` `text/html`
+row of the table near the top of this document, unchanged.
+
+Setting it changes the headers as well as the count, and that is
+measured rather than chosen. The framework schema models `rateLimit`
+as `max` and `windowMs` alone, so a supplied block reaches
+express-rate-limit without the draft-6 choice the fallback literal
+makes, and the library's own defaults answer: `X-RateLimit-Limit`,
+`X-RateLimit-Remaining` and an epoch-second `X-RateLimit-Reset`,
+with no `RateLimit-*` header at all. Unset, a response carries
+`RateLimit-Limit: 100` and no `X-` name. A client reading the budget
+has to read both spellings until `lib/express/` passes the header
+choice through, which this package does not edit.

@@ -78,6 +78,7 @@ import { createDbEntityStore } from './entities/db-store.js';
 import { buildEntitiesRouter } from './entities/routes.js';
 import { createDbFindingStore } from './findings/db-store.js';
 import { buildFindingsRouter } from './findings/routes.js';
+import { serviceHttpOptions } from './http/service-options.js';
 import {
   registerEmailChannel,
   registerPushChannel,
@@ -356,6 +357,9 @@ await createService({
       : []),
   ],
   ...authConfig,
+  // `cors` and `rateLimit`, each only when its entry is set, so an
+  // unset one leaves the framework's own default answering.
+  ...serviceHttpOptions(config),
   register(app, ctx) {
     // `GET /example` — the demonstrator route this package inherited from
     // its template — was mounted HERE, first in `register`. It was
