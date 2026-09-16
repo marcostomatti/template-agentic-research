@@ -5,9 +5,10 @@
  *
  * `./api.ts` is the same seam for the 34 accessors; this is the seam
  * for the session, and it is a SEPARATE module for the reason
- * `./http/auth.ts` gives — the fixture build must not carry the auth
- * transport, and a barrel that merged the two would keep the HTTP
- * module alive in the bundle through the accessors' own import.
+ * `./http/auth.ts` gives: a barrel that merged the two would keep the
+ * HTTP auth module alive in EVERY bundle through the accessors' own
+ * import, and would tie the two switches together for good. What the
+ * separation buys is measured below, and it is less than it was.
  *
  * THE SWITCH RULE is `./source.ts`'s, unchanged: `VITE_AR_API_URL`
  * UNSET selects the fixture layer; any string at all selects the HTTP
@@ -23,20 +24,35 @@
  * rolldown folds a comparison against that literal and drops the
  * branch not taken; it does NOT fold a call across a module boundary.
  * That is what makes {@link logout} and {@link probeAuth} being
- * `undefined` in fixture mode a DROPPED module rather than a pair of
- * unreachable bindings — with them folded away, nothing in a fixture
- * build references `./http/auth.ts`, and `zod`, the client and the
- * session store leave with it.
+ * `undefined` in fixture mode a pair of DROPPED bindings rather than
+ * unreachable ones: the ternary folds, and whatever is reachable only
+ * through the branch not taken goes with it.
  *
- * MEASURED SO FAR, and not more than this: with `VITE_AR_API_URL`
- * unset AND with it set to `''`, a `bun run build` of this package
- * leaves the string `auth/logout` out of `dist/` BOTH times. That
- * reading does not yet separate the two branches — no page calls
- * `useLogout` in this commit, so the binding is dead in either build
- * and the HTTP module goes for a reason that has nothing to do with
- * the switch. The fold itself is `./api.ts`'s measurement, taken on
- * the same Vite; the branch-separating reading here is only
- * available once the topbar consumes the hook.
+ * WHAT IT NO LONGER BUYS is a dropped MODULE, and this header used to
+ * claim it did. `src/routes/login/` imports `./http/auth.ts` directly
+ * — the login page calls `login`, the auth gate calls `probeAuth` —
+ * and `src/routes/router.tsx` names both of those components while
+ * building the API route tree, so a fixture build now reaches the
+ * module through the ROUTER whatever these two exports fold to.
+ *
+ * MEASURED, `bun run build` in this package with `grep -rlF` over
+ * `dist/`, three builds:
+ *
+ * - `VITE_AR_API_URL` unset: `auth/login` and `ar.session` PRESENT,
+ *   `auth/logout` absent.
+ * - `VITE_AR_API_URL` set to `''`: the same three readings.
+ * - The same fixture build taken with the previous `router.tsx`,
+ *   which named neither login component: all three absent.
+ *
+ * So the fold is real and is doing exactly one thing — `logout` has
+ * no caller yet, and its path string leaves BOTH bundles — while the
+ * transport, the client and the session store now ship in either.
+ * `zod` was never a reading this module could claim on its own: the
+ * editors' schemas put it in the fixture bundle already, and
+ * `invalid_type` is present in the pre-router build above. The
+ * branch-separating reading arrives with the topbar's `useLogout`
+ * call, where `auth/logout` should appear in an API build and stay
+ * out of a fixture one.
  *
  * WHY THE READ IS OPTIONAL-CHAINED: `import.meta.env` is undefined in
  * the Playwright node process and in the unit runner, where a bare

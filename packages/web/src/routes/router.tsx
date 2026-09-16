@@ -105,6 +105,21 @@
  * A malformed domain slug is the one bad address this cannot catch, for
  * the reason `./DomainGuard.tsx` gives — it MATCHES the domain pattern.
  *
+ * ## The two TREES
+ *
+ * The two BASES above are one tree mounted twice. On top of that there
+ * are two TREES, and the difference between them is the build's data
+ * source rather than the URL: {@link ROUTES} is the fixture tree, with
+ * no `/login` and no gate, and {@link createRoutes} with `auth: true`
+ * builds the one an API build runs — the same bases with each one's
+ * chrome inside `./login/AuthGate.tsx`, and `/login` beside them.
+ *
+ * {@link ROUTES} keeps its name and its exact shape because it is what
+ * the fixture unit suite and both Playwright suites drive. In that
+ * tree `/login` is an address nothing claims, so it reaches the
+ * catch-all like any other — which is the fixture app's honest answer,
+ * there being no session to sign into.
+ *
  * ## Why there is no exported router object
  *
  * `createBrowserRouter` reaches for `document` when it is CALLED, so a
@@ -125,6 +140,7 @@ import { AppLayout } from '../app-shell/AppLayout';
 import { Sidebar } from '../app-shell/Sidebar';
 import { Topbar } from '../app-shell/Topbar';
 import { PlaceholderModal } from '../components/PlaceholderModal';
+import { authMode } from '../data/auth';
 import { findPage } from '../pages';
 import { AgentEditorModal } from '../pages/agents/AgentEditorModal';
 import { DigestDetailModal } from '../pages/digest/DigestDetailModal';
@@ -137,6 +153,9 @@ import { SourceFailuresModal } from '../pages/sources/SourceFailuresModal';
 import { ConnectorEditorModal } from '../pages/tools/ConnectorEditorModal';
 
 import { DomainGuard } from './DomainGuard';
+import { AuthGate } from './login/AuthGate';
+import { LoginPage } from './login/LoginPage';
+import { LOGIN_PATH } from './login/returnPath';
 import {
   DOMAIN_BASE_PREFIX,
   SINGLE_DOMAIN_BASE,
@@ -510,24 +529,101 @@ const routesBelowBase = (): RouteObject[] => [
 ];
 
 /**
- * The whole route tree, as data.
+ * The login form, at the one address that is not below a base.
+ *
+ * Held as an ELEMENT for the reason every modal above is: ONE object,
+ * shared by every tree built here, so `./router.test.ts` can ask which
+ * element an address opens with a `toBe` rather than by rendering.
+ * Registered only in the API tree — see {@link createRoutes}.
+ */
+export const LOGIN_PAGE = <LoginPage />;
+
+/** What {@link createRoutes} is asked to build. */
+export interface RouteTreeOptions {
+  /**
+   * Whether this tree talks to a service that can refuse it.
+   *
+   * `true` publishes `/login` and wraps each base's chrome in
+   * {@link AuthGate}; `false` is the fixture tree, which has no
+   * session to hold and no service to ask.
+   */
+  readonly auth: boolean;
+}
+
+/**
+ * Build one route tree.
+ *
+ * The two trees differ in exactly two places, and both of them are
+ * ABOVE the bases: whether `/login` is declared at all, and whether
+ * each base's element is wrapped in the gate. Everything below a base
+ * — every surface, every modal sub-route, the index redirect and the
+ * catch-all — is the same declaration either way, which is what keeps
+ * the fixture tree byte-for-byte the tree the fixture unit and
+ * Playwright suites were written against.
+ *
+ * The gate goes OUTSIDE `DomainGuard` on the domain base rather than
+ * inside it. An operator with no session has no business learning
+ * which domain slugs this deployment answers to, malformed or not, and
+ * the refusal page `DomainGuard` renders is app content like any other.
+ *
+ * `/login` is declared FIRST, though nothing rests on that: react-router
+ * ranks branches by specificity rather than by declaration order, so a
+ * static `/login` outranks the `/` base's catch-all wherever it sits.
+ * `./router.test.ts` drives the path and reads which element answered.
+ *
+ * Built per call, never cached, for the reason {@link routesBelowBase}
+ * is: `RouteObject` and its `children` are mutable, so two trees
+ * sharing an array are a single edit away from disagreeing.
+ *
+ * @param options - Whether the tree carries the auth surfaces.
+ * @returns The route tree, in declaration order.
+ */
+export const createRoutes = (options: RouteTreeOptions): RouteObject[] => {
+  const { auth } = options;
+
+  const gated = (chrome: ReactNode): ReactNode => (auth
+    ? <AuthGate>{chrome}</AuthGate>
+    : chrome);
+
+  const bases: RouteObject[] = [
+    {
+      path: SINGLE_DOMAIN_BASE,
+      element: gated(SHELL),
+      children: routesBelowBase(),
+    },
+    {
+      path: DOMAIN_BASE_PATTERN,
+      element: gated(<DomainGuard>{SHELL}</DomainGuard>),
+      children: routesBelowBase(),
+    },
+  ];
+
+  return auth
+    ? [{ path: LOGIN_PATH, element: LOGIN_PAGE }, ...bases]
+    : bases;
+};
+
+/**
+ * The fixture route tree, as data.
  *
  * Exported rather than kept private because it is the only part of the
  * router a unit test can reach: `matchRoutes` resolves paths against
  * this array with nothing rendered and no browser present.
+ *
+ * This is the tree a `bun run dev` with no `VITE_AR_API_URL` runs, and
+ * the one both Playwright suites drive — so `/login` is not in it, and
+ * falls through to the catch-all like any other unclaimed address.
  */
-export const ROUTES: RouteObject[] = [
-  {
-    path: SINGLE_DOMAIN_BASE,
-    element: SHELL,
-    children: routesBelowBase(),
-  },
-  {
-    path: DOMAIN_BASE_PATTERN,
-    element: <DomainGuard>{SHELL}</DomainGuard>,
-    children: routesBelowBase(),
-  },
-];
+export const ROUTES: RouteObject[] = createRoutes({ auth: false });
+
+/**
+ * Where the app is mounted, when `import.meta.env` says nothing.
+ *
+ * The same default `vite.config.ts` gives `base`, which is what
+ * `BASE_URL` reflects: the dev server and both fixture suites run at
+ * the root.
+ */
+const DEFAULT_BASENAME = '/';
 
 /**
  * Build the browser router the app runs on.
@@ -536,6 +632,33 @@ export const ROUTES: RouteObject[] = [
  * `document`, so creating one at import time would make this module
  * unimportable from the node unit suite.
  *
- * @returns A router over {@link ROUTES}, for `RouterProvider`.
+ * WHICH TREE is a build-time reading, not a runtime one. `authMode`
+ * comes from `../data/auth`, which folds the `VITE_AR_API_URL`
+ * comparison Vite replaced — an API build gets the gated tree and a
+ * fixture build the tree every fixture suite was written against. The
+ * API tree is built HERE rather than held as a second module-scope
+ * constant, so a fixture build never CALLS it. It still SHIPS both
+ * components either way — `../data/auth.ts` carries the measurement
+ * that naming them here puts the HTTP auth transport in a fixture
+ * bundle too, which is a claim that used to run the other way.
+ *
+ * THE BASENAME is `BASE_URL`, which Vite sets from `base` in
+ * `vite.config.ts` — `/` for the dev server and `/app/` for the
+ * deployed build, whose SPA is mounted under that prefix and only
+ * there. Both route bases are declared BELOW it: react-router strips
+ * the basename before matching (a trailing `/` on it included), so
+ * `/app/d/example-tech-radar/digest` matches `/d/:domainSlug` and
+ * every path this app builds stays prefix-free. The read is
+ * optional-chained for `../data/api.ts`'s measured reason:
+ * `import.meta.env` is undefined under the node runners, where a bare
+ * member read throws at import.
+ *
+ * @returns A router over the tree this build selected, for
+ * `RouterProvider`.
  */
-export const createAppRouter = () => createBrowserRouter(ROUTES);
+export const createAppRouter = () => createBrowserRouter(
+  authMode === 'api'
+    ? createRoutes({ auth: true })
+    : ROUTES,
+  { basename: import.meta.env?.BASE_URL ?? DEFAULT_BASENAME },
+);

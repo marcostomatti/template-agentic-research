@@ -61,3 +61,29 @@ point branches on which of the two is live:
   router. `createBrowserRouter` reaches for `document` when it is
   CALLED, and `matchRoutes` over the exported `ROUTES` is the only
   verification seam a route tree has from the node unit suite.
+- There are two TREES, and which one runs is a BUILD-time reading
+  rather than a URL. `createRoutes({auth})` is the single factory:
+  `ROUTES` is the `auth: false` call — the fixture tree above,
+  unchanged, and the one every `matchRoutes` case and both Playwright
+  suites drive — and `auth: true` adds `/login` beside the two bases
+  and wraps each base's chrome in `AuthGate`. `createAppRouter` picks
+  by `authMode` from `src/data/auth.ts`. A fixture build therefore
+  declares no login route at all, and `/login` reaches the catch-all
+  there like any other address nothing claims.
+- `/login` sits BESIDE the bases, not below one: the login screen
+  brings its own layout and has no shell around it. Declaration order
+  does not decide the match — react-router ranks branches by
+  specificity, so the static segment outranks the `/` base's
+  catch-all wherever it is written — and nothing BELOW `/login` is
+  claimed, so `/login/anything` still falls through.
+- On the domain base the gate wraps OUTSIDE `DomainGuard`. An
+  operator with no session is sent to the form before a malformed
+  slug is ruled on: the refusal page is app content like any other,
+  and which slugs a deployment answers to is not a question the gate
+  has let them ask yet.
+- `createAppRouter` passes `basename` from `import.meta.env.BASE_URL`,
+  which Vite sets from `base` in `vite.config.ts` — `/` for the dev
+  server and both fixture suites, `/app/` for the deployed build the
+  service serves under that prefix. react-router strips the basename
+  before matching, a trailing `/` on it included, so both bases stay
+  declared below it and no path `paths.ts` builds carries the prefix.

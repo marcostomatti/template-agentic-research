@@ -7,8 +7,12 @@
  * session makes sense of, which is why they live apart from
  * `./api.ts`'s 34 read accessors rather than beside them. The
  * separation is also what lets `src/data/auth.ts` hand a fixture build
- * `undefined` for {@link logout} and {@link probeAuth} and drop this
- * module — and with it `zod` and the client — out of that bundle.
+ * `undefined` for {@link logout} and {@link probeAuth}, which drops
+ * those two BINDINGS and everything reachable only through them —
+ * measured there. It no longer drops this module from that bundle:
+ * `src/routes/login/` imports it directly and `src/routes/router.tsx`
+ * names the login page and the auth gate while building the API route
+ * tree, so a fixture build reaches it through the router.
  *
  * ## All three routes answer BARE bodies
  *

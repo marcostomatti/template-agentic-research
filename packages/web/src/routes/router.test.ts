@@ -1,21 +1,27 @@
 import type { ReactNode } from 'react';
 import type { RouteObject } from 'react-router';
 
+import { isValidElement } from 'react';
 import { matchRoutes } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
+import { DomainGuard } from './DomainGuard';
+import { AuthGate } from './login/AuthGate';
+import { LOGIN_PATH, loginPathFor } from './login/returnPath';
 import { SINGLE_DOMAIN_BASE, SURFACES, withBase } from './paths';
 import {
   AGENT_EDITOR,
   CONNECTOR_EDITOR,
   DIGEST_DETAIL,
   LEXICON_EDITOR,
+  LOGIN_PAGE,
   MODAL_PLACEHOLDER,
   SOURCE_CONFIG_APPROVAL,
   SOURCE_EDITOR,
   SOURCE_FAILURES,
   NOT_FOUND,
   ROUTES,
+  createRoutes,
 } from './router';
 
 // `matchRoutes` resolves a path against the route objects with nothing
@@ -230,26 +236,56 @@ function routeLabel(route: RouteObject): string {
 }
 
 /**
- * The route patterns a path matched, outermost first.
+ * The route patterns a path matched against one tree, outermost first.
+ *
+ * Takes the tree because there are two of them — the fixture tree every
+ * test above drives, and the API tree the bottom of this file does — and
+ * the reading is the same reading either way.
+ *
+ * @param tree - The route tree to resolve against.
+ * @param path - An absolute path, query string and all.
+ * @returns One label per route in the match chain, or an empty list where
+ * the path matched nothing at all.
+ */
+function chainIn(tree: RouteObject[], path: string): readonly string[] {
+  const matches = matchRoutes(tree, path) ?? [];
+
+  return matches.map((match) => routeLabel(match.route));
+}
+
+/**
+ * The route patterns a path matched in the FIXTURE tree, outermost first.
  *
  * @param path - An absolute path.
  * @returns One label per route in the match chain, or an empty list where
  * the path matched nothing at all.
  */
 function chainOf(path: string): readonly string[] {
-  const matches = matchRoutes(ROUTES, path) ?? [];
-
-  return matches.map((match) => routeLabel(match.route));
+  return chainIn(ROUTES, path);
 }
 
 /**
- * What the innermost matched route renders.
+ * What the innermost matched route renders, in one tree.
+ *
+ * @param tree - The route tree to resolve against.
+ * @param path - An absolute path, query string and all.
+ * @returns The leaf route's element, or `undefined` where nothing matched.
+ */
+function leafElementIn(
+  tree: RouteObject[],
+  path: string,
+): ReactNode | undefined {
+  return matchRoutes(tree, path)?.at(-1)?.route.element;
+}
+
+/**
+ * What the innermost matched route renders, in the FIXTURE tree.
  *
  * @param path - An absolute path.
  * @returns The leaf route's element, or `undefined` where nothing matched.
  */
 function leafElementOf(path: string): ReactNode | undefined {
-  return matchRoutes(ROUTES, path)?.at(-1)?.route.element;
+  return leafElementIn(ROUTES, path);
 }
 
 /**
@@ -286,6 +322,56 @@ function declaredSubRoutesOf(
   const surface = base?.children?.find((route) => route.path === segment);
 
   return (surface?.children ?? []).map(routeLabel);
+}
+
+/**
+ * The COMPONENT a route element was built from.
+ *
+ * The only thing a route element says about itself without a renderer,
+ * and enough for the two claims the API tree rests on: that a base's
+ * element is the gate, and that the gate is the OUTER of the two
+ * wrappers on the domain base.
+ *
+ * @param element - A route element, or whatever a route carried instead.
+ * @returns Its component, or `undefined` for a node that is not an
+ * element at all.
+ */
+function elementTypeOf(element: ReactNode): unknown {
+  return isValidElement(element)
+    ? element.type
+    : undefined;
+}
+
+/**
+ * The component of the single child a wrapper element was given.
+ *
+ * @param element - A wrapper element, such as the gate.
+ * @returns The child's component, or `undefined` where either the
+ * wrapper or its child is not an element.
+ */
+function childElementTypeOf(element: ReactNode): unknown {
+  return isValidElement<{ children?: ReactNode }>(element)
+    ? elementTypeOf(element.props.children)
+    : undefined;
+}
+
+/**
+ * A tree's shape as labels alone, children and all.
+ *
+ * What lets one assertion say "these two trees declare the same
+ * addresses" without naming a single one of them — the claim the API
+ * tree makes about everything BELOW its bases, which is the half that
+ * must not have moved.
+ *
+ * @param routes - The routes to describe.
+ * @returns One entry per route, in declaration order, each carrying its
+ * own children described the same way.
+ */
+function labelTreeOf(routes: readonly RouteObject[]): unknown {
+  return routes.map((route) => ({
+    at: routeLabel(route),
+    children: labelTreeOf(route.children ?? []),
+  }));
 }
 
 describe('the two route trees', () => {
@@ -742,5 +828,205 @@ describe('the catch-all', () => {
     // This is the test of `./DomainGuard.tsx`'s reason to exist.
     // Arrange / Act / Assert
     expect(chainOf('/d/Bad/digest')).toEqual(['/d/:domainSlug', 'digest']);
+  });
+});
+
+describe('the API route tree', () => {
+  // `createRoutes` answers a fresh tree on every call, so this is the
+  // one the matching cases below drive; the identity case asks for a
+  // second on its own.
+  const apiRoutes = createRoutes({ auth: true });
+
+  /** The two base routes of the API tree, in declaration order. */
+  const apiBases = apiRoutes.filter((route) => route.path !== LOGIN_PATH);
+
+  it('declares /login beside both bases', () => {
+    // Arrange / Act
+    const declared = apiRoutes.map(routeLabel);
+
+    // Assert
+    expect(declared).toEqual([LOGIN_PATH, '/', '/d/:domainSlug']);
+  });
+
+  it('declares the login route as a leaf', () => {
+    // The login screen brings its own layout and has nothing below it,
+    // so a `children` key here would mean the tree says otherwise.
+    // Arrange / Act
+    const login = apiRoutes.find((route) => route.path === LOGIN_PATH);
+
+    // Assert
+    expect(login?.children).toBeUndefined();
+  });
+
+  it('resolves /login to the login page rather than the catch-all', () => {
+    // The ranking claim. `/login` is declared beside two bases whose
+    // trees both end in a catch-all, and react-router ranks branches by
+    // specificity rather than by declaration order — so this says the
+    // static segment wins, and `toBe` says what actually answered.
+    // Arrange / Act / Assert
+    expect(chainIn(apiRoutes, LOGIN_PATH)).toEqual([LOGIN_PATH]);
+    expect(leafElementIn(apiRoutes, LOGIN_PATH)).toBe(LOGIN_PAGE);
+  });
+
+  it('resolves the path a refused deep address redirects to', () => {
+    // The join between `./login/returnPath.ts` and this tree: the gate
+    // redirects to whatever `loginPathFor` builds, and that value
+    // carries a query string. It has to reach the login route with the
+    // query attached — `matchRoutes` parses one off a path string, and
+    // a route that only answered the bare form would strand every
+    // redirect this app makes.
+    // Arrange
+    const deep = `/d/${DOMAIN_SLUG}/digest`;
+    const redirectTo = loginPathFor(deep, '?window=7d');
+
+    // Act / Assert
+    expect(redirectTo).toContain('?');
+    expect(chainIn(apiRoutes, redirectTo)).toEqual([LOGIN_PATH]);
+    expect(leafElementIn(apiRoutes, redirectTo)).toBe(LOGIN_PAGE);
+  });
+
+  it('claims nothing BELOW /login', () => {
+    // `/login` is one static segment, not a prefix: a path under it
+    // falls through to the single-domain base's catch-all like any
+    // other unclaimed address.
+    // Arrange / Act / Assert
+    expect(chainIn(apiRoutes, `${LOGIN_PATH}/${UNMATCHED}`))
+      .toEqual(['/', '*']);
+  });
+
+  it('wraps both bases in the auth gate', () => {
+    // Arrange / Act
+    const wrappers = apiBases.map((route) => elementTypeOf(route.element));
+
+    // Assert
+    expect(wrappers).toEqual([AuthGate, AuthGate]);
+  });
+
+  it('puts the gate OUTSIDE the domain guard', () => {
+    // The nesting order is a decision rather than a layout: an operator
+    // with no session is redirected before the domain slug is ruled on,
+    // so a malformed slug does not answer a question the gate has not
+    // let them ask. The single-domain base is the control — its gate
+    // wraps the shell itself, so the two readings differ and neither is
+    // `undefined`.
+    // Arrange / Act
+    const wrapped = apiBases.map((route) => childElementTypeOf(route.element));
+
+    // Assert
+    expect(wrapped[1]).toBe(DomainGuard);
+    expect(wrapped[0]).not.toBe(DomainGuard);
+    expect(wrapped[0]).toBeDefined();
+  });
+
+  it('declares the same tree below its bases as the fixture tree', () => {
+    // Everything below a base is built by one factory shared by both
+    // trees, and this is the assertion that says so without naming a
+    // single address: the API tree's two bases describe, children and
+    // grandchildren included, exactly what the fixture tree's do.
+    // Arrange / Act / Assert
+    expect(labelTreeOf(apiBases)).toEqual(labelTreeOf(ROUTES));
+  });
+
+  it('is the fixture tree that ROUTES already is, with auth off', () => {
+    // `ROUTES` is now a `createRoutes({ auth: false })` call, and every
+    // test above it drives that constant. This is what says the factory
+    // with auth off still answers the tree those tests were written
+    // against rather than merely something the factory agrees with.
+    // Arrange / Act / Assert
+    expect(labelTreeOf(createRoutes({ auth: false }))).toEqual(
+      labelTreeOf(ROUTES),
+    );
+  });
+
+  it('resolves every surface under both bases', () => {
+    // Arrange / Act
+    const matched = BASES.flatMap(({ label, base }) => SURFACES.map((surface) => ({
+      at: `${label}: ${surface.id}`,
+      chain: chainIn(apiRoutes, withBase(base, surface.id)),
+    })));
+
+    // Assert
+    expect(matched).toEqual(
+      BASES.flatMap(({ label, pattern }) => SURFACES.map((surface) => ({
+        at: `${label}: ${surface.id}`,
+        chain: [pattern, surface.segment],
+      }))),
+    );
+  });
+
+  it('keeps every modal sub-route matched under both bases', () => {
+    // Arrange
+    const cases = BASES.flatMap(({ label, base, pattern }) => MODAL_SUB_ROUTES
+      .map(({ surface, pattern: modalPattern }) => ({
+        at: `${label}: ${addressOf(surface.id, modalPattern)}`,
+        path: pathUnder(
+          withBase(base, surface.id),
+          modalPattern.replace(ENTITY_PARAM, ENTITY_ID),
+        ),
+        chain: [pattern, surface.segment, modalPattern],
+      })));
+
+    // Act
+    const matched = cases.map(({ at, path }) => ({
+      at,
+      chain: chainIn(apiRoutes, path),
+    }));
+
+    // Assert
+    expect(matched).toEqual(cases.map(({ at, chain }) => ({ at, chain })));
+  });
+
+  it('claims an unmatched path under both bases', () => {
+    // Arrange / Act
+    const matched = BASES.map(({ label, base }) => ({
+      at: label,
+      chain: chainIn(apiRoutes, pathUnder(base, UNMATCHED)),
+    }));
+
+    // Assert
+    expect(matched).toEqual(
+      BASES.map(({ label, pattern }) => ({ at: label, chain: [pattern, '*'] })),
+    );
+  });
+
+  it('gives every tree its own children arrays', () => {
+    // `RouteObject.children` is mutable, and there are now three arrays
+    // in play per base — the fixture tree's, and one per call of the
+    // factory. A shared one is a single edit away from trees that
+    // disagree, and every matching test here stays green either way.
+    // Arrange
+    const trees = [ROUTES, apiRoutes, createRoutes({ auth: true })];
+
+    // Act
+    const childArrays = trees
+      .flat()
+      .map((route) => route.children)
+      .filter((children) => children !== undefined);
+
+    // Assert
+    expect(new Set(childArrays).size).toBe(childArrays.length);
+    expect(childArrays.length).toBeGreaterThan(0);
+  });
+});
+
+describe('the fixture route tree', () => {
+  it('declares no login route', () => {
+    // The control on every API-tree case above, and the property the
+    // fixture unit and Playwright suites rest on: with no service to
+    // sign in to, `/login` is an address nothing claims and reaches the
+    // catch-all inside the mounted shell like any other.
+    // Arrange / Act / Assert
+    expect(ROUTES.map(routeLabel)).toEqual(['/', '/d/:domainSlug']);
+    expect(chainOf(LOGIN_PATH)).toEqual(['/', '*']);
+    expect(leafElementOf(LOGIN_PATH)).toBe(NOT_FOUND);
+  });
+
+  it('wraps neither base in the auth gate', () => {
+    // Arrange / Act
+    const wrappers = ROUTES.map((route) => elementTypeOf(route.element));
+
+    // Assert
+    expect(wrappers.filter((wrapper) => wrapper === AuthGate)).toEqual([]);
+    expect(wrappers.filter((wrapper) => wrapper === undefined)).toEqual([]);
   });
 });

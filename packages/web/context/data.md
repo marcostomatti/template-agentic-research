@@ -53,19 +53,33 @@ Unset it when building for fixture-backed development.
   session store).
 - `src/data/` holds `api.ts` (the Vite-replaced selector), `auth.ts`
   (the session selector: `authMode`, plus `logout` and `probeAuth`,
-  both `undefined` in fixture mode so the HTTP auth module and its
-  `zod` leave that bundle), `source.ts` (the resolver), `hooks.ts`
-  (one cache hook per accessor, plus `useLogout` over `auth.ts`),
-  `types.ts` (shared vocabulary and `FIXTURE_NOW`), and one-line
-  re-exports at the old paths: `export * from './fixture/<module>'`
-  for every fixture module still imported outside
-  `src/data/fixture/`.
+  both `undefined` in fixture mode so those two BINDINGS and
+  whatever only they reach fold out of that bundle), `source.ts`
+  (the resolver), `hooks.ts` (one cache hook per accessor, plus
+  `useLogout` over `auth.ts`), `types.ts` (shared vocabulary and
+  `FIXTURE_NOW`), and one-line re-exports at the old paths:
+  `export * from './fixture/<module>'` for every fixture module
+  still imported outside `src/data/fixture/`.
 
   `auth.ts` is a SEPARATE selector from `api.ts` on purpose. Merging
-  the two would keep `src/data/http/auth.ts` alive in a fixture
-  build through the accessors' own import, and the point of the two
-  `undefined`s is that rolldown folds the build-time comparison and
-  drops the module entirely.
+  the two would keep `src/data/http/auth.ts` alive in every bundle
+  through the accessors' own import and tie the two switches
+  together for good; the point of the two `undefined`s is that
+  rolldown folds the build-time comparison and drops the branch not
+  taken.
+
+  It does NOT drop the module any more, and this page said it did.
+  `src/routes/login/` imports `src/data/http/auth.ts` directly and
+  `src/routes/router.tsx` names the login page and the auth gate
+  while building the API route tree, so the router reaches it in
+  either build. MEASURED over `dist/` after `bun run build`:
+  `auth/login` and `ar.session` are present with `VITE_AR_API_URL`
+  unset and with it set to `''`, and `auth/logout` is absent from
+  both — `logout` has no caller yet, which is the one thing the fold
+  is still doing. The same fixture build taken before the router
+  named either component had all three absent, which is the control.
+  `zod` was never this selector's reading to claim: the editors'
+  schemas put it in the fixture bundle already.
 
 Specs and pages stay byte-identical because they import from the
 old paths.
