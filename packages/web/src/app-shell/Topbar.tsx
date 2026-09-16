@@ -110,10 +110,25 @@
  *   another menu programmatically, and creating a research domain is a
  *   service operation with no UI in this plan.
  *
- * `onLogout` is unwired for a stronger reason: there is no session.
- * `logoutMessage` is still overridden, because the component's default
- * names a placeholder company — a confirmation naming somebody else's
- * product is worse than a vague one.
+ * `onLogout` is the one control whose wiring depends on the build.
+ * `useLogout` answers the sign-out call under the API layer and
+ * `undefined` under fixtures, where there is no session to drop, so
+ * the prop is passed only when the hook answers a function and THE
+ * FIXTURE SHELL'S PROFILE MENU IS UNCHANGED — same items, same
+ * confirmation, no sign-out affordance — exactly as it renders today.
+ *
+ * Under the API layer the handler runs the call and then navigates to
+ * `/login`. It navigates on a rejection too: `../data/http/auth.ts`
+ * clears the tab's session whether or not the request succeeded and
+ * reports the failure afterwards, so by the time the promise settles
+ * either way there is no session left and staying on a gated surface
+ * would only wait for the gate to redirect. The path is the bare
+ * login route with no return path: an operator who asked to leave has
+ * not asked to be sent back where they were.
+ *
+ * `logoutMessage` is overridden in both builds, because the
+ * component's default names a placeholder company — a confirmation
+ * naming somebody else's product is worse than a vague one.
  *
  * Both "settings" destinations ARE wired, to the app's settings
  * surface: it is the one place holding deployment-level preferences,
@@ -149,10 +164,12 @@ import { useLocation, useNavigate, useParams } from 'react-router';
 import { resolveDomainSlug } from '../data/domains';
 import {
   useDomains,
+  useLogout,
   useNotifications,
   useOperator,
   useSearchSuggestions,
 } from '../data/hooks';
+import { LOGIN_PATH } from '../routes/login/returnPath';
 import {
   activeSurfaceId,
   domainBase,
@@ -199,6 +216,7 @@ export const Topbar = () => {
   const suggestionsRead = useSearchSuggestions();
   const notificationsRead = useNotifications();
   const operatorRead = useOperator();
+  const logout = useLogout();
 
   // Which notifications the operator has cleared — ids, not rows, so
   // the list below stays derived from the read. See the header.
@@ -232,6 +250,20 @@ export const Topbar = () => {
   const goToSettings = () => {
     void navigate(withBase(domainBase(domainSlug), 'settings'));
   };
+
+  // Absent under fixtures, which is what leaves the prop off. See the
+  // header for why the navigation happens on a rejection too.
+  const onLogout = logout === undefined
+    ? undefined
+    : () => {
+      // The rejection is absorbed here rather than surfaced: the
+      // session is already gone, and the navigation IS the report.
+      void logout()
+        .catch(() => undefined)
+        .finally(() => {
+          void navigate(LOGIN_PATH);
+        });
+    };
 
   return (
     <>
@@ -275,6 +307,9 @@ export const Topbar = () => {
         <ProfileMenu
           user={operator}
           onAccountSettings={goToSettings}
+          {...(onLogout === undefined
+            ? {}
+            : { onLogout })}
           logoutMessage={LOGOUT_MESSAGE}
         />
       )}
