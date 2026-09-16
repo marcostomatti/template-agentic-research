@@ -34,11 +34,13 @@ COPY packages/service/tsconfig.json ./packages/service/
 COPY packages/service/lib ./packages/service/lib
 COPY packages/service/src ./packages/service/src
 
-# tests/ stays out of the image, but src/ carries colocated *.test.ts
-# files importing the shared in-memory fakes, so tests/helpers has to
-# come along for the type-check to resolve them. The rest of tests/ is
-# absent and its include glob simply matches nothing.
-COPY packages/service/tests/helpers ./packages/service/tests/helpers
+# src/ carries colocated *.test.ts files that import from tests/ (the
+# in-memory fakes under tests/helpers, the parity fixtures under
+# tests/parity), so the whole tree comes along and the type-check
+# covers it. tests/seed imports scripts/seed*.ts, so scripts/ comes too.
+# Both live only in this stage: runtime copies neither.
+COPY packages/service/scripts ./packages/service/scripts
+COPY packages/service/tests ./packages/service/tests
 
 WORKDIR /app/packages/service
 RUN bun run check-types

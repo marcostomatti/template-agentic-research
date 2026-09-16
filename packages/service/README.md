@@ -266,7 +266,16 @@ already public lands in `docs/` or on a `context/` page instead.
   begins (an on-merge trigger is included, commented out).
 - **One container, API and web app**: `Dockerfile`, built from the repo
   root, has four stages. `deps` and `build` install and type-check
-  `@ar/service` alone. `web` is its own stage: it installs the `@ar/ui`
+  `@ar/service` alone — and `build` copies the whole `tests/` tree (plus
+  the `scripts/` it imports), so the image type-checks the full test tree,
+  not just `src`. Colocated `src/**/*.test.ts` files import from `tests/`
+  (`src/sources/html-text.test.ts` reaches `tests/parity/fixtures.js`);
+  copying only `tests/helpers` failed that stage with TS2307 (issue #64).
+  The web-app plan limited its Dockerfile edits to the `web` stage; this
+  `build`-stage copy (the `tests/helpers` line became `tests/` whole, and
+  `scripts/` joined it) was the single widening, because a stage that
+  cannot type-check blocks the image the plan ships. `runtime` copies
+  neither tree. `web` is its own stage: it installs the `@ar/ui`
   and `@ar/web` workspaces, builds `@ar/ui` first (the app resolves it
   through `workspace:*` against its `dist/`), then builds `@ar/web` with
   `VITE_AR_API_URL=''` (same-origin API) and `VITE_AR_BASE_PATH=/app/`.
