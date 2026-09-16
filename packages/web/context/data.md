@@ -51,11 +51,21 @@ Unset it when building for fixture-backed development.
   (response shape), `operator.ts` (derive from sub claim), `auth.ts`
   (login, logout and the open-service probe, over the tab's one
   session store).
-- `src/data/` holds `api.ts` (the Vite-replaced selector), `source.ts`
-  (the resolver), `hooks.ts` (one cache hook per accessor), `types.ts`
-  (shared vocabulary and `FIXTURE_NOW`), and one-line re-exports at
-  the old paths: `export * from './fixture/<module>'` for every
-  fixture module still imported outside `src/data/fixture/`.
+- `src/data/` holds `api.ts` (the Vite-replaced selector), `auth.ts`
+  (the session selector: `authMode`, plus `logout` and `probeAuth`,
+  both `undefined` in fixture mode so the HTTP auth module and its
+  `zod` leave that bundle), `source.ts` (the resolver), `hooks.ts`
+  (one cache hook per accessor, plus `useLogout` over `auth.ts`),
+  `types.ts` (shared vocabulary and `FIXTURE_NOW`), and one-line
+  re-exports at the old paths: `export * from './fixture/<module>'`
+  for every fixture module still imported outside
+  `src/data/fixture/`.
+
+  `auth.ts` is a SEPARATE selector from `api.ts` on purpose. Merging
+  the two would keep `src/data/http/auth.ts` alive in a fixture
+  build through the accessors' own import, and the point of the two
+  `undefined`s is that rolldown folds the build-time comparison and
+  drops the module entirely.
 
 Specs and pages stay byte-identical because they import from the
 old paths.

@@ -857,6 +857,18 @@ const CHILD_LIST_HOOKS: readonly ChildListHookCase[] = [
 const KEY_PROBE_ID = 4242;
 
 /** Everything this module exports that is not a hook. */
+/**
+ * The hooks that wrap `./auth.ts` instead of an accessor in
+ * `./api.ts`.
+ *
+ * They are named here rather than derived because there is nothing to
+ * derive them FROM: `./auth.ts` exports two calls and a mode, and only
+ * one of the three is wrapped. Keeping the list explicit is what lets
+ * the parity check below stay a whole-set comparison — a hook added to
+ * the module and to neither population still fails it.
+ */
+const SESSION_HOOKS = ['useLogout'];
+
 const KEY_LAYER = [
   'DEPLOYMENT_SCOPE',
   'READ_OPTIONS',
@@ -1122,10 +1134,10 @@ describe('the hook surface', () => {
     // verb whole. There is no exemption list any more — the ledger
     // that carried the nine writes while they had no hooks is struck,
     // which is what its own docblock said striking a name off it
-    // meant.
+    // meant. {@link SESSION_HOOKS} is the one population NOT derived
+    // from a barrel, and says why.
     // Arrange
-    const expected = Object.keys(api)
-      .map(hookNameFor)
+    const expected = [...Object.keys(api).map(hookNameFor), ...SESSION_HOOKS]
       .sort();
 
     // Act
@@ -1168,7 +1180,7 @@ describe('the hook surface', () => {
   it('exports nothing beyond the hooks and the key layer', () => {
     // The guard the case tables rest on, in the shape `api.test.ts`
     // uses: anything exported here and named in no table is covered by
-    // nothing and reported by nothing. FIVE populations now — the
+    // nothing and reported by nothing. SIX populations now — the
     // write hooks, the single-row reads and the child-list read are
     // each a differently shaped export and get their own table rather
     // than an exemption, so a hook added to the module and to no table
@@ -1180,6 +1192,7 @@ describe('the hook surface', () => {
       ...SINGLE_ROW_HOOKS.map((single) => single.name),
       ...CHILD_LIST_HOOKS.map((child) => child.name),
       ...WRITE_HOOKS.map((write) => write.name),
+      ...SESSION_HOOKS,
       ...KEY_LAYER,
     ].sort();
 
@@ -1897,5 +1910,30 @@ describe('what each write hook invalidates and records', () => {
       expect(write.readBack(DEFAULT_DOMAIN_SLUG, PROBE)).toBe(PROBE);
       expect(write.readBack(SPARSE_DOMAIN_SLUG, PROBE)).toBe(PROBE);
     });
+  });
+});
+
+describe('useLogout', () => {
+  it('answers nothing under the fixture layer the unit suite loads', () => {
+    // The whole behaviour of the hook on this side: `./auth.ts` selects
+    // at import, and the unit runner has no `VITE_AR_API_URL`, so a
+    // caller here must narrow before it can offer a sign-out at all.
+    // `./auth.test.ts` is where the API side of that switch is pinned.
+    // Arrange / Act
+    const call = hooks.useLogout();
+
+    // Assert
+    expect(call).toBeUndefined();
+  });
+
+  it('answers the same value on every call', () => {
+    // It is a module binding rather than state, so a caller may pass it
+    // straight into a prop without a render loop.
+    // Arrange / Act
+    const first = hooks.useLogout();
+    const second = hooks.useLogout();
+
+    // Assert
+    expect(first).toBe(second);
   });
 });
