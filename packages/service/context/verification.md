@@ -82,15 +82,18 @@ value against the WIRING's own conditions, since a presence toggle
 routinely makes two of them exact complements.
 
 `Dockerfile`'s build stage runs `bun run check-types` over a PARTIAL tree
-(`tsconfig` + `lib` + `src`) while the package tsconfig's `include` also
-names `tests`, so any colocated `src/**/*.test.ts` importing a shared
-fixture out of `tests/helpers/` type-checks locally and breaks the IMAGE --
-and no gate in either fan-out reports it, since nothing but a docker build
-ever type-checks that subset (measured: 10 TS2307 across four
-`src/auth/*.test.ts` files, plus 2 TS7006 cascades, tsc exiting 2). The
-Dockerfile has to COPY whatever `tests/` subtree `src/` reaches, and the
-helper's own imports have to stay inside the copied set. Two readings such
-a build owes. A `docker build` whose every layer prints CACHED is a REPLAY,
+(`tsconfig` + `lib` + `src` + `scripts` + `tests`, no root `*.ts`) while
+the package tsconfig's `include` names more, so a new import from any of
+those into a path the stage does not COPY type-checks locally and breaks
+the IMAGE -- and no gate in either fan-out reports it, since nothing but a
+docker build ever type-checks that subset (measured: 10 TS2307 across four
+`src/auth/*.test.ts` files when only `src` was copied; later a TS2307 on
+`tests/parity/fixtures.js` from `src/sources/html-text.test.ts` when only
+`tests/helpers` was; copying `tests` whole then drew three more on
+`scripts/seed*.js`, with TS7006/TS18046 cascades, tsc exiting 2 each
+time). The copied set has to stay closed under its own imports. Two
+readings such a build owes. A `docker build` whose every layer prints
+CACHED is a REPLAY,
 not a measurement — it exits 0 without running a single RUN step, and the
 `check-types` layer is exactly the one a stale cache hides; take it with
 `--no-cache` and read the RUN steps' OWN output (a genuine run prints both

@@ -12,6 +12,17 @@ They are here because every one of them is invisible to `lint`,
   boundary, i.e. the shell-down outcome. Every gate here is green over
   it. The app-local answer is a bare `Link`: `tokens.css` already styles
   `a` with the accent colour, an underline and a hover.
+- **`Button` can never be a form's SUBMIT control.** `ButtonProps` is
+  `Omit<ButtonHTMLAttributes, 'type'>` and the element it renders
+  hard-wires `type="button"`, so no spelling of it submits a form. The
+  consequence is a KEYBOARD one and it is silent: a form carrying two
+  or more fields that block implicit submission and no submit button
+  gets no default button at all, so Enter in a box does nothing while
+  a mouse path wired through `onClick` still works. The app-local
+  answer is the `asChild` one — drop to the element and borrow the
+  classes, `button()` and `touchable()` both being exported from the
+  barrel. `src/routes/login/LoginPage.tsx` composes the two calls
+  exactly as `Button` itself does.
 - **The format ladder is unreachable.** The root barrel re-exports
   `./lib` as `cn` ALONE, so `formatRelativeTime`, `formatDate` and the
   rest are not importable — only the `Formatted*` COMPONENTS are. A

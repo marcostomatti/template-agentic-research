@@ -1,8 +1,9 @@
-import type { DomainFieldSpec, DomainFieldType, Entity } from './types';
+import type { DomainFieldSpec, DomainFieldType, Entity } from '../types';
 
 import { describe, expect, it } from 'vitest';
 
-import { repeated } from '../test-support/repeated';
+import { repeated } from '../../test-support/repeated';
+import { FIXTURE_NOW } from '../types';
 
 import {
   DOCUMENTS,
@@ -24,7 +25,6 @@ import {
   resolveFieldContract,
   resolveVerdictVocabulary,
 } from './domains';
-import { FIXTURE_NOW } from './types';
 
 /**
  * Whether a value is what the contract says the field holds.

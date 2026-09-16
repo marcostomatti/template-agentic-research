@@ -138,6 +138,23 @@ Two ways to combine them:
   `AUTH_INTROSPECT_URL`/`AUTH_INTROSPECT_SECRET` point the middleware at
   somebody else's RFC 7662 endpoint instead; with neither pair set both are
   no-op passthroughs. Configured either way, they fail closed.
+- **Cross-origin reads and the rate limit** — `AR_CORS_ORIGINS` and
+  `AR_RATE_LIMIT_MAX`, both unset by default and translated for
+  `createService` by `src/http/service-options.ts`. With the origins unset
+  no cross-origin read is allowed; set, they are the only origins a browser
+  may read a response from, each a bare `http(s)` origin, with a blank entry
+  or `*` refused at boot. With the max unset the framework's limiter allows
+  100 requests per client per minute; set, it replaces the count and the
+  window stays a minute. See `docs/architecture/08-http-api.md`.
+- **The web app (off by default)** — `AR_WEB_DIST`, the directory a
+  `packages/web` build made with the `/app` base wrote. Set, `src/index.ts`
+  serves it at `/app` through `mountWebApp` in `src/web/static.ts`, mounted
+  above `/users` and every guarded mount so a browser with no credential
+  can load the shell it signs in from; unset, nothing is mounted there. The
+  prefix is fixed, because the app's own paths (`/settings`,
+  `/sources/:id/failures`) are API routes at `/`. A directory holding no
+  `index.html`, or a blank value, fails the boot. See
+  `docs/architecture/08-http-api.md`.
 - **The HTTP resource surface** — twelve resource groups over schema v2,
   wired from `src/index.ts` as sixteen routers, because the taxonomy
   contributes two, the sources group three and the runs group two. Wave 1 is
@@ -247,6 +264,28 @@ already public lands in `docs/` or on a `context/` page instead.
 - <!-- doc-links-skip: .github/workflows/deploy.yml -- workflows are at root level, not package level -->[.github/workflows/deploy.yml](.github/workflows/deploy.yml) — manually
   triggered; builds the Docker image and stops where your infrastructure
   begins (an on-merge trigger is included, commented out).
+- **One container, API and web app**: `Dockerfile`, built from the repo
+  root, has four stages. `deps` and `build` install and type-check
+  `@ar/service` alone — and `build` copies the whole `tests/` tree (plus
+  the `scripts/` it imports), so the image type-checks the full test tree,
+  not just `src`. Colocated `src/**/*.test.ts` files import from `tests/`
+  (`src/sources/html-text.test.ts` reaches `tests/parity/fixtures.js`);
+  copying only `tests/helpers` failed that stage with TS2307 (issue #64).
+  The web-app plan limited its Dockerfile edits to the `web` stage; this
+  `build`-stage copy (the `tests/helpers` line became `tests/` whole, and
+  `scripts/` joined it) was the single widening, because a stage that
+  cannot type-check blocks the image the plan ships. `runtime` copies
+  neither tree. `web` is its own stage: it installs the `@ar/ui`
+  and `@ar/web` workspaces, builds `@ar/ui` first (the app resolves it
+  through `workspace:*` against its `dist/`), then builds `@ar/web` with
+  `VITE_AR_API_URL=''` (same-origin API) and `VITE_AR_BASE_PATH=/app/`.
+  `runtime` copies only `packages/web/dist` out of it and sets
+  `AR_WEB_DIST` to that directory, so the one image serves the API at `/`
+  and mounts the build at `/app`. No other stage reads `packages/ui` or
+  `packages/web`, so dropping the app from the image is deleting the
+  `web` stage plus the copy and the `ENV` line. There is no
+  `.dockerignore`: every `COPY` names source paths, never a package
+  whole, so no `node_modules` or `dist` reaches the build context.
 - **Self-hosted runners**: nothing here requires one. If you have a homelab
   runner (this stack's origin used one labeled `grow-box`), point `runs-on`
   at its labels to give jobs access to private registries or long-lived test

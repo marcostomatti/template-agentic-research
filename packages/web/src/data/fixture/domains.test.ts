@@ -1,9 +1,10 @@
-import type { Domain } from './types';
+import type { Domain } from '../types';
 
 import { describe, expect, it } from 'vitest';
 
-import { domainBase } from '../routes/paths';
-import { repeated } from '../test-support/repeated';
+import { domainBase } from '../../routes/paths';
+import { repeated } from '../../test-support/repeated';
+import { FIXTURE_NOW } from '../types';
 
 import {
   DEFAULT_DOMAIN_SLUG,
@@ -16,7 +17,6 @@ import {
   resolveFieldContract,
   resolveVerdictVocabulary,
 } from './domains';
-import { FIXTURE_NOW } from './types';
 
 /**
  * A domain built here rather than taken from the table.

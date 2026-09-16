@@ -49,6 +49,10 @@
  *   the only mount in the guarded block carrying a path of its own, so
  *   its `ctx.requireAuth` is spelled rather than inherited. See
  *   `src/openapi.ts` and the same doc.
+ * - The built web app at `/app` — presence-toggled on `AR_WEB_DIST`,
+ *   and mounted first in `register`, above `/users` and every guarded
+ *   mount, so a browser with no credential yet can load the shell it
+ *   signs in from. See `src/web/static.ts` and the same doc.
  */
 import type { AuthDeps } from './auth/index.js';
 import type { ServiceConfig } from '../lib/express/index.js';
@@ -78,6 +82,8 @@ import { createDbEntityStore } from './entities/db-store.js';
 import { buildEntitiesRouter } from './entities/routes.js';
 import { createDbFindingStore } from './findings/db-store.js';
 import { buildFindingsRouter } from './findings/routes.js';
+import { serviceHttpOptions } from './http/service-options.js';
+import { buildMeRouter } from './me/routes.js';
 import {
   registerEmailChannel,
   registerPushChannel,
@@ -103,6 +109,7 @@ import { createDbTaxonomyStore } from './taxonomy/db-store.js';
 import { buildTermsRouter } from './taxonomy/terms-routes.js';
 import { createDbTopicStore } from './topics/db-store.js';
 import { buildTopicsRouter } from './topics/routes.js';
+import { mountWebApp } from './web/static.js';
 
 const logger = createLogger('template-service-express');
 
@@ -356,6 +363,9 @@ await createService({
       : []),
   ],
   ...authConfig,
+  // `cors` and `rateLimit`, each only when its entry is set, so an
+  // unset one leaves the framework's own default answering.
+  ...serviceHttpOptions(config),
   register(app, ctx) {
     // `GET /example` — the demonstrator route this package inherited from
     // its template — was mounted HERE, first in `register`. It was
@@ -363,8 +373,8 @@ await createService({
     // nothing else and took the directory with it. Three reasons, none of
     // them decisive alone:
     //
-    // - The service now carries a real surface. The seventeen routers
-    //   wired in this block answer fifty-five routes, so a route whose
+    // - The service now carries a real surface. The eighteen routers
+    //   wired in this block answer fifty-six routes, so a route whose
     //   whole purpose was to show that a router can be mounted at all
     //   demonstrates nothing this file does not now say better.
     // - It was OPEN, on a surface where nothing else is. Every mount
@@ -389,6 +399,27 @@ await createService({
     // two reaches a caller from here: the only route that reports
     // `serviceId` is the control plane's status route, and this file
     // passes no `control` block, so `/_control` is never mounted at all.
+
+    // The built web app at `/app`, only when `AR_WEB_DIST` names a
+    // build. `mountWebApp` throws here, at boot, when that directory
+    // holds no `index.html`.
+    //
+    // ABOVE `/users` AND EVERY `ctx.requireAuth` MOUNT, and the position
+    // is the point. The guarded mounts below sit at `/` with no path of
+    // their own, so each one's guard runs for every request that
+    // reaches it — an anonymous `GET /app/` mounted below them would be
+    // answered `401` JSON by the first, and the browser that has to
+    // load the shell to sign in could never load it. Mounted here it is
+    // answered before any guard runs. It carries a path, so it joins no
+    // fall-through chain: a request outside `/app` never enters it, and
+    // a non-read under `/app` leaves it for the mounts below.
+    //
+    // No guard of its own, deliberately: the shell and its assets are
+    // the same bytes for every caller and hold no data, and every data
+    // request the app makes lands on a guarded route below.
+    if (config.AR_WEB_DIST !== undefined) {
+      mountWebApp(app, { dir: config.AR_WEB_DIST });
+    }
 
     // The session routes ride the same toggle as the verifier: with no
     // credential bootstrapped, a login could only ever be refused.
@@ -416,10 +447,16 @@ await createService({
       }
     });
 
-    // Protected route example — a no-op passthrough until auth is configured.
-    app.get('/me', ctx.requireAuth, (_req, res) => {
-      res.json({ ok: true });
-    });
+    // `GET /me`, answering `{ ok: true, sub }` — see `src/me/routes.ts`
+    // for why `sub` is `null` while the guard is a passthrough. Mounted
+    // where the inline handler it replaced sat, and on the terms of the
+    // research mounts below rather than with the guard on the route: at
+    // `/`, behind `ctx.requireAuth`. That makes it the FIRST guarded
+    // fall-through mount, so an anonymous unmatched path is now refused
+    // here rather than one mount later — the same `401`, since nothing
+    // was mounted between the two — and a credentialled request below
+    // runs the verifier once more.
+    app.use(ctx.requireAuth, buildMeRouter());
 
     // The wave-1 HTTP surface. The guard sits on the MOUNT rather than on
     // each handler, per `docs/architecture/08-http-api.md`: a route added

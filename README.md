@@ -1,16 +1,3 @@
-<!--
-  HERO ASSET (placeholder). Pick one, save it under docs/assets/, and
-  uncomment the matching line:
-  <p align="center"><img src="docs/assets/logo.svg" alt="agentic-research" width="160"></p>
-  <p align="center"><img src="docs/assets/hero.gif" alt="A research pass: sources in, briefing out" width="760"></p>
--->
-
-<h1 align="center">agentic-research</h1>
-
-<p align="center">
-  <strong>Point it at a field. Get a briefing.</strong><br>
-  A self-hosted agentic research pipeline: your sources in, scored findings and periodic digests out.
-</p>
 
 <p align="center">
 
@@ -20,6 +7,14 @@
 [![Bun 1.3.9](https://img.shields.io/badge/bun-1.3.9-000?logo=bun)](https://bun.sh)
 
 </p>
+
+<h1 align="center"><img src="docs/assets/bart-wordmark-full.png" alt="A research pass: sources in, briefing out" width="760"></h1>
+
+<p align="center">
+  <strong>Point it at a field. Get a briefing.</strong><br>
+  A self-hosted agentic research pipeline: your sources in, scored findings and periodic digests out.
+</p>
+
 
 ## What is it
 
@@ -130,18 +125,17 @@ To test against a deployed n8n instance instead of the local stack, see
 `deploy:external` and `verify-external.sh` in
 [packages/service/scripts/README.md](packages/service/scripts/README.md).
 
-<!--
-  SCREENSHOT PLACEHOLDER: save under docs/assets/ and uncomment.
-  <p align="center"><img src="docs/assets/n8n-dispatch-execution.png" alt="ar-dispatch execution graph in n8n" width="760"></p>
--->
+
+<!-- <p align="center"><img src="docs/assets/screenshot-v0.1.0.jpg" alt="ar-dispatch execution graph in n8n" width="760"></p> -->
+
 
 ## How it works
 
-| Package | What it is |
-| --- | --- |
+| Package       | What it is                                                                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `@ar/service` | The backend: REST and MCP API, the n8n workflows, the Postgres schema and migrations. Everything above runs here. |
-| `@ar/web` | The web app, currently a clickable prototype on fixture data. |
-| `@ar/ui` | The component library `@ar/web` is built on, with its Storybook workbench. |
+| `@ar/web`     | The web app, currently a clickable prototype on fixture data.                                                     |
+| `@ar/ui`      | The component library `@ar/web` is built on, with its Storybook workbench.                                        |
 
 > [!NOTE]
 > `@ar/web` is not connected to `@ar/service` yet.
@@ -150,10 +144,7 @@ To test against a deployed n8n instance instead of the local stack, see
 > writes to the service, and edits last only until the tab closes. To exercise
 > the pipeline, use the service's REST or MCP endpoints.
 
-<!--
-  SCREENSHOT PLACEHOLDER (prototype): save under docs/assets/ and uncomment.
-  <p align="center"><img src="docs/assets/web-prototype.png" alt="The @ar/web prototype on fixture data" width="760"></p>
--->
+<p align="center"><img src="docs/assets/screenshot-v0.1.0.jpg" alt="ar-dispatch execution graph in n8n" width="760"></p>
 
 ```mermaid
 flowchart LR

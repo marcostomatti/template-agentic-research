@@ -34,12 +34,15 @@ but one per router. The routes land against this document; where
 one of them departs from it, the departure is argued here in the
 same commit rather than left for a reader to find in a response.
 
-The foot of this document carries one section that is not a wave and
-not a rule the routes obey. `The documentation surface` came after all
-three of them, in q14, and is about the OpenAPI document generated
+The foot of this document carries two sections that are not a wave
+and not a rule the routes obey. `The documentation surface` came after
+all three of them, in q14, and is about the OpenAPI document generated
 FROM this surface: what a router module exports for a route to appear
 in it, what holds the two in step, and the rules stated above that no
-document assembled that way can carry.
+document assembled that way can carry. `App-wide settings` came in q20
+and is about two settings every route sits under without declaring:
+which cross-origin callers may read a response, and how many requests
+a client may make in a minute.
 
 It is the document the HTTP API row of the behaviour table in
 `docs/architecture/00-overview.md` names, so a change to an
@@ -497,9 +500,9 @@ established that.
 ### The paths wave 1 does not take
 
 `GET /health` and `ALL /_control/*` belong to the framework
-(`lib/express/builtin-routes.ts`), `/auth/*` to q07, and `/users`
-and `/me` are declared in `src/index.ts` today. Wave 1 adds
-nothing under any of them, and none of its five prefixes —
+(`lib/express/builtin-routes.ts`), `/auth/*` to q07, `/users` to
+`src/index.ts` and `/me` to `src/me/routes.ts`, which it mounts.
+Wave 1 adds nothing under any of them, and none of its five prefixes —
 `/domains`, `/categories`, `/terms`, `/personas`, `/settings` —
 collides with one.
 
@@ -513,11 +516,12 @@ below it carries `ctx.requireAuth`; and its body put the template
 repository name in front of any caller. Nothing replaced it, so
 the prefix is free rather than reassigned.
 
-That leaves three declarations above the guarded block, in
-`register`'s own order: the `/auth` mount, conditional on a
-bootstrapped credential where nothing else here is; `GET /users`,
-open; and `GET /me`, which carries `ctx.requireAuth` on the route
-itself rather than inheriting it from a mount. The framework's
+That leaves four declarations above the guarded block, in
+`register`'s own order: the `/app` mount, conditional on
+`AR_WEB_DIST` and argued in the next section; the `/auth` mount,
+conditional on a bootstrapped credential; `GET /users`,
+open; and `GET /me`, mounted from `src/me/routes.ts` at `/` behind
+`ctx.requireAuth` on the research mounts' terms. The framework's
 `GET /health` sits above all three, `mountBuiltinRoutes` running
 before `register` is called, and `ALL /_control/*` is mounted by
 nothing here — its config block is optional with no default and
@@ -531,6 +535,42 @@ four of those prefixes and the table below names them; `/findings`,
 `/documents`, `/entities`, `/runs` and `/spend` arrive with wave 3
 as further routers, mounted the same way and answering under every
 rule above.
+
+### The web app answers under `/app`, because its paths collide here
+
+With `AR_WEB_DIST` set, `mountWebApp` in `src/web/static.ts` serves
+the built web app from that directory at `/app`, first in
+`register`. A read under the prefix answers the file it names, and a
+miss on a path that is not asset-shaped answers `index.html`, so a
+deep link loads the shell the client router takes over from. Unset,
+nothing is mounted and `/app` is an unmatched path like any other.
+
+The prefix is forced by a collision rather than chosen. The web app's
+own route spellings include `/settings` and `/sources/:id/failures`,
+and both are API routes at `/` in the tables here. One spelling
+cannot answer a browser's deep link with the shell and an API
+client's request with JSON, so the two namespaces need a prefix
+between them, and `/` is the one mount that would break both. It is
+`WEB_APP_PREFIX`, a constant and not a setting: the build writes its
+base into every asset URL the shell carries, so a server told another
+prefix would serve a shell whose assets land nowhere.
+
+The mount sits ABOVE `/users` and every `ctx.requireAuth` mount
+because of the unmatched-path rule above. Below the guarded mounts,
+an anonymous `GET /app/` would be answered `401` JSON by the first of
+them, and a browser has to load the shell before it can sign in.
+Measured over a booted service carrying an auth block and one guarded
+router at `/`: mounted above it, an anonymous `GET /app/` and
+`GET /app/settings` answer `200` `text/html`; mounted below it, both
+answer `401` JSON. In both orders an anonymous `GET /settings`, a
+`POST /app/x` and an unmatched `/nope` answer `401`, because the
+mount carries a path and passes on every method but `GET` and `HEAD`.
+
+The mount carries no guard of its own. The shell and its assets are
+the same bytes for every caller and hold no data; every request the
+app makes for data lands on a guarded route. Its scoped
+`Content-Security-Policy`, its cache headers and its refusals are
+argued in the TSDoc of `src/web/static.ts`.
 
 ### The four prefixes wave 2 adds, and the two it borrows
 
@@ -3667,7 +3707,7 @@ of calls the window holds.
 
 Every router module exports one `*RouteSchemas` table, keyed by the
 labels of the routes it declares — `GET /domains/:slug` and its
-fifty-four siblings — each key naming what that route parses a request
+fifty-five siblings — each key naming what that route parses a request
 with, under `params`, `query` and `body`.
 `src/http/openapi-bindings.ts` declares the shape; the tables sit in
 the router modules, beside the routes they describe.
@@ -3706,12 +3746,12 @@ find — so `{}` is what a route parsing nothing says.
 
 ### The registry is assembly, and declares no route of its own
 
-`src/openapi.ts` walks the seventeen tables in one pass: it splits
+`src/openapi.ts` walks the eighteen tables in one pass: it splits
 each label into a method and a path, rewrites the express `:slug`
 spelling as the OpenAPI `{slug}` one, and registers the result under a
 tag named for the path base. It declares no route, no parameter and no
 schema of its own, and the document that comes out carries one
-operation per table key — fifty-five today, over 36 path keys, the
+operation per table key — fifty-six today, over 37 path keys, the
 verbs collapsing under one path item apiece.
 
 `extendZodWithOpenApi` is deliberately never called. It mutates
@@ -3742,13 +3782,13 @@ able to show.
 
 The mount is last in `register` and spells `ctx.requireAuth` itself.
 It does not have to for an anonymous request to be refused: the
-sixteen research mounts sit at `/`, so the first of them answers `401`
-long before this line is read, exactly as the unmatched-path claim
-above describes. That refusal is mount ORDER and nothing else, and
-this mount carries a path, so it is not itself part of the
-fall-through chain those mounts form. The guard spelled here is what
-survives a reordering — whether the document is public is answered by
-one line rather than by a position.
+identity mount and the sixteen research mounts sit at `/`, so the
+first of them answers `401` long before this line is read, exactly as
+the unmatched-path claim above describes. That refusal is mount ORDER
+and nothing else, and this mount carries a path, so it is not itself
+part of the fall-through chain those mounts form. The guard spelled
+here is what survives a reordering — whether the document is public is
+answered by one line rather than by a position.
 
 The document is built ONCE, at boot. `generateOpenApiDocument`
 assembles a fresh registry per call and throws on a table it cannot
@@ -3826,8 +3866,9 @@ reports it.
 
 It holds two label sets equal — the operations the generated document
 declares, walked out of each path item's verb keys, against the labels
-the sixteen research routers and the auth entry declare. The
-conversion between the two spellings happens ONCE and on ONE side: the
+the sixteen research routers, the auth entry and the identity entry
+declare. The conversion between the two spellings happens ONCE and on
+ONE side: the
 document is rewritten into the routers' `:param` spelling and the
 router side is converted by nothing, which is what stops a rewrite
 both sides shared from passing unreported.
@@ -3875,6 +3916,24 @@ forgotten: `docs/architecture/01-invariants.md` carries the
 not-enforced row that records the deferral, and `src/http/envelope.ts`
 the argument that row points back at.
 
+### `GET /me` names its own body, because a schema for it exists
+
+`GET /me` answers `{ ok: true, sub }`, a bare object in neither
+envelope. `sub` is the verified session's subject, and `null` where
+the guard is a passthrough: that service checks no credential, and
+the `null` says so where an absent key would hide it. Under an auth
+block the `null` is unreachable, the guard answering `401` before the
+route runs.
+
+Unlike the `/auth` mount, that body HAS a schema. The handler in
+`src/me/routes.ts` builds its answer through `meResponseSchema`, and
+`src/openapi.ts` binds that export to the `200` by identity, so the
+document names the object the route writes rather than a copy. It is
+left untagged and inlined, which keeps `components/schemas` at the
+three envelopes. The route also declares the guard's `401` and the
+failure envelope at `500`, and neither a `204` nor a `422`: it
+deletes nothing and parses nothing.
+
 ### Four rules of this surface no binding table can state
 
 A table says what a route ACCEPTS, and four rules of this surface
@@ -3912,3 +3971,55 @@ declare descriptions and no content at all. Login writes a bare
 the single-key `{ error }` shape at `400`, `401` or `429`.
 `src/auth/routes.ts` argues all four of these beside the table this
 surface reads.
+
+## App-wide settings
+
+### Two entries, and each leaves the framework default when unset
+
+`AR_CORS_ORIGINS` and `AR_RATE_LIMIT_MAX` are declared in
+`src/config.ts` and translated by `serviceHttpOptions` in
+`src/http/service-options.ts` into the `cors` and `rateLimit` members
+`createService` takes. A member is omitted, not defaulted, when its
+entry is unset, so what answers then is `lib/express/middleware.ts`
+itself: a CORS middleware at `origin: false`, and a limiter at 100
+requests per client per minute. No route reads either setting, and no
+router can loosen or tighten one for itself.
+
+### A listed origin is the only kind a browser may read from
+
+With `AR_CORS_ORIGINS` set, the CORS middleware answers an allowed
+origin's request with `Access-Control-Allow-Origin` naming it, and a
+preflight from it with `204`, reflecting the requested headers, which
+is how `Authorization` reaches a bearer-guarded route from a page
+served elsewhere. An origin outside the list gets no allow-origin
+header on either, so the browser withholds the response. The server
+still ANSWERS it: this is a read restriction a browser enforces, not
+an access control, and every route keeps its own guard.
+
+Each entry has to be a bare `http` or `https` origin written as a
+browser sends it, because the `cors` package matches the `Origin`
+header by string equality. A trailing slash, a path or an upper-case
+scheme would be an entry nobody ever matches, so all three are
+refused at boot rather than normalised. So are a blank entry and `*`.
+A blank value is not a way to say no origin, which unset already
+says, and `*` handed to the framework would be a literal matching
+nothing, or, read as intended, every page on the web reading an API
+whose token a browser holds.
+
+### The rate limit is a count, and the window is a minute
+
+`AR_RATE_LIMIT_MAX` is a positive integer replacing the fallback's
+100; `windowMs` is fixed at `60_000`, so the entry always reads as
+requests per minute. A request over it answers the `429` `text/html`
+row of the table near the top of this document, unchanged.
+
+Setting it changes the headers as well as the count, and that is
+measured rather than chosen. The framework schema models `rateLimit`
+as `max` and `windowMs` alone, so a supplied block reaches
+express-rate-limit without the draft-6 choice the fallback literal
+makes, and the library's own defaults answer: `X-RateLimit-Limit`,
+`X-RateLimit-Remaining` and an epoch-second `X-RateLimit-Reset`,
+with no `RateLimit-*` header at all. Unset, a response carries
+`RateLimit-Limit: 100` and no `X-` name. A client reading the budget
+has to read both spellings until `lib/express/` passes the header
+choice through, which this package does not edit.

@@ -1,8 +1,9 @@
-import type { Connector } from './types';
+import type { Connector } from '../types';
 
 import { describe, expect, it } from 'vitest';
 
-import { repeated } from '../test-support/repeated';
+import { repeated } from '../../test-support/repeated';
+import { FIXTURE_NOW } from '../types';
 
 import {
   CONNECTORS,
@@ -23,7 +24,6 @@ import {
   SPARSE_DOMAIN_SLUG,
   getDomain,
 } from './domains';
-import { FIXTURE_NOW } from './types';
 
 /**
  * Whether a config key is one a credential would be stored under.

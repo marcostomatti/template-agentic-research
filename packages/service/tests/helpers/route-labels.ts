@@ -48,7 +48,8 @@
  * length why leaving them out of THAT walk is the stronger claim,
  * while the OpenAPI surface documents them and so wants them in. One
  * roster satisfying both would have had to pick, and picking is what
- * the split avoids.
+ * the split avoids. {@link buildMeRouterEntry} is split out on the
+ * same terms, for `GET /me`.
  */
 
 import type { Router } from 'express';
@@ -64,6 +65,7 @@ import { buildDocumentsRouter } from '../../src/documents/routes.js';
 import { buildDomainsRouter } from '../../src/domains/routes.js';
 import { buildEntitiesRouter } from '../../src/entities/routes.js';
 import { buildFindingsRouter } from '../../src/findings/routes.js';
+import { buildMeRouter } from '../../src/me/routes.js';
 import { buildPersonasRouter } from '../../src/personas/routes.js';
 import { buildRunsRouter } from '../../src/runs/routes.js';
 import { buildSpendRouter } from '../../src/runs/spend-routes.js';
@@ -273,4 +275,24 @@ export function buildAuthRouterEntry(): DeclaredRouter {
   });
 
   return { name: 'auth', labels: labelsOf(router, readAuthMount()) };
+}
+
+/**
+ * The identity router, labelled at the root it is mounted at.
+ *
+ * The eighteenth entry, kept out of {@link buildResearchRouters} for
+ * the auth entry's reason: a consumer chooses whether to walk it.
+ * `GET /me` answers outside both envelopes and calls no service
+ * function, so the MCP exposure walk has nothing to hold it against,
+ * while the OpenAPI surface documents it and so wants it in.
+ *
+ * `src/index.ts` mounts it the way it mounts the research routers —
+ * `app.use(ctx.requireAuth, buildMeRouter())`, no path argument —
+ * so the prefix is the empty string and nothing has to be read out
+ * of that file the way {@link readAuthMount} reads the auth mount.
+ *
+ * @returns The one entry, carrying the one label.
+ */
+export function buildMeRouterEntry(): DeclaredRouter {
+  return { name: 'me', labels: labelsOf(buildMeRouter(), '') };
 }

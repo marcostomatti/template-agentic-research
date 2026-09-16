@@ -7,8 +7,8 @@ import type {
 
 import { describe, expect, it } from 'vitest';
 
-import { SURFACES } from '../routes/paths';
-import { repeated } from '../test-support/repeated';
+import { SURFACES } from '../../routes/paths';
+import { repeated } from '../../test-support/repeated';
 
 import { CONNECTORS, EXPORT_SUBSCRIPTIONS } from './connectors';
 import { ENTITIES, FINDINGS } from './digest';

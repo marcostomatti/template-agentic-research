@@ -228,6 +228,7 @@
  * per call, so rebuilding costs nothing either of them notices.
  */
 
+import type { LogoutCall } from './auth';
 import type { ExportSubscriptionSummary } from './connectors';
 import type { CategorySummary } from './lexicon';
 import type { SourceConfigProposal } from './proposals';
@@ -290,6 +291,7 @@ import {
   saveSettings,
   saveSource,
 } from './api';
+import { logout } from './auth';
 import { resolveDomainSlug } from './domains';
 
 /**
@@ -1316,4 +1318,28 @@ export function useSaveSettings(): RecordedWrite<Settings> {
     saveSettings,
     [deploymentQueryKey('settings')],
   );
+}
+
+/**
+ * Sign out — the only hook here that wraps `./auth.ts` rather than an
+ * accessor in `./api.ts`, and the only one that can answer nothing.
+ *
+ * `undefined` is the FIXTURE answer and not a failure: that build has
+ * no session to drop, and `./auth.ts` explains why the call being
+ * absent rather than a no-op is what drops the HTTP auth module out of
+ * the bundle. A caller narrows it and omits its own sign-out affordance
+ * when it is missing, which is what keeps the fixture shell's profile
+ * menu exactly as it is today.
+ *
+ * It takes no cache dependency on purpose. A sign-out clears the tab's
+ * session and sends the operator to `/login`, so the caller navigates
+ * away from every cached read rather than invalidating any of them,
+ * and the mount that follows starts cold.
+ *
+ * @returns The logout call under the API layer, `undefined` under
+ * fixtures — the same value on every render, since it is a module
+ * binding fixed at build time.
+ */
+export function useLogout(): LogoutCall | undefined {
+  return logout;
 }

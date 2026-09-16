@@ -1,10 +1,10 @@
 /**
  * @packageDocumentation
  * The OpenAPI registry and the 3.1 document generated from it,
- * assembled from the seventeen binding tables and from nothing else.
+ * assembled from the eighteen binding tables and from nothing else.
  *
  * Every router module exports one table keyed by the labels of the
- * routes it declares — `GET /domains/:slug` and its fifty-four
+ * routes it declares — `GET /domains/:slug` and its fifty-five
  * siblings — each naming the schemas that route parses a request
  * with. {@link buildOpenApiRegistry} walks those tables, splits each
  * label into a method and a path, rewrites the express `:slug`
@@ -51,7 +51,7 @@
  * WHAT THE RESPONSES CLAIM IS NARROWER THAN WHAT THE REQUESTS DO.
  * A binding table says what a route READS; the status it answers
  * with lives in the handler, where no generator can see it, and it
- * is not uniform — measured across the fifty-five, eight deletes
+ * is not uniform — measured across the fifty-six, eight deletes
  * answer `204`, nine creates answer `201` and the rest answer `200`.
  * A per-route status map here would be a second authority for that,
  * kept in step with the handlers by nothing at all, which is the one
@@ -85,9 +85,20 @@
  * them the failure envelope, because those handlers parse inline and
  * the error handler `createService` registers last is reached by
  * none of them. `src/auth/routes.ts` argues all of it beside the
- * table this module reads. That split is also why the two rosters
- * below are separate, exactly as `tests/helpers/route-labels.ts`
- * keeps its auth entry apart from the sixteen it walks.
+ * table this module reads. That split is also why the rosters below
+ * are separate, exactly as `tests/helpers/route-labels.ts` keeps its
+ * auth entry apart from the sixteen it walks.
+ *
+ * `GET /me` IS A THIRD SHAPE, and the one route here whose success
+ * body the document names. It answers `{ ok, sub }` outside both
+ * envelopes, as `/auth` does, but a schema for that body exists:
+ * the handler in `src/me/routes.ts` builds its answer THROUGH
+ * `meResponseSchema`, so the `200` binds that export by identity
+ * rather than describing a copy. It stays untagged, so it is
+ * inlined and `components/schemas` keeps the three envelopes and
+ * no fourth. Its `401` is the guard's, as on the research surface,
+ * and its `500` the failure envelope; no `422`, since it parses
+ * nothing, and no `204`, since it deletes nothing.
  *
  * THE DOCUMENT WRITES DOWN TWO FACTS THAT LIVE ELSEWHERE, and
  * neither is spelled here as a literal. `info.version` comes from
@@ -127,6 +138,7 @@ import {
   paginatedEnvelopeSchema,
   successEnvelopeSchema,
 } from './http/envelope.js';
+import { meResponseSchema, meRouteSchemas } from './me/routes.js';
 import { personasRouteSchemas } from './personas/routes.js';
 import { runsRouteSchemas } from './runs/routes.js';
 import { spendRouteSchemas } from './runs/spend-routes.js';
@@ -197,6 +209,10 @@ const AUTH_REFUSAL_DESCRIPTION = 'Refused, rate-limited or '
   + 'unauthenticated. A single-key body, and never the failure '
   + 'envelope: these handlers parse inline and reach no error '
   + 'handler.';
+
+const IDENTITY_DESCRIPTION = 'The subject the guard verified, or '
+  + '`null` where the guard is a passthrough and no credential is '
+  + 'checked at all. A bare object outside both envelopes.';
 
 /**
  * The methods {@link parseRouteLabel} will accept, as a record
@@ -319,8 +335,9 @@ export function parseRouteLabel(label: string): RouteLabelParts {
  * One JSON response, described by a schema.
  *
  * @param description - What the status means on this surface.
- * @param schema - The body's shape. Tagged with a component id, so
- *   the generator writes a `$ref` and hoists it.
+ * @param schema - The body's shape. Where it carries a component id
+ *   the generator writes a `$ref` and hoists it; an untagged one,
+ *   `GET /me`'s, is inlined.
  * @returns The response the registry reads.
  */
 function jsonResponse(
@@ -447,6 +464,29 @@ function bareResponses(): RouteConfig['responses'] {
   };
 }
 
+/**
+ * The responses `GET /me` declares.
+ *
+ * @returns A `200` carrying the body the handler writes, the
+ *   guard's `401`, and the failure envelope at `500`.
+ *
+ * @remarks
+ * `meResponseSchema` is bound as `src/me/routes.ts` exports it, by
+ * identity and untagged, because the handler parses its answer
+ * through that const: the document then names the object the route
+ * writes. An explicit `200` rather than a range, the handler writing
+ * no other success status. The `500` is what a session whose `sub`
+ * fails that parse reaches. No `422` and no `204`, the route parsing
+ * nothing and deleting nothing.
+ */
+function identityResponses(): RouteConfig['responses'] {
+  return {
+    '200': jsonResponse(IDENTITY_DESCRIPTION, meResponseSchema),
+    '401': { description: UNAUTHORIZED_DESCRIPTION },
+    '500': jsonResponse(FAILED_DESCRIPTION, errorEnvelope),
+  };
+}
+
 /** A binding table under the tag its routes are grouped by. */
 interface TaggedTable {
   /**
@@ -489,15 +529,18 @@ const ENVELOPE_TABLES: readonly TaggedTable[] = [
 /** The seventeenth table, kept apart for the reasons above. */
 const AUTH_TABLE: TaggedTable = { tag: 'auth', table: authRouteSchemas };
 
+/** The eighteenth, apart as well: its one route names its own body. */
+const ME_TABLE: TaggedTable = { tag: 'me', table: meRouteSchemas };
+
 /**
  * Registers every route one table declares.
  *
  * @param registry - Where the registrations land.
  * @param tagged - The table and the tag its routes are grouped by.
  * @param responsesFor - What its routes answer with. The one thing
- *   that differs between the research groups and `/auth`, handed in
- *   rather than branched on inside, so the difference is legible at
- *   the two call sites.
+ *   that differs between the research groups, `/auth` and `/me`,
+ *   handed in rather than branched on inside, so the difference is
+ *   legible at the three call sites.
  *
  * @remarks
  * The label becomes the operation's `summary` as well as its method
@@ -528,7 +571,7 @@ function registerTable(
  * The registry every generated document is built from.
  *
  * @returns A fresh {@link OpenAPIRegistry} carrying one registration
- *   per binding-table key across all seventeen tables.
+ *   per binding-table key across all eighteen tables.
  *
  * @remarks
  * Fresh on every call rather than a module-scope singleton: a
@@ -546,6 +589,7 @@ export function buildOpenApiRegistry(): OpenAPIRegistry {
   }
 
   registerTable(registry, AUTH_TABLE, bareResponses);
+  registerTable(registry, ME_TABLE, identityResponses);
 
   return registry;
 }

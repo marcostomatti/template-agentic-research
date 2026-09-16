@@ -1,0 +1,115 @@
+{
+  "_readme": [
+    "INTEGRATION FIXTURE. A test asset, not a seed: `data/` stays the",
+    "only seed directory and `scripts/seed.ts` its only reader. The",
+    "integration seed reads this directory and nothing under `data/`,",
+    "on top of a `db:seed` pass that has already written the domain.",
+    "",
+    "This file carries `llm_calls` rows. The web keeps no calls module:",
+    "its spend module holds only the week's sum, `TOKENS_USED_THIS_WEEK`,",
+    "so these rows are the calls that sum is made of. Every `estTokens`",
+    "whose `calledAt` falls in `[2026-06-08T00:00:00.000Z,",
+    "2026-06-11T14:30:00.000Z)`, the Monday that opens the week of the",
+    "web's `FIXTURE_NOW` up to that instant, adds to exactly 1042800.",
+    "Keys beginning with an underscore are commentary, not columns.",
+    "",
+    "The table has no `domain_id` and no natural key, and these rows carry",
+    "no id of their own. `runFixtureId` names a row of `runs.json` by its",
+    "`fixtureId`, or is null for a call no pass made. `node` is the",
+    "workflow node that records such a call and `model` the `model` of",
+    "the `connectors.json` row a pass of that node reads.",
+    "",
+    "`estTokens` is `ceil(promptChars / 4)`, what `estimateTokens` in",
+    "`src/lib/chunk.ts` computes, and `promptChars` is not always a",
+    "multiple of four so the rounding is present in the bundle.",
+    "",
+    "TIMESTAMPS ARE FIXED. `calledAt` is a literal instant inside the run",
+    "it names, never derived from the wall clock and never left to the",
+    "column's `now()` default. A spend window read against a real clock",
+    "therefore finds none of these rows; read it with an explicit `since`",
+    "and `until`."
+  ],
+  "llmCalls": [
+    {
+      "_comment": "A call no pass made, in the week before the one WEEK_SPEND in packages/web/src/data/fixture/spend.ts sums.",
+      "runFixtureId": null,
+      "node": "Extract Finding Fields",
+      "model": "example-model-standard",
+      "promptChars": 73600,
+      "estTokens": 18400,
+      "calledAt": "2026-06-06T03:00:00.000Z"
+    },
+    {
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. FINDINGS id 1 in packages/web/src/data/digest.ts.",
+      "runFixtureId": 2,
+      "node": "Extract Finding Fields",
+      "model": "example-model-standard",
+      "promptChars": 385597,
+      "estTokens": 96400,
+      "calledAt": "2026-06-08T15:38:00.000Z"
+    },
+    {
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. FINDINGS id 2 in packages/web/src/data/digest.ts.",
+      "runFixtureId": 3,
+      "node": "Extract Finding Fields",
+      "model": "example-model-standard",
+      "promptChars": 473199,
+      "estTokens": 118300,
+      "calledAt": "2026-06-09T09:15:00.000Z"
+    },
+    {
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. A call no pass made, which the sum counts all the same.",
+      "runFixtureId": null,
+      "node": "Extract Finding Fields",
+      "model": "example-model-standard",
+      "promptChars": 256798,
+      "estTokens": 64200,
+      "calledAt": "2026-06-10T03:00:00.000Z"
+    },
+    {
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. FINDINGS id 3 in packages/web/src/data/digest.ts.",
+      "runFixtureId": 4,
+      "node": "Extract Finding Fields",
+      "model": "example-model-standard",
+      "promptChars": 526797,
+      "estTokens": 131700,
+      "calledAt": "2026-06-10T18:50:00.000Z"
+    },
+    {
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. FINDINGS id 4 in packages/web/src/data/digest.ts.",
+      "runFixtureId": 4,
+      "node": "Extract Finding Fields",
+      "model": "example-model-standard",
+      "promptChars": 419600,
+      "estTokens": 104900,
+      "calledAt": "2026-06-10T18:51:00.000Z"
+    },
+    {
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. The digest prose for EXPORT_SUBSCRIPTIONS id 1 in packages/web/src/data/connectors.ts.",
+      "runFixtureId": 7,
+      "node": "Draft Digest Prose",
+      "model": "example-model-long-context",
+      "promptChars": 1029599,
+      "estTokens": 257400,
+      "calledAt": "2026-06-11T06:02:00.000Z"
+    },
+    {
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. FINDINGS id 5 in packages/web/src/data/digest.ts.",
+      "runFixtureId": 6,
+      "node": "Extract Finding Fields",
+      "model": "example-model-standard",
+      "promptChars": 570398,
+      "estTokens": 142600,
+      "calledAt": "2026-06-11T06:03:00.000Z"
+    },
+    {
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. FINDINGS id 6 in packages/web/src/data/digest.ts.",
+      "runFixtureId": 6,
+      "node": "Extract Finding Fields",
+      "model": "example-model-standard",
+      "promptChars": 509199,
+      "estTokens": 127300,
+      "calledAt": "2026-06-11T06:18:00.000Z"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { repeated } from '../test-support/repeated';
+import { repeated } from '../../test-support/repeated';
 
 import { findDomain, resolveDomainSlug } from './domains';
 import { NOTIFICATION_CHANNELS, SETTINGS, getSettings } from './settings';

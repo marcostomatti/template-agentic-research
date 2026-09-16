@@ -1,0 +1,242 @@
+{
+  "_readme": [
+    "INTEGRATION FIXTURE. A test asset, not a seed: `data/` stays the",
+    "only seed directory and `scripts/seed.ts` its only reader. The",
+    "integration seed reads this directory and nothing under `data/`,",
+    "on top of a `db:seed` pass that has already written the domain.",
+    "",
+    "This file carries `runs` rows for the example domain. The web keeps",
+    "no runs module, so each row is transcribed from the stamps the web",
+    "fixture modules named in its `_comment` already state: a pass",
+    "opens before the document, finding or delivery it produced and",
+    "closes after it, so the web's fixture path and a seeded `ar_live`",
+    "tell one story. Keys beginning with an underscore are commentary,",
+    "not columns.",
+    "",
+    "`fixtureId` is not a column. The database issues `runs.id`, and the",
+    "table carries no natural key, so the member keeps an id of this",
+    "file's own, which is what `llm-calls.json` names a run by.",
+    "`domainSlug` names the domain by the slug `data/domains.json` seeds.",
+    "",
+    "`status`, `scheduledBy`, `counts` and `errors` take the shapes the",
+    "workflow that closes such a pass writes: `ar-ingest` Close Run,",
+    "`ar-capture` Close Capture Run and `ar-digest` Close Digest Run, each",
+    "`counts` carrying every key its workflow builds. `errors` is opaque",
+    "`jsonb` with no foreign key, so its `source_id` holds the source's",
+    "`fixtureId` from `sources.json` and is written verbatim, never",
+    "resolved; nothing may join on it. The digest's `briefings_written`",
+    "counts a `briefings` row this bundle does not carry, and scoring",
+    "passes are not carried at all.",
+    "",
+    "TIMESTAMPS ARE FIXED. `startedAt` and `finishedAt` are literal",
+    "instants on or before the web's `FIXTURE_NOW` of",
+    "`2026-06-11T14:30:00.000Z`, never derived from the wall clock and",
+    "never left to the `started_at` column's `now()` default, so two seeds",
+    "of one bundle store the same rows. No run is left `running`."
+  ],
+  "runs": [
+    {
+      "_comment": "Ingest pass behind DOCUMENTS id 1 in packages/web/src/data/digest.ts.",
+      "fixtureId": 1,
+      "domainSlug": "example-tech-radar",
+      "scheduledBy": "interval",
+      "status": "failed",
+      "startedAt": "2026-06-07T21:00:00.000Z",
+      "finishedAt": "2026-06-07T21:11:00.000Z",
+      "counts": {
+        "sources_read": 1,
+        "sources_failed": 1,
+        "sources_flagged": 0,
+        "records_refused": 0,
+        "documents_written": 1,
+        "documents_repeated": 0,
+        "duplicates_marked": 0,
+        "documents_ignored": 0,
+        "model_calls": 0,
+        "answers_refused": 0,
+        "findings_written": 0,
+        "documents_featurized": 0,
+        "subjects_searchable": 0,
+        "intentions_raised": 0,
+        "intentions_suppressed_repeat": 0,
+        "intentions_suppressed_interval": 0
+      },
+      "errors": [
+        {
+          "node": "Apply Source Health",
+          "source_id": 3,
+          "consecutive_failures": 1,
+          "flagged": false
+        }
+      ]
+    },
+    {
+      "_comment": "Capture pass behind DOCUMENTS id 2 and FINDINGS id 1 in packages/web/src/data/digest.ts.",
+      "fixtureId": 2,
+      "domainSlug": "example-tech-radar",
+      "scheduledBy": "operator",
+      "status": "ok",
+      "startedAt": "2026-06-08T15:22:00.000Z",
+      "finishedAt": "2026-06-08T15:41:00.000Z",
+      "counts": {
+        "captures_received": 1,
+        "sources_read": 0,
+        "sources_failed": 0,
+        "sources_flagged": 0,
+        "envelopes_refused": 0,
+        "records_refused": 0,
+        "documents_written": 1,
+        "documents_promoted": 0,
+        "documents_repeated": 0,
+        "answers_refused": 0,
+        "findings_written": 1
+      },
+      "errors": []
+    },
+    {
+      "_comment": "Ingest pass behind DOCUMENTS id 3 and FINDINGS id 2 in packages/web/src/data/digest.ts.",
+      "fixtureId": 3,
+      "domainSlug": "example-tech-radar",
+      "scheduledBy": "interval",
+      "status": "ok",
+      "startedAt": "2026-06-09T09:00:00.000Z",
+      "finishedAt": "2026-06-09T09:21:00.000Z",
+      "counts": {
+        "sources_read": 1,
+        "sources_failed": 0,
+        "sources_flagged": 0,
+        "records_refused": 0,
+        "documents_written": 1,
+        "documents_repeated": 0,
+        "duplicates_marked": 0,
+        "documents_ignored": 0,
+        "model_calls": 1,
+        "answers_refused": 0,
+        "findings_written": 1,
+        "documents_featurized": 0,
+        "subjects_searchable": 0,
+        "intentions_raised": 0,
+        "intentions_suppressed_repeat": 0,
+        "intentions_suppressed_interval": 0
+      },
+      "errors": []
+    },
+    {
+      "_comment": "Ingest pass behind DOCUMENTS id 4 and FINDINGS ids 3 and 4 in packages/web/src/data/digest.ts.",
+      "fixtureId": 4,
+      "domainSlug": "example-tech-radar",
+      "scheduledBy": "interval",
+      "status": "ok",
+      "startedAt": "2026-06-10T18:30:00.000Z",
+      "finishedAt": "2026-06-10T18:57:00.000Z",
+      "counts": {
+        "sources_read": 1,
+        "sources_failed": 0,
+        "sources_flagged": 0,
+        "records_refused": 0,
+        "documents_written": 1,
+        "documents_repeated": 0,
+        "duplicates_marked": 0,
+        "documents_ignored": 0,
+        "model_calls": 2,
+        "answers_refused": 0,
+        "findings_written": 2,
+        "documents_featurized": 0,
+        "subjects_searchable": 0,
+        "intentions_raised": 0,
+        "intentions_suppressed_repeat": 0,
+        "intentions_suppressed_interval": 0
+      },
+      "errors": []
+    },
+    {
+      "_comment": "Ingest pass that failed SOURCES id 6 in packages/web/src/data/sources.ts a second time.",
+      "fixtureId": 5,
+      "domainSlug": "example-tech-radar",
+      "scheduledBy": "interval",
+      "status": "failed",
+      "startedAt": "2026-06-10T22:00:00.000Z",
+      "finishedAt": "2026-06-10T22:16:00.000Z",
+      "counts": {
+        "sources_read": 1,
+        "sources_failed": 1,
+        "sources_flagged": 0,
+        "records_refused": 0,
+        "documents_written": 0,
+        "documents_repeated": 0,
+        "duplicates_marked": 0,
+        "documents_ignored": 0,
+        "model_calls": 0,
+        "answers_refused": 0,
+        "findings_written": 0,
+        "documents_featurized": 0,
+        "subjects_searchable": 0,
+        "intentions_raised": 0,
+        "intentions_suppressed_repeat": 0,
+        "intentions_suppressed_interval": 0
+      },
+      "errors": [
+        {
+          "node": "Apply Source Health",
+          "source_id": 6,
+          "consecutive_failures": 2,
+          "flagged": false
+        }
+      ]
+    },
+    {
+      "_comment": "Ingest pass behind DOCUMENTS ids 5 and 6 and FINDINGS ids 5 and 6 in packages/web/src/data/digest.ts.",
+      "fixtureId": 6,
+      "domainSlug": "example-tech-radar",
+      "scheduledBy": "interval",
+      "status": "partial",
+      "startedAt": "2026-06-11T05:50:00.000Z",
+      "finishedAt": "2026-06-11T06:21:00.000Z",
+      "counts": {
+        "sources_read": 2,
+        "sources_failed": 1,
+        "sources_flagged": 1,
+        "records_refused": 0,
+        "documents_written": 2,
+        "documents_repeated": 0,
+        "duplicates_marked": 0,
+        "documents_ignored": 0,
+        "model_calls": 2,
+        "answers_refused": 0,
+        "findings_written": 2,
+        "documents_featurized": 0,
+        "subjects_searchable": 0,
+        "intentions_raised": 0,
+        "intentions_suppressed_repeat": 0,
+        "intentions_suppressed_interval": 0
+      },
+      "errors": [
+        {
+          "node": "Apply Source Health",
+          "source_id": 3,
+          "consecutive_failures": 3,
+          "flagged": true
+        }
+      ]
+    },
+    {
+      "_comment": "Digest pass for EXPORT_SUBSCRIPTIONS id 1 in packages/web/src/data/connectors.ts, dated by packages/web/src/data/shell.ts.",
+      "fixtureId": 7,
+      "domainSlug": "example-tech-radar",
+      "scheduledBy": "interval",
+      "status": "ok",
+      "startedAt": "2026-06-11T06:00:00.000Z",
+      "finishedAt": "2026-06-11T06:04:00.000Z",
+      "counts": {
+        "findings_selected": 4,
+        "findings_digested": 4,
+        "sections_assembled": 2,
+        "subscriptions_enabled": 4,
+        "model_calls": 1,
+        "briefings_written": 1,
+        "served_obsidian_md": 1
+      },
+      "errors": []
+    }
+  ]
+}

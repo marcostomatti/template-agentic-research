@@ -1,0 +1,98 @@
+{
+  "_readme": [
+    "INTEGRATION FIXTURE. A test asset, not a seed: `data/` stays the",
+    "only seed directory and `scripts/seed.ts` its only reader. The",
+    "integration seed reads this directory and nothing under `data/`.",
+    "",
+    "This file carries `connectors` rows, each transcribed from the web",
+    "fixture module named in its `_comment`, so the web's fixture path",
+    "and a seeded `ar_live` tell one story. Keys beginning with an",
+    "underscore are commentary, not columns. Connectors carry no domain:",
+    "the table has no `domain_id`, so these rows belong to the deployment.",
+    "",
+    "`fixtureId` is not a column. The database issues `connectors.id`;",
+    "the member keeps the `id` the web fixture gave the row, while",
+    "(`kind`, `name`) is the natural key `connectors_kind_name_unique`",
+    "holds and the one an export subscription resolves a target by.",
+    "",
+    "SECRETS ARE DUMMIES. Every credential-shaped key below carries the",
+    "one value `dummy-integration-secret`, which authenticates nothing.",
+    "The web fixture writes `[redacted]` in the same places; this file",
+    "does not copy it, so a stored value is told apart from a read mask",
+    "and from the web placeholder. The service stores a submitted",
+    "`config` whole and masks it only on the way out, so these values",
+    "are what a masked read hides. Never put a real credential here."
+  ],
+  "connectors": [
+    {
+      "_comment": "Mirrors CONNECTORS id 1 in packages/web/src/data/connectors.ts.",
+      "fixtureId": 1,
+      "kind": "llm",
+      "name": "primary",
+      "config": {
+        "endpoint": "https://api.example.com/v1/messages",
+        "model": "example-model-standard",
+        "apiKey": "dummy-integration-secret"
+      }
+    },
+    {
+      "_comment": "Mirrors CONNECTORS id 2 in packages/web/src/data/connectors.ts.",
+      "fixtureId": 2,
+      "kind": "llm",
+      "name": "long-context",
+      "config": {
+        "endpoint": "https://api.example.com/v1/messages",
+        "model": "example-model-long-context",
+        "apiKey": "dummy-integration-secret"
+      }
+    },
+    {
+      "_comment": "Mirrors CONNECTORS id 3 in packages/web/src/data/connectors.ts.",
+      "fixtureId": 3,
+      "kind": "search",
+      "name": "web",
+      "config": {
+        "endpoint": "https://search.example.net/v1/query",
+        "resultLimit": 20,
+        "apiKey": "dummy-integration-secret"
+      }
+    },
+    {
+      "_comment": "Mirrors CONNECTORS id 4 in packages/web/src/data/connectors.ts.",
+      "fixtureId": 4,
+      "kind": "notebook",
+      "name": "research",
+      "config": {
+        "baseUrl": "https://notebook.example.org",
+        "notebookId": "example-tech-radar",
+        "password": "dummy-integration-secret"
+      }
+    },
+    {
+      "_comment": "Mirrors CONNECTORS id 5 in packages/web/src/data/connectors.ts.",
+      "fixtureId": 5,
+      "kind": "export_target",
+      "name": "notes-directory",
+      "config": {
+        "path": "/srv/exports/example-tech-radar/notes"
+      }
+    },
+    {
+      "_comment": "Mirrors CONNECTORS id 6 in packages/web/src/data/connectors.ts.",
+      "fixtureId": 6,
+      "kind": "export_target",
+      "name": "static-feed",
+      "config": {
+        "path": "/srv/exports/example-tech-radar/feed.xml",
+        "publicUrl": "https://example.org/example-tech-radar/feed.xml"
+      }
+    },
+    {
+      "_comment": "Mirrors CONNECTORS id 7 in packages/web/src/data/connectors.ts.",
+      "fixtureId": 7,
+      "kind": "export_target",
+      "name": "mail-drafts",
+      "config": {}
+    }
+  ]
+}

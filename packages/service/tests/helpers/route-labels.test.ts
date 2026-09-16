@@ -7,7 +7,7 @@
  * in which no router has quietly stopped declaring anything.
  *
  * THE WALK IS DRIVEN OVER HAND-BUILT ROUTERS rather than over the
- * seventeen the module builds, and that is the point of those cases
+ * eighteen the module builds, and that is the point of those cases
  * rather than a shortcut. The real routers are a moving surface —
  * a route added to any of them changes what a walk over them
  * answers — so a case asserting a figure taken off them measures
@@ -61,6 +61,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildAuthRouterEntry,
+  buildMeRouterEntry,
   buildResearchRouters,
   labelFor,
   labelsOf,
@@ -409,5 +410,17 @@ describe('buildAuthRouterEntry', () => {
     }
 
     expect(entry.labels).not.toContain('POST /login');
+  });
+});
+
+describe('buildMeRouterEntry', () => {
+  it('names the identity router and labels its one route at the root', () => {
+    const entry = buildMeRouterEntry();
+
+    // One route and one handler, so the list and the set agree. A
+    // prefix composed in by mistake, or a route lost, both move this
+    // list rather than a count.
+    expect(entry.name).toBe('me');
+    expect([...entry.labels]).toStrictEqual(['GET /me']);
   });
 });

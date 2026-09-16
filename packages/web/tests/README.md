@@ -14,16 +14,104 @@ Two runners split by what they can reach:
   its baselines are per-machine and untracked, and CI has none, so a
   screenshot spec under `tests/e2e/` would red the hosted job on the
   first push. Run it with `bun run test:visual`.
+- **Integration** (`playwright` via `playwright.integration.config.ts`) —
+  `tests/integration/*.spec.ts`, driving the same app with
+  `VITE_AR_API_URL` SET against a LIVE `@ar/service` over a seeded
+  Postgres, on port 5176. It is the only suite in this tree that needs a
+  backend, and nothing in the config starts one — so
+  `tests/integration/global-setup.ts` refuses the run, before the first
+  browser, when `GET /health` on the service does not answer
+  `{ status: 'ok' }` or when either `AR_INTEGRATION_USER` or
+  `AR_INTEGRATION_PASSWORD` carries nothing. Put the service and its data
+  in place first, then run it with `bun run test:integration`.
 
 The unit suite lives in `src/` rather than here on purpose: colocation is
 the repo's testing convention, and it keeps a pure module and its test in
 one directory. This tree is for specs that need the assembled app.
 
-Neither tree carries a shared helper module, and that is the convention
+No tree here carries a shared helper module, and that is the convention
 rather than an oversight: every spec imports from `src/`, from
 `@playwright/test` and from nothing else. Hoisting a helper into a sibling
 module changes that convention and drags every existing spec's imports
-with it.
+with it. `tests/integration/global-setup.ts` is the one non-spec module
+in any of the three trees, and it is not an exception: it is named by its
+config rather than imported by a spec, it imports nothing at all, and
+Playwright's default `testMatch` does not match its name, so it never
+joins the suite it guards.
+
+## Running integration tests
+
+**⚠️ Shared state warning:** `ar_live` is shared across all worktrees on
+the same machine. Running the integration suite resets the database state.
+Coordinate with others before running.
+
+1. **Start the Postgres container** on port 5433:
+
+   ```bash
+   cd packages/service
+   bun run stress:start
+   ```
+
+2. **Migrate and seed the database:**
+
+   ```bash
+   cd packages/service
+   export DATABASE_URL=postgresql://ar:ar@localhost:5433/ar_live
+   bun run db:migrate
+   bun run db:seed
+   bun run seed:integration
+   ```
+
+   None of the three takes a database flag: each reads `DATABASE_URL`
+   only, and `drizzle-kit migrate` refuses an unrecognized option.
+
+3. **Start the service** in another terminal:
+
+   ```bash
+   cd packages/service
+   export DATABASE_URL=postgresql://ar:ar@localhost:5433/ar_live
+   export PORT=3100
+   export AUTH_BASIC_USER=testuser
+   export AUTH_BASIC_PASSWORD=testpassword
+   export AR_CORS_ORIGINS=http://127.0.0.1:5176
+   export AR_RATE_LIMIT_MAX=1000
+   bun run dev
+   ```
+
+   `AUTH_BASIC_PASSWORD` must be at least 12 characters: the service
+   validates its env at import and refuses a shorter one before
+   `GET /health` answers. The service binds `PORT`; `AR_API_PORT` is
+   read only by the web side's integration config, whose default is
+   already 3100.
+
+   The login route carries its own in-memory limiter (10 attempts per
+   15 minutes per process), separate from `AR_RATE_LIMIT_MAX`. One suite
+   run stays under it; a second run against the same process reds most
+   specs with "Too many sign-in attempts", so restart the service between
+   runs.
+
+4. **Set credentials for the test runner:**
+
+   ```bash
+   export AR_INTEGRATION_USER=testuser
+   export AR_INTEGRATION_PASSWORD=testpassword
+   ```
+
+5. **Run the integration suite:**
+
+   ```bash
+   cd packages/web
+   bun run test:integration
+   ```
+
+6. **Clean up:**
+
+   Stop the service (Ctrl+C in its terminal), then:
+
+   ```bash
+   cd packages/service
+   bun run stress:stop
+   ```
 
 ## Why this file exists
 

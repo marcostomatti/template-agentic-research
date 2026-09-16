@@ -2051,8 +2051,10 @@ async function captureProbes(
     const handle: ServiceHandle = await createService({
       serviceId: 'api-request-echo-probe',
       register(app, ctx) {
-        // The sixteen mounts of `src/index.ts`, in its order and
-        // with its guard, off the one list the table guards read.
+        // The sixteen research mounts of `src/index.ts`, in its
+        // order and with its guard, off the one list the table
+        // guards read. The identity mount above them is left out:
+        // `GET /me` parses no request, so it has nothing to echo.
         // No `auth` block is configured, so `ctx.requireAuth` is
         // the passthrough and every request below reaches its
         // handler.

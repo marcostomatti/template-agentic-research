@@ -56,7 +56,7 @@
  * second freeze to reach.
  */
 
-import type { SpendSummary } from './types';
+import type { SpendSummary } from '../types';
 
 /**
  * The two readings the sidebar pill can carry.

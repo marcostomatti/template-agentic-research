@@ -2,7 +2,8 @@ import type { DraftableRow } from './drafts';
 
 import { describe, expect, it } from 'vitest';
 
-import { repeated } from '../test-support/repeated';
+import { repeated } from '../../test-support/repeated';
+import { FIXTURE_NOW } from '../types';
 
 import {
   DEFAULT_DOMAIN_SLUG,
@@ -16,7 +17,6 @@ import {
   listSourceProposals,
 } from './proposals';
 import { findSource, listSources } from './sources';
-import { FIXTURE_NOW } from './types';
 
 /**
  * The id of a row handed over as a ruling, read through the structural

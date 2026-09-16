@@ -2,6 +2,11 @@ import process from 'node:process';
 
 import { z } from 'zod';
 
+import {
+  corsOriginsSchema,
+  rateLimitMaxSchema,
+} from './http/service-options.js';
+
 /**
  * Environment configuration — parsed once at import time; the process fails
  * fast on invalid env instead of limping into a broken state.
@@ -15,6 +20,13 @@ import { z } from 'zod';
  *   is exactly what it was. Both set → the bootstrap upsert, the `/auth`
  *   routes and a DB-backed verifier that takes precedence over the
  *   introspection pair above.
+ * - `AR_CORS_ORIGINS` unset (the default) → no cross-origin read is
+ *   allowed. `AR_RATE_LIMIT_MAX` unset (the default) → the framework's
+ *   100-per-minute limiter. Both are translated for `createService` by
+ *   `src/http/service-options.ts`.
+ * - `AR_WEB_DIST` unset (the default) → nothing is mounted at `/app`.
+ *   Set → the built web app in that directory is served there, from
+ *   `src/web/static.ts`.
  *
  * Not every optional entry is an integration toggle. The `AR_N8N_*` pair and
  * the `AR_LLM_*` trio below belong to operator commands rather than to the
@@ -90,6 +102,53 @@ const EnvSchema = z.object({
   AUTH_SESSION_TTL_SECONDS: z.coerce.number().int()
     .positive()
     .default(86400),
+  /**
+   * Origins a browser may let read this service's responses,
+   * comma-separated — the web app's own origin when it is served from
+   * somewhere other than this port. Unset leaves the framework
+   * answering every cross-origin request with no
+   * `Access-Control-Allow-Origin` at all.
+   *
+   * Each entry must be a bare `http` or `https` origin, written as a
+   * browser sends it in `Origin`. A blank entry (a blank value, a
+   * doubled or trailing comma) and `*` are boot failures rather than
+   * readings of "nothing" or "everything": see `corsOriginsSchema` in
+   * `src/http/service-options.ts`, which is also where the parsed list
+   * becomes the `cors` member `createService` takes.
+   */
+  AR_CORS_ORIGINS: corsOriginsSchema.optional(),
+  /**
+   * Requests one client may make per minute, app-wide. Unset leaves
+   * the framework's own limit of 100. The window is fixed at a minute
+   * in `src/http/service-options.ts`, so this is the only knob.
+   *
+   * A positive integer; a blank value coerces to 0 and is a boot
+   * failure, as it is for `AUTH_SESSION_TTL_SECONDS` above. Setting it
+   * changes the limiter's response headers as well as its count: a
+   * block supplied here reaches the limiter without the draft-6 header
+   * choice the framework fallback carries, so responses answer
+   * `X-RateLimit-Limit` rather than `RateLimit-Limit`.
+   */
+  AR_RATE_LIMIT_MAX: rateLimitMaxSchema.optional(),
+  /**
+   * Directory holding the built web app, served under `/app` when set.
+   * Unset leaves `/app` unmounted, so a boot is exactly what it was
+   * and the path falls through to the guarded mounts like any other
+   * unmatched one.
+   *
+   * A path, resolved against the working directory the process starts
+   * in. The floor of 1 makes a present-but-blank value a boot failure
+   * rather than a reading of the working directory itself. Whether the
+   * directory holds a build is checked by `mountWebApp` in
+   * `src/web/static.ts`, which throws at mount time when it finds no
+   * `index.html` there, so a mistyped path fails the boot rather than
+   * every page load.
+   *
+   * The build must have been made for the `/app` base, and the prefix
+   * is not a setting — `WEB_APP_PREFIX` in the same module says why.
+   */
+  AR_WEB_DIST: z.string().min(1)
+    .optional(),
   /**
    * Base URL of the n8n instance `scripts/deploy-external.ts` uploads built
    * workflows to, over the public REST API that instance exposes. That script
