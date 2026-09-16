@@ -1,12 +1,13 @@
-## Testing — two runners, two Playwright configs
+## Testing — two runners, three Playwright configs
 
-Two runners, and Playwright is configured TWICE over the one app:
+Two runners, and Playwright is configured THREE TIMES over the one app:
 
 | Runner | What it reaches | Where the tests live |
 | --- | --- | --- |
 | `vitest` | Pure modules only — node environment, no DOM, include `src/**/*.test.ts` (`.ts`, never `.tsx`) | Colocated beside the module |
 | `playwright` via `playwright.config.ts` | The assembled app in a real browser, chromium alone, on port 5174 | `tests/e2e/*.spec.ts` |
 | `playwright` via `playwright.visual.config.ts` | The same app screenshotted at four widths in both themes, on port 5175 | `tests/visual/*.spec.ts` |
+| `playwright` via `playwright.integration.config.ts` | The same app with `VITE_AR_API_URL` SET, in a real browser against a LIVE `@ar/service` over a seeded Postgres, on port 5176 | `tests/integration/*.spec.ts` |
 
 That split is what makes the pure-function/component division in this
 package load-bearing rather than stylistic: a `.tsx` file is read by
@@ -25,7 +26,7 @@ its whole file with it.
 <!-- doc-links-skip: pages/filters.ts -- package-local path -->
 <!-- doc-links-skip: app-shell/theme.ts -- package-local path -->
 
-Four scripts drive them, and only the first two are ever a gate:
+Five scripts drive them, and only the first two are ever a gate:
 
 | Script | What it is |
 | --- | --- |
@@ -33,6 +34,7 @@ Four scripts drive them, and only the first two are ever a gate:
 | `test` | `vitest run && playwright test` behind one script line — the default config, and the only test script CI runs here |
 | `test:visual` | `playwright test --config playwright.visual.config.ts`, asserting the screenshots against THIS machine's baselines |
 | `test:visual:update` | the same with `--update-snapshots=changed`, which seeds a machine's set or refreshes only the shots that moved |
+| `test:integration` | `playwright test --config playwright.integration.config.ts`, driving the app against a live service — it REFUSES before the first browser unless the run-book's steps are done |
 
 The screenshot suite sits outside the default run for a measured
 reason rather than a preference. At the pinned 1.62.1 `updateSnapshots`
@@ -63,6 +65,43 @@ from a green run:
   `packages/web/.gitignore` restates `visual/` and then negates
   `!tests/visual/` — within one ignore file the LAST matching
   pattern wins.
+
+The INTEGRATION suite sits outside every gate for a different reason:
+it is the only config of the three that needs a backend. Its
+`webServer.env` sets `VITE_AR_API_URL` to an absolute
+`http://127.0.0.1:3100`, which is the whole data-source switch
+(`src/data/api.ts`: unset selects the fixture layer, any string at all
+selects the HTTP layer), so every read crosses a socket to
+`@ar/service` over a seeded Postgres. Four consequences:
+
+- The value is absolute rather than the dev proxy's `/api`, so the
+  browser calls the service CROSS-ORIGIN and the suite exercises CORS
+  instead of hiding it behind vite's same-origin proxy. The service
+  must be started with `AR_CORS_ORIGINS=http://127.0.0.1:5176` and
+  `AR_RATE_LIMIT_MAX=1000`, and `AR_API_PORT` re-points both sides.
+- It is set on the SERVER rather than exported by hand, because an
+  exported `VITE_AR_API_URL` would also re-point a developer's own
+  `bun run dev` and every fixture suite started from the same terminal.
+- `test:integration` gets no `pretest` either, for the same
+  whole-script-name reason the two visual scripts do not. Build
+  `@ar/ui` by hand first or the app under test is assembled from
+  whatever that package's gitignored `dist/` last held.
+- Nothing in the config starts the service, migrates or seeds, and a
+  run without those steps would HANG and then report a wall of
+  timed-out assertions against an app whose every read rejected —
+  which reads exactly like the app being broken.
+  `tests/integration/global-setup.ts` is the config's `globalSetup` and
+  turns that into ONE refusal, before the first browser, when
+  `GET /health` on the service does not answer `{ status: 'ok' }` or
+  when either `AR_INTEGRATION_USER` / `AR_INTEGRATION_PASSWORD` carries
+  nothing. Blank counts as unset there on purpose: `export
+  AR_INTEGRATION_PASSWORD=` leaves the variable present and empty,
+  which a `=== undefined` test accepts and which then fails as the
+  service's own refusal sentence — indistinguishable from a wrong
+  password. The message points at the run-book in `tests/README.md`
+  rather than restating its steps, so the two cannot drift, and it is
+  the only non-spec module in any of the three trees (`testMatch`
+  does not match a `global-setup.ts`, so it never joins the suite).
 
 Reading a run:
 
@@ -125,9 +164,10 @@ Spec conventions:
   resolves from memory and the server is started by the config, so a
   second attempt that passed would be hiding a real bug.
   `playwright.visual.config.ts` repeats all four decisions on port
-  5175, which is what lets the two suites coexist: a shared port would
-  leave whichever started second either waiting out its timeout or
-  screenshotting a tree it did not build.
+  5175 and `playwright.integration.config.ts` repeats them again on
+  5176, and three distinct numbers are what let the three suites
+  coexist: a shared port would leave whichever started second either
+  waiting out its timeout or driving a tree it did not build.
 - Output (`test-results/`, `playwright-report/`) is gitignored at the
   repo root, and a failing run writes the first of those even with
   every artifact setting at its default.
