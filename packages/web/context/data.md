@@ -48,7 +48,9 @@ Unset it when building for fixture-backed development.
   tests, exactly as before. Twenty modules total.
 - `src/data/http/` holds the HTTP implementations: `api.ts` (34
   accessors by stub), `client.ts` (session + fetch), `envelope.ts`
-  (response shape), `operator.ts` (derive from sub claim).
+  (response shape), `operator.ts` (derive from sub claim), `auth.ts`
+  (login, logout and the open-service probe, over the tab's one
+  session store).
 - `src/data/` holds `api.ts` (the Vite-replaced selector), `source.ts`
   (the resolver), `hooks.ts` (one cache hook per accessor), `types.ts`
   (shared vocabulary and `FIXTURE_NOW`), and one-line re-exports at
