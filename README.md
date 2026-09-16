@@ -1,12 +1,4 @@
 
-
-<h1 align="center"><img src="docs/assets/bart-wordmark-full.png" alt="A research pass: sources in, briefing out" width="760"></h1>
-
-<p align="center">
-  <strong>Point it at a field. Get a briefing.</strong><br>
-  A self-hosted agentic research pipeline: your sources in, scored findings and periodic digests out.
-</p>
-
 <p align="center">
 
 [![CI](https://github.com/marcostomatti/template-agentic-research/actions/workflows/back.yml/badge.svg)](https://github.com/marcostomatti/template-agentic-research/actions/workflows/back.yml)
@@ -15,6 +7,14 @@
 [![Bun 1.3.9](https://img.shields.io/badge/bun-1.3.9-000?logo=bun)](https://bun.sh)
 
 </p>
+
+<h1 align="center"><img src="docs/assets/bart-wordmark-full.png" alt="A research pass: sources in, briefing out" width="760"></h1>
+
+<p align="center">
+  <strong>Point it at a field. Get a briefing.</strong><br>
+  A self-hosted agentic research pipeline: your sources in, scored findings and periodic digests out.
+</p>
+
 
 ## What is it
 
