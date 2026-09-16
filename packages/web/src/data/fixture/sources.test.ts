@@ -1,8 +1,9 @@
-import type { Source, SourceKind } from './types';
+import type { Source, SourceKind } from '../types';
 
 import { describe, expect, it } from 'vitest';
 
-import { repeated } from '../test-support/repeated';
+import { repeated } from '../../test-support/repeated';
+import { FIXTURE_NOW } from '../types';
 
 import { DOCUMENTS } from './digest';
 import {
@@ -19,7 +20,6 @@ import {
   listSources,
   summarizeSources,
 } from './sources';
-import { FIXTURE_NOW } from './types';
 
 /**
  * Every member of the kind union, as a record rather than as a list.

@@ -1,8 +1,8 @@
-import type { Term, TermPolarity } from './types';
+import type { Term, TermPolarity } from '../types';
 
 import { describe, expect, it } from 'vitest';
 
-import { repeated } from '../test-support/repeated';
+import { repeated } from '../../test-support/repeated';
 
 import { ENTITIES } from './digest';
 import {

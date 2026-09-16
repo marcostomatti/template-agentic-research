@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { repeated } from '../test-support/repeated';
+import { repeated } from '../../test-support/repeated';
 
 import {
   DEFAULT_DOMAIN_SLUG,

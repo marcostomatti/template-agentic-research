@@ -12,7 +12,7 @@ import type {
   Settings,
   Source,
   Term,
-} from './types';
+} from '../types';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

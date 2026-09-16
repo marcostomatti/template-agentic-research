@@ -31,7 +31,7 @@
   ],
   "llmCalls": [
     {
-      "_comment": "A call no pass made, in the week before the one WEEK_SPEND in packages/web/src/data/spend.ts sums.",
+      "_comment": "A call no pass made, in the week before the one WEEK_SPEND in packages/web/src/data/fixture/spend.ts sums.",
       "runFixtureId": null,
       "node": "Extract Finding Fields",
       "model": "example-model-standard",
@@ -40,7 +40,7 @@
       "calledAt": "2026-06-06T03:00:00.000Z"
     },
     {
-      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/spend.ts. FINDINGS id 1 in packages/web/src/data/digest.ts.",
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. FINDINGS id 1 in packages/web/src/data/digest.ts.",
       "runFixtureId": 2,
       "node": "Extract Finding Fields",
       "model": "example-model-standard",
@@ -49,7 +49,7 @@
       "calledAt": "2026-06-08T15:38:00.000Z"
     },
     {
-      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/spend.ts. FINDINGS id 2 in packages/web/src/data/digest.ts.",
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. FINDINGS id 2 in packages/web/src/data/digest.ts.",
       "runFixtureId": 3,
       "node": "Extract Finding Fields",
       "model": "example-model-standard",
@@ -58,7 +58,7 @@
       "calledAt": "2026-06-09T09:15:00.000Z"
     },
     {
-      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/spend.ts. A call no pass made, which the sum counts all the same.",
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. A call no pass made, which the sum counts all the same.",
       "runFixtureId": null,
       "node": "Extract Finding Fields",
       "model": "example-model-standard",
@@ -67,7 +67,7 @@
       "calledAt": "2026-06-10T03:00:00.000Z"
     },
     {
-      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/spend.ts. FINDINGS id 3 in packages/web/src/data/digest.ts.",
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. FINDINGS id 3 in packages/web/src/data/digest.ts.",
       "runFixtureId": 4,
       "node": "Extract Finding Fields",
       "model": "example-model-standard",
@@ -76,7 +76,7 @@
       "calledAt": "2026-06-10T18:50:00.000Z"
     },
     {
-      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/spend.ts. FINDINGS id 4 in packages/web/src/data/digest.ts.",
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. FINDINGS id 4 in packages/web/src/data/digest.ts.",
       "runFixtureId": 4,
       "node": "Extract Finding Fields",
       "model": "example-model-standard",
@@ -85,7 +85,7 @@
       "calledAt": "2026-06-10T18:51:00.000Z"
     },
     {
-      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/spend.ts. The digest prose for EXPORT_SUBSCRIPTIONS id 1 in packages/web/src/data/connectors.ts.",
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. The digest prose for EXPORT_SUBSCRIPTIONS id 1 in packages/web/src/data/connectors.ts.",
       "runFixtureId": 7,
       "node": "Draft Digest Prose",
       "model": "example-model-long-context",
@@ -94,7 +94,7 @@
       "calledAt": "2026-06-11T06:02:00.000Z"
     },
     {
-      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/spend.ts. FINDINGS id 5 in packages/web/src/data/digest.ts.",
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. FINDINGS id 5 in packages/web/src/data/digest.ts.",
       "runFixtureId": 6,
       "node": "Extract Finding Fields",
       "model": "example-model-standard",
@@ -103,7 +103,7 @@
       "calledAt": "2026-06-11T06:03:00.000Z"
     },
     {
-      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/spend.ts. FINDINGS id 6 in packages/web/src/data/digest.ts.",
+      "_comment": "Counts toward WEEK_SPEND in packages/web/src/data/fixture/spend.ts. FINDINGS id 6 in packages/web/src/data/digest.ts.",
       "runFixtureId": 6,
       "node": "Extract Finding Fields",
       "model": "example-model-standard",
