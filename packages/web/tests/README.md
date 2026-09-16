@@ -66,17 +66,21 @@ Coordinate with others before running.
    cd packages/service
    export AR_API_PORT=3100
    export AUTH_BASIC_USER=testuser
-   export AUTH_BASIC_PASSWORD=testpass
+   export AUTH_BASIC_PASSWORD=testpassword
    export AR_CORS_ORIGINS=http://127.0.0.1:5176
    export AR_RATE_LIMIT_MAX=1000
    bun run dev
    ```
 
+   `AUTH_BASIC_PASSWORD` must be at least 12 characters: the service
+   validates its env at import and refuses a shorter one before
+   `GET /health` answers.
+
 4. **Set credentials for the test runner:**
 
    ```bash
    export AR_INTEGRATION_USER=testuser
-   export AR_INTEGRATION_PASSWORD=testpass
+   export AR_INTEGRATION_PASSWORD=testpassword
    ```
 
 5. **Run the integration suite:**
