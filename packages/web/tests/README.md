@@ -39,6 +39,61 @@ config rather than imported by a spec, it imports nothing at all, and
 Playwright's default `testMatch` does not match its name, so it never
 joins the suite it guards.
 
+## Running integration tests
+
+**⚠️ Shared state warning:** `ar_live` is shared across all worktrees on
+the same machine. Running the integration suite resets the database state.
+Coordinate with others before running.
+
+1. **Start the Postgres container** on port 5433:
+
+   ```bash
+   docker compose --profile stress up -d postgres-live
+   ```
+
+2. **Migrate and seed the database:**
+
+   ```bash
+   cd packages/service
+   bun run db:migrate -- --database ar_live
+   bun run db:seed -- --database ar_live
+   bun run seed:integration -- --database ar_live
+   ```
+
+3. **Start the service** in another terminal:
+
+   ```bash
+   cd packages/service
+   export AR_API_PORT=3100
+   export AUTH_BASIC_USER=testuser
+   export AUTH_BASIC_PASSWORD=testpass
+   export AR_CORS_ORIGINS=http://127.0.0.1:5176
+   export AR_RATE_LIMIT_MAX=1000
+   bun run dev
+   ```
+
+4. **Set credentials for the test runner:**
+
+   ```bash
+   export AR_INTEGRATION_USER=testuser
+   export AR_INTEGRATION_PASSWORD=testpass
+   ```
+
+5. **Run the integration suite:**
+
+   ```bash
+   cd packages/web
+   bun run test:integration
+   ```
+
+6. **Clean up:**
+
+   Stop the service (Ctrl+C in its terminal), then:
+
+   ```bash
+   docker compose --profile stress down
+   ```
+
 ## Why this file exists
 
 `lint` uses the explicit-path form (`eslint src tests *.ts *.mjs`), which
