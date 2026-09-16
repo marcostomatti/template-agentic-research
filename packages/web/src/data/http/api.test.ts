@@ -2,7 +2,7 @@ import type { RequestPort } from './client';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import * as fixtureApi from '../api';
+import * as fixtureApi from '../fixture/api';
 
 import * as httpApi from './api';
 import { ApiError, UNAUTHORIZED } from './envelope';

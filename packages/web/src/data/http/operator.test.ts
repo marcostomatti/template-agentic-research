@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { OPERATOR } from '../shell';
+import { OPERATOR } from '../fixture/shell';
 
 import { BAD_ENVELOPE } from './envelope';
 import { LOCAL_OPERATOR, operatorFromSub, readMeSub } from './operator';

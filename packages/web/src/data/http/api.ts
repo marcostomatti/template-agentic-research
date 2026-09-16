@@ -33,7 +33,7 @@
  */
 
 import type { ApiClient, FetchPort, ResponsePort } from './client';
-import type * as FixtureApi from '../api';
+import type * as FixtureApi from '../fixture/api';
 
 import { createBrowserSession } from '../../auth/session';
 import { resolveDataSource } from '../source';
