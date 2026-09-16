@@ -48,23 +48,29 @@ Coordinate with others before running.
 1. **Start the Postgres container** on port 5433:
 
    ```bash
-   docker compose --profile stress up -d postgres-live
+   cd packages/service
+   bun run stress:start
    ```
 
 2. **Migrate and seed the database:**
 
    ```bash
    cd packages/service
-   bun run db:migrate -- --database ar_live
-   bun run db:seed -- --database ar_live
-   bun run seed:integration -- --database ar_live
+   export DATABASE_URL=postgresql://ar:ar@localhost:5433/ar_live
+   bun run db:migrate
+   bun run db:seed
+   bun run seed:integration
    ```
+
+   None of the three takes a database flag: each reads `DATABASE_URL`
+   only, and `drizzle-kit migrate` refuses an unrecognized option.
 
 3. **Start the service** in another terminal:
 
    ```bash
    cd packages/service
-   export AR_API_PORT=3100
+   export DATABASE_URL=postgresql://ar:ar@localhost:5433/ar_live
+   export PORT=3100
    export AUTH_BASIC_USER=testuser
    export AUTH_BASIC_PASSWORD=testpassword
    export AR_CORS_ORIGINS=http://127.0.0.1:5176
@@ -74,7 +80,15 @@ Coordinate with others before running.
 
    `AUTH_BASIC_PASSWORD` must be at least 12 characters: the service
    validates its env at import and refuses a shorter one before
-   `GET /health` answers.
+   `GET /health` answers. The service binds `PORT`; `AR_API_PORT` is
+   read only by the web side's integration config, whose default is
+   already 3100.
+
+   The login route carries its own in-memory limiter (10 attempts per
+   15 minutes per process), separate from `AR_RATE_LIMIT_MAX`. One suite
+   run stays under it; a second run against the same process reds most
+   specs with "Too many sign-in attempts", so restart the service between
+   runs.
 
 4. **Set credentials for the test runner:**
 
@@ -95,7 +109,8 @@ Coordinate with others before running.
    Stop the service (Ctrl+C in its terminal), then:
 
    ```bash
-   docker compose --profile stress down
+   cd packages/service
+   bun run stress:stop
    ```
 
 ## Why this file exists

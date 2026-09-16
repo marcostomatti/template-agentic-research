@@ -14,6 +14,7 @@ export default [
       '.claude/**',
       '.plans/**',
       '.specs/**',
+      '.rafa/**',
       '.tmp/**',
       '.docs/**',
     ],
