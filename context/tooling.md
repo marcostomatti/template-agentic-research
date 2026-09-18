@@ -3,7 +3,8 @@
 - `eslint.base.mjs` + `sharedRules.mjs` at the root; each package (and the
   root) layers its own leaf `eslint.config.mjs` on top.
 - `tsconfig.base.json` is the shared strict core; leaves specialize
-  (DOM/react-jsx for ui/web, node-strict for service, root covers `tools/`).
+  (DOM/react-jsx for ui/web, DOM+node for dev-tools, node-strict
+  for service, root covers `tools/`).
 - Root scripts: `lint:all`, `check-types:all`, `test:all` fan out to every
   package; bare `lint`/`check-types`/`test` cover root files + `tools/`.
 - Runtime: bun-first (`packageManager` pinned). `@ar/ui`'s test toolchain
