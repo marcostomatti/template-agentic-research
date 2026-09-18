@@ -383,11 +383,19 @@ function refuse(
  * case-sensitive one; then maps every run of anything else to one dash,
  * truncates, and trims the dashes a truncation may have left exposed.
  *
+ * Exported for `./git.ts`, which sanitises the round to the same rule
+ * one step earlier — spec item 9's `[a-z0-9-]` — so that the round
+ * reaching `__DEVTOOLS_ROUND__` and the round naming this module's
+ * directory cannot drift apart. The function is idempotent, so a round
+ * that came through `./git.ts` passing it again here changes nothing.
+ * It is NOT part of the package's public surface: `./index.ts` exports
+ * neither it nor anything else from this file.
+ *
  * @param value - The raw text.
  * @param maxLength - How long the result may be.
  * @returns The sanitised segment, which is `''` when nothing survived.
  */
-function sanitiseSegment(value: string, maxLength: number): string {
+export function sanitiseSegment(value: string, maxLength: number): string {
   const kept = value
     .toLowerCase()
     .replace(NON_SEGMENT_CHARACTERS, '-')
