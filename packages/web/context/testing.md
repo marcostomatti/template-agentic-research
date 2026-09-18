@@ -103,6 +103,23 @@ selects the HTTP layer), so every read crosses a socket to
   the only non-spec module in any of the three trees (`testMatch`
   does not match a `global-setup.ts`, so it never joins the suite).
 
+The DEV-TOOLS widget sits outside both the visual and default e2e suites
+for a different reason: it is never mounted under automation. `navigator.
+webdriver` is true when Playwright runs a spec, so the widget guard at
+mount time skips the whole render — no button, no root, nothing. The
+screenshot suite and the default e2e suite are both untouched, and that
+absence is itself a control: the default suite asserts the trigger is
+absent, proving the automation guard held. A forced Playwright config on
+port 5177 (`playwright.devtools.config.ts`) drives a single spec,
+`tests/e2e/dev-tools-shell.spec.ts`, that overrides the guard with
+`VITE_DEVTOOLS_FORCE=1` set through `test.use`. That spec runs the widget
+in all four corner positions, opens its menu, moves the trigger between
+corners, and verifies that a reload resets the corner to the configured
+default while keeping the size. It tests the modal's focus trap, the
+drawer's placement switcher and handle, the about popover's version line,
+and proves no more than one drawer opens at a time — all impossible from a
+suite that sees no widget at all.
+
 Reading a run:
 
 - The `&&` short-circuits. A red vitest means Playwright never ran, so
