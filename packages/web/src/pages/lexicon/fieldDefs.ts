@@ -18,12 +18,20 @@
  * constraints are the v2 line and that a second rule source would
  * give one question two answers free to drift.
  *
+ * The polarity select's options are no exception to that, and the
+ * distinction is the contract's own: they say what the control
+ * OFFERS rather than what a value must satisfy. The membership
+ * `../../dynamic-form/readers.ts` applies is that control reading
+ * its own positions back, and the only thing that REFUSES a payload
+ * is still `./schema.ts` at the save.
+ *
  * ## Which member forced which answer
  *
  * Four members, from {@link EditableTermMembers} — the ones
- * `./schema.ts` declares an operator may write. Three of the four
- * are decided by the member's own type and the fourth is decided by
- * what v1 does not have.
+ * `./schema.ts` declares an operator may write. Every one of the
+ * four is decided by the member's own type, which is a sentence
+ * that moved: three of them were, and the fourth was decided by
+ * what v1 did not have until `enum` landed.
  *
  * - `pattern` forced `string`. `Term.pattern` is a plain
  *   string and v1's `string` is the one box that draws it. The
@@ -32,8 +40,11 @@
  *   `../../dynamic-form/readers.ts` reads that box from free TEXT —
  *   refusing what is not finite rather than coercing it, which is
  *   what keeps `Number('')` being `0` out of the draft.
- * - `polarity` forced `string`, and it is the one DEGRADED answer.
- *   See below.
+ * - `polarity` forced `enum`. `Term.polarity` is a union of three
+ *   literals rather than a string, and v1's `enum` is the one
+ *   control that offers a fixed set: the options are read off
+ *   {@link POLARITY_FACETS}, so what is offered here and what
+ *   `./schema.ts` accepts are one table read twice. See below.
  * - `notes` forced `string`. `Term.notes` is `string | null`
  *   and a cleared leaf box writes `null` by the provider's stated
  *   decision, so the nullable member round-trips losslessly through
@@ -45,33 +56,55 @@
  * and the fields presentation is offered. That is a measurement of
  * this payload and not a property of the provider.
  *
- * ## Why `polarity` is free text HERE, for now
+ * ## Why `polarity` is NOT free text
  *
- * It was "because the contract carries no enumeration", and that
- * reason has expired: `.specs/q20b-0-dynamic-form-enum-and-actions.md`
- * added `enum` to `fieldDef.ts` and `choice` to the registry, so the
- * type this member wants now exists. What has not happened yet is
- * this module's own move onto it, which is a change to what the
- * lexicon editor DRAWS and lands with the e2e reading that covers
- * it. So the paragraphs below still describe this file as it stands
- * rather than as it will stand, and the degradation they name is a
- * step behind rather than a hole in the contract.
+ * It was, and the reason was that the contract carried no
+ * enumeration. That reason expired:
+ * `.specs/q20b-0-dynamic-form-enum-and-actions.md` added `enum` to
+ * `../../dynamic-form/fieldDef.ts` and `choice` to the registry,
+ * and this module's move onto them is what closed the degradation
+ * the old reason left standing — an operator was told at the SAVE
+ * what the control could have said at the box.
  *
- * So the box is a text box, and the refusal is the SAVE PATH's.
- * `./schema.ts`'s `termPayloadSchema` reads its enum off
- * {@link POLARITY_FACETS}, so an out-of-union spelling is refused by
- * an `invalid_value` issue naming the entry, the member and the
- * values allowed, which `../../components/jsonDraft.ts` turns into a
- * sentence and `DynamicForm` shows in the same banner the JSON box
- * uses. Nothing is accepted that the JSON box would refuse.
+ * The options come off {@link POLARITY_FACETS} in facet order, one
+ * per facet, carrying that facet's own `polarity` as the value and
+ * its own `label` as the words. The order and the membership belong
+ * to `./cards.ts` and every reader takes them from the owner rather
+ * than from each other, which is the rule `./schema.ts` states
+ * about its own copy; the order is load-bearing at its head, that
+ * being what `../../dynamic-form/values.ts` opens an absent member
+ * at. A polarity added upstream is therefore offered here, rather
+ * than being a spelling somebody has to remember to add.
  *
- * That makes free text a degradation rather than a hole, and the
- * degradation is worth naming: an operator finds out at the edit
- * rather than at the control. {@link POLARITY_DESCRIPTION} is what
- * this module can do about it — the spellings are listed in the
- * field's own description, derived from the table that owns them, so
- * a polarity added upstream is offered here rather than being a
- * spelling the hint goes on omitting.
+ * The save path's refusal is UNTOUCHED and is simply no longer
+ * reachable from this control. `./schema.ts`'s `termPayloadSchema`
+ * still reads its enum off the same table, so an out-of-union
+ * spelling is still an `invalid_value` issue naming the entry, the
+ * member and the values allowed, which
+ * `../../components/jsonDraft.ts` turns into a sentence and
+ * `DynamicForm` shows in the same banner the JSON box uses. What
+ * changed is who can produce one: the JSON box, a stored payload or
+ * a later source — and no longer a word typed into this form.
+ *
+ * A value outside the options is still DRAWN, and what that costs
+ * is recorded where it is measured rather than here:
+ * `../../dynamic-form/ChoiceField.tsx` reads the held value through
+ * `readEnumField` and states the rule in the field's own error
+ * slot, over a trigger `@ar/ui`'s `Select` resolves to `options[0]`
+ * for a value it does not carry.
+ *
+ * ## The options are a tuple, and an empty table refuses the shape
+ *
+ * `EnumFieldDef.options` is a NON-EMPTY tuple, so a select with no
+ * positions is a `check-types` error where somebody wrote it rather
+ * than an empty dropdown on somebody else's screen.
+ * {@link POLARITY_FACETS} is a plain `readonly` array and carries
+ * no such guarantee, so the crossing is made here:
+ * {@link polarityDef} answers `null` for a table that has lost its
+ * rows, which is the same `null` an undrawable member answers and
+ * reaches the same refusal below. A throw is the alternative and it
+ * would take the whole modal down over a shape this file already
+ * has a word for.
  *
  * ## Why the reading can answer `null`
  *
@@ -120,6 +153,11 @@
  * addition side and the ordered literal is the removal side. Both
  * spellings restore green and leave this file byte-identical.
  *
+ * Both were RE-TAKEN when `polarity` moved from a box to a select,
+ * and neither count moved: the member is still one key of one
+ * record and one spelling of one literal, whatever def sits in it.
+ * The two legs below were re-taken with them, to the same answers.
+ *
  * A THIRD compile-time leg guards the crossing itself. Widening
  * {@link TermEntryMemberDefs} to `Record<string, ...>` is TS2322
  * next door and reddens NO case at all — which is exactly why that
@@ -137,6 +175,7 @@
 
 import type { EditableTermMembers } from './schema';
 import type {
+  EnumFieldDef,
   LeafFieldDef,
   ListFieldDef,
   ObjectFieldDef,
@@ -162,26 +201,60 @@ export type TermEntryMemberDefs = Readonly<
 >;
 
 /**
- * The polarity spellings, in the order the surface draws them.
+ * What the polarity select offers, or `null` for a table with no
+ * rows to offer.
  *
- * Read off {@link POLARITY_FACETS} for the reason `./schema.ts`
- * gives about its own copy: the order and the membership belong to
- * `./cards.ts`, and every reader takes them from the owner instead
- * of from each other. Here it matters twice over, the description
- * being the only place v1 can say what the spellings are.
+ * Read off {@link POLARITY_FACETS} in facet order: the value is the
+ * facet's own `polarity`, which is the spelling `./schema.ts`
+ * accepts, and the label is the facet's own words, which is what
+ * the surface already calls that reading elsewhere.
+ *
+ * The `null` is the tuple crossing the header describes rather than
+ * a case anybody expects: `EnumFieldDef.options` is non-empty by
+ * construction and the facet table is a plain array, so the head is
+ * READ rather than assumed and its absence is answered with the
+ * same word an undrawable member is answered with.
+ *
+ * @returns The options, or `null` if the facet table is empty.
  */
-const POLARITY_NAMES: readonly string[] = POLARITY_FACETS
-  .map((facet) => facet.polarity);
+function polarityOptions(): EnumFieldDef['options'] | null {
+  const [head, ...rest] = POLARITY_FACETS.map((facet) => ({
+    value: facet.polarity,
+    label: facet.label,
+  }));
+
+  if (head === undefined) {
+    return null;
+  }
+
+  return [head, ...rest];
+}
 
 /**
- * What the polarity box tells an operator, in place of a control
- * that could constrain it.
+ * The polarity member's def, or `null` if it cannot be drawn.
  *
- * A bare comma list rather than a phrase: a hint is read at a
- * glance, and the values are what an operator needs to copy.
+ * A function rather than a literal in {@link ENTRY_MEMBER_DEFS},
+ * because the def carries a member the other three do not and that
+ * member is derived — see {@link polarityOptions} for the one shape
+ * that answers `null`.
+ *
+ * @returns The select's def, or `null` for an empty facet table.
  */
-const POLARITY_DESCRIPTION
-  = `Which way a match counts. One of: ${POLARITY_NAMES.join(', ')}.`;
+function polarityDef(): EnumFieldDef | null {
+  const options = polarityOptions();
+
+  if (options === null) {
+    return null;
+  }
+
+  return {
+    key: 'polarity',
+    label: 'Polarity',
+    type: 'enum',
+    description: 'Which way a match counts.',
+    options,
+  };
+}
 
 /**
  * The members, in the order the one mounted form draws them.
@@ -227,12 +300,7 @@ const ENTRY_MEMBER_DEFS: TermEntryMemberDefs = {
     type: 'number',
     description: 'How much a match is worth. A magnitude only.',
   },
-  polarity: {
-    key: 'polarity',
-    label: 'Polarity',
-    type: 'string',
-    description: POLARITY_DESCRIPTION,
-  },
+  polarity: polarityDef(),
   notes: {
     key: 'notes',
     label: 'Notes',
@@ -280,8 +348,8 @@ const PAYLOAD_DEF_LABEL = 'Terms';
  * the one mounted form is one entry's four boxes.
  *
  * The header says which member forced which answer, why `polarity`
- * is free text, and why an undrawable member refuses the whole shape
- * rather than being left out of it.
+ * is a select rather than a box, and why an undrawable member
+ * refuses the whole shape rather than being left out of it.
  *
  * @param members - The per-member declarations to fold. Defaults to
  * this module's own; the header says why it is a parameter at all
