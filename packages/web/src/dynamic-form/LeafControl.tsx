@@ -59,7 +59,22 @@
  * `aria-labelledby` and not by a `<label for>` that would not reach
  * it, and that the container row's accessible name is the label
  * alone. Measured 40 of 40 such readings, with eleven mutation legs
- * driven against them to show they discriminate.
+ * driven against them to show they discriminate — the six-type
+ * count this measurement predates `enum`.
+ *
+ * The `choice` case is read separately, over `POLARITY` (the def
+ * `./readers.test.ts` declares): held `'negative'`, a listed value,
+ * prints a trigger `button` carrying `aria-label="Polarity"` (its
+ * ACCESSIBLE NAME, since `Select` takes no `id` for `FormField`'s
+ * `htmlFor` to reach) with the held option's own label, `Negative`,
+ * as its visible text. Held `'sideways'`, outside the options, prints
+ * the same trigger falling back to `options[0]`'s label —
+ * `Positive`, the display gap `../../context/ui-constraints.md`
+ * records — beside an error slot reading `Choose one of the
+ * options listed for Polarity.`, `readEnumField`'s refusal for that
+ * def. Three readings, 3 of 3, taken through the same offline probe
+ * as the six-type count above and not folded into it, since that
+ * count's own mutation legs are unchanged by this addition.
  *
  * What NEITHER reaches is the keystroke: a static render fires no
  * `onChange`, so reporting a value WITHOUT reading it is a leg that
