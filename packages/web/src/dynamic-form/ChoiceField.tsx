@@ -96,7 +96,7 @@ import type { EnumFieldDef } from './fieldDef';
 import type { NodePath } from './nodePath';
 
 import { FormField, Select } from '@ar/ui';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { readEnumField } from './readers';
 import { useFieldAction } from './useFieldAction';
@@ -212,11 +212,32 @@ export const ChoiceField = ({
   // fresh option from the first paint, so the draft has to carry
   // what an operator is already looking at. An effect and not a
   // render-time call, because this is a write into a store above.
-  // It settles in one pass — the write leaves `value` a string,
-  // and a write the path refuses answers by identity, so nothing
-  // re-renders and the guard holds either way.
+  //
+  // It does NOT settle in one pass, and the `attempted` ref below is
+  // why one is needed. The optimistic reading — the write leaves
+  // `value` a string, so the effect never runs twice — holds only
+  // for an ACCEPTED write. `./DynamicForm.tsx`'s `report` validates
+  // the WHOLE payload before calling back here, so a write this
+  // effect makes can be REFUSED by a sibling member's own fault (an
+  // empty `pattern` beside this member, say) with `value` left
+  // exactly as it was. `./NodeForm.tsx` keys every field by its own
+  // path, so this instance never sees a different `path` or `def`
+  // while mounted, but `onValueChange` is handed no such guarantee —
+  // `./DynamicForm.tsx`'s own copy is a fresh arrow every render, by
+  // design — and a parent re-render for ANY reason (the refusal
+  // banner appearing, say) would otherwise re-run this effect against
+  // a `value` still `undefined`, forever: an unbounded write loop
+  // with nothing in the render tree to break it. One try per mount,
+  // not one try per render, closes that regardless of whether the
+  // write above ever succeeds; a value still absent after the one try
+  // stays absent until the operator opens the select themselves,
+  // which reports through the ordinary `onChange` below and is not
+  // gated by this ref at all.
+  const attempted = useRef(false);
+
   useEffect(() => {
-    if (value === undefined) {
+    if (value === undefined && !attempted.current) {
+      attempted.current = true;
       onValueChange(path, freshEnumValue(def));
     }
   }, [def, path, value, onValueChange]);
