@@ -1,6 +1,15 @@
 ---
 name: dev-planner
-description: Use when producing or parsing a plan document (PLAN-<stub>.md, PLAN_TRACKER-<stub>.md, PREREQUISITES-<stub>.md) for the ralph agent loop — establishes the checkbox/stage-heading syntax the tracker parser requires, task granularity rules, and testing-task insertion patterns.
+description: "Use when writing or parsing a PLAN-<stub>.md or its tracker for the ralph loop — checkbox syntax, task granularity, test tasks."
+prevents: "plan and tracker tasks the loop's parser silently skips or misreads because they are shaped wrong"
+signal: silent
+when_to_use: "You are generating a plan document for the ralph loop, or reading one the loop's tracker parser will consume. Prevents: plan and tracker tasks the loop's parser silently skips or misreads because they are shaped wrong"
+tags:
+  - dev
+  - planner
+  - typescript
+stack:
+  - typescript
 ---
 
 # dev-planner — Plan Document Format Specification
