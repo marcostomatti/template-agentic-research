@@ -186,6 +186,7 @@
         "zod": "^4.6.2",
       },
       "devDependencies": {
+        "@ar/dev-tools": "workspace:*",
         "@axe-core/playwright": "^4.13.0",
         "@playwright/test": "1.61.1",
         "@tailwindcss/vite": "^4",
