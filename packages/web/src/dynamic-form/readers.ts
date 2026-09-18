@@ -1,6 +1,6 @@
 /**
  * @packageDocumentation
- * The four leaf readers: text an operator typed, read as the value
+ * The five leaf readers: text an operator typed, read as the value
  * the form writes, or refused with the one sentence saying why.
  *
  * `./fieldDef.ts` says what a field IS and `./registry.ts` says
@@ -31,19 +31,41 @@
  * in the DOM, in a screenshot, and in whatever gets pasted into a
  * support thread. So the sentences below are fixed text. They are
  * assembled from the RULE the reader applies and from nothing else,
- * which is also why they can be module constants rather than
- * built per call.
+ * which is also why three of the four are module constants rather
+ * than built per call.
  *
- * ## The sentence names no field, deliberately
+ * The fourth, {@link notAnOption}, is built per call and carries
+ * the field's label. That is the same rule rather than an
+ * exception to it: a label is DECLARED text off this app's own
+ * field table, and nothing an operator typed reaches the sentence
+ * either way. The next section says why that reader's rule cannot
+ * be stated without it.
+ *
+ * ## Three sentences name no field; the fourth names one
  *
  * The one thing `describeSchemaIssues` does carry is the path,
  * because a whole-payload refusal has to say where the fault is.
- * A reader has the opposite problem: it reads ONE box, and its
- * sentence is rendered in that box's own `FormField` error slot,
+ * The three constants have the opposite problem: each reports ONE
+ * box, and is rendered in that box's own `FormField` error slot,
  * which associates it with the labelled control for a screen reader
  * as well as for an eye. Naming the field again in the text would
- * be the label read twice, and it would make every reader need a
- * def it otherwise has no use for.
+ * be the label read twice, and it would make the two readers that
+ * carry them need a def they otherwise have no use for.
+ *
+ * {@link readEnumField} is the exception, and it is one because its
+ * rule is not a grammar. "Enter a finite number" is complete on its
+ * own: it names the whole rule, and every number box in the app
+ * applies the same one. An enum's rule is "one of THESE", and which
+ * ones is a property of the def rather than of this module, so a
+ * sentence that does not say whose options it means states a rule
+ * nobody can act on. It already takes the def the options live on,
+ * so the label costs it nothing.
+ *
+ * The label is DECLARED text either way: it comes off the app's own
+ * field table, never off a keystroke. So the section below is
+ * untouched by it — a sentence naming a field still repeats
+ * nothing that was typed, and `./readers.test.ts` measures that
+ * over this reader with the same marker it uses for the rest.
  *
  * ## An empty box reads as `null`
  *
@@ -63,6 +85,16 @@
  * member, through the banner the JSON box already uses. That is the
  * honest outcome. The alternative is a form that writes `''` to
  * dodge a refusal the operator has earned.
+ *
+ * Two readers are outside the rule, and for one reason between
+ * them: neither control has an empty position to be in.
+ * {@link readBooleanField} reads a switch, and
+ * {@link readEnumField} reads a select whose every position is an
+ * option. `''` reaching the enum reader is therefore not a cleared
+ * box at all but a value the def does not offer, and it is refused
+ * as one, by the same membership check and with the same sentence
+ * as any other unlisted spelling. There is no second guard for it
+ * and no branch answering `null`.
  *
  * ## `Number.isFinite`, never `!Number.isNaN`
  *
@@ -142,10 +174,10 @@
  * the equivalent `Z` would discard the local zone the operator
  * supplied, which is information rather than formatting.
  *
- * ## Two of the four have no branch reaching the refusal arm
+ * ## Two of the five have no branch reaching the refusal arm
  *
  * {@link readStringField} and {@link readBooleanField} answer the
- * same union as the other two and never take its refusal arm. That
+ * same union as the other three and never take its refusal arm. That
  * is recorded here rather than left for a reader to discover and
  * "fix" with a rule nobody asked for. A string field has no rule to
  * break: any text is a string, and length or pattern rules belong
@@ -163,18 +195,27 @@
  *
  * ## Mutation note
  *
- * Measured rather than argued, over `./readers.test.ts` at 48 cases
- * and 28 legs, each leg one guard this file claims. Every run took
+ * Measured rather than argued, over `./readers.test.ts` at 52 cases
+ * and 32 legs, each leg one guard this file claims. Every run took
  * its failing set through `--reporter=json`, which names the CASES;
  * the default reporter names only failing FILES and cannot support
  * the reading below.
  *
- * The union of the 28 legs reds 48 of 48 cases. That is the reading
+ * The union of the 32 legs reds 52 of 52 cases. That is the reading
  * a leg-by-leg table cannot give on its own: a red leg says a guard
  * is measured, and only the union says no CASE is sitting under
  * nothing. Eight legs picked from this module's headline claims
  * left 22 cases undefended, and the legs that closed them are as
  * much a part of the grid as the ones that started it.
+ *
+ * The grid is additive, and the counts above say so: 28 legs over
+ * the 48 cases that stood before {@link readEnumField}, which are
+ * the readings in this section, plus the four legs that reader
+ * brought with the four cases it added, which are the second
+ * mutation note below. The union still covers every case: the
+ * enum legs red the enum cases between them, and no leg in THIS
+ * section reaches one, since every enum case calls that reader
+ * alone and no mutation here touches it.
  *
  * The four legs carrying the claims this header spends its length
  * on:
@@ -202,7 +243,49 @@
  * four-hundred clause reds exactly the case about the year 2000,
  * which is the whole argument for asking the platform rather than
  * carrying the rule here.
+ *
+ * ## Mutation note — the enum reader's four legs
+ *
+ * Measured when it landed, the same way: one mutation at a time,
+ * the failing set read off `--reporter=json`, and this file
+ * restored byte-identical after each (checked by `shasum`).
+ *
+ * - The membership guard dropped, so every text is accepted, reds
+ *   FIVE: the reader's three refusal cases and both cases in `what
+ *   no refusal sentence carries`, which stop finding a refusal to
+ *   look at.
+ * - `option.value` swapped for `option.label` reds TWO, and they
+ *   are the pair that makes the accept rule a rule: the case
+ *   variant stops being refused and the option values stop being
+ *   accepted. The case variant IS the label, which is what buys
+ *   one case both readings.
+ * - The sentence dropping the field it names reds FOUR: the three
+ *   refusals and the sentence roster, none of which any longer
+ *   matches the retyped text. So the label in the sentence is
+ *   measured rather than merely written.
+ * - The refusal made to quote what it read reds FIVE, the three
+ *   refusals plus both roster cases again. It is the privacy law
+ *   measured over this reader, and deliberately NOT an isolate: a
+ *   sentence that quotes is also a sentence that changed.
+ *
+ * Two cases here were EDITED rather than added, both in `what no
+ * refusal sentence carries`, which grew an enum entry each. Two
+ * legs over the NUMBER reader were run on both sides of that edit
+ * to show it disarmed neither, since a roster case that grew an
+ * entry is exactly the shape that can lose an old one unnoticed:
+ *
+ * - Rewording {@link NOT_A_NUMBER} reds SEVEN, the six number
+ *   refusals and the sentence roster.
+ * - Making that same refusal quote its input reds EIGHT, those
+ *   seven and the privacy case.
+ *
+ * Each was run against this commit's test file and against the
+ * one at `HEAD` before it, and the failing SETS are identical
+ * across the pair, the roster case's own rename aside. So neither
+ * count is anything the enum entry contributed.
  */
+
+import type { EnumFieldDef } from './fieldDef';
 
 /** A reading that landed, and the value the form may now write. */
 export interface FieldAccepted<T> {
@@ -249,6 +332,26 @@ const NOT_A_STAMP
 
 /** What a well-shaped stamp refuses when its day does not exist. */
 const NOT_A_REAL_DAY = 'That calendar date does not exist.';
+
+/**
+ * What a select refuses when its text is not one of its options.
+ *
+ * The one sentence here built per call rather than held as a module
+ * constant, because the rule it states is the DEF's rather than
+ * this module's: which options exist varies field by field, so a
+ * sentence that does not name the field states a rule nobody can
+ * act on. The header's section on it carries the argument.
+ *
+ * It still repeats nothing that was typed. The label is declared
+ * text off this app's own field table, and the text the reader
+ * refused appears nowhere in what comes back.
+ *
+ * @param label - What the field is called on screen.
+ * @returns The refusal sentence naming that field.
+ */
+function notAnOption(label: string): string {
+  return `Choose one of the options listed for ${label}.`;
+}
 
 /** The year, month and day, each captured, each range-bounded. */
 const DATE_PART = '(\\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])';
@@ -394,11 +497,12 @@ export function readStringField(
  * thing it could report, so there is nothing here to parse and
  * nothing to refuse.
  *
- * It answers no `null`, which is the one place the four readers
- * disagree about the cleared state: a switch has no empty position
- * to be in. A `boolean | null` member therefore cannot be cleared
- * through this control, and the save path's schema is what says
- * whether that matters.
+ * It answers no `null`, which is where it and
+ * {@link readEnumField} part from the three text readers: a switch
+ * has no empty position to be in, and neither has a select. A
+ * `boolean | null` member therefore cannot be cleared through this
+ * control, and the save path's schema is what says whether that
+ * matters.
  *
  * @param checked - The next checked state, as the switch reports it.
  * @returns That state, accepted.
@@ -491,4 +595,53 @@ export function readDatetimeField(
   }
 
   return accepted(stamp);
+}
+
+/**
+ * Read a select's reported value against the options its def lists.
+ *
+ * The accept rule is exact membership and nothing else: the text is
+ * accepted when it equals the `value` of one of `def.options`,
+ * character for character. Everything else is refused, which is
+ * three things worth naming because each is a spelling somebody
+ * reaches for:
+ *
+ * - A `label` is not a second accepted spelling of its option. The
+ *   label is prose that may be reworded or translated; the value is
+ *   what the payload carries.
+ * - Nothing is trimmed and nothing is case-folded. This reader is
+ *   handed what a control reported or what a draft already holds,
+ *   not something typed a character at a time, so a near miss is a
+ *   value from somewhere else rather than a typo to be forgiven.
+ * - An empty box is refused rather than read as `null`. A select
+ *   has no empty position, so `''` is a value the def does not
+ *   offer and it is refused as one. The header's cleared-box
+ *   section says why this reader and {@link readBooleanField} sit
+ *   outside that rule.
+ *
+ * The refusal is `Choose one of the options listed for <label>.`,
+ * the module's one sentence naming its field, and the only one
+ * built per call. {@link notAnOption} and the header say why.
+ *
+ * It takes a def where the other four take a box's text or a
+ * switch's state and nothing more. Two members are what that is for: the
+ * options it matches against and the label its refusal names. No
+ * other member is read, `type` included.
+ *
+ * @param def - The field whose options the text must be one of.
+ * @param text - What the control reported, or what the draft holds.
+ * @returns That value, accepted, or the refusal naming the field.
+ */
+export function readEnumField(
+  def: EnumFieldDef,
+  text: string,
+): FieldReading<string> {
+  const listed = def.options
+    .some((option) => option.value === text);
+
+  if (!listed) {
+    return refused(notAnOption(def.label));
+  }
+
+  return accepted(text);
 }

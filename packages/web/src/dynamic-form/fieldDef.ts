@@ -67,6 +67,24 @@
  * handed to an `@ar/ui` component whose own signature declares it
  * mutable.
  *
+ * ## A def may be declared before it JOINS the union
+ *
+ * {@link EnumOption} and {@link EnumFieldDef} are declared below and
+ * are members of neither {@link FieldType} nor {@link FieldDef}. That
+ * is a staging step rather than an oversight. Joining a seventh type
+ * reddens every table keyed by the union and every switch over it at
+ * once, which is the count the mutation note below measures; the
+ * reader for that type needs nothing but the def's own shape, since
+ * `./readers.ts`'s `readEnumField` takes an {@link EnumFieldDef}
+ * rather than a {@link FieldDef}. So the shape lands and is measured
+ * first, and the join is then one change with every consequence of it
+ * already in front of whoever makes it.
+ *
+ * While it stands apart, nothing that walks a {@link FieldDef} can be
+ * handed one: {@link isContainerField} does not take it, no control
+ * draws it, and {@link LEAF_FIELD_TYPES} does not list it. The reader
+ * is its only consumer, and that is the whole of its reach.
+ *
  * ## Mutation note — the fabricated seventh type
  *
  * Measured rather than argued, with a fabricated `'currency'` added
@@ -130,8 +148,11 @@ export type FieldType = LeafFieldType | ContainerFieldType;
  *
  * Exactly the source doc's four, minus the discriminant each member
  * of the union declares for itself. Unexported deliberately: a def is
- * one of the three below, and a value typed as this base alone would
- * be one no control renders.
+ * one of the three members of {@link FieldDef} below, and a value
+ * typed as this base alone would be one no control renders.
+ *
+ * {@link EnumFieldDef} extends it as a fourth and is NOT in that union
+ * yet, for the reason the header's staging section gives.
  */
 interface FieldDefBase {
   /** The key this field reads and writes in the data structure. */
@@ -158,6 +179,53 @@ interface FieldDefBase {
 export interface LeafFieldDef extends FieldDefBase {
   /** Which of the four leaf types this field is. */
   readonly type: LeafFieldType;
+}
+
+/**
+ * One choice a select offers: what is stored, and what is shown.
+ *
+ * Two members rather than a bare string, because the two questions
+ * differ and a shared spelling answers neither well: `value` is what
+ * the payload carries and what `./readers.ts` matches text against,
+ * and `label` is prose an operator reads. A record saved under a
+ * relabelled option keeps its value, which is what makes the label
+ * safe to reword.
+ */
+export interface EnumOption {
+  /** What the form writes, and the only spelling a reader accepts. */
+  readonly value: string;
+  /** What the option is called on screen. */
+  readonly label: string;
+}
+
+/**
+ * A field whose value is one of a fixed, declared set.
+ *
+ * Declared here and joined to neither {@link FieldType} nor
+ * {@link FieldDef}; the header's staging section says why, and
+ * `./readers.ts`'s `readEnumField` is its only reader so far.
+ */
+export interface EnumFieldDef extends FieldDefBase {
+  /** The discriminant, fixed so a narrowing reaches {@link options}. */
+  readonly type: 'enum';
+  /**
+   * The choices this field offers, in the order to draw them.
+   *
+   * A non-empty tuple rather than `readonly EnumOption[]`, which is
+   * the same representability argument {@link ObjectFieldDef.fields}
+   * makes below: there is nothing a select with no options can draw,
+   * and an empty literal here is a `check-types` error where
+   * somebody wrote it rather than an empty dropdown on somebody
+   * else's screen. Measured, with a probe carrying `options: []`:
+   * `bun run check-types` answers EXIT 2 and one TS2322, `Type '[]'
+   * is not assignable to type 'readonly [EnumOption,
+   * ...EnumOption[]]'`.
+   *
+   * The head is the only position the type distinguishes, and it
+   * distinguishes it for that reason alone: nothing reads an option
+   * by position yet.
+   */
+  readonly options: readonly [EnumOption, ...EnumOption[]];
 }
 
 /** A list of one repeated shape, drilled into rather than inlined. */

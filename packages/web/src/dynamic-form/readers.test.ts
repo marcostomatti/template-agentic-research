@@ -1,14 +1,17 @@
+import type { EnumFieldDef } from './fieldDef';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   readBooleanField,
   readDatetimeField,
+  readEnumField,
   readNumberField,
   readStringField,
 } from './readers';
 
 /**
- * The three sentences, RETYPED rather than imported.
+ * The four sentences, RETYPED rather than imported.
  *
  * Deliberate, and the one place in this file where duplication is
  * the point: these are text an operator reads, so a reworded
@@ -25,6 +28,32 @@ const NOT_A_STAMP
 
 /** The datetime CALENDAR refusal, retyped for the same reason. */
 const NOT_A_REAL_DAY = 'That calendar date does not exist.';
+
+/**
+ * The enum refusal for the def below, retyped for the same reason.
+ *
+ * The only one of the four carrying a field's label, so it is the
+ * sentence for THIS def rather than for every enum field.
+ */
+const NOT_AN_OPTION = 'Choose one of the options listed for Polarity.';
+
+/**
+ * A def whose labels are its values recased, deliberately.
+ *
+ * That is what lets one case read as two: `Positive` is both a case
+ * variant of the option value and the option's own label, so a
+ * reader that folded case OR accepted labels would accept it.
+ */
+const POLARITY: EnumFieldDef = {
+  key: 'polarity',
+  label: 'Polarity',
+  type: 'enum',
+  options: [
+    { value: 'positive', label: 'Positive' },
+    { value: 'negative', label: 'Negative' },
+    { value: 'neutral', label: 'Neutral' },
+  ],
+};
 
 /**
  * A stamp nothing below refuses, for the controls that need one.
@@ -430,6 +459,56 @@ describe('what the boolean reader answers', () => {
   });
 });
 
+describe('what the enum reader refuses', () => {
+  it('refuses a spelling the options do not list', () => {
+    expect(readEnumField(POLARITY, 'mixed')).toEqual({
+      ok: false,
+      sentence: NOT_AN_OPTION,
+    });
+  });
+
+  it('refuses a case variant, which is also a label', () => {
+    // Two readings in one text: `Positive` is the option value
+    // recased AND the option's own label, so this reds a reader
+    // that folds case and a reader that matches on `label`.
+    expect(readEnumField(POLARITY, 'Positive')).toEqual({
+      ok: false,
+      sentence: NOT_AN_OPTION,
+    });
+  });
+
+  it('refuses an empty box rather than reading it as null', () => {
+    // The asymmetry with the three text readers: a select has no
+    // empty position, so `''` is a value the def does not offer
+    // rather than a cleared box. Whitespace is the same state and
+    // gets the same answer, through the same membership check.
+    expect(readEnumField(POLARITY, '')).toEqual({
+      ok: false,
+      sentence: NOT_AN_OPTION,
+    });
+    expect(readEnumField(POLARITY, '   ')).toEqual({
+      ok: false,
+      sentence: NOT_AN_OPTION,
+    });
+  });
+});
+
+describe('what the enum reader accepts', () => {
+  it('accepts every value the options list', () => {
+    // The control for the loop, so an options tuple that shrank
+    // cannot leave this case passing over fewer readings than it
+    // claims: three options, three acceptances.
+    expect(POLARITY.options).toHaveLength(3);
+
+    for (const option of POLARITY.options) {
+      expect(readEnumField(POLARITY, option.value)).toEqual({
+        ok: true,
+        value: option.value,
+      });
+    }
+  });
+});
+
 describe('what no refusal sentence carries', () => {
   it('repeats nothing that was typed', () => {
     // The header's law, measured rather than asserted. Every
@@ -439,6 +518,7 @@ describe('what no refusal sentence carries', () => {
       readNumberField(SECRET),
       readDatetimeField(SECRET),
       readDatetimeField(`2026-02-30T00:00:00Z ${SECRET}`),
+      readEnumField(POLARITY, SECRET),
     ];
 
     for (const reading of refusals) {
@@ -451,14 +531,22 @@ describe('what no refusal sentence carries', () => {
     }
   });
 
-  it('answers one of exactly three sentences', () => {
-    // The roster, so a fourth sentence added without a case is a
-    // red rather than an unread branch.
-    const sentences = [NOT_A_NUMBER, NOT_A_STAMP, NOT_A_REAL_DAY];
+  it('answers one of exactly four sentences', () => {
+    // The roster, so a fifth sentence added without a case is a
+    // red rather than an unread branch. The fourth is the enum
+    // refusal for the def above, which is the only sentence here
+    // that varies with the field it refused.
+    const sentences = [
+      NOT_A_NUMBER,
+      NOT_A_STAMP,
+      NOT_A_REAL_DAY,
+      NOT_AN_OPTION,
+    ];
     const seen = [
       readNumberField('12,5'),
       readDatetimeField('Jan 1 2026'),
       readDatetimeField('2026-02-30T00:00:00Z'),
+      readEnumField(POLARITY, 'mixed'),
     ];
 
     for (const reading of seen) {
@@ -469,6 +557,6 @@ describe('what no refusal sentence carries', () => {
       }
     }
 
-    expect(new Set(sentences).size).toBe(3);
+    expect(new Set(sentences).size).toBe(4);
   });
 });
