@@ -142,16 +142,46 @@
  * not draw. The app is unaffected either way — decision 3 puts this
  * root outside the app's.
  *
+ * ## Measured — `react-dom/server` probe in `/tmp`
+ *
+ * `/tmp/devtools-shell-probe.tsx` (this task's own capture, filed in the
+ * close-out notes) rendered this component at mount, twice: once with no
+ * features, once with one feature contributing a `mode: 'modal'` item and
+ * a `mode: 'drawer'` item side by side.
+ *
+ * - The trigger's accessible name is `Dev tools` — `aria-label`, from
+ *   `./Trigger.tsx`'s own default, nothing passed here overrides it —
+ *   carrying `aria-haspopup="menu"` and `aria-expanded="false"` before
+ *   the menu has ever been opened.
+ * - `role="status"` is present in the static markup at mount, empty
+ *   (`<p class="devtools-status" role="status"></p>`), confirming it is
+ *   rendered unconditionally rather than created on first announcement.
+ * - With both a modal item and a drawer item configured, the markup at
+ *   mount carries no `<dialog>` at all and no `.devtools-drawer` panel:
+ *   `openSurface` starts `null`, and `modalItem` above and every
+ *   drawer's `open` are both read off that ONE value, so neither surface
+ *   is open before anything has been chosen.
+ * - `renderToStaticMarkup` fires no event handler (no hydration, no
+ *   listener), so `chooseItem`'s two blocking branches could not be
+ *   exercised by a click inside the probe. What it measured instead:
+ *   writing the modal branch's literal and then the drawer branch's
+ *   literal into ONE binding typed `DevToolsOpenSurface | null`
+ *   (`./shellRules.ts`) leaves the binding reading as exactly one of
+ *   them at a time — the second write replaces rather than joins the
+ *   first, because there is no third shape that is both. That is the
+ *   whole of the mechanical control behind "the one nullable slot IS
+ *   the one-drawer-at-a-time invariant" above.
+ *
  * ## What proves what
  *
  * Nothing in this file is proved by a unit case: the jsdom vitest
  * project collects `.ts` only, by the two-runner discipline
  * `../../vitest.config.ts` states. The decisions were moved into
  * `./shellRules.ts`, which has 22 of them; what is left here is
- * wiring, and the only readings of it are the probes this stage
- * records in the close-out notes and the forced Playwright spec —
- * neither of which re-runs, so a change to the wiring below is
- * reported by nothing automatic.
+ * wiring, and the only readings of it are the probe above, recorded in
+ * the close-out notes, and the forced Playwright spec — neither of
+ * which re-runs, so a change to the wiring below is reported by
+ * nothing automatic.
  */
 
 import type { MenuFixedNode } from './menuModel';
