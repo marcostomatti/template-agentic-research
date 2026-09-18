@@ -41,7 +41,7 @@
  * stating as a rule rather than as this one case: a def may be
  * read here for a value to PROPOSE, never for a value to REFUSE.
  * Every rule about what the option list accepts stays in
- * `./readers.ts`'s `readEnumField`, which `./LeafControl.tsx`
+ * `./readers.ts`'s `readEnumField`, which `./ChoiceField.tsx`
  * crosses in both directions around this function. A second
  * def-reading function that turned something away would be the
  * split gone, whatever it was called.
@@ -684,7 +684,7 @@ export function withListReordered(
  * touch the control — so answering it is the only value that
  * matches what is drawn.
  *
- * `./LeafControl.tsx` calls it for a held `undefined` and reports
+ * `./ChoiceField.tsx` calls it for a held `undefined` and reports
  * what comes back, which is what keeps the draft holding the option
  * the select is showing rather than an absence behind it. It is not
  * called for any other held value: something outside the options is

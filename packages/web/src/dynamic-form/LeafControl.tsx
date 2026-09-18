@@ -11,6 +11,10 @@
  * {@link LeafControlProps.def} arrives with is the caller's, never
  * re-read here.
  *
+ * Four of the five kinds are drawn here; the fifth, `choice`, is
+ * `./ChoiceField.tsx`'s, split out under the same 800-line law that
+ * split this file out of that one, and switched to below.
+ *
  * What is drawn is the KIND `./registry.ts` names, which is the
  * last link of a four-module chain: `./fieldDef.ts` says what a
  * field IS, `./registry.ts` says which control kind draws that
@@ -62,19 +66,10 @@
  * driven against them to show they discriminate — the six-type
  * count this measurement predates `enum`.
  *
- * The `choice` case is read separately, over `POLARITY` (the def
- * `./readers.test.ts` declares): held `'negative'`, a listed value,
- * prints a trigger `button` carrying `aria-label="Polarity"` (its
- * ACCESSIBLE NAME, since `Select` takes no `id` for `FormField`'s
- * `htmlFor` to reach) with the held option's own label, `Negative`,
- * as its visible text. Held `'sideways'`, outside the options, prints
- * the same trigger falling back to `options[0]`'s label —
- * `Positive`, the display gap `../../context/ui-constraints.md`
- * records — beside an error slot reading `Choose one of the
- * options listed for Polarity.`, `readEnumField`'s refusal for that
- * def. Three readings, 3 of 3, taken through the same offline probe
- * as the six-type count above and not folded into it, since that
- * count's own mutation legs are unchanged by this addition.
+ * The `choice` case was read separately, three readings taken
+ * through the same offline probe and not folded into that count;
+ * they moved with the control to `./ChoiceField.tsx`, whose header
+ * holds them.
  *
  * What NEITHER reaches is the keystroke: a static render fires no
  * `onChange`, so reporting a value WITHOUT reading it is a leg that
@@ -141,34 +136,12 @@
  * restated. The envelope is not a style choice here: it follows
  * from what the control IS.
  *
- * ### How `choice` is labelled, and what that costs
- *
- * `choice` is the fifth kind and takes NEITHER of those two
- * spellings, which is a fact about `@ar/ui`'s `Select` rather than
- * a preference here. Measured against the component as shipped:
- * `SelectProps` is a closed list — `value`, `options`, `onChange`,
- * `size`, `width`, `ariaLabel` and `className` — extending no
- * `HTMLAttributes`, and what it renders is a Radix menu trigger. So
- * it takes no `id` for a `<label for>` to reach and no
- * `aria-labelledby` to point at one, and `ariaLabel` is the only
- * name it can be given.
- *
- * The drawing therefore keeps `FormField` for the label row, the
- * hint and the error slot, and passes it NO `htmlFor`: a `<label
- * for>` naming nothing is worse than a label naming nothing, and
- * the accessible name comes off `ariaLabel={def.label}` instead.
- * The label is written twice for one control and that is the point
- * — the visible row and the accessible name are two different
- * channels here, where every other kind has them wired together.
- *
- * What it costs is the `aria-describedby` every other kind has:
- * with no attribute to pass, the refusal in the error slot is
- * VISIBLE beside the select and associated with it by nothing. The
- * id-inside-the-slot repair the section above describes has no
- * attribute to point at, so it is not used here and the slot takes
- * the sentence bare. Both halves are recorded in
- * `../../context/ui-constraints.md`, which is where a later
- * `@ar/ui` wave closes them.
+ * `choice` takes NEITHER spelling, which is a fact about `@ar/ui`'s
+ * `Select` rather than a preference: it is a Radix menu trigger
+ * taking no `id` and no `aria-labelledby`, so its name comes off
+ * `ariaLabel` and it loses the `aria-describedby` every other kind
+ * has. That measurement, and what it costs, moved to
+ * `./ChoiceField.tsx` with the control.
  *
  * A def's `description` is the hint under the box. `FormField`
  * REPLACES that hint with the error while there is one, which is its
@@ -178,6 +151,41 @@
  * it in, which is what leaves it addressable by `aria-describedby`;
  * the hint has no id and is wired to nothing, exactly as the two
  * editors above leave theirs.
+ *
+ * ## An action draws a third thing inside the field's envelope
+ *
+ * A leaf def may name one — `./fieldDef.ts`'s `action`, an id and
+ * a label — and where it is DRAWN is this file's decision, since
+ * the envelope is. The button goes beside the control and inside
+ * the same `FormField`, so the field's label row, its hint and its
+ * error slot cover both: an `IconButton` named by `action.label`,
+ * which is its whole accessible name because the glyph is
+ * `aria-hidden`, and the refusal a rejected run leaves behind
+ * rendered in the error slot the reader's refusals already use.
+ * `./useFieldAction.tsx` holds the button, the run, the pending
+ * flag and that refusal, and its header carries the labelling
+ * measurement, the contract, and the static-render readings taken
+ * over both — including the one that says an actionless field's
+ * markup is byte-identical to what it was before any of this.
+ *
+ * Two consequences belong here rather than there:
+ *
+ * - The refusal is shown AHEAD of the reader's own sentence, since
+ *   it is about the more recent event, and the box's `aria-invalid`
+ *   follows the READING alone — an action that failed says nothing
+ *   about the text an operator typed.
+ * - `toggle` is the one kind whose envelope is not a `FormField`,
+ *   so its row carries the button and a refusal line by hand. The
+ *   alternative was a declared action drawing nothing, and
+ *   `ToggleField`'s own doc says why that was refused.
+ *
+ * What NEITHER gate reaches is the press, exactly as neither
+ * reaches the keystroke: `check-types` proves the bindings and the
+ * static render fires no event, so the run, the write and the
+ * refusal arriving are reachable only from a real browser. No spec
+ * under `../../tests/e2e/` drives one yet, which means that path is
+ * covered by NOTHING today — `./useFieldAction.tsx`'s header says
+ * so at length rather than leaving it to be assumed.
  *
  * ## The kind is switched, and its `drill-in` case is a real guard
  *
@@ -197,16 +205,11 @@
  *
  * ## Spelling a value as box text is the readers read backwards
  *
- * {@link boxText} is all but the last rule-shaped thing left in this
- * file. The other is {@link choiceText}, which is this one narrowed
- * to the single shape a select can hold — no option ever carries
- * a number — and parts from it at ONE value: an absent member
- * opens at `./values.ts`'s `freshEnumValue` rather than at the empty
- * spelling, because a select has no empty position to sit at. That
- * function's own doc says why the fresh value is reported as well as
- * drawn. What follows is one line per JSON
- * scalar: a string is itself, a number
- * is its `String`, and anything else — `null`, an absent member, a
+ * {@link boxText} is the last rule-shaped thing left in this file;
+ * `./ChoiceField.tsx`'s `choiceText` is this one narrowed to the
+ * single shape a select can hold, and its own header says where the
+ * two part. What follows is one line per JSON scalar: a string is
+ * itself, a number is its `String`, and anything else — `null`, an absent member, a
  * value of the wrong shape — is an EMPTY box. That last clause is
  * not a fallback. It is the readers' own convention read in the
  * other direction: an empty box reads as `null`, so `null` spells as
@@ -221,23 +224,24 @@
  * beside the readers it mirrors, not copy it.
  */
 
+import type { FieldActionTable } from './actions';
 import type { LeafValue } from './FieldControl';
-import type { EnumFieldDef, LeafFieldDef } from './fieldDef';
+import type { LeafFieldDef } from './fieldDef';
 import type { NodePath } from './nodePath';
 import type { FieldReading } from './readers';
 
-import { FormField, Select, Switch, TextInput } from '@ar/ui';
-import { useEffect, useId, useState } from 'react';
+import { FormField, Switch, TextInput } from '@ar/ui';
+import { useId, useState } from 'react';
 
+import { ChoiceField } from './ChoiceField';
 import {
   readBooleanField,
   readDatetimeField,
-  readEnumField,
   readNumberField,
   readStringField,
 } from './readers';
 import { controlKindFor } from './registry';
-import { freshEnumValue } from './values';
+import { useFieldAction } from './useFieldAction';
 
 /**
  * The branch a total switch over the control kinds has nothing left
@@ -304,6 +308,8 @@ interface TextFieldProps {
    * keypad would be the wrong one, and prose has no hint to give.
    */
   readonly inputMode?: 'decimal';
+  /** The action table, for a def naming one. */
+  readonly actions: FieldActionTable | undefined;
   /** Report a value that read. */
   readonly onValueChange: (path: NodePath, next: LeafValue) => void;
 }
@@ -329,6 +335,7 @@ const TextField = ({
   value,
   read,
   inputMode,
+  actions,
   onValueChange,
 }: TextFieldProps) => {
   const fieldId = useId();
@@ -338,11 +345,27 @@ const TextField = ({
   // follow a value edited elsewhere until then. See the header.
   const [typed, setTyped] = useState<string | undefined>(undefined);
 
+  const { withAction, refusal, forgetRefusal } = useFieldAction({
+    def,
+    path,
+    value,
+    actions,
+    onValueChange,
+    // Dropped so the box shows what the action answered rather than
+    // the text it was holding — the hold wins while it exists.
+    onWrote: () => {
+      setTyped(undefined);
+    },
+  });
+
   const text = typed ?? boxText(value);
   const reading = read(text);
-  const fault = reading.ok
+  const unread = reading.ok
     ? undefined
     : reading.sentence;
+  // The action's refusal first: it is about the more recent event,
+  // and it is gone by the next keystroke either way.
+  const fault = refusal ?? unread;
 
   return (
     <FormField
@@ -356,65 +379,37 @@ const TextField = ({
         ? undefined
         : <span id={faultId}>{fault}</span>}
     >
-      <TextInput
-        id={fieldId}
-        value={text}
-        inputMode={inputMode}
-        // The library's `invalid` variant paints the border and sets
-        // no ARIA state, so the state is set here.
-        invalid={fault !== undefined}
-        aria-invalid={fault !== undefined}
-        aria-describedby={fault === undefined
-          ? undefined
-          : faultId}
-        onChange={(next) => {
-          // Held first and unconditionally: what was typed stays
-          // visible whether or not it reads.
-          setTyped(next);
+      {withAction(
+        <TextInput
+          id={fieldId}
+          value={text}
+          inputMode={inputMode}
+          // The library's `invalid` variant paints the border and
+          // sets no ARIA state, so the state is set here. It follows
+          // the READING alone: an action's refusal is about the
+          // action, and says nothing about the text in the box.
+          invalid={unread !== undefined}
+          aria-invalid={unread !== undefined}
+          aria-describedby={fault === undefined
+            ? undefined
+            : faultId}
+          onChange={(next) => {
+            // Held first and unconditionally: what was typed stays
+            // visible whether or not it reads.
+            setTyped(next);
+            forgetRefusal();
 
-          const accepted = read(next);
+            const accepted = read(next);
 
-          if (accepted.ok) {
-            onValueChange(path, accepted.value);
-          }
-        }}
-      />
+            if (accepted.ok) {
+              onValueChange(path, accepted.value);
+            }
+          }}
+        />,
+      )}
     </FormField>
   );
 };
-
-/**
- * Spell a value as the option the select opens at.
- *
- * {@link boxText} narrowed to the one shape a select can hold, with
- * the absent member split out: no option ever carries a number, so
- * a string is itself and everything else is the empty spelling
- * `readEnumField` refuses — except `undefined`, which is an
- * ABSENT member rather than a wrong one and opens at
- * `freshEnumValue`.
- *
- * The split is the readers' emptiness convention meeting a control
- * that has no empty position: a text box can sit at `''` while a
- * member holds nothing, and `Select` has nowhere to sit but an
- * option. Drawing the head and stating no rule is the only reading
- * that is not a lie about what is stored, which is why the call
- * above reports it.
- *
- * @param def - The member, for its options.
- * @param value - The value at this member's path.
- * @returns Its spelling, the fresh option, or `''`.
- */
-function choiceText(def: EnumFieldDef, value: unknown): string {
-  if (value === undefined) {
-    return freshEnumValue(def);
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  return '';
-}
 
 /** What one toggle row is given. */
 interface ToggleFieldProps {
@@ -424,6 +419,8 @@ interface ToggleFieldProps {
   readonly path: NodePath;
   /** The value at that path; anything but `true` draws it off. */
   readonly value: unknown;
+  /** The action table, for a def naming one. */
+  readonly actions: FieldActionTable | undefined;
   /** Report the next state. */
   readonly onValueChange: (path: NodePath, next: LeafValue) => void;
 }
@@ -431,9 +428,10 @@ interface ToggleFieldProps {
 /**
  * A switch, and the label it is named by.
  *
- * No refusal slot and no typed text, because there is neither to
- * have: `readBooleanField` is total and a switch has no text to be
- * between two states of. It still crosses that reader, so the claim
+ * No refusal from its READER and no typed text, because there is
+ * neither to have: `readBooleanField` is total and a switch has no
+ * text to be between two states of. An action can still refuse, and
+ * the section below says where that sentence goes. It still crosses that reader, so the claim
  * that every leaf value reaches the draft through one stays true.
  *
  * A switch also has no cleared position, which is where it and the
@@ -444,18 +442,47 @@ interface ToggleFieldProps {
  * the same reason {@link boxText} shows an empty box: naming a
  * member of the wrong shape is the schema's job.
  *
- * @param props - The def, its path, its value, and where the next
- * state goes.
- * @returns The named row and its switch.
+ * An ACTION still draws, and this is the one kind whose envelope is
+ * not a `FormField` — so the button sits in the row beside the
+ * switch and the refusal takes the hint's place below it, which is
+ * what `FormField` does for the other four by itself. The
+ * alternative was drawing nothing for a def that declares one, and
+ * a declared action silently absent is the quietest way this form
+ * could lose a control. The sentence carries no warning mark, since
+ * `@ar/ui`'s stroke-icon helper is internal — the same gap
+ * `./FieldControl.tsx`'s chevron records.
+ *
+ * @param props - The def, its path, its value, the action table,
+ * and where the next state goes.
+ * @returns The named row, its switch, and the rule a run broke.
  */
 const ToggleField = ({
   def,
   path,
   value,
+  actions,
   onValueChange,
 }: ToggleFieldProps) => {
   const labelId = useId();
   const hintId = `${labelId}-hint`;
+  const faultId = `${labelId}-fault`;
+
+  const { withAction, refusal, forgetRefusal } = useFieldAction({
+    def,
+    path,
+    value,
+    actions,
+    onValueChange,
+  });
+
+  // The refusal displaces the hint, which is what `FormField` does
+  // for the other four kinds and is restated by hand here.
+  const hinted = def.description === undefined
+    ? undefined
+    : hintId;
+  const describedBy = refusal === undefined
+    ? hinted
+    : faultId;
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -470,7 +497,7 @@ const ToggleField = ({
           {def.label}
         </div>
 
-        {def.description !== undefined && (
+        {def.description !== undefined && refusal === undefined && (
           // `tokens.css` puts a direct rule on `p`, so the size, the
           // colour and the margin are all restated here rather than
           // inherited from the column.
@@ -480,126 +507,31 @@ const ToggleField = ({
         )}
       </div>
 
-      <Switch
-        checked={value === true}
-        aria-labelledby={labelId}
-        aria-describedby={def.description === undefined
-          ? undefined
-          : hintId}
-        onChange={(next) => {
-          const accepted = readBooleanField(next);
+      {withAction(
+        <Switch
+          checked={value === true}
+          aria-labelledby={labelId}
+          aria-describedby={describedBy}
+          onChange={(next) => {
+            forgetRefusal();
 
-          if (accepted.ok) {
-            onValueChange(path, accepted.value);
-          }
-        }}
-      />
+            const accepted = readBooleanField(next);
+
+            if (accepted.ok) {
+              onValueChange(path, accepted.value);
+            }
+          }}
+        />,
+      )}
+
+      {refusal !== undefined && (
+        // `basis-full` inside the wrapping row above, which is what
+        // puts the sentence on its own line under both columns.
+        <p id={faultId} className="m-0 basis-full text-xs text-danger">
+          {refusal}
+        </p>
+      )}
     </div>
-  );
-};
-
-/** What one select is given. */
-interface ChoiceFieldProps {
-  /** The member, narrowed to the one leaf def carrying options. */
-  readonly def: EnumFieldDef;
-  /** Where it sits, reported back with every accepted value. */
-  readonly path: NodePath;
-  /**
-   * The value at that path.
-   *
-   * Anything the options do not carry — a value from elsewhere, a
-   * member of the wrong shape — states the rule in the error slot
-   * rather than being written or hidden. An ABSENT member is the
-   * one exception and the only one: it is no wrong value, so it
-   * draws the fresh option and is written back rather than being
-   * told off for holding nothing.
-   */
-  readonly value: unknown;
-  /** Report a value that read. */
-  readonly onValueChange: (path: NodePath, next: LeafValue) => void;
-}
-
-/**
- * A select over the def's options, and the rule a held value breaks.
- *
- * No typed text and so no hold, which is what this control does not
- * need and {@link TextField} does: a select reports an option or
- * reports nothing, so there is no half-typed state to show and
- * nothing to keep beside the value.
- *
- * A held `undefined` is the one value it does not put through that
- * reader: {@link choiceText} answers the fresh option for it and
- * the effect below reports that same option, so the reading is of a
- * value the def carries by construction. Every other held value is
- * read.
- *
- * It still crosses {@link readEnumField} in both directions. What
- * the control reports is read before it is written, so a position
- * the def does not carry reaches the draft no more than a refused
- * keystroke does; and what the VALUE holds is read too, so a member
- * carrying something the options do not offer states the rule in
- * the error slot instead of passing for one of them. `Select`
- * itself would say nothing — it resolves its trigger as
- * `options.find(o => o.value === value) ?? options[0]`, drawing
- * SOMEBODY ELSE'S option for a value outside the list, which is the
- * gap `../../context/ui-constraints.md` records.
- *
- * @param props - The def, its path, its value, and where an accepted
- * value goes.
- * @returns The labelled select, and the rule its value breaks.
- */
-const ChoiceField = ({
-  def,
-  path,
-  value,
-  onValueChange,
-}: ChoiceFieldProps) => {
-  const held = choiceText(def, value);
-
-  // Reported rather than drawn and forgotten: the select shows the
-  // fresh option from the first paint, so the draft has to carry
-  // what an operator is already looking at. An effect and not a
-  // render-time call, because this is a write into a store above.
-  // It settles in one pass — the write leaves `value` a string,
-  // and a write the path refuses answers by identity, so nothing
-  // re-renders and the guard holds either way.
-  useEffect(() => {
-    if (value === undefined) {
-      onValueChange(path, freshEnumValue(def));
-    }
-  }, [def, path, value, onValueChange]);
-
-  const reading = readEnumField(def, held);
-  const fault = reading.ok
-    ? undefined
-    : reading.sentence;
-
-  return (
-    <FormField
-      // No `htmlFor`: `Select` renders a Radix menu trigger and takes
-      // no id, so a `<label for>` would point at nothing. The name
-      // comes off `ariaLabel` below instead, which is the whole of
-      // the ARIA that component accepts.
-      label={def.label}
-      hint={def.description}
-      error={fault}
-    >
-      <Select
-        value={held}
-        // Copied because `SelectProps.options` is declared MUTABLE
-        // and a def list is `readonly` — the binding-level copy
-        // `../../context/ui-constraints.md` prescribes.
-        options={[...def.options]}
-        ariaLabel={def.label}
-        onChange={(next) => {
-          const accepted = readEnumField(def, next);
-
-          if (accepted.ok) {
-            onValueChange(path, accepted.value);
-          }
-        }}
-      />
-    </FormField>
   );
 };
 
@@ -611,6 +543,16 @@ interface LeafControlProps {
   readonly path: NodePath;
   /** The value at that path. */
   readonly value: unknown;
+  /**
+   * The handlers a def's `action` ref is matched against.
+   *
+   * Optional and threaded from `./DynamicForm.tsx`, which is where
+   * `./actions.ts`'s `assertActions` refuses a def naming an id
+   * nothing holds. Passed on untouched: which kind draws a button
+   * is not this switch's distinction, it is
+   * `./useFieldAction.tsx`'s reading of the def.
+   */
+  readonly actions?: FieldActionTable;
   /** Report a value that read. */
   readonly onValueChange: (path: NodePath, next: LeafValue) => void;
 }
@@ -637,6 +579,7 @@ export const LeafControl = ({
   def,
   path,
   value,
+  actions,
   onValueChange,
 }: LeafControlProps) => {
   // A local const rather than `controlKindFor(def.type)` inline in
@@ -652,6 +595,7 @@ export const LeafControl = ({
           path={path}
           value={value}
           read={readStringField}
+          actions={actions}
           onValueChange={onValueChange}
         />
       );
@@ -663,6 +607,7 @@ export const LeafControl = ({
           value={value}
           read={readNumberField}
           inputMode="decimal"
+          actions={actions}
           onValueChange={onValueChange}
         />
       );
@@ -673,6 +618,7 @@ export const LeafControl = ({
           path={path}
           value={value}
           read={readDatetimeField}
+          actions={actions}
           onValueChange={onValueChange}
         />
       );
@@ -682,6 +628,7 @@ export const LeafControl = ({
           def={def}
           path={path}
           value={value}
+          actions={actions}
           onValueChange={onValueChange}
         />
       );
@@ -703,6 +650,7 @@ export const LeafControl = ({
           def={def}
           path={path}
           value={value}
+          actions={actions}
           onValueChange={onValueChange}
         />
       );

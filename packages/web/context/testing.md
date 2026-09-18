@@ -19,7 +19,7 @@ component or hook is the thin part around it. `pages/*/rows.ts`,
 `src/components/` (`editorDraft.ts`, `jsonDraft.ts`) and the seven
 pure modules under `src/dynamic-form/` are all that shape — the
 provider's whole core is `.ts` for exactly this reason, and its
-three `.tsx` hold no decision the unit runner would have wanted.
+seven `.tsx` hold no decision the unit runner would have wanted.
 Anything touching `document` at import time crashes the unit runner
 outright and takes its whole file with it.
 

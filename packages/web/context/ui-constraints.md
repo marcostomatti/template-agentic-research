@@ -57,7 +57,7 @@ They are here because every one of them is invisible to `lint`,
   reach and no `aria-labelledby` to offer instead — and the
   accessible name comes off `ariaLabel` while the envelope's label
   row carries the same words for the eye. The label is written twice
-  by necessity, not by preference. `src/dynamic-form/LeafControl.tsx`
+  by necessity, not by preference. `src/dynamic-form/ChoiceField.tsx`
   draws the `choice` kind exactly that way.
 - **A refused value cannot be shown ON a `Select`, only beside it.**
   Its trigger's `cva` offers `size` alone — no `invalid` variant to

@@ -109,6 +109,19 @@
  * contents, and what keeps the visible label and the accessible
  * name the same string.
  *
+ * ## An action passes through here and is read nowhere
+ *
+ * {@link FieldControlProps.actions} arrives with the def and the
+ * value and is handed to the leaf branch untouched. Nothing here
+ * reads it, and that is decision 5 of
+ * `.specs/q20b-0-dynamic-form-enum-and-actions.md` falling out of
+ * the type rather than being checked: `action` sits on the LEAF
+ * base, so the container branch below could not reach one if it
+ * tried. Which def draws a button, what its name is, and where the
+ * refusal goes are `./useFieldAction.tsx`'s, and the button is
+ * drawn inside the same `FormField` as the control it belongs to,
+ * which is `./LeafControl.tsx`'s envelope and not this file's row.
+ *
  * ## Why the def narrows before the kind is switched
  *
  * {@link isContainerField} runs first, and not because the kind is
@@ -125,6 +138,7 @@
  * documented there, beside the switch that performs them.
  */
 
+import type { FieldActionTable } from './actions';
 import type { ContainerFieldDef, FieldDef } from './fieldDef';
 import type { NodePath } from './nodePath';
 
@@ -194,6 +208,16 @@ export interface FieldControlProps {
    * calls nothing.
    */
   readonly onValueChange: (path: NodePath, next: LeafValue) => void;
+  /**
+   * The handlers a leaf def's `action` ref is matched against.
+   *
+   * Optional, and read by no branch here: a container carries no
+   * action — decision 5 of
+   * `.specs/q20b-0-dynamic-form-enum-and-actions.md`, and a type
+   * error rather than a check — so the leaf branch is the only
+   * place it can matter and this file hands it straight on.
+   */
+  readonly actions?: FieldActionTable;
   /**
    * Report that a container row was pressed.
    *
@@ -340,6 +364,7 @@ export const FieldControl = ({
   def,
   path,
   value,
+  actions,
   onValueChange,
   onDrillIn,
 }: FieldControlProps) => {
@@ -352,6 +377,7 @@ export const FieldControl = ({
       def={def}
       path={path}
       value={value}
+      actions={actions}
       onValueChange={onValueChange}
     />
   );
