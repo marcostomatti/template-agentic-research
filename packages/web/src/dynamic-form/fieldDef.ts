@@ -249,9 +249,12 @@ export interface EnumFieldDef extends FieldDefBase {
    * is not assignable to type 'readonly [EnumOption,
    * ...EnumOption[]]'`.
    *
-   * The head is the only position the type distinguishes, and it
-   * distinguishes it for that reason alone: nothing reads an option
-   * by position yet.
+   * The head is the only position the type distinguishes, and one
+   * thing now reads it: `./values.ts`'s `freshEnumValue` answers
+   * the first option's `value` for a member holding nothing, which
+   * is total for exactly the reason above. So the ORDER of this
+   * list is load-bearing at its first entry — a reordered def
+   * list changes what an absent member opens at.
    */
   readonly options: readonly [EnumOption, ...EnumOption[]];
 }

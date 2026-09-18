@@ -17,20 +17,38 @@
  * environment, so a decision living in a `.tsx` is reachable by no
  * test in this package at all.
  *
- * ## It takes no def, and that is the whole split
+ * ## One function takes a def, and the split is what the rest of
+ * them do not do
  *
- * A def says what a field IS; a value says what is there. This
- * module only ever reads the second, which is what keeps it from
- * becoming a second opinion about the contract. So it cannot refuse
- * a write because a def declares no such member — that is the
- * schema's job at the save path, whose refusals
+ * A def says what a field IS; a value says what is there. Every
+ * path function below reads the second alone, which is what keeps
+ * them from becoming a second opinion about the contract. So a
+ * write cannot be refused because a def declares no such member
+ * — that is the schema's job at the save path, whose refusals
  * `../components/jsonDraft.ts` turns into sentences, and giving one
  * question two answers is exactly what the provider's decision to
  * validate through the schema exists to avoid.
  *
- * What it CAN refuse is a path that names no position at all, and
- * that reading is structural rather than declared: it comes from the
- * value's own shape.
+ * {@link freshEnumValue} is the single exception, and it is here
+ * rather than anywhere else for the reason the paragraph above
+ * gives: a NEW value is what this module answers and no other
+ * module in the directory does, while the only thing that can say
+ * which value a select opens at is the def's own option list. It
+ * reads that list and nothing more — the head's `value`, with no
+ * judgement about the value already held.
+ *
+ * Which is the line that keeps the split honest, and it is worth
+ * stating as a rule rather than as this one case: a def may be
+ * read here for a value to PROPOSE, never for a value to REFUSE.
+ * Every rule about what the option list accepts stays in
+ * `./readers.ts`'s `readEnumField`, which `./LeafControl.tsx`
+ * crosses in both directions around this function. A second
+ * def-reading function that turned something away would be the
+ * split gone, whatever it was called.
+ *
+ * What this module CAN refuse is a path that names no position at
+ * all, and that reading is structural rather than declared: it
+ * comes from the value's own shape.
  *
  * ## Absent is `undefined`, and `null` is a value
  *
@@ -151,12 +169,16 @@
  * ## Mutation note — what the colocated cases actually catch
  *
  * A green suite is not evidence a case can fail, so every claim
- * above was measured by breaking it. TWELVE legs, each reddening
+ * above was measured by breaking it. THIRTEEN legs, each reddening
  * `bun x vitest run src/dynamic-form/values.test.ts` and each
  * restoring this file byte-identical; the counts are of NAMED
- * failing cases out of 28. None of them failed at COLLECTION, which
+ * failing cases out of 29. None of them failed at COLLECTION, which
  * would have credited a case that never ran, and the union of the
- * twelve covers all 28 — so no case here is decorative.
+ * thirteen covers all 29 — so no case here is decorative. All
+ * thirteen were re-run together when {@link freshEnumValue} and its
+ * case arrived: every count below is that run's, not a carried
+ * one, and the twelve path legs each red exactly what they did
+ * against 28.
  *
  * Immutability, the claim with the most ways to be wrong:
  *
@@ -198,6 +220,16 @@
  *   which is what makes the positive read case a measurement rather
  *   than a smoke test.
  *
+ * The def-reading exception, which no path leg touches:
+ *
+ * - {@link freshEnumValue} answering the head's `label` instead of
+ *   its `value` reds exactly ONE, the fresh-value case, and that
+ *   case is the only thing any of the thirteen legs reds it with.
+ *   The same case's flipped-order control is what separates the
+ *   head from a sort or a hard-coded spelling; answering the label
+ *   is the leg that names it because the two members are the two
+ *   things a def offers at that position.
+ *
  * The segment union's own two directions are guarded in
  * `./nodePath.test.ts` and are not restated here, which would give
  * one fact two authorities. What this module adds is its own
@@ -207,6 +239,7 @@
  * raises in `./nodePath.ts` and `./nodePath.test.ts`).
  */
 
+import type { EnumFieldDef } from './fieldDef';
 import type { NodePath, PathSegment } from './nodePath';
 
 /** How a write reports that it landed, and what it built. */
@@ -638,4 +671,32 @@ export function withListReordered(
   }
 
   return withValueAt(value, path, movedWithin(items, from, to));
+}
+
+/**
+ * The value a select opens at when the member holds nothing.
+ *
+ * The head of the def's options, which is a choice the type makes
+ * possible rather than one made here: `EnumFieldDef.options` is a
+ * non-empty tuple, so there IS a first option to answer and this
+ * function is total. A def list orders its options for the screen,
+ * and the first one is what an operator is looking at before they
+ * touch the control — so answering it is the only value that
+ * matches what is drawn.
+ *
+ * `./LeafControl.tsx` calls it for a held `undefined` and reports
+ * what comes back, which is what keeps the draft holding the option
+ * the select is showing rather than an absence behind it. It is not
+ * called for any other held value: something outside the options is
+ * a rule to state, not a value to replace, and `readEnumField` is
+ * what states it.
+ *
+ * The one function in this module that reads a def — see the
+ * header for the rule that keeps it the only one.
+ *
+ * @param def - The enum field to open.
+ * @returns Its first option's `value`.
+ */
+export function freshEnumValue(def: EnumFieldDef): string {
+  return def.options[0].value;
 }

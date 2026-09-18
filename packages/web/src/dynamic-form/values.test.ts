@@ -1,3 +1,4 @@
+import type { EnumFieldDef, EnumOption } from './fieldDef';
 import type { NodePath } from './nodePath';
 
 import { describe, expect, it } from 'vitest';
@@ -9,6 +10,7 @@ import {
   ROOT_PATH,
 } from './nodePath';
 import {
+  freshEnumValue,
   readValueAt,
   withListReordered,
   withValueAt,
@@ -466,5 +468,35 @@ describe('what a reorder answers', () => {
     expect(next).not.toBe(value);
     expect(readValueAt(next, ALIASES)).toEqual(['wet', 'damp']);
     expect(snapshot(next)).toBe(snapshot(value));
+  });
+});
+
+describe('what a fresh enum value answers', () => {
+  it('answers the first option, not the first label or a sort', () => {
+    // Arrange: a def whose head is neither alphabetically first by
+    // value nor by label, so a sort or a label read would answer
+    // something else and be seen.
+    const weekly: EnumOption = { value: 'weekly', label: 'Every week' };
+    const daily: EnumOption = { value: 'daily', label: 'Every day' };
+    const def: EnumFieldDef = {
+      key: 'cadence',
+      label: 'Cadence',
+      type: 'enum',
+      options: [weekly, daily],
+    };
+
+    // Act
+    const fresh = freshEnumValue(def);
+
+    // Assert
+    expect(fresh).toBe('weekly');
+
+    // The control for the axis: the HEAD decides, so the same two
+    // options in the other order answer the other value. Without
+    // it, answering a label, a sort or a hard-coded spelling could
+    // still read green off the line above.
+    const flipped: EnumFieldDef = { ...def, options: [daily, weekly] };
+
+    expect(freshEnumValue(flipped)).toBe('daily');
   });
 });

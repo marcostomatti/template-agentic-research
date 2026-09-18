@@ -183,10 +183,13 @@
  * ## Spelling a value as box text is the readers read backwards
  *
  * {@link boxText} is all but the last rule-shaped thing left in this
- * file. The other is the line {@link ChoiceField} opens with, which
- * is this one narrowed to the single shape a select can hold: a
- * string is itself and everything else is the empty spelling, no
- * option ever carrying a number. What follows is one line per JSON
+ * file. The other is {@link choiceText}, which is this one narrowed
+ * to the single shape a select can hold — no option ever carries
+ * a number — and parts from it at ONE value: an absent member
+ * opens at `./values.ts`'s `freshEnumValue` rather than at the empty
+ * spelling, because a select has no empty position to sit at. That
+ * function's own doc says why the fresh value is reported as well as
+ * drawn. What follows is one line per JSON
  * scalar: a string is itself, a number
  * is its `String`, and anything else — `null`, an absent member, a
  * value of the wrong shape — is an EMPTY box. That last clause is
@@ -209,7 +212,7 @@ import type { NodePath } from './nodePath';
 import type { FieldReading } from './readers';
 
 import { FormField, Select, Switch, TextInput } from '@ar/ui';
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 import {
   readBooleanField,
@@ -219,6 +222,7 @@ import {
   readStringField,
 } from './readers';
 import { controlKindFor } from './registry';
+import { freshEnumValue } from './values';
 
 /**
  * The branch a total switch over the control kinds has nothing left
@@ -364,6 +368,39 @@ const TextField = ({
   );
 };
 
+/**
+ * Spell a value as the option the select opens at.
+ *
+ * {@link boxText} narrowed to the one shape a select can hold, with
+ * the absent member split out: no option ever carries a number, so
+ * a string is itself and everything else is the empty spelling
+ * `readEnumField` refuses — except `undefined`, which is an
+ * ABSENT member rather than a wrong one and opens at
+ * `freshEnumValue`.
+ *
+ * The split is the readers' emptiness convention meeting a control
+ * that has no empty position: a text box can sit at `''` while a
+ * member holds nothing, and `Select` has nowhere to sit but an
+ * option. Drawing the head and stating no rule is the only reading
+ * that is not a lie about what is stored, which is why the call
+ * above reports it.
+ *
+ * @param def - The member, for its options.
+ * @param value - The value at this member's path.
+ * @returns Its spelling, the fresh option, or `''`.
+ */
+function choiceText(def: EnumFieldDef, value: unknown): string {
+  if (value === undefined) {
+    return freshEnumValue(def);
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  return '';
+}
+
 /** What one toggle row is given. */
 interface ToggleFieldProps {
   /** The member, narrowed to a leaf so no container reaches here. */
@@ -456,8 +493,11 @@ interface ChoiceFieldProps {
    * The value at that path.
    *
    * Anything the options do not carry — a value from elsewhere, a
-   * member of the wrong shape, an absent one — states the rule in
-   * the error slot rather than being written or hidden.
+   * member of the wrong shape — states the rule in the error slot
+   * rather than being written or hidden. An ABSENT member is the
+   * one exception and the only one: it is no wrong value, so it
+   * draws the fresh option and is written back rather than being
+   * told off for holding nothing.
    */
   readonly value: unknown;
   /** Report a value that read. */
@@ -471,6 +511,12 @@ interface ChoiceFieldProps {
  * need and {@link TextField} does: a select reports an option or
  * reports nothing, so there is no half-typed state to show and
  * nothing to keep beside the value.
+ *
+ * A held `undefined` is the one value it does not put through that
+ * reader: {@link choiceText} answers the fresh option for it and
+ * the effect below reports that same option, so the reading is of a
+ * value the def carries by construction. Every other held value is
+ * read.
  *
  * It still crosses {@link readEnumField} in both directions. What
  * the control reports is read before it is written, so a position
@@ -493,9 +539,21 @@ const ChoiceField = ({
   value,
   onValueChange,
 }: ChoiceFieldProps) => {
-  const held = typeof value === 'string'
-    ? value
-    : '';
+  const held = choiceText(def, value);
+
+  // Reported rather than drawn and forgotten: the select shows the
+  // fresh option from the first paint, so the draft has to carry
+  // what an operator is already looking at. An effect and not a
+  // render-time call, because this is a write into a store above.
+  // It settles in one pass — the write leaves `value` a string,
+  // and a write the path refuses answers by identity, so nothing
+  // re-renders and the guard holds either way.
+  useEffect(() => {
+    if (value === undefined) {
+      onValueChange(path, freshEnumValue(def));
+    }
+  }, [def, path, value, onValueChange]);
+
   const reading = readEnumField(def, held);
   const fault = reading.ok
     ? undefined
