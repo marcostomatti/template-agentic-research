@@ -65,9 +65,23 @@
  * That is a claim about the BUILT bundle, and reading the line below is
  * not evidence for it: whether a bundler drops a dead-branch dynamic
  * import, or keeps it as a separate chunk nothing loads, is the
- * bundler's decision and not this file's. The reading that settles it
- * is a grep of `dist/` for the specifier, taken against a real `vite
- * build`.
+ * bundler's decision and not this file's. Measured against a real
+ * `vite build` (vite 8.3.0 over rolldown 1.2.8), the branch is dropped
+ * BEFORE the specifier is resolved: with `@ar/dev-tools`'s
+ * `dist/index.js` moved aside the build still exits `0` and emits a
+ * byte-identical main chunk, while the same build with the guard below
+ * forced to `true` fails with `Rolldown failed to resolve import
+ * "@ar/dev-tools"`. Nothing of the package reaches `dist/`.
+ *
+ * The reading that settles it is NOT a grep of `dist/` for the
+ * specifier. Vite rewrites a bare specifier to a resolved path, so
+ * `@ar/dev-tools` is absent from the output whether or not the package
+ * shipped — `0` hits under both builds, which makes that grep
+ * a false negative rather than evidence. What discriminates is a
+ * literal only the package holds, the About popover's title `About`:
+ * `0` hits in the shipped build, `2` with the guard forced, both of
+ * those inside a `dist/assets/devtools-*.js` chunk no shipped build
+ * emits.
  *
  * LAST is about what a failure can cost. The import resolves on a later
  * microtask, so no part of the dev tools is on the path to the first
