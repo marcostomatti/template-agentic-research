@@ -1,11 +1,13 @@
 import type { CategorySummary } from '../../src/data/lexicon';
 import type { TermPolarity } from '../../src/data/types';
 import type {
+  EnumFieldDef,
   FieldDef,
   FieldType,
   ListFieldDef,
 } from '../../src/dynamic-form/fieldDef';
 import type { FieldReading } from '../../src/dynamic-form/readers';
+import type { FieldControlKind } from '../../src/dynamic-form/registry';
 import type {
   TermPayload,
   TermPayloadEntry,
@@ -18,6 +20,7 @@ import { describeSchemaIssues } from '../../src/components/jsonDraft';
 import { fetchCategorySummaries, fetchTerms } from '../../src/data/api';
 import { DEFAULT_DOMAIN_SLUG } from '../../src/data/domains';
 import {
+  readEnumField,
   readNumberField,
   readStringField,
 } from '../../src/dynamic-form/readers';
@@ -44,24 +47,27 @@ import { SINGLE_DOMAIN_BASE, withBase } from '../../src/routes/paths';
 // member reads again, and that an address the presentation cannot be
 // reached at leaves the surface behind it standing.
 //
-// ## Both refusals here are the SCHEMA's, and that is the point
+// ## The refusal here is the SCHEMA's, and that is the point
 //
-// The two members driven below are `string` typed, and
+// The member driven below is `string` typed, and
 // `dynamic-form/readers.ts` accepts every text a `string` box can
-// hold — an empty one included, which it answers `null` for. So
-// neither edit is refused by the control it was typed into: both are
+// hold — an empty one included, which it answers `null` for. So the
+// edit is not refused by the control it was typed into: it is
 // applied to the payload, refused over the WHOLE candidate, and
 // reported through the one banner `DynamicForm` builds from
-// `describeSchemaIssues`. Each case reads the box's own invalid state
+// `describeSchemaIssues`. The case reads the box's own invalid state
 // while that banner is up, which is what keeps the two channels
 // distinguishable instead of letting one stand for the other.
 //
 // A cleared `pattern` is the provider's stated decision made visible:
 // an empty box writes `null` rather than `''`, so clearing a member
-// the schema requires is a refusal naming it. An out-of-union
-// `polarity` is the degradation `pages/lexicon/fieldDefs.ts` records:
-// v1 carries no enumerated type, so the box takes any word and the
-// save path is what says which words are real.
+// the schema requires is a refusal naming it.
+//
+// It was a PAIR, and `polarity` was the other half: v1 carried no
+// enumerated type, so the box took any word and the save path was
+// what said which words were real. `pages/lexicon/fieldDefs.ts` now
+// draws that member as an `enum`, which is where that row went —
+// the comment in its place says what can no longer produce it.
 //
 // ## What is derived, and what is spelled
 //
@@ -104,26 +110,29 @@ import { SINGLE_DOMAIN_BASE, withBase } from '../../src/routes/paths';
 // the keystroke, and the walk is the same breadcrumb the case above
 // it is about.
 //
-// ## All six types, and the two with no site in this payload
+// ## All seven types, and the two with no site in this payload
 //
-// `dynamic-form/registry.ts` is total over the six and its own
+// `dynamic-form/registry.ts` is total over the seven and its own
 // cases are what prove it. What only this file can add is the
 // accounting for THIS payload: the def list
-// `fieldDefsForTermPayload` answers uses four of the six, and the
+// `fieldDefsForTermPayload` answers uses five of the seven, and the
 // lexicon editor is the whole of what mounts the provider, so
-// `boolean` and `datetime` have no control anywhere in the app.
-// The split is DERIVED — the defs walked for the types they carry,
+// `boolean` and `datetime` have no control anywhere in the app. The
+// split is DERIVED — the defs walked for the types they carry,
 // crossed against `CONTROL_KIND_BY_TYPE` — so a member that later
 // takes one of the two moves this file's accounting with it rather
 // than leaving a sentence here asserting the old count.
 //
-// Only ONE of the two absences is observable in the DOM, and saying
-// which is the difference between a reading and a coincidence.
-// `boolean` draws as a `Switch`, so a zero count of `role="switch"`
-// reports it. `datetime` draws as the same box `string` draws, so
-// nothing in the markup separates them; what stands in for it is
-// the textbox COUNT held against the leaf defs, which a stray box
-// of any kind would move.
+// Only ONE of the two absences is observable in the DOM, and
+// saying which is the difference between a reading and a
+// coincidence. `boolean` draws as a `Switch`, so a zero count of
+// `role="switch"` reports it. `datetime` draws as the same box
+// `string` draws, and nothing in the markup separates one from the
+// other. What stands in for it is the textbox COUNT held against
+// the defs that ask for a box, which a stray box of any kind would
+// move — and the select `enum` now draws is counted the same way,
+// against the defs that ask for a trigger, so neither kind covers
+// for the other's absence.
 //
 // ## The number box is text on purpose
 //
@@ -166,11 +175,14 @@ import { SINGLE_DOMAIN_BASE, withBase } from '../../src/routes/paths';
 // - The ROSTER, off the move controls' own accessible names in DOM
 //   order. Invariant under a move by construction, which is the
 //   point: it is what reports a row lost, duplicated or misnumbered.
-// - The CONTENT, off each entry's own boxes after drilling in. It is
-//   what MOVED, and it is a form VALUE rather than rendered prose —
-//   deliberately, prose on a surface being free to carry a stamp and
-//   `@ar/ui`'s same-day relative-time rung rendering a LOCAL clock
-//   time, which is why `playwright.config.ts` pins a timezone at all.
+// - The CONTENT, off each entry's own controls after drilling in.
+//   It is what MOVED, and it is a form VALUE rather than rendered
+//   prose — deliberately, prose on a surface being free to carry a
+//   stamp and `@ar/ui`'s same-day relative-time rung rendering a
+//   LOCAL clock time, which is why `playwright.config.ts` pins a
+//   timezone at all. The select is the one control whose reading is
+//   an option's LABEL, which is a form value all the same: it comes
+//   off the def the form was drawn from, never off the surface.
 //
 // ## A drag from outside the list
 //
@@ -239,9 +251,17 @@ const REFUSED_ENTRY_INDEX = 0;
 /**
  * A polarity spelling the schema's enum does not carry.
  *
- * Asserted absent from `POLARITY_FACETS` in the Arrange rather than
- * assumed: a spelling that had quietly become real would make the
- * refusal case measure an acceptance and still pass its locators.
+ * It was what the refusal table typed into the polarity box, and
+ * that box is a select now — so what it is for here is DRAWING the
+ * select's own refusal sentence out of the app: `readEnumField`
+ * answers it for a value the def's options do not hold, and an
+ * acceptance below reads that sentence absent the way every other
+ * member reads `aria-invalid="false"`.
+ *
+ * That it is unlisted is checked rather than assumed, and by the
+ * app's own reader: a spelling that had quietly become real would
+ * make `readEnumField` accept it, and the helper that asks throws
+ * rather than returning a sentence nothing would ever show.
  */
 const OUT_OF_UNION_POLARITY = 'sideways';
 
@@ -297,13 +317,13 @@ const WEIGHT_STEP = 0.5;
 const LARGE_WEIGHT_TEXT = '987654321.5';
 
 /**
- * The six types v1 renders, as this file states them.
+ * The seven types this app renders, as this file states them.
  *
  * Annotated `readonly FieldType[]`, which is the REMOVAL direction:
  * a type dropped from the union reddens at the spelling here that
  * outlived it. The ADDITION direction is the length crossing in the
  * accounting case below, against `CONTROL_KIND_BY_TYPE`'s own keys
- * — a table total over the union by its annotation, so a seventh
+ * — a table total over the union by its annotation, so an eighth
  * type is a key it gains and a member this literal is short of.
  * Neither artifact reports the other's direction.
  */
@@ -312,6 +332,7 @@ const FIELD_TYPES: readonly FieldType[] = [
   'boolean',
   'number',
   'datetime',
+  'enum',
   'list',
   'object',
 ];
@@ -377,21 +398,25 @@ interface FieldAcceptance {
    */
   readonly member: keyof TermPayloadEntry;
   /**
-   * What goes in that box.
+   * What that control is left holding, as the PAYLOAD spells it.
    *
-   * Derived from the entry rather than flat, so the typed text
-   * differs from the stored spelling whatever the fixtures carry —
-   * which is the whole of what keeps the reading after the walk
-   * from being satisfied by a box that never changed.
+   * Typed into a box and chosen from a select, which is the case's
+   * own branch off the def rather than a member of this row — so
+   * this is the value either way, and never an option's label.
+   *
+   * Derived from the entry rather than flat, so it differs from the
+   * stored spelling whatever the fixtures carry — which is the
+   * whole of what keeps the reading after the walk from being
+   * satisfied by a control that never changed.
    */
   readonly typed: (entry: TermPayloadEntry) => string;
   /**
-   * The reader that box's kind uses.
+   * The reader that control's kind uses.
    *
    * Named per row rather than switched on the type: which reader a
    * kind takes is `dynamic-form/registry.ts`'s distinction, and the
    * case crosses this answer against {@link FieldAcceptance.accepted}
-   * so the entry below is a consequence of the typed text.
+   * so the entry below is a consequence of what was entered.
    */
   readonly read: (text: string) => FieldReading<string | number | null>;
   /**
@@ -492,23 +517,20 @@ function entryDefs(): ListFieldDef {
 }
 
 /**
- * What one member's box is called, from the member it writes.
+ * The def one member is drawn from.
  *
- * The crossing `pages/lexicon/fieldDefs.ts` says only a runtime
- * reading can make: a def's `key` is a plain string, so the member a
- * box writes and the word above it are two facts and this is where
- * they are held together. It is also what keeps every locator below
- * addressing a member rather than a label somebody may reword.
+ * Found by KEY rather than by position, so everything below is a
+ * reading about a member instead of about a slot in the item.
  *
  * @param defs - The list def the presentation draws from.
- * @param member - The payload member whose box is wanted.
- * @returns The label that box carries.
+ * @param member - The payload member whose def is wanted.
+ * @returns That member's own def.
  * @throws If the item is not an object, or draws no such member.
  */
-function memberLabel(
+function memberDef(
   defs: ListFieldDef,
   member: keyof TermPayloadEntry,
-): string {
+): FieldDef {
   const { item } = defs;
 
   if (item.type !== 'object') {
@@ -521,7 +543,50 @@ function memberLabel(
     throw new Error(`No def draws the ${member} member.`);
   }
 
-  return field.label;
+  return field;
+}
+
+/**
+ * What one member's control is called, from the member it writes.
+ *
+ * The crossing `pages/lexicon/fieldDefs.ts` says only a runtime
+ * reading can make: a def's `key` is a plain string, so the member a
+ * control writes and the word above it are two facts and this is
+ * where they are held together. It is also what keeps every locator
+ * below addressing a member rather than a label somebody may reword.
+ *
+ * @param defs - The list def the presentation draws from.
+ * @param member - The payload member whose control is wanted.
+ * @returns The label that control carries.
+ * @throws If the item is not an object, or draws no such member.
+ */
+function memberLabel(
+  defs: ListFieldDef,
+  member: keyof TermPayloadEntry,
+): string {
+  return memberDef(defs, member).label;
+}
+
+/**
+ * One member's def narrowed to the select's, or `null` for a box.
+ *
+ * The one branch every control helper below takes, written once:
+ * `options` lives on the `enum` def alone, and the narrowing is what
+ * reaches it with no cast.
+ *
+ * @param defs - The list def the presentation draws from.
+ * @param member - The payload member to ask about.
+ * @returns Its def if it is drawn as a select, `null` otherwise.
+ */
+function selectDef(
+  defs: ListFieldDef,
+  member: keyof TermPayloadEntry,
+): EnumFieldDef | null {
+  const def = memberDef(defs, member);
+
+  return def.type === 'enum'
+    ? def
+    : null;
 }
 
 /**
@@ -680,6 +745,216 @@ function spellStored(value: unknown): string {
 }
 
 /**
+ * What one member's control SHOWS for a value the payload holds.
+ *
+ * {@link spellStored} answers it for a box, which shows the value
+ * itself. A select shows the OPTION's label instead, so the def is
+ * what translates — the two channels `EnumOption` splits on
+ * purpose, and the reason a stored polarity is looked for on screen
+ * under the facet's own word rather than under its spelling.
+ *
+ * @param defs - The list def the presentation draws from.
+ * @param member - Whose control is being spelled.
+ * @param value - The value at that member's path.
+ * @returns What the control shows for it.
+ * @throws If a select offers no option carrying that value, which
+ * is a member the form cannot honestly draw rather than a reading.
+ */
+function spellMember(
+  defs: ListFieldDef,
+  member: keyof TermPayloadEntry,
+  value: unknown,
+): string {
+  const select = selectDef(defs, member);
+
+  if (select === null) {
+    return spellStored(value);
+  }
+
+  const option = select.options.find((each) => each.value === value);
+
+  if (option === undefined) {
+    throw new Error(`The ${member} select offers no ${String(value)}.`);
+  }
+
+  return option.label;
+}
+
+/**
+ * One member's control inside a mounted form.
+ *
+ * A `textbox` for every kind but `choice`, whose control is the
+ * select's TRIGGER: `@ar/ui`'s `Select` renders a Radix menu
+ * trigger, which is a `button`, and takes its accessible name off
+ * the `ariaLabel` `dynamic-form/ChoiceField.tsx` passes the def's
+ * label as. Both are addressed by that one label, so a member that
+ * changes control kind moves this file's locators with it.
+ *
+ * @param form - The mounted form the member is drawn in.
+ * @param defs - The list def the presentation draws from.
+ * @param member - Whose control is wanted.
+ * @returns That control.
+ */
+function memberControl(
+  form: Locator,
+  defs: ListFieldDef,
+  member: keyof TermPayloadEntry,
+): Locator {
+  const role = selectDef(defs, member) === null
+    ? 'textbox'
+    : 'button';
+
+  return form.getByRole(role, {
+    name: memberLabel(defs, member),
+    exact: true,
+  });
+}
+
+/**
+ * What one member's control shows right now.
+ *
+ * A box answers its VALUE and a trigger answers its TEXT, which is
+ * the option's label — the same string {@link spellMember} derives,
+ * so the two are comparable either way.
+ *
+ * @param form - The mounted form the member is drawn in.
+ * @param defs - The list def the presentation draws from.
+ * @param member - Whose control to read.
+ * @returns What it shows.
+ */
+async function readMember(
+  form: Locator,
+  defs: ListFieldDef,
+  member: keyof TermPayloadEntry,
+): Promise<string> {
+  const control = memberControl(form, defs, member);
+
+  if (selectDef(defs, member) === null) {
+    return control.inputValue();
+  }
+
+  const shown = await control.textContent();
+
+  return (shown ?? '').trim();
+}
+
+/**
+ * Put a value into one member's control.
+ *
+ * TYPED into a box; CHOSEN from a select, through the menu that
+ * select opens — addressed on the PAGE rather than inside the
+ * dialog, `Select` rendering its panel through a portal, which
+ * makes it a sibling of the modal and not a descendant.
+ *
+ * The value is the payload's own spelling in both cases and the
+ * option is found from it, so no case here holds a label beside a
+ * value it has to keep in step.
+ *
+ * @param page - The page the editor is open on.
+ * @param form - The mounted form the member is drawn in.
+ * @param defs - The list def the presentation draws from.
+ * @param member - Whose control to drive.
+ * @param value - The value to leave it holding.
+ */
+async function enterMember(
+  page: Page,
+  form: Locator,
+  defs: ListFieldDef,
+  member: keyof TermPayloadEntry,
+  value: string,
+): Promise<void> {
+  const control = memberControl(form, defs, member);
+
+  if (selectDef(defs, member) === null) {
+    await control.fill(value);
+
+    return;
+  }
+
+  await control.click();
+  await page
+    .getByRole('menu')
+    .getByRole('menuitemradio', {
+      name: spellMember(defs, member, value),
+      exact: true,
+    })
+    .click();
+}
+
+/**
+ * Read one member's control back against a value the payload holds.
+ *
+ * A retrying assertion rather than a bare read for both kinds, so a
+ * control redrawn a tick later is waited for instead of reported.
+ *
+ * @param form - The mounted form the member is drawn in.
+ * @param defs - The list def the presentation draws from.
+ * @param member - Whose control to read.
+ * @param value - The value it should be showing.
+ */
+async function expectMemberShows(
+  form: Locator,
+  defs: ListFieldDef,
+  member: keyof TermPayloadEntry,
+  value: unknown,
+): Promise<void> {
+  const control = memberControl(form, defs, member);
+  const shown = spellMember(defs, member, value);
+
+  if (selectDef(defs, member) === null) {
+    await expect(control).toHaveValue(shown);
+
+    return;
+  }
+
+  await expect(control).toHaveText(shown);
+}
+
+/**
+ * Assert the control itself is refusing nothing.
+ *
+ * Two channels for two kinds, and the split is `@ar/ui`'s rather
+ * than a preference here: a box carries `aria-invalid`, and
+ * `Select` accepts no such attribute at all — so
+ * `dynamic-form/ChoiceField.tsx` puts `readEnumField`'s refusal in
+ * the field's error slot bare. What stands in for the attribute is
+ * that sentence being ABSENT, taken from the app's own reader over
+ * {@link OUT_OF_UNION_POLARITY} rather than spelled here.
+ *
+ * @param dialog - The open editor, the error slot being inside it.
+ * @param form - The mounted form the member is drawn in.
+ * @param defs - The list def the presentation draws from.
+ * @param member - Whose control to read.
+ * @throws If the select turns out to offer the unlisted value,
+ * which would leave the reading a sentence nothing ever shows.
+ */
+async function expectControlAccepted(
+  dialog: Locator,
+  form: Locator,
+  defs: ListFieldDef,
+  member: keyof TermPayloadEntry,
+): Promise<void> {
+  const select = selectDef(defs, member);
+
+  if (select === null) {
+    await expect(memberControl(form, defs, member))
+      .toHaveAttribute('aria-invalid', 'false');
+
+    return;
+  }
+
+  const unlisted = readEnumField(select, OUT_OF_UNION_POLARITY);
+
+  if (unlisted.ok) {
+    throw new Error(`The ${member} select offers ${OUT_OF_UNION_POLARITY}.`);
+  }
+
+  await expect(
+    dialog.getByText(unlisted.sentence, { exact: true }),
+  ).toHaveCount(0);
+}
+
+/**
  * The trail above the mounted form, through its own landmark.
  *
  * Named as well as scoped. The shell draws two more `nav` landmarks
@@ -732,6 +1007,32 @@ function entryFields(defs: ListFieldDef): readonly FieldDef[] {
 }
 
 /**
+ * Which ARIA role one control kind is addressed through.
+ *
+ * Three roles over the six kinds, which is the whole of what the
+ * markup separates: a `toggle` is a `Switch`, a `choice` is the
+ * menu trigger `@ar/ui`'s `Select` renders, and the three text
+ * kinds are one box — which is why the counts held against this
+ * answer are what stand in for an absence no role can report.
+ *
+ * `drill-in` never reaches it: a container is a row at the level
+ * above rather than a control in the mounted form, and every caller
+ * here walks one entry's leaf defs.
+ *
+ * @param kind - The kind `dynamic-form/registry.ts` names.
+ * @returns The role its control carries.
+ */
+function roleForKind(kind: FieldControlKind): 'button' | 'switch' | 'textbox' {
+  if (kind === 'toggle') {
+    return 'switch';
+  }
+
+  return kind === 'choice'
+    ? 'button'
+    : 'textbox';
+}
+
+/**
  * Every type a def tree uses, root first and duplicates kept.
  *
  * The switch is over the DESTRUCTURED discriminant, which is what
@@ -753,6 +1054,26 @@ function usedFieldTypes(def: FieldDef): readonly FieldType[] {
     default:
       return [type];
   }
+}
+
+/**
+ * The polarity member's def, narrowed to the select it is drawn as.
+ *
+ * The def list is a pure reading, so this costs no browser and the
+ * acceptance row below can name the reader that takes it.
+ *
+ * @returns Its `enum` def.
+ * @throws If the member is not drawn as a select at all, which
+ * would leave that row reading a control it is not over.
+ */
+function polaritySelect(): EnumFieldDef {
+  const select = selectDef(entryDefs(), 'polarity');
+
+  if (select === null) {
+    throw new Error('The polarity member is not drawn as a select.');
+  }
+
+  return select;
 }
 
 /**
@@ -840,23 +1161,16 @@ const FIELD_REFUSALS: readonly FieldRefusal[] = [
     refused: (entry) => ({ ...entry, pattern: null }),
     repaired: () => REPAIRED_PATTERN,
   },
-  {
-    what: 'an out-of-union polarity',
-    member: 'polarity',
-    typed: OUT_OF_UNION_POLARITY,
-    refused: (entry) => ({
-      ...entry,
-      polarity: OUT_OF_UNION_POLARITY,
-    }),
-    // A polarity the entry does not already carry, so the repair is a
-    // real change to the payload whichever way the fixtures are
-    // edited — a write back to the stored value would leave the
-    // footer's own reading ambiguous.
-    repaired: (entry) => first(
-      POLARITY_FACETS.filter((facet) => facet.polarity !== entry.polarity),
-      'polarity other than the stored one',
-    ).polarity,
-  },
+  // An out-of-union `polarity` stood here and is gone because the
+  // CONTROL can no longer produce one. `pages/lexicon/fieldDefs.ts`
+  // draws that member as an `enum` over `POLARITY_FACETS`, so the
+  // form offers the spellings the schema accepts and nothing else:
+  // there is no box to type `sideways` into, and a row that typed it
+  // would be measuring a gesture no operator can make. The schema's
+  // own refusal for that spelling is untouched and still has its
+  // cases — `pages/lexicon/schema.test.ts` for the issue and
+  // `components/jsonDraft.test.ts` for the sentence — and the JSON
+  // box is what can still reach it from a browser.
 ];
 
 test.describe('the fields presentation', () => {
@@ -889,21 +1203,16 @@ test.describe('the fields presentation', () => {
           (sentence) => sentence.includes(refusal.member),
         );
 
-        // Four guards, every one of them about vacuity rather than
+        // Three guards, every one of them about vacuity rather than
         // about the app. A refusal producing no sentence would leave
         // the loops below asserting nothing. A sentence naming no
         // member would leave an operator with nowhere to go, which is
-        // the claim this file exists to make. The box's reader
+        // the claim this file exists to make. And the box's reader
         // answering something other than what this file put in the
-        // candidate would make the sentences a coincidence. And a
-        // repair the schema also refuses would make the retirement
-        // below unmeasurable.
+        // candidate would make the sentences a coincidence.
         expect(reading.sentences.length).toBeGreaterThan(0);
         expect(naming.length).toBeGreaterThan(0);
         expect(reading.written).toBe(reading.read);
-        expect(
-          POLARITY_FACETS.map((facet) => facet.polarity),
-        ).not.toContain(OUT_OF_UNION_POLARITY);
 
         // Act — open the fields presentation. A member has a box only
         // inside an entry: the root node is the LIST, and its form
@@ -1166,7 +1475,7 @@ test.describe('the structure the fields presentation navigates', () => {
     ).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('accounts for all six types, drawing the four in use', async ({
+  test('accounts for all seven types, drawing the five in use', async ({
     page,
   }) => {
     // Arrange
@@ -1191,13 +1500,13 @@ test.describe('the structure the fields presentation navigates', () => {
     // The union's two directions, one artifact each. The literal
     // is short of a type dropped from the union; the table gains a
     // key for one added to it, so the lengths disagreeing is what
-    // reports a seventh type nobody accounted for here.
+    // reports an eighth type nobody accounted for here.
     expect(FIELD_TYPES).toHaveLength(
       Object.keys(CONTROL_KIND_BY_TYPE).length,
     );
 
     // The accounting is TOTAL and the two halves are disjoint, so
-    // every one of the six is either drawn below or named as
+    // every one of the seven is either drawn below or named as
     // having no site. A type used but outside the roster would
     // leave the sum right and the membership wrong.
     expect([...used].every((type) => FIELD_TYPES.includes(type)))
@@ -1207,10 +1516,16 @@ test.describe('the structure the fields presentation navigates', () => {
     // What makes the second half non-vacuous, and a measurement of
     // this payload rather than of the provider: `boolean` is the
     // one absence the markup can report. A def list that later
-    // draws all six should delete this guard and the reads under
+    // draws all seven should delete this guard and the reads under
     // it rather than leaving them passing over nothing.
     expect(unused.length).toBeGreaterThan(0);
     expect(unusedKinds).toContain('toggle');
+
+    // And the half that IS drawn covers both control shapes, or the
+    // two counts below are one reading wearing two names.
+    expect(boxKinds).toContain('choice');
+    expect(boxKinds.filter((kind) => kind !== 'choice').length)
+      .toBeGreaterThan(0);
 
     // Act
     const dialog = await openFields(page, summary.category.id);
@@ -1219,22 +1534,29 @@ test.describe('the structure the fields presentation navigates', () => {
     // Assert — every member is drawn as the control its type's row
     // names, addressed by the label its def carries. That crossing
     // is the one `pages/lexicon/fieldDefs.ts` says only a runtime
-    // reading can make.
+    // reading can make. Three roles rather than two since `enum`
+    // took a site here: `@ar/ui`'s `Select` is a menu trigger, so
+    // the `choice` kind is a `button` carrying the def's label as
+    // its accessible name.
     for (const def of fields) {
-      const role = controlKindFor(def.type) === 'toggle'
-        ? 'switch'
-        : 'textbox';
-
       await expect(
-        form.getByRole(role, { name: def.label, exact: true }),
+        form.getByRole(roleForKind(controlKindFor(def.type)), {
+          name: def.label,
+          exact: true,
+        }),
       ).toHaveCount(1);
     }
 
     // And nothing else is drawn. `datetime` shares `string`'s box,
     // so no role count can report its absence — the count of boxes
-    // against the defs that ask for one is what stands in for it.
+    // against the defs that ask for one is what stands in for it,
+    // and the triggers are counted the same way beside them so one
+    // kind cannot stand in for the other.
     await expect(form.getByRole('textbox')).toHaveCount(
-      boxKinds.filter((kind) => kind !== 'toggle').length,
+      boxKinds.filter((kind) => roleForKind(kind) === 'textbox').length,
+    );
+    await expect(form.getByRole('button')).toHaveCount(
+      boxKinds.filter((kind) => roleForKind(kind) === 'button').length,
     );
 
     // The absence that IS observable.
@@ -1257,11 +1579,16 @@ test.describe('the structure the fields presentation navigates', () => {
  * The four edits the fields presentation takes, one per member.
  *
  * Total over what one entry draws — the accounting case asserts the
- * arity — so "each of the four leaf controls edits its member" is a
- * loop over this table rather than a claim in a comment. Each row
- * states the whole entry its edit produces, which is what lets the
- * reading after the walk cover the members the edit did NOT touch
- * with the same derivation as the one it did.
+ * arity — so "each control this payload draws edits its member" is
+ * a loop over this table rather than a claim in a comment. Three
+ * boxes and one select since `polarity` became an `enum`, and which
+ * of the two a row drives is read off the DEF rather than declared
+ * here: a member that changes control kind moves the gesture with
+ * it and leaves this table alone.
+ *
+ * Each row states the whole entry its edit produces, which is what
+ * lets the reading after the walk cover the members the edit did
+ * NOT touch with the same derivation as the one it did.
  */
 const ACCEPTED_EDITS: readonly FieldAcceptance[] = [
   {
@@ -1285,7 +1612,13 @@ const ACCEPTED_EDITS: readonly FieldAcceptance[] = [
     what: 'a polarity',
     member: 'polarity',
     typed: (entry) => otherPolarity(entry),
-    read: readStringField,
+    // The select's own reader, and the one row whose reader is a
+    // closure: `readEnumField` takes the def the options live on,
+    // membership being a property of the def rather than of the
+    // module. So this row states that what is chosen has to BE one
+    // of the positions offered, where the three beside it state
+    // what a box's text becomes.
+    read: (text) => readEnumField(polaritySelect(), text),
     accepted: (entry) => ({ ...entry, polarity: otherPolarity(entry) }),
   },
   {
@@ -1322,19 +1655,20 @@ test.describe('what the fields presentation takes', () => {
       const reading = edit.read(typed);
 
       // The table is total over what one entry draws, so the loop
-      // after the walk reads every box the form holds rather than a
-      // subset that happens to include the edited one.
+      // after the walk reads every control the form holds rather
+      // than a subset that happens to include the edited one.
       expect(members).toHaveLength(entryFields(defs).length);
 
       if (!reading.ok) {
-        throw new Error(`The box refused the sample: ${edit.what}.`);
+        throw new Error(`The control refused the sample: ${edit.what}.`);
       }
 
-      // Four guards, every one about vacuity. The box's reader has
-      // to answer what this file says the entry then carries, or the
-      // reads below are a coincidence beside the typed text. The
-      // edited member's spelling has to MOVE, or a box that never
-      // changed satisfies the reading after the walk. Its neighbours
+      // Four guards, every one about vacuity. The control's own
+      // reader has to answer what this file says the entry then
+      // carries, or the reads below are a coincidence beside what
+      // was entered. The edited member's spelling has to MOVE, or a
+      // control that never changed satisfies the reading after the
+      // walk. Its neighbours
       // have to be left alone by the table itself, or "that member
       // alone" is being asserted of a row that moved two. And the
       // schema has to take the candidate, or this is a refusal case
@@ -1362,20 +1696,16 @@ test.describe('what the fields presentation takes', () => {
       await expect(save).toBeDisabled();
 
       const form = await drillInto(dialog, labels.root, entryLabel);
-      const box = form.getByRole('textbox', {
-        name: memberLabel(defs, edit.member),
-        exact: true,
-      });
 
-      await expect(box).toHaveValue(spellStored(entry[edit.member]));
-      await box.fill(typed);
+      await expectMemberShows(form, defs, edit.member, entry[edit.member]);
+      await enterMember(page, form, defs, edit.member, typed);
 
-      // Assert — the box took the text, nothing was refused, and the
-      // write reached the draft. The shut footer this case opened on
-      // is what makes the enabled one a change rather than a state
-      // the editor was already in.
-      await expect(box).toHaveValue(typed);
-      await expect(box).toHaveAttribute('aria-invalid', 'false');
+      // Assert — the control took what it was given, nothing was
+      // refused, and the write reached the draft. The shut footer
+      // this case opened on is what makes the enabled one a change
+      // rather than a state the editor was already in.
+      await expectMemberShows(form, defs, edit.member, written[edit.member]);
+      await expectControlAccepted(dialog, form, defs, edit.member);
       await expect(
         dialog.getByText(REFUSED_TITLE, { exact: true }),
       ).toHaveCount(0);
@@ -1394,12 +1724,7 @@ test.describe('what the fields presentation takes', () => {
       // covers both, so a case cannot pass by checking only the
       // member it typed into.
       for (const member of members) {
-        await expect(
-          redrawn.getByRole('textbox', {
-            name: memberLabel(defs, member),
-            exact: true,
-          }),
-        ).toHaveValue(spellStored(written[member]));
+        await expectMemberShows(redrawn, defs, member, written[member]);
       }
 
       await expect(save).toBeEnabled();
@@ -1712,24 +2037,30 @@ function entryLabelAt(labels: TreeLabels, index: number): string {
  * and rebuilt the rest, which is a different bug wearing the same
  * green.
  *
+ * @param defs - The list def the presentation draws from.
  * @param entry - The entry to spell.
  * @param members - The members one entry draws, in draw order.
- * @returns Its members as their boxes would show them.
+ * @returns Its members as their own controls would show them.
  */
 function entrySpelling(
+  defs: ListFieldDef,
   entry: TermPayloadEntry,
   members: readonly (keyof TermPayloadEntry)[],
 ): readonly string[] {
-  return members.map((member) => spellStored(entry[member]));
+  return members.map((member) => spellMember(defs, member, entry[member]));
 }
 
 /**
  * What one entry's mounted form shows, member by member.
  *
+ * Through each member's own control rather than through a textbox
+ * locator: `polarity` is a select and answers the option's LABEL,
+ * which is what {@link entrySpelling} derives on the other side.
+ *
  * @param form - That entry's own mounted form.
  * @param defs - The list def the presentation draws from.
  * @param members - The members one entry draws, in draw order.
- * @returns One box value per member, in draw order.
+ * @returns One control's reading per member, in draw order.
  */
 async function readEntry(
   form: Locator,
@@ -1739,19 +2070,14 @@ async function readEntry(
   const spelling: string[] = [];
 
   for (const member of members) {
-    const box = form.getByRole('textbox', {
-      name: memberLabel(defs, member),
-      exact: true,
-    });
-
-    spelling.push(await box.inputValue());
+    spelling.push(await readMember(form, defs, member));
   }
 
   return spelling;
 }
 
 /**
- * What the list holds, position by position, read off the boxes.
+ * What the list holds, position by position, off its own controls.
  *
  * The CONTENT half of the reading the header splits in two: the
  * roster says the rows are still the rows, and this says which
@@ -1889,7 +2215,9 @@ test.describe('the reorder the fields presentation makes', () => {
     const defs = entryDefs();
     const labels = treeLabels(defs, payload);
     const members = ACCEPTED_EDITS.map((each) => each.member);
-    const stored = payload.map((entry) => entrySpelling(entry, members));
+    const stored = payload.map(
+      (entry) => entrySpelling(defs, entry, members),
+    );
     const expected = movedTo(stored, MOVED_ROW_INDEX, LANDED_ROW_INDEX);
     const roster = moveRoster(labels);
     const movedLabel = entryLabelAt(labels, MOVED_ROW_INDEX);
@@ -2020,7 +2348,9 @@ test.describe('the reorder the fields presentation makes', () => {
     const defs = entryDefs();
     const labels = treeLabels(defs, payload);
     const members = ACCEPTED_EDITS.map((each) => each.member);
-    const stored = payload.map((entry) => entrySpelling(entry, members));
+    const stored = payload.map(
+      (entry) => entrySpelling(defs, entry, members),
+    );
     const roster = moveRoster(labels);
     const treeNames = [labels.root, ...labels.entries];
     const movedLabel = entryLabelAt(labels, MOVED_ROW_INDEX);
@@ -2112,7 +2442,9 @@ test.describe('the reorder the fields presentation makes', () => {
     const defs = entryDefs();
     const labels = treeLabels(defs, payload);
     const members = ACCEPTED_EDITS.map((each) => each.member);
-    const stored = payload.map((entry) => entrySpelling(entry, members));
+    const stored = payload.map(
+      (entry) => entrySpelling(defs, entry, members),
+    );
     const roster = moveRoster(labels);
     const lastIndex = payload.length - 1;
     const expected = movedTo(stored, MOVED_ROW_INDEX, lastIndex);

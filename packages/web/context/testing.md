@@ -16,12 +16,12 @@ decision is a pure function over already-read browser values and the
 component or hook is the thin part around it. `pages/*/rows.ts`,
 `cards.ts`, `fields.ts`, `editor.ts`, `schema.ts`, `fieldDefs.ts`,
 `pages/filters.ts`, `app-shell/theme.ts`, the pair under
-`src/components/` (`editorDraft.ts`, `jsonDraft.ts`) and the six pure
-modules under `src/dynamic-form/` are all that shape — the provider's
-whole core is `.ts` for exactly this reason, and its three `.tsx` hold
-no decision the unit runner would have wanted. Anything touching
-`document` at import time crashes the unit runner outright and takes
-its whole file with it.
+`src/components/` (`editorDraft.ts`, `jsonDraft.ts`) and the seven
+pure modules under `src/dynamic-form/` are all that shape — the
+provider's whole core is `.ts` for exactly this reason, and its
+seven `.tsx` hold no decision the unit runner would have wanted.
+Anything touching `document` at import time crashes the unit runner
+outright and takes its whole file with it.
 
 <!-- doc-links-skip: pages/filters.ts -- package-local path -->
 <!-- doc-links-skip: app-shell/theme.ts -- package-local path -->
@@ -160,7 +160,10 @@ Spec conventions:
 - `playwright.config.ts` pins `locale`, `timezoneId` and `colorScheme`
   in `use`, and serves the app on port 5174 with `--strictPort` so a
   developer's own `bun run dev` is never silently the server under
-  test. `retries` is 0, stated rather than inherited: the data
+  test. That server's own port is vite's default 5173, which is
+  deliberately none of the three below — so a one-off Playwright
+  script in `/tmp` driving a running `bun run dev` cannot collide
+  with a suite run, and needs no port of its own. `retries` is 0, stated rather than inherited: the data
   resolves from memory and the server is started by the config, so a
   second attempt that passed would be hiding a real bug.
   `playwright.visual.config.ts` repeats all four decisions on port
@@ -245,6 +248,11 @@ trigger — but delete it in the same step, because `tests/e2e/` IS the
   answer different things. Arrow keys CLAMP at the last item rather
   than wrapping, typeahead works, and Escape inside an open menu
   closes the MENU ONLY — the second press dismisses the dialog.
+  Asserting that one offers EXACTLY a fixed roster in a fixed order
+  is `toHaveText([...])` against the multi-element `menuitemradio`
+  locator, which compares each match positionally; that is the idiom
+  this package already reads a `tablist` and a breadcrumb trail with,
+  so a roster claim here needs no new helper.
 - `Table` renders TWO `<table>` elements (a sticky header and the
   body), so `page.getByRole('table')` is a strict-mode violation on
   every list surface and `.last()` under `main` is the body.
@@ -390,6 +398,46 @@ trigger — but delete it in the same step, because `tests/e2e/` IS the
   of the list. Press inside the row's GRIP (about 18px in), one small
   move to start, then TWO moves over the target's half above its
   midpoint, then release.
+- A member's CONTROL KIND is read by specs outside the dynamic form's
+  own, and changing one reds them where no task named them.
+  `tests/e2e/keyboard.spec.ts` walks the fields presentation too and
+  had every member spelled as a `textbox`, so moving `polarity` from
+  `string` to `enum` reddened it under the full suite alone — a
+  scoped `bun x playwright test tests/e2e/dynamic-form.spec.ts` stays
+  green over exactly that break. Derive the role from
+  `controlKindFor(def)` rather than spelling `textbox`, and a def
+  changing type moves the spec with it. The accounting case in
+  `tests/e2e/dynamic-form.spec.ts` reads the same way: it counts the
+  types the lexicon payload actually USES, five of the seven since
+  `polarity` became an enum, through a `roleForKind` helper — so a
+  seventh type landing and a def changing kind move different halves
+  of one figure.
+- The screenshot suite cannot see a member control at all, so a
+  control's SHAPE changing moves no baseline.
+  `tests/visual/dynamic-form.spec.ts` frames the fields presentation
+  right after the tab opens, and `DynamicForm` seeds `selectedPath` to
+  `ROOT_PATH` — so every shot holds the category's own list-level
+  form and never a term's members. Measured over the polarity box
+  becoming a select: all 56 hashes byte-identical, zero baselines
+  changed, against a plan that expected the opposite. Read a
+  no-baselines-moved result on a member change as the suite's FRAMING
+  rather than as evidence the control is unchanged, and take the live
+  reading from `tests/e2e/lexicon.spec.ts`, whose polarity-select case
+  is the only place that control is actually driven.
+- The offline static-render probe reaches this provider, with four
+  shapes that each fail as something else. `DynamicFormProps.defs` is
+  ONE root def (an `ObjectFieldDef`), never an array — handing it a
+  list of leaf defs throws `Unknown field type: undefined` out of
+  `assertActions` before anything draws. There is no `text` leaf type:
+  the string box is spelled `string`, and a wrong spelling reaches the
+  same throw naming the bad type. A static render only draws the ROOT
+  node, so the list branch is unreached from `DynamicForm` and a probe
+  proving `ListNodeForm` forwards a prop must mount `NodeForm` over
+  `nodeAt(tree, [keySegment('items')])` itself. And a mount-time
+  REFUSAL is probeable because `DynamicForm` runs `assertActions`
+  inside a lazy `useState` seed rather than an effect —
+  `react-dom/server` runs the initializer, so the throw arrives with
+  no DOM at all.
 - `tests/` carries NO shared helper module and that is the CONVENTION
   rather than an oversight: every spec imports from `src/`, from
   `@playwright/test` and from nothing else in the tree, and `SKELETON`

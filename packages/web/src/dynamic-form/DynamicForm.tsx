@@ -115,6 +115,42 @@
  * this app cannot read is what somebody needs told before they touch
  * anything.
  *
+ * ## The action table is refused here, before anything draws
+ *
+ * {@link DynamicFormProps.actions} is the caller's table of
+ * handlers, and this file does two things with it: it refuses the
+ * def list against it once, at mount, through `./actions.ts`'s
+ * `assertActions`, and it hands it to `./NodeForm.tsx` untouched.
+ * Nothing between here and the leaf reads an id — the lookup is
+ * `./useFieldAction.tsx`'s, per leaf, at the moment it draws a
+ * button.
+ *
+ * At MOUNT rather than per render, and rather than in an effect.
+ * Decision 3 of
+ * `.specs/q20b-0-dynamic-form-enum-and-actions.md` is that a def
+ * naming an id nothing holds throws before anything draws, and an
+ * effect runs after the first paint — it would throw too late to
+ * stop the button appearing. A lazy `useState` seed is the same
+ * once-per-mount device {@link storedRefusal} already uses here,
+ * and for the same reason: a def list is a declaration and does
+ * not move under one mount.
+ *
+ * Measured through the offline static-render probe, over a def
+ * list whose `term` leaf names `pick`: with an empty table, and
+ * with no table at all, the render throws
+ * `No action for field term: unknown id pick` and produces no
+ * markup; with a table holding `pick`, the same render draws one
+ * button named after the ref's label and the actionless `note`
+ * leaf beside it draws none. The stage's full grid of readings is
+ * `./LeafControl.tsx`'s.
+ *
+ * It throws rather than joining the refusal banner below, which is
+ * the one place this file refuses WITHOUT a sentence for an
+ * operator. Deliberate: a banner is for a payload that cannot be
+ * saved, which is somebody's data, while an unanswered action id
+ * is a def list and a table that disagree — nobody using this form
+ * can act on it, and the person who can is reading a stack trace.
+ *
  * ## No test in this package reaches this file
  *
  * A fact about the runner rather than an omission, and the one both
@@ -154,6 +190,7 @@
  * is the click, the drag and the keystroke, which are Playwright's.
  */
 
+import type { FieldActionTable } from './actions';
 import type { LeafValue } from './FieldControl';
 import type { ContainerFieldDef } from './fieldDef';
 import type { NodePath } from './nodePath';
@@ -165,6 +202,7 @@ import { useState } from 'react';
 
 import { describeSchemaIssues } from '../components/jsonDraft';
 
+import { assertActions } from './actions';
 import { NodeForm } from './NodeForm';
 import { ROOT_PATH, pathKey } from './nodePath';
 import {
@@ -206,6 +244,18 @@ const NO_REFUSAL: readonly string[] = Object.freeze([]);
  * already carry the fault.
  */
 const REFUSED_TITLE = 'This cannot be saved';
+
+/**
+ * No handlers, as one shared table.
+ *
+ * Frozen and shared for the reason {@link NO_REFUSAL} is: it stands
+ * in for an absent {@link DynamicFormProps.actions} on the one walk
+ * that reads the table, and a fresh `{}` per render would be a new
+ * identity for a thing that never changes. A def list naming any
+ * action at all is refused against it, which is the correct reading
+ * of a page that supplied no table.
+ */
+const NO_ACTIONS: FieldActionTable = Object.freeze({});
 
 /** The two columns, stacking under `sm` where 220px is most of it. */
 const SHELL_LAYOUT = 'grid grid-cols-1 items-start gap-4 '
@@ -382,17 +432,47 @@ export interface DynamicFormProps<T extends object> {
    * cannot express answers no defs at all and keeps the JSON box.
    */
   readonly defs: ContainerFieldDef;
+  /**
+   * The handler behind every action id the defs name.
+   *
+   * Optional: a def list naming no action needs no table, and a
+   * page that has none supplies none. A def naming an id this
+   * table does not hold THROWS at mount, with the def's key and
+   * the id — see the header on why that is a throw rather than the
+   * banner.
+   *
+   * Decision 4 of
+   * `.specs/q20b-0-dynamic-form-enum-and-actions.md` is the
+   * contract each handler is held to, and it is the same sentence
+   * `./actions.ts` states beside the type — repeated here because
+   * this prop is where a caller meets it. A handler is handed the
+   * field's path, its def and the value held there, and answers a
+   * `LeafValue`, `undefined`, or a promise of either. A value that
+   * comes back is written through `./values.ts`'s `withValueAt` —
+   * the path a keystroke takes, so it is checked against
+   * {@link DynamicFormProps.schema} and reported through
+   * {@link DynamicFormProps.onChange} like any other edit — and it
+   * REPLACES whatever text the control was holding. `undefined`
+   * leaves the field exactly as it was. A rejected promise renders
+   * beside its field, in that field's error slot, as the action's
+   * refusal, and is never thrown. No action changes the def list:
+   * {@link DynamicFormProps.defs} is read, never written.
+   */
+  readonly actions?: FieldActionTable;
 }
 
 /**
  * The dynamic form provider: a structure to navigate, and one form.
  *
  * @typeParam T - The payload being edited.
- * @param props - The label, the payload, the report, the schema and
- * the defs to draw it from.
+ * @param props - The label, the payload, the report, the schema,
+ * the defs to draw it from, and the handlers their actions name.
  * @returns The two columns, and the refusal region under them.
- * @throws If any def in the walk carries a container type outside
- * the two, which `check-types` rules out for defs written here.
+ * @throws At mount, if a def names an action id
+ * {@link DynamicFormProps.actions} does not hold, naming the def's
+ * key and the id. Or if any def in the walk carries a container
+ * type outside the two, which `check-types` rules out for defs
+ * written here.
  */
 export const DynamicForm = <T extends object>({
   label,
@@ -400,7 +480,17 @@ export const DynamicForm = <T extends object>({
   onChange,
   schema,
   defs,
+  actions,
 }: DynamicFormProps<T>) => {
+  // Decision 3, and the header says why it is a seed rather than an
+  // effect: the walk runs once, at mount, and a def naming an id
+  // nothing answers throws before the first render finishes.
+  useState(() => {
+    assertActions([defs], actions ?? NO_ACTIONS);
+
+    return null;
+  });
+
   // The one holder of where an operator is; the header says why
   // nothing below it keeps a second reading.
   const [selectedPath, setSelectedPath] = useState<NodePath>(
@@ -498,6 +588,7 @@ export const DynamicForm = <T extends object>({
             key={nodeKey}
             node={node}
             value={value}
+            actions={actions}
             onValueChange={(path: NodePath, next: LeafValue) => {
               report(applied(value, withValueAt(value, path, next)));
             }}

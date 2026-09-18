@@ -58,7 +58,9 @@ layer; until then these are the app's real rules.
   through `toTermPayload` / `withTermPayload` and validate against the
   same `termPayloadSchema` — which is what makes switching presentation
   free rather than a save, and what keeps two drawings from answering
-  one question two ways.
+  one question two ways. The `polarity` member is now a `select` in
+  the FIELDS tab, drawn from an enum def whose options are the
+  `POLARITY_FACETS` in facet order.
 - **The JSON box is the fallback under the FIELDS segment, not a
   retired presentation.** `fieldDefsForTermPayload()` answers a def
   list or `null`, and a `null` answer draws the box where the form
@@ -100,6 +102,14 @@ layer; until then these are the app's real rules.
   modal holds its own typed text; a control drawn straight from a
   trimmed draft swallows the space between two words as the second is
   being typed.
+- **An action handler's return value writes through the draft as a
+  keystroke does.** The handler is handed the path, the def, and the
+  value held there now, and answers a new value, `undefined` to leave
+  it, or a promise of either. Its return goes through `values.ts`'s
+  `withValueAt` — the same path a keystroke takes — and replaces what
+  the control was holding. `undefined` leaves the field as it was. A
+  rejected promise renders beside the field as the action's refusal
+  and is never thrown.
 - **Adding an accessor SHAPE costs partitions, not assertions.** Both
   `api.test.ts` and `hooks.test.ts` partition the barrel by SHAPE, so
   a single-row read `(slug, id)`, a parent-keyed child list and a

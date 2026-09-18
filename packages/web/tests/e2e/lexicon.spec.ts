@@ -1392,6 +1392,74 @@ test.describe('an edit made in the fields presentation', () => {
   });
 });
 
+test.describe('the polarity select in the fields presentation', () => {
+  test('offers exactly the facet spellings, and writes a choice into the draft', async ({
+    page,
+  }) => {
+    // Arrange — the entry `pickFieldsEdit` derives, so the navigation
+    // and the tree label are one truth with the swap cases above; the
+    // choice this case drives is read off the SAME term's polarity,
+    // moved through `withTermPolarity`, the very mover the row's own
+    // control calls (see `moveTerm`).
+    const edit = await pickFieldsEdit();
+    const term = first(edit.terms, 'term in the first category');
+    const target = first(
+      POLARITY_FACETS.filter((facet) => facet.polarity !== term.polarity),
+      'polarity other than the stored one',
+    );
+    const moved = withTermPolarity(edit.terms, term.id, target.polarity);
+    const polarityLabel = memberLabel(entryDefs(), 'polarity');
+
+    await page.goto(
+      editPath(SINGLE_DOMAIN_BASE, edit.summary.category.id),
+    );
+
+    const dialog = page.getByRole('dialog');
+
+    await expect(dialog).toBeVisible();
+    await expectSettled(page);
+    await swapTo(dialog, FIELDS_TAB_NAME);
+
+    const form = await drillInto(dialog, edit);
+    const trigger = form.getByRole('button', {
+      name: polarityLabel,
+      exact: true,
+    });
+
+    // Act — open the menu, which `Select` renders through a portal
+    // and so is addressed on the PAGE rather than inside the dialog.
+    await trigger.click();
+
+    const options = page.getByRole('menu').getByRole('menuitemradio');
+
+    // Assert — exactly the facet spellings, in facet ORDER: not a
+    // subset, and not a reordering a bare membership check would
+    // pass just the same.
+    await expect(options).toHaveText(
+      POLARITY_FACETS.map((facet) => facet.label),
+    );
+
+    // Act — choose a spelling other than the one this entry is
+    // stored under.
+    await page
+      .getByRole('menu')
+      .getByRole('menuitemradio', { name: target.label, exact: true })
+      .click();
+
+    // Assert — the trigger shows the choice, and the choice reached
+    // the DRAFT rather than only the control: the buckets, read
+    // through the other drawing after a swap that UNMOUNTS this one,
+    // move the term exactly as `withTermPolarity` says they should.
+    await expect(trigger).toHaveText(target.label);
+
+    await swapTo(dialog, TEMPLATE_TAB_NAME);
+
+    await expect
+      .poll(() => readBuckets(dialog))
+      .toEqual(expectedBuckets(moved));
+  });
+});
+
 test.describe('the JSON fallback beside the fields presentation', () => {
   test('is offered last, and still refuses text that is not JSON', async ({
     page,

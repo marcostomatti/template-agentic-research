@@ -1,6 +1,15 @@
 ---
 name: progress-hygiene
-description: Use when compacting progress.txt — the loop dispatches a compaction session between tasks once the file passes its caps, and the wrap-up runs one more at the end of a plan. Governs what gets promoted out of progress.txt (skills, context/ pages, docs), what gets deleted, and what a mid-run compaction may not touch, so the file stays small enough to inject into plan generation.
+description: "Use when compacting progress.txt — when a compaction is due, what is promoted to skills or context pages, and what is deleted."
+prevents: "findings deleted from progress.txt before anything durable carries them, and a file so large plan generation truncates it"
+signal: silent
+when_to_use: "You are compacting progress.txt — between tasks, at the end of a plan, or by hand — and deciding what to promote and what to delete. Prevents: findings deleted from progress.txt before anything durable carries them, and a file so large plan generation truncates it"
+tags:
+  - progress
+  - hygiene
+  - typescript
+stack:
+  - typescript
 ---
 
 # progress-hygiene — keep progress.txt small and true

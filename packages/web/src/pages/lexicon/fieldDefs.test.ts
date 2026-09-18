@@ -1,6 +1,7 @@
 import type { TermEntryMemberDefs } from './fieldDefs';
 import type { EditableTermMembers } from './schema';
 import type {
+  EnumOption,
   FieldDef,
   FieldType,
   LeafFieldDef,
@@ -44,15 +45,17 @@ const MEMBERS: readonly (keyof EditableTermMembers)[] = [
  * compiler demands here (TS2741), so a member cannot arrive with
  * these cases still green.
  *
- * `polarity` at `string` is the degraded answer the module's header
- * argues for. Written out rather than derived, so the day v1 grows
- * an enumeration this row is what fails.
+ * `polarity` at `enum` is the member whose answer moved — see the
+ * module's header on why it is a select and no longer a box.
+ * Written out rather than derived, so a member quietly falling back
+ * to a text box is this row failing rather than a form nobody looks
+ * at.
  */
 const EXPECTED_TYPES: Readonly<Record<keyof EditableTermMembers, FieldType>>
   = {
     pattern: 'string',
     weight: 'number',
-    polarity: 'string',
+    polarity: 'enum',
     notes: 'string',
   };
 
@@ -148,6 +151,27 @@ function fieldFor(member: keyof EditableTermMembers): FieldDef {
   }
 
   return found;
+}
+
+/**
+ * What the polarity member's select offers.
+ *
+ * A narrowing rather than a case: `options` sits on the one leaf
+ * def carrying it, so a member drawn as anything else is a throw
+ * naming what it was drawn as rather than a read off `undefined`.
+ *
+ * @returns Its options, in the order the def declares them.
+ * @throws If the member is not drawn as a select, which the type
+ * case below reports in full.
+ */
+function polarityOptions(): readonly EnumOption[] {
+  const def = fieldFor('polarity');
+
+  if (def.type !== 'enum') {
+    throw new Error(`Polarity is drawn as ${def.type}, not a select.`);
+  }
+
+  return def.options;
 }
 
 /**
@@ -278,22 +302,29 @@ describe('how the def list crosses the editable members', () => {
   });
 });
 
-describe('what the polarity field says in place of a control', () => {
-  it('names every spelling the save path accepts', () => {
-    const { description } = fieldFor('polarity');
+describe('what the polarity field offers', () => {
+  it('offers exactly the facet spellings, in facet order', () => {
+    // The whole list rather than a membership check, because the
+    // ORDER is load-bearing at its head: the provider's own
+    // `freshEnumValue` opens an absent member at `options[0]`, so a
+    // reordered facet table changes what a fresh entry carries.
+    const offered = polarityOptions();
 
-    POLARITY_FACETS.forEach((facet) => {
-      expect(description).toContain(facet.polarity);
-    });
+    expect(offered.map((option) => option.value))
+      .toEqual(POLARITY_FACETS.map((facet) => facet.polarity));
+    expect(offered.map((option) => option.label))
+      .toEqual(POLARITY_FACETS.map((facet) => facet.label));
 
+    // A facet table that had quietly emptied would satisfy both.
     expect(POLARITY_FACETS.length).toBeGreaterThan(0);
   });
 
-  it('draws it as free text, v1 carrying no enumeration', () => {
-    // The degradation stated as a case: the day this reads anything
-    // else, the header's argument about the save path owning the
-    // refusal has stopped being the design.
-    expect(fieldFor('polarity').type).toBe('string');
+  it('draws it as an enum, the contract now carrying one', () => {
+    // The move stated as a case: the day this reads `string` again
+    // the save path is back to being the only thing that says which
+    // spellings are real, which is the degradation the header
+    // records as closed.
+    expect(fieldFor('polarity').type).toBe('enum');
   });
 
   it('leaves the other three members their own descriptions', () => {

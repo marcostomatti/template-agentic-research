@@ -35,13 +35,14 @@ import {
 } from './values';
 
 /**
- * The six types v1 renders, as a typed literal.
+ * The seven types this app renders, as a typed literal.
  *
  * The roster the fixture below is held against, so "a def list
- * holding all six types" is a measurement rather than a count of the
- * defs somebody happened to write. Annotated `readonly FieldType[]`,
- * which is the REMOVAL direction: a type taken out of the union
- * reddens `check-types` at the spelling here that outlived it.
+ * holding all seven types" is a measurement rather than a count of
+ * the defs somebody happened to write. Annotated
+ * `readonly FieldType[]`, which is the REMOVAL direction: a type
+ * taken out of the union reddens `check-types` at the spelling here
+ * that outlived it.
  *
  * Spelled out rather than assembled from `LEAF_FIELD_TYPES` and a
  * container roster — a roster checked against its own complement
@@ -53,12 +54,13 @@ const FIELD_TYPES: readonly FieldType[] = [
   'boolean',
   'number',
   'datetime',
+  'enum',
   'list',
   'object',
 ];
 
 /**
- * One term: an object whose four members are the four leaf types.
+ * One term: an object whose five members are the five leaf types.
  *
  * Modelled on the Lexicon payload the swap hands over, and widened
  * by the two members that payload has no use for — `enabled` and
@@ -74,6 +76,15 @@ const TERM: ObjectFieldDef = {
     { key: 'weight', label: 'Weight', type: 'number' },
     { key: 'enabled', label: 'Enabled', type: 'boolean' },
     { key: 'reviewedAt', label: 'Reviewed', type: 'datetime' },
+    {
+      key: 'polarity',
+      label: 'Polarity',
+      type: 'enum',
+      options: [
+        { value: 'positive', label: 'Positive' },
+        { value: 'negative', label: 'Negative' },
+      ],
+    },
   ],
 };
 
@@ -129,18 +140,21 @@ function terms(): unknown {
       weight: 2,
       enabled: true,
       reviewedAt: '2026-01-01T00:00:00Z',
+      polarity: 'positive',
     },
     {
       pattern: 'storm',
       weight: 5,
       enabled: false,
       reviewedAt: null,
+      polarity: 'negative',
     },
     {
       pattern: 'hail',
       weight: 1,
       enabled: true,
       reviewedAt: '2026-03-04T05:06:07Z',
+      polarity: 'positive',
     },
   ];
 }
@@ -229,14 +243,14 @@ function requireNode(tree: FormNode, path: NodePath): FormNode {
 }
 
 describe('the def list the two columns render', () => {
-  it('holds every one of the six field types', () => {
+  it('holds every one of the seven field types', () => {
     const defs = everyDef(TERMS);
     const found = [...new Set(defs.map((def) => def.type))].sort();
 
     expect(found).toEqual([...FIELD_TYPES].sort());
 
     // One def per type, which is what says the set above came from
-    // six distinct defs rather than from a fixture repeating one.
+    // seven distinct defs rather than from a fixture repeating one.
     expect(defs).toHaveLength(FIELD_TYPES.length);
   });
 
@@ -251,7 +265,7 @@ describe('the def list the two columns render', () => {
     expect(new Set(drilled)).toEqual(new Set(['drill-in']));
     expect(boxes.map(kindOf)).not.toContain('drill-in');
 
-    // And the four leaves draw four DIFFERENT boxes, so the split
+    // And the five leaves draw five DIFFERENT controls, so the split
     // above is the container line and not one kind for everything.
     expect(new Set(boxes.map(kindOf)).size).toBe(boxes.length);
   });

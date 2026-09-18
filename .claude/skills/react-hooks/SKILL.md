@@ -1,17 +1,26 @@
 ---
 name: react-hooks
-description: Use when setState (setForm/setX) is called inside useEffect — resetting modal/drawer form state on an `open` prop, or syncing/filtering one piece of state from another — or when the IDE/ESLint flags "Calling setState synchronously within an effect can trigger cascading renders", react-hooks/exhaustive-deps, or stale state when reopening a modal for a different item.
+description: "Use when an effect calls setState or writes upstream — reset-on-open, derived state, a write-once seed that loops forever, or a cascading-renders or exhaustive-deps warning."
+prevents: stale per-session state, cascading re-renders from setState called inside an effect, and an infinite render loop from a mount-time write-back whose write is refused
+signal: loud
+when_to_use: "Recognize these shapes:. Prevents: stale per-session state and cascading re-renders from setState called inside an effect, and a mount-time write-back that retries forever when the write is refused"
+tags:
+  - react
+  - hooks
+  - typescript
+stack:
+  - typescript
 ---
 
-> Scope: file paths in this document are relative to `packages/ui/` (the `@ar/ui` package), except `.claude/`, `.plans/`, and `.specs/`, which live at the umbrella repo root.
+> Scope: file paths in this document are relative to `packages/ui/` (the `@ar/ui` package), except `.claude/`, `.plans/`, `.specs/` and any path beginning `packages/`, which are relative to the umbrella repo root.
 
-# Removing setState from useEffect
+# Removing setState — and refused write-backs — from useEffect
 
 ## Overview
 
 **An effect that calls `setState` to derive or reset state is almost always the wrong tool.** Effects exist to synchronize React with *external* systems (DOM, timers, subscriptions, network). State that can be computed from props/other state belongs in render; state that resets per "session" belongs to the mount lifecycle.
 
-This repo repeats the same anti-patterns across modals and overlays: reset-on-open (Fix A), derived/synced state (Fix B), and genuine effects carrying a synchronous reset (Fix C). Reference: https://react.dev/learn/you-might-not-need-an-effect
+This repo repeats the same anti-patterns across modals and overlays: reset-on-open (Fix A), derived/synced state (Fix B), and genuine effects carrying a synchronous reset (Fix C). A fourth shape writes no local state at all and so trips no lint rule — a mount-time seed sent *upstream* through a parent's callback, which loops forever when the write is refused (Fix D). Reference: https://react.dev/learn/you-might-not-need-an-effect
 
 ## When to use
 
@@ -20,6 +29,7 @@ Recognize these shapes:
 - **Reset-on-open:** `useEffect(() => { if (open) { setForm(existing ?? DEFAULT()); setTab(0); } }, [open, existing])`
 - **Derived/synced state:** `useEffect(() => { setX(deriveFrom(y)); }, [y])` (filtering, mapping, recomputing)
 - **Genuine effect + a synchronous reset:** a real `setInterval`/DOM-measure/subscription effect that *also* does `if (!open) { setX(reset); return }` or seeds an initial value synchronously — only the reset is flagged (Fix C)
+- **Write-once seed that writes UPSTREAM:** `useEffect(() => { if (value === undefined) onValueChange(path, fresh()); }, [..., value, onValueChange])` — the effect does not `setState` at all, it calls a callback the *parent* owns (Fix D)
 
 Or these signals:
 - IDE/ESLint: *"Calling setState synchronously within an effect can trigger cascading renders"*
@@ -128,6 +138,46 @@ useEffect(() => {
 
 `computePosition()` calls `setCoords` too, but indirectly through a helper — the lint rule only flags *direct* synchronous `setState` in the effect body, so it stays quiet. Stale coords while closed are never read (the portal is gated on `open`).
 
+## Fix D — a write-once seed that writes UPSTREAM
+
+The effect calls no `setState`, so none of the shapes above match it and no lint rule fires. It calls a callback the **parent** owns, intending to write a default exactly once:
+
+```tsx
+// ❌ Before — loops forever the moment the write is refused
+useEffect(() => {
+  if (value === undefined) onValueChange(path, freshEnumValue(def));
+}, [def, path, value, onValueChange]);
+```
+
+This is correct only under two assumptions it never states, and both can be false at once:
+
+1. **The write always lands**, so `value` stops being `undefined` and the effect stops re-qualifying. A write that is validated *upstream* — against a whole payload rather than the touched member — is refused whenever anything **else** in that payload is invalid. The guard's own condition then never changes.
+2. **`onValueChange` is stable.** A caller handing down an inline arrow (`onValueChange={(p, v) => …}`) recreates it every render, so the dep array changes on every render of the parent — for reasons having nothing to do with this field.
+
+Together they are an infinite loop: render → effect → refused write → parent re-renders → new callback identity → effect → … The artifact is React's `Maximum update depth exceeded`, and it reaches no test that does not render the component with a value of `undefined` *inside an otherwise-invalid payload*.
+
+**The fix is a ref scoped to the mount**, because "once" is a property of *this mount* and not of any value in the dep array:
+
+```tsx
+// ✅ After — attempted once per mount, whatever the write answers
+const attempted = useRef(false);
+
+useEffect(() => {
+  if (value === undefined && !attempted.current) {
+    attempted.current = true;
+    onValueChange(path, freshEnumValue(def));
+  }
+}, [def, path, value, onValueChange]);
+```
+
+Memoizing the parent's callback (`useCallback`) narrows the loop but does not close it: assumption 1 stands on its own, and the next unrelated state change in the parent re-fires the effect anyway. Fix the ref; memoize as well if the callback has other consumers.
+
+`packages/web/src/dynamic-form/ChoiceField.tsx` is the worked example, with the reasoning in a comment above the ref.
+
+### Recognizing it before it bites
+
+Ask of any effect that writes a default: **what happens if this write is refused?** If the answer is "the guard re-qualifies next render", the effect needs a mount-scoped flag. The two aggravating ingredients — validation over a wider unit than the write, and a non-memoized callback prop — are each individually harmless and are invisible from inside the component.
+
 ## Quick reference
 
 | Shape | Fix |
@@ -137,6 +187,7 @@ useEffect(() => {
 | `setX` in effect on `[a]` derived purely from `a` | Derive during render |
 | DOM attr, `setInterval`, subscription | **Keep** — genuine external sync |
 | Genuine effect that *also* resets state synchronously when closed | Keep the effect; lift the seed into `useState` + conditional-mount if a parent owns the flag (C1), or delete the redundant reset if the component owns it (C2) — **Fix C** |
+| Effect seeds a value by calling a callback the PARENT owns, and the write can be refused | Gate on a `useRef` flag scoped to the mount, not on the value the write was supposed to change — **Fix D** |
 
 Each Fix A also needs its parent to mount conditionally (`{open && <…/>}`).
 

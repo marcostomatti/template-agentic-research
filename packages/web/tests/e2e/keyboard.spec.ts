@@ -19,6 +19,7 @@ import {
   fetchTerms,
 } from '../../src/data/api';
 import { DEFAULT_DOMAIN_SLUG } from '../../src/data/domains';
+import { controlKindFor } from '../../src/dynamic-form/registry';
 import { buildFormTree, treeNavNodes } from '../../src/dynamic-form/tree';
 import { POLARITY_FACETS } from '../../src/pages/lexicon/cards';
 import { fieldDefsForTermPayload } from '../../src/pages/lexicon/fieldDefs';
@@ -1349,6 +1350,39 @@ function entryFields(defs: ListFieldDef): readonly FieldDef[] {
 }
 
 /**
+ * Which role one member's control is addressed through.
+ *
+ * `dynamic-form/registry.ts` maps a type to a control KIND, and the
+ * kinds this payload draws are two roles: a box for the text and
+ * numeric kinds, and the menu TRIGGER `@ar/ui`'s `Select` renders
+ * for the `choice` kind `pages/lexicon/fieldDefs.ts` draws
+ * `polarity` as. Both are in the tab order, which is the whole of
+ * what this file asks of them.
+ *
+ * A kind this payload does not carry throws rather than being
+ * guessed at — a `toggle` is a `switch` and no member here is one,
+ * so a def that grew one would report that instead of quietly
+ * being looked for under the wrong role.
+ *
+ * @param def - One member's def.
+ * @returns The role its control carries.
+ * @throws If the kind has no reading here.
+ */
+function controlRole(def: FieldDef): 'button' | 'textbox' {
+  const kind = controlKindFor(def.type);
+
+  if (kind === 'choice') {
+    return 'button';
+  }
+
+  if (kind === 'text' || kind === 'numeric') {
+    return 'textbox';
+  }
+
+  throw new Error(`No keyboard reading for the ${kind} kind.`);
+}
+
+/**
  * What one member's box is called, from the member it writes.
  *
  * The crossing `pages/lexicon/fieldDefs.ts` says only a runtime
@@ -1675,7 +1709,7 @@ test.describe('the fields presentation', () => {
     await expect(steps).toHaveText([root]);
   });
 
-  test('offers every box of the mounted form in draw order', async ({
+  test('offers every control of the mounted form in draw order', async ({
     page,
   }) => {
     // Arrange
@@ -1684,9 +1718,16 @@ test.describe('the fields presentation', () => {
     const form = await selectEntry(page, dialog, subject.labels, 0);
     const members = entryFields(subject.defs);
 
-    // One box per member and no more, so the walk below is over the
-    // whole form rather than over a prefix of it.
-    await expect(form.getByRole('textbox')).toHaveCount(members.length);
+    // One control per member and no more, so the walk below is over
+    // the whole form rather than over a prefix of it. Counted per
+    // ROLE since `polarity` became an `enum`: the boxes, and the
+    // select's trigger beside them.
+    await expect(form.getByRole('textbox')).toHaveCount(
+      members.filter((def) => controlRole(def) === 'textbox').length,
+    );
+    await expect(form.getByRole('button')).toHaveCount(
+      members.filter((def) => controlRole(def) === 'button').length,
+    );
 
     // Act — Tab out of the tree and past the trail, whose length is
     // read off the trail itself rather than counted here.
@@ -1696,13 +1737,14 @@ test.describe('the fields presentation', () => {
 
     await walk(page, trail);
 
-    // Assert — one press per member, each landing on the box that
-    // writes it, in the order the defs list them. Derived from the
-    // defs, so a member reordered there moves this with it.
+    // Assert — one press per member, each landing on the control
+    // that writes it, in the order the defs list them. Derived from
+    // the defs, so a member reordered there moves this with it, and
+    // a member that changes control kind moves the role with it.
     for (const def of members) {
       await page.keyboard.press('Tab');
       await expect(
-        form.getByRole('textbox', { name: def.label, exact: true }),
+        form.getByRole(controlRole(def), { name: def.label, exact: true }),
       ).toBeFocused();
     }
   });
