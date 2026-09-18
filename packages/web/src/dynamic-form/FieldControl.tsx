@@ -12,6 +12,28 @@
  * live one module back, in a `.ts`, for the reason the next section
  * gives.
  *
+ * ## The leaf half lives in `./LeafControl.tsx`
+ *
+ * Only the CONTAINER branch is written out below. The leaf half is
+ * three text kinds that differ by a reader and a keyboard hint, a
+ * toggle, the spelling that turns a value back into box text, and
+ * the switch over the registry's kind that picks between them —
+ * enough that keeping it here left one file nobody could read
+ * whole, so it sits in `./LeafControl.tsx` with the sections that
+ * document it: why the two envelopes split exactly where
+ * labelability does, why typed text is held BESIDE the value and
+ * never in it, why the caller's `key` is load-bearing because of
+ * that hold, and the static-render readings taken over both files.
+ * The split moved code and nothing else: {@link LeafValue} and
+ * {@link FieldControlProps} are still declared HERE, so no importer
+ * changed, and the narrowing the guard below performs crosses the
+ * boundary with the def rather than being re-read there.
+ *
+ * The labelling ruling covers both halves and is written down
+ * there: `FormField`'s `htmlFor` reaches a labelable control and
+ * nothing else, so the drill-in row below carries `aria-labelledby`
+ * for the same reason the toggle does.
+ *
  * ## No test in this package reaches this file
  *
  * That is a fact about the runner rather than an omission. `@ar/web`
@@ -36,16 +58,16 @@
  * reaches what the other cannot.
  *
  * Its type bindings are proven by `check-types`, which is the whole
- * of the mutation grid this plan records for the file. Measured, from
- * inside `packages/web`, every one at EXIT 2: a container def
- * reaching the leaf branch is TS2322 at the JSX prop site (five of
- * them, one per case plus the caller); a leaf def reaching the
- * container branch is TS2322; a member dropped from
- * {@link LeafValue} is TS2322 at every reader that still answers it;
- * a reader answering an object is TS2322; and
- * {@link FieldControlProps.onDrillIn} handed the def's key instead of
- * the path is TS2345. TS2322 rather than the TS2345 an
- * exhaustive switch answers with — these are assignability faults at
+ * of the mutation grid this plan records for the file. Measured,
+ * from inside `packages/web`, every one at EXIT 2. The two legs
+ * that land HERE after the split are a leaf def reaching the
+ * container branch, TS2322, and {@link FieldControlProps.onDrillIn}
+ * handed the def's key instead of the path, TS2345. A container def
+ * reaching the leaf branch is TS2322 at five JSX prop sites — one
+ * per case, which is `./LeafControl.tsx`'s, plus the caller below
+ * — and the two legs over {@link LeafValue} red wholly in that
+ * file, so its header lists them. TS2322 rather than the TS2345 an
+ * exhaustive switch answers with: these are assignability faults at
  * a prop, not a discriminant with no case.
  *
  * Its RENDERING is measurable with no runner at all, through the
@@ -55,7 +77,9 @@
  * `aria-labelledby` and not by a `<label for>` that would not reach
  * it, and that the container row's accessible name is the label
  * alone. Measured 40 of 40 such readings, with eleven mutation legs
- * driven against them to show they discriminate.
+ * driven against them to show they discriminate. A leaf def mounts
+ * `./LeafControl.tsx` from the branch below, so those readings
+ * cover both files.
  *
  * What NEITHER reaches is the keystroke: a static render fires no
  * `onChange`, so reporting a value WITHOUT reading it is a leg that
@@ -64,72 +88,6 @@
  * Playwright specs under `../../tests/e2e/` take over. They drive a
  * real browser over the assembled form and are the only thing that
  * can.
- *
- * ## Typed text is held BESIDE the value, never in it
- *
- * The one thing this file does hold state for, and the reason it is
- * a component rather than a function of props. A box shows what was
- * TYPED; the form reports what READ. Those are two different things
- * on every keystroke that is not yet a value, and collapsing them
- * loses one of them:
- *
- * - Derive the box from the value alone, and text that does not read
- *   as a value cannot be shown at all. A half-typed stamp, a lone
- *   minus sign, a `1e` on the way to `1e6` — each would be
- *   rewritten back to the last accepted value under the cursor.
- * - Report the text instead of the reading, and the draft takes
- *   values the schema will refuse. `Number('')` is `0`, which is the
- *   case that makes this a rule rather than a preference.
- *
- * So the text is held here and the reading is reported. Text that
- * refuses stays VISIBLE, states the rule it breaks, and reaches
- * {@link FieldControlProps.onValueChange} not at all — the draft
- * keeps the last value that read.
- *
- * `../pages/lexicon/LexiconEditorModal.tsx` reaches the same rule
- * for a term's weight and `../pages/sources/SourceEditorModal.tsx`
- * for a feed's endpoint; this is that shape generalised over the
- * def, not a third mechanism. The consequence both of them state is
- * worth restating: a save can be OFFERED while a box shows a
- * refusal, because the refusal means the last keystroke did not
- * reach the draft and the save is of what did.
- *
- * The hold is `undefined` until something is typed, which is what
- * lets the box follow a value edited elsewhere — the JSON
- * presentation, a reorder — up until the moment an operator takes
- * the box over. From then on it is theirs for as long as the control
- * is mounted.
- *
- * ### Which makes the caller's `key` load-bearing
- *
- * The hold's lifetime is this component's mount, and that is the
- * correct lifetime only if a different member is a different mount.
- * `./NodeForm.tsx` therefore keys each control by `pathKey(path)`:
- * without it React reuses the control at a position when the
- * selected node changes, and one member's half-typed text would
- * appear in another's box. Nothing in this file can enforce that,
- * which is why it is written down.
- *
- * ## Two envelopes, split exactly where labelability does
- *
- * `FormField` owns labelling through `htmlFor`, which reaches a
- * labelable control and nothing else. Three of the four leaf kinds
- * are an `<input>` and take it. The fourth is `Switch`, which
- * renders a `button`, and `../pages/sources/SourceEditorModal.tsx`
- * already ruled that `<label for>` does not reach it — so the
- * toggle and the drill-in row carry `aria-labelledby` pointing at a
- * labelling element instead, which is that file's own `ControlRow`
- * shape restated. The envelope is not a style choice here: it
- * follows from what the control IS.
- *
- * A def's `description` is the hint under the box. `FormField`
- * REPLACES that hint with the error while there is one, which is its
- * behaviour and is the right trade — while a box states a rule, the
- * rule matters more than the clarification. The refusal carries the
- * id INSIDE the error slot rather than on the span `FormField` wraps
- * it in, which is what leaves it addressable by `aria-describedby`;
- * the hint has no id and is wired to nothing, exactly as the two
- * editors above leave theirs.
  *
  * ## A container row reports a PATH, and reads no value at all
  *
@@ -160,55 +118,21 @@
  * `fields` with no cast and what makes handing it a leaf def a
  * compile error rather than a runtime one.
  *
- * The kind is then switched over inside the leaf branch, where its
- * `drill-in` case is a real guard and not a formality: it is what a
- * registry edit mapping `string` onto the container kind reaches,
- * and drawing that member as a box while reporting nothing is the
- * quietest way this form could lose a field. The opposite
- * disagreement — a container mapped onto a leaf kind — is guarded
- * in `./registry.test.ts`, which pins both container rows to one
- * kind distinct from every leaf kind. Guarding it here as well would
- * be two readings of one property, the shape where either can be
- * deleted with everything still green.
- *
- * ## Spelling a value as box text is the readers read backwards
- *
- * {@link boxText} is the only rule-shaped thing left in this file,
- * and it is one line per JSON scalar: a string is itself, a number
- * is its `String`, and anything else — `null`, an absent member, a
- * value of the wrong shape — is an EMPTY box. That last clause is
- * not a fallback. It is the readers' own convention read in the
- * other direction: an empty box reads as `null`, so `null` spells as
- * an empty box, and the two directions round-trip.
- *
- * A value of the WRONG shape at a leaf member therefore shows as
- * empty rather than as itself, and the save path's schema is what
- * names it — the same division of labour `./readers.ts` states. It
- * is local rather than promoted to a `.ts` because it is the inverse
- * of a module that already exists and has no second caller; a
- * reader that needs it elsewhere should move it to `./readers.ts`
- * beside the readers it mirrors, not copy it.
+ * The kind is then switched over inside the leaf branch, which is
+ * `./LeafControl.tsx`'s — including the `drill-in` case that
+ * guards a registry edit mapping a leaf type onto the container
+ * kind, and the `never` default a fifth leaf kind reddens. Both are
+ * documented there, beside the switch that performs them.
  */
 
-import type {
-  ContainerFieldDef,
-  FieldDef,
-  LeafFieldDef,
-} from './fieldDef';
+import type { ContainerFieldDef, FieldDef } from './fieldDef';
 import type { NodePath } from './nodePath';
-import type { FieldReading } from './readers';
 
-import { FormField, Switch, TextInput, Touchable } from '@ar/ui';
-import { useId, useState } from 'react';
+import { Touchable } from '@ar/ui';
+import { useId } from 'react';
 
 import { isContainerField } from './fieldDef';
-import {
-  readBooleanField,
-  readDatetimeField,
-  readNumberField,
-  readStringField,
-} from './readers';
-import { controlKindFor } from './registry';
+import { LeafControl } from './LeafControl';
 
 /**
  * What a leaf control reports, which is every scalar a leaf reads as.
@@ -255,7 +179,8 @@ export interface FieldControlProps {
    * `unknown` because a def describes a shape the value is only
    * SUPPOSED to have: it arrives from a payload, and a member of the
    * wrong shape is a state this form has to survive rather than
-   * assume away. {@link boxText} is where that is absorbed.
+   * assume away. `./LeafControl.tsx`'s `boxText` is where that is
+   * absorbed.
    *
    * Unread by the container branch — see the header.
    */
@@ -276,231 +201,6 @@ export interface FieldControlProps {
    */
   readonly onDrillIn: (path: NodePath) => void;
 }
-
-/**
- * The branch a total switch over the control kinds has nothing left
- * for.
- *
- * The parameter is `never` while the four leaf kinds are all a leaf
- * def can resolve to, so a fifth reddens the CALL rather than
- * reaching the throw. It still throws for the reason every guard in
- * this directory does: the compiler's guarantee stops at this app's
- * boundary, and a def out of a payload can carry a type whose row
- * resolves to a kind no case claims.
- *
- * @param kind - The kind no case above claimed.
- * @returns Never; the call does not return.
- * @throws Always, naming the kind that reached it.
- */
-function unreachableLeafKind(kind: never): never {
-  throw new Error(`No leaf control for kind: ${String(kind)}`);
-}
-
-/**
- * Spell a value as the text its box opens with.
- *
- * Total over every value a payload can hold, and the readers'
- * emptiness convention read backwards — see the header for why the
- * `''` is a round trip rather than a fallback.
- *
- * @param value - The value at this member's path.
- * @returns Its spelling, or `''` for a value no box can show.
- */
-function boxText(value: unknown): string {
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (typeof value === 'number') {
-    return String(value);
-  }
-
-  return '';
-}
-
-/** What one text-shaped leaf box is given. */
-interface TextFieldProps {
-  /** The member, narrowed to a leaf so no container reaches here. */
-  readonly def: LeafFieldDef;
-  /** Where it sits, reported back with every accepted value. */
-  readonly path: NodePath;
-  /** The value at that path, spelled by {@link boxText}. */
-  readonly value: unknown;
-  /**
-   * The reader this kind's text crosses to become a value.
-   *
-   * A parameter rather than a switch inside this component: which
-   * reader a kind uses is `./registry.ts`'s distinction between
-   * `text`, `numeric` and `timestamp`, and reading it twice is what
-   * that table exists to avoid.
-   */
-  readonly read: (text: string) => FieldReading<LeafValue>;
-  /**
-   * The keyboard a touch device should offer, where one helps.
-   *
-   * Set for `numeric` alone. A stamp carries letters, so a decimal
-   * keypad would be the wrong one, and prose has no hint to give.
-   */
-  readonly inputMode?: 'decimal';
-  /** Report a value that read. */
-  readonly onValueChange: (path: NodePath, next: LeafValue) => void;
-}
-
-/**
- * A leaf box: what was typed, what it read as, and what it broke.
- *
- * One component for all three text kinds, which differ by their
- * reader and by a keyboard hint and in nothing else. The box is left
- * at `TextInput`'s default `type="text"` for every one of them,
- * `numeric` included: a native number input filters keystrokes and
- * forces a spinner, and the source doc's own table asks a `number`
- * for direct manual text entry. Every guard over that text is
- * `readNumberField`'s, which is where it can be tested.
- *
- * @param props - The def, its path, its value, the reader, the
- * keyboard hint, and where an accepted value goes.
- * @returns The labelled box, and the rule it breaks while it does.
- */
-const TextField = ({
-  def,
-  path,
-  value,
-  read,
-  inputMode,
-  onValueChange,
-}: TextFieldProps) => {
-  const fieldId = useId();
-  const faultId = `${fieldId}-fault`;
-
-  // `undefined` until this box is typed into, which is what lets it
-  // follow a value edited elsewhere until then. See the header.
-  const [typed, setTyped] = useState<string | undefined>(undefined);
-
-  const text = typed ?? boxText(value);
-  const reading = read(text);
-  const fault = reading.ok
-    ? undefined
-    : reading.sentence;
-
-  return (
-    <FormField
-      label={def.label}
-      htmlFor={fieldId}
-      hint={def.description}
-      // The id rides INSIDE the slot rather than on the span
-      // FormField wraps it in, which is what leaves the sentence
-      // addressable by `aria-describedby` below.
-      error={fault === undefined
-        ? undefined
-        : <span id={faultId}>{fault}</span>}
-    >
-      <TextInput
-        id={fieldId}
-        value={text}
-        inputMode={inputMode}
-        // The library's `invalid` variant paints the border and sets
-        // no ARIA state, so the state is set here.
-        invalid={fault !== undefined}
-        aria-invalid={fault !== undefined}
-        aria-describedby={fault === undefined
-          ? undefined
-          : faultId}
-        onChange={(next) => {
-          // Held first and unconditionally: what was typed stays
-          // visible whether or not it reads.
-          setTyped(next);
-
-          const accepted = read(next);
-
-          if (accepted.ok) {
-            onValueChange(path, accepted.value);
-          }
-        }}
-      />
-    </FormField>
-  );
-};
-
-/** What one toggle row is given. */
-interface ToggleFieldProps {
-  /** The member, narrowed to a leaf so no container reaches here. */
-  readonly def: LeafFieldDef;
-  /** Where it sits, reported back with the next state. */
-  readonly path: NodePath;
-  /** The value at that path; anything but `true` draws it off. */
-  readonly value: unknown;
-  /** Report the next state. */
-  readonly onValueChange: (path: NodePath, next: LeafValue) => void;
-}
-
-/**
- * A switch, and the label it is named by.
- *
- * No refusal slot and no typed text, because there is neither to
- * have: `readBooleanField` is total and a switch has no text to be
- * between two states of. It still crosses that reader, so the claim
- * that every leaf value reaches the draft through one stays true.
- *
- * A switch also has no cleared position, which is the one place the
- * four readers disagree — a `boolean | null` member cannot be
- * cleared here, and the save path's schema is what says whether that
- * matters. A value that is not a boolean draws OFF rather than
- * refusing, for the same reason {@link boxText} shows an empty box:
- * naming a member of the wrong shape is the schema's job.
- *
- * @param props - The def, its path, its value, and where the next
- * state goes.
- * @returns The named row and its switch.
- */
-const ToggleField = ({
-  def,
-  path,
-  value,
-  onValueChange,
-}: ToggleFieldProps) => {
-  const labelId = useId();
-  const hintId = `${labelId}-hint`;
-
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-      <div className="min-w-[10rem] flex-1">
-        {/* A div rather than a `<label>`: `Switch` renders a button
-            and `<label for>` does not reach it, which is the ruling
-            `../pages/sources/SourceEditorModal.tsx` already made. */}
-        <div
-          id={labelId}
-          className="text-[13px] font-semibold text-fg1"
-        >
-          {def.label}
-        </div>
-
-        {def.description !== undefined && (
-          // `tokens.css` puts a direct rule on `p`, so the size, the
-          // colour and the margin are all restated here rather than
-          // inherited from the column.
-          <p id={hintId} className="m-0 mt-0.5 text-xs text-fg3">
-            {def.description}
-          </p>
-        )}
-      </div>
-
-      <Switch
-        checked={value === true}
-        aria-labelledby={labelId}
-        aria-describedby={def.description === undefined
-          ? undefined
-          : hintId}
-        onChange={(next) => {
-          const accepted = readBooleanField(next);
-
-          if (accepted.ok) {
-            onValueChange(path, accepted.value);
-          }
-        }}
-      />
-    </div>
-  );
-};
 
 /**
  * The chevron's own chrome.
@@ -621,95 +321,6 @@ const DrillInRow = ({ def, path, onDrillIn }: DrillInRowProps) => {
       )}
     </div>
   );
-};
-
-/** What the leaf half of {@link FieldControl} is given. */
-interface LeafControlProps {
-  /** The member, narrowed to a leaf by the caller's own guard. */
-  readonly def: LeafFieldDef;
-  /** Where it sits, reported back with every accepted value. */
-  readonly path: NodePath;
-  /** The value at that path. */
-  readonly value: unknown;
-  /** Report a value that read. */
-  readonly onValueChange: (path: NodePath, next: LeafValue) => void;
-}
-
-/**
- * The registry's kind, switched to a component.
- *
- * The switch is over the KIND rather than over `def.type`, which is
- * the whole reason `./registry.ts` exists: three of these four kinds
- * are the same box, and which reader each takes is that table's
- * distinction to make once. The `drill-in` case is a real guard —
- * the header says which registry edit reaches it — and the default
- * branch's `never` is what makes a fifth leaf kind a compile error
- * here.
- *
- * @param props - The leaf def, its path, its value, and where an
- * accepted value goes.
- * @returns The control that kind draws as.
- * @throws If the kind is the container kind, or outside the union.
- */
-const LeafControl = ({
-  def,
-  path,
-  value,
-  onValueChange,
-}: LeafControlProps) => {
-  // A local const rather than `controlKindFor(def.type)` inline in
-  // the switch: narrowing works on the const, and the default
-  // branch is what carries the exhaustiveness.
-  const kind = controlKindFor(def.type);
-
-  switch (kind) {
-    case 'text':
-      return (
-        <TextField
-          def={def}
-          path={path}
-          value={value}
-          read={readStringField}
-          onValueChange={onValueChange}
-        />
-      );
-    case 'numeric':
-      return (
-        <TextField
-          def={def}
-          path={path}
-          value={value}
-          read={readNumberField}
-          inputMode="decimal"
-          onValueChange={onValueChange}
-        />
-      );
-    case 'timestamp':
-      return (
-        <TextField
-          def={def}
-          path={path}
-          value={value}
-          read={readDatetimeField}
-          onValueChange={onValueChange}
-        />
-      );
-    case 'toggle':
-      return (
-        <ToggleField
-          def={def}
-          path={path}
-          value={value}
-          onValueChange={onValueChange}
-        />
-      );
-    case 'drill-in':
-      throw new Error(
-        `Leaf field '${def.key}' resolved to the container control`,
-      );
-    default:
-      return unreachableLeafKind(kind);
-  }
 };
 
 /**
