@@ -187,6 +187,42 @@
  * covered by NOTHING today — `./useFieldAction.tsx`'s header says
  * so at length rather than leaving it to be assumed.
  *
+ * ### The stage's static-render grid, four readings
+ *
+ * `./DynamicForm.tsx`'s header points here for "the stage's full
+ * grid" — this is it, each reading taken through the same offline
+ * probe `renderToStaticMarkup` idiom, over a root object def with
+ * one `term` leaf naming an action `normalise` and one actionless
+ * `note` leaf beside it:
+ *
+ * 1. A leaf whose def carries an action, drawn through a table that
+ *    answers it, prints exactly ONE `button` carrying
+ *    `aria-label="Normalise URL"` — the label alone, counted against
+ *    the markup's `<button` total (two, the other `./TreeNav`'s own
+ *    row) so the count is a positive reading and not an absence
+ *    misread as a pass.
+ * 2. The pending hold seeded `true` — the same mutation leg
+ *    `./useFieldAction.tsx`'s header measures and restores
+ *    byte-identical — prints that button with `disabled=""` and
+ *    `aria-busy="true"`; at rest it carries neither, `aria-busy`
+ *    read as the string `"false"`.
+ * 3. The actionless `note` leaf beside it prints no `button` of its
+ *    own: the markup's two `<button` tags are the tree row and the
+ *    `term` field's, and grepping either leaf's own row for
+ *    `aria-label="Normalise URL"` finds it only in `term`'s.
+ * 4. A def naming an id the table does not hold — `term` naming
+ *    `normalise` against `{}` or against no `actions` prop at
+ *    all — throws at `./DynamicForm.tsx`'s render, before any
+ *    markup returns, with the message
+ *    `No action for field term: unknown id normalise`: the def's
+ *    `key` and the action's `id`, exactly as `./actions.ts`'s
+ *    `assertActions` spells it and decision 3 requires.
+ *
+ * Probe deleted after (`git status --short` clean on this
+ * directory), so none of the four is a case any gate re-runs; the
+ * plan's close-out notes carry the same grid dated against this
+ * task.
+ *
  * ## The kind is switched, and its `drill-in` case is a real guard
  *
  * The switch below is over the KIND rather than over `def.type`,
