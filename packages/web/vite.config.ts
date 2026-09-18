@@ -1,3 +1,4 @@
+import { devtoolsPlugin } from '@ar/dev-tools/vite';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
@@ -19,7 +20,14 @@ export default defineConfig(({ mode }) => {
     // under `/app`, so a deployed build sets `VITE_AR_BASE_PATH=/app/`; the
     // default `/` keeps the dev server and the fixture suites at the root.
     base: env.VITE_AR_BASE_PATH?.trim() || DEFAULT_BASE_PATH,
-    plugins: [react(), tailwindcss()],
+    // `devtoolsPlugin()` is registered unconditionally and still does
+    // nothing to a production build: the plugin declares `apply: 'serve'`,
+    // and Vite filters on that BEFORE it runs a hook, so under `vite build`
+    // its `config()` never runs, its three `__DEVTOOLS_*__` defines do not
+    // exist, and neither `/__devtools` endpoint is registered. That is why
+    // `src/dev/devtools.ts` reads all three defines behind `typeof` guards
+    // — see its header — and why no `mode` branch is needed here.
+    plugins: [react(), tailwindcss(), devtoolsPlugin()],
     server: {
       proxy: {
         // The target is loopback, never `localhost`: `localhost` resolves to
