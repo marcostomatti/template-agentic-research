@@ -1,7 +1,7 @@
 /**
  * @packageDocumentation
  * Which control draws which type: the source doc's type table,
- * written as a total map from the six field types onto the five
+ * written as a total map from the seven field types onto the six
  * control kinds this app draws them with.
  *
  * `./fieldDef.ts` says what a field IS and `./readers.ts` says how
@@ -20,13 +20,13 @@
  *
  * A kind is named for what the control IS, never for the `@ar/ui`
  * export that happens to draw it today. `TextInput` draws three of
- * these five, and a date picker built later would take `timestamp`
+ * these six, and a date picker built later would take `timestamp`
  * off it without one line here moving. Spelling a kind `switch`
  * would make this table a claim about another package's export
  * list, and that coupling is exactly what keeps a registry out of a
  * component library.
  *
- * ## Four leaf kinds, though three of them draw the same box
+ * ## Five leaf kinds, though three of them draw the same box
  *
  * `string`, `number` and `datetime` are all a `TextInput`, and they
  * are still three kinds, because a kind selects a READER as well as
@@ -36,6 +36,11 @@
  * `Number` will cheerfully convert. Collapsing them would leave
  * `./FieldControl.tsx` switching on `def.type` a second time to
  * pick the reader, which is the job this table exists to do once.
+ *
+ * `choice` is the fifth and the one whose box differs as well as
+ * its reader: `enum` is the only type whose def carries the
+ * positions a control offers, so it is a `Select` rather than a
+ * text box and `readEnumField` is the only reader taking a def.
  *
  * `number` also carries a requirement of its own that the box does
  * not: the source doc's table asks for direct manual text entry, so
@@ -55,7 +60,7 @@
  * ## A table rather than a switch
  *
  * `Readonly<Record<FieldType, FieldControlKind>>` is the addition
- * direction on its own: a seventh member of {@link FieldType} is a
+ * direction on its own: an eighth member of {@link FieldType} is a
  * key the compiler DEMANDS here, and the mutation note below
  * measures that rather than asserting it. A switch with a `never`
  * default would report the same fault, and carrying both would be
@@ -108,20 +113,24 @@
  *
  * The four compile-time legs are the totality claims above:
  *
- * - A seventh member added to {@link FieldType} reds THREE errors,
+ * - An eighth member added to {@link FieldType} reds THREE errors,
  *   one of them TS2741 here, naming `currency` as a property this
  *   table is missing. The other two are `./fieldDef.ts`'s own pair.
- *   That count is a snapshot rather than a property: it grows by
- *   one with every module that keys a table by {@link FieldType},
- *   and this table is what moved it from two to three.
+ *   Re-measured after `enum` joined the union, and the count did
+ *   not move — it is a snapshot of how many modules key a table
+ *   by {@link FieldType}, not of how many members the union holds,
+ *   and joining a type adds no such module. This table is what
+ *   moved it from two to three; the next module keying one moves
+ *   it to four.
  * - `datetime` REMOVED from {@link FieldType} reds TS2353 here, at
  *   the row that outlived it, and TS2322 at the type roster in
  *   `./registry.test.ts`.
  * - `timestamp` removed from {@link LeafControlKind} reds TS2322 at
  *   the `datetime` row here and TS2353 at that file's kind roster.
- * - A sixth kind ADDED reds ONE error, TS2741 at the kind roster
- *   and NOWHERE in this module — which is the whole reason that
- *   roster is a record rather than an array.
+ * - A FURTHER kind added to {@link LeafControlKind} reds ONE error,
+ *   TS2741 at the kind roster and NOWHERE in this module — which
+ *   is the whole reason that roster is a record rather than an
+ *   array.
  *
  * The five runtime legs red 10 of 10 cases between them, so no
  * case sits under nothing. That is read as a UNION over the case
@@ -145,10 +154,10 @@
  *   that reads `undefined` off the table, which is what that case
  *   is for.
  * - The `datetime` row's VALUE set to `undefined` reds six, and is
- *   the only leg reaching the case that reads all six types back
- *   defined. It leaves the KEY in place, so the case counting keys
- *   stays GREEN under it — which is what says those two cases
- *   are asking different questions rather than one twice.
+ *   the only leg reaching the case that reads every type in the
+ *   roster back defined. It leaves the KEY in place, so the case
+ *   counting keys stays GREEN under it — which is what says those
+ *   two cases are asking different questions rather than one twice.
  * - `object` drawn as a leaf box is the only leg reaching the case
  *   pinning both containers to one kind, and it reds the row-level
  *   case beside it.
@@ -157,17 +166,18 @@
 import type { FieldType } from './fieldDef';
 
 /**
- * The control kinds the four leaf types draw as.
+ * The control kinds the five leaf types draw as.
  *
  * One per leaf type rather than one per box, for the reason the
  * header gives: a kind picks the reader too, and three of these
- * four are the same box today.
+ * five are the same box today.
  */
 export type LeafControlKind =
   | 'text'
   | 'toggle'
   | 'numeric'
-  | 'timestamp';
+  | 'timestamp'
+  | 'choice';
 
 /**
  * The one kind both container types draw as.
@@ -182,7 +192,7 @@ export type ContainerControlKind = 'drill-in';
 export type FieldControlKind = LeafControlKind | ContainerControlKind;
 
 /**
- * The table's shape: total over the six types, and read-only.
+ * The table's shape: total over the seven types, and read-only.
  *
  * Named rather than written inline below, so the annotation
  * carrying the totality claim reads as one thing.
@@ -190,7 +200,7 @@ export type FieldControlKind = LeafControlKind | ContainerControlKind;
 type ControlKindTable = Readonly<Record<FieldType, FieldControlKind>>;
 
 /**
- * The registry: which control kind draws each of the six types.
+ * The registry: which control kind draws each of the seven types.
  *
  * The source doc's type table and nothing beyond it. Reach it
  * through {@link controlKindFor} wherever the type came from
@@ -202,6 +212,7 @@ export const CONTROL_KIND_BY_TYPE: ControlKindTable = {
   boolean: 'toggle',
   number: 'numeric',
   datetime: 'timestamp',
+  enum: 'choice',
   list: 'drill-in',
   object: 'drill-in',
 };

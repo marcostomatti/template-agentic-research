@@ -45,13 +45,17 @@
  * and the fields presentation is offered. That is a measurement of
  * this payload and not a property of the provider.
  *
- * ## Why `polarity` is free text in v1
+ * ## Why `polarity` is free text HERE, for now
  *
- * Because the six types carry no enumeration. `TermPolarity` has
- * three spellings and v1 has no type that says so — the text-enum
- * toggle list that would is one of the composite types the source
- * doc defers to v2, and inventing one here would be the validation
- * metadata `fieldDef.ts` rules out.
+ * It was "because the contract carries no enumeration", and that
+ * reason has expired: `.specs/q20b-0-dynamic-form-enum-and-actions.md`
+ * added `enum` to `fieldDef.ts` and `choice` to the registry, so the
+ * type this member wants now exists. What has not happened yet is
+ * this module's own move onto it, which is a change to what the
+ * lexicon editor DRAWS and lands with the e2e reading that covers
+ * it. So the paragraphs below still describe this file as it stands
+ * rather than as it will stand, and the degradation they name is a
+ * step behind rather than a hole in the contract.
  *
  * So the box is a text box, and the refusal is the SAVE PATH's.
  * `./schema.ts`'s `termPayloadSchema` reads its enum off

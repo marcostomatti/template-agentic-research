@@ -104,26 +104,28 @@ import { SINGLE_DOMAIN_BASE, withBase } from '../../src/routes/paths';
 // the keystroke, and the walk is the same breadcrumb the case above
 // it is about.
 //
-// ## All six types, and the two with no site in this payload
+// ## All seven types, and the three with no site in this payload
 //
-// `dynamic-form/registry.ts` is total over the six and its own
+// `dynamic-form/registry.ts` is total over the seven and its own
 // cases are what prove it. What only this file can add is the
 // accounting for THIS payload: the def list
-// `fieldDefsForTermPayload` answers uses four of the six, and the
+// `fieldDefsForTermPayload` answers uses four of the seven, and the
 // lexicon editor is the whole of what mounts the provider, so
-// `boolean` and `datetime` have no control anywhere in the app.
-// The split is DERIVED — the defs walked for the types they carry,
-// crossed against `CONTROL_KIND_BY_TYPE` — so a member that later
-// takes one of the two moves this file's accounting with it rather
-// than leaving a sentence here asserting the old count.
+// `boolean`, `datetime` and `enum` have no control anywhere in the
+// app. The split is DERIVED — the defs walked for the types they
+// carry, crossed against `CONTROL_KIND_BY_TYPE` — so a member that
+// later takes one of the three moves this file's accounting with it
+// rather than leaving a sentence here asserting the old count.
 //
-// Only ONE of the two absences is observable in the DOM, and saying
-// which is the difference between a reading and a coincidence.
-// `boolean` draws as a `Switch`, so a zero count of `role="switch"`
-// reports it. `datetime` draws as the same box `string` draws, so
-// nothing in the markup separates them; what stands in for it is
-// the textbox COUNT held against the leaf defs, which a stray box
-// of any kind would move.
+// Only ONE of the three absences is observable in the DOM, and
+// saying which is the difference between a reading and a
+// coincidence. `boolean` draws as a `Switch`, so a zero count of
+// `role="switch"` reports it. `datetime` draws as the same box
+// `string` draws and `enum` draws as a menu trigger, which is the
+// same `button` role half this shell is built from; nothing in the
+// markup separates either from what is already there. What stands
+// in for both is the textbox COUNT held against the leaf defs,
+// which a stray box of any kind would move.
 //
 // ## The number box is text on purpose
 //
@@ -297,13 +299,13 @@ const WEIGHT_STEP = 0.5;
 const LARGE_WEIGHT_TEXT = '987654321.5';
 
 /**
- * The six types v1 renders, as this file states them.
+ * The seven types this app renders, as this file states them.
  *
  * Annotated `readonly FieldType[]`, which is the REMOVAL direction:
  * a type dropped from the union reddens at the spelling here that
  * outlived it. The ADDITION direction is the length crossing in the
  * accounting case below, against `CONTROL_KIND_BY_TYPE`'s own keys
- * — a table total over the union by its annotation, so a seventh
+ * — a table total over the union by its annotation, so an eighth
  * type is a key it gains and a member this literal is short of.
  * Neither artifact reports the other's direction.
  */
@@ -312,6 +314,7 @@ const FIELD_TYPES: readonly FieldType[] = [
   'boolean',
   'number',
   'datetime',
+  'enum',
   'list',
   'object',
 ];
@@ -1166,7 +1169,7 @@ test.describe('the structure the fields presentation navigates', () => {
     ).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('accounts for all six types, drawing the four in use', async ({
+  test('accounts for all seven types, drawing the four in use', async ({
     page,
   }) => {
     // Arrange
@@ -1191,13 +1194,13 @@ test.describe('the structure the fields presentation navigates', () => {
     // The union's two directions, one artifact each. The literal
     // is short of a type dropped from the union; the table gains a
     // key for one added to it, so the lengths disagreeing is what
-    // reports a seventh type nobody accounted for here.
+    // reports an eighth type nobody accounted for here.
     expect(FIELD_TYPES).toHaveLength(
       Object.keys(CONTROL_KIND_BY_TYPE).length,
     );
 
     // The accounting is TOTAL and the two halves are disjoint, so
-    // every one of the six is either drawn below or named as
+    // every one of the seven is either drawn below or named as
     // having no site. A type used but outside the roster would
     // leave the sum right and the membership wrong.
     expect([...used].every((type) => FIELD_TYPES.includes(type)))
@@ -1207,7 +1210,7 @@ test.describe('the structure the fields presentation navigates', () => {
     // What makes the second half non-vacuous, and a measurement of
     // this payload rather than of the provider: `boolean` is the
     // one absence the markup can report. A def list that later
-    // draws all six should delete this guard and the reads under
+    // draws all seven should delete this guard and the reads under
     // it rather than leaving them passing over nothing.
     expect(unused.length).toBeGreaterThan(0);
     expect(unusedKinds).toContain('toggle');

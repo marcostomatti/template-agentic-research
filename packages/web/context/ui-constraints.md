@@ -45,6 +45,30 @@ They are here because every one of them is invisible to `lint`,
   value goes unmentioned. `WorkspaceSwitcher` resolves the same way. Any
   option list built from a read independent of the read holding the value
   must take that value as an argument and guarantee membership.
+- **`SelectProps` is a CLOSED prop list, so a select takes no id and
+  no ARIA but its name.** It declares `value`, `options`, `onChange`,
+  `size`, `width`, `ariaLabel` and `className`, and extends
+  `SelectTriggerVariants` rather than `HTMLAttributes` — nothing
+  passes through. Measured: a probe adding `id`, `aria-describedby`
+  and `aria-invalid` to one is EXIT 2 and TS2322, `Property 'id' does
+  not exist on type 'IntrinsicAttributes & SelectProps'` (tsc names
+  the first excess property only). So `FormField` around a `Select`
+  takes NO `htmlFor` — the trigger has no id for a `<label for>` to
+  reach and no `aria-labelledby` to offer instead — and the
+  accessible name comes off `ariaLabel` while the envelope's label
+  row carries the same words for the eye. The label is written twice
+  by necessity, not by preference. `src/dynamic-form/LeafControl.tsx`
+  draws the `choice` kind exactly that way.
+- **A refused value cannot be shown ON a `Select`, only beside it.**
+  Its trigger's `cva` offers `size` alone — no `invalid` variant to
+  paint a border — and the closed prop list above leaves no
+  `aria-invalid` to set and no `aria-describedby` to point at the
+  sentence. The established repair for `FormField`'s unaddressable
+  slot (an id INSIDE the `error` slot) therefore has no attribute to
+  point at here, and a select's refusal renders VISIBLE beside the
+  control and associated with it by nothing. Every gate is green over
+  that, so weigh it before putting a rule on a select rather than on
+  a box.
 - **`Field` computes `disabled` from its `state` VARIANT**, which
   suppresses React's controlled-input warning by a presentation choice
   rather than an intent. Pass `readOnly` alongside `state="disabled"`

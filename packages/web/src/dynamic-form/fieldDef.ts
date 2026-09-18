@@ -4,11 +4,12 @@
  * anything has decided how to draw it.
  *
  * `.specs/q17-dynamic-form-provider.md` is the authority for the six
- * types and for the members every def carries. This module is that
- * table written as types and nothing else — no control, no value, no
- * refusal. `./registry.ts` maps a type to a control and
- * `./readers.ts` reads what an operator typed; both are readings OF
- * this contract rather than parts of it.
+ * types v1 shipped with and for the members every def carries, and
+ * `.specs/q20b-0-dynamic-form-enum-and-actions.md` for the seventh,
+ * `enum`. This module is that table written as types and nothing
+ * else — no control, no value, no refusal. `./registry.ts` maps a
+ * type to a control and `./readers.ts` reads what an operator typed;
+ * both are readings OF this contract rather than parts of it.
  *
  * It is a `.ts` for the reason the whole core of `src/dynamic-form/`
  * is: the unit runner collects `.ts` files under `src` in a node
@@ -26,8 +27,8 @@
  * Discriminated, that literal is a `check-types` error where somebody
  * wrote it rather than an empty form on somebody else's screen.
  *
- * And it takes the exhaustiveness away from the compiler. A
- * seventh member of {@link FieldType} reddens every switch holding
+ * And it takes the exhaustiveness away from the compiler. An
+ * eighth member of {@link FieldType} reddens every switch holding
  * no case for it, and it is also a key `./registry.ts`'s table
  * DEMANDS — which is what turns growing the contract into a build
  * failure rather than a default branch quietly drawing the new type
@@ -50,12 +51,21 @@
  * {@link ObjectFieldDef.fields} are that table's existing requirement
  * written down, not a fifth and sixth member somebody wanted.
  *
- * They are also not the line that doc draws at v2, which is over
- * CONSTRAINTS: bounds, ranges, enumerations, and the composite types
- * built on them. Nothing here bounds a value, refuses one, or says
- * anything about what a value may BE — `fields` says what an object
- * HAS, never what any of it must satisfy. Validation stays where it
- * already is, at the save path's schema, whose refusals
+ * {@link EnumFieldDef.options} is the third member of that kind and
+ * the only one that does not come off the source doc at all: that
+ * doc defers enumerations to a v2 it draws over CONSTRAINTS —
+ * bounds, ranges, enumerations, and the composite types built on
+ * them — and `.specs/q20b-0-dynamic-form-enum-and-actions.md` takes
+ * the enumeration out of that list and nothing else with it. A
+ * select cannot be drawn without the positions it offers, which is
+ * the same completeness argument the two above make.
+ *
+ * What none of the three is, is a rule a value is CHECKED against.
+ * `fields` says what an object HAS and `options` says what a select
+ * OFFERS; the membership `./readers.ts`'s `readEnumField` applies is
+ * that control reading its own positions, and nothing here bounds a
+ * number, ranges a stamp or refuses a string. Validation stays where
+ * it already is, at the save path's schema, whose refusals
  * `../components/jsonDraft.ts` turns into sentences. A second rule
  * source here would give one question two answers free to drift.
  *
@@ -67,25 +77,25 @@
  * handed to an `@ar/ui` component whose own signature declares it
  * mutable.
  *
- * ## A def may be declared before it JOINS the union
+ * ## The leaf side is a union too, and for the same reason
  *
- * {@link EnumOption} and {@link EnumFieldDef} are declared below and
- * are members of neither {@link FieldType} nor {@link FieldDef}. That
- * is a staging step rather than an oversight. Joining a seventh type
- * reddens every table keyed by the union and every switch over it at
- * once, which is the count the mutation note below measures; the
- * reader for that type needs nothing but the def's own shape, since
- * `./readers.ts`'s `readEnumField` takes an {@link EnumFieldDef}
- * rather than a {@link FieldDef}. So the shape lands and is measured
- * first, and the join is then one change with every consequence of it
- * already in front of whoever makes it.
+ * Four of the five leaf types carry the base and nothing more, and
+ * `enum` carries {@link EnumFieldDef.options}. So
+ * {@link LeafFieldDef} is {@link PlainLeafFieldDef} beside
+ * {@link EnumFieldDef} rather than one interface over all five with
+ * an optional `options?`, which is the representability argument at
+ * the top of this header applied one level down: optional, an
+ * `{ type: 'enum' }` carrying no options is WRITEABLE, and a select
+ * with no positions is exactly the thing the tuple exists to rule
+ * out. `./fieldDef.test.ts` pins the empty literal as a type error.
  *
- * While it stands apart, nothing that walks a {@link FieldDef} can be
- * handed one: {@link isContainerField} does not take it, no control
- * draws it, and {@link LEAF_FIELD_TYPES} does not list it. The reader
- * is its only consumer, and that is the whole of its reach.
+ * {@link PlainLeafFieldDef.type} is `Exclude<LeafFieldType, 'enum'>`
+ * rather than the four spelled again, which is what keeps a sixth
+ * leaf type a ONE-line edit to {@link LeafFieldType}: it lands in
+ * that interface by subtraction, and the mutation note below is the
+ * reading of what it reddens everywhere else.
  *
- * ## Mutation note — the fabricated seventh type
+ * ## Mutation note — the fabricated eighth type
  *
  * Measured rather than argued, with a fabricated `'currency'` added
  * to {@link LeafFieldType} and every case and every table left as it
@@ -103,6 +113,15 @@
  * Restoring the member leaves all three green and this file
  * byte-identical.
  *
+ * This is the reading RE-TAKEN after `enum` joined the union, and
+ * the count did not move: the three are the same three the seventh
+ * type reddened, the only difference being that each printed type
+ * now carries the `enum` key beside the rest. `'currency'` lands in
+ * {@link PlainLeafFieldDef} by the `Exclude` above with no error of
+ * its own, so the leaf union's split adds no fourth site — and
+ * nothing reddens in `./LeafControl.tsx`, whose switch is over the
+ * KIND rather than the type.
+ *
  * THREE is a snapshot rather than a property of the union: the
  * count is one per module keying a table by {@link FieldType}, so a
  * later module adding one moves it again. Re-derive it rather than
@@ -118,17 +137,20 @@
  */
 
 /**
- * The four types whose value is one editable box.
+ * The five types whose value is one control an operator edits here.
  *
  * "Leaf" is a statement about the tree `./tree.ts` builds rather than
  * about the value: these are the types that become a field in the one
- * mounted form, and never a node to drill into.
+ * mounted form, and never a node to drill into. Four of them are a
+ * box and `enum` is a select, which is `./registry.ts`'s distinction
+ * to make rather than this union's.
  */
 export type LeafFieldType =
   | 'string'
   | 'boolean'
   | 'number'
-  | 'datetime';
+  | 'datetime'
+  | 'enum';
 
 /**
  * The two types that hold other fields.
@@ -140,7 +162,10 @@ export type LeafFieldType =
  */
 export type ContainerFieldType = 'list' | 'object';
 
-/** The six types v1 renders, as the source doc's table lists them. */
+/**
+ * The seven types this app renders: the source doc's table, and the
+ * `enum` `.specs/q20b-0-dynamic-form-enum-and-actions.md` adds to it.
+ */
 export type FieldType = LeafFieldType | ContainerFieldType;
 
 /**
@@ -148,11 +173,8 @@ export type FieldType = LeafFieldType | ContainerFieldType;
  *
  * Exactly the source doc's four, minus the discriminant each member
  * of the union declares for itself. Unexported deliberately: a def is
- * one of the three members of {@link FieldDef} below, and a value
+ * one of the four members of {@link FieldDef} below, and a value
  * typed as this base alone would be one no control renders.
- *
- * {@link EnumFieldDef} extends it as a fourth and is NOT in that union
- * yet, for the reason the header's staging section gives.
  */
 interface FieldDefBase {
   /** The key this field reads and writes in the data structure. */
@@ -171,14 +193,17 @@ interface FieldDefBase {
 /**
  * A field whose value is one editable box.
  *
- * One interface for all four types rather than four, because nothing
- * about the DEF varies between them: which control draws it is
- * `./registry.ts`'s reading of the same discriminant, and how its
- * text becomes a value is `./readers.ts`'s.
+ * One interface for all four of those types rather than four,
+ * because nothing about the DEF varies between them: which control
+ * draws it is `./registry.ts`'s reading of the same discriminant,
+ * and how its text becomes a value is `./readers.ts`'s.
+ *
+ * {@link EnumFieldDef} is the fifth leaf type and is NOT this
+ * interface, carrying a member of its own — see the header.
  */
-export interface LeafFieldDef extends FieldDefBase {
-  /** Which of the four leaf types this field is. */
-  readonly type: LeafFieldType;
+export interface PlainLeafFieldDef extends FieldDefBase {
+  /** Which leaf type this field is, `enum` excepted. */
+  readonly type: Exclude<LeafFieldType, 'enum'>;
 }
 
 /**
@@ -201,9 +226,12 @@ export interface EnumOption {
 /**
  * A field whose value is one of a fixed, declared set.
  *
- * Declared here and joined to neither {@link FieldType} nor
- * {@link FieldDef}; the header's staging section says why, and
- * `./readers.ts`'s `readEnumField` is its only reader so far.
+ * The one leaf def carrying a member of its own, which is why
+ * {@link LeafFieldDef} is a union rather than an interface. It draws
+ * as `./registry.ts`'s `choice` kind and reads through
+ * `./readers.ts`'s `readEnumField`, which takes this type rather
+ * than a {@link FieldDef} because {@link options} is the whole of
+ * what it matches against.
  */
 export interface EnumFieldDef extends FieldDefBase {
   /** The discriminant, fixed so a narrowing reaches {@link options}. */
@@ -227,6 +255,15 @@ export interface EnumFieldDef extends FieldDefBase {
    */
   readonly options: readonly [EnumOption, ...EnumOption[]];
 }
+
+/**
+ * A field that is one control here rather than a node to drill into.
+ *
+ * The union the header argues for: the four plain types beside the
+ * one carrying options. Every walk in this directory reaches it
+ * through {@link isLeafField} rather than by reading `type` twice.
+ */
+export type LeafFieldDef = PlainLeafFieldDef | EnumFieldDef;
 
 /** A list of one repeated shape, drilled into rather than inlined. */
 export interface ListFieldDef extends FieldDefBase {
@@ -280,15 +317,16 @@ export const LEAF_FIELD_TYPES: readonly LeafFieldType[] = [
   'boolean',
   'number',
   'datetime',
+  'enum',
 ];
 
 /**
  * The branch a total switch over {@link FieldType} has nothing left
  * for.
  *
- * The parameter is `never` while the union holds exactly the six, so
- * a seventh reddens the CALL rather than reaching the throw. That is
- * the exhaustiveness the header's mutation note measures.
+ * The parameter is `never` while the union holds exactly the seven,
+ * so an eighth reddens the CALL rather than reaching the throw. That
+ * is the exhaustiveness the header's mutation note measures.
  *
  * It still throws, because the compiler's guarantee stops at this
  * app's boundary: a def read out of a payload, or built by a
@@ -309,7 +347,7 @@ function unreachableFieldType(type: never): never {
  *
  * A switch rather than a `!== 'list' && !== 'object'` pair, for the
  * one thing only the switch gives: the default branch's `never` makes
- * a seventh member of {@link FieldType} a compile error HERE, where
+ * an eighth member of {@link FieldType} a compile error HERE, where
  * the pair would quietly answer `false` and send it to a leaf
  * control.
  *
@@ -325,7 +363,7 @@ export function isContainerField(
   // `def.type`, which is what leaves the default branch a value to
   // name: narrowing `def` to `never` takes its members with it, and
   // `def.type` there is an error about the wrong thing (TS2339,
-  // measured) instead of the TS2345 that reports a seventh type.
+  // measured) instead of the TS2345 that reports an eighth type.
   const { type } = def;
 
   switch (type) {
@@ -336,6 +374,7 @@ export function isContainerField(
     case 'boolean':
     case 'number':
     case 'datetime':
+    case 'enum':
       return false;
     default:
       return unreachableFieldType(type);
@@ -353,7 +392,7 @@ export function isContainerField(
  * the roster to be believed.
  *
  * @param def - Any def.
- * @returns Whether it is one of the four leaf types.
+ * @returns Whether it is one of the five leaf types.
  * @throws If the def carries a type outside {@link FieldType}, for
  * the reason {@link isContainerField} gives.
  */

@@ -48,10 +48,10 @@
  *
  * - Which control draws a type is `CONTROL_KIND_BY_TYPE`, pinned row
  *   by row in `./registry.test.ts`.
- * - What a box's text reads as is the four readers, pinned refusal
- *   by refusal in `./readers.test.ts`.
+ * - What a control reports reads as is the five readers, pinned
+ *   refusal by refusal in `./readers.test.ts`.
  * - Whether a def is a container is {@link isContainerField}, pinned
- *   over all six types in `./fieldDef.test.ts`.
+ *   over all seven types in `./fieldDef.test.ts`.
  *
  * What is left is composition: which component, wired to which
  * reader, inside which envelope. Two things measure it and each
@@ -137,9 +137,10 @@ import { LeafControl } from './LeafControl';
 /**
  * What a leaf control reports, which is every scalar a leaf reads as.
  *
- * The union of the four readers' accepted types rather than
+ * The union of the five readers' accepted types rather than
  * `unknown`, so a branch reporting an object or an array is a compile
- * error where it was written (TS2322, measured). `null` is a member
+ * error where it was written (TS2322, measured). The select's reader
+ * answers a `string` and so widened it by nothing. `null` is a member
  * because a cleared box answers it — see `./readers.ts` on why
  * that is the cleared state rather than `''`.
  *

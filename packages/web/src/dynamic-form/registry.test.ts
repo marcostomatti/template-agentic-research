@@ -7,7 +7,7 @@ import { LEAF_FIELD_TYPES } from './fieldDef';
 import { CONTROL_KIND_BY_TYPE, controlKindFor } from './registry';
 
 /**
- * The six types, as a typed literal.
+ * The seven types, as a typed literal.
  *
  * The direction {@link CONTROL_KIND_BY_TYPE} cannot guard. Its own
  * annotation makes a type ADDED to the union a key the compiler
@@ -24,6 +24,7 @@ const FIELD_TYPES: readonly FieldType[] = [
   'boolean',
   'number',
   'datetime',
+  'enum',
   'list',
   'object',
 ];
@@ -58,6 +59,7 @@ const KIND_ROSTER: Readonly<Record<FieldControlKind, true>> = {
   toggle: true,
   numeric: true,
   timestamp: true,
+  choice: true,
   'drill-in': true,
 };
 
@@ -74,7 +76,7 @@ const LOOSE: Readonly<Record<string, FieldControlKind | undefined>>
   = CONTROL_KIND_BY_TYPE;
 
 describe('what the registry refuses', () => {
-  it('throws for a type outside the six, not undefined', () => {
+  it('throws for a type outside the seven, not undefined', () => {
     // The contract is a compile-time union, so this type cannot be
     // WRITTEN — only parsed, or built by something that does not
     // type-check. `date-range` is one of the composite types the
@@ -100,7 +102,7 @@ describe('what the registry refuses', () => {
   });
 });
 
-describe('which control each of the six types draws', () => {
+describe('which control each of the seven types draws', () => {
   it('maps every type to the kind the type table names', () => {
     // The row-level reading, retyped from the source doc's table
     // rather than derived: the structural cases below all survive
@@ -110,12 +112,13 @@ describe('which control each of the six types draws', () => {
       boolean: 'toggle',
       number: 'numeric',
       datetime: 'timestamp',
+      enum: 'choice',
       list: 'drill-in',
       object: 'drill-in',
     });
   });
 
-  it('holds a kind for every one of the six types', () => {
+  it('holds a kind for every one of the seven types', () => {
     const keys = Object.keys(CONTROL_KIND_BY_TYPE).sort();
 
     expect(keys).toEqual([...FIELD_TYPES].sort());
@@ -142,7 +145,7 @@ describe('which control each of the six types draws', () => {
 });
 
 describe('how the leaf and container kinds are kept apart', () => {
-  it('gives each of the four leaf types its own kind', () => {
+  it('gives each of the five leaf types its own kind', () => {
     const kinds = LEAF_FIELD_TYPES.map(controlKindFor);
 
     expect(new Set(kinds).size).toBe(kinds.length);

@@ -1,5 +1,6 @@
 import type {
   ContainerFieldDef,
+  EnumFieldDef,
   FieldDef,
   FieldType,
 } from './fieldDef';
@@ -15,7 +16,7 @@ import {
 /**
  * One def per type, which is what makes this file's coverage total.
  *
- * Keyed by {@link FieldType} rather than listed, so a seventh type
+ * Keyed by {@link FieldType} rather than listed, so an eighth type
  * added to the union is a key the COMPILER demands here. That is the
  * second half of the mutation the module header records, and the
  * reason a new type cannot arrive with these cases still green.
@@ -28,6 +29,15 @@ const DEFS: Readonly<Record<FieldType, FieldDef>> = {
   boolean: { key: 'enabled', label: 'Enabled', type: 'boolean' },
   number: { key: 'weight', label: 'Weight', type: 'number' },
   datetime: { key: 'seenAt', label: 'Last seen', type: 'datetime' },
+  enum: {
+    key: 'polarity',
+    label: 'Polarity',
+    type: 'enum',
+    options: [
+      { value: 'positive', label: 'Positive' },
+      { value: 'negative', label: 'Negative' },
+    ],
+  },
   list: {
     key: 'terms',
     label: 'Terms',
@@ -46,7 +56,7 @@ const DEFS: Readonly<Record<FieldType, FieldDef>> = {
 };
 
 /**
- * The six types, as a typed literal.
+ * The seven types, as a typed literal.
  *
  * The direction {@link DEFS} cannot guard: annotated
  * `readonly FieldType[]`, so a type REMOVED from the union reddens
@@ -59,12 +69,13 @@ const FIELD_TYPES: readonly FieldType[] = [
   'boolean',
   'number',
   'datetime',
+  'enum',
   'list',
   'object',
 ];
 
 /**
- * The two types the tree drills into, held apart from the four.
+ * The two types the tree drills into, held apart from the five.
  *
  * Spelled out rather than derived from {@link LEAF_FIELD_TYPES}: a
  * roster checked against its own complement would agree with itself
@@ -129,7 +140,36 @@ function classify(def: FieldDef): string {
 }
 
 describe('what the guards refuse', () => {
-  it('throws for a type outside the six, rather than leaf', () => {
+  it('refuses an enum def offering nothing to choose from', () => {
+    // A `check-types` reading rather than a runtime one: `options` is
+    // a non-empty tuple, so the empty literal is TS2322 where somebody
+    // WROTE it. The directive is the pin — a contract that stopped
+    // refusing it would red this line as an unused expectation
+    // (TS2578) rather than leave the case quietly passing.
+    const refused = {
+      key: 'polarity',
+      label: 'Polarity',
+      type: 'enum',
+      // @ts-expect-error an enum offers at least one option.
+      options: [],
+    } satisfies EnumFieldDef;
+
+    // The positive control, varied along that one axis: the same def
+    // carrying one option compiles with no directive at all, so a
+    // type that had come to refuse EVERY enum literal would fail this
+    // file rather than pass it.
+    const accepted = {
+      key: 'polarity',
+      label: 'Polarity',
+      type: 'enum',
+      options: [{ value: 'positive', label: 'Positive' }],
+    } satisfies EnumFieldDef;
+
+    expect(refused.options).toHaveLength(0);
+    expect(accepted.options).toHaveLength(1);
+  });
+
+  it('throws for a type outside the seven, rather than leaf', () => {
     // The contract is a compile-time union, so this def cannot be
     // WRITTEN — only parsed, or built by something that does not
     // type-check. `date-range` is one of the composite types the
@@ -159,19 +199,19 @@ describe('what the guards refuse', () => {
   });
 });
 
-describe('how the guards split the six types', () => {
+describe('how the guards split the seven types', () => {
   it('holds one def per type, leaving no type untested', () => {
     expect(Object.keys(DEFS).sort()).toEqual([...FIELD_TYPES].sort());
   });
 
-  it('answers exactly one guard for every one of the six', () => {
+  it('answers exactly one guard for every one of the seven', () => {
     const readings = FIELD_TYPES.map((type) => classify(DEFS[type]));
 
     expect(readings).not.toContain('both');
     expect(readings).not.toContain('neither');
   });
 
-  it('reads the four leaf types as leaves', () => {
+  it('reads the five leaf types as leaves', () => {
     LEAF_FIELD_TYPES.forEach((type) => {
       expect(classify(DEFS[type])).toBe('leaf');
     });
@@ -181,6 +221,21 @@ describe('how the guards split the six types', () => {
     CONTAINER_TYPES.forEach((type) => {
       expect(classify(DEFS[type])).toBe('container');
     });
+  });
+
+  it('answers false for an enum def, which holds no defs', () => {
+    // The one leaf def carrying a member of its own, asked directly
+    // rather than through the roster loop above: `options` is a list
+    // INSIDE a def and the reflex reading of "a def holding a list"
+    // is the container one. It is not — nothing under an enum is a
+    // def, so there is nothing to drill into.
+    expect(isContainerField(DEFS.enum)).toBe(false);
+    expect(isLeafField(DEFS.enum)).toBe(true);
+
+    // The control for the axis: a def that really does hold defs,
+    // through the same two calls.
+    expect(isContainerField(DEFS.object)).toBe(true);
+    expect(isLeafField(DEFS.object)).toBe(false);
   });
 
   it('names in the leaf roster exactly what reads as a leaf', () => {

@@ -32,8 +32,9 @@
  *
  * So everything worth asserting has been pushed out of it: which
  * control draws a type is `CONTROL_KIND_BY_TYPE`, pinned row by row
- * in `./registry.test.ts`, and what a box's text reads as is the
- * four readers, pinned refusal by refusal in `./readers.test.ts`.
+ * in `./registry.test.ts`, and what a control reports reads as is
+ * the five readers, pinned refusal by refusal in
+ * `./readers.test.ts`.
  * What is left is composition — which component, wired to which
  * reader, inside which envelope — and two things measure it,
  * each reaching what the other cannot.
@@ -116,14 +117,43 @@
  * ## Two envelopes, split exactly where labelability does
  *
  * `FormField` owns labelling through `htmlFor`, which reaches a
- * labelable control and nothing else. Three of the four leaf kinds
- * are an `<input>` and take it. The fourth is `Switch`, which
- * renders a `button`, and `../pages/sources/SourceEditorModal.tsx`
- * already ruled that `<label for>` does not reach it — so the
- * toggle and the drill-in row carry `aria-labelledby` pointing at a
- * labelling element instead, which is that file's own `ControlRow`
- * shape restated. The envelope is not a style choice here: it
- * follows from what the control IS.
+ * labelable control and nothing else. Three of the five leaf kinds
+ * are an `<input>` and take it. `toggle` is `Switch`, which renders
+ * a `button`, and `../pages/sources/SourceEditorModal.tsx` already
+ * ruled that `<label for>` does not reach it — so the toggle and
+ * the drill-in row carry `aria-labelledby` pointing at a labelling
+ * element instead, which is that file's own `ControlRow` shape
+ * restated. The envelope is not a style choice here: it follows
+ * from what the control IS.
+ *
+ * ### How `choice` is labelled, and what that costs
+ *
+ * `choice` is the fifth kind and takes NEITHER of those two
+ * spellings, which is a fact about `@ar/ui`'s `Select` rather than
+ * a preference here. Measured against the component as shipped:
+ * `SelectProps` is a closed list — `value`, `options`, `onChange`,
+ * `size`, `width`, `ariaLabel` and `className` — extending no
+ * `HTMLAttributes`, and what it renders is a Radix menu trigger. So
+ * it takes no `id` for a `<label for>` to reach and no
+ * `aria-labelledby` to point at one, and `ariaLabel` is the only
+ * name it can be given.
+ *
+ * The drawing therefore keeps `FormField` for the label row, the
+ * hint and the error slot, and passes it NO `htmlFor`: a `<label
+ * for>` naming nothing is worse than a label naming nothing, and
+ * the accessible name comes off `ariaLabel={def.label}` instead.
+ * The label is written twice for one control and that is the point
+ * — the visible row and the accessible name are two different
+ * channels here, where every other kind has them wired together.
+ *
+ * What it costs is the `aria-describedby` every other kind has:
+ * with no attribute to pass, the refusal in the error slot is
+ * VISIBLE beside the select and associated with it by nothing. The
+ * id-inside-the-slot repair the section above describes has no
+ * attribute to point at, so it is not used here and the slot takes
+ * the sentence bare. Both halves are recorded in
+ * `../../context/ui-constraints.md`, which is where a later
+ * `@ar/ui` wave closes them.
  *
  * A def's `description` is the hint under the box. `FormField`
  * REPLACES that hint with the error while there is one, which is its
@@ -138,7 +168,7 @@
  *
  * The switch below is over the KIND rather than over `def.type`,
  * which is the whole reason `./registry.ts` exists: three of the
- * four leaf kinds are the same box, and which reader each takes is
+ * five leaf kinds are the same box, and which reader each takes is
  * that table's distinction to make once. Its `drill-in` case is no
  * formality — it is what a registry edit mapping `string` onto
  * the container kind reaches, and drawing that member as a box
@@ -152,8 +182,12 @@
  *
  * ## Spelling a value as box text is the readers read backwards
  *
- * {@link boxText} is the only rule-shaped thing left in this file,
- * and it is one line per JSON scalar: a string is itself, a number
+ * {@link boxText} is all but the last rule-shaped thing left in this
+ * file. The other is the line {@link ChoiceField} opens with, which
+ * is this one narrowed to the single shape a select can hold: a
+ * string is itself and everything else is the empty spelling, no
+ * option ever carrying a number. What follows is one line per JSON
+ * scalar: a string is itself, a number
  * is its `String`, and anything else — `null`, an absent member, a
  * value of the wrong shape — is an EMPTY box. That last clause is
  * not a fallback. It is the readers' own convention read in the
@@ -170,16 +204,17 @@
  */
 
 import type { LeafValue } from './FieldControl';
-import type { LeafFieldDef } from './fieldDef';
+import type { EnumFieldDef, LeafFieldDef } from './fieldDef';
 import type { NodePath } from './nodePath';
 import type { FieldReading } from './readers';
 
-import { FormField, Switch, TextInput } from '@ar/ui';
+import { FormField, Select, Switch, TextInput } from '@ar/ui';
 import { useId, useState } from 'react';
 
 import {
   readBooleanField,
   readDatetimeField,
+  readEnumField,
   readNumberField,
   readStringField,
 } from './readers';
@@ -189,8 +224,8 @@ import { controlKindFor } from './registry';
  * The branch a total switch over the control kinds has nothing left
  * for.
  *
- * The parameter is `never` while the four leaf kinds are all a leaf
- * def can resolve to, so a fifth reddens the CALL rather than
+ * The parameter is `never` while the five leaf kinds are all a leaf
+ * def can resolve to, so a sixth reddens the CALL rather than
  * reaching the throw. It still throws for the reason every guard in
  * this directory does: the compiler's guarantee stops at this app's
  * boundary, and a def out of a payload can carry a type whose row
@@ -349,12 +384,13 @@ interface ToggleFieldProps {
  * between two states of. It still crosses that reader, so the claim
  * that every leaf value reaches the draft through one stays true.
  *
- * A switch also has no cleared position, which is the one place the
- * four readers disagree — a `boolean | null` member cannot be
- * cleared here, and the save path's schema is what says whether that
- * matters. A value that is not a boolean draws OFF rather than
- * refusing, for the same reason {@link boxText} shows an empty box:
- * naming a member of the wrong shape is the schema's job.
+ * A switch also has no cleared position, which is where it and the
+ * select part from the three text readers — a `boolean | null`
+ * member cannot be cleared here, and the save path's schema is what
+ * says whether that matters. `./readers.ts` holds that split. A
+ * value that is not a boolean draws OFF rather than refusing, for
+ * the same reason {@link boxText} shows an empty box: naming a
+ * member of the wrong shape is the schema's job.
  *
  * @param props - The def, its path, its value, and where the next
  * state goes.
@@ -410,6 +446,90 @@ const ToggleField = ({
   );
 };
 
+/** What one select is given. */
+interface ChoiceFieldProps {
+  /** The member, narrowed to the one leaf def carrying options. */
+  readonly def: EnumFieldDef;
+  /** Where it sits, reported back with every accepted value. */
+  readonly path: NodePath;
+  /**
+   * The value at that path.
+   *
+   * Anything the options do not carry — a value from elsewhere, a
+   * member of the wrong shape, an absent one — states the rule in
+   * the error slot rather than being written or hidden.
+   */
+  readonly value: unknown;
+  /** Report a value that read. */
+  readonly onValueChange: (path: NodePath, next: LeafValue) => void;
+}
+
+/**
+ * A select over the def's options, and the rule a held value breaks.
+ *
+ * No typed text and so no hold, which is what this control does not
+ * need and {@link TextField} does: a select reports an option or
+ * reports nothing, so there is no half-typed state to show and
+ * nothing to keep beside the value.
+ *
+ * It still crosses {@link readEnumField} in both directions. What
+ * the control reports is read before it is written, so a position
+ * the def does not carry reaches the draft no more than a refused
+ * keystroke does; and what the VALUE holds is read too, so a member
+ * carrying something the options do not offer states the rule in
+ * the error slot instead of passing for one of them. `Select`
+ * itself would say nothing — it resolves its trigger as
+ * `options.find(o => o.value === value) ?? options[0]`, drawing
+ * SOMEBODY ELSE'S option for a value outside the list, which is the
+ * gap `../../context/ui-constraints.md` records.
+ *
+ * @param props - The def, its path, its value, and where an accepted
+ * value goes.
+ * @returns The labelled select, and the rule its value breaks.
+ */
+const ChoiceField = ({
+  def,
+  path,
+  value,
+  onValueChange,
+}: ChoiceFieldProps) => {
+  const held = typeof value === 'string'
+    ? value
+    : '';
+  const reading = readEnumField(def, held);
+  const fault = reading.ok
+    ? undefined
+    : reading.sentence;
+
+  return (
+    <FormField
+      // No `htmlFor`: `Select` renders a Radix menu trigger and takes
+      // no id, so a `<label for>` would point at nothing. The name
+      // comes off `ariaLabel` below instead, which is the whole of
+      // the ARIA that component accepts.
+      label={def.label}
+      hint={def.description}
+      error={fault}
+    >
+      <Select
+        value={held}
+        // Copied because `SelectProps.options` is declared MUTABLE
+        // and a def list is `readonly` — the binding-level copy
+        // `../../context/ui-constraints.md` prescribes.
+        options={[...def.options]}
+        ariaLabel={def.label}
+        onChange={(next) => {
+          const accepted = readEnumField(def, next);
+
+          if (accepted.ok) {
+            onValueChange(path, accepted.value);
+          }
+        }}
+      />
+    </FormField>
+  );
+};
+
 /** What the leaf half of `./FieldControl.tsx` is given. */
 interface LeafControlProps {
   /** The member, narrowed to a leaf by the caller's own guard. */
@@ -426,17 +546,19 @@ interface LeafControlProps {
  * The registry's kind, switched to a component.
  *
  * The switch is over the KIND rather than over `def.type`, which is
- * the whole reason `./registry.ts` exists: three of these four kinds
+ * the whole reason `./registry.ts` exists: three of these five kinds
  * are the same box, and which reader each takes is that table's
  * distinction to make once. The `drill-in` case is a real guard —
  * the header says which registry edit reaches it — and the default
- * branch's `never` is what makes a fifth leaf kind a compile error
- * here.
+ * branch's `never` is what makes a sixth leaf kind a compile error
+ * here. The `choice` case carries a second guard of its own, for
+ * the narrowing a kind cannot make; the comment there says why.
  *
  * @param props - The leaf def, its path, its value, and where an
  * accepted value goes.
  * @returns The control that kind draws as.
- * @throws If the kind is the container kind, or outside the union.
+ * @throws If the kind is the container kind, if it is `choice` at a
+ * def carrying no options, or if it is outside the union.
  */
 export const LeafControl = ({
   def,
@@ -484,6 +606,27 @@ export const LeafControl = ({
     case 'toggle':
       return (
         <ToggleField
+          def={def}
+          path={path}
+          value={value}
+          onValueChange={onValueChange}
+        />
+      );
+    case 'choice':
+      // The narrowing the kind cannot make: `controlKindFor` reads
+      // `def.type` and answers a kind, which leaves `def` the whole
+      // leaf union. Only `enum` carries options, and only `enum`'s
+      // row names this kind — so a def arriving here at another
+      // type is a registry row re-pointed, the same fault the
+      // `drill-in` case below reports from the other side.
+      if (def.type !== 'enum') {
+        throw new Error(
+          `Field '${def.key}' draws as a choice and carries no options`,
+        );
+      }
+
+      return (
+        <ChoiceField
           def={def}
           path={path}
           value={value}
