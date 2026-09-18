@@ -139,6 +139,7 @@
  * drag, which is Playwright's.
  */
 
+import type { FieldActionTable } from './actions';
 import type { LeafValue } from './FieldControl';
 import type {
   FieldDef,
@@ -478,6 +479,8 @@ interface ListItemRowProps {
   readonly row: ListRow;
   /** How many items the list holds, for the ends. */
   readonly count: number;
+  /** The handlers this item's leaf is matched against, if any. */
+  readonly actions: FieldActionTable | undefined;
   /** Report a value that read, at the path it belongs to. */
   readonly onValueChange: (path: NodePath, next: LeafValue) => void;
   /** Report that this row's own container was pressed. */
@@ -494,12 +497,14 @@ interface ListItemRowProps {
  * nothing here branching on which. Both it and the controls opt
  * out of the drag — the grip is the handle, per the header.
  *
- * @param props - The row, the list's length, its three reports.
+ * @param props - The row, the list's length, the action table,
+ * its three reports.
  * @returns The row.
  */
 const ListItemRow = ({
   row,
   count,
+  actions,
   onValueChange,
   onDrillIn,
   onMove,
@@ -525,6 +530,7 @@ const ListItemRow = ({
         def={row.def}
         path={row.path}
         value={row.value}
+        actions={actions}
         onValueChange={onValueChange}
         onDrillIn={onDrillIn}
       />
@@ -549,7 +555,8 @@ interface ListNodeFormProps extends NodeFormProps {
  * the drop derives its pair through {@link moveFromOrder} and the
  * controls hand theirs straight over.
  *
- * @param props - The node, its def, the value, its three reports.
+ * @param props - The node, its def, the value, the action table,
+ * its three reports.
  * @returns The sortable list of rows.
  * @throws If a segment carries a kind `./nodePath.ts` disowns.
  */
@@ -557,6 +564,7 @@ export const ListNodeForm = ({
   node,
   def,
   value,
+  actions,
   onValueChange,
   onDrillIn,
   onReorder,
@@ -583,6 +591,7 @@ export const ListNodeForm = ({
         <ListItemRow
           row={row}
           count={rows.length}
+          actions={actions}
           onValueChange={onValueChange}
           onDrillIn={onDrillIn}
           onMove={reorderRequest}

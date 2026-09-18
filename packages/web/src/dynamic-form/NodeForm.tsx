@@ -65,6 +65,7 @@
  * the drag, which is Playwright's.
  */
 
+import type { FieldActionTable } from './actions';
 import type { LeafValue } from './FieldControl';
 import type { ObjectFieldDef } from './fieldDef';
 import type { NodePath } from './nodePath';
@@ -116,7 +117,8 @@ interface ObjectNodeFormProps
  * without it React reuses a control at a position and one member's
  * half-typed text appears in another's box.
  *
- * @param props - The node, its def, and the value.
+ * @param props - The node, its def, the value, and the
+ * action table every leaf under it is matched against.
  * @returns The fields, in declared order.
  * @throws If a segment carries a kind `./nodePath.ts` disowns.
  */
@@ -124,6 +126,7 @@ const ObjectNodeForm = ({
   node,
   def,
   value,
+  actions,
   onValueChange,
   onDrillIn,
 }: ObjectNodeFormProps) => (
@@ -137,6 +140,7 @@ const ObjectNodeForm = ({
           def={field}
           path={path}
           value={readValueAt(value, path)}
+          actions={actions}
           onValueChange={onValueChange}
           onDrillIn={onDrillIn}
         />
@@ -170,6 +174,17 @@ export interface NodeFormProps {
    * reaches this file not at all.
    */
   readonly onValueChange: (path: NodePath, next: LeafValue) => void;
+  /**
+   * The handlers every leaf under this node is matched against.
+   *
+   * Optional, and forwarded untouched to both branches: nothing
+   * here reads an id — `./useFieldAction.tsx` does, per leaf —
+   * and a node holding no action-bearing leaf never notices the
+   * prop. `./DynamicForm.tsx` has already refused a def list
+   * naming an id this table does not hold, so a table arriving
+   * here answers every ref beneath it.
+   */
+  readonly actions?: FieldActionTable;
   /**
    * Report that a container member was pressed.
    *
@@ -206,6 +221,7 @@ export interface NodeFormProps {
 const NodeMembers = ({
   node,
   value,
+  actions,
   onValueChange,
   onDrillIn,
   onReorder,
@@ -220,6 +236,7 @@ const NodeMembers = ({
           node={node}
           def={def}
           value={value}
+          actions={actions}
           onValueChange={onValueChange}
           onDrillIn={onDrillIn}
           onReorder={onReorder}
@@ -231,6 +248,7 @@ const NodeMembers = ({
           node={node}
           def={def}
           value={value}
+          actions={actions}
           onValueChange={onValueChange}
           onDrillIn={onDrillIn}
         />
@@ -249,13 +267,15 @@ const NodeMembers = ({
  * inside a dialog. Its name is the node's label, so the form, the
  * tree item and the breadcrumb step all say the same thing.
  *
- * @param props - The node, the value, and its three reports.
+ * @param props - The node, the value, the action table, and its
+ * three reports.
  * @returns The form.
  * @throws If the def carries a container type outside the two.
  */
 export const NodeForm = ({
   node,
   value,
+  actions,
   onValueChange,
   onDrillIn,
   onReorder,
@@ -264,6 +284,7 @@ export const NodeForm = ({
     <NodeMembers
       node={node}
       value={value}
+      actions={actions}
       onValueChange={onValueChange}
       onDrillIn={onDrillIn}
       onReorder={onReorder}
