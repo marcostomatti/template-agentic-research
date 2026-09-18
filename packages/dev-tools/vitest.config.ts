@@ -26,6 +26,15 @@ import { defineConfig } from 'vitest/config';
 // storage key, positioning over a measured rect), not for rendering
 // React.
 //
+// One thing jsdom does NOT give this package is `localStorage`. Node 25
+// ships a built-in Web Storage global, vitest's jsdom environment leaves
+// it in place rather than replacing it with jsdom's, and started without
+// `--localstorage-file` that object is a husk: `getItem` is `undefined`
+// and `localStorage.clear()` reds with `localStorage.clear is not a
+// function` under BOTH projects below (measured). So
+// `src/core/settings.test.ts` installs a Map-backed store of its own per
+// case, and a later file that needs storage has to do the same.
+//
 // `passWithNoTests` is set ONCE at the root and not inside either
 // project, because it is a root-only option: vitest 4.1.11 types a
 // project entry as `ProjectConfig`, which does not carry it, and `tsc`
