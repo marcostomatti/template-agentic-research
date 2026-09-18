@@ -18,7 +18,15 @@ this package's gates are worth knowing before calling a change verified:
 - The React rule sets (`react-hooks`, `jsx-a11y`, `react-refresh`) are
   scoped to `.jsx` and `.tsx` alone, so a hook living in a `.ts` file
   gets NO rules-of-hooks and no `exhaustive-deps` checking. Read those
-  dependency arrays by hand.
+  dependency arrays by hand. Where they DO apply,
+  `react-refresh/only-export-components` keys on a component being
+  DECLARED rather than exported: a `.tsx` whose exports are a hook and
+  some types is refused for a component declared privately inside it,
+  and the message ("Move your component(s) to a separate file")
+  names an export the file does not have. A private helper component
+  is therefore not the way out — make the markup a module-level JSX
+  element constant and inline its wrapper, so the file declares no
+  component at all.
 - `check-types` covers `src`, `tests` and the package-root config
   files. The `*.mjs` entry in the tsconfig `include` is inert without
   `allowJs`, and the package `test` script does not type-check at all

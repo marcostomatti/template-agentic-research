@@ -180,6 +180,7 @@ Rules:
 - Write negative tests before positive tests (error paths, early exits, edge cases).
 - Write unit tests before integration tests.
 - Place test tasks in the same stage as the code they cover, not in a separate testing stage.
+- When a plan CAPS unit-case growth at the cases its spec names, that cap binds the review and fix stages too. A bug found late whose finding names a coverage gap does not get a regression test smuggled in under the cap — write the gap into the close-out as explicit debt, name the plan or spec that will close it, and land the fix alone. Say this in the plan's `rafa:context` laws where the cap is declared, or the first reviewer to find a real bug has to choose between the cap and the obvious follow-up with nothing to point at.
 
 ---
 

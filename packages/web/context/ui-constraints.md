@@ -159,6 +159,14 @@ They are here because every one of them is invisible to `lint`,
   `FormField`'s label and hint spans carry NO id, so nothing can point
   `aria-describedby` at them; the established repair is putting the id
   INSIDE the `error` slot (`error={<span id={faultId}>{fault}</span>}`).
+  The mirror cost is owed by the controls on the OTHER side of that
+  split: a refusal shown for a control not inside a `FormField` has to
+  restate by hand what the envelope does for free — suppress the hint
+  while the sentence is up, move `aria-describedby` onto it, and tone
+  it — and it gets NO warning mark, `@ar/ui`'s `StrokeIcon` helper
+  being internal and never re-exported, the same gap the chevron
+  already records. The shape the toggle row settled on is a
+  `basis-full` danger-toned `p` inside the wrapping flex row.
 - **Surface tokens are HYPHENATED and a wrong spelling is silent.**
   `bg-surface-1`, `bg-surface-2` and `bg-surface-sunk` are the only three
   in the tree, so a reflexive `bg-surface2` renders no rule at all and
@@ -186,6 +194,16 @@ They are here because every one of them is invisible to `lint`,
   literal keys rather than an index signature — so a roster-keyed table
   answers `V` and needs no non-null assertion, and adding a `?? fallback`
   hides the very TS2741 that reports a member the table is missing.
+- **`TextInput` cannot be sized as a FLEX item.** It puts its
+  `className` on the `input` and wraps that in a `span` the caller
+  cannot reach, so a flex child is the WRAPPER: the item sizes to the
+  span's intrinsic width, the input's own `w-full` has no definite
+  width to resolve against, and the box shrinks to its default
+  character count instead of filling the row. Every gate is green
+  over it and only a screenshot shows it. Put the row on a grid
+  instead — `grid grid-cols-[minmax(0,1fr)_auto]` gives the wrapper
+  a definite track, which is what a control drawn beside a button
+  needs.
 - **The established typed-text-beside-value shape** is three lines and is
   worth copying rather than re-deriving: `const [typed, setTyped] =
   useState<string | undefined>(undefined)`, `const text = typed ??

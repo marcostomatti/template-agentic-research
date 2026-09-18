@@ -567,13 +567,30 @@ matching anything prints exactly the same five lines.
   a stale file cannot read as fresh, and print `EXIT=$?` beside the
   capture's BYTE COUNT in the same command — the byte count is what
   separates an aborted tool from a tool that legitimately found nothing.
+  A third discipline belongs beside them, for the gates whose output is
+  LARGE: capture with a plain `>` and read the status from a separate,
+  short `echo $?`, never through `tee` plus `PIPESTATUS` in the same
+  call. This package's `bun run test` prints about 230 kB, and an
+  agent-run command that big has its visible output replaced by a short
+  preview — which drops a trailing status echo sharing the call, so the
+  exit code the probe was written to report is simply not among the
+  lines that come back.
 - A probe's own VERDICT line is prose no gate ever re-runs, exactly like a
   commit message or a TSDoc mutation note, so DERIVE its totals from the
   checks themselves rather than typing them: a hand-written
   `checks run: 24` sat over 19 actual assertions here and read precisely
   like a measurement. Append every check's label to a list and print that
   list's length — one line, and it also makes a leg that silently stopped
-  running visible as a total that moved.
+  running visible as a total that moved. The same sentence has a second
+  half, for the reader rather than the writer: a mutation note whose
+  count a LATER task measures and finds wrong is corrected in that
+  task's own commit, whoever wrote it. A plan's re-measurement law
+  covers the counts a task's own change MOVES, so a count it merely
+  READS and falsifies (measured here: a note claiming "five JSX prop
+  sites" over four) falls outside it and survives in source with only a
+  close-out recording the discrepancy. Nothing in this tree compares a
+  close-out against a header, so that is a count that is never reported
+  again.
 - The root `.gitignore` is read by NO lint rule — an explicit-path
   `bun x eslint -f json .gitignore` answers the fourth shape (`File ignored
   because no matching configuration was supplied`) — while
@@ -659,3 +676,15 @@ matching anything prints exactly the same five lines.
   workflows DO run a gate — the control-byte one, by its file path rather
   than through its `gate:*` name — so finding no `gate:*` name under
   `.github/workflows/` is no evidence that CI gates nothing.
+- `gate:doc-links` is RED at HEAD and has been for some time, so its EXIT
+  CODE answers nothing about a change. Measured at `bdf6bce`: 87 tracked
+  documents, 1843 references, `FAIL: 79 finding(s)` (76 unresolved span,
+  2 unused marker, 1 marker over a passing reference) plus a further 45
+  in the `.claude/` section that never move the exit code — spread over
+  `context/*.md`, `packages/service/**` and `packages/web/context/data.md`,
+  none of them anything a current task touched. The verdict for a change
+  is therefore a DIFF of the finding set: capture the run before the edit
+  and after it, and require the two totals equal and the new file's own
+  path absent from both. It is also a ROOT-ONLY script — `bun run
+  gate:doc-links` from inside a package answers `Script not found`, which
+  reads like the gate passing if the line is skimmed.
