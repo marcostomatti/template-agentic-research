@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dev tools harness</title>
+  </head>
+  <body>
+    <!-- The one thing on this page besides the widget: a plain button a
+         drawer test can click to prove the page stayed interactive
+         behind an open panel. See dev-tools-harness.tsx for why.
+         Fixed at the top-left corner on purpose: `@ar/dev-tools`'s
+         default drawer edge is `end` (the right side, full height) and
+         the trigger's own default corner is `bottom-right`, so a
+         button left in the normal document flow — which this page's
+         narrow body would otherwise place near the top-left anyway —
+         could still end up under either at some viewport width. Top
+         left, pinned, is outside both no matter the viewport. -->
+    <button
+      id="app-button"
+      type="button"
+      style="position: fixed; top: 8px; left: 8px;"
+    >App button</button>
+    <span id="app-button-count">0</span>
+
+    <script type="module" src="./dev-tools-harness.tsx"></script>
+  </body>
+</html>
