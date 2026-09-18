@@ -1,0 +1,24 @@
+/*
+ * The package's single stylesheet, copied verbatim to `dist/styles.css`
+ * by `vite-plugin-static-copy` and exposed as the `./styles.css` export.
+ * It is never imported from JS: the consuming app opts in.
+ *
+ * A placeholder for the skeleton stage, holding the `--devtools-` token
+ * scope and nothing else. The file has to EXIST from this stage on,
+ * because the copy target is required rather than best-effort: with it
+ * absent `vite build` fails with `Error: No file was found to copy on
+ * src/styles.css src.` and exits 1 (measured while landing the
+ * vitest config).
+ *
+ * Every custom property this package introduces is prefixed
+ * `--devtools-`, never `--ar-`, so the port to open-tomato renames
+ * nothing and a host app's token layer can never collide with it. The
+ * shell stage fills this scope with the real tokens and makes them
+ * theme-aware through `prefers-color-scheme` and a `data-theme`
+ * attribute when the host sets one.
+ */
+
+[data-devtools-root] {
+  /* Tokens land here in the shell stage. */
+  color-scheme: light dark;
+}
