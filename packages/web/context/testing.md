@@ -16,12 +16,12 @@ decision is a pure function over already-read browser values and the
 component or hook is the thin part around it. `pages/*/rows.ts`,
 `cards.ts`, `fields.ts`, `editor.ts`, `schema.ts`, `fieldDefs.ts`,
 `pages/filters.ts`, `app-shell/theme.ts`, the pair under
-`src/components/` (`editorDraft.ts`, `jsonDraft.ts`) and the six pure
-modules under `src/dynamic-form/` are all that shape — the provider's
-whole core is `.ts` for exactly this reason, and its three `.tsx` hold
-no decision the unit runner would have wanted. Anything touching
-`document` at import time crashes the unit runner outright and takes
-its whole file with it.
+`src/components/` (`editorDraft.ts`, `jsonDraft.ts`) and the seven
+pure modules under `src/dynamic-form/` are all that shape — the
+provider's whole core is `.ts` for exactly this reason, and its
+three `.tsx` hold no decision the unit runner would have wanted.
+Anything touching `document` at import time crashes the unit runner
+outright and takes its whole file with it.
 
 <!-- doc-links-skip: pages/filters.ts -- package-local path -->
 <!-- doc-links-skip: app-shell/theme.ts -- package-local path -->

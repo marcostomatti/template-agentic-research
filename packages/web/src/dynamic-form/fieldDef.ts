@@ -6,10 +6,11 @@
  * `.specs/q17-dynamic-form-provider.md` is the authority for the six
  * types v1 shipped with and for the members every def carries, and
  * `.specs/q20b-0-dynamic-form-enum-and-actions.md` for the seventh,
- * `enum`. This module is that table written as types and nothing
- * else — no control, no value, no refusal. `./registry.ts` maps a
- * type to a control and `./readers.ts` reads what an operator typed;
- * both are readings OF this contract rather than parts of it.
+ * `enum`, and for the ACTION a leaf def may name. This module is
+ * that table written as types and nothing else — no control, no
+ * value, no refusal. `./registry.ts` maps a type to a control and
+ * `./readers.ts` reads what an operator typed; both are readings OF
+ * this contract rather than parts of it.
  *
  * It is a `.ts` for the reason the whole core of `src/dynamic-form/`
  * is: the unit runner collects `.ts` files under `src` in a node
@@ -79,8 +80,8 @@
  *
  * ## The leaf side is a union too, and for the same reason
  *
- * Four of the five leaf types carry the base and nothing more, and
- * `enum` carries {@link EnumFieldDef.options}. So
+ * Four of the five leaf types carry the leaf base and nothing more,
+ * and `enum` carries {@link EnumFieldDef.options}. So
  * {@link LeafFieldDef} is {@link PlainLeafFieldDef} beside
  * {@link EnumFieldDef} rather than one interface over all five with
  * an optional `options?`, which is the representability argument at
@@ -94,6 +95,50 @@
  * leaf type a ONE-line edit to {@link LeafFieldType}: it lands in
  * that interface by subtraction, and the mutation note below is the
  * reading of what it reddens everywhere else.
+ *
+ * ## An action is a REF, and the handler is the caller's
+ *
+ * {@link FieldActionRef} carries an id and a label and no function,
+ * which is decision 2 of
+ * `.specs/q20b-0-dynamic-form-enum-and-actions.md` and the one thing
+ * that keeps a def what the rest of this header assumes it is: a
+ * value, JSON-serialisable, readable out of a payload and pinnable
+ * by the unit runner. A handler ON the def takes all three away at
+ * once, and a slot component per field would be a second registry
+ * beside `./registry.ts`; both were considered there and closed.
+ *
+ * So the id is opaque HERE. Nothing in this module, and nothing in
+ * this package, knows what an action DOES — `./actions.ts` is where
+ * an id is matched against the table a caller supplies, and where
+ * the refusal for an id nothing answers is written. This module
+ * declares that a leaf may name one, and stops.
+ *
+ * ## Only a LEAF may carry one, and that is a type error
+ *
+ * Decision 5 defers actions on containers to v2, and the contract
+ * says so structurally rather than in prose: `action` sits on
+ * {@link LeafFieldDefBase}, which {@link PlainLeafFieldDef} and
+ * {@link EnumFieldDef} extend and the two container defs do not.
+ * `./fieldDef.test.ts` pins both halves of that — a list def and an
+ * object def carrying `action` are each a `check-types` error where
+ * somebody wrote them, and a leaf def carrying the same member
+ * compiles beside them with no directive at all.
+ *
+ * A third leaf-only member is also why that base exists rather than
+ * the member being spelled twice: two spellings of one optional
+ * member are two things to keep in step, and the union's whole
+ * point is that the compiler keeps them instead.
+ *
+ * Measured in both directions. A literal carrying `action` answers
+ * TS2353 at the `action` line itself — `'action' does not exist in
+ * type 'ListFieldDef'`, and the same for `ObjectFieldDef` — under
+ * `satisfies ListFieldDef`, under `satisfies ContainerFieldDef` and
+ * under a plain `: FieldDef` annotation alike, the discriminant
+ * being enough to pick the constituent before the excess member is
+ * read. The opposite leg is what says the pin can fail: `action`
+ * moved onto {@link FieldDefBase} makes both `@ts-expect-error`
+ * directives in `./fieldDef.test.ts` TS2578, `Unused
+ * '@ts-expect-error' directive`, one per container.
  *
  * ## Mutation note — the fabricated eighth type
  *
@@ -113,10 +158,13 @@
  * Restoring the member leaves all three green and this file
  * byte-identical.
  *
- * This is the reading RE-TAKEN after `enum` joined the union, and
- * the count did not move: the three are the same three the seventh
- * type reddened, the only difference being that each printed type
- * now carries the `enum` key beside the rest. `'currency'` lands in
+ * This is the reading RE-TAKEN after `enum` joined the union and
+ * again after {@link FieldActionRef} did, and the count did not
+ * move at either: the three are the same three the seventh type
+ * reddened, the only difference being that each printed type now
+ * carries the `enum` key beside the rest. The action ref adds no
+ * site of its own because neither it nor
+ * {@link LeafFieldDefBase} keys a table by {@link FieldType}. `'currency'` lands in
  * {@link PlainLeafFieldDef} by the `Exclude` above with no error of
  * its own, so the leaf union's split adds no fourth site — and
  * nothing reddens in `./LeafControl.tsx`, whose switch is over the
@@ -191,6 +239,60 @@ interface FieldDefBase {
 }
 
 /**
+ * A leaf def's reference to an action a caller supplies.
+ *
+ * Two members and neither is a function — see the header for why
+ * that is the contract rather than a convenience. {@link id} is
+ * looked up in the table `./actions.ts` checks a def list against;
+ * {@link label} is this def's own and is never read from there.
+ */
+export interface FieldActionRef {
+  /**
+   * The key of the handler in the caller's action table.
+   *
+   * Opaque to this package: it is matched, never interpreted. An id
+   * the table does not hold is what `./actions.ts` refuses, naming
+   * this def's `key` beside it.
+   */
+  readonly id: string;
+  /**
+   * What the action is called on screen.
+   *
+   * Carried on the DEF rather than on the handler, so a def list
+   * reads whole — the label is part of what the form draws, and a
+   * caller swapping one handler for another changes no wording. It
+   * is also the button's accessible name, which is the one thing
+   * that makes the control reachable without sight of the icon.
+   */
+  readonly label: string;
+}
+
+/**
+ * What the two leaf defs share beyond {@link FieldDefBase}.
+ *
+ * Exactly {@link LeafFieldDefBase.action}, and unexported for the
+ * reason {@link FieldDefBase} is: a value typed as this base alone
+ * names no type, so no control draws it. A leaf def is one of the
+ * two members of {@link LeafFieldDef}.
+ */
+interface LeafFieldDefBase extends FieldDefBase {
+  /**
+   * The action drawn beside this field's control, if it has one.
+   *
+   * Optional, and absent on almost every def: an action is a button
+   * an operator presses to FILL the box, not a property of being a
+   * field. Container defs cannot carry it at all — the header's
+   * section on that is the ruling, and `./fieldDef.test.ts` the
+   * measurement.
+   *
+   * What pressing it does is no part of this contract. The handler,
+   * the value it answers and the refusal it can fail with all live
+   * with the caller, behind `./actions.ts`'s `FieldAction`.
+   */
+  readonly action?: FieldActionRef;
+}
+
+/**
  * A field whose value is one editable box.
  *
  * One interface for all four of those types rather than four,
@@ -201,7 +303,7 @@ interface FieldDefBase {
  * {@link EnumFieldDef} is the fifth leaf type and is NOT this
  * interface, carrying a member of its own — see the header.
  */
-export interface PlainLeafFieldDef extends FieldDefBase {
+export interface PlainLeafFieldDef extends LeafFieldDefBase {
   /** Which leaf type this field is, `enum` excepted. */
   readonly type: Exclude<LeafFieldType, 'enum'>;
 }
@@ -233,7 +335,7 @@ export interface EnumOption {
  * than a {@link FieldDef} because {@link options} is the whole of
  * what it matches against.
  */
-export interface EnumFieldDef extends FieldDefBase {
+export interface EnumFieldDef extends LeafFieldDefBase {
   /** The discriminant, fixed so a narrowing reaches {@link options}. */
   readonly type: 'enum';
   /**

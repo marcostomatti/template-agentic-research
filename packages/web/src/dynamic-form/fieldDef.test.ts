@@ -3,6 +3,9 @@ import type {
   EnumFieldDef,
   FieldDef,
   FieldType,
+  LeafFieldDef,
+  ListFieldDef,
+  ObjectFieldDef,
 } from './fieldDef';
 
 import { describe, expect, it } from 'vitest';
@@ -167,6 +170,55 @@ describe('what the guards refuse', () => {
 
     expect(refused.options).toHaveLength(0);
     expect(accepted.options).toHaveLength(1);
+  });
+
+  it('refuses a list def and an object def carrying an action', () => {
+    // Decision 5 of
+    // `.specs/q20b-0-dynamic-form-enum-and-actions.md`: a container
+    // carries no action in v1. `action` sits on the leaf base alone,
+    // so both literals below are TS2353 at the `action` line —
+    // measured, `'action' does not exist in type 'ListFieldDef'` and
+    // the same for `ObjectFieldDef`. The directives are the pin: a
+    // contract that grew the member on `FieldDefBase` instead would
+    // red these lines as unused expectations (TS2578) rather than
+    // leave the case quietly passing.
+    const refusedList = {
+      key: 'terms',
+      label: 'Terms',
+      type: 'list',
+      item: { key: 'term', label: 'Term', type: 'string' },
+      // @ts-expect-error a container carries no action in v1.
+      action: { id: 'pick', label: 'Pick a term' },
+    } satisfies ListFieldDef;
+
+    const refusedObject = {
+      key: 'window',
+      label: 'Window',
+      type: 'object',
+      fields: [{ key: 'from', label: 'From', type: 'datetime' }],
+      // @ts-expect-error a container carries no action in v1.
+      action: { id: 'pick', label: 'Pick a window' },
+    } satisfies ObjectFieldDef;
+
+    // The positive control, varied along that one axis alone: the
+    // same member on a LEAF def compiles with no directive, so a
+    // contract that had come to refuse every `action` would fail
+    // this file rather than pass it.
+    const accepted = {
+      key: 'endpoint',
+      label: 'Endpoint',
+      type: 'string',
+      action: { id: 'normalise', label: 'Normalise URL' },
+    } satisfies LeafFieldDef;
+
+    // Runtime readings, so the case is not a directive and nothing
+    // else: the two refused literals still HOLD what was written —
+    // a type error is not a deletion — and the accepted one reaches
+    // its ref through the declared member rather than through a
+    // cast or an `in` check.
+    expect(isContainerField(refusedList)).toBe(true);
+    expect(isContainerField(refusedObject)).toBe(true);
+    expect(accepted.action?.id).toBe('normalise');
   });
 
   it('throws for a type outside the seven, rather than leaf', () => {
