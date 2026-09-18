@@ -60,6 +60,25 @@ export default defineConfig([
   importPlugin.flatConfigs.recommended,
   importPlugin.flatConfigs.typescript,
   {
+    // Type-only DOM globals, declared because `no-undef` cannot see them.
+    //
+    // `sharedRules.mjs` sets `no-undef` to error and the base config takes
+    // its globals from the `globals` package, which lists RUNTIME globals
+    // only. `RequestInit` exists in TypeScript's DOM lib as a type and has
+    // no runtime binding, so `globals.browser` does not carry it and a
+    // signature naming it reads as `'RequestInit' is not defined` — a
+    // false positive `tsc` disagrees with (measured: `check-types` is
+    // green over the same line). Listed rather than switching `no-undef`
+    // off for TypeScript, so a genuinely undefined identifier is still an
+    // error here.
+    files: ['src/**/*.{js,mjs,cjs,ts,tsx,jsx}'],
+    languageOptions: {
+      globals: {
+        RequestInit: 'readonly',
+      },
+    },
+  },
+  {
     // Browser layer: no node builtin anywhere under src/ but the node layer.
     files: ['src/**/*.{js,mjs,cjs,ts,tsx,jsx}'],
     ignores: ['src/vite/**'],
