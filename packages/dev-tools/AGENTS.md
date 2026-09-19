@@ -47,12 +47,22 @@ per case (Node 25 ships Web Storage global).
 free. eslint forbids `node:*` / `child_process` outside `src/vite/`.
 
 `postbuild` is npm-lifecycle-named, so `bun run build` ALREADY runs
-the leak grep over `dist/index.js` and exits with the grep's code.
+the leak grep over BOTH browser bundles — `dist/index.js` and
+`dist/feedback.js` — and exits with the grep's code. It refuses three
+specifiers in either file: `node:`, `child_process` and `yaml`. `yaml`
+is a real dependency of this package but of the NODE half only
+(`src/vite/`), so a browser bundle importing it is a layering leak the
+bundler reports as success. A missing bundle is a refusal too: absent
+`dist/feedback.js` exits `1` rather than passing an unread file.
 A `build` that exits `1` under a successful `vite build` line is the
-grep refusing a `node:`/`child_process` import that reached the
-browser entry — not a bundler failure. Running `bun run postbuild`
-again afterwards is redundant, and useful only to read that step's
-exit code on its own.
+grep refusing one of those three — not a bundler failure. Running
+`bun run postbuild` again afterwards is redundant, and useful only to
+read that step's exit code on its own.
+
+The runtime dependencies split by half: `@medv/finder` is browser-only
+(the element-selector capture), `yaml` is node-only (issue-form
+parsing). Both are in `rollupOptions.external` in `vite.config.ts`, so
+neither is bundled; the grep is what proves `yaml` never crosses.
 
 ## The storage key
 
