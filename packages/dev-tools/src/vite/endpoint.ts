@@ -148,22 +148,21 @@
  *   `./comment.ts`'s two members are flat. It reaches a browser as JSON
  *   inside a string, never as markup.
  *
- * ## Where this module's cases are: two files, split on the assembly
+ * ## Where this module's cases are: split on the assembly, then on how
+ * many routes one case drives
  *
- * The rule, for the next route added here: a case that has to name a
- * resolved build value belongs beside the assembler in
- * `./plugin.test.ts`, and one that does not belongs beside this module
- * in `./endpoint.test.ts`. The status payload and a stored report's
- * path carry the commit, the branch, the round and the repository slug,
- * and `./plugin.ts`'s `assembleDevTools` is what resolves all four, so
- * a case over either says nothing without an assembly. The "also
- * affected" route reads a body, a schema and
- * {@link DevToolsEndpointContext.gateway} and touches no build value,
- * no filesystem and no clock, so its cases hand
- * {@link createDevToolsEndpoint} a context literal directly — which
- * also keeps `./plugin.test.ts` under this package's 800-line file cap,
- * a line it was already within 1 of. `./http.test.ts` is the third file
- * in the set, holding the plumbing underneath both.
+ * The rule, for the next route added here: a case pinning ONE route
+ * that has to name a resolved build value belongs beside the assembler
+ * in `./plugin.test.ts`, one pinning ONE route that does not belongs
+ * beside this module in `./endpoint.test.ts`, and one driving MORE than
+ * one route against the SAME assembled middleware — a templates read,
+ * then a report post, then an "also affected" comment on the same fake
+ * tracker; a status payload whose `repo`, `round` and `gateway` all
+ * read off one assembly — belongs in `./endpoint.integration.test.ts`.
+ * `./http.test.ts` holds the plumbing underneath all three, and
+ * `./harness.ts` — not itself a test file — is the fake filesystem,
+ * clock, command runner and request/response shim `./plugin.test.ts`
+ * and `./endpoint.integration.test.ts` both assemble a middleware from.
  */
 
 import type {

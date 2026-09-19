@@ -1,9 +1,5 @@
-import type { DevToolsEndpointFs, DevToolsMiddleware } from './endpoint';
 import type { ReportGateway, ReportGatewayFileOutcome } from './gateway';
-import type { DevToolsCommandRunner } from './git';
-import type { DevToolsIncoming, DevToolsOutgoing } from './http';
-import type { DevToolsPluginDeps, DevToolsPluginOptions } from './plugin';
-import type { DevToolsClock } from './store';
+import type { DevToolsIncoming } from './http';
 
 import { Buffer } from 'node:buffer';
 import { join } from 'node:path';
@@ -20,7 +16,19 @@ import {
   DEVTOOLS_TEMPLATES_PATH,
 } from './endpoint';
 import { DEVTOOLS_UNKNOWN_BUILD_VALUE } from './git';
-import { assembleDevTools, devtoolsPlugin } from './plugin';
+import {
+  LAN_ADDRESS,
+  LOOPBACK_ADDRESS,
+  ROUND,
+  SAME_ORIGIN_HEADERS,
+  SERVER_PORT,
+  STAMP,
+  assemble,
+  createResponse,
+  fakeRequest,
+  runMiddleware,
+} from './harness';
+import { devtoolsPlugin } from './plugin';
 import { DEVTOOLS_DEFAULT_OUT_DIR } from './store';
 import { DEVTOOLS_ISSUE_FORM_DIR } from './templates';
 
@@ -28,19 +36,21 @@ import { DEVTOOLS_ISSUE_FORM_DIR } from './templates';
  * ## What this file drives, and why it is the one with cases over
  * `./endpoint.ts`
  *
- * `createDevToolsEndpoint` is reached one way only — through this
- * module's `assembleDevTools` — so the cases that exercise the
+ * `createDevToolsEndpoint` is reached one way only — through
+ * `./plugin.ts`'s `assembleDevTools` — so the cases that exercise the
  * middleware are the assembled ones, and `./endpoint.ts`'s own header
  * says why they live here rather than beside it.
  *
- * Every case below hands `assembleDevTools` an in-memory filesystem, a
- * clock stuck at one instant, and a command runner that answers as
- * though there were no `git` on the `PATH` at all — except the one
- * status case that scripts `git remote get-url origin`. So nothing
- * here writes to a real directory, nothing spawns a process, and the
- * round this file asserts on is the plugin option alone —
- * `resolveDevToolsBuildInfo` falls back to it because the scripted
- * runner refuses every command it is not given an answer for.
+ * The fakes every case below is built from — the in-memory filesystem,
+ * the clock stuck at one instant, the command runner that answers as
+ * though there were no `git` on the `PATH` at all except the one status
+ * case that scripts `git remote get-url origin`, and the
+ * request/response/`assemble` plumbing — live in `./harness.ts`, not
+ * here; that module's own header says why. So nothing here writes to a
+ * real directory, nothing spawns a process, and the round this file
+ * asserts on is the plugin option alone — `resolveDevToolsBuildInfo`
+ * falls back to it because the scripted runner refuses every command it
+ * is not given an answer for.
  *
  * ## The order
  *
@@ -61,177 +71,16 @@ import { DEVTOOLS_ISSUE_FORM_DIR } from './templates';
  * same-origin, loopback, well-formed request they vary away from — and
  * `answers the issue forms it read` is the control for the two
  * templates refusals, varying only the method and the address.
- */
-
-/** One call the recorder saw. */
-interface RecordedWrite {
-  /** Where it was written. */
-  readonly path: string;
-
-  /** What was written there. */
-  readonly data: string | Uint8Array;
-}
-
-/** A filesystem that records writes and answers a fixed directory. */
-interface RecordingFs extends DevToolsEndpointFs {
-  /** Every directory `mkdir` was asked for, in order. */
-  readonly directories: readonly string[];
-
-  /** Every file `writeFile` was asked for, in order. */
-  readonly writes: readonly RecordedWrite[];
-}
-
-/**
- * Build a filesystem that records every write instead of making one,
- * and answers one in-memory issue-form directory.
  *
- * @param forms - Bare filenames under {@link DEVTOOLS_ISSUE_FORM_DIR}
- * to their text, or `null` for a directory that does not exist — which
- * is how the empty-list reading is spelled, with no path to arrange.
- * @returns The recorder. Every case below gets a fresh one, so a
- * refusal's "nothing was written" reads against a filesystem that saw
- * nothing else.
- */
-function createFs(
-  forms: Readonly<Record<string, string>> | null = null,
-): RecordingFs {
-  const directories: string[] = [];
-  const writes: RecordedWrite[] = [];
-
-  return {
-    directories,
-    writes,
-    async mkdir(path: string) {
-      directories.push(path);
-
-      return undefined;
-    },
-    async writeFile(path: string, data: string | Uint8Array) {
-      writes.push({ path, data });
-    },
-    readdir: (path: string): Promise<readonly string[]> => (
-      forms === null || path !== DEVTOOLS_ISSUE_FORM_DIR
-        ? Promise.reject(new Error(`ENOENT: ${path}`))
-        : Promise.resolve(Object.keys(forms))
-    ),
-    readFile: (path: string): Promise<string> => {
-      const text = forms?.[path.slice(DEVTOOLS_ISSUE_FORM_DIR.length + 1)];
-
-      return text === undefined
-        ? Promise.reject(new Error(`ENOENT: ${path}`))
-        : Promise.resolve(text);
-    },
-  };
-}
-
-/** The instant every case is stamped with: 2026-09-18T12:34:56.789Z. */
-const CLOCK: DevToolsClock = () => new Date(
-  Date.UTC(2026, 8, 18, 12, 34, 56, 789),
-);
-
-/** What {@link CLOCK} spells as. */
-const STAMP = '20260918-123456-789';
-
-/** The round every case is assembled with, stated as a plugin option. */
-const ROUND = 'plugin-test';
-
-/** The port the fake dev server answers on. */
-const SERVER_PORT = 5173;
-
-/** The headers a page served by the dev server sends on a POST. */
-const SAME_ORIGIN_HEADERS: Readonly<Record<string, string>> = Object.freeze({
-  origin: `http://localhost:${SERVER_PORT}`,
-  host: `localhost:${SERVER_PORT}`,
-});
-
-/** The loopback address every allowed request arrives from. */
-const LOOPBACK_ADDRESS = '127.0.0.1';
-
-/** An address on the operator's network, not on loopback. */
-const LAN_ADDRESS = '192.168.1.24';
-
-/**
- * Assemble the middleware over a fresh recording filesystem.
+ * ## Where the cases that span more than one route live
  *
- * @param options - The plugin's options; `round` defaults to
- * {@link ROUND} so every case's paths are exact.
- * @param forms - The issue forms on the injected disk; see
- * {@link createFs}.
- * @param remote - What `git remote get-url origin` answers, when a
- * case scripts one.
- * @returns The assembly and the filesystem it was given.
+ * A case that drives one assembled middleware through more than one of
+ * its four routes in a row — a templates read, then a report post, then
+ * an "also affected" comment on the same fake tracker — is an
+ * INTEGRATION case rather than a per-route one, and it lives in
+ * `./endpoint.integration.test.ts`, over the same `./harness.ts` this
+ * file imports.
  */
-function assemble(
-  options: DevToolsPluginOptions = {},
-  forms: Readonly<Record<string, string>> | null = null,
-  remote?: string,
-): { readonly assembly: ReturnType<typeof assembleDevTools>; readonly fs: RecordingFs } {
-  const fs = createFs(forms);
-  // No repository unless a case scripts one: every command is refused,
-  // so the commit and the branch resolve to unknown and the round comes
-  // from the option above rather than from a branch this file would
-  // have to fake a checkout for.
-  const run: DevToolsCommandRunner = (args) => (
-    args[0] === 'remote' && remote !== undefined
-      ? { ok: true, stdout: `${remote}\n` }
-      : { ok: false }
-  );
-  const deps: DevToolsPluginDeps = {
-    fs,
-    now: CLOCK,
-    run,
-    env: {},
-    protocol: 'http:',
-  };
-
-  return { assembly: assembleDevTools({ round: ROUND, ...options }, deps), fs };
-}
-
-/** What one fake request needs stated. */
-interface FakeRequestInit {
-  /** The request method. */
-  readonly method: string;
-
-  /** The request target. */
-  readonly url: string;
-
-  /** The request headers; defaults to none. */
-  readonly headers?: Readonly<Record<string, string>>;
-
-  /** The socket's peer address, absent when the socket cannot say. */
-  readonly remoteAddress?: string;
-
-  /** The local end's port; absent when the socket cannot say. */
-  readonly localPort?: number;
-
-  /** The raw body, sent as a single chunk; absent for no body at all. */
-  readonly body?: string;
-}
-
-/**
- * Build a request the middleware can read, body included.
- *
- * @param init - The method, path, headers, socket facts and body.
- * @returns A request satisfying `DevToolsIncoming`.
- */
-function fakeRequest(init: FakeRequestInit): DevToolsIncoming {
-  const chunks = init.body === undefined
-    ? []
-    : [init.body];
-
-  return {
-    method: init.method,
-    url: init.url,
-    headers: init.headers ?? {},
-    socket: {
-      remoteAddress: init.remoteAddress,
-      localPort: init.localPort,
-    },
-    async *[Symbol.asyncIterator]() {
-      yield* chunks;
-    },
-  };
-}
 
 /**
  * Build a `POST /__devtools/report` request from the dev server's own
@@ -256,70 +105,6 @@ function reportRequest(
     remoteAddress: LOOPBACK_ADDRESS,
     localPort: SERVER_PORT,
     body,
-  });
-}
-
-/** What the middleware wrote to a fake response. */
-interface RecordedResponse {
-  /** The status code it was left with. */
-  readonly statusCode: number;
-
-  /** The body, parsed as JSON. */
-  readonly body: unknown;
-}
-
-/**
- * Build a response that records what the middleware writes to it.
- *
- * @returns The response, and a reader for what it recorded so far.
- */
-function createResponse(): {
-  readonly res: DevToolsOutgoing;
-  readonly read: () => RecordedResponse;
-} {
-  let body: unknown;
-  const res: DevToolsOutgoing = {
-    statusCode: 0,
-    setHeader: () => undefined,
-    end: (chunk: string) => {
-      body = JSON.parse(chunk);
-    },
-  };
-
-  return { res, read: () => ({ statusCode: res.statusCode, body }) };
-}
-
-/**
- * Drive the middleware and wait for it to finish answering.
- *
- * The middleware's own contract is synchronous — `./plugin.ts`'s header
- * says the async work inside it is launched rather than awaited — so a
- * case awaits this instead of the call itself. It resolves the moment a
- * response is written, or immediately when the request falls through to
- * `next()`.
- *
- * @param handler - The assembled middleware.
- * @param req - The request to hand it.
- * @param res - The response to hand it.
- * @returns Once the middleware has finished with this request.
- */
-function runMiddleware(
-  handler: DevToolsMiddleware,
-  req: DevToolsIncoming,
-  res: DevToolsOutgoing,
-): Promise<void> {
-  return new Promise((resolve) => {
-    const originalEnd = res.end.bind(res);
-
-    res.end = (chunk: string) => {
-      const outcome = originalEnd(chunk);
-
-      resolve();
-
-      return outcome;
-    };
-
-    handler(req, res, resolve);
   });
 }
 
