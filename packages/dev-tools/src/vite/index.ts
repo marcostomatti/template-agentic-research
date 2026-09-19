@@ -13,8 +13,9 @@
  *   `serve` alone, defining the commit, branch and round the About
  *   surface shows, answering `GET /__devtools/status` and `GET
  *   /__devtools/templates`, and accepting `POST /__devtools/report`
- *   behind a zod body schema, a same-origin check and a loopback check
- *   that only `allowLan` relaxes.
+ *   and the "also affected" `POST /__devtools/comment` behind a zod
+ *   body schema each, a same-origin check and a loopback check that
+ *   only `allowLan` relaxes.
  * - `assembleDevTools(options, deps)` beside it, the injected seam the
  *   plugin is a thin shell over: the filesystem, the clock, the command
  *   runner and the environment are arguments there, so a consumer that
@@ -28,7 +29,9 @@
  * either `node:` or `child_process` reaching `dist/index.js`.
  */
 
+export type { DevToolsComment } from './comment';
 export type {
+  DevToolsCommentedBody,
   DevToolsEndpointFs,
   DevToolsMiddleware,
   DevToolsStatusBody,
@@ -60,6 +63,7 @@ export type { DevToolsReport } from './report';
 export type { DevToolsStoredReport } from './store';
 
 export {
+  DEVTOOLS_COMMENT_PATH,
   DEVTOOLS_REPORT_PATH,
   DEVTOOLS_STATUS_PATH,
   DEVTOOLS_TEMPLATES_PATH,

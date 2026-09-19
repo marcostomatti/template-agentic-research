@@ -251,7 +251,7 @@ export interface DevToolsAssembly {
   /** Spec item 8.1's three defines, each already JSON-encoded. */
   readonly define: Readonly<Record<string, string>>;
 
-  /** The middleware answering all three endpoints. */
+  /** The middleware answering all four endpoints. */
   readonly handler: DevToolsMiddleware;
 }
 

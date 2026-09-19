@@ -14,12 +14,13 @@
  * ## What "ships none" means, concretely
  *
  * There is no `rafaGateway`, no `githubGateway` and no default
- * implementation anywhere in this plan, and `./plugin.ts` never
+ * implementation anywhere in this package, and `./plugin.ts` never
  * constructs one: a gateway arrives through `devtoolsPlugin({gateway})`
  * or the plugin has none, in which case `POST /__devtools/report`
  * answers `{status: 'stored', path}` after `./store.ts` has written the
- * files and `GET /__devtools/status` answers `gateway: 'none'`. That is
- * the whole of the plugin's gateway behaviour here.
+ * files, `POST /__devtools/comment` refuses with `gateway-absent`, and
+ * `GET /__devtools/status` answers `gateway: 'none'`. That is the whole
+ * of the plugin's gateway behaviour here.
  *
  * q20b-2's item 8 is what fills this in: `src/vite/gateway/rafa.ts`,
  * `rafaGateway({bin?, run?})`, implementing this interface over an
@@ -175,11 +176,12 @@ export type ReportGatewayCommentOutcome =
  * an implementation talks to a process or a network, and a dev-server
  * middleware that awaited a synchronous one would be lying about it.
  *
- * The three are deliberately independent — `./plugin.ts` in this plan
- * calls {@link file} alone, and q20b-2's drawer is what sequences
- * {@link search} before it and {@link comment} after it — so an
- * implementation that dedupes inside {@link file} and one that lets
- * the caller drive both are equally legal.
+ * The three are deliberately independent — `./endpoint.ts` calls
+ * {@link file} from the report route and {@link comment} from the
+ * "also affected" one, each on its own request, and the drawer is what
+ * sequences {@link search} between them — so an implementation that
+ * dedupes inside {@link file} and one that lets the caller drive both
+ * are equally legal.
  */
 export interface ReportGateway {
   /**

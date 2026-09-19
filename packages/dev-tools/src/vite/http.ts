@@ -1,5 +1,5 @@
 /**
- * The request plumbing both dev-tools routes sit on: the pathname
+ * The request plumbing every dev-tools route sits on: the pathname
  * reader, the capped body reader, the server-origin reader, and the two
  * writers every answer leaves through.
  *
@@ -9,9 +9,10 @@
  * routing alone, and it is what lets the readers and writers below be
  * driven directly by `./http.test.ts`: none of them needs an assembled
  * plugin, a filesystem or a clock, so a case there is an object literal
- * and an assertion — which is why this half of the pair has a colocated
- * suite where `./endpoint.ts` still sends its cases to
- * `./plugin.test.ts`.
+ * and an assertion. `./endpoint.ts`'s own cases are split across
+ * `./plugin.test.ts` and `./endpoint.test.ts` on whether they need an
+ * assembly to resolve a build value; that module's header has the
+ * rule.
  *
  * ## What every response looks like
  *
@@ -23,9 +24,10 @@
  * rule, reason}`, where `reason` is a fixed sentence and never a value
  * the request carried. The rules this module owns are
  * {@link DevToolsEndpointRule} and their sentences are frozen in one
- * table here; `./origin.ts`, `./report.ts` and `./store.ts` carry their
- * own rule names and their own sentences, and a refusal from one of
- * them is answered with that name rather than remapped onto this set.
+ * table here; `./origin.ts`, `./report.ts`, `./comment.ts`,
+ * `./store.ts` and `./endpoint.ts` carry their own rule names and their
+ * own sentences, and a refusal from one of them is answered with that
+ * name rather than remapped onto this set.
  *
  * ## Why the rule union is still called `DevToolsEndpointRule`
  *
@@ -76,9 +78,10 @@ export const HTTP_SERVER_ERROR = 500;
 /**
  * Which rule refused, for the refusals this plumbing owns.
  *
- * `./origin.ts`, `./report.ts` and `./store.ts` each carry their own
- * rule names, and a refusal from one of them is answered with that
- * name rather than remapped onto this set.
+ * `./origin.ts`, `./report.ts`, `./comment.ts`, `./store.ts` and
+ * `./endpoint.ts` each carry their own rule names, and a refusal from
+ * one of them is answered with that name rather than remapped onto
+ * this set.
  */
 export type DevToolsEndpointRule =
   | 'method-not-allowed'
@@ -113,7 +116,8 @@ export interface DevToolsRefusalBody {
   /**
    * Which rule refused — one of {@link DevToolsEndpointRule},
    * `./origin.ts`'s `DevToolsRequestRule`, `./store.ts`'s
-   * `DevToolsStoreRule`, or `body.<field path>` for `./report.ts`.
+   * `DevToolsStoreRule`, `./endpoint.ts`'s `gateway-absent`, or
+   * `body.<field path>` for `./report.ts` and `./comment.ts`.
    */
   readonly rule: string;
 

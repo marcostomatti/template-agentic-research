@@ -136,6 +136,38 @@ Stores a report and attachments.
 }
 ```
 
+### `POST /__devtools/comment`
+
+The "also affected" route: adds a comment to an issue the tracker
+already has, which is how a report that matched an existing one ends.
+It writes nothing to disk — the report it is about was stored by the
+route above on an earlier request.
+
+**Request body**:
+- `issueId`: the tracker's own id, up to 128 characters. An identifier
+  charset only, and never one beginning with a dash: a gateway passes
+  it to `rafa` as an argv element, where a leading dash reads as a flag.
+- `body`: the comment markdown, up to 5,000 characters
+
+**Success (200)**:
+```json
+{
+  "status": "commented",
+  "gateway": { "status": "filed", "tracker": "local", "id": "AR-123" }
+}
+```
+
+`gateway` is whatever `ReportGateway.comment` answered, wrapped rather
+than returned bare. A gateway that refused is still a 200 carrying
+`{"status": "refused", "reason": "…"}` under that key, because the
+REQUEST was not refused; a top-level `"status": "refused"` always means
+the request itself was.
+
+A dev server configured with no gateway refuses this route with
+`gateway-absent` — see below — since there is nowhere for a comment to
+go. The body is validated first either way, so a malformed one is
+refused the same on every machine.
+
 ### Refusals
 
 | Rule | Code | Reason | When |
@@ -143,12 +175,13 @@ Stores a report and attachments.
 | `remote-not-loopback` | 403 | Non-loopback address without `allowLan` | Remote not allowed |
 | `origin-mismatch` | 403 | Request `Origin` header mismatch | Cross-origin `POST` |
 | `host-mismatch` | 403 | Request `Host` header mismatch | Cross-origin `POST` |
-| `method-not-allowed` | 405 | Wrong method for path | `GET` to `/report`, or `POST` to `/status` or `/templates` |
+| `method-not-allowed` | 405 | Wrong method for path | `GET` to `/report` or `/comment`, or `POST` to `/status` or `/templates` |
 | `body-too-large` | 413 | Over 24 MiB | Oversized body |
 | `body-unreadable` | 400 | Stream error | Read failed |
 | `body-not-json` | 400 | `JSON.parse` failed | Invalid JSON |
 | `slug-unusable` | 400 | Title sanitises to empty | Body validation |
 | `attachment-name-unusable` | 400 | Attachment name empty | Body validation |
+| `gateway-absent` | 500 | No gateway configured | `POST` to `/comment` with no `gateway` option |
 | `round-unusable` | 500 | Round is empty | Server state |
 | `clock-unusable` | 500 | Timestamp failed | Server state |
 | `write-failed` | 500 | Filesystem error | Server I/O |
