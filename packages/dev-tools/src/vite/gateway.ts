@@ -11,21 +11,24 @@
  * business, behind an injected gateway the plugin declares here and
  * leaves empty."
  *
- * ## What "ships none" means, concretely
+ * ## What this file ships, and what `./plugin.ts` does with it
  *
- * There is no `rafaGateway`, no `githubGateway` and no default
- * implementation anywhere in this package, and `./plugin.ts` never
- * constructs one: a gateway arrives through `devtoolsPlugin({gateway})`
- * or the plugin has none, in which case `POST /__devtools/report`
- * answers `{status: 'stored', path}` after `./store.ts` has written the
- * files, `POST /__devtools/comment` refuses with `gateway-absent`, and
- * `GET /__devtools/status` answers `gateway: 'none'`. That is the whole
- * of the plugin's gateway behaviour here.
+ * `./plugin.ts` never CONSTRUCTS a gateway: one arrives through
+ * `devtoolsPlugin({gateway})` or the plugin has none, in which case
+ * `POST /__devtools/report` answers `{status: 'stored', path}` after
+ * `./store.ts` has written the files, `POST /__devtools/comment`
+ * refuses with `gateway-absent`, and `GET /__devtools/status` answers
+ * `gateway: 'none'`. That is the whole of the plugin's gateway
+ * behaviour, and it did not change when an implementation arrived.
  *
- * q20b-2's item 8 is what fills this in: `src/vite/gateway/rafa.ts`,
- * `rafaGateway({bin?, run?})`, implementing this interface over an
- * injected `run(argv)` that drives the `rafa` binary with an argv ARRAY
- * and parses its NDJSON result events. A second implementation over
+ * What DID change: q20b-1 shipped no implementation anywhere in this
+ * package, and q20b-2's item 8 landed one beside this file —
+ * `./gateway/rafa.ts`, `rafaGateway({bin?, run?, module?, priority?})`,
+ * implementing this interface over an injected `run(argv)` that drives
+ * the `rafa` binary with an argv ARRAY, and `./gateway/call.ts`, which
+ * parses its NDJSON result events. Neither is reached from here: this
+ * file still exports no value, and a consumer that wants the rafa one
+ * imports it by name. A later implementation over
  * `@open-tomato/rafa/qa-bug-reporter` is named in that spec as a
  * further implementation of this same interface rather than a rewrite,
  * which is the reason the seam is an interface and not a function
@@ -36,9 +39,10 @@
  * Nothing here exists at runtime. Every declaration below is erased by
  * the compiler, so there is no behaviour a case could pin and no
  * `.js` for one to import; the cases that prove the shape is usable
- * are q20b-2's, against its implementation. `./store.ts` is the
- * module in this pair that has a colocated `store.test.ts`, because it
- * is the one that does something.
+ * live beside the implementation, in `./gateway/rafa.test.ts` and
+ * `./gateway/call.test.ts`. `./store.ts` is the module in this pair
+ * that has a colocated `store.test.ts`, because it is the one that
+ * does something.
  *
  * ## Why the interface is not named with the package's prefix
  *
