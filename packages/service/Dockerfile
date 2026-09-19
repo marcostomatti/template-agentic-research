@@ -21,6 +21,8 @@ COPY package.json bun.lock ./
 COPY packages/service/package.json ./packages/service/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/web/package.json ./packages/web/
+# Manifest only, so bun install --frozen-lockfile accepts the lockfile; no other file of @ar/dev-tools enters the image.
+COPY packages/dev-tools/package.json ./packages/dev-tools/
 RUN bun install --frozen-lockfile --filter '@ar/service'
 
 # ---------------------------------------------------------------------------
@@ -59,6 +61,8 @@ COPY package.json bun.lock ./
 COPY packages/service/package.json ./packages/service/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/web/package.json ./packages/web/
+# Manifest only, so bun install --frozen-lockfile accepts the lockfile; no other file of @ar/dev-tools enters the image.
+COPY packages/dev-tools/package.json ./packages/dev-tools/
 RUN bun install --frozen-lockfile --filter '@ar/ui' --filter '@ar/web'
 
 COPY tsconfig.base.json ./
@@ -85,6 +89,8 @@ COPY package.json bun.lock ./
 COPY packages/service/package.json ./packages/service/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/web/package.json ./packages/web/
+# Manifest only, so bun install --frozen-lockfile accepts the lockfile; no other file of @ar/dev-tools enters the image.
+COPY packages/dev-tools/package.json ./packages/dev-tools/
 RUN bun install --frozen-lockfile --production --filter '@ar/service'
 
 COPY --from=build /app/packages/service/lib ./packages/service/lib

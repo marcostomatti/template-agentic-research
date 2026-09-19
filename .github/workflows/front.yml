@@ -1,6 +1,6 @@
 name: Front
 
-# Frontend pipeline: @ar/ui + @ar/web. Two jobs:
+# Frontend pipeline: @ar/ui + @ar/web + @ar/dev-tools. Two jobs:
 #
 # - checks: hosted runner — lint, types, unit tests + bundle guard, library
 #   build, storybook compile, web build, and @ar/web's own two-runner
@@ -21,6 +21,7 @@ on:
     paths:
       - 'packages/ui/**'
       - 'packages/web/**'
+      - 'packages/dev-tools/**'
       - 'package.json'
       - 'bun.lock'
       - 'tsconfig.base.json'
@@ -33,6 +34,7 @@ on:
     paths:
       - 'packages/ui/**'
       - 'packages/web/**'
+      - 'packages/dev-tools/**'
       - 'package.json'
       - 'bun.lock'
       - 'tsconfig.base.json'
@@ -83,16 +85,27 @@ jobs:
       - name: Build @ar/ui
         run: bun run --filter '@ar/ui' build
 
+      # Same reason, same place: once @ar/web takes @ar/dev-tools as a
+      # devDependency it resolves it through that package's gitignored dist
+      # exports, so it is built here, before the per-package checks below.
+      # Nothing rebuilds it later in this job — no pretest fronts it — so
+      # this step is the only build it gets.
+      - name: Build @ar/dev-tools
+        run: bun run --filter '@ar/dev-tools' build
+
       - name: Lint
-        run: bun run --filter '@ar/ui' lint && bun run --filter '@ar/web' lint
+        run: bun run --filter '@ar/ui' lint && bun run --filter '@ar/dev-tools' lint && bun run --filter '@ar/web' lint
 
       - name: Type-check
-        run: bun run --filter '@ar/ui' check-types && bun run --filter '@ar/web' check-types
+        run: bun run --filter '@ar/ui' check-types && bun run --filter '@ar/dev-tools' check-types && bun run --filter '@ar/web' check-types
 
       # `test` in @ar/ui runs pretest (library build + ioredis bundle guard)
-      # then the unit project.
+      # then the unit project. `test` in @ar/dev-tools runs its two vitest
+      # projects (jsdom over core/features, node over vite) and no guard.
+      # The `&&` short-circuits: a red @ar/ui means the dev-tools suite
+      # never ran, so its absence from the log is not a pass.
       - name: Unit tests + bundle guard
-        run: bun run --filter '@ar/ui' test
+        run: bun run --filter '@ar/ui' test && bun run --filter '@ar/dev-tools' test
 
       - name: Storybook compile
         working-directory: packages/ui

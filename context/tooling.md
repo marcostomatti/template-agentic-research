@@ -3,7 +3,8 @@
 - `eslint.base.mjs` + `sharedRules.mjs` at the root; each package (and the
   root) layers its own leaf `eslint.config.mjs` on top.
 - `tsconfig.base.json` is the shared strict core; leaves specialize
-  (DOM/react-jsx for ui/web, node-strict for service, root covers `tools/`).
+  (DOM/react-jsx for ui/web, DOM+node for dev-tools, node-strict
+  for service, root covers `tools/`).
 - Root scripts: `lint:all`, `check-types:all`, `test:all` fan out to every
   package; bare `lint`/`check-types`/`test` cover root files + `tools/`.
 - Runtime: bun-first (`packageManager` pinned). `@ar/ui`'s test toolchain
@@ -258,9 +259,11 @@
   stops resolving, rather than assuming your own edit. A SECOND cause
   produces the same `import/no-unresolved` symptom and needs the opposite
   response: another process REBUILDING a package's gitignored `dist/`.
-  `@ar/web`'s `pretest` wipes and rewrites `@ar/ui`'s, so a `lint` started
-  while that build is in flight reports the error against a file the
-  branch never touched, with `check-types` GREEN through it (that
+  `@ar/web`'s `pretest` wipes and rewrites `@ar/ui`'s — and, since it
+  builds `@ar/dev-tools` under the same filtered run, that package's as
+  well — so a `lint` started while that build is in flight reports the
+  error against a file the branch never touched, with `check-types`
+  GREEN through it (that
   package's exports map resolves types and values from DIFFERENT files).
   Attribute before investigating — `git log --oneline <base>..HEAD --
   <the named file>` and `git status --short -uall -- <it>` both answering
