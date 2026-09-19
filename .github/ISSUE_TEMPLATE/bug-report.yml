@@ -1,0 +1,74 @@
+# GitHub issue form. Two readers:
+#
+#   - GitHub's own "new issue" chooser, so a bug filed by hand takes the
+#     same shape as one the dev-tools feedback widget files.
+#   - `@ar/dev-tools`' plugin half, which parses this file and renders its
+#     `body` items as the widget's form fields.
+#
+# The `x-devtools` key below is not part of GitHub's schema; GitHub ignores
+# unknown top-level keys, and the widget reads it to decide which of its own
+# three fields to append. A bug report gets a screenshot and the always
+# present context block, but no element selector: a bug is rarely about one
+# node, and `ui-feedback.yml` is the form that picks one.
+name: Bug report
+description: Something in the app behaves wrong, breaks, or errors.
+title: '[fb/manual] '
+labels: ['type:bug', 'needs-triage']
+
+x-devtools:
+  screenshot: true
+  selector: false
+
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, in the order you saw it.
+      placeholder: Opening the lexicon editor cleared the selected node.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: One step per line, starting from a freshly loaded page.
+      placeholder: |
+        1. Open the lexicon surface at /d/<domain>/lexicon
+        2. Select a node in the tree
+        3. Press Save
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behaviour
+    attributes:
+      label: Expected behaviour
+      description: What should have happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-message
+    attributes:
+      label: Error message shown, if any
+      description: >-
+        The message the app or the console showed, copied verbatim. Leave
+        empty when there was none.
+      render: shell
+    validations:
+      required: false
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How much of the app this stops. Triage may change it.
+      options:
+        - blocker - the surface cannot be used at all
+        - major - a task cannot be completed, no workaround
+        - minor - a task can be completed, with a workaround
+        - cosmetic - it looks wrong, it works
+    validations:
+      required: true
