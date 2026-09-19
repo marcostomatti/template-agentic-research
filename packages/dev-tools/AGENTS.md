@@ -34,6 +34,7 @@ gates, workflow, and loop architecture.
 | `src/vite/origin.ts` | LAN access: `DEVTOOLS_ALLOW_LAN` enables `0.0.0.0`, default `localhost`. |
 | `src/vite/store.ts` | Round tag, persistence flag, report rounds persist. |
 | `src/vite/gateway.ts` | Report gateway interface, behaviour deferred. |
+| `src/vite/templates.ts` | Reads `.github/ISSUE_TEMPLATE/*.yml`, or configured paths, through an injected filesystem; parses with `yaml` and maps GitHub's five body types (`markdown`, `input`, `textarea`, `dropdown`, `checkboxes`) onto `ReportField`s, validated by `reportTemplate.ts`'s schema. Nothing is fatal: a directory that cannot be listed answers `[]`, an unreadable/oversized/malformed/unusable file is skipped with a warning naming it, and an unknown body type skips that ITEM only. `config.yml` and non-`.yml` entries are skipped silently. |
 | `src/index.ts` | Browser entry: exports types, `mountDevTools`, `devtoolsBus`. |
 
 ## Two vitest projects
