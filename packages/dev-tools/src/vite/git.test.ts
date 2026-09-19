@@ -10,6 +10,7 @@ import {
   DEVTOOLS_ROUND_ENV_NAME,
   DEVTOOLS_UNKNOWN_BUILD_VALUE,
   resolveDevToolsBuildInfo,
+  resolveDevToolsRepo,
 } from './git';
 
 /**
@@ -37,7 +38,14 @@ import {
  * commands refused" are indistinguishable from the values alone.
  *
  * Cases that answer `unknown` run before the cases that answer a value,
- * which is this plan's order for every test file in the package.
+ * which is this plan's order for every test file in the package. Both
+ * of the file's exports are grouped that way across the file, not
+ * within their own pair: the two refusal blocks run first, then the two
+ * reading blocks.
+ *
+ * `resolveDevToolsRepo` shares the scripted runner, so the repository
+ * slug is read over the same refuse-by-omission script: leaving
+ * `remote` out of a script is a repository with no `origin`.
  */
 
 /** A scripted runner and the argv it was handed, in order. */
@@ -59,6 +67,9 @@ interface Script {
 
   /** `rev-parse --abbrev-ref HEAD`'s answer; absent means it refuses. */
   readonly branch?: string;
+
+  /** `remote get-url origin`'s answer; absent means it refuses. */
+  readonly remote?: string;
 }
 
 /** The argv `git.ts` runs to ask whether this is a work tree. */
@@ -69,6 +80,9 @@ const COMMIT_CALL = 'rev-parse HEAD';
 
 /** The argv `git.ts` runs to read the branch. */
 const BRANCH_CALL = 'rev-parse --abbrev-ref HEAD';
+
+/** The argv `git.ts` runs to read the `origin` remote's url. */
+const REMOTE_CALL = 'remote get-url origin';
 
 /** A hash of the shape a sha1 repository answers. */
 const HASH = '4f22b541b723707739e74421b36d1d04ade2e755';
@@ -87,6 +101,7 @@ function scripted(script: Script): ScriptedRunner {
     [PROBE_CALL, script.probe],
     [COMMIT_CALL, script.commit],
     [BRANCH_CALL, script.branch],
+    [REMOTE_CALL, script.remote],
   ]);
 
   return {
@@ -128,6 +143,24 @@ function resolve(script: Script, env = NO_ENV) {
 
   return { info: resolveDevToolsBuildInfo({ run: runner.run, env }), runner };
 }
+
+/**
+ * Resolve the repository slug over a remote url.
+ *
+ * @param remote - What `git remote get-url origin` prints; left out to
+ * have that command refuse, which is a repository with no `origin`.
+ * @returns The slug and the runner's call log.
+ */
+function resolveRepo(remote?: string) {
+  const runner = scripted(remote === undefined
+    ? {}
+    : { remote });
+
+  return { repo: resolveDevToolsRepo(runner.run), runner };
+}
+
+/** A remote url of the shape GitHub prints for a cloned repository. */
+const HTTPS_REMOTE = 'https://github.com/open-tomato/agentic-research.git';
 
 describe('what resolveDevToolsBuildInfo cannot read', () => {
   it('answers unknown for all three outside a repository', () => {
@@ -286,6 +319,69 @@ describe('what resolveDevToolsBuildInfo cannot read', () => {
   });
 });
 
+describe('what resolveDevToolsRepo cannot read', () => {
+  it('answers unknown when there is no origin remote', () => {
+    // Arrange: `git remote get-url origin` exits 2 with "No such
+    // remote" in a repository nobody cloned and nobody added a remote
+    // to, which is one refused command to this seam.
+    // Act
+    const { repo, runner } = resolveRepo();
+
+    // Assert
+    expect(repo).toBe(DEVTOOLS_UNKNOWN_BUILD_VALUE);
+
+    // One command, and no work-tree probe before it: a repo read that
+    // silently ran nothing would answer unknown just the same.
+    expect(runner.calls).toEqual([REMOTE_CALL]);
+
+    // The control: the same call over a runner that answers a url
+    // answers the slug.
+    expect(resolveRepo(HTTPS_REMOTE).repo).toBe('open-tomato/agentic-research');
+  });
+
+  it('answers unknown for a remote that prints nothing', () => {
+    // Arrange: exit 0 and an empty stdout is not a url.
+    // Act and assert
+    for (const stdout of ['', '   \n']) {
+      expect(resolveRepo(stdout).repo).toBe(DEVTOOLS_UNKNOWN_BUILD_VALUE);
+    }
+
+    // The control
+    expect(resolveRepo(HTTPS_REMOTE).repo).toBe('open-tomato/agentic-research');
+  });
+
+  it('answers unknown for a url it cannot parse', () => {
+    // Arrange: the slug is spliced into a GitHub new-issue link, so
+    // anything that is no `owner/name` remote is dropped rather than
+    // echoed. A local path, a host with no owner, an owner with no
+    // name, a third path segment, a space, and dot segments that would
+    // climb out of a url path are all refused.
+    const rejected = [
+      'warning: core.hooksPath is set',
+      '/Users/someone/projects/agentic-research',
+      '../agentic-research',
+      'https://github.com/',
+      'https://github.com/open-tomato',
+      'https://github.com/open-tomato/agentic-research/tree/main',
+      'https://github.com/open tomato/agentic-research',
+      'https://github.com/../..',
+      'git@github.com:open-tomato',
+      'git@github.com',
+      `https://github.com/open-tomato/${'x'.repeat(101)}`,
+    ];
+
+    // Act and assert
+    for (const stdout of rejected) {
+      expect(resolveRepo(stdout).repo).toBe(DEVTOOLS_UNKNOWN_BUILD_VALUE);
+    }
+
+    // The control: the two shapes a real remote takes still parse.
+    expect(resolveRepo(HTTPS_REMOTE).repo).toBe('open-tomato/agentic-research');
+    expect(resolveRepo('git@github.com:open-tomato/agentic-research').repo)
+      .toBe('open-tomato/agentic-research');
+  });
+});
+
 describe('what resolveDevToolsBuildInfo reads', () => {
   it('runs the repository probe before anything else', () => {
     // Arrange and act
@@ -402,5 +498,68 @@ describe('what resolveDevToolsBuildInfo reads', () => {
     // Assert
     expect(ok([])).toEqual({ ok: true, stdout: 'true\n' });
     expect(failed([])).toEqual({ ok: false });
+  });
+});
+
+describe('what resolveDevToolsRepo reads', () => {
+  it('answers owner/name for an https url', () => {
+    // Arrange and act: the url `git clone https://…` writes, with the
+    // newline `git` prints and without the `.git` suffix stripped yet.
+    const { repo, runner } = resolveRepo(
+      'https://github.com/open-tomato/agentic-research\n',
+    );
+
+    // Assert
+    expect(repo).toBe('open-tomato/agentic-research');
+    expect(runner.calls).toEqual([REMOTE_CALL]);
+
+    // A host that is not GitHub parses the same way: the slug is a path
+    // reading, not a host reading.
+    expect(resolveRepo('https://gitlab.example.com/team/thing').repo)
+      .toBe('team/thing');
+  });
+
+  it('answers owner/name for a git@ url', () => {
+    // Arrange and act
+    const { repo } = resolveRepo('git@github.com:open-tomato/agentic-research');
+
+    // Assert
+    expect(repo).toBe('open-tomato/agentic-research');
+
+    // The `ssh://` spelling git writes for a remote carrying a port
+    // reaches the same slug.
+    expect(resolveRepo('ssh://git@github.com:22/open-tomato/thing').repo)
+      .toBe('open-tomato/thing');
+  });
+
+  it('drops a .git suffix from either form', () => {
+    // Arrange: `git clone` leaves the suffix on, and a GitHub slug
+    // never carries it.
+    // Act and assert
+    expect(resolveRepo(HTTPS_REMOTE).repo).toBe('open-tomato/agentic-research');
+    expect(resolveRepo('git@github.com:open-tomato/agentic-research.git').repo)
+      .toBe('open-tomato/agentic-research');
+
+    // The control that keeps the strip honest: only the TRAILING
+    // suffix goes, so a repository actually named `.git`-something
+    // keeps its name and a `.github` owner survives whole.
+    expect(resolveRepo('https://github.com/open-tomato/dot.github').repo)
+      .toBe('open-tomato/dot.github');
+    expect(resolveRepo('https://github.com/.github/profile.git').repo)
+      .toBe('.github/profile');
+  });
+
+  it('answers the slug alone for a url carrying credentials', () => {
+    // Arrange: a remote a CI checkout wrote carries a token in its
+    // userinfo, and that value must never reach the browser through the
+    // status payload.
+    const url = 'https://x-access-token:ghs_SECRET@github.com/open/thing.git';
+
+    // Act
+    const { repo } = resolveRepo(url);
+
+    // Assert: the two captured segments and nothing else.
+    expect(repo).toBe('open/thing');
+    expect(repo).not.toContain('ghs_SECRET');
   });
 });

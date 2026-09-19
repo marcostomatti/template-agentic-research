@@ -78,6 +78,18 @@
  * function that sanitises the round again when it names a directory, so
  * the round the browser is told and the round on disk cannot drift.
  *
+ * ## The fourth value is read on its own
+ *
+ * {@link resolveDevToolsRepo} answers the `owner/name` slug of the
+ * `origin` remote, which spec item 7 needs for the prefilled GitHub
+ * new-issue link on the local-tracker path. It is a separate export
+ * rather than a fourth member of {@link DevToolsBuildInfo} because the
+ * three members of that record are spliced into the browser bundle by
+ * `./plugin.ts`'s `define` and the slug is not: it is read per
+ * dev-server start by `GET /__devtools/status` alone. It takes the
+ * runner directly, not {@link DevToolsGitDeps}, because no environment
+ * variable states it.
+ *
  * ## Mutation note - what the colocated cases actually catch
  *
  * A green suite is not evidence a case can fail. Each leg below was
@@ -128,6 +140,31 @@
  *   stated` and `falls back to the branch when the environment round is
  *   unusable`, the second because an unsanitised `'   '` is truthy and
  *   never falls through.
+ *
+ * The slug read was measured the same way, over the same baseline:
+ *
+ * - Having {@link repoFromUrl} answer the url unparsed where neither
+ *   pattern matches answers `1 failed | 21 passed (22)` - `answers
+ *   unknown for a url it cannot parse`.
+ * - Dropping the {@link DOTS_ONLY} guard answers `1 failed | 21
+ *   passed` - the same case, on its `https://github.com/../..` entry.
+ * - Stripping `.git` everywhere rather than off the end answers `1
+ *   failed | 21 passed` - `drops a .git suffix from either form`,
+ *   which is why that case carries a `.github` owner and a
+ *   `dot.github` name as its control half.
+ * - Stripping it nowhere answers `5 failed | 17 passed`, since the
+ *   control half of nearly every refusal case is an https url with the
+ *   suffix on.
+ * - Making {@link HTTP_REMOTE_PATTERN}'s userinfo group CAPTURING, so
+ *   the destructure takes the credentials as the owner, answers `6
+ *   failed | 16 passed` - including `answers the slug alone for a url
+ *   carrying credentials`, the case whose whole point is that nothing
+ *   before the host is answered.
+ * - Reading the remote's stdout directly instead of through
+ *   {@link readLine} answers `1 failed | 21 passed` - `answers
+ *   owner/name for an https url`, on the newline `git` prints. The
+ *   null guard itself is NOT separately pinned: a refused command and
+ *   an empty stdout both reach `unknown` either way.
  *
  * One thing no case pins: NO case here runs a real `git`, so the
  * agreement between {@link DevToolsCommandRunner} and `spawnSync`'s
@@ -434,4 +471,107 @@ export function resolveDevToolsBuildInfo(
     branch,
     round: statedRound ?? roundFromBranch(branch),
   });
+}
+
+/** Spec item 7's remote read. */
+const REMOTE_ARGS: readonly string[] = Object.freeze([
+  'remote',
+  'get-url',
+  'origin',
+]);
+
+/** What a remote url may carry after the host, per path segment. */
+const REPO_SEGMENT = '[A-Za-z0-9._-]{1,100}';
+
+/**
+ * An `https://` (or `http://`) remote, with optional userinfo and port.
+ *
+ * A token-carrying url — `https://x-access-token:...@host/owner/name` —
+ * is matched by the optional userinfo group, and the userinfo is
+ * DROPPED rather than answered: only the two captured segments reach a
+ * caller, so no credential a remote url carries can reach the browser.
+ */
+const HTTP_REMOTE_PATTERN = new RegExp(
+  `^https?://(?:[^\\s/@]+@)?[^\\s/:@]+(?::\\d{1,5})?/(${REPO_SEGMENT})/(${REPO_SEGMENT})$`,
+);
+
+/**
+ * A `git@host:owner/name` remote, and its `ssh://git@host/owner/name`
+ * spelling, which git writes for a remote carrying a port.
+ */
+const SCP_REMOTE_PATTERN = new RegExp(
+  `^(?:ssh://)?[^\\s/@]+@[^\\s/:@]+(?::\\d{1,5})?[:/](${REPO_SEGMENT})/(${REPO_SEGMENT})$`,
+);
+
+/** The suffix git leaves on a remote url and GitHub's slug does not. */
+const GIT_SUFFIX = '.git';
+
+/** A segment made of dots alone, which names no owner and no repo. */
+const DOTS_ONLY = /^\.+$/;
+
+/**
+ * Turn a remote url into `owner/name`.
+ *
+ * @param url - What `git remote get-url origin` printed, trimmed.
+ * @returns The slug, or `null` for a url neither pattern matches and
+ * for one whose owner or name is dots alone.
+ */
+function repoFromUrl(url: string): string | null {
+  const bare = url.endsWith(GIT_SUFFIX)
+    ? url.slice(0, -GIT_SUFFIX.length)
+    : url;
+  const match = HTTP_REMOTE_PATTERN.exec(bare) ?? SCP_REMOTE_PATTERN.exec(bare);
+
+  if (match === null) {
+    return null;
+  }
+
+  const [, owner, name] = match;
+
+  if (
+    owner === undefined
+    || name === undefined
+    || DOTS_ONLY.test(owner)
+    || DOTS_ONLY.test(name)
+  ) {
+    return null;
+  }
+
+  return `${owner}/${name}`;
+}
+
+/**
+ * Resolve the `owner/name` slug of the `origin` remote.
+ *
+ * Runs exactly one command, `git remote get-url origin`, and reads its
+ * single-line answer through the same {@link readLine} the three build
+ * values use. Nothing here throws: a directory that is no repository, a
+ * repository with no `origin`, and a `git` that is not on the `PATH`
+ * all answer {@link DEVTOOLS_UNKNOWN_BUILD_VALUE}, because all three
+ * are one refused command to this seam.
+ *
+ * No work-tree probe runs first: unlike the commit and the branch,
+ * there is one read here, so a probe would double the cost of the
+ * answering case to save nothing in the refusing one.
+ *
+ * The slug reaches a caller only through the two patterns above, and
+ * the two capture groups are all that is answered. So a remote url
+ * carrying credentials, a host, a port or a query answers the slug
+ * alone or answers `unknown` — never a fragment of the url itself. That
+ * matters because spec item 7 splices this value into a GitHub
+ * new-issue link.
+ *
+ * @param run - The injected runner, the same seam
+ * {@link resolveDevToolsBuildInfo} takes.
+ * @returns `owner/name`, or {@link DEVTOOLS_UNKNOWN_BUILD_VALUE} when
+ * there is no remote to read or its url parses as no repository.
+ */
+export function resolveDevToolsRepo(run: DevToolsCommandRunner): string {
+  const line = readLine(run, REMOTE_ARGS);
+
+  if (line === null) {
+    return DEVTOOLS_UNKNOWN_BUILD_VALUE;
+  }
+
+  return repoFromUrl(line) ?? DEVTOOLS_UNKNOWN_BUILD_VALUE;
 }

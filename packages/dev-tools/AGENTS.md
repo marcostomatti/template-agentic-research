@@ -31,7 +31,7 @@ gates, workflow, and loop architecture.
 | `src/vite/plugin.ts` | Vite plugin: injects `define` (three version constants), endpoint. |
 | `src/vite/endpoint.ts` | Routing and the route handlers ALONE: `GET /__devtools/status` (git, persistence), `POST /report` (body, log). Its request plumbing lives in `http.ts`; its cases live in `plugin.test.ts`, since the middleware is reached only through `assembleDevTools`. |
 | `src/vite/http.ts` | The request plumbing both routes sit on, with its own colocated node tests: the pathname reader, the body reader and its 24 MiB cap, the server-origin reader (port off the accepted socket), the `respond` and `refuse` writers, the refusal body and the status codes. |
-| `src/vite/git.ts` | Sync reads `HEAD`, branch, round from `.git` or `unknown`. |
+| `src/vite/git.ts` | Sync reads `HEAD`, branch, round from `.git` or `unknown`, plus the `owner/name` slug of the `origin` remote (`git remote get-url origin`, https and `git@` forms, `.git` suffix dropped) as a separate export — the three build values reach a `define`, the slug reaches the status route only. |
 | `src/vite/origin.ts` | LAN access: `DEVTOOLS_ALLOW_LAN` enables `0.0.0.0`, default `localhost`. |
 | `src/vite/store.ts` | Round tag, persistence flag, report rounds persist. |
 | `src/vite/gateway.ts` | Report gateway interface, behaviour deferred. |
