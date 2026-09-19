@@ -45,6 +45,14 @@ per case (Node 25 ships Web Storage global).
 **node (`src/vite/**/*.test.ts`)**: Dev-server layer; Node builtins
 free. eslint forbids `node:*` / `child_process` outside `src/vite/`.
 
+`postbuild` is npm-lifecycle-named, so `bun run build` ALREADY runs
+the leak grep over `dist/index.js` and exits with the grep's code.
+A `build` that exits `1` under a successful `vite build` line is the
+grep refusing a `node:`/`child_process` import that reached the
+browser entry — not a bundler failure. Running `bun run postbuild`
+again afterwards is redundant, and useful only to read that step's
+exit code on its own.
+
 ## The storage key
 
 **One only:** `devtools.settings` = `{size, handles}`. Never reads
@@ -66,7 +74,13 @@ here knows it moves.
 
 - `src/core/**` imports no Node builtins, no `src/features/**`
 - `src/features/**` imports `src/core/**` only
-- `src/vite/**` imports nothing above
+- `src/vite/**` is imported by NEITHER of the two above. It is not
+  forbidden the reverse direction: `eslint.config.mjs` lets
+  `src/vite/**` import `src/core/**`, which is the spec's rule read
+  literally rather than an oversight — no file uses it, and a
+  reviewer meeting the asymmetry should leave it alone. (Replaces the
+  earlier "imports nothing above", which read as a ban in both
+  directions and the config never enforced one.)
 - Shell imports no feature module. Features reach shell only through
   host (prop). Features array in `DevToolsConfig.features`. Host
   frozen, unchanged while mounted.
@@ -85,6 +99,7 @@ New need = new host member, never Shell import or feature import.
 
 ## Context pages
 
-- `context/testing.md` — two-runner split, jsdom quirks, why widget
-  invisible to default e2e, forced project and server port, absence
-  control in default suite.
+- `packages/web/context/testing.md` — two-runner split, jsdom quirks,
+  why the widget is invisible to the default e2e suite, the forced
+  project and its server port, the absence control in the default
+  suite.

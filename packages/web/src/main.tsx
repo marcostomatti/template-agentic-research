@@ -83,6 +83,18 @@
  * those inside a `dist/assets/devtools-*.js` chunk no shipped build
  * emits.
  *
+ * The grep to NOT reach for is the bare substring `devtools`, which
+ * hits a clean build and reads as a leak. React ships its own
+ * `__REACT_DEVTOOLS_GLOBAL_HOOK__` identifier, and the browser scheme
+ * allow-list carries the literal `devtools:` — neither has anything
+ * to do with `@ar/dev-tools`. The four literals that discriminate are
+ * `About`, `mountDevTools`, `data-devtools-root` and
+ * `__DEVTOOLS_COMMIT__`, all `0` in the shipped build. Pair them with
+ * a planted control over something the bundle certainly holds
+ * (`Agentic Research`, from `index.html`'s title, reads `1`) so a
+ * row of zeros is a reading rather than a grep that matched nothing
+ * because `dist/` was stale or the path was wrong.
+ *
  * LAST is about what a failure can cost. The import resolves on a later
  * microtask, so no part of the dev tools is on the path to the first
  * paint, and a dev-tools module that throws while loading rejects a

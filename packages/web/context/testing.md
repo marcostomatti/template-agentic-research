@@ -1,11 +1,14 @@
-## Testing — two runners, three Playwright configs
+## Testing — two runners, three Playwright configs, four ports
 
-Two runners, and Playwright is configured THREE TIMES over the one app:
+Two runners, and Playwright is configured THREE TIMES over the one app —
+but the default config declares TWO projects over TWO dev servers, so the
+ports number four rather than three:
 
 | Runner | What it reaches | Where the tests live |
 | --- | --- | --- |
 | `vitest` | Pure modules only — node environment, no DOM, include `src/**/*.test.ts` (`.ts`, never `.tsx`) | Colocated beside the module |
-| `playwright` via `playwright.config.ts` | The assembled app in a real browser, chromium alone, on port 5174 | `tests/e2e/*.spec.ts` |
+| `playwright` via `playwright.config.ts`, project `chromium` | The assembled app in a real browser, chromium alone, on port 5174 | `tests/e2e/*.spec.ts`, less the dev-tools spec |
+| `playwright` via `playwright.config.ts`, project `chromium-devtools` | The same app on a SECOND dev server on port 5177 carrying `VITE_DEVTOOLS_FORCE=1`, so the dev-tools widget mounts under automation | `tests/e2e/dev-tools-shell.spec.ts` alone |
 | `playwright` via `playwright.visual.config.ts` | The same app screenshotted at four widths in both themes, on port 5175 | `tests/visual/*.spec.ts` |
 | `playwright` via `playwright.integration.config.ts` | The same app with `VITE_AR_API_URL` SET, in a real browser against a LIVE `@ar/service` over a seeded Postgres, on port 5176 | `tests/integration/*.spec.ts` |
 
@@ -109,16 +112,39 @@ webdriver` is true when Playwright runs a spec, so the widget guard at
 mount time skips the whole render — no button, no root, nothing. The
 screenshot suite and the default e2e suite are both untouched, and that
 absence is itself a control: the default suite asserts the trigger is
-absent, proving the automation guard held. A forced Playwright config on
-port 5177 (`playwright.devtools.config.ts`) drives a single spec,
-`tests/e2e/dev-tools-shell.spec.ts`, that overrides the guard with
-`VITE_DEVTOOLS_FORCE=1` set through `test.use`. That spec runs the widget
-in all four corner positions, opens its menu, moves the trigger between
-corners, and verifies that a reload resets the corner to the configured
-default while keeping the size. It tests the modal's focus trap, the
-drawer's placement switcher and handle, the about popover's version line,
-and proves no more than one drawer opens at a time — all impossible from a
-suite that sees no widget at all.
+absent, proving the automation guard held. A forced SECOND dev server on
+port 5177 drives a single spec: it is a second entry in
+`playwright.config.ts`'s `webServer` ARRAY, paired with a second project
+`chromium-devtools` whose `testMatch` is
+`tests/e2e/dev-tools-shell.spec.ts` and which the default `chromium`
+project takes a matching `testIgnore` for. There is NO
+`playwright.devtools.config.ts` — this page named one until the config
+was written, and the array form is what shipped. The guard is overridden
+by `VITE_DEVTOOLS_FORCE=1` on that server's own `env`, never by
+`test.use`, and `test.use` could not do it: Vite reads the variable when
+the dev server STARTS and bakes it into the served modules, while a
+`test.use` block configures a browser context created long afterwards.
+That spec runs the widget in all four corner positions, opens its menu,
+moves the trigger between corners, and verifies that a reload resets the
+corner to the configured default while keeping the size. It tests the
+modal's focus trap, the drawer's placement switcher and handle, the about
+popover's version line, and proves no more than one drawer opens at a
+time — all impossible from a suite that sees no widget at all.
+
+Two readings that shipped with it, both measured rather than reasoned:
+
+- `startDevTools()` is reached from a DYNAMIC import that fires after
+  the app root has rendered (`src/main.tsx`'s own header says why), so
+  the widget is not in the DOM the instant `load` fires. An immediate
+  `Locator.isVisible()` after `page.goto()` races the mount and reads
+  false; wait on the locator (`toBeVisible`, or `waitFor({ state:
+  'visible' })`) as every other spec in this tree already does.
+- The visual suite's pass count and its screenshot count do NOT match,
+  and that is the suite's shape rather than a lost baseline: 60 passed
+  against a 56-line SHA-256 manifest, because 4 of the 60 call no
+  `toHaveScreenshot` at all (two baseline-name collision guards plus
+  two live reads of tree/rail state). 48 breakpoint shots + 8
+  dynamic-form shots = the 56.
 
 Reading a run:
 

@@ -66,8 +66,20 @@ fails with `ERR_MODULE_NOT_FOUND` before the plugin's own
 | --- | --- | --- | --- |
 | `round` | `string` | — | Round tag for reports. Wins over env and branch. |
 | `allowLan` | `boolean` | `DEVTOOLS_ALLOW_LAN` env | Accept non-loopback addresses. |
-| `outDir` | `string` | `.devtools` | Where round directory is created. |
+| `outDir` | `string` | `.rafa/feedback` | Where round directory is created. |
 | `gateway` | `ReportGateway` | — | Where stored reports go next. |
+
+`outDir`'s default is `.rafa/feedback`, not `.devtools` — this table
+said the latter until the constant was read
+(`DEVTOOLS_DEFAULT_OUT_DIR` in `src/vite/store.ts`). It is a RELATIVE
+path handed straight to `join()`, so it resolves against the cwd of
+the process running the dev server, not against the repo root: started
+the usual way (`bun run dev` from inside `packages/web`), a stored
+report lands at `packages/web/.rafa/feedback/<round>/…`, and the path
+in the endpoint's JSON response is relative too. Both locations are
+gitignored either way — the repo-root `.gitignore`'s `.rafa/` pattern
+is unanchored and matches the nested directory as well — so nothing
+tracked is at risk; it is only where to look for a report by hand.
 
 ## Endpoints
 
@@ -108,8 +120,9 @@ Stores a report and attachments.
 
 | Rule | Code | Reason | When |
 | --- | --- | --- | --- |
-| `not-loopback` | 403 | Non-LAN address without `allowLan` | Remote not allowed |
-| `not-same-origin` | 403 | Request `Origin` header mismatch | Cross-origin `POST` |
+| `remote-not-loopback` | 403 | Non-loopback address without `allowLan` | Remote not allowed |
+| `origin-mismatch` | 403 | Request `Origin` header mismatch | Cross-origin `POST` |
+| `host-mismatch` | 403 | Request `Host` header mismatch | Cross-origin `POST` |
 | `method-not-allowed` | 405 | Wrong method for path | `GET` to `/report` or `POST` to `/status` |
 | `body-too-large` | 413 | Over 24 MiB | Oversized body |
 | `body-unreadable` | 400 | Stream error | Read failed |
@@ -121,6 +134,17 @@ Stores a report and attachments.
 | `write-failed` | 500 | Filesystem error | Server I/O |
 | `socket-unreadable` | 403 | Can't read local port | Connection issue |
 | `endpoint-failed` | 500 | Unhandled throw | Middleware error |
+
+The first two codes were spelled `not-loopback` and `not-same-origin`
+here until they were read off `src/vite/origin.ts`; the names above are
+the ones the endpoint actually answers with.
+
+The ORDER matters when reading a refusal. `endpoint.ts`'s route runs
+`isAllowedRemote` FIRST, on both `GET` and `POST`, and only then
+`isSameOriginRequest` (`POST` only). So a non-loopback caller is
+refused `remote-not-loopback` whatever `Origin` and `Host` it sends —
+there is no way to observe an origin refusal from a LAN address, and a
+test for the LAN rule needs no crafted mismatched origin to provoke it.
 
 ## Environment variables
 
@@ -137,6 +161,21 @@ string, path, export, CSS var and env name is prefixed
 `devtools` / `DEVTOOLS` / `--devtools-` to survive the move
 unchanged. The plugin unplugs under the port; the routes and types
 stay.
+
+## Known gap: the stylesheet is not imported by `@ar/web`
+
+`src/styles.css` is the package's only stylesheet and the consuming
+app opts in with one `@import` — but `@ar/web` does not yet write
+one. Measured: `packages/web/src/styles.css` imports `tailwindcss`
+and the `@ar/ui` stylesheet and nothing else, and no other file under
+`packages/web/src/` names this package's `styles.css` export. The
+widget therefore mounts and behaves correctly while rendering
+UNSTYLED — every `data-corner` / `data-size` assertion in
+`packages/web/tests/e2e/dev-tools-shell.spec.ts` still passes, so no
+gate reports it. Whoever closes this must keep the import out of the production
+CSS graph (a plain line in `packages/web/src/styles.css` would ship
+the widget's CSS to users) and re-run the `dist/` leak greps that
+`packages/web/src/main.tsx`'s header describes.
 
 ## "Save settings" behaviour
 
