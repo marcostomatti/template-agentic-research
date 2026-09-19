@@ -25,6 +25,7 @@ gates, workflow, and loop architecture.
 | `src/core/menuModel.ts` | Turns `DevToolsFeature[]` + host into rows. Throws are loud. |
 | `src/core/menuFocus.ts` | Roving menu focus state machine. |
 | `src/core/shellRules.ts` | CSS: overlay, backdrop, positioning, animation. All `--devtools-` vars. |
+| `src/core/reportTemplate.ts` | Report-form shape shared by both halves: the seven-kind `ReportField` union, `ReportTemplate`, their zod schemas, and the `x-devtools` defaults (screenshot on, selector on, context always). A `select` with no option is refused, not mapped. Schemas only — no YAML, no filesystem. |
 | `src/feedback/` | Phase 2 stub, error reporting surface. |
 | `src/vite/` | Node layer (node-tested). Plugin, endpoint, git, probes. Imports Node builtins. |
 | `src/vite/plugin.ts` | Vite plugin: injects `define` (three version constants), endpoint. |
