@@ -28,14 +28,16 @@
  */
 
 export type {
-  DevToolsEndpointRule,
-  DevToolsIncoming,
   DevToolsMiddleware,
-  DevToolsOutgoing,
-  DevToolsRefusalBody,
   DevToolsStatusBody,
   DevToolsStoredBody,
 } from './endpoint';
+export type {
+  DevToolsEndpointRule,
+  DevToolsIncoming,
+  DevToolsOutgoing,
+  DevToolsRefusalBody,
+} from './http';
 export type {
   ReportGateway,
   ReportGatewayCommentOutcome,
@@ -56,10 +58,10 @@ export type { DevToolsReport } from './report';
 export type { DevToolsStoredReport } from './store';
 
 export {
-  DEVTOOLS_BODY_BYTES_MAX,
   DEVTOOLS_REPORT_PATH,
   DEVTOOLS_STATUS_PATH,
 } from './endpoint';
+export { DEVTOOLS_BODY_BYTES_MAX } from './http';
 export {
   DEVTOOLS_ALLOW_LAN_ENV_NAME,
   DEVTOOLS_PLUGIN_NAME,

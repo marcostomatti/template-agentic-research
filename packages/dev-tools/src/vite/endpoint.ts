@@ -9,6 +9,17 @@
  * filesystem, clock and `git` and hands them here, and it is the one
  * Vite ever sees.
  *
+ * ## What this module is, and what `./http.ts` is
+ *
+ * This one routes: it matches a path, decides which rule may refuse a
+ * request and in which order, and handles the route it matched.
+ * Everything a route does to a request or a response that is NOT a
+ * routing decision lives in `./http.ts` — the pathname reader, the
+ * capped body reader, the server-origin reader, the `respond` and
+ * `refuse` writers, the refusal body and the status codes. So a route
+ * added here is a handler and a branch, and the plumbing it sits on is
+ * already written and already tested.
+ *
  * ## The order a `POST` is read in
  *
  * `./origin.ts`, then `./report.ts`, then `./store.ts` — the order the
@@ -18,8 +29,8 @@
  *    check, and the only one that does not depend on a header, so a
  *    caller on the LAN is refused before anything it SENT is looked at.
  * 2. `isSameOriginRequest` on the headers. `POST` only — see below.
- * 3. The raw body, capped at {@link DEVTOOLS_BODY_BYTES_MAX} and
- *    decoded once, then `JSON.parse`.
+ * 3. The raw body, capped at `./http.ts`'s `DEVTOOLS_BODY_BYTES_MAX`
+ *    and decoded once, then `JSON.parse`.
  * 4. `parseReport`, which is the whole of spec item 8.3's schema.
  * 5. `storeReport`, which writes the attachments and then the JSON
  *    naming them.
@@ -45,20 +56,19 @@
  * ## The port comes from the kernel
  *
  * `isSameOriginRequest` needs the port the dev server actually listens
- * on, and `server.config.server.port` is the port that was ASKED for:
- * with `strictPort` off Vite moves to the next free one, and a
- * comparison against the configured number would then refuse every
- * request. So the port is read per request from `req.socket.localPort`,
- * the local end of the accepted connection — the same number the
- * browser put in `Host`, and one no header can contradict. A socket
- * that cannot say is refused as `socket-unreadable`: an unreadable
- * socket is not evidence of anything, which is the reading
- * `./origin.ts` takes of an absent remote address.
+ * on, and `./http.ts`'s `serverOriginOf` reads it per request from
+ * `req.socket.localPort` — the local end of the accepted connection,
+ * the same number the browser put in `Host`, and one no header can
+ * contradict; that module's header says why the configured port is not
+ * it. A socket that cannot say is refused here as `socket-unreadable`:
+ * an unreadable socket is not evidence of anything, which is the
+ * reading `./origin.ts` takes of an absent remote address.
  *
  * ## What every response looks like
  *
  * JSON, always, with `Cache-Control: no-store` and
- * `X-Content-Type-Options: nosniff`. Three shapes:
+ * `X-Content-Type-Options: nosniff` — `./http.ts`'s `respond` sets all
+ * three. Three shapes:
  *
  * - {@link DevToolsStatusBody} — spec item 8.2's five members exactly.
  * - {@link DevToolsStoredBody} — spec item 8.4's `{status: 'stored',
@@ -66,11 +76,11 @@
  *   is present in BOTH cases, so a caller reads it without branching
  *   and a gateway that refused cannot be mistaken for a request that
  *   was refused.
- * - {@link DevToolsRefusalBody} — `{status: 'refused', rule, reason}`,
- *   where `reason` is a fixed sentence from `./origin.ts`,
- *   `./report.ts` or `./store.ts` and never a value the request
- *   carried. `./report.ts`'s refusal `path` is folded into `rule` as
- *   `body.<path>`, which is the one place a refusal names
+ * - `./http.ts`'s `DevToolsRefusalBody` — `{status: 'refused', rule,
+ *   reason}`, where `reason` is a fixed sentence from `./http.ts`,
+ *   `./origin.ts`, `./report.ts` or `./store.ts` and never a value the
+ *   request carried. `./report.ts`'s refusal `path` is folded into
+ *   `rule` as `body.<path>`, which is the one place a refusal names
  *   input-supplied text — a `context` key. It reaches a browser as JSON
  *   inside a string, never as markup.
  *
@@ -83,21 +93,35 @@
  * assembler rather than here — a colocated `endpoint.test.ts` would
  * have to rebuild that assembly to say anything. This file is the one
  * in the pair with no test of its own; `./plugin.test.ts` is where its
- * five refusals, its status payload and its stored report are pinned.
+ * five refusals, its status payload and its stored report are pinned,
+ * and `./http.test.ts` is where the plumbing underneath them is, since
+ * none of that needs an assembly.
  */
 
 import type { ReportGateway, ReportGatewayFileOutcome } from './gateway';
 import type { DevToolsBuildInfo } from './git';
+import type { DevToolsIncoming, DevToolsOutgoing } from './http';
 import type {
   DevToolsClock,
   DevToolsStoredReport,
   DevToolsStoreFs,
   DevToolsStoreRule,
 } from './store';
-import type { IncomingHttpHeaders } from 'node:http';
 
-import { Buffer } from 'node:buffer';
-
+import {
+  HTTP_BAD_REQUEST,
+  HTTP_CONTENT_TOO_LARGE,
+  HTTP_FORBIDDEN,
+  HTTP_METHOD_NOT_ALLOWED,
+  HTTP_OK,
+  HTTP_SERVER_ERROR,
+  createRefuse,
+  pathnameOf,
+  readBody,
+  refusalOf,
+  respond,
+  serverOriginOf,
+} from './http';
 import { isAllowedRemote, isSameOriginRequest } from './origin';
 import { parseReport } from './report';
 import { storeReport } from './store';
@@ -113,70 +137,6 @@ export const DEVTOOLS_REPORT_PATH = `${DEVTOOLS_ENDPOINT_PREFIX}/report`;
 
 /** What the status endpoint answers when no gateway is configured. */
 export const DEVTOOLS_GATEWAY_NONE = 'none';
-
-/**
- * The most raw request body that is buffered, in bytes.
- *
- * 24 MiB, which is spec item 8.3's limits read as the largest body they
- * admit: three attachments of 5 MiB is 15 MiB of bytes, base64 inflates
- * that by four thirds to 20 MiB, and the rest is the JSON envelope, the
- * 5,000-character `body` and a `context`. The cap is checked per chunk,
- * so a body over it is abandoned rather than held.
- *
- * `./report.ts` is the authority on what is ACCEPTED; this is only the
- * bound on what is READ, so the two cannot disagree about a limit.
- */
-export const DEVTOOLS_BODY_BYTES_MAX = 24 * 1024 * 1024;
-
-/** A request that was answered. */
-const HTTP_OK = 200;
-
-/** A body the endpoint could not accept. */
-const HTTP_BAD_REQUEST = 400;
-
-/** A request from somewhere the endpoint does not act for. */
-const HTTP_FORBIDDEN = 403;
-
-/** The right path, the wrong method. */
-const HTTP_METHOD_NOT_ALLOWED = 405;
-
-/** A body over {@link DEVTOOLS_BODY_BYTES_MAX}. */
-const HTTP_CONTENT_TOO_LARGE = 413;
-
-/** The endpoint's own fault: a failed write, a clock, a thrown error. */
-const HTTP_SERVER_ERROR = 500;
-
-/**
- * Which rule refused, for the refusals this module owns.
- *
- * `./origin.ts`, `./report.ts` and `./store.ts` each carry their own
- * rule names, and a refusal from one of them is answered with that
- * name rather than remapped onto this set.
- */
-export type DevToolsEndpointRule =
-  | 'method-not-allowed'
-  | 'socket-unreadable'
-  | 'body-too-large'
-  | 'body-unreadable'
-  | 'body-not-json'
-  | 'endpoint-failed';
-
-/** The fixed explanation each of this module's rules answers with. */
-const REASONS: Readonly<Record<DevToolsEndpointRule, string>> = Object.freeze({
-  'method-not-allowed':
-    'This dev-tools endpoint does not answer that method.',
-  'socket-unreadable':
-    'The local port of this request is unknown, so the request cannot '
-    + 'be held to the dev server own origin.',
-  'body-too-large':
-    'The request body is larger than the endpoint reads.',
-  'body-unreadable':
-    'The request body could not be read to the end.',
-  'body-not-json':
-    'The request body is not JSON.',
-  'endpoint-failed':
-    'The dev-tools endpoint failed while answering this request.',
-});
 
 /**
  * Which status code each of `./store.ts`'s rules answers with.
@@ -234,77 +194,6 @@ export interface DevToolsStoredBody {
   readonly gateway?: ReportGatewayFileOutcome;
 }
 
-/** What a refused request is answered with. */
-export interface DevToolsRefusalBody {
-  /** Always `'refused'`; the discriminant. */
-  readonly status: 'refused';
-
-  /**
-   * Which rule refused — one of {@link DevToolsEndpointRule},
-   * `./origin.ts`'s `DevToolsRequestRule`, `./store.ts`'s
-   * `DevToolsStoreRule`, or `body.<field path>` for `./report.ts`.
-   */
-  readonly rule: string;
-
-  /** A fixed explanation, carrying no value the request sent. */
-  readonly reason: string;
-}
-
-/** What a node socket has to say about where a request came from. */
-export interface DevToolsSocketFacts {
-  /** The peer's address, absent when the socket has closed. */
-  readonly remoteAddress?: string | undefined;
-
-  /** The local end's port, which is the port the server listens on. */
-  readonly localPort?: number | undefined;
-}
-
-/**
- * The part of a request this module reads.
- *
- * Structural rather than node's `IncomingMessage`, so a case builds one
- * as an object literal with an async generator for a body. The real
- * `IncomingMessage` satisfies it — `server.middlewares.use(handler)` in
- * `./plugin.ts` is the compile-time proof.
- */
-export interface DevToolsIncoming extends AsyncIterable<unknown> {
-  /** The request method, upper-case as node hands it over. */
-  readonly method?: string | undefined;
-
-  /** The request target: path, and query if there is one. */
-  readonly url?: string | undefined;
-
-  /** The headers, lower-cased as node hands them over. */
-  readonly headers: IncomingHttpHeaders;
-
-  /** The connection the request arrived on. */
-  readonly socket: DevToolsSocketFacts;
-}
-
-/** The part of a response this module writes. */
-export interface DevToolsOutgoing {
-  /** The status code, set before the body. */
-  statusCode: number;
-
-  /**
-   * Set one response header.
-   *
-   * @param name - The header name.
-   * @param value - Its value.
-   * @returns Whatever the implementation answers, which is ignored.
-   */
-  setHeader(name: string, value: string): unknown;
-
-  /**
-   * Write the whole body and finish.
-   *
-   * @param chunk - The body; always a string here, because every
-   * response this module writes is JSON.
-   * @returns Whatever the implementation answers, which is ignored.
-   */
-  end(chunk: string): unknown;
-}
-
 /**
  * The middleware, shaped so that Vite's `Connect.NextHandleFunction`
  * satisfies it.
@@ -352,127 +241,6 @@ export interface DevToolsEndpointContext {
    * dev-server log cannot become a copy of whatever was posted.
    */
   readonly log?: (message: string) => void;
-}
-
-/**
- * Build the refusal body for one of this module's rules.
- *
- * @param rule - Which rule refused.
- * @returns The body, frozen.
- */
-function refusalOf(rule: DevToolsEndpointRule): DevToolsRefusalBody {
-  return Object.freeze({
-    status: 'refused' as const,
-    rule,
-    reason: REASONS[rule],
-  });
-}
-
-/**
- * Read the path a request is addressed to.
- *
- * @param url - `req.url`, path and query.
- * @returns The pathname, or `null` when there is no usable one — which
- * reads as "not our path" and falls through to `next()`.
- */
-function pathnameOf(url: string | undefined): string | null {
-  if (typeof url !== 'string' || !url.startsWith('/')) {
-    return null;
-  }
-
-  const cut = url.search(/[?#]/);
-
-  if (cut === -1) {
-    return url;
-  }
-
-  return url.slice(0, cut);
-}
-
-/**
- * Turn one body chunk into bytes.
- *
- * @param chunk - Whatever the request iterated.
- * @returns Its bytes, or `null` when it is neither a string nor a byte
- * view — a stream shape this module will not guess at.
- */
-function bytesOf(chunk: unknown): Uint8Array | null {
-  if (typeof chunk === 'string') {
-    return Buffer.from(chunk, 'utf8');
-  }
-
-  if (chunk instanceof Uint8Array) {
-    return chunk;
-  }
-
-  return null;
-}
-
-/** What {@link readBody} answers. */
-type DevToolsBodyRead =
-  | { readonly ok: true; readonly value: unknown }
-  | { readonly ok: false; readonly rule: DevToolsEndpointRule };
-
-/**
- * Read a request body to the end, capped, and parse it as JSON.
- *
- * Bytes are concatenated and decoded ONCE, so a multi-byte character
- * split across two chunks survives. Leaving the loop early closes the
- * stream, which is what stops an oversize body being buffered.
- *
- * @param req - The request to drain.
- * @returns The parsed JSON, or the rule that refused it.
- */
-async function readBody(req: DevToolsIncoming): Promise<DevToolsBodyRead> {
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-
-  try {
-    for await (const chunk of req) {
-      const bytes = bytesOf(chunk);
-
-      if (bytes === null) {
-        return { ok: false, rule: 'body-unreadable' };
-      }
-
-      size += bytes.length;
-
-      if (size > DEVTOOLS_BODY_BYTES_MAX) {
-        return { ok: false, rule: 'body-too-large' };
-      }
-
-      chunks.push(bytes);
-    }
-  } catch {
-    return { ok: false, rule: 'body-unreadable' };
-  }
-
-  try {
-    return { ok: true, value: JSON.parse(Buffer.concat(chunks).toString()) };
-  } catch {
-    return { ok: false, rule: 'body-not-json' };
-  }
-}
-
-/**
- * Read the dev server's own origin off the accepted connection.
- *
- * @param req - The request, for its socket.
- * @param protocol - The scheme the dev server answers on.
- * @returns The origin, or `null` when the socket could not say which
- * port the request arrived on.
- */
-function serverOriginOf(
-  req: DevToolsIncoming,
-  protocol: 'http:' | 'https:',
-): { readonly protocol: 'http:' | 'https:'; readonly port: number } | null {
-  const port = req.socket.localPort;
-
-  if (typeof port !== 'number' || !Number.isInteger(port) || port <= 0) {
-    return null;
-  }
-
-  return { protocol, port };
 }
 
 /**
@@ -552,43 +320,7 @@ export function createDevToolsEndpoint(
     gateway: gatewayNameOf(context.gateway),
   });
 
-  /**
-   * Write one JSON response.
-   *
-   * @param res - The response to write.
-   * @param code - The status code.
-   * @param body - What to answer with.
-   */
-  function respond(res: DevToolsOutgoing, code: number, body: unknown): void {
-    res.statusCode = code;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-store');
-    // Every body here is JSON a caller reads with `response.json()`;
-    // nosniff stops one ever being rendered as something else.
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.end(`${JSON.stringify(body)}\n`);
-  }
-
-  /**
-   * Refuse a request: log the rule, answer the fixed reason.
-   *
-   * @param req - The request, for the method and path in the log line.
-   * @param res - The response to write.
-   * @param code - The status code.
-   * @param body - The refusal.
-   */
-  function refuse(
-    req: DevToolsIncoming,
-    res: DevToolsOutgoing,
-    code: number,
-    body: DevToolsRefusalBody,
-  ): void {
-    context.log?.(
-      `devtools: refused ${req.method ?? 'a request'} `
-      + `${pathnameOf(req.url) ?? ''} (${body.rule})`,
-    );
-    respond(res, code, body);
-  }
+  const refuse = createRefuse(context.log);
 
   /**
    * Answer `POST /__devtools/report`: steps 3 to 6 of the order in this

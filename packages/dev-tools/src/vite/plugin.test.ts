@@ -1,5 +1,6 @@
-import type { DevToolsIncoming, DevToolsMiddleware, DevToolsOutgoing } from './endpoint';
+import type { DevToolsMiddleware } from './endpoint';
 import type { ReportGateway, ReportGatewayFileOutcome } from './gateway';
+import type { DevToolsIncoming, DevToolsOutgoing } from './http';
 import type { DevToolsPluginDeps, DevToolsPluginOptions } from './plugin';
 import type { DevToolsClock, DevToolsStoreFs } from './store';
 
