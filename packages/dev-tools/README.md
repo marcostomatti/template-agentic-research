@@ -40,16 +40,25 @@ The Vite dev-server plugin. Registers in `serve` only; does nothing
 under `vite build`.
 
 ```typescript
-import { devtoolsPlugin } from '@ar/dev-tools/vite'
+import { defineConfig } from 'vite'
 
-export default {
+export default defineConfig(async ({ command }) => ({
   plugins: [
-    devtoolsPlugin({
-      round: 'my-round',
-    }),
+    ...(command === 'serve'
+      ? [(await import('@ar/dev-tools/vite')).devtoolsPlugin({
+        round: 'my-round',
+      })]
+      : []),
   ],
-}
+}))
 ```
+
+Import it dynamically and only under `serve`. A static top-level
+import is resolved whenever the config file is loaded, `vite build`
+included, so a build environment holding no built copy of this
+package — an image stage that copies only its manifest, for one —
+fails with `ERR_MODULE_NOT_FOUND` before the plugin's own
+`apply: 'serve'` is ever read.
 
 ### Options
 
