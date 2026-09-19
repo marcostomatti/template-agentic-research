@@ -1,21 +1,28 @@
-import type { DevToolsMiddleware } from './endpoint';
+import type { DevToolsEndpointFs, DevToolsMiddleware } from './endpoint';
 import type { ReportGateway, ReportGatewayFileOutcome } from './gateway';
+import type { DevToolsCommandRunner } from './git';
 import type { DevToolsIncoming, DevToolsOutgoing } from './http';
 import type { DevToolsPluginDeps, DevToolsPluginOptions } from './plugin';
-import type { DevToolsClock, DevToolsStoreFs } from './store';
+import type { DevToolsClock } from './store';
 
 import { Buffer } from 'node:buffer';
+import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+
+import { REPORT_TEMPLATE_DEVTOOLS_DEFAULTS } from '../core/reportTemplate';
 
 import {
   DEVTOOLS_GATEWAY_NONE,
   DEVTOOLS_REPORT_PATH,
   DEVTOOLS_STATUS_PATH,
+  DEVTOOLS_TEMPLATE_MODULE,
+  DEVTOOLS_TEMPLATES_PATH,
 } from './endpoint';
 import { DEVTOOLS_UNKNOWN_BUILD_VALUE } from './git';
 import { assembleDevTools, devtoolsPlugin } from './plugin';
 import { DEVTOOLS_DEFAULT_OUT_DIR } from './store';
+import { DEVTOOLS_ISSUE_FORM_DIR } from './templates';
 
 /**
  * ## What this file drives, and why it is the one with cases over
@@ -28,22 +35,32 @@ import { DEVTOOLS_DEFAULT_OUT_DIR } from './store';
  *
  * Every case below hands `assembleDevTools` an in-memory filesystem, a
  * clock stuck at one instant, and a command runner that answers as
- * though there were no `git` on the `PATH` at all. So nothing here
- * writes to a real directory, nothing spawns a process, and the round
- * this file asserts on is the plugin option alone — `resolveDevToolsBuildInfo`
- * falls back to it because the scripted runner refuses every command.
+ * though there were no `git` on the `PATH` at all — except the one
+ * status case that scripts `git remote get-url origin`. So nothing
+ * here writes to a real directory, nothing spawns a process, and the
+ * round this file asserts on is the plugin option alone —
+ * `resolveDevToolsBuildInfo` falls back to it because the scripted
+ * runner refuses every command it is not given an answer for.
  *
  * ## The order
  *
  * The five refusals run first, in spec item 8.5's order — bad body,
  * over-length, oversize attachment, cross-origin, LAN without
  * `allowLan` — each asserting the status code, the rule, and that the
- * filesystem recorded neither a directory nor a write. Then the status
- * payload, then a stored report, then a configured gateway. The stored
- * report is the one accepting case in the file and is also this file's
- * positive control: it is the same same-origin, loopback, well-formed
- * request the refusals above are variations of, and it is the one that
- * writes.
+ * filesystem recorded neither a directory nor a write. Then the two
+ * the templates route adds: the wrong method, and a caller off
+ * loopback with no `allowLan`. Then the accepting cases — the status
+ * payload, the templates, a stored report, a configured gateway.
+ *
+ * ## What each refusal's control is
+ *
+ * "The answer is not a stored report" and "the answer is not a
+ * template list" are both satisfied by a middleware answering nothing
+ * at all, so neither reading stands alone. The stored report is the
+ * control for the five body and origin refusals — the same
+ * same-origin, loopback, well-formed request they vary away from — and
+ * `answers the issue forms it read` is the control for the two
+ * templates refusals, varying only the method and the address.
  */
 
 /** One call the recorder saw. */
@@ -55,8 +72,8 @@ interface RecordedWrite {
   readonly data: string | Uint8Array;
 }
 
-/** A filesystem that records instead of writing. */
-interface RecordingFs extends DevToolsStoreFs {
+/** A filesystem that records writes and answers a fixed directory. */
+interface RecordingFs extends DevToolsEndpointFs {
   /** Every directory `mkdir` was asked for, in order. */
   readonly directories: readonly string[];
 
@@ -65,13 +82,19 @@ interface RecordingFs extends DevToolsStoreFs {
 }
 
 /**
- * Build a filesystem that records every write instead of making one.
+ * Build a filesystem that records every write instead of making one,
+ * and answers one in-memory issue-form directory.
  *
+ * @param forms - Bare filenames under {@link DEVTOOLS_ISSUE_FORM_DIR}
+ * to their text, or `null` for a directory that does not exist — which
+ * is how the empty-list reading is spelled, with no path to arrange.
  * @returns The recorder. Every case below gets a fresh one, so a
  * refusal's "nothing was written" reads against a filesystem that saw
  * nothing else.
  */
-function createFs(): RecordingFs {
+function createFs(
+  forms: Readonly<Record<string, string>> | null = null,
+): RecordingFs {
   const directories: string[] = [];
   const writes: RecordedWrite[] = [];
 
@@ -85,6 +108,18 @@ function createFs(): RecordingFs {
     },
     async writeFile(path: string, data: string | Uint8Array) {
       writes.push({ path, data });
+    },
+    readdir: (path: string): Promise<readonly string[]> => (
+      forms === null || path !== DEVTOOLS_ISSUE_FORM_DIR
+        ? Promise.reject(new Error(`ENOENT: ${path}`))
+        : Promise.resolve(Object.keys(forms))
+    ),
+    readFile: (path: string): Promise<string> => {
+      const text = forms?.[path.slice(DEVTOOLS_ISSUE_FORM_DIR.length + 1)];
+
+      return text === undefined
+        ? Promise.reject(new Error(`ENOENT: ${path}`))
+        : Promise.resolve(text);
     },
   };
 }
@@ -120,20 +155,31 @@ const LAN_ADDRESS = '192.168.1.24';
  *
  * @param options - The plugin's options; `round` defaults to
  * {@link ROUND} so every case's paths are exact.
+ * @param forms - The issue forms on the injected disk; see
+ * {@link createFs}.
+ * @param remote - What `git remote get-url origin` answers, when a
+ * case scripts one.
  * @returns The assembly and the filesystem it was given.
  */
 function assemble(
   options: DevToolsPluginOptions = {},
+  forms: Readonly<Record<string, string>> | null = null,
+  remote?: string,
 ): { readonly assembly: ReturnType<typeof assembleDevTools>; readonly fs: RecordingFs } {
-  const fs = createFs();
+  const fs = createFs(forms);
+  // No repository unless a case scripts one: every command is refused,
+  // so the commit and the branch resolve to unknown and the round comes
+  // from the option above rather than from a branch this file would
+  // have to fake a checkout for.
+  const run: DevToolsCommandRunner = (args) => (
+    args[0] === 'remote' && remote !== undefined
+      ? { ok: true, stdout: `${remote}\n` }
+      : { ok: false }
+  );
   const deps: DevToolsPluginDeps = {
     fs,
     now: CLOCK,
-    // No repository at all: every command is refused, so the commit
-    // and the branch resolve to unknown and the round comes from the
-    // option above rather than from a branch this file would have to
-    // fake a checkout for.
-    run: () => ({ ok: false }),
+    run,
     env: {},
     protocol: 'http:',
   };
@@ -310,6 +356,63 @@ function reportBody(fields: {
   });
 }
 
+/** An issue form mapping onto exactly one text field. */
+const BUG_FORM = `name: Bug report
+description: Something in the app behaves wrong.
+body:
+  - type: input
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+`;
+
+/** A second form, so a case can prove which one an option picked. */
+const UI_FORM = `name: UI feedback
+description: Something on screen looks wrong.
+body:
+  - type: input
+    id: what-looks-wrong
+    attributes:
+      label: What looks wrong
+`;
+
+/** What {@link BUG_FORM} reaches a caller as; the id is the filename. */
+const BUG_TEMPLATE = Object.freeze({
+  id: 'bug-report',
+  name: 'Bug report',
+  description: 'Something in the app behaves wrong.',
+  module: DEVTOOLS_TEMPLATE_MODULE,
+  fields: [{
+    id: 'what-happened',
+    kind: 'text',
+    label: 'What happened',
+    required: true,
+  }],
+  devtools: REPORT_TEMPLATE_DEVTOOLS_DEFAULTS,
+});
+
+/**
+ * Build a request for the templates route.
+ *
+ * @param method - The method to send; the route answers `GET`.
+ * @param remoteAddress - The peer address; loopback is the allowed one.
+ * @returns The request. Those two are what this route's own refusals
+ * read, so they are the only things a case varies.
+ */
+function templatesRequest(
+  method = 'GET',
+  remoteAddress: string = LOOPBACK_ADDRESS,
+): DevToolsIncoming {
+  return fakeRequest({
+    method,
+    url: DEVTOOLS_TEMPLATES_PATH,
+    remoteAddress,
+    localPort: SERVER_PORT,
+  });
+}
+
 describe('the refusals spec item 8.5 orders first', () => {
   it('refuses a body that is not JSON', async () => {
     // Arrange: same origin, over loopback — everything but the body is
@@ -441,8 +544,99 @@ describe('the refusals spec item 8.5 orders first', () => {
   });
 });
 
+describe('the refusals the templates route adds', () => {
+  it('refuses a POST to the templates route', async () => {
+    // Arrange: over loopback, with forms on the injected disk, so the
+    // METHOD is the only thing wrong with this request.
+    const { assembly } = assemble({}, { 'bug-report.yml': BUG_FORM });
+    const { res, read } = createResponse();
+
+    // Act
+    await runMiddleware(assembly.handler, templatesRequest('POST'), res);
+
+    // Assert
+    expect(read().statusCode).toBe(405);
+    expect(read().body).toMatchObject({
+      status: 'refused',
+      rule: 'method-not-allowed',
+    });
+  });
+
+  it('refuses a non-loopback caller without allowLan', async () => {
+    // Arrange: allowLan is not stated, so it defaults to false.
+    const { assembly } = assemble({}, { 'bug-report.yml': BUG_FORM });
+    const { res, read } = createResponse();
+
+    // Act
+    await runMiddleware(
+      assembly.handler,
+      templatesRequest('GET', LAN_ADDRESS),
+      res,
+    );
+
+    // Assert
+    expect(read().statusCode).toBe(403);
+    expect(read().body).toMatchObject({
+      status: 'refused',
+      rule: 'remote-not-loopback',
+    });
+  });
+});
+
+describe('the templates route', () => {
+  it('answers the issue forms it read', async () => {
+    // Arrange: the control for both refusals above — same route, same
+    // filesystem, same assembly, over loopback with the right method.
+    const { assembly } = assemble({}, { 'bug-report.yml': BUG_FORM });
+    const { res, read } = createResponse();
+
+    // Act
+    await runMiddleware(assembly.handler, templatesRequest(), res);
+
+    // Assert: the bare list the browser half validates.
+    expect(read().statusCode).toBe(200);
+    expect(read().body).toEqual([BUG_TEMPLATE]);
+  });
+
+  it('answers an empty list where no template directory exists', async () => {
+    // Arrange: `forms` defaults to null, so `readdir` rejects the way
+    // it does on a checkout with no `.github/ISSUE_TEMPLATE/`.
+    const { assembly } = assemble();
+    const { res, read } = createResponse();
+
+    // Act
+    await runMiddleware(assembly.handler, templatesRequest(), res);
+
+    // Assert: answered, not refused — a missing directory is no
+    // failure of the dev server's.
+    expect(read().statusCode).toBe(200);
+    expect(read().body).toEqual([]);
+  });
+
+  it('reads the paths the templates option names, not the directory', async () => {
+    // Arrange: two forms on disk, and an option naming one of them.
+    const { assembly } = assemble(
+      { templates: [join(DEVTOOLS_ISSUE_FORM_DIR, 'ui-feedback.yml')] },
+      { 'bug-report.yml': BUG_FORM, 'ui-feedback.yml': UI_FORM },
+    );
+    const { res, read } = createResponse();
+
+    // Act
+    await runMiddleware(assembly.handler, templatesRequest(), res);
+
+    // Assert: the named one alone — the whole shape of a template is
+    // pinned by the case above, so this one reads the ids, which is
+    // what proves the option reached the reader rather than the
+    // directory listing that would have answered both.
+    const answered = read().body as readonly { readonly id: string }[];
+
+    expect(read().statusCode).toBe(200);
+    expect(answered.map((template) => template.id)).toEqual(['ui-feedback']);
+  });
+});
+
 describe('the status payload', () => {
-  it('answers commit, branch, round, persistence and gateway', async () => {
+  it('answers commit, branch, round, persistence, gateway and repo', async () => {
     // Arrange: GET carries no Origin on a same-origin request, so only
     // the loopback check applies here — see `./endpoint.ts`'s header
     // for why.
@@ -460,8 +654,8 @@ describe('the status payload', () => {
       res,
     );
 
-    // Assert: no repository, so commit and branch are unknown; the
-    // round is the plugin option; no gateway is configured.
+    // Assert: no repository, so commit, branch and repo are unknown;
+    // the round is the plugin option; no gateway is configured.
     expect(read().statusCode).toBe(200);
     expect(read().body).toEqual({
       commit: DEVTOOLS_UNKNOWN_BUILD_VALUE,
@@ -469,6 +663,33 @@ describe('the status payload', () => {
       round: ROUND,
       persistence: false,
       gateway: DEVTOOLS_GATEWAY_NONE,
+      repo: DEVTOOLS_UNKNOWN_BUILD_VALUE,
+    });
+  });
+
+  it('names the repository the origin remote points at', async () => {
+    // Arrange: the control for the `repo: unknown` above — a payload
+    // hard-wired to `unknown` passes that case and fails this one. The
+    // runner answers the remote alone, so commit stays unknown.
+    const { assembly } = assemble({}, null, 'git@github.com:acme/widgets.git');
+    const { res, read } = createResponse();
+
+    // Act
+    await runMiddleware(
+      assembly.handler,
+      fakeRequest({
+        method: 'GET',
+        url: DEVTOOLS_STATUS_PATH,
+        remoteAddress: LOOPBACK_ADDRESS,
+      }),
+      res,
+    );
+
+    // Assert: the slug alone, with the `.git` suffix dropped.
+    expect(read().statusCode).toBe(200);
+    expect(read().body).toMatchObject({
+      commit: DEVTOOLS_UNKNOWN_BUILD_VALUE,
+      repo: 'acme/widgets',
     });
   });
 });
@@ -572,7 +793,7 @@ describe('the plugin itself', () => {
   it('registers for serve only', () => {
     // Arrange + Act + Assert: decision 7's whole production story — see
     // `./plugin.ts`'s header for why `apply: 'serve'` is what keeps
-    // every define and both endpoints out of `vite build`.
+    // every define and all three endpoints out of `vite build`.
     expect(devtoolsPlugin().apply).toBe('serve');
   });
 });

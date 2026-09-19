@@ -11,9 +11,10 @@
  *
  * - `devtoolsPlugin(options)` from `./plugin` — a Vite plugin for
  *   `serve` alone, defining the commit, branch and round the About
- *   surface shows, answering `GET /__devtools/status`, and accepting
- *   `POST /__devtools/report` behind a zod body schema, a same-origin
- *   check and a loopback check that only `allowLan` relaxes.
+ *   surface shows, answering `GET /__devtools/status` and `GET
+ *   /__devtools/templates`, and accepting `POST /__devtools/report`
+ *   behind a zod body schema, a same-origin check and a loopback check
+ *   that only `allowLan` relaxes.
  * - `assembleDevTools(options, deps)` beside it, the injected seam the
  *   plugin is a thin shell over: the filesystem, the clock, the command
  *   runner and the environment are arguments there, so a consumer that
@@ -28,6 +29,7 @@
  */
 
 export type {
+  DevToolsEndpointFs,
   DevToolsMiddleware,
   DevToolsStatusBody,
   DevToolsStoredBody,
@@ -60,6 +62,7 @@ export type { DevToolsStoredReport } from './store';
 export {
   DEVTOOLS_REPORT_PATH,
   DEVTOOLS_STATUS_PATH,
+  DEVTOOLS_TEMPLATES_PATH,
 } from './endpoint';
 export { DEVTOOLS_BODY_BYTES_MAX } from './http';
 export {

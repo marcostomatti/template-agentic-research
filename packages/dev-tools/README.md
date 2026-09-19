@@ -67,6 +67,7 @@ fails with `ERR_MODULE_NOT_FOUND` before the plugin's own
 | `round` | `string` | — | Round tag for reports. Wins over env and branch. |
 | `allowLan` | `boolean` | `DEVTOOLS_ALLOW_LAN` env | Accept non-loopback addresses. |
 | `outDir` | `string` | `.rafa/feedback` | Where round directory is created. |
+| `templates` | `readonly string[]` | `.github/ISSUE_TEMPLATE/` | Issue forms to serve; `[]` serves none. |
 | `gateway` | `ReportGateway` | — | Where stored reports go next. |
 
 `outDir`'s default is `.rafa/feedback`, not `.devtools` — this table
@@ -93,9 +94,28 @@ Returns build and configuration info.
   "branch": "main",
   "round": "default",
   "persistence": false,
-  "gateway": "none"
+  "gateway": "none",
+  "repo": "owner/name"
 }
 ```
+
+`repo` is the `owner/name` slug of the `origin` remote, read once at
+dev-server start through `git remote get-url origin`, and `unknown`
+where there is no remote or its url parses as no repository. Only the
+two capture groups are answered, so a remote url carrying credentials
+never reaches the response.
+
+### `GET /__devtools/templates`
+
+Returns the repository's GitHub issue forms, parsed into the
+`ReportTemplate` shape both halves of this package validate against —
+a bare JSON array, in the order they were read.
+
+The directory is read on every request, so an edited issue form is
+picked up without restarting the dev server. Nothing there is fatal: a
+missing `.github/ISSUE_TEMPLATE/` answers `[]`, and an unreadable or
+malformed file is skipped with a warning in the dev-server log naming
+it.
 
 ### `POST /__devtools/report`
 
@@ -123,7 +143,7 @@ Stores a report and attachments.
 | `remote-not-loopback` | 403 | Non-loopback address without `allowLan` | Remote not allowed |
 | `origin-mismatch` | 403 | Request `Origin` header mismatch | Cross-origin `POST` |
 | `host-mismatch` | 403 | Request `Host` header mismatch | Cross-origin `POST` |
-| `method-not-allowed` | 405 | Wrong method for path | `GET` to `/report` or `POST` to `/status` |
+| `method-not-allowed` | 405 | Wrong method for path | `GET` to `/report`, or `POST` to `/status` or `/templates` |
 | `body-too-large` | 413 | Over 24 MiB | Oversized body |
 | `body-unreadable` | 400 | Stream error | Read failed |
 | `body-not-json` | 400 | `JSON.parse` failed | Invalid JSON |

@@ -1,13 +1,14 @@
 /**
- * The two endpoints as one connect middleware: `GET
- * /__devtools/status`, `POST /__devtools/report`, and `next()` for
- * everything else.
+ * The three endpoints as one connect middleware: `GET
+ * /__devtools/status`, `GET /__devtools/templates`, `POST
+ * /__devtools/report`, and `next()` for everything else.
  *
- * Spec items 8.2 to 8.4 are the authority. This is the module that
- * reads `./origin.ts`, `./report.ts`, `./store.ts` and `./gateway.ts`
- * in a row; `./plugin.ts` is the module that resolves the real
- * filesystem, clock and `git` and hands them here, and it is the one
- * Vite ever sees.
+ * Spec items 8.2 to 8.4 are the authority for the status and the
+ * report routes, and spec item 2 for the templates one. This is the
+ * module that reads `./origin.ts`, `./report.ts`, `./store.ts`,
+ * `./templates.ts` and `./gateway.ts` in a row; `./plugin.ts` is the
+ * module that resolves the real filesystem, clock and `git` and hands
+ * them here, and it is the one Vite ever sees.
  *
  * ## What this module is, and what `./http.ts` is
  *
@@ -19,6 +20,18 @@
  * `refuse` writers, the refusal body and the status codes. So a route
  * added here is a handler and a branch, and the plumbing it sits on is
  * already written and already tested.
+ *
+ * ## One route table, and what a path that is not in it does
+ *
+ * {@link ROUTE_METHODS} is both the match and the method map: a
+ * pathname it has no entry for is not this plugin's and falls through
+ * to `next()`, and the method it answers with is the one entry's
+ * value. One record rather than two, so a route added here cannot be
+ * routed and left with no method of its own — which is the shape the
+ * old `path === status ? 'GET' : 'POST'` would have taken on a second
+ * `GET`. It is a `Map` rather than an object literal because the key
+ * looked up is a pathname a caller sent, and a `Map` has no prototype
+ * chain an input could reach a value through.
  *
  * ## The order a `POST` is read in
  *
@@ -39,6 +52,28 @@
  * Nothing is written before step 5, so every refusal above it leaves
  * the filesystem untouched.
  *
+ * ## `GET /__devtools/templates` reads the disk on every request
+ *
+ * Nothing is cached. The issue forms are a handful of small files, and
+ * a dev server is the one place they get EDITED: a cached list would
+ * leave a corrected form invisible until the server restarted, which
+ * is a failure the person editing `.github/ISSUE_TEMPLATE/` would
+ * blame on their own YAML.
+ *
+ * `./templates.ts` is also the module that decides nothing there is
+ * fatal — a directory that cannot be listed answers `[]`, an
+ * unreadable or malformed file is skipped with a warning naming it —
+ * so this route has no failure of its own to answer, and it answers
+ * the ARRAY rather than an envelope around it: the browser half
+ * validates the whole answer with `../core/reportTemplate.ts`'s
+ * `reportTemplateListSchema`, which is a list.
+ *
+ * Those warnings go to {@link DevToolsEndpointContext.log}, the sink a
+ * refusal is already logged to. `./templates.ts` REQUIRES one where
+ * this context's is optional, so a plugin configured without a log
+ * drops the skips through {@link ignoreTemplateWarning} rather than
+ * throwing on a form somebody mistyped.
+ *
  * ## Why the same-origin check is on `POST` and not on `GET`
  *
  * A browser sends `Origin` on every `POST`, same-origin included, and
@@ -47,11 +82,12 @@
  * fetch. It is also the reason `./origin.ts` can say "a browser sends
  * one on every CORS-eligible request, which a `POST` always is".
  *
- * Both routes still take `isAllowedRemote`. Spec item 8.3 puts the
- * loopback rule on the report endpoint, and applying it to the status
- * endpoint as well is strictly narrower than the spec asks: the commit,
- * the branch and the round are a small disclosure, and no machine on
- * the LAN needs to read them off a laptop running `vite --host`.
+ * All three routes still take `isAllowedRemote`. Spec item 8.3 puts the
+ * loopback rule on the report endpoint, and applying it to the other
+ * two as well is strictly narrower than the spec asks: the commit, the
+ * branch, the round, the repository slug and the questions a form asks
+ * are each a small disclosure, and no machine on the LAN needs to read
+ * them off a laptop running `vite --host`.
  *
  * ## The port comes from the kernel
  *
@@ -70,7 +106,10 @@
  * `X-Content-Type-Options: nosniff` — `./http.ts`'s `respond` sets all
  * three. Three shapes:
  *
- * - {@link DevToolsStatusBody} — spec item 8.2's five members exactly.
+ * - {@link DevToolsStatusBody} — spec item 8.2's five members, plus the
+ *   `repo` slug spec item 7 splices into a prefilled GitHub new-issue
+ *   link when a report was stored rather than filed.
+ * - A `ReportTemplate[]` from `./templates.ts`, bare; see above.
  * - {@link DevToolsStoredBody} — spec item 8.4's `{status: 'stored',
  *   path}`, plus a `gateway` member when a gateway ran. The stored path
  *   is present in BOTH cases, so a caller reads it without branching
@@ -93,9 +132,9 @@
  * assembler rather than here — a colocated `endpoint.test.ts` would
  * have to rebuild that assembly to say anything. This file is the one
  * in the pair with no test of its own; `./plugin.test.ts` is where its
- * five refusals, its status payload and its stored report are pinned,
- * and `./http.test.ts` is where the plumbing underneath them is, since
- * none of that needs an assembly.
+ * refusals, its status payload, its template list and its stored
+ * report are pinned, and `./http.test.ts` is where the plumbing
+ * underneath them is, since none of that needs an assembly.
  */
 
 import type { ReportGateway, ReportGatewayFileOutcome } from './gateway';
@@ -107,6 +146,7 @@ import type {
   DevToolsStoreFs,
   DevToolsStoreRule,
 } from './store';
+import type { DevToolsTemplatesFs } from './templates';
 
 import {
   HTTP_BAD_REQUEST,
@@ -125,8 +165,9 @@ import {
 import { isAllowedRemote, isSameOriginRequest } from './origin';
 import { parseReport } from './report';
 import { storeReport } from './store';
+import { loadReportTemplates } from './templates';
 
-/** The prefix both endpoints sit under — `../core/host.ts`'s default. */
+/** The prefix all three endpoints sit under — `../core/host.ts`'s default. */
 const DEVTOOLS_ENDPOINT_PREFIX = '/__devtools';
 
 /** Spec item 8.2's path. */
@@ -135,8 +176,33 @@ export const DEVTOOLS_STATUS_PATH = `${DEVTOOLS_ENDPOINT_PREFIX}/status`;
 /** Spec item 8.3's path. */
 export const DEVTOOLS_REPORT_PATH = `${DEVTOOLS_ENDPOINT_PREFIX}/report`;
 
+/** Spec item 2's path: the issue forms, parsed. */
+export const DEVTOOLS_TEMPLATES_PATH
+  = `${DEVTOOLS_ENDPOINT_PREFIX}/templates`;
+
+/** Which method each route answers; see this module's header. */
+const ROUTE_METHODS: ReadonlyMap<string, 'GET' | 'POST'> = new Map([
+  [DEVTOOLS_STATUS_PATH, 'GET'],
+  [DEVTOOLS_TEMPLATES_PATH, 'GET'],
+  [DEVTOOLS_REPORT_PATH, 'POST'],
+]);
+
 /** What the status endpoint answers when no gateway is configured. */
 export const DEVTOOLS_GATEWAY_NONE = 'none';
+
+/**
+ * The tracker module every template this dev server serves files
+ * under.
+ *
+ * A constant rather than an option, because the plan's prerequisites
+ * fix it: "Every widget report files under `--module=web` with NO
+ * `--priority`". A `.yml` says nothing about which tracker module it
+ * belongs to, so `./templates.ts` takes the module as a request member
+ * and this is the one value it is ever given here. A second module is
+ * a plugin option on the day a second module exists, and YAGNI until
+ * then.
+ */
+export const DEVTOOLS_TEMPLATE_MODULE = 'web';
 
 /**
  * Which status code each of `./store.ts`'s rules answers with.
@@ -180,6 +246,19 @@ export interface DevToolsStatusBody {
 
   /** The configured gateway's name, or {@link DEVTOOLS_GATEWAY_NONE}. */
   readonly gateway: string;
+
+  /**
+   * The `owner/name` slug of the `origin` remote, or `unknown`.
+   *
+   * Spec item 7 is why it is here: a report the tracker chain filed
+   * LOCALLY leaves the drawer offering a prefilled GitHub new-issue
+   * link, and that link needs the repository this checkout pushes to.
+   * `./git.ts`'s `resolveDevToolsRepo` answers the two capture groups
+   * of a remote url and never a fragment of the url itself, so a
+   * remote carrying credentials reaches a browser as `unknown` rather
+   * than as anything it could leak.
+   */
+  readonly repo: string;
 }
 
 /** Spec item 8.4's response body. */
@@ -193,6 +272,17 @@ export interface DevToolsStoredBody {
   /** What the configured gateway answered, when one ran. */
   readonly gateway?: ReportGatewayFileOutcome;
 }
+
+/**
+ * The whole filesystem this endpoint reaches.
+ *
+ * One seam rather than two: `./store.ts` writes a report through
+ * `mkdir` and `writeFile`, `./templates.ts` reads the issue forms
+ * through `readdir` and `readFile`, and the real `node:fs/promises`
+ * satisfies both halves at once — which is why `./plugin.ts` names one
+ * object and a case builds one fake.
+ */
+export type DevToolsEndpointFs = DevToolsStoreFs & DevToolsTemplatesFs;
 
 /**
  * The middleware, shaped so that Vite's `Connect.NextHandleFunction`
@@ -217,6 +307,27 @@ export interface DevToolsEndpointContext {
   /** Where the round directory is created. */
   readonly outDir: string;
 
+  /**
+   * The `owner/name` slug the status payload answers with.
+   *
+   * Resolved by `./plugin.ts` through `./git.ts`'s
+   * `resolveDevToolsRepo`, once per dev-server start, and NOT a member
+   * of {@link DevToolsBuildInfo}: those three values are spliced into
+   * the browser bundle by the plugin's `define`, and this one is read
+   * by the status route alone.
+   */
+  readonly repo: string;
+
+  /**
+   * The issue forms `GET /__devtools/templates` reads, instead of
+   * listing `./templates.ts`'s default directory.
+   *
+   * An explicitly EMPTY list means no template rather than a fallback
+   * to the directory — `./templates.ts` says so — which is how a
+   * configuration turns the form off without moving a file.
+   */
+  readonly templates?: readonly string[];
+
   /** Whether a non-loopback address is accepted. */
   readonly allowLan: boolean;
 
@@ -226,19 +337,24 @@ export interface DevToolsEndpointContext {
   /** Where a stored report goes next, when one is configured. */
   readonly gateway?: ReportGateway;
 
-  /** The filesystem `./store.ts` writes through. */
-  readonly fs: DevToolsStoreFs;
+  /** The filesystem both `./store.ts` and `./templates.ts` go through. */
+  readonly fs: DevToolsEndpointFs;
 
   /** The clock `./store.ts` timestamps with. */
   readonly now: DevToolsClock;
 
   /**
-   * Where a refusal is logged, defaulting to nowhere.
+   * Where a refusal, and a skipped issue form, are logged — defaulting
+   * to nowhere.
    *
    * `./origin.ts`'s header says the plugin logs the rule, and this is
-   * where it does. The method, the path and the RULE are logged and
-   * nothing else — never a header, an address or a body — so a
-   * dev-server log cannot become a copy of whatever was posted.
+   * where it does. Of a REFUSED request the method, the path and the
+   * RULE are logged and nothing else — never a header, an address or a
+   * body — so a dev-server log cannot become a copy of whatever was
+   * posted. The other sender is `./templates.ts`, whose warnings name
+   * a file in the working tree and what was wrong with it; those come
+   * off the disk rather than off a request, and a form author needs to
+   * be told which file was dropped.
    */
   readonly log?: (message: string) => void;
 }
@@ -266,6 +382,19 @@ function gatewayNameOf(gateway: ReportGateway | undefined): string {
 }
 
 /**
+ * Where a skipped issue form goes when no log sink was configured.
+ *
+ * `./templates.ts` REQUIRES a warning sink and this context's `log` is
+ * optional, so the route needs a sink that does nothing rather than a
+ * branch that reads the templates twice. A dropped form is worth a
+ * line in a dev-server log and nothing more, so a plugin with nowhere
+ * to put that line loses it rather than failing the read.
+ */
+function ignoreTemplateWarning(): void {
+  // Deliberately empty; see above.
+}
+
+/**
  * Take a stored report to the gateway without letting it throw.
  *
  * An implementation answers a refusal rather than throwing —
@@ -289,7 +418,7 @@ async function fileThroughGateway(
 }
 
 /**
- * Build the middleware that answers both endpoints.
+ * Build the middleware that answers all three endpoints.
  *
  * ## `persistence` is always `false` in this plan
  *
@@ -318,9 +447,30 @@ export function createDevToolsEndpoint(
     round: context.info.round,
     persistence: false as const,
     gateway: gatewayNameOf(context.gateway),
+    repo: context.repo,
   });
 
   const refuse = createRefuse(context.log);
+
+  /**
+   * Answer `GET /__devtools/templates`: the issue forms, parsed.
+   *
+   * Reads the disk per request and caches nothing — this module's
+   * header says why — and answers the bare list, because
+   * `./templates.ts` skips what it cannot read rather than failing,
+   * and `../core/reportTemplate.ts`'s `reportTemplateListSchema` is
+   * what the browser half validates the answer with.
+   *
+   * @param res - The response to write.
+   */
+  async function answerTemplates(res: DevToolsOutgoing): Promise<void> {
+    const loaded = await loadReportTemplates(
+      { paths: context.templates, module: DEVTOOLS_TEMPLATE_MODULE },
+      { fs: context.fs, warn: context.log ?? ignoreTemplateWarning },
+    );
+
+    respond(res, HTTP_OK, loaded);
+  }
 
   /**
    * Answer `POST /__devtools/report`: steps 3 to 6 of the order in this
@@ -392,7 +542,7 @@ export function createDevToolsEndpoint(
   }
 
   /**
-   * Route a request that is addressed to one of the two endpoints.
+   * Route a request addressed to one of this plugin's three paths.
    *
    * @param req - The request.
    * @param res - The response to write.
@@ -415,11 +565,7 @@ export function createDevToolsEndpoint(
       return;
     }
 
-    const wanted = path === DEVTOOLS_STATUS_PATH
-      ? 'GET'
-      : 'POST';
-
-    if (req.method !== wanted) {
+    if (req.method !== ROUTE_METHODS.get(path)) {
       refuse(
         req,
         res,
@@ -432,6 +578,12 @@ export function createDevToolsEndpoint(
 
     if (path === DEVTOOLS_STATUS_PATH) {
       respond(res, HTTP_OK, statusBody);
+
+      return;
+    }
+
+    if (path === DEVTOOLS_TEMPLATES_PATH) {
+      await answerTemplates(res);
 
       return;
     }
@@ -462,7 +614,7 @@ export function createDevToolsEndpoint(
   return (req, res, next) => {
     const path = pathnameOf(req.url);
 
-    if (path !== DEVTOOLS_STATUS_PATH && path !== DEVTOOLS_REPORT_PATH) {
+    if (path === null || !ROUTE_METHODS.has(path)) {
       next();
 
       return;
