@@ -143,6 +143,8 @@ To test against a deployed n8n instance instead of the local stack, see
 > <http://localhost:5173> on seed-shaped fixture data. It never reads from or
 > writes to the service, and edits last only until the tab closes. To exercise
 > the pipeline, use the service's REST or MCP endpoints.
+> For development tools available during `bun run dev`, see
+> [packages/dev-tools/README.md](packages/dev-tools/README.md).
 
 <p align="center"><img src="docs/assets/screenshot-v0.1.0.jpg" alt="ar-dispatch execution graph in n8n" width="760"></p>
 

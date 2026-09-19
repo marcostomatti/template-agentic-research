@@ -101,6 +101,17 @@ const FINDINGS_SEARCH_PLACEHOLDER = 'Search findings…';
  */
 const SUMMARY_FIELD = 'summary';
 
+/**
+ * The dev-tools trigger's accessible name.
+ *
+ * Decision 4 (`.rafa/specs/q20b-1-dev-tools-shell.md`) is that the widget
+ * is never mounted under automation, so this default-suite boot — run
+ * against the DEFAULT dev server, with no `VITE_DEVTOOLS_FORCE` — is the
+ * control for `dev-tools-shell.spec.ts`, which runs against the SECOND,
+ * forced dev server and is the one place the trigger is asserted present.
+ */
+const DEV_TOOLS_TRIGGER_NAME = 'Dev tools';
+
 test.describe('the app at the single-domain base', () => {
   test('boots onto the digest surface', async ({ page }) => {
     // Arrange / Act — the bare base, with no surface named.
@@ -234,5 +245,19 @@ test.describe('the app at the single-domain base', () => {
     for (const summary of summaries) {
       await expect(main.getByRole('row', { name: summary })).toBeVisible();
     }
+  });
+
+  test('never mounts the dev-tools trigger', async ({ page }) => {
+    // Arrange / Act — the default project's own server, carrying no
+    // `VITE_DEVTOOLS_FORCE`, which is what decision 4 says every default
+    // boot looks like.
+    await page.goto(SINGLE_DOMAIN_BASE);
+
+    // Assert — the counterpart to `dev-tools-shell.spec.ts`, which is
+    // the one file where this same locator resolves to something
+    // visible.
+    await expect(
+      page.getByRole('button', { name: DEV_TOOLS_TRIGGER_NAME }),
+    ).toHaveCount(0);
   });
 });

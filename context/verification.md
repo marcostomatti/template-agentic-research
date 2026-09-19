@@ -206,14 +206,17 @@ red package never masks another and a single run gives the whole picture.
 - Neither fan-out declares a lifecycle hook, so one exit-zero line per
   package is exact for both. `test:all` is the exception, and all three
   packages declare a `pretest` there: `@ar/service` and `@ar/ui` give two
-  exit-zero lines apiece, `@ar/web` gives FOUR. Its pretest is itself a
-  filtered run (`bun run --filter '@ar/ui' build`, so the app's suite is
-  self-contained whatever order the fan-out reaches the packages in), and
-  the nested filter prints `@ar/ui build:` and `@ar/ui postbuild:` exit
-  lines of its own inside `@ar/web pretest:`. Read four there as the
-  healthy count, not as a package that ran twice — and note the doubled
-  prefix is what keeps those lines classifiable, since they are `@ar/ui`'s
-  build output sitting under `@ar/web`'s name.
+  exit-zero lines apiece, `@ar/web` gives SIX. Its pretest is itself a
+  filtered run (`bun run --filter '@ar/ui' --filter '@ar/dev-tools' build`,
+  so the app's suite is self-contained whatever order the fan-out reaches
+  the packages in), and the nested filter prints a `build:` and a
+  `postbuild:` exit line per FILTERED PACKAGE inside `@ar/web pretest:` —
+  measured four nested lines, `@ar/dev-tools`' pair and `@ar/ui`'s. Read
+  six there as the healthy count, not as a package that ran twice — and
+  note the doubled prefix is what keeps those lines classifiable, since
+  they are another package's build output sitting under `@ar/web`'s name.
+  The nested half is one PAIR per `--filter` that script names, so it
+  moves with the script rather than being invariant at four.
 - `test:all` prints the root vitest summary, then one line per package.
   All three packages now run real vitest suites — `@ar/web`'s placeholder
   `echo` is gone, so its code-0 line finally means a suite RAN, and
@@ -331,9 +334,12 @@ red package never masks another and a single run gives the whole picture.
   still looks plausible. And pino lines carry the `@ar/service test:`
   prefix themselves, so a generic `@ar/`-prefixed bucket tested BEFORE the
   pino rule scores pino at zero, the same way. Attribute a moved bucket by
-  EMITTING SCRIPT: the vite figure is 1781 + 1781, the `@ar/ui` build
-  printed once by `@ar/ui pretest` and once nested inside `@ar/web pretest`,
-  so it can only move from that package, and `@ar/service pretest` emits one
+  EMITTING SCRIPT: the vite figure's two large halves are 1781 + 1781, the
+  `@ar/ui` build printed once by `@ar/ui pretest` and once nested inside
+  `@ar/web pretest`, so they can only move from that package — and a third,
+  small member joins them under `@ar/web pretest` now that it also builds
+  `@ar/dev-tools`, measured at 3 table rows (one per emitted chunk) against
+  that package's own build. And `@ar/service pretest` emits one
   line per workflow SOURCE beside its summary — three lines over a tree
   holding one workflow and four over two — so a landed workflow moves the
   other-`@ar/` bucket by exactly one, while a module under `src/lib/` or
@@ -347,9 +353,10 @@ red package never masks another and a single run gives the whole picture.
   `@ar/web pretest: @ar/ui build: Exited with code 0` and its `postbuild:`
   sibling carry the same string under a DOUBLED prefix.
   `^@ar/\S+ \S+: Exited with code (\d+)$` splits the two populations
-  exactly (measured 6 top-level, 2 nested), and that anchor is what
-  reconciles the two sentences above — "@ar/web gives FOUR" counts the
-  nested pair and "the set is exactly SIX" does not, so a reader taking
+  exactly (measured 6 top-level, 4 nested — 2 nested before `@ar/web`'s
+  pretest took a second `--filter`), and that anchor is what
+  reconciles the two sentences above — "@ar/web gives SIX" counts the
+  nested pairs and "the set is exactly SIX" does not, so a reader taking
   either literally against a raw count concludes the other is stale. Assert
   the six by NAME against `packages/*` with a fabricated member asserted
   absent, and capture the CODE as a group rather than matching `code 0`, or
@@ -402,12 +409,15 @@ red package never masks another and a single run gives the whole picture.
   suite. The pass-glyph total tracks the NON-VITEST members alone and not
   suite size, because vitest's default reporter contributes exactly ZERO of
   them — the count is whatever `@ar/web test:` contributes (Playwright's
-  per-test lines) plus 2 apiece from the `@ar/ui` and `@ar/web` pretest vite
-  builds. Decompose it BY PREFIX rather than quoting the total: the two vite
-  halves hold at 2 each, and the Playwright half moves with that suite. It
-  read 31 (27 + 2 + 2) at both 2709 and 5783 vitest cases, which is why this
-  file once called 31 invariant, and 150 (146 + 2 + 2) at the q13 tip with
-  `@ar/service` at 5930 passing cases contributing none of them. So the
+  per-test lines) plus 2 per vite BUILD inside a pretest — 2 under `@ar/ui`
+  and, since that script took the `@ar/dev-tools` filter, a measured 4 under
+  `@ar/web`. Decompose it BY PREFIX rather than quoting the total: a vite
+  half holds at 2 per build it runs, and the Playwright half moves with that
+  suite. It read 31 (27 + 2 + 2) at both 2709 and 5783 vitest cases, which
+  is why this file once called 31 invariant, and 150 (146 + 2 + 2) at the
+  q13 tip with `@ar/service` at 5930 passing cases contributing none of
+  them — all three readings taken before `@ar/web`'s pretest built a second
+  package, so their trailing `+ 2` is a `+ 4` on any tree carrying it. So the
   DECOMPOSITION is the law and every figure in it is a snapshot: re-derive
   the PARTS, and a total quoted without them cannot say which half moved.
   And that package-scope `other` bucket is

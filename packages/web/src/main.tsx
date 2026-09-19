@@ -41,6 +41,68 @@
  * an inline call would behave identically; naming the router keeps the
  * mount a plain description of what the app is wrapped in.
  *
+ * ## Why the dev-tools widget is started dynamically, and guarded
+ *
+ * `./dev/devtools` is reached at the bottom of this file by a DYNAMIC
+ * import behind `import.meta.env.DEV`, after the root has rendered.
+ * All three of those — dynamic, guarded, last — answer different
+ * questions, and none of them is stylistic.
+ *
+ * GUARDED is what decides whether the widget runs. `import.meta.env.DEV`
+ * is one of Vite's own substitutions rather than a runtime lookup, so a
+ * production build has the literal `false` here and the block below is
+ * a branch nothing can enter.
+ *
+ * DYNAMIC is what decides whether the widget SHIPS. A static `import`
+ * is hoisted and evaluated before any statement of this module runs, so
+ * the guard would gate the call while the module — and everything
+ * `@ar/dev-tools` pulls in with it — was already in the bundle and
+ * already executed for its side effects. Only the dynamic form leaves
+ * the specifier inside the dead branch, which is the whole reason
+ * `@ar/dev-tools` can be a devDependency of this package rather than a
+ * dependency.
+ *
+ * That is a claim about the BUILT bundle, and reading the line below is
+ * not evidence for it: whether a bundler drops a dead-branch dynamic
+ * import, or keeps it as a separate chunk nothing loads, is the
+ * bundler's decision and not this file's. Measured against a real
+ * `vite build` (vite 8.3.0 over rolldown 1.2.8), the branch is dropped
+ * BEFORE the specifier is resolved: with `@ar/dev-tools`'s
+ * `dist/index.js` moved aside the build still exits `0` and emits a
+ * byte-identical main chunk, while the same build with the guard below
+ * forced to `true` fails with `Rolldown failed to resolve import
+ * "@ar/dev-tools"`. Nothing of the package reaches `dist/`.
+ *
+ * The reading that settles it is NOT a grep of `dist/` for the
+ * specifier. Vite rewrites a bare specifier to a resolved path, so
+ * `@ar/dev-tools` is absent from the output whether or not the package
+ * shipped — `0` hits under both builds, which makes that grep
+ * a false negative rather than evidence. What discriminates is a
+ * literal only the package holds, the About popover's title `About`:
+ * `0` hits in the shipped build, `2` with the guard forced, both of
+ * those inside a `dist/assets/devtools-*.js` chunk no shipped build
+ * emits.
+ *
+ * The grep to NOT reach for is the bare substring `devtools`, which
+ * hits a clean build and reads as a leak. React ships its own
+ * `__REACT_DEVTOOLS_GLOBAL_HOOK__` identifier, and the browser scheme
+ * allow-list carries the literal `devtools:` — neither has anything
+ * to do with `@ar/dev-tools`. The four literals that discriminate are
+ * `About`, `mountDevTools`, `data-devtools-root` and
+ * `__DEVTOOLS_COMMIT__`, all `0` in the shipped build. Pair them with
+ * a planted control over something the bundle certainly holds
+ * (`Agentic Research`, from `index.html`'s title, reads `1`) so a
+ * row of zeros is a reading rather than a grep that matched nothing
+ * because `dist/` was stale or the path was wrong.
+ *
+ * LAST is about what a failure can cost. The import resolves on a later
+ * microtask, so no part of the dev tools is on the path to the first
+ * paint, and a dev-tools module that throws while loading rejects a
+ * promise the app has already stopped depending on rather than taking
+ * the bootstrap with it. The rejection is caught for exactly that
+ * reason and reported rather than swallowed: the app is standing, and a
+ * development widget that did not start is a line on the console.
+ *
  * ## Theme
  *
  * Not owned here. `data-theme` is written by `useTheme` from the
@@ -80,3 +142,13 @@ createRoot(rootElement).render(
     </QueryProvider>
   </StrictMode>,
 );
+
+if (import.meta.env.DEV) {
+  void import('./dev/devtools')
+    .then(({ startDevTools }) => {
+      startDevTools();
+    })
+    .catch((error: unknown) => {
+      console.error('Dev tools did not start.', error);
+    });
+}

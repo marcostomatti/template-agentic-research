@@ -1,0 +1,592 @@
+/*
+ * @ar/dev-tools -- the package's ONLY stylesheet.
+ *
+ * There is no second CSS file and no CSS-in-JS anywhere in this
+ * package: every rule the widget needs is below, the file is copied
+ * verbatim to `dist/styles.css` by `vite-plugin-static-copy` and is
+ * exposed as the `./styles.css` export. It is never imported from JS,
+ * so the consuming app opts in with one `@import`. That single-file
+ * shape is what decision 2 of `.rafa/specs/q20b-1-dev-tools-shell.md`
+ * buys: the package depends on no design system, so a tool that has
+ * to report a broken stylesheet does not render through one.
+ *
+ * ## The scoping rule
+ *
+ * EVERY selector in this file is scoped under `[data-devtools-root]`
+ * -- the one element `mountDevTools` appends to `document.body`. The
+ * rule runs both ways and both directions are load-bearing:
+ *
+ * - The widget cannot style the app. Nothing here selects a bare
+ *   element, a `:root`, a `*` or a class outside that subtree, so
+ *   importing this file can change nothing the app draws.
+ * - The app's reset cannot flatten the widget. Every property the
+ *   widget depends on is SET inside the scope rather than inherited,
+ *   because the host's own reset has already run over `body` and its
+ *   descendants and this file must survive whatever it did.
+ *
+ * A `[data-theme='dark']` or `:root` prefix on a selector is still
+ * within the rule: the theme attribute lives on the HOST document's
+ * `<html>` (that is where `packages/web`'s `THEME_ATTRIBUTE` writes
+ * it), so the widget's own scope can only appear to its right, and
+ * the declarations still land on the widget alone.
+ *
+ * Measured rather than asserted, over a comment-stripped scan of this
+ * file: 52 rule preludes, 60 selectors, 0 of them without
+ * `[data-devtools-root]`. The same scan over this file plus one
+ * appended `body { color: red; }` answers 1 unscoped selector,
+ * `body` -- so the zero is a reading the check could have failed.
+ * Keyframe stops are excluded, being offsets rather than selectors
+ * over the document.
+ *
+ * ## Tokens
+ *
+ * Every custom property is prefixed `--devtools-`, never `--ar-`, so
+ * the port to open-tomato renames nothing and a host token layer can
+ * never collide with one of these. They are declared ON
+ * `[data-devtools-root]` rather than on `:root` for the same reason:
+ * a token on `:root` is visible to the app and is therefore a thing
+ * the app could come to depend on.
+ *
+ * Fixed-position children, a `popover` and a `<dialog>` promoted to
+ * the top layer all keep their DOM parent, so all three still inherit
+ * these tokens from the root element.
+ *
+ * ## Contrast, measured
+ *
+ * WCAG 2.1 ratios computed off the oklch values below (oklch -> sRGB
+ * -> relative luminance), light / dark: text on surface 16.85 / 14.25,
+ * text on the hover surface 14.55 / 11.83, muted text on surface
+ * 5.37 / 6.65 and on hover 4.64 / 5.52. Every text pairing clears
+ * 4.5:1.
+ *
+ * `--devtools-accent` is the one value that does not, and it is not a
+ * text colour: it draws the focus outline and the checked-corner
+ * marker glyph, both non-text UI needing 3:1. Its worst reading is
+ * 4.05 (dark accent on the dark hover surface); on the two surfaces
+ * themselves it is 5.32 / 4.88, and `--devtools-accent-contrast` on
+ * `--devtools-accent` is 5.32 / 5.57 for a filled accent. The light
+ * accent was moved from `oklch(58% 0.19 27)` to `oklch(54.5% 0.195
+ * 27)` on that measurement: 3.95 on the hover surface before, 4.59
+ * after.
+ *
+ * ## Motion
+ *
+ * The only animated geometry is `opacity`, `scale` and `translate` --
+ * compositor properties, no layout-bound one anywhere; the two
+ * remaining transitions are `background-color` and `color`, which
+ * repaint without reflowing. `scale` and `translate` are the
+ * INDEPENDENT transform properties rather than a `transform`
+ * shorthand on purpose: `@floating-ui/dom` writes `transform` inline
+ * on the menu and the popover, and a `transform` here would be
+ * clobbered by it (or clobber it) on every reposition.
+ *
+ * The `prefers-reduced-motion: reduce` block at the foot of the file
+ * is the single place motion is withdrawn.
+ */
+
+/* ------------------------------------------------------------------
+ * Token layer
+ * ------------------------------------------------------------------ */
+
+[data-devtools-root] {
+  /* Light is the base resolution; the two dark blocks below restate
+     these five and nothing else. */
+  --devtools-surface: oklch(99% 0.004 95);
+  --devtools-surface-hover: oklch(94% 0.008 95);
+  --devtools-text: oklch(22% 0.01 60);
+  --devtools-text-muted: oklch(52% 0.015 60);
+  --devtools-accent: oklch(54.5% 0.195 27);
+  --devtools-accent-contrast: oklch(99% 0 0);
+  --devtools-border: oklch(88% 0.008 95);
+  --devtools-shadow: 0 1px 2px oklch(20% 0.02 60 / 12%),
+    0 8px 24px oklch(20% 0.02 60 / 16%);
+
+  /* Theme-invariant: neither block below restates these. A radius and
+     a duration do not change with the light level. */
+  --devtools-radius: 10px;
+
+  /* The three trigger sizes of `Size` in `src/core/types.ts`. */
+  --devtools-size-sm: 2rem;
+  --devtools-size-md: 2.75rem;
+  --devtools-size-lg: 3.5rem;
+
+  /* Two durations: `fast` for a state change the operator caused
+     (hover, press, highlight), `normal` for a surface arriving or
+     leaving. */
+  --devtools-duration-fast: 120ms;
+  --devtools-duration-normal: 220ms;
+  --devtools-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Two values that are neither palette nor scale: the gap the fixed
+     trigger and the handle keep from the viewport edge, and the stack
+     the widget occupies. The z-index is deliberately far above any
+     plausible app layer -- the trigger and the drawer are NOT in the
+     platform top layer, unlike the popover and the modal, so they
+     compete with the app's own stacking contexts. */
+  --devtools-inset: 1rem;
+  --devtools-z: 2147483000;
+
+  color-scheme: light;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+    Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  isolation: isolate;
+}
+
+/* Both dark blocks resolve the SAME tokens, so the media query and the
+   attribute can never drift into two different dark themes. The media
+   block is narrowed to a document carrying no `data-theme`: a host
+   that stated `light` explicitly has overruled the OS, and the widget
+   follows the host it is mounted in. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) [data-devtools-root] {
+    --devtools-surface: oklch(24% 0.012 60);
+    --devtools-surface-hover: oklch(30% 0.016 60);
+    --devtools-text: oklch(95% 0.006 95);
+    --devtools-text-muted: oklch(72% 0.012 95);
+    --devtools-accent: oklch(66% 0.18 27);
+    --devtools-accent-contrast: oklch(18% 0.01 60);
+    --devtools-border: oklch(36% 0.014 60);
+    --devtools-shadow: 0 1px 2px oklch(0% 0 0 / 40%),
+      0 8px 24px oklch(0% 0 0 / 48%);
+
+    color-scheme: dark;
+  }
+}
+
+[data-theme='dark'] [data-devtools-root],
+[data-devtools-root][data-theme='dark'] {
+  --devtools-surface: oklch(24% 0.012 60);
+  --devtools-surface-hover: oklch(30% 0.016 60);
+  --devtools-text: oklch(95% 0.006 95);
+  --devtools-text-muted: oklch(72% 0.012 95);
+  --devtools-accent: oklch(66% 0.18 27);
+  --devtools-accent-contrast: oklch(18% 0.01 60);
+  --devtools-border: oklch(36% 0.014 60);
+  --devtools-shadow: 0 1px 2px oklch(0% 0 0 / 40%),
+    0 8px 24px oklch(0% 0 0 / 48%);
+
+  color-scheme: dark;
+}
+
+/* ------------------------------------------------------------------
+ * Scope reset -- what the host's own reset must not have taken away
+ * ------------------------------------------------------------------ */
+
+[data-devtools-root],
+[data-devtools-root] *,
+[data-devtools-root] *::before,
+[data-devtools-root] *::after {
+  box-sizing: border-box;
+}
+
+[data-devtools-root] button {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+[data-devtools-root] :focus-visible {
+  outline: 2px solid var(--devtools-accent);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------
+ * Trigger
+ * ------------------------------------------------------------------ */
+
+[data-devtools-root] .devtools-trigger {
+  position: fixed;
+  z-index: var(--devtools-z);
+  display: grid;
+  place-items: center;
+  inline-size: var(--devtools-trigger-size, var(--devtools-size-md));
+  block-size: var(--devtools-trigger-size, var(--devtools-size-md));
+  /* A round ring, by spec item 2, on both :focus-visible and while the
+     menu is open -- so the radius belongs on the element itself. */
+  border-radius: 100%;
+  transition: scale var(--devtools-duration-fast) var(--devtools-ease),
+    opacity var(--devtools-duration-fast) var(--devtools-ease);
+}
+
+[data-devtools-root] .devtools-trigger[data-size='sm'] {
+  --devtools-trigger-size: var(--devtools-size-sm);
+}
+
+[data-devtools-root] .devtools-trigger[data-size='md'] {
+  --devtools-trigger-size: var(--devtools-size-md);
+}
+
+[data-devtools-root] .devtools-trigger[data-size='lg'] {
+  --devtools-trigger-size: var(--devtools-size-lg);
+}
+
+/* Physical corners, because `Corner` in `src/core/types.ts` is
+   physical: the trigger is moved to dodge whatever it covers, which is
+   a screen position and not a reading order. The drawer's `start`/`end`
+   placements below ARE logical, and that asymmetry is the contract's. */
+[data-devtools-root] .devtools-trigger[data-corner='top-left'] {
+  top: var(--devtools-inset);
+  left: var(--devtools-inset);
+}
+
+[data-devtools-root] .devtools-trigger[data-corner='top-right'] {
+  top: var(--devtools-inset);
+  right: var(--devtools-inset);
+}
+
+[data-devtools-root] .devtools-trigger[data-corner='bottom-right'] {
+  right: var(--devtools-inset);
+  bottom: var(--devtools-inset);
+}
+
+[data-devtools-root] .devtools-trigger[data-corner='bottom-left'] {
+  bottom: var(--devtools-inset);
+  left: var(--devtools-inset);
+}
+
+[data-devtools-root] .devtools-trigger:hover {
+  scale: 1.06;
+}
+
+[data-devtools-root] .devtools-trigger:active {
+  scale: 0.95;
+}
+
+[data-devtools-root] .devtools-trigger[aria-expanded='true'] {
+  outline: 2px solid var(--devtools-accent);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------
+ * Menu and submenus
+ * ------------------------------------------------------------------ */
+
+[data-devtools-root] .devtools-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: calc(var(--devtools-z) + 1);
+  min-inline-size: 13rem;
+  max-block-size: 80vh;
+  overflow-y: auto;
+  margin: 0;
+  border: 1px solid var(--devtools-border);
+  border-radius: var(--devtools-radius);
+  padding: 0.25rem;
+  background: var(--devtools-surface);
+  box-shadow: var(--devtools-shadow);
+  color: var(--devtools-text);
+  list-style: none;
+  opacity: 0;
+  scale: 0.97;
+  transition: opacity var(--devtools-duration-normal) var(--devtools-ease),
+    scale var(--devtools-duration-normal) var(--devtools-ease);
+}
+
+[data-devtools-root] .devtools-menu[data-open='true'] {
+  opacity: 1;
+  scale: 1;
+}
+
+[data-devtools-root] .devtools-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  inline-size: 100%;
+  border-radius: calc(var(--devtools-radius) - 4px);
+  padding: 0.375rem 0.5rem;
+  transition: background-color var(--devtools-duration-fast)
+    var(--devtools-ease);
+}
+
+[data-devtools-root] .devtools-menu-item:hover,
+[data-devtools-root] .devtools-menu-item[data-highlighted='true'] {
+  background-color: var(--devtools-surface-hover);
+}
+
+[data-devtools-root] .devtools-menu-item[aria-disabled='true'] {
+  color: var(--devtools-text-muted);
+  cursor: default;
+}
+
+/* The pending state of an action whose `run(host)` returned a promise
+   that has not settled. Opacity alone, so nothing reflows under the
+   pointer while the operator waits. */
+[data-devtools-root] .devtools-menu-item[data-pending='true'] {
+  animation: devtools-pulse 1.1s var(--devtools-ease) infinite;
+  cursor: progress;
+}
+
+@keyframes devtools-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+[data-devtools-root] .devtools-menu-marker {
+  inline-size: 1em;
+  color: var(--devtools-accent);
+  text-align: center;
+}
+
+[data-devtools-root] .devtools-menu-arrow {
+  margin-inline-start: auto;
+  color: var(--devtools-text-muted);
+}
+
+[data-devtools-root] .devtools-menu-label {
+  padding: 0.375rem 0.5rem 0.25rem;
+  color: var(--devtools-text-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+[data-devtools-root] .devtools-menu-separator {
+  margin: 0.25rem 0.5rem;
+  border: 0;
+  border-top: 1px solid var(--devtools-border);
+}
+
+/* ------------------------------------------------------------------
+ * Surfaces: popover, modal, drawer
+ * ------------------------------------------------------------------ */
+
+/* `popover="manual"` -- the platform top layer, non-modal, so the page
+   behind stays interactive and the popover may coexist with a drawer.
+   The UA sheet gives a popover its own border, padding and inset;
+   all three are restated here rather than inherited. */
+[data-devtools-root] .devtools-popover {
+  position: fixed;
+  inset: auto;
+  max-inline-size: min(24rem, calc(100vw - 2rem));
+  margin: 0;
+  border: 1px solid var(--devtools-border);
+  border-radius: var(--devtools-radius);
+  padding: 0.75rem;
+  background: var(--devtools-surface);
+  box-shadow: var(--devtools-shadow);
+  color: var(--devtools-text);
+}
+
+[data-devtools-root] .devtools-popover:popover-open {
+  opacity: 1;
+  scale: 1;
+  transition: opacity var(--devtools-duration-normal) var(--devtools-ease),
+    scale var(--devtools-duration-normal) var(--devtools-ease);
+}
+
+@starting-style {
+  [data-devtools-root] .devtools-popover:popover-open {
+    opacity: 0;
+    scale: 0.97;
+  }
+}
+
+/* `<dialog>.showModal()` -- focus trapped and Escape handled by the
+   platform, so there is no JS trap to style around. */
+[data-devtools-root] .devtools-modal {
+  position: fixed;
+  inset: 0;
+  max-inline-size: min(36rem, calc(100vw - 2rem));
+  max-block-size: calc(100vh - 4rem);
+  margin: auto;
+  border: 1px solid var(--devtools-border);
+  border-radius: var(--devtools-radius);
+  padding: 0;
+  background: var(--devtools-surface);
+  box-shadow: var(--devtools-shadow);
+  color: var(--devtools-text);
+}
+
+[data-devtools-root] .devtools-modal[open] {
+  opacity: 1;
+  scale: 1;
+  transition: opacity var(--devtools-duration-normal) var(--devtools-ease),
+    scale var(--devtools-duration-normal) var(--devtools-ease);
+}
+
+@starting-style {
+  [data-devtools-root] .devtools-modal[open] {
+    opacity: 0;
+    scale: 0.97;
+  }
+}
+
+[data-devtools-root] .devtools-modal::backdrop {
+  background: oklch(0% 0 0 / 45%);
+}
+
+/* A fixed panel the page stays interactive behind -- no backdrop, no
+   inert, nothing that would stop the operator using the app it is
+   reporting on. */
+[data-devtools-root] .devtools-drawer {
+  position: fixed;
+  z-index: var(--devtools-z);
+  display: flex;
+  flex-direction: column;
+  background: var(--devtools-surface);
+  box-shadow: var(--devtools-shadow);
+  color: var(--devtools-text);
+  transition: translate var(--devtools-duration-normal) var(--devtools-ease);
+}
+
+[data-devtools-root] .devtools-drawer[data-placement='start'] {
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: min(24rem, 100vw);
+  border-inline-end: 1px solid var(--devtools-border);
+}
+
+[data-devtools-root] .devtools-drawer[data-placement='end'] {
+  inset-block: 0;
+  inset-inline-end: 0;
+  inline-size: min(24rem, 100vw);
+  border-inline-start: 1px solid var(--devtools-border);
+}
+
+[data-devtools-root] .devtools-drawer[data-placement='top'] {
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: min(22rem, 100vh);
+  border-block-end: 1px solid var(--devtools-border);
+}
+
+[data-devtools-root] .devtools-drawer[data-placement='bottom'] {
+  inset-block-end: 0;
+  inset-inline: 0;
+  block-size: min(22rem, 100vh);
+  border-block-start: 1px solid var(--devtools-border);
+}
+
+[data-devtools-root] .devtools-drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-block-end: 1px solid var(--devtools-border);
+  padding: 0.5rem 0.75rem;
+}
+
+[data-devtools-root] .devtools-drawer-title {
+  margin: 0;
+  margin-inline-end: auto;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+[data-devtools-root] .devtools-drawer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0.75rem;
+}
+
+/* The collapsed edge tab a drawer declaring `handle: true` leaves
+   behind once it has been opened. It is the drawer's only affordance
+   when the menu is shut, so it keeps the drawer's own placement. */
+[data-devtools-root] .devtools-handle {
+  position: fixed;
+  z-index: calc(var(--devtools-z) - 1);
+  display: grid;
+  place-items: center;
+  min-inline-size: 1.5rem;
+  min-block-size: 1.5rem;
+  border: 1px solid var(--devtools-border);
+  padding: 0.25rem;
+  background: var(--devtools-surface);
+  box-shadow: var(--devtools-shadow);
+  color: var(--devtools-text-muted);
+  transition: color var(--devtools-duration-fast) var(--devtools-ease),
+    scale var(--devtools-duration-fast) var(--devtools-ease);
+}
+
+[data-devtools-root] .devtools-handle:hover {
+  color: var(--devtools-text);
+  scale: 1.05;
+}
+
+[data-devtools-root] .devtools-handle[data-placement='start'] {
+  inset-block-start: 50%;
+  inset-inline-start: 0;
+  border-start-end-radius: var(--devtools-radius);
+  border-end-end-radius: var(--devtools-radius);
+}
+
+[data-devtools-root] .devtools-handle[data-placement='end'] {
+  inset-block-start: 50%;
+  inset-inline-end: 0;
+  border-start-start-radius: var(--devtools-radius);
+  border-end-start-radius: var(--devtools-radius);
+}
+
+[data-devtools-root] .devtools-handle[data-placement='top'] {
+  inset-block-start: 0;
+  inset-inline-start: 50%;
+  border-end-start-radius: var(--devtools-radius);
+  border-end-end-radius: var(--devtools-radius);
+}
+
+[data-devtools-root] .devtools-handle[data-placement='bottom'] {
+  inset-block-end: 0;
+  inset-inline-start: 50%;
+  border-start-start-radius: var(--devtools-radius);
+  border-start-end-radius: var(--devtools-radius);
+}
+
+/* ------------------------------------------------------------------
+ * Shared bits: the icon button and the live region
+ * ------------------------------------------------------------------ */
+
+[data-devtools-root] .devtools-icon-button {
+  display: grid;
+  place-items: center;
+  min-inline-size: 1.75rem;
+  min-block-size: 1.75rem;
+  border-radius: calc(var(--devtools-radius) - 4px);
+  color: var(--devtools-text-muted);
+  transition: background-color var(--devtools-duration-fast)
+      var(--devtools-ease),
+    color var(--devtools-duration-fast) var(--devtools-ease);
+}
+
+[data-devtools-root] .devtools-icon-button:hover {
+  background-color: var(--devtools-surface-hover);
+  color: var(--devtools-text);
+}
+
+/* The `role="status"` region is present from mount rather than created
+   on first use, so it is visually hidden rather than display:none --
+   a region a screen reader cannot reach announces nothing. */
+[data-devtools-root] .devtools-status {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------
+ * Reduced motion -- the one place motion is withdrawn
+ * ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  [data-devtools-root],
+  [data-devtools-root] *,
+  [data-devtools-root] *::before,
+  [data-devtools-root] *::after {
+    /* Not `none`: a zero-length transition still fires transitionend,
+       so a surface waiting on that event still closes. */
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scale: none !important;
+    translate: none !important;
+  }
+}
