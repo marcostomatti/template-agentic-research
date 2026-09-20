@@ -23,6 +23,7 @@ gates, workflow, and loop architecture.
 | `src/core/Menu.tsx` | Menu rows from `menuModel(features)`. Calls `isEnabled`, `items` on features. |
 | `src/core/MenuRow.tsx` | One row, delegates to action/popover/modal/drawer. |
 | `src/core/menuModel.ts` | Turns `DevToolsFeature[]` + host into rows. Throws are loud. |
+| `src/core/openItem.ts` | The pure decision behind the bus's `open-item` topic: `resolveOpenItem(features, host, payload)` answers the feature's own `MenuItem`, untouched, or `null` for an unknown feature id, an unknown item id, a feature whose `isEnabled` answers `false`, and a payload of the wrong shape — the payload is taken as `unknown` because the publisher is the app. The four refusals collapse to one answer on purpose: the shell opens nothing and announces "Nothing to open". A disabled feature is not asked for items and a throwing callback is not caught, both as in `menuModel.ts`. |
 | `src/core/menuFocus.ts` | Roving menu focus state machine. |
 | `src/core/shellRules.ts` | CSS: overlay, backdrop, positioning, animation. All `--devtools-` vars. |
 | `src/core/reportTemplate.ts` | Report-form shape shared by both halves: the seven-kind `ReportField` union, `ReportTemplate`, their zod schemas, and the `x-devtools` defaults (screenshot on, selector on, context always). A `select` with no option is refused, not mapped. Schemas only — no YAML, no filesystem. |
