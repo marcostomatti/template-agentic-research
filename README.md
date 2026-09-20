@@ -237,6 +237,16 @@ https://github.com/<owner>/<repo>/issues/new?template=<file>&title=[fb/<round>] 
 Copy the body text into that form and file it manually. The `[fb/<round>]` prefix
 and attachment paths are included for triagers to track the report's origin.
 
+### If the app crashes
+
+A render error in the app shows a fallback screen with an error heading, a
+**Reload** button (reloads the page), and a **Try again** button (re-renders
+the app tree from the error boundary). If the widget is mounted, a **Report
+this** button appears: click it to file a bug report using the same feedback
+form, pre-populated with the thrown error's message in the context block. The
+report is filed to `.rafa/feedback/<round>/` at the REPO ROOT, following the
+same storage and GitHub fallback as other reports.
+
 ## Troubleshooting / Known issues
 
 | Symptom                                                                         | Cure                                                                                                                                                               |
