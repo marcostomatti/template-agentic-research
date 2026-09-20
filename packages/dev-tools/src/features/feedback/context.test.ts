@@ -28,10 +28,19 @@ import {
  *
  * ## The bus is the real one
  *
- * `createDevToolsBus()` rather than a hand-rolled `last()`: nothing
- * publishes on the bus in this plan, so the case that matters most
- * here is the EMPTY one, and a stub would be the wrong thing to prove
- * it against. Each case builds its own, so no publish leaks forward.
+ * `createDevToolsBus()` rather than a hand-rolled `last()`/`recent()`:
+ * the ring's order, its own cap and the empty reading are the bus's
+ * behaviour, and a stub would let this file agree with itself about
+ * all three. Each case builds its own bus, so no publish leaks
+ * forward, and the case that matters most is still the EMPTY one.
+ *
+ * ## The error keys are spelled out, never imported
+ *
+ * {@link ERROR_KEYS} names the five keys a full ring writes. `context.ts`
+ * builds them from a private depth constant and a private key
+ * function, and a case reading either of those would pass for
+ * whatever they said — the same reason `bus.test.ts` spells its cap of
+ * `20` out rather than importing it.
  */
 
 /** Undo functions for whatever the current case installed. */
@@ -87,6 +96,32 @@ function stubColorScheme(scheme: string | null): void {
 function setTheme(element: Element, value: string): void {
   element.setAttribute('data-theme', value);
   restorers.push(() => element.removeAttribute('data-theme'));
+}
+
+/**
+ * Every key an `error` ring can put in the record, newest first.
+ *
+ * Five names, because a report carries five failures; a sixth key
+ * would be a behaviour no case here asked for.
+ */
+const ERROR_KEYS: readonly string[] = [
+  'error',
+  'errorPrevious1',
+  'errorPrevious2',
+  'errorPrevious3',
+  'errorPrevious4',
+];
+
+/**
+ * Publish `error` payloads in the order an app would.
+ *
+ * @param bus - The bus to publish on.
+ * @param payloads - OLDEST first, so the ring answers the reverse.
+ */
+function publishErrors(bus: DevToolsBus, payloads: readonly unknown[]): void {
+  for (const payload of payloads) {
+    bus.publish('error', payload);
+  }
 }
 
 /** What {@link createHost} takes. */
@@ -173,19 +208,91 @@ describe('what the feedback context refuses to report', () => {
     expect(collected).not.toHaveProperty('theme');
   });
 
-  it('omits both bus keys when nothing has been published', () => {
-    // Arrange: an untouched bus, which is every bus in this plan —
-    // no producer exists, so this is the normal case and not a gap.
+  it('omits every bus key when the ring is empty', () => {
+    // Arrange: an untouched bus, which is what a report reads until
+    // something publishes — the normal case, not a gap.
     const bus = createDevToolsBus();
 
     expect(bus.last('error')).toBeUndefined();
+    expect(bus.recent('error', ERROR_KEYS.length)).toEqual([]);
+
+    // Act
+    const collected = collectFeedbackContext(createHost({ bus }));
+
+    // Assert: all five error names, not only the newest one's.
+    for (const key of ERROR_KEYS) {
+      expect(collected, `${key} came from an empty ring`).not.toHaveProperty(key);
+    }
+
+    expect(collected).not.toHaveProperty('artefact');
+  });
+
+  it('omits the error keys a ring of two does not fill', () => {
+    // Arrange
+    const bus = createDevToolsBus();
+
+    publishErrors(bus, ['the older failure', 'the newer failure']);
+
+    // Act
+    const collected = collectFeedbackContext(createHost({ bus }));
+
+    // Assert: what the ring holds, and nothing padded after it.
+    expect(collected.error).toBe('the newer failure');
+    expect(collected.errorPrevious1).toBe('the older failure');
+
+    for (const key of ERROR_KEYS.slice(2)) {
+      expect(collected, `${key} was padded`).not.toHaveProperty(key);
+    }
+  });
+
+  it('omits every error older than the fifth', () => {
+    // Arrange: six published, so the window has to have moved.
+    const bus = createDevToolsBus();
+
+    publishErrors(bus, ['e1', 'e2', 'e3', 'e4', 'e5', 'e6']);
+
+    // Act
+    const collected = collectFeedbackContext(createHost({ bus }));
+
+    // Assert: the oldest is gone from the record entirely, and no
+    // sixth key appeared to carry it.
+    expect(Object.values(collected)).not.toContain('e1');
+    expect(collected).not.toHaveProperty('errorPrevious5');
+    expect(collected.errorPrevious4).toBe('e2');
+  });
+
+  it('leaves an unreportable error its own number rather than closing the gap', () => {
+    // Arrange: the third-newest is blank, which `summariseBusPayload`
+    // omits — the two older than it keep their own ages.
+    const bus = createDevToolsBus();
+
+    publishErrors(bus, ['the oldest', '   ', 'the middle', 'the newest']);
 
     // Act
     const collected = collectFeedbackContext(createHost({ bus }));
 
     // Assert
-    expect(collected).not.toHaveProperty('error');
-    expect(collected).not.toHaveProperty('artefact');
+    expect(collected.error).toBe('the newest');
+    expect(collected.errorPrevious1).toBe('the middle');
+    expect(collected).not.toHaveProperty('errorPrevious2');
+    expect(collected.errorPrevious3).toBe('the oldest');
+  });
+
+  it('omits every artefact but the current one', () => {
+    // Arrange: the artefact stays a single `last` read — a report is
+    // filed about one artefact, not about a trail of them.
+    const bus = createDevToolsBus();
+
+    bus.publish('artefact', 'source:41');
+    bus.publish('artefact', 'source:42');
+
+    // Act
+    const collected = collectFeedbackContext(createHost({ bus }));
+
+    // Assert
+    expect(collected.artefact).toBe('source:42');
+    expect(collected).not.toHaveProperty('artefactPrevious1');
+    expect(Object.values(collected)).not.toContain('source:41');
   });
 
   it('omits a bus payload that is blank', () => {
@@ -396,6 +503,83 @@ describe('what the feedback context reports', () => {
       'viewportHeight',
       'viewportWidth',
     ]);
+  });
+
+  it('adds all five error keys to that set when the ring is full', () => {
+    // Arrange
+    const bus = createDevToolsBus();
+
+    setTheme(document.documentElement, 'dark');
+    publishErrors(bus, ['e1', 'e2', 'e3', 'e4', 'e5']);
+    bus.publish('artefact', 'source:42');
+
+    // Act
+    const collected = collectFeedbackContext(createHost({ bus }));
+
+    // Assert: the four `errorPrevious` keys are the only addition to
+    // the set the case above pins — every other key is unchanged.
+    expect(Object.keys(collected).sort()).toEqual([
+      'api',
+      'artefact',
+      'branch',
+      'colorScheme',
+      'commit',
+      'devicePixelRatio',
+      'error',
+      'errorPrevious1',
+      'errorPrevious2',
+      'errorPrevious3',
+      'errorPrevious4',
+      'round',
+      'theme',
+      'url',
+      'userAgent',
+      'viewportHeight',
+      'viewportWidth',
+    ]);
+  });
+
+  it('reports the five newest errors newest first', () => {
+    // Arrange
+    const bus = createDevToolsBus();
+
+    publishErrors(bus, ['e1', 'e2', 'e3', 'e4', 'e5', 'e6']);
+
+    // Act
+    const collected = collectFeedbackContext(createHost({ bus }));
+
+    // Assert: read through the key names in age order, so a record
+    // that carried the right values under the wrong numbers reds.
+    expect(ERROR_KEYS.map((key) => collected[key])).toEqual([
+      'e6',
+      'e5',
+      'e4',
+      'e3',
+      'e2',
+    ]);
+  });
+
+  it('summarises every error in the ring, not only the newest', () => {
+    // Arrange: three shapes `summariseBusPayload` reads differently,
+    // published oldest first.
+    const bus = createDevToolsBus();
+    const long = 'e'.repeat(FEEDBACK_CONTEXT_VALUE_LIMIT + 40);
+
+    publishErrors(bus, [
+      long,
+      { kind: 'render', id: 7 },
+      new TypeError('x is not a function'),
+    ]);
+
+    // Act
+    const collected = collectFeedbackContext(createHost({ bus }));
+
+    // Assert
+    expect(collected.error).toBe('TypeError: x is not a function');
+    expect(collected.errorPrevious1).toBe('{"kind":"render","id":7}');
+    expect(collected.errorPrevious2).toBe(
+      `${'e'.repeat(FEEDBACK_CONTEXT_VALUE_LIMIT)}${FEEDBACK_CONTEXT_ELLIPSIS}`,
+    );
   });
 
   it('reports the viewport rounded, and the device pixel ratio as is', () => {

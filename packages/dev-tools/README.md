@@ -121,8 +121,10 @@ The three appended fields are:
   parent, ArrowDown returns.
 - `context` (`readonly`): automatically collected: viewport, device
   pixel ratio, colour scheme, `data-theme` if present, user agent,
-  `location.href`, app version, and the bus's last `error` and
-  `artefact` when present. Never opted out.
+  `location.href`, app version, the bus's five newest `error` payloads
+  (`error` for the newest, then `errorPrevious1` to `errorPrevious4`,
+  a number naming a payload's age and never padded) and its current
+  `artefact`, each when present. Never opted out.
 
 ### Form Renderer Slot
 
