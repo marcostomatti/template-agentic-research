@@ -53,11 +53,14 @@
  * Every module named above — the boundary, the fallback,
  * `useArtefactSignal`, the layout effect and the bridge — lands in a
  * later stage of the same plan as this file, and none of them exists
- * at the commit that adds it. Until they do, {@link AppSignals.last}
- * answers `undefined` on all five topics for the whole life of the
- * app, and the only thing publishing here is `appSignals.test.ts`.
- * That is the normal case rather than a gap: what is missing is a
- * caller, not a behaviour.
+ * at the commit that adds it. `useArtefactSignal.ts` has since landed
+ * beside this file and is the only one of them here so far; it is
+ * still no producer, because none of the seven modal sub-routes calls
+ * it yet. So {@link AppSignals.last} answers `undefined` on all five
+ * topics for the whole life of the app until the callers arrive, and
+ * the only thing that publishes here when anything runs is
+ * `appSignals.test.ts`. That is the normal case rather than a gap:
+ * what is missing is a caller, not a behaviour.
  *
  * ## The payloads are TYPED, unlike the bus's
  *
