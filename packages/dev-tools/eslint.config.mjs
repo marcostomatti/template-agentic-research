@@ -71,9 +71,20 @@ export default defineConfig([
     // green over the same line). Listed rather than switching `no-undef`
     // off for TypeScript, so a genuinely undefined identifier is still an
     // error here.
+    //
+    // The list grows one measured name at a time: each entry below was
+    // added because a file naming that type red `no-undef` while
+    // `check-types` stayed green over the same line. `BlobCallback`,
+    // `DisplayMediaStreamOptions`, `EventListener` and
+    // `MediaStreamTrackState` arrived with the screenshot capture
+    // (`src/features/feedback/capture.ts` and its cases).
     files: ['src/**/*.{js,mjs,cjs,ts,tsx,jsx}'],
     languageOptions: {
       globals: {
+        BlobCallback: 'readonly',
+        DisplayMediaStreamOptions: 'readonly',
+        EventListener: 'readonly',
+        MediaStreamTrackState: 'readonly',
         RequestInit: 'readonly',
       },
     },
