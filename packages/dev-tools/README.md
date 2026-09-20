@@ -74,13 +74,31 @@ fails with `ERR_MODULE_NOT_FOUND` before the plugin's own
 said the latter until the constant was read
 (`DEVTOOLS_DEFAULT_OUT_DIR` in `src/vite/store.ts`). It is a RELATIVE
 path handed straight to `join()`, so it resolves against the cwd of
-the process running the dev server, not against the repo root: started
-the usual way (`bun run dev` from inside `packages/web`), a stored
-report lands at `packages/web/.rafa/feedback/<round>/…`, and the path
-in the endpoint's JSON response is relative too. Both locations are
+the process running the dev server, not against the repo root: left
+unstated and started the usual way (`bun run dev` from inside
+`packages/web`), a stored report lands at
+`packages/web/.rafa/feedback/<round>/…`, and the path in the
+endpoint's JSON response is relative too. Both locations are
 gitignored either way — the repo-root `.gitignore`'s `.rafa/` pattern
 is unanchored and matches the nested directory as well — so nothing
 tracked is at risk; it is only where to look for a report by hand.
+
+A caller that wants one fixed location therefore passes an ABSOLUTE
+path, which is what `packages/web/vite.config.ts` does:
+`resolve(import.meta.dirname, '../../.rafa/feedback')`, so every
+report in this repo lands under the repo root's `.rafa/feedback/`
+whatever directory the dev server was started from. Written relative
+instead, `../../.rafa/feedback` would only reach the root while the
+cwd stayed `packages/web`; from the repo root the same two `..`
+segments resolve above the checkout, and nothing refuses — `store.ts`
+creates the round directory with `mkdir(…, {recursive: true})`, so a
+mis-resolved `outDir` writes a fresh tree somewhere else silently.
+The stored path also travels: `POST /__devtools/report` answers it
+and `src/vite/gateway/rafa.ts` lists the attachment paths in the
+issue body it files, so it should name the same place read from
+anywhere. The `templates` option resolves the same way but is left
+relative there, because those paths are only read and a miss answers
+`[]` rather than creating anything.
 
 ## Feedback Feature
 

@@ -216,10 +216,11 @@ Enter a title and body text describing the issue. Click **File** to submit.
 
 ### Where the PNG lands
 
-Screenshots are stored on your machine at `.rafa/feedback/<round>/` relative to the
-dev server's working directory. When you run `bun run dev` from `packages/web`, the
-path resolves to `packages/web/.rafa/feedback/<round>/…`. The files are gitignored,
-so nothing tracked is at risk. The issue tracker receives only the **path** to the
+Screenshots are stored on your machine at `.rafa/feedback/<round>/` under the REPO
+ROOT. `packages/web/vite.config.ts` passes the plugin an `outDir` resolved from the
+config file's own directory, so the location does not move with the directory you
+started the dev server from. The files are gitignored, so nothing tracked is at
+risk. The issue tracker receives only the **path** to the
 PNG, never the image bytes themselves — the tracker refers to it, but the file stays
 on your machine.
 
