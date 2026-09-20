@@ -34,7 +34,9 @@
  *
  * Nothing under `src/vite/` is bundled into the browser entries: the
  * build externalises every `node:` builtin, and `postbuild` fails on
- * either `node:` or `child_process` reaching `dist/index.js`.
+ * either `node:` or `child_process` reaching any browser-side `.js`
+ * file under `dist/` — `dist/index.js`, `dist/feedback.js` and any
+ * rollup-hoisted shared chunk alike, `dist/vite.js` alone excepted.
  */
 
 export type { DevToolsComment } from './comment';

@@ -42,25 +42,26 @@
  *
  * This bundle runs in the browser. The eslint layering rule refuses
  * `node:*` and `child_process` under every path but `src/vite/**`, and
- * `package.json`'s `postbuild` greps the emitted `dist/index.js` for
- * the same two names — two readings of one rule, because a lint rule
- * covers the sources it is pointed at and the grep covers what was
- * emitted at the path it is given.
+ * `package.json`'s `postbuild` greps every emitted browser-side `.js`
+ * file under `dist/` for the same two names (plus `yaml`) — two
+ * readings of one rule, because a lint rule covers the sources it is
+ * pointed at and the grep covers what was emitted.
  *
- * That second reading is NARROWER than "whatever got bundled", and it
- * narrowed further the moment `src/features/feedback/index.ts` started
- * exporting a real feature. The two browser entries then shared
- * modules, so rollup hoisted the shared half into chunks of its own:
- * `dist/index.js` went from 27.28 kB holding the whole shell to 103
- * bytes re-exporting `dist/mount-<hash>.js`, and the shell's code now
- * sits in that chunk, which `postbuild` never opens. Measured with a
- * planted leak, both ways: `import "node:fs";` appended to
- * `dist/mount-<hash>.js` leaves `bun run postbuild` exiting `0`, while
- * the identical line appended to `dist/index.js` exits `1`. The grep
- * is therefore still a real gate over the two entry FILES and is no
- * longer one over the browser half's code; closing that is a change to
- * `package.json`'s `postbuild`, which is the verification stage's to
- * make rather than this module's to describe away.
+ * That second reading used to be NARROWER than "whatever got bundled":
+ * it named only `dist/index.js` and `dist/feedback.js`, and it stopped
+ * covering the browser half's code the moment
+ * `src/features/feedback/index.ts` started exporting a real feature.
+ * The two browser entries then shared modules, so rollup hoisted the
+ * shared half into chunks of its own — `dist/index.js` went from
+ * 27.28 kB holding the whole shell to 103 bytes re-exporting
+ * `dist/mount-<hash>.js`, and the shell's code moved into that chunk.
+ * `postbuild` now loops over every `./dist/*.js` file except
+ * `dist/vite.js` (the node half, which legitimately imports `yaml` and
+ * `node:` builtins), so a hashed shared chunk is covered by
+ * construction rather than by name. Measured with a planted leak:
+ * `import "node:fs";` appended to `dist/mount-<hash>.js` now leaves
+ * `bun run postbuild` exiting `1`, the same as the identical line
+ * appended to `dist/index.js`.
  *
  * The grep matches an IMPORT of either name — `from`, `import` or
  * `require`, then a quote — rather than the bare substring, and the

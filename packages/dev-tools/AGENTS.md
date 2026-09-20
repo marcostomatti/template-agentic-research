@@ -54,17 +54,21 @@ per case (Node 25 ships Web Storage global).
 free. eslint forbids `node:*` / `child_process` outside `src/vite/`.
 
 `postbuild` is npm-lifecycle-named, so `bun run build` ALREADY runs
-the leak grep over BOTH browser bundles — `dist/index.js` and
-`dist/feedback.js` — and exits with the grep's code. It refuses three
-specifiers in either file: `node:`, `child_process` and `yaml`. `yaml`
-is a real dependency of this package but of the NODE half only
-(`src/vite/`), so a browser bundle importing it is a layering leak the
-bundler reports as success. A missing bundle is a refusal too: absent
-`dist/feedback.js` exits `1` rather than passing an unread file.
-A `build` that exits `1` under a successful `vite build` line is the
-grep refusing one of those three — not a bundler failure. Running
-`bun run postbuild` again afterwards is redundant, and useful only to
-read that step's exit code on its own.
+the leak grep and exits with the grep's code. It first asserts the two
+entry files exist — `dist/index.js` and `dist/feedback.js` — then
+greps EVERY `./dist/*.js` file except `dist/vite.js` (the node half,
+which legitimately imports `yaml` and `node:` builtins), so a
+rollup-hoisted shared chunk (`dist/mount-<hash>.js`,
+`dist/reportTemplate-<hash>.js`) is covered by construction rather
+than by name. It refuses three specifiers in any covered file: `node:`,
+`child_process` and `yaml`. `yaml` is a real dependency of this
+package but of the NODE half only (`src/vite/`), so a browser chunk
+importing it is a layering leak the bundler reports as success. A
+missing entry is a refusal too: absent `dist/feedback.js` exits `1`
+rather than passing an unread file. A `build` that exits `1` under a
+successful `vite build` line is the grep refusing one of those three —
+not a bundler failure. Running `bun run postbuild` again afterwards is
+redundant, and useful only to read that step's exit code on its own.
 
 The runtime dependencies split by half: `@medv/finder` is browser-only
 (the element-selector capture), `yaml` is node-only (issue-form
@@ -174,11 +178,15 @@ UP) would be collected by neither, leaving violations silent.
 ## Leak grep over browser bundles
 
 `postbuild` is npm-lifecycle-named, so `bun run build` ALREADY
-runs the leak check over BOTH browser bundles after vite
-compiles. It refuses three specifiers found in either file:
-`node:`, `child_process` and `yaml`. The `yaml` package is a
+runs the leak check after vite compiles. It first asserts the two
+entry files exist, then greps EVERY `./dist/*.js` file except
+`dist/vite.js` (the node half) — covering `dist/index.js`,
+`dist/feedback.js` and any rollup-hoisted shared chunk
+(`dist/mount-<hash>.js`, `dist/reportTemplate-<hash>.js`) by
+construction. It refuses three specifiers found in any covered
+file: `node:`, `child_process` and `yaml`. The `yaml` package is a
 real dependency but of the NODE half only (`src/vite/`); a
-browser bundle importing it signals a layering leak the bundler
+browser chunk importing it signals a layering leak the bundler
 reports as success. Missing bundle (no `dist/feedback.js`) also
 exits `1`. A `build` that exits `1` under successful `vite build`
 means the grep refused one of those three — not a bundler

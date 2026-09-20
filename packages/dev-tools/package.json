@@ -32,7 +32,7 @@
   ],
   "scripts": {
     "build": "vite build",
-    "postbuild": "for devtoolsBundle in ./dist/index.js ./dist/feedback.js; do test -f \"$devtoolsBundle\" || { echo \"ERROR: $devtoolsBundle is absent, so the leak grep read nothing\" >&2; exit 1; }; grep -qE \"(from|import|require)[[:space:]]*\\(?[[:space:]]*['\\\"](node:|child_process|yaml['\\\"/])\" \"$devtoolsBundle\" && { echo \"ERROR: a node-only import (node:, child_process or yaml) is imported by the browser entry bundle $devtoolsBundle\" >&2; exit 1; }; done; exit 0",
+    "postbuild": "for devtoolsBundle in ./dist/index.js ./dist/feedback.js; do test -f \"$devtoolsBundle\" || { echo \"ERROR: $devtoolsBundle is absent, so the leak grep read nothing\" >&2; exit 1; }; done; for devtoolsBundle in ./dist/*.js; do case \"$devtoolsBundle\" in ./dist/vite.js) continue ;; esac; grep -qE \"(from|import|require)[[:space:]]*\\(?[[:space:]]*['\\\"](node:|child_process|yaml['\\\"/])\" \"$devtoolsBundle\" && { echo \"ERROR: a node-only import (node:, child_process or yaml) is imported by the browser entry bundle $devtoolsBundle\" >&2; exit 1; }; done; exit 0",
     "lint": "eslint src *.ts *.mjs",
     "check-types": "tsc --noEmit",
     "test": "vitest run"
