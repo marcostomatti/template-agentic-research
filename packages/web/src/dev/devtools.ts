@@ -119,6 +119,38 @@
  * `createElement` rather than JSX: this module is the config, it is a
  * `.ts`, and it holds no markup beyond the one component name.
  *
+ * ## ... and why the package's stylesheet is imported from HERE
+ *
+ * `@ar/dev-tools/styles.css` is the package's only stylesheet, it is
+ * imported from no module the package ships, and the consuming app
+ * opts in — the shape that stylesheet's own header records. This app
+ * had never written that opt-in, so the widget drew unstyled under
+ * `bun run dev`; issue #103 is the filing of it, and the side-effect
+ * import below is the close.
+ *
+ * It is written in THIS module rather than in `../styles.css`
+ * beside `tailwindcss` and `@ar/ui/styles.css`, because those two
+ * are reached from `../main.tsx` unconditionally and would carry the
+ * widget's rules into every production build. This module is reached
+ * only through `../main.tsx`'s `import.meta.env.DEV` branch, which a
+ * build replaces with `false` and then eliminates along with the
+ * dynamic import inside it, so the stylesheet is a dev-server-only
+ * asset for the same reason every other decision here is.
+ *
+ * Measured rather than asserted, over a `bun run build` of this
+ * package: `grep -c devtools` over the emitted stylesheet,
+ * `dist/assets/index-*.css`, answers `0`. The control is the same
+ * grep over that stylesheet CONCATENATED with
+ * `packages/dev-tools/dist/styles.css`, which answers `245` — so the
+ * zero is a reading that could have come out non-zero rather than a
+ * grep that matched nothing anywhere.
+ *
+ * `grep -rl devtools packages/web/dist/` does name one file, the JS
+ * bundle, and that hit is not this import: one occurrence, the string
+ * `devtools:` inside react-router's list of unsafe URL protocols. It
+ * predates this line. The capture of all of it is in this plan's
+ * close-out notes.
+ *
  * ## Mutation note — what the colocated cases actually catch
  *
  * A green suite is not evidence a case can fail. Each leg below was
@@ -219,6 +251,8 @@ import { resolveDataSource } from '../data/source';
 import { activeSurfaceId } from '../routes/paths';
 
 import { ReportForm } from './ReportForm';
+
+import '@ar/dev-tools/styles.css';
 
 /**
  * What `devtoolsPlugin()` substitutes while the dev server is serving.
