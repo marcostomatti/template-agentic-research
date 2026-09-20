@@ -154,6 +154,32 @@ export const DEVTOOLS_SAVE_SETTINGS_DEFERRED
   = 'Saving settings to the dev server is not implemented in this build.';
 
 /**
+ * What the shell's live region says when a published `open-item`
+ * names nothing it can open.
+ *
+ * Decision 7 of `.rafa/specs/q20b-3-error-boundary-provider.md` fixes
+ * the words: `./openItem.ts` collapses an unknown feature id, an
+ * unknown item id, a disabled feature and a payload of the wrong
+ * shape into ONE `null`, and this is the one thing `./Shell.tsx` says
+ * about any of them. Four sentences would have told the operator
+ * which of the publisher's mistakes it was, which is a thing the
+ * publisher's author reads in a console and the operator cannot act
+ * on.
+ *
+ * Stated with no trailing stop, unlike
+ * {@link DEVTOOLS_SAVE_SETTINGS_DEFERRED}: that one is a sentence
+ * about this build, this is a label about one publish.
+ *
+ * It has no colocated case of its own, as
+ * {@link DEVTOOLS_ABOUT_DETAILS_LABEL} has none: a case reading that
+ * a constant is a non-empty string pins nothing this module decides.
+ * What the words are FOR is pinned where they are said — the live
+ * region of a mounted shell, which `./Shell.tsx`'s probe reads and
+ * the stage's assembled-shell cases pin.
+ */
+export const DEVTOOLS_NOTHING_TO_OPEN = 'Nothing to open';
+
+/**
  * What build is running, as the About panel reads it.
  *
  * Spelled as a lookup into {@link DevToolsHost} rather than restated,
