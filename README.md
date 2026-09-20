@@ -214,6 +214,14 @@ Fill in the form fields. The drawer appends three automatic fields:
 
 Enter a title and body text describing the issue. Click **File** to submit.
 
+**This files a real issue.** In a checkout where `gh` and `rafa` are
+configured against the project tracker, **File** runs `rafa issue create` and
+opens a genuine, public GitHub issue — there is no dry-run or local-only mode
+in between. Only an unauthenticated checkout falls back to the local tracker
+described below. If you are rehearsing the flow rather than reporting a real
+defect, capture the id from the drawer's status line and close the issue with
+a comment saying so, right away, instead of leaving it as tracker noise.
+
 ### Where the PNG lands
 
 Screenshots are stored on your machine at `.rafa/feedback/<round>/` under the REPO

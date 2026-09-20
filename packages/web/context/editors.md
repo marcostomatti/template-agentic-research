@@ -140,3 +140,13 @@ layer; until then these are the app's real rules.
   message a missing row gets — which is what a scoped endpoint
   answers too, and what makes a foreign-row address a real refusal a
   spec can drive rather than a fabricated one.
+- **Two editor modals sit over the 800-line cap, and were already over
+  it before this wave.** `src/pages/lexicon/LexiconEditorModal.tsx` is
+  1,125 lines and `src/pages/tools/ConnectorEditorModal.tsx` 880;
+  measured at `75f1f00` they were 1,109 and 864, so the q20b-3 plan
+  added 16 lines apiece (one `useArtefactSignal` call) to files that
+  already broke the cap. Recorded as CARRIED debt, so a later reading
+  neither treats it as new nor lets a sixteen-line addition scope an
+  unplanned split. The split, when someone takes it, is the lexicon
+  modal's three drawings — `Buckets`, `Fields` and `JSON`, listed
+  above — which already have separate concerns and a shared draft.

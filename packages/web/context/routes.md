@@ -105,6 +105,20 @@ router builds at module scope in `src/main.tsx`, and the tree is
 fixed before the first paint. The guard therefore sits at the USE
 site, in `routesBelowBase()`.
 
+The path it REGISTERS is relative (`__devtools/crash`) even though
+`DEV_CRASH_PATH`, the address a spec drives, is absolute.
+`devRoutes()` is spread into the children of BOTH bases, and
+react-router refuses an absolute child path not prefixed by its
+parent's — under `/d/:domainSlug` an absolute `/__devtools/crash`
+child THROWS when the router is created rather than failing to
+match, so the whole app fails to boot. The segment is the single
+spelling and the absolute constant is built from it with a template
+literal, which is what keeps the registered pattern and the
+grepped-for literal from drifting. The same rule already governs
+navigation targets above; it governs registration too, and there
+the cost of getting it wrong is a boot failure rather than a wrong
+destination.
+
 Whether the route survives into a production bundle is the bundler's
 decision, not the source's: `import.meta.env.DEV` becomes a literal
 `false` at build time and the ternary folds; Vite replaces the read

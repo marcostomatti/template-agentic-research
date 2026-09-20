@@ -368,6 +368,13 @@ any gateway runs. It is NOT `gateway.id`, which is the tracker's own
 issue id; both are present in the same response and read alike in a
 log, so name which one a reading means.
 
+The RESPONSE is the only place the two ever meet. `store.ts` writes
+the file before the gateway runs and nothing round-trips the answer
+back onto it, so the stored `.json` never carries the issue id or the
+tracker name — reading it back off disk to learn "what did this file
+as" answers nothing. Take the id from the drawer's own `role="status"`
+line (`Filed as <id> on <tracker>.`) or from the tracker directly.
+
 ### `POST /__devtools/comment`
 
 The "also affected" route: adds a comment to an issue the tracker

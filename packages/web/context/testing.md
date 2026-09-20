@@ -225,6 +225,48 @@ Two readings that shipped with it, both measured rather than reasoned:
   two live reads of tree/rail state). 48 breakpoint shots + 8
   dynamic-form shots = the 56.
 
+Four more readings a dev-tools spec needs, all measured while the
+boundary spec was written:
+
+- Nothing exposes `devtoolsBus` on `window`, so a spec that must read
+  the bus imports it INSIDE `page.evaluate` from the `/@fs/` URL Vite
+  serves the package's built entry at, and gets the same cached module
+  instance the app's own static import populated. `@ar/dev-tools` is a
+  LINKED workspace package rather than a pre-bundled dependency, so it
+  has no stable `node_modules/.vite/deps` URL to address — the path is
+  its real filesystem one under an `/@fs/` prefix. Build it from
+  `import.meta.url` through `fileURLToPath` and a relative `new
+  URL(...)`, the way the existing PNG fixture path is built, so it
+  holds on any checkout rather than on this one.
+- The drawer's read-only **Context** field is not a native `select`.
+  `reportFormAdapter.ts` maps a readonly report field onto a
+  single-option ENUM leaf — the dynamic-form contract has no disabled
+  or `readOnly` leaf, so the one leaf whose value no edit can move is
+  what it gets — and `@ar/ui`'s `Select` draws that as the Radix menu
+  trigger described in the locator vocabulary below. Read it with
+  `getByRole('button', { name: 'Context' })` and its TEXT CONTENT,
+  never through `selectOption` or an `option` locator. What the block
+  CONTAINS is composed in `drawerModel.ts` (one key-value line per
+  fact, `CONTEXT_LABEL`); assert against `describeFeedbackContext`'s
+  output rather than re-deriving the record inside the spec.
+- `import.meta.env` IS defined under this package's vitest project,
+  with `MODE` `test`, `DEV` `true` and `PROD` `false`, and
+  `process.env` merged in — so the unit suite reads the DEV route
+  tree, crash route included. `src/data/api.ts`'s docblock reads at a
+  glance like it says otherwise; its measurement is about the
+  PLAYWRIGHT node process, which has no `import.meta.env` at all.
+  Probing this needs a file write from a throwaway test: the runner
+  swallows `console.log` on a PASSING case.
+- To drive the widget as a real developer's browser sees it — against
+  a plain `bun run dev`, no `VITE_DEVTOOLS_FORCE`, no second server —
+  override `navigator.webdriver` to `false` with
+  `context.addInitScript` BEFORE the first navigation.
+  `packages/dev-tools/src/core/mount.ts`'s `isDevToolsAutomated()`
+  reads exactly that property, which Playwright's Chromium reports
+  `true`. This is the technique for a hand-run that must answer "what
+  does `bun run dev` show a person", not for a suite spec — the forced
+  5177 project is the supported path for those.
+
 Reading a run:
 
 - The `&&` short-circuits. A red vitest means Playwright never ran, so

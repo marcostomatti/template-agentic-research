@@ -685,6 +685,12 @@ matching anything prints exactly the same five lines.
   none of them anything a current task touched. The verdict for a change
   is therefore a DIFF of the finding set: capture the run before the edit
   and after it, and require the two totals equal and the new file's own
-  path absent from both. It is also a ROOT-ONLY script — `bun run
+  path absent from both. Diff the per-KIND counts on the `FAIL:` line
+  (unresolved span, unresolved link, unused marker, …) and NOT the
+  summary `N tracked document(s)` / `N references` lines above it:
+  those two grow with every newly tracked document and every new
+  doc-comment span, so a sitting that adds a clean file widens the
+  denominator without touching the numerator, and a reader comparing
+  the summary figures reports new debt that does not exist. It is also a ROOT-ONLY script — `bun run
   gate:doc-links` from inside a package answers `Script not found`, which
   reads like the gate passing if the line is skimmed.
