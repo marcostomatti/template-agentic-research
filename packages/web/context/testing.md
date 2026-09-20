@@ -160,6 +160,36 @@ the feature works), while the drop zone IS driven with a fixture PNG to
 assert the file path writes and the preview thumbnail renders. Decision 3
 of the spec spells this split: capture API first, drop zone always.
 
+The third forced spec in `tests/e2e/dev-tools-boundary.spec.ts` drives the
+app error boundary and its fallback at 5177 with `VITE_DEVTOOLS_FORCE=1`,
+so the widget mounts and the bridge installs. It throws from `/__devtools
+/crash` to render the fallback, asserts the boundary kept the app standing
+with the tomato visible, verifies "report this" opens the feedback drawer
+with the thrown error in the context block, and confirms a navigation
+publishes the `route` signal read back through `page.evaluate` over the bus.
+
+That spec is a FORCED spec — added to `DEVTOOLS_SPECS` in
+`playwright.config.ts` IN THE SAME COMMIT as the file — which means the
+default `chromium` project's `testIgnore` holds it, so it never runs
+against the plain 5174 server. A dev-tools spec named in NEITHER the
+forced-project `testMatch` NOR the default project's `testIgnore` is not
+skipped: it is collected by the DEFAULT project and driven against the
+plain 5174 server, where `navigator.webdriver` is true, `VITE_DEVTOOLS
+_FORCE` is unset, and the widget is absent by design. Every locator times
+out against an app carrying no mount point.
+
+The default e2e suite carries its own control: one case in
+`tests/e2e/shell.spec.ts` that drives the crash path at 5174 and asserts
+the fallback with reload and try-again controls and NO "report this"
+button. That is the PRODUCTION READING — the same error with no bridge
+installed draws the fallback exactly as it would in a production build,
+where the dev-tools package is not loaded at all. The boundary and its
+fallback are app-local and survive in every build; the bridge and the
+widget are guarded by `import.meta.env.DEV` and absent from production.
+The default-server control proves both halves: the boundary's fallback
+shows the right shape when the widget is absent, and the guard held — no
+dev-tools code shipped in the production bundle.
+
 Opening a Radix dropdown (the template select) in a spec follows the `@ar/ui
 Select` pattern from the locator vocabulary: the trigger is a `button` with
 an accessible name from its `ariaLabel`, its panel is a `role="menu"` of
