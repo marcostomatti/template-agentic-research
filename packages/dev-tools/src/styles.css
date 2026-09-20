@@ -31,12 +31,12 @@
  * the declarations still land on the widget alone.
  *
  * Measured rather than asserted, over a comment-stripped scan of this
- * file: 62 rule preludes, 72 selectors, 0 of them without
+ * file: 70 rule preludes, 80 selectors, 0 of them without
  * `[data-devtools-root]`. The same scan over this file plus one
- * appended `body { color: red; }` answers 1 unscoped selector,
- * `body` -- so the zero is a reading the check could have failed.
- * Keyframe stops are excluded, being offsets rather than selectors
- * over the document.
+ * appended `body { color: red; }` answers 71 preludes, 81 selectors
+ * and 1 unscoped one, `body` -- so the zero is a reading the check
+ * could have failed. Keyframe stops are excluded, being offsets
+ * rather than selectors over the document.
  *
  * ## Tokens
  *
@@ -81,7 +81,13 @@
  * clobbered by it (or clobber it) on every reposition.
  *
  * The `prefers-reduced-motion: reduce` block at the foot of the file
- * is the single place motion is withdrawn.
+ * is the single place motion is withdrawn, and it withdraws `scale`
+ * and `translate` by resetting them to `none` over every element in
+ * the widget. That is why the element picker's overlay places its
+ * boxes on `left` and `top`: geometry carried on `translate` would be
+ * thrown away for readers who asked for less motion and for nobody
+ * else. `src/features/feedback/pickerOverlay.ts` records the same
+ * reading from the other side.
  */
 
 /* ------------------------------------------------------------------
@@ -660,6 +666,98 @@
 [data-devtools-root] .devtools-screenshot-notice {
   margin: 0.5rem 0 0;
   color: var(--devtools-text-muted);
+}
+
+/* ------------------------------------------------------------------
+ * Element picker -- src/features/feedback/Picker.tsx
+ * ------------------------------------------------------------------ */
+
+/* The pick control, the live match count and the help line, as one
+   row that wraps the hint onto its own line. */
+[data-devtools-root] .devtools-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-block-start: 0.5rem;
+}
+
+[data-devtools-root] .devtools-picker-start {
+  border: 1px solid var(--devtools-border);
+  border-radius: calc(var(--devtools-radius) - 4px);
+  padding: 0.25rem 0.625rem;
+  color: var(--devtools-text);
+  transition: background-color var(--devtools-duration-fast)
+    var(--devtools-ease);
+}
+
+[data-devtools-root] .devtools-picker-start:hover {
+  background-color: var(--devtools-surface-hover);
+}
+
+[data-devtools-root] .devtools-picker-count {
+  margin: 0;
+  color: var(--devtools-text-muted);
+}
+
+[data-devtools-root] .devtools-picker-hint {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--devtools-text-muted);
+}
+
+/* The sheet the picker draws on: a `popover="manual"` element the
+   platform promotes into the top layer where there is one, and which
+   the fixed position and z-index below paint above the app where
+   there is not. `pointer-events: none` is the load-bearing
+   declaration -- the sheet covers the whole viewport, and a sheet
+   that took the pointer would make the page unpickable. */
+[data-devtools-root] .devtools-pick-layer {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--devtools-z) + 2);
+  overflow: hidden;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  pointer-events: none;
+}
+
+/* One outlined element, placed on `left`/`top` and never `translate`:
+   the reduced-motion block below resets `translate` over the whole
+   widget, which would park every box at the viewport's corner for
+   exactly the readers who asked for less motion. No transition, so
+   none of this is animation. */
+[data-devtools-root] .devtools-pick-outline {
+  position: absolute;
+  top: var(--devtools-pick-y, 0);
+  left: var(--devtools-pick-x, 0);
+  width: var(--devtools-pick-width, 0);
+  height: var(--devtools-pick-height, 0);
+  border: 1px solid var(--devtools-accent);
+  border-radius: 2px;
+  background-color: color-mix(in oklch, var(--devtools-accent) 14%,
+    transparent);
+}
+
+/* The match count, laid over the selector input's own box so it reads
+   as a counter on that control's trailing edge. The doubled
+   text-shadow is what keeps it legible over a long selector. */
+[data-devtools-root] .devtools-pick-badge {
+  position: absolute;
+  top: var(--devtools-pick-y, 0);
+  left: var(--devtools-pick-x, 0);
+  display: flex;
+  width: var(--devtools-pick-width, 0);
+  height: var(--devtools-pick-height, 0);
+  align-items: center;
+  justify-content: flex-end;
+  padding-inline-end: 0.5rem;
+  color: var(--devtools-text-muted);
+  font-size: 0.75rem;
+  text-shadow: 0 0 4px var(--devtools-surface),
+    0 0 4px var(--devtools-surface);
 }
 
 /* ------------------------------------------------------------------

@@ -26,7 +26,7 @@ gates, workflow, and loop architecture.
 | `src/core/menuFocus.ts` | Roving menu focus state machine. |
 | `src/core/shellRules.ts` | CSS: overlay, backdrop, positioning, animation. All `--devtools-` vars. |
 | `src/core/reportTemplate.ts` | Report-form shape shared by both halves: the seven-kind `ReportField` union, `ReportTemplate`, their zod schemas, and the `x-devtools` defaults (screenshot on, selector on, context always). A `select` with no option is refused, not mapped. Schemas only — no YAML, no filesystem. |
-| `src/features/feedback/` | Feature layer, browser-side: the `./feedback` export's source, phase 2's error reporting surface. Bundled as `dist/feedback.js` — named by the `feedback` lib entry KEY, which the move did not touch — and typed at `dist/features/feedback/index.d.ts`, because `vite-plugin-dts` mirrors the SOURCE path. It sits under the feature layer so the jsdom vitest project collects its tests and the feature-layer eslint rule matches it: both patterns name `src/features/**`, so a module one directory higher is collected by neither and its layering violations go unreported. |
+| `src/features/feedback/` | Feature layer, browser-side: the `./feedback` export's source, phase 2's error reporting surface. The element picker is three files: `picker.ts` decides what an element is called and what a selector matches, `pickerOverlay.ts` owns the top-layer sheet and the pointer-following pick session, `pickerField.ts` the decoration hung on the marked selector input, and `Picker.tsx` draws the two controls — see the file-name note below before importing that last one. Bundled as `dist/feedback.js` — named by the `feedback` lib entry KEY, which the move did not touch — and typed at `dist/features/feedback/index.d.ts`, because `vite-plugin-dts` mirrors the SOURCE path. It sits under the feature layer so the jsdom vitest project collects its tests and the feature-layer eslint rule matches it: both patterns name `src/features/**`, so a module one directory higher is collected by neither and its layering violations go unreported. |
 | `src/vite/` | Node layer (node-tested). Plugin, endpoint, git, probes. Imports Node builtins. |
 | `src/vite/plugin.ts` | Vite plugin: injects `define` (three version constants), endpoint. Options `round`, `allowLan`, `outDir`, `templates` (issue-form paths; `[]` serves none), `gateway`. Resolves the `repo` slug for the status route, and names ONE filesystem — `mkdir`, `writeFile`, `readdir`, `readFile` — for `store.ts` and `templates.ts` both. |
 | `src/vite/endpoint.ts` | Routing and the route handlers ALONE: `GET /__devtools/status` (git, persistence, the `repo` slug), `GET /templates` (the parsed issue forms, read per request, `[]` where there is no directory), `POST /report` (body, store, gateway), `POST /comment` (the "also affected" comment, answered as `{status:'commented', gateway}`; `gateway-absent` where none is configured). One `ROUTE_METHODS` map is both the path match and the method each path answers. Its request plumbing lives in `http.ts` and its body schemas in `report.ts`/`comment.ts`. Its cases are split three ways on what an assembly a case needs: one route pinned at a time and needing a resolved build value lives in `plugin.test.ts`, one route pinned at a time and needing none in `endpoint.test.ts`, and a case driving more than one route against the SAME assembled middleware in `endpoint.integration.test.ts`. |
@@ -70,6 +70,23 @@ The runtime dependencies split by half: `@medv/finder` is browser-only
 (the element-selector capture), `yaml` is node-only (issue-form
 parsing). Both are in `rollupOptions.external` in `vite.config.ts`, so
 neither is bundled; the grep is what proves `yaml` never crosses.
+
+## File names are case-folded here
+
+`picker.ts` (the picker's decisions) and `Picker.tsx` (its drawing)
+differ by one letter's case, and on the macOS checkout this repo is
+worked in that is ONE name rather than two. Measured three ways:
+`import … from './Picker'` answers `picker.ts` under vitest with no
+error at all; `check-types` refuses the same import with `TS1149:
+File name '…/Picker.ts' differs from already included file name
+'…/picker.ts' only in casing`; and a `Picker.d.ts` emitted into
+`dist/features/feedback/` REPLACES `picker.d.ts` there (16,983 bytes
+to 37, one file listed where there were two).
+
+So `Picker.tsx` is imported by nothing, every decision it calls lives
+in `pickerOverlay.ts` and `pickerField.ts` where the jsdom project
+collects the cases, and a new `.tsx` must not take the name of a
+sibling `.ts`. It is the only such pair under `packages/`.
 
 ## The storage key
 
