@@ -78,6 +78,7 @@ function createHost(): DevToolsHost {
       subscribe: () => () => {},
       publish: () => {},
       last: () => undefined,
+      recent: () => [],
     },
     fetch: () => Promise.resolve(new Response(null, { status: 204 })),
   };

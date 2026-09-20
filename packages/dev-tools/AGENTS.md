@@ -15,7 +15,7 @@ gates, workflow, and loop architecture.
 | `src/core/` | Browser layer (jsdom-tested). `.ts` modules only, container `.tsx`. Trigger, menu, surfaces, shell state, host builder. One `localStorage` key: `devtools.settings`. |
 | `src/core/types.ts` | Feature contract: `DevToolsFeature`, `MenuItem` (union on mode), `DevToolsHost` (only thing features reach), `DevToolsConfig`, `DevToolsStatus`. |
 | `src/core/host.ts` | Builds host: normalises endpoint to app-origin path, joins feature paths, applies defaults. Frozen; `context()` calls `extra()` per read. |
-| `src/core/bus.ts` | Pub/sub: three topics (`error`, `route`, `artefact`), `unknown` payloads. No producer this plan. |
+| `src/core/bus.ts` | Pub/sub: three topics (`error`, `route`, `artefact`), `unknown` payloads. No producer this plan. `last(topic)` answers the newest payload; `recent(topic, n)` answers up to `n` of them newest-first out of a ring capped at 20 per topic, empty for an untouched topic and for `n <= 0`. Each publish REPLACES the ring and `recent` slices a copy, so an array a caller holds neither grows nor writes back. |
 | `src/core/settings.ts` | Reads/writes `devtools.settings`, one key only. Stores `{size, handles}`. Corner not persisted. |
 | `src/core/mount.ts` | Entry: `mountDevTools(config)`. Own root on body. Refuses automation (unless forced) and empty features (unless `showEmpty`). |
 | `src/core/Shell.tsx` | Top: owns state (`status`, `settings`), renders trigger/menu/surface/about. |

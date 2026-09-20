@@ -25,6 +25,7 @@ const BUS: DevToolsBus = {
   subscribe: () => () => undefined,
   publish: () => undefined,
   last: () => undefined,
+  recent: () => [],
 };
 
 /**

@@ -191,6 +191,38 @@ export interface DevToolsBus {
    * @returns The last payload, or `undefined` before any publish.
    */
   last(topic: DevToolsBusTopic): unknown;
+
+  /**
+   * The payloads recently published on a topic, most recent FIRST.
+   *
+   * {@link last} answers one payload and this answers a window over
+   * the same stream, so `recent(topic, 1)[0]` and `last(topic)` are
+   * the same value wherever anything has been published. Both exist
+   * because a reader wanting the current state wants the first and a
+   * reader wanting what LED here — an error report carrying the last
+   * few failures rather than only the newest — wants the second, and
+   * spelling the second as repeated `last` reads is impossible: a
+   * payload `last` has already been replaced by is gone.
+   *
+   * The bus keeps at most 20 payloads per topic. That number is the
+   * bus's, not the caller's: a request for more than were kept
+   * answers what there is, and never pads. So the answer's length is
+   * `min(n, published, 20)` and a caller reads the array's own
+   * length rather than assuming it got what it asked for.
+   *
+   * Every answer is a fresh array. A caller may sort or splice it
+   * without reaching the bus's own state, and holding one does not
+   * make it grow as later payloads arrive — read again for those.
+   *
+   * @param topic - One of the three topics.
+   * @param n - How many to answer, at most. Zero and every negative
+   * answer an empty array, which is the same answer an untouched
+   * topic gives: "nothing to show" is not an error here and a caller
+   * never has to guard the call.
+   * @returns Up to `n` payloads, newest first; empty before any
+   * publish.
+   */
+  recent(topic: DevToolsBusTopic, n: number): readonly unknown[];
 }
 
 /**
