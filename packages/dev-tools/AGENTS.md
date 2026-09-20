@@ -133,9 +133,80 @@ ONE thing features reach:
 
 New need = new host member, never Shell import or feature import.
 
+## Feature layer: `src/features/feedback/`
+
+**Module map.** The feedback drawer and element picker:
+
+- `index.ts` — exports `FeedbackFeature` (the `DevToolsFeature`
+  implementing error reporting surface)
+- `FeedbackDrawer.tsx` — the drawer UI, composed from draft and
+  outcome. A pick collapses it; collapsed drawer children are
+  `null`, so state lives in `drawerDraft.ts` outside React
+- `drawerDraft.ts` — report draft store and template cache
+  (outside React because no effect runs under `react-dom/server`)
+- `drawerModel.ts` — merges served template with widget's three
+  fields (`selector`, `context` above-fold, screenshot) and
+  assembles the final report object
+- `drawerOutcome.ts` — composes status line (`role="status"`)
+  and prefilled GitHub new-issue link (with attachment paths)
+- `drawerData.ts` — makes the two GETs (templates and context)
+  and encodes the attachment (screenshot PNG to base64)
+- `FeedbackOutcome.tsx` — renders outcome region (success,
+  failure, "also affected" comment)
+- `picker.ts` — decides element identity (name and callable
+  selector) and what a pick match means (tag, class, id, data)
+- `pickerOverlay.ts` — top-layer sheet and pick session
+  (pointer following, escape-key refusal)
+- `pickerField.ts` — decorates marked selector input after a
+  pick (label text, close button, selector validation)
+- `ElementPicker.tsx` — renders picker controls (activate
+  button, marked input with decoration, overlay)
+
+**Why the path matters.** The vitest `jsdom` project collects
+`src/{core,features}/**/*.test.ts` and eslint rule forbids
+`src/features/**` importing `src/vite/**` or `src/core/**`'s
+Node builtins. The feature sits one level DOWN from the root
+so both patterns match it: tests are collected, layering
+violations are caught. A module at `src/features.ts` (one level
+UP) would be collected by neither, leaving violations silent.
+`src/vite/` sits parallel to both and is imported by neither.
+
+## Leak grep over browser bundles
+
+`postbuild` is npm-lifecycle-named, so `bun run build` ALREADY
+runs the leak check over BOTH browser bundles after vite
+compiles. It refuses three specifiers found in either file:
+`node:`, `child_process` and `yaml`. The `yaml` package is a
+real dependency but of the NODE half only (`src/vite/`); a
+browser bundle importing it signals a layering leak the bundler
+reports as success. Missing bundle (no `dist/feedback.js`) also
+exits `1`. A `build` that exits `1` under successful `vite build`
+means the grep refused one of those three — not a bundler
+failure. Running `bun run postbuild` alone afterward is redundant
+but useful to read that step's exit code in isolation.
+
+Both are in `rollupOptions.external` in `vite.config.ts`, so
+neither is bundled; the grep is what proves `yaml` never crosses.
+
+## Screenshot control under either renderer
+
+A feature draws its own screenshot in EITHER jsdom (unit/
+browser test) OR real browser (e2e/Playwright spec). Under
+jsdom, `@medv/finder` and canvas APIs fail silently (no
+`HTMLCanvasElement`, no pixel rendering), so `ElementPicker`
+and `drawerModel` both gracefully handle missing screenshot
+and mark the field as unchecked or absent. Under Playwright,
+the forced spec activates the drawer and captures the canvas
+before submit; the spec-level control means automation never
+drives screenshot capture (decision 7 from `.rafa/specs/
+q20b-2-feedback-feature.md`). A feature never reads the app's
+`sessionStorage`, other `localStorage` keys or its API client;
+only the report draft, endpoint response and user form state
+reach the tracker.
+
 ## Context pages
 
-- `packages/web/context/testing.md` — two-runner split, jsdom quirks,
-  why the widget is invisible to the default e2e suite, the forced
-  project and its server port, the absence control in the default
-  suite.
+- `packages/web/context/testing.md` — two-runner split, jsdom
+  quirks, why the widget is invisible to the default e2e suite,
+  the forced project and its server port, the absence control
+  in the default suite.
