@@ -100,6 +100,45 @@ anywhere. The `templates` option resolves the same way but is left
 relative there, because those paths are only read and a miss answers
 `[]` rather than creating anything.
 
+## DevToolsBus Topics and Methods
+
+The `devtoolsBus` module exports `publish(topic, payload)`,
+`subscribe(topic, callback)`, `unsubscribe()`, and `recent(topic, n)`.
+
+### Topics and Payloads
+
+| Topic | Payload Shape | Published by |
+| --- | --- | --- |
+| `error` | `{message, stack, href, at}` | Error boundary and global capture |
+| `route` | `{path, search, at}` | App layout on navigation |
+| `artefact` | `{kind, id, at}` | Modal editors when focused |
+| `open-item` | `{featureId, itemId}` | App fallback when reporting |
+
+All payloads carry an `at` timestamp (ms since epoch).
+
+### `recent(topic, n) → Payload[]`
+
+Returns the N most recent payloads for a topic, newest first. For
+`error`, the ring holds at most 20 payloads; older errors are dropped
+when the cap fills. `recent('error', 5)` returns up to 5 of the 20
+held, reordered with the newest first. Other topics hold one payload
+per session and answer it until replaced.
+
+Requesting more items than exist returns fewer. Requesting zero returns
+`[]`. An untouched topic answers `[]`.
+
+### Global Error Capture
+
+Call `installGlobalCapture(bus)` to add window-level `error` and
+`unhandledrejection` event listeners. Both publish to the bus's `error`
+topic with the error message, first stack line, `location.href` and
+a `Date.now()` timestamp.
+
+The `error` event listener fires on throws inside event handlers and
+timers. The `unhandledrejection` listener fires on unhandled promise
+rejections. Both are called only AFTER the bridge has subscribed to
+`error`, so the payloads appear in `recent('error', n)` calls.
+
 ## Feedback Feature
 
 The feedback drawer is a plugged-in feature that lets users file bug
@@ -139,10 +178,10 @@ The three appended fields are:
   parent, ArrowDown returns.
 - `context` (`readonly`): automatically collected: viewport, device
   pixel ratio, colour scheme, `data-theme` if present, user agent,
-  `location.href`, app version, the bus's five newest `error` payloads
-  (`error` for the newest, then `errorPrevious1` to `errorPrevious4`,
-  a number naming a payload's age and never padded) and its current
-  `artefact`, each when present. Never opted out.
+  `location.href`, app version, the five newest `error` payloads from
+  `bus.recent('error', 5)` (each holding message, stack, href, and
+  timestamp), and the current `artefact`, each when present. Never
+  opted out.
 
 ### Form Renderer Slot
 
