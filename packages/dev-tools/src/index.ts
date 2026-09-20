@@ -40,6 +40,23 @@
  * contract block, because it is {@link mountDevTools}'s return type
  * and a caller storing one in a typed field cannot otherwise name it.
  *
+ * ## Why the mount decision leaves as a value
+ *
+ * {@link shouldMountDevTools} and {@link DevToolsMountDecision} are
+ * here because the app needs the ANSWER, not just its effect.
+ * {@link mountDevTools} returns a plain {@link DevToolsDisposer}
+ * whether it mounted or refused — decision 7 of
+ * `.rafa/specs/q20b-3-error-boundary-provider.md` keeps that return
+ * unchanged, so nothing about the disposer says which of the two
+ * happened. An app that has its own work to do only when the widget
+ * is really there — installing the dev-only bridge between its error
+ * boundary and the bus, say — therefore has to take the decision
+ * itself, and can only do so if the pure predicate and the shape it
+ * reads are nameable from outside. Widening the disposer into a
+ * result object would have answered the same question and reopened
+ * decision 7; exporting the predicate answers it and leaves every
+ * existing call site untouched.
+ *
  * ## Nothing here may import a node builtin
  *
  * This bundle runs in the browser. The eslint layering rule refuses
@@ -93,7 +110,7 @@ export type {
   SurfaceMode,
   SurfaceProps,
 } from './core/types';
-export type { DevToolsDisposer } from './core/mount';
+export type { DevToolsDisposer, DevToolsMountDecision } from './core/mount';
 
 export { devtoolsBus } from './core/bus';
-export { mountDevTools } from './core/mount';
+export { mountDevTools, shouldMountDevTools } from './core/mount';
