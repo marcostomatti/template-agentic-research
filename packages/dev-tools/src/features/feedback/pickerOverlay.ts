@@ -6,7 +6,7 @@
  * `./picker.ts` answers what an element is called, what a selector
  * matches and what sits above an element. This module answers where
  * a rectangle goes and who owns the pointer while pick mode is on.
- * `./Picker.tsx` calls both and holds no geometry of its own.
+ * `./ElementPicker.tsx` calls both and holds no geometry of its own.
  *
  * ## Why pick mode is drawn imperatively and not in JSX
  *
@@ -403,7 +403,7 @@ export function createOverlayLayer(root: Element): FeedbackOverlayLayer {
   layer.className = LAYER_CLASS;
   layer.setAttribute('popover', 'manual');
   // Everything drawn here is a positioned echo of something already
-  // in the page or already said by `./Picker.tsx`'s own count line,
+  // in the page or already said by `./ElementPicker.tsx`'s own count line,
   // so none of it is announced a second time.
   layer.setAttribute('aria-hidden', 'true');
   root.append(layer);

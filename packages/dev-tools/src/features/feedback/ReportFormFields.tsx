@@ -94,7 +94,7 @@
  * ## `data-devtools-field="selector"`
  *
  * Spec item 5: both renderers mark the selector input with it, and
- * `./Picker.tsx` attaches the match outline, the match count and the
+ * `./ElementPicker.tsx` attaches the match outline, the match count and the
  * ArrowUp/ArrowDown climb to the element carrying that attribute
  * rather than to a control it drew itself. It is written here as a
  * literal for the same reason it is written literally in the
@@ -417,7 +417,7 @@ function FieldControl({
     );
   }
 
-  // Spec item 5: `./Picker.tsx` finds the field by this attribute,
+  // Spec item 5: `./ElementPicker.tsx` finds the field by this attribute,
   // under both renderers. A `text` field carries none: an attribute
   // written as `undefined` is left out of the markup entirely.
   const selectorMark = field.kind === 'selector'

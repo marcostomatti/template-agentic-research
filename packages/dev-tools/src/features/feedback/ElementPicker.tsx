@@ -63,39 +63,26 @@
  * and not `useState` because nothing drawn here reads it — the field
  * shows the selector, and the selector is the drawer's.
  *
- * ## This file cannot be imported on a case-insensitive filesystem
+ * ## Why this file is `ElementPicker.tsx` and not `Picker.tsx`
  *
- * Measured on the machine this was written on (macOS, APFS,
- * case-insensitive), and the reason no `Picker.test.ts` sits beside
- * it and no module imports it yet:
+ * It was `Picker.tsx` for one commit, beside `./picker.ts`, and that
+ * pair differs by one letter's case. Measured on a case-insensitive
+ * filesystem (macOS, APFS), where the loop runs:
  *
- * - `import { Picker } from './Picker'` resolves to `./picker.ts`.
- *   Vite's default extension order tries `.ts` before `.tsx`, and a
- *   stat for `Picker.ts` matches `picker.ts`. Under vitest the two
- *   spellings answered the SAME module object and raised nothing at
- *   all — both `FEEDBACK_ATTRIBUTE_VALUE_LIMIT,…,matchesOf`, neither
- *   carrying a `Picker`.
- * - `bun run check-types` refuses the same import loudly: `error
- *   TS1149: File name '…/Picker.ts' differs from already included
- *   file name '…/picker.ts' only in casing`, beside `error TS2305:
- *   Module '"./Picker"' has no exported member 'Picker'`.
- * - And the consequence a green build would otherwise have shipped:
- *   the moment anything does import this file, `vite-plugin-dts`
- *   emits `dist/features/feedback/Picker.d.ts`, which on the same
- *   filesystem REPLACES `picker.d.ts`. Measured by writing one
- *   beside the other: the pure module's declaration went from 16,983
- *   bytes to 37, and the directory listed one file where it had
- *   listed two.
+ * - `import { Picker } from './Picker'` resolved to `./picker.ts`:
+ *   Vite tries `.ts` before `.tsx`, and a stat for `Picker.ts`
+ *   matches `picker.ts`. Under vitest both spellings answered the
+ *   SAME module object and raised nothing.
+ * - `bun run check-types` refused the import with TS1149 (file names
+ *   differing only in casing) beside TS2305.
+ * - `vite-plugin-dts` would have emitted `Picker.d.ts` over
+ *   `picker.d.ts`: written one beside the other, the pure module's
+ *   declaration went from 16,983 bytes to 37.
  *
- * The collision is the file NAME's and nothing else's — `picker.ts`,
- * spec item 5's pure half, and `Picker.tsx`, its drawing, differ by
- * one letter's case. On a case-sensitive filesystem all three
- * readings come out fine, so this is a name that works in CI and not
- * on the machine the loop runs on; it is the only such pair in the
- * repository, measured over every directory under `packages/`.
- * Renaming either half is a decision this task had no standing to
- * take. The two modules above carry every decision and every case, so
- * the rename costs this file its name and nothing else.
+ * A case-sensitive CI passes all three, so the pair worked everywhere
+ * but here. Twelve modules import `./picker` and none imported the
+ * component, so the component took the new name. No two files under
+ * `packages/` may differ only by case; this was the only such pair.
  *
  * ## What proves what
  *
@@ -107,8 +94,8 @@
  * mutation legs.
  *
  * What no case reads is the markup below — the button's `type`, the
- * three elements in the row, the hint — because no `.test.ts` in this
- * directory can import this file. Two gates still cover it: `bun run
+ * three elements in the row, the hint — because no case in this
+ * directory imports this file yet. Two gates still cover it: `bun run
  * lint` and `bun run check-types` both read it, the second through
  * `tsconfig.json`'s `include: ["src"]` rather than through any
  * import. The forced Playwright spec is where the button is pressed.
@@ -142,8 +129,8 @@ const PICK_HINT
   + 'Escape to cancel. With the field focused, ArrowUp selects the '
   + 'parent and ArrowDown returns.';
 
-/** What {@link Picker} takes. */
-export interface PickerProps {
+/** What {@link ElementPicker} takes. */
+export interface ElementPickerProps {
   /** What the selector field holds right now. */
   readonly value: string;
 
@@ -175,12 +162,12 @@ export interface PickerProps {
  * @param props - {@link PickerProps}.
  * @returns The button, the count and the hint.
  */
-export function Picker({
+export function ElementPicker({
   value,
   matches,
   onSelect,
   onCollapse,
-}: PickerProps): ReactElement {
+}: ElementPickerProps): ReactElement {
   const anchor = useRef<HTMLDivElement | null>(null);
   const trail = useRef(FEEDBACK_CLIMB_TRAIL_START);
 

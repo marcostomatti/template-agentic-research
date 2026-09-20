@@ -68,7 +68,7 @@
  * The other two fields the widget adds are NOT withheld this way. The
  * `selector` field is drawn by the renderer — both renderers mark its
  * input `data-devtools-field="selector"` (spec item 5) and
- * `./Picker.tsx` attaches the match decoration and the climb keys to
+ * `./ElementPicker.tsx` attaches the match decoration and the climb keys to
  * whatever element carries that attribute — and `readonly` is how the
  * always-present context block is drawn.
  *

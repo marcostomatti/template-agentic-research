@@ -6,7 +6,7 @@
  * Three exported functions. {@link describeElement} answers one
  * element's selector, tag, text excerpt and bounding box;
  * {@link matchesOf} answers what a selector matches right now; and
- * {@link climb} answers the element above one. `Picker.tsx` — the
+ * {@link climb} answers the element above one. `ElementPicker.tsx` — the
  * overlay that follows the pointer, the click that selects, the
  * Escape that cancels, the ArrowUp that climbs — draws what these
  * three answer and decides nothing of its own, which is this
@@ -367,7 +367,7 @@ const REFUSED_MATCHES: FeedbackSelectorMatches = Object.freeze({
  *
  * Exported because the overlay needs the same answer BEFORE a click:
  * a pointer crossing the widget must not draw a highlight over it,
- * and a `Picker.tsx` that re-derived the rule would be a second
+ * and a `ElementPicker.tsx` that re-derived the rule would be a second
  * place for it to be wrong. See this module's documentation for why
  * `<html>` is refused alongside the widget's own root.
  *

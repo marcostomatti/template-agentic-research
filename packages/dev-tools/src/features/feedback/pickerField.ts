@@ -30,7 +30,7 @@
  * - The sheet's badge, parked on the field's trailing edge by
  *   `./pickerOverlay.ts`, visible only while the field has focus. The
  *   sheet is `aria-hidden`, so this one is never announced.
- * - `./Picker.tsx`'s own count line, beside the pick button, in the
+ * - `./ElementPicker.tsx`'s own count line, beside the pick button, in the
  *   accessibility tree and present whether the field has focus or
  *   not.
  *

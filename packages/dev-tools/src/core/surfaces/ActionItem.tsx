@@ -64,7 +64,7 @@
  * rule preludes, 80 selectors, 0 unscoped) that a new rule would
  * falsify, and because the pending rule it already carries names this
  * component in its own comment. The two figures are the reading AFTER
- * `src/features/feedback/Picker.tsx`'s element-picker block was
+ * `src/features/feedback/ElementPicker.tsx`'s element-picker block was
  * added, which is what re-measuring a new rule costs. A reader who
  * does add a class there should move this card onto it.
  *
