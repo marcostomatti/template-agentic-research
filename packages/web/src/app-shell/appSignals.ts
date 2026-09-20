@@ -48,21 +48,27 @@
  * contract; a sixth member with no producer would be a promise
  * nothing keeps.
  *
- * ## No producer exists YET
+ * ## One producer exists so far
  *
  * Every module named above — the boundary, the fallback,
  * `useArtefactSignal`, the layout effect and the bridge — lands in a
  * later stage of the same plan as this file, and none of them exists
- * at the commit that adds it. Three have since landed beside this
- * file: `useArtefactSignal.ts`, `CrashFallback.tsx` and
- * `AppErrorBoundary.tsx`. None of the three is a producer yet — none
+ * at the commit that adds it. Four have since landed: the layout
+ * effect in `AppLayout.tsx`, and beside this file
+ * `useArtefactSignal.ts`, `CrashFallback.tsx` and
+ * `AppErrorBoundary.tsx`.
+ *
+ * Exactly ONE of the four publishes when the app runs. `AppLayout` is
+ * the layout route both route trees nest under, so its effect runs on
+ * the first render and on every navigation after it: `route` is live,
+ * and {@link AppSignals.last} answers a record there from the first
+ * paint onward. The other three are still waiting on callers — none
  * of the seven modal sub-routes calls the hook, and nothing renders
  * the fallback or mounts the boundary until `src/main.tsx` wraps the
- * router in it. So {@link AppSignals.last} answers `undefined` on all
- * five topics for the whole life of the app until the callers
- * arrive, and the only thing that publishes here when anything runs
- * is `appSignals.test.ts`. That is the normal case rather than a gap:
- * what is missing is a caller, not a behaviour.
+ * router in it — so `last` answers `undefined` on the other four
+ * topics for the whole life of the app until those callers arrive.
+ * That is the normal case rather than a gap: what is missing is a
+ * caller, not a behaviour.
  *
  * ## The payloads are TYPED, unlike the bus's
  *
