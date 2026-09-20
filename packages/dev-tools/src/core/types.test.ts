@@ -1,9 +1,11 @@
 import type {
   Corner,
   DevToolsBus,
+  DevToolsBusTopic,
   DevToolsConfig,
   DevToolsFeature,
   DevToolsHost,
+  DevToolsOpenItemPayload,
   DevToolsStatus,
   DrawerPlacement,
   MenuItem,
@@ -76,6 +78,48 @@ const CORNERS: readonly Corner[] = [
 
 /** The three sizes, annotated for the same reason. */
 const SIZES: readonly Size[] = ['sm', 'md', 'lg'];
+
+/**
+ * The four bus topics, annotated for the same reason.
+ *
+ * The union is now `keyof DevToolsBusPayloads` rather than a literal
+ * list, so this line is also the reading that the derivation KEPT the
+ * three original members while gaining `open-item`: a payload map
+ * that lost one would red here rather than quietly narrow what the
+ * bus accepts.
+ */
+const BUS_TOPICS: readonly DevToolsBusTopic[] = [
+  'error',
+  'route',
+  'artefact',
+  'open-item',
+];
+
+/**
+ * A bus that records what it was handed, for the topic cases.
+ *
+ * Separate from {@link BUS}, which answers nothing and exists to make
+ * a {@link DevToolsHost} literal satisfiable: a case reading what a
+ * topic CARRIES needs the payload back.
+ *
+ * @returns The bus, and the `topic`/`payload` pairs published on it.
+ */
+function recordingBus(): {
+  bus: DevToolsBus;
+  published: { topic: DevToolsBusTopic; payload: unknown }[];
+} {
+  const published: { topic: DevToolsBusTopic; payload: unknown }[] = [];
+
+  return {
+    bus: {
+      subscribe: () => () => undefined,
+      publish: (topic, payload) => { published.push({ topic, payload }); },
+      last: () => undefined,
+      recent: () => [],
+    },
+    published,
+  };
+}
 
 /**
  * What the shell would do with one item, without a shell.
@@ -213,6 +257,52 @@ describe('what the contract refuses', () => {
 
     expect(drawnAs(refused)).toBe('drawer:bottom:false');
     expect(drawnAs(accepted)).toBe('drawer:bottom:false');
+  });
+
+  it('refuses an open-item payload that is not a pair of ids', () => {
+    // `open-item` is the one topic with a declared payload, because it
+    // is the one the widget ACTS on rather than summarises. The three
+    // directives below are what that declaration buys: each publish
+    // still runs — a type error is not a deletion — so the recorder
+    // reads them all back afterwards.
+    const { bus, published } = recordingBus();
+
+    // @ts-expect-error open-item carries two ids, not a route-like string.
+    bus.publish('open-item', 'feedback/drawer');
+
+    // @ts-expect-error itemId is required: half a pair opens nothing.
+    bus.publish('open-item', { featureId: 'feedback' });
+
+    bus.publish('open-item', {
+      featureId: 'feedback',
+      itemId: 'drawer',
+      // @ts-expect-error the payload is two ids and nothing else.
+      open: () => undefined,
+    });
+
+    // The positive control, varied along the one axis that matters —
+    // the topic, not the value. The SAME string that was refused above
+    // compiles with no directive on `error`, so this pair reads the
+    // map's seam rather than a bus that has come to refuse every
+    // payload. A map that typed all four topics alike would red this
+    // line.
+    bus.publish('error', 'feedback/drawer');
+
+    // And a topic outside the roster is refused whatever it carries:
+    // the union is the map's `keyof`, so there is no fifth member to
+    // publish on.
+    // @ts-expect-error the roster is closed at four.
+    bus.publish('open-items', { featureId: 'feedback', itemId: 'drawer' });
+
+    expect(published.map((entry) => entry.topic)).toEqual([
+      'open-item',
+      'open-item',
+      'open-item',
+      'error',
+      'open-items',
+    ]);
+    expect(published[0]?.payload).toBe('feedback/drawer');
+    expect(published[1]?.payload).toEqual({ featureId: 'feedback' });
   });
 });
 
@@ -402,5 +492,54 @@ describe('what the status endpoint answers', () => {
     };
 
     expect(outsideARepo.commit).toBe('unknown');
+  });
+});
+
+describe('what a bus topic carries', () => {
+  it('names four topics, one of which carries a pair of ids', () => {
+    // The roster, read as a set so its ORDER is not a contract. Four
+    // members, because the union is the payload map's `keyof` and the
+    // map has four keys.
+    expect(new Set(BUS_TOPICS)).toEqual(
+      new Set(['error', 'route', 'artefact', 'open-item']),
+    );
+    expect(BUS_TOPICS).toHaveLength(4);
+
+    // The typed payload is two ids and nothing else. Read as the key
+    // set rather than member by member, so a third member added to the
+    // payload would leave this reading behind.
+    const payload: DevToolsOpenItemPayload = {
+      featureId: 'feedback',
+      itemId: 'drawer',
+    };
+
+    expect(Object.keys(payload).sort()).toEqual(['featureId', 'itemId']);
+    expect(`${payload.featureId}/${payload.itemId}`).toBe('feedback/drawer');
+  });
+
+  it('accepts any payload at all on the three unknown topics', () => {
+    // The looseness is per topic and deliberate: the three
+    // announcement topics are the host app's, their shapes are settled
+    // by whatever producer it attaches, and `unknown` is what lets a
+    // string, an Error and a record all through the same call.
+    const { bus, published } = recordingBus();
+    const thrown = new TypeError('devtools-test: x is not a function');
+
+    bus.publish('error', thrown);
+    bus.publish('route', '/lexicon');
+    bus.publish('artefact', { kind: 'source', id: 42 });
+    bus.publish('open-item', { featureId: 'feedback', itemId: 'report' });
+
+    expect(published.map((entry) => entry.topic)).toEqual([
+      'error',
+      'route',
+      'artefact',
+      'open-item',
+    ]);
+    expect(published[0]?.payload).toBe(thrown);
+    expect(published[3]?.payload).toEqual({
+      featureId: 'feedback',
+      itemId: 'report',
+    });
   });
 });

@@ -5,11 +5,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDevToolsBus, devtoolsBus } from './bus';
 
 /**
- * The three topics, annotated so a topic REMOVED from the union reds
+ * The four topics, annotated so a topic REMOVED from the union reds
  * this line rather than quietly shrinking what every case below
  * sweeps.
+ *
+ * `open-item` is swept beside the other three on purpose: it is the
+ * one topic with a declared payload, and every reading this list
+ * feeds — `last` before a publish, `recent` before a publish, the
+ * singleton's untouched state — must answer for it exactly as for the
+ * `unknown` ones. A typed payload changes what may be PUBLISHED and
+ * nothing about how the bus holds it.
  */
-const TOPICS: readonly DevToolsBusTopic[] = ['error', 'route', 'artefact'];
+const TOPICS: readonly DevToolsBusTopic[] = [
+  'error',
+  'route',
+  'artefact',
+  'open-item',
+];
 
 /**
  * A recorder: a subscriber that keeps what it was handed.
@@ -162,6 +174,42 @@ describe('what the bus refuses to do', () => {
     expect(bus.recent('error', 2)).toEqual(['second', 'first']);
   });
 
+  it('keeps an open-item publish off every other topic', () => {
+    // Arrange: a subscriber on each topic, so the case reads where the
+    // payload went AND where it did not. The fourth topic is the one
+    // the shell itself consumes, so a leak here would open a widget
+    // item on a route change.
+    const bus = createDevToolsBus();
+    const onOpen = recorder();
+    const onError = recorder();
+    const onRoute = recorder();
+    const onArtefact = recorder();
+
+    bus.subscribe('open-item', onOpen.fn);
+    bus.subscribe('error', onError.fn);
+    bus.subscribe('route', onRoute.fn);
+    bus.subscribe('artefact', onArtefact.fn);
+
+    // Act
+    bus.publish('open-item', { featureId: 'feedback', itemId: 'drawer' });
+
+    // Assert: one delivery, and the other three topics untouched in
+    // every reading they offer — the subscriber, `last` and the ring.
+    expect(onOpen.seen).toEqual([{ featureId: 'feedback', itemId: 'drawer' }]);
+    expect([onError.seen, onRoute.seen, onArtefact.seen]).toEqual([[], [], []]);
+    expect(bus.last('error')).toBeUndefined();
+    expect(bus.recent('route', 5)).toEqual([]);
+    expect(bus.recent('artefact', 5)).toEqual([]);
+
+    // The control, varied along the one axis that matters: a publish
+    // on one of those topics DOES reach its own subscriber, so a bus
+    // that had stopped delivering anywhere would fail here rather than
+    // pass the emptiness above.
+    bus.publish('route', '/lexicon');
+    expect(onRoute.seen).toEqual(['/lexicon']);
+    expect(onOpen.seen).toHaveLength(1);
+  });
+
   it('answers only what was published when asked for more than there are', () => {
     // Arrange: two payloads, a request for fifty.
     const bus = createDevToolsBus();
@@ -214,6 +262,34 @@ describe('what the bus delivers', () => {
     expect(bus.last('route')).toBe('/digests');
     expect(bus.last('error')).toBeInstanceOf(Error);
     expect(bus.last('artefact')).toBeUndefined();
+  });
+
+  it('holds an open-item payload in last and in the ring like any other', () => {
+    // Arrange: the typed topic, read through all three of the bus's
+    // readings. The claim is that the payload type buys a compiler
+    // refusal at the publish site and changes NOTHING about storage —
+    // the same identity out of `last`, the same newest-first ring.
+    const bus = createDevToolsBus();
+    const listener = recorder();
+    const first = { featureId: 'feedback', itemId: 'drawer' };
+    const second = { featureId: 'feedback', itemId: 'report' };
+
+    bus.subscribe('open-item', listener.fn);
+
+    // Act
+    bus.publish('open-item', first);
+    bus.publish('open-item', second);
+
+    // Assert: delivered in publish order, remembered as the newest by
+    // identity, and windowed newest-first.
+    expect(listener.seen).toEqual([first, second]);
+    expect(bus.last('open-item')).toBe(second);
+    expect(bus.recent('open-item', 5)).toEqual([second, first]);
+
+    // And the payload is handed through unchanged rather than copied
+    // or normalised on the way — a shell resolving it reads the ids
+    // the publisher wrote.
+    expect(listener.seen[0]).toBe(first);
   });
 
   it('stops delivering to a subscriber once its disposer has run', () => {
