@@ -24,10 +24,11 @@
  * The `export {}` below exports nothing and is not decoration: it is
  * what makes this file a MODULE. Measured — with it deleted, `bun run
  * build` still exits `0` and still writes `dist/feedback.js` and
- * `dist/feedback/index.d.ts`, but the declaration file ends at the
- * comment, so the `./feedback` export resolves to a script rather than
- * to a module with no exports yet. The marker is the difference
- * between an entry that is empty and an entry that is not an entry.
+ * `dist/features/feedback/index.d.ts`, but the declaration file ends
+ * at the comment, so the `./feedback` export resolves to a script
+ * rather than to a module with no exports yet. The marker is the
+ * difference between an entry that is empty and an entry that is not
+ * an entry.
  */
 
 export {};

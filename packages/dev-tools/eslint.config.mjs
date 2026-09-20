@@ -13,8 +13,8 @@ import sharedRules from '../../sharedRules.mjs';
 // Decision 1's layering, encoded once so a message is authored in one place.
 //
 // The browser layer is everything under src/ except src/vite/**: the two
-// browser entries (src/index.ts, src/feedback/index.ts) plus src/core/** and
-// src/features/**. src/vite/** is the node layer and is the one place a
+// browser entries (src/index.ts, src/features/feedback/index.ts) plus
+// src/core/** and src/features/**. src/vite/** is the node layer and is the one place a
 // builtin is allowed.
 const NODE_BUILTIN_PATTERNS = [
   {

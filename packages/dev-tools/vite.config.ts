@@ -18,8 +18,11 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
  *   `dist/feedback.js` and `dist/vite.js`.
  * - The declaration path comes from the SOURCE path, because
  *   `vite-plugin-dts` mirrors `src/`, so the types land at
- *   `dist/index.d.ts`, `dist/feedback/index.d.ts` and
- *   `dist/vite/index.d.ts`.
+ *   `dist/index.d.ts`, `dist/features/feedback/index.d.ts` and
+ *   `dist/vite/index.d.ts`. The two are independent: the feedback
+ *   source sits under `src/features/`, so its declaration moved to
+ *   `dist/features/feedback/index.d.ts` while its bundle stayed at
+ *   `dist/feedback.js`, named by the unchanged entry key.
  *
  * No React plugin is registered: nothing here needs Fast Refresh, and
  * Vite's esbuild transform reads `jsx: "react-jsx"` from
@@ -62,7 +65,7 @@ export default defineConfig({
     lib: {
       entry: {
         index: resolve(rootDir, 'src/index.ts'),
-        feedback: resolve(rootDir, 'src/feedback/index.ts'),
+        feedback: resolve(rootDir, 'src/features/feedback/index.ts'),
         vite: resolve(rootDir, 'src/vite/index.ts'),
       },
       formats: ['es'],

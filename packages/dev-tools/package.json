@@ -14,7 +14,7 @@
       "import": "./dist/index.js"
     },
     "./feedback": {
-      "types": "./dist/feedback/index.d.ts",
+      "types": "./dist/features/feedback/index.d.ts",
       "import": "./dist/feedback.js"
     },
     "./vite": {
