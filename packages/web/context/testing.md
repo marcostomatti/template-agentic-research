@@ -136,6 +136,50 @@ handle, the about popover's version line, and proves no more than one
 drawer opens at a time — all impossible from a suite that sees no
 widget at all.
 
+The second forced spec in `tests/e2e/dev-tools-feedback.spec.ts` drives
+the feedback drawer feature that the shell spec's real app wires into its
+one mounted feature. The drawer is a `DevToolsFeature` placed at the `end`
+edge with a `handle: true`, so it appears in the shell's menu as a choosable
+drawer and in the real app as the one drawer the feedback form fills. The
+spec runs under the same `chromium-devtools` project as the shell spec on
+port 5177 with `VITE_DEVTOOLS_FORCE=1`, for the same reason: the widget is
+absent by design under the default `chromium` project, and a spec driven
+against a page that carries no mount point is both unrun and silent.
+
+The spec opens the drawer from the menu, verifies the template select lists
+both issue forms (`bug-report` and `ui-feedback`), chooses the UI feedback
+form and asserts its fields render. It refuses an empty title, drives the
+element picker to write a selector from a clicked sidebar item and verifies
+the field shows one match, stubs the `/__devtools/report` endpoint to read
+the request body and assert the context keys, stubs a `duplicate` answer to
+show both buttons and proves **also affected** posts the comment. Two
+deliberately absent assertions carry equal weight: screenshot capture is not
+driven (`navigator.mediaDevices.getDisplayMedia` cannot show a prompt under
+automation that a person can accept, so a stubbed canvas is not the proof
+the feature works), while the drop zone IS driven with a fixture PNG to
+assert the file path writes and the preview thumbnail renders. Decision 3
+of the spec spells this split: capture API first, drop zone always.
+
+Opening a Radix dropdown (the template select) in a spec follows the `@ar/ui
+Select` pattern from the locator vocabulary: the trigger is a `button` with
+an accessible name from its `ariaLabel`, its panel is a `role="menu"` of
+`menuitemradio` items, and it is addressed at PAGE scope (the portal sits
+outside any dialog). Click the trigger button to open, then click the
+desired `menuitemradio` to choose. The selector for the template select is
+`page.getByRole('button', { name: 'Report type' }).click()`, followed by
+`page.getByRole('menuitemradio', { name: 'UI Feedback' }).click()`.
+
+The absence control for the feedback drawer appears in the default e2e suite
+(`chromium` project on port 5174 with `VITE_DEVTOOLS_FORCE` unset): the
+drawer guard at mount time reads `navigator.webdriver` and returns null,
+leaving the whole feature unmounted. A spec running against that page
+cannot reach the drawer's trigger at all, and that is exactly what
+`tests/e2e/unknown-route.spec.ts`'s absence case asserts — the same control
+that proved the shell widget itself was absent. The default suite also
+proves the feedback feature never lands in the production build: a `bun run
+build` in `packages/web` emits no dev-tools code at all, because `src/dev/`
+is guarded by `import.meta.env.DEV` end to end.
+
 Two readings that shipped with it, both measured rather than reasoned:
 
 - `startDevTools()` is reached from a DYNAMIC import that fires after
