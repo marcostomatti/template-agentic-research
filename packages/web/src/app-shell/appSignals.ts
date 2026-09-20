@@ -56,7 +56,11 @@
  * at the commit that adds it. Four have since landed: the layout
  * effect in `AppLayout.tsx`, and beside this file
  * `useArtefactSignal.ts`, `CrashFallback.tsx` and
- * `AppErrorBoundary.tsx`.
+ * `AppErrorBoundary.tsx`. The fifth is WRITTEN and not yet installed:
+ * `src/dev/bridge.ts` holds the whole of the bridge's behaviour and
+ * takes its signals, its bus and its window capture as arguments, so
+ * until `src/dev/devtools.ts` calls it the only caller it has is its
+ * own colocated cases, over a channel they build themselves.
  *
  * TWO of the four publish when the app runs. `AppLayout` is the
  * layout route both route trees nest under, so its effect runs on the
