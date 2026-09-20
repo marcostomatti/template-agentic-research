@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { fetchFindings } from '../../src/data/api';
 import { DEFAULT_DOMAIN_SLUG, getDomain } from '../../src/data/domains';
 import { getOperator } from '../../src/data/shell';
+import { DEV_CRASH_PATH } from '../../src/dev/crashRoute';
 import { rowCountLabel } from '../../src/pages/digest/rows';
 import {
   getSurface,
@@ -132,6 +133,32 @@ const FEEDBACK_DRAWER_NAME = 'Report feedback';
  * an absent drawer says nothing on its own about an absent handle.
  */
 const FEEDBACK_HANDLE_NAME = `Expand ${FEEDBACK_DRAWER_NAME}`;
+
+/**
+ * `CrashFallback.tsx`'s own `HEADING`, unexported — the same string
+ * `dev-tools-boundary.spec.ts` reads under its own local name, which is
+ * what tells this screen apart from react-router's own default error
+ * page ("Unexpected Application Error!").
+ */
+const CRASH_FALLBACK_HEADING =
+  'This page stopped working while it was rendering.';
+
+/** `CrashFallback.tsx`'s own `TRY_AGAIN_LABEL`, unexported. */
+const TRY_AGAIN_LABEL = 'Try again';
+
+/** `CrashFallback.tsx`'s own `RELOAD_LABEL`, unexported. */
+const RELOAD_LABEL = 'Reload the page';
+
+/**
+ * `CrashFallback.tsx`'s own `REPORT_LABEL`, unexported — drawn only
+ * while `appSignals.last('devtools')` reads installed. This is the
+ * default project's own server, with no `VITE_DEVTOOLS_FORCE`, so
+ * nothing ever publishes that signal and the button never appears —
+ * the production reading `dev-tools-boundary.spec.ts`'s forced
+ * counterpart cannot take, run as it is against the widget-carrying
+ * server instead.
+ */
+const REPORT_THIS_LABEL = 'Report this';
 
 test.describe('the app at the single-domain base', () => {
   test('boots onto the digest surface', async ({ page }) => {
@@ -300,4 +327,38 @@ test.describe('the app at the single-domain base', () => {
       page.getByRole('button', { name: FEEDBACK_HANDLE_NAME }),
     ).toHaveCount(0);
   });
+
+  test(
+    'the crash route renders the fallback with no report control',
+    async ({ page }) => {
+      // Arrange / Act — the default project's own server, same as the
+      // two widget-absence cases above: no `VITE_DEVTOOLS_FORCE`, so
+      // `RouteErrorBoundary` (`../../src/app-shell/RouteErrorBoundary.tsx`)
+      // still catches the dev-only crash route's throw and draws
+      // `CrashFallback`, but no bridge ever installs behind it.
+      await page.goto(DEV_CRASH_PATH);
+
+      // Assert — the fallback rendered at all, which is what tells this
+      // screen apart from react-router's own default error page.
+      await expect(
+        page.getByRole('heading', { level: 1, name: CRASH_FALLBACK_HEADING }),
+      ).toBeVisible();
+
+      // The two controls every build draws, production included.
+      await expect(
+        page.getByRole('button', { name: TRY_AGAIN_LABEL }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: RELOAD_LABEL }),
+      ).toBeVisible();
+
+      // And the one control that is a reading of the bridge's absence:
+      // this is the production reading `dev-tools-boundary.spec.ts`'s
+      // forced counterpart cannot take, since nothing here ever
+      // publishes `devtools` `{installed: true}`.
+      await expect(
+        page.getByRole('button', { name: REPORT_THIS_LABEL }),
+      ).toHaveCount(0);
+    },
+  );
 });
