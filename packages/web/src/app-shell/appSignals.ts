@@ -48,7 +48,7 @@
  * contract; a sixth member with no producer would be a promise
  * nothing keeps.
  *
- * ## One producer exists so far
+ * ## Two producers run so far
  *
  * Every module named above — the boundary, the fallback,
  * `useArtefactSignal`, the layout effect and the bridge — lands in a
@@ -58,17 +58,22 @@
  * `useArtefactSignal.ts`, `CrashFallback.tsx` and
  * `AppErrorBoundary.tsx`.
  *
- * Exactly ONE of the four publishes when the app runs. `AppLayout` is
- * the layout route both route trees nest under, so its effect runs on
- * the first render and on every navigation after it: `route` is live,
- * and {@link AppSignals.last} answers a record there from the first
- * paint onward. The other three are still waiting on callers — none
- * of the seven modal sub-routes calls the hook, and nothing renders
- * the fallback or mounts the boundary until `src/main.tsx` wraps the
- * router in it — so `last` answers `undefined` on the other four
- * topics for the whole life of the app until those callers arrive.
- * That is the normal case rather than a gap: what is missing is a
- * caller, not a behaviour.
+ * TWO of the four publish when the app runs. `AppLayout` is the
+ * layout route both route trees nest under, so its effect runs on the
+ * first render and on every navigation after it: `route` is live, and
+ * {@link AppSignals.last} answers a record there from the first paint
+ * onward. `useArtefactSignal` is live too, now that all seven modal
+ * sub-routes call it with their own kind and the `entityId` they
+ * edit — so `artefact` answers `undefined` until the first modal
+ * opens, a record while one is open, and `null` from the moment it
+ * closes.
+ *
+ * The other two are still waiting: nothing renders the fallback or
+ * mounts the boundary until `src/main.tsx` wraps the router in it, so
+ * `last` answers `undefined` on `error`, and on the two handshake
+ * topics the bridge is both ends of, for the whole life of the app
+ * until those callers arrive. That is the normal case rather than a
+ * gap: what is missing is a caller, not a behaviour.
  *
  * ## The payloads are TYPED, unlike the bus's
  *

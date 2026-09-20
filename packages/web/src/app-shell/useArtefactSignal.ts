@@ -103,13 +103,22 @@
  * publish, the id change and the unmount clear are observable end to
  * end.
  *
- * That spec, the bridge and the seven calling modals all land in
- * LATER stages of the same plan as this file, and none of them exists
- * at the commit that adds it. So the paragraph above names the cover
- * rather than reports a green reading, and the task that writes the
- * forced spec owes it an artefact reading beside the `route` one. In
- * the meantime this hook has no caller, and the `artefact` topic
- * answers `undefined` for the whole life of the app.
+ * That spec and the bridge land in LATER stages of the same plan as
+ * this file, and neither exists at the commit that adds it. So the
+ * paragraph above names the cover rather than reports a green
+ * reading, and the task that writes the forced spec owes it an
+ * artefact reading beside the `route` one.
+ *
+ * The callers are no longer pending, though: all seven modal
+ * sub-routes call this hook, each with its own kind constant —
+ * `lexicon-category`, `digest-finding`, `source`, `source-config`,
+ * `source-failures`, `agent-persona` and `connector`. The three
+ * sources modals carry a SOURCE id apiece, which is why their kinds
+ * name the modal rather than the entity: the pair is what tells a
+ * reporter which of the three is open. Each passes the RAW
+ * `useParams` segment rather than the number it parses beside it, so
+ * an unparseable address publishes the segment a reader can see in
+ * the URL rather than `NaN`.
  */
 
 import { useEffect } from 'react';

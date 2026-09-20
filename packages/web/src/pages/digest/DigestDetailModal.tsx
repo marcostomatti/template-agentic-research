@@ -113,6 +113,7 @@ import {
 import { useId } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 
+import { useArtefactSignal } from '../../app-shell/useArtefactSignal';
 import {
   useDocuments,
   useFinding,
@@ -131,6 +132,15 @@ import {
 } from './actions';
 import { buildFindingDetail, findingSummary } from './detail';
 import { UNRATED_VERDICT_LABEL, verdictTone } from './rows';
+
+/**
+ * This surface's own word for what it shows, on the `artefact` topic.
+ *
+ * One distinct string per modal sub-route. This one is read-only
+ * where the four editors are not, and the topic does not care: what
+ * it carries is which entity is open, not what may be done to it.
+ */
+const ARTEFACT_KIND = 'digest-finding';
 
 /**
  * The route this modal closes to: the digest list it hangs under.
@@ -217,6 +227,12 @@ export const DigestDetailModal = () => {
   }>();
   const { pathname } = useLocation();
   const navigate = useNavigate();
+
+  // Say what this surface is about for as long as it is open. The RAW
+  // route segment, not the numeric id below: a segment that is not a
+  // number is a live address here, and `NaN` is not an entity anything
+  // could look up.
+  useArtefactSignal(ARTEFACT_KIND, entityId);
 
   // `:entityId` is a required segment so it cannot arrive empty, but a
   // segment that is not a number is a live address: `Number` answers
