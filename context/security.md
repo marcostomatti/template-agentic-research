@@ -1,23 +1,31 @@
 ## Plans and specs (CRITICAL)
 
-Working plans and specs go in `.plans/` and `.specs/` at the repo root —
-both **gitignored on purpose**: these files routinely describe critical
-bugs (privacy/security) before they are patched, and must never reach the
+Working plans and specs go in `.rafa/plans/` and `.rafa/specs/` at the
+repo root — the loop's own tree, which supersedes the older top-level
+`.plans/` and `.specs/` this page used to name alone; all three are
+**gitignored on purpose** (`.rafa/` by the rafa-owned block at
+`.gitignore:48`): these files routinely describe critical bugs
+(privacy/security) before they are patched, and must never reach the
 remote ahead of the fix. Never "tidy" them into a tracked path, and never
 weaken the `.gitignore` entries. Tracked docs are only for material whose
 subject is already visible in the public code; when in doubt, `.specs/`.
 
-Before any `git add -A`, confirm the ignored trio is absent from
-`git status --short --untracked-files=all`: `progress.txt`, `.plans/`, and
-`.specs/` all carry origin paths and pre-patch security content.
-`git check-ignore -v progress.txt .plans .specs` prints the governing rule
-and line for each in one command, which turns "the ignores are fine" from an
-assumption into evidence. The blast radius of being wrong is an origin path
-on the remote.
+Before any `git add -A`, confirm the ignored set is absent from
+`git status --short --untracked-files=all`: `progress.txt`, `.rafa/`,
+`.plans/`, and `.specs/` all carry origin paths and pre-patch security
+content. `git check-ignore -v progress.txt .rafa .plans .specs` prints
+the governing rule and line for each in one command, which turns "the
+ignores are fine" from an assumption into evidence. The practical
+consequence for a wrap-up: a plan's close-out notes under
+`.rafa/plans/CLOSEOUT-*.md` never appear in `git status`, so nothing the
+loop commits carries them and every finding worth keeping has to be
+promoted by hand before the file is left behind. The blast radius of
+being wrong is an origin path on the remote.
 
-Both trees also sit outside EVERY gate, and the consequence is a legitimately
-EMPTY commit set. The root leaf config lists `.specs/**` and `.plans/**` in
-its `ignores` (an explicit-path `bun x eslint -f json <spec>` returns the
+Every one of those trees also sits outside EVERY gate, and the consequence
+is a legitimately EMPTY commit set. The root leaf config lists `.specs/**`
+and `.plans/**` in its `ignores` (an explicit-path
+`bun x eslint -f json <spec>` returns the
 *File ignored because of a matching ignore pattern* warning — the IGNORED
 shape, not covered-and-clean), and `gate:control-bytes` opens only TRACKED
 files, which these are not. So a spec/plan task has no green to lean on AND

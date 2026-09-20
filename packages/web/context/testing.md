@@ -413,6 +413,28 @@ trigger — but delete it in the same step, because `tests/e2e/` IS the
   instead, since a page needs a router and a query client. Delete
   either in the same step: `tests/e2e/` IS the `testDir`, so a
   leftover probe silently JOINS the suite and its count.
+- A THIRD idiom, for the hand-proof a definition-of-done asks for: a
+  Playwright config plus spec kept OUTSIDE the repo entirely, so no
+  probe can join the suite at all. Four things it needs, each measured
+  as a failure first. The temp directory resolves nothing, so
+  `mkdir -p <tmp>/node_modules/@playwright && ln -s
+  <repo>/packages/web/node_modules/@playwright/test <tmp>/node_modules/`
+  — one symlink serves the config and every spec beside it, or the
+  config dies at `Cannot find module '@playwright/test'`. Invoke it as
+  `bun x playwright test --config=<abs-tmp>/playwright.config.ts` FROM
+  `packages/web`: run from inside the temp directory, `bun x` resolves
+  `playwright` as a package to fetch and loads a SECOND copy of the
+  runner, which surfaces as `Playwright Test did not expect test() to
+  be called here.` Set `webServer.cwd` to `packages/web`'s absolute
+  path: Playwright defaults that cwd to the CONFIG FILE's directory,
+  and a vite server started there binds the port and answers every
+  request with 404, reading as `Timed out waiting 60000ms from
+  config.webServer`. And drop a `{ "type": "module" }` `package.json`
+  beside the config if any spec uses `import.meta`, since an
+  extensionless-module-system directory is CommonJS to Node and
+  `import.meta` throws a `SyntaxError` there. The dev server that proof
+  drives wants `VITE_DEVTOOLS_FORCE=1`, for the same reason the forced
+  project does.
 
 - The dynamic form's locator vocabulary, which no gate states and which
   four specs now depend on. `NodeForm` wraps the ONE mounted form in

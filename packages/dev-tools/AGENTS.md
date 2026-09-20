@@ -53,27 +53,9 @@ per case (Node 25 ships Web Storage global).
 **node (`src/vite/**/*.test.ts`)**: Dev-server layer; Node builtins
 free. eslint forbids `node:*` / `child_process` outside `src/vite/`.
 
-`postbuild` is npm-lifecycle-named, so `bun run build` ALREADY runs
-the leak grep and exits with the grep's code. It first asserts the two
-entry files exist — `dist/index.js` and `dist/feedback.js` — then
-greps EVERY `./dist/*.js` file except `dist/vite.js` (the node half,
-which legitimately imports `yaml` and `node:` builtins), so a
-rollup-hoisted shared chunk (`dist/mount-<hash>.js`,
-`dist/reportTemplate-<hash>.js`) is covered by construction rather
-than by name. It refuses three specifiers in any covered file: `node:`,
-`child_process` and `yaml`. `yaml` is a real dependency of this
-package but of the NODE half only (`src/vite/`), so a browser chunk
-importing it is a layering leak the bundler reports as success. A
-missing entry is a refusal too: absent `dist/feedback.js` exits `1`
-rather than passing an unread file. A `build` that exits `1` under a
-successful `vite build` line is the grep refusing one of those three —
-not a bundler failure. Running `bun run postbuild` again afterwards is
-redundant, and useful only to read that step's exit code on its own.
-
-The runtime dependencies split by half: `@medv/finder` is browser-only
-(the element-selector capture), `yaml` is node-only (issue-form
-parsing). Both are in `rollupOptions.external` in `vite.config.ts`, so
-neither is bundled; the grep is what proves `yaml` never crosses.
+What the two runners do NOT prove is the layering of the built
+bundles — that is `postbuild`'s leak grep, under its own heading
+below.
 
 ## File names are case-folded here
 
@@ -173,6 +155,7 @@ Node builtins. The feature sits one level DOWN from the root
 so both patterns match it: tests are collected, layering
 violations are caught. A module at `src/features.ts` (one level
 UP) would be collected by neither, leaving violations silent.
+<!-- doc-links-skip: src/features.ts -- illustrative wrong-path example -->
 `src/vite/` sits parallel to both and is imported by neither.
 
 ## Leak grep over browser bundles
@@ -193,8 +176,18 @@ means the grep refused one of those three — not a bundler
 failure. Running `bun run postbuild` alone afterward is redundant
 but useful to read that step's exit code in isolation.
 
-Both are in `rollupOptions.external` in `vite.config.ts`, so
-neither is bundled; the grep is what proves `yaml` never crosses.
+The runtime dependencies split by half: `@medv/finder` is
+browser-only (the element-selector capture), `yaml` is node-only
+(issue-form parsing). Both are in `rollupOptions.external` in
+`vite.config.ts`, so neither is bundled; the grep is what proves
+`yaml` never crosses.
+
+Proving the grep BITES needs care: rollup tree-shakes a named import
+whose binding is never used, so a probe that merely adds
+`import x from 'yaml'` to a feature module leaves nothing in the
+bundle and the grep passes for the wrong reason. Reference the
+binding (export it) so it survives into `dist/`, and read the probe as
+a pass only when the unreferenced control also fails.
 
 ## Screenshot control under either renderer
 

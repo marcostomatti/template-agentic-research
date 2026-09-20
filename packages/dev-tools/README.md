@@ -220,12 +220,28 @@ server-side (the browser has no authority over the round and the paths
 do not exist until the report is stored). The attachment BYTES never
 leave the machine; only their paths are appended to the issue body.
 
+An issue form's own `labels:` key does NOT reach an issue the widget
+files. That key is applied by GitHub's new-issue chooser UI alone;
+`rafa issue create` neither reads nor forwards it, and rafa has no
+label flag at all. So the labels on a widget-filed issue are the ones
+rafa derives from its own flags — measured on the github tracker as
+`type:bug`, `needs-triage` and `module:web` for a `--type=bug
+--module=web` create, whichever form was chosen. A form's `labels:`
+still governs the same issue opened by hand, so the two routes to one
+tracker do not agree on labels and a triage query must key on the
+`[fb/<round>]` title prefix rather than on a label.
+
 ### Local Tracker Path
 
 When the tracker has no GitHub authentication, rafa falls back to the
-`local` tracker and stores issues in the repo. The widget detects this
-and shows a prefilled GitHub new-issue link so a triager can copy the
-content to hand:
+`local` tracker and stores issues in the repo. That fallback still
+SUCCEEDS: the gateway answers `filed` with `tracker: 'local'`, not the
+endpoint-level `stored`, and the drawer's status line reads
+`Filed as <id> on local.` The escape hatch is keyed on the tracker
+rather than on the status — any non-`github` `filed` is treated exactly
+like a gateway-absent `stored` — so the widget shows a prefilled GitHub
+new-issue link beside a copy block of the same body, so a triager can
+carry the content over by hand:
 
 ```
 /issues/new?template=<file>&title=[fb/<round>] <title>&body=<body>
@@ -287,6 +303,11 @@ Stores a report and attachments.
   "gateway": { ... }
 }
 ```
+
+`path` is this package's own report-JSON path on disk, written before
+any gateway runs. It is NOT `gateway.id`, which is the tracker's own
+issue id; both are present in the same response and read alike in a
+log, so name which one a reading means.
 
 ### `POST /__devtools/comment`
 
