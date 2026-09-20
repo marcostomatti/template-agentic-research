@@ -12,7 +12,9 @@
  *   `.rafa/specs/q20b-1-dev-tools-shell.md`, so an error escaping the
  *   app's root leaves the reporter standing.
  * - {@link devtoolsBus}, the pure pub/sub the app tells the widget
- *   things on. No producer exists in this plan.
+ *   things on. The package's own window capture
+ *   (`src/core/globalCapture.ts`) publishes captured failures on its
+ *   `error` topic; every other payload is the app's to produce.
  * - The feature contract, as types: what a {@link DevToolsFeature} is,
  *   what a {@link MenuItem} may be, and {@link DevToolsHost} — the ONE
  *   thing a feature may reach.

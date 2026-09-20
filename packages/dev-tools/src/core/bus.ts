@@ -12,7 +12,9 @@
  *
  * ## WHO PUBLISHES, AND WHICH WAY EACH TOPIC RUNS
  *
- * No module in this package publishes on this bus as of this commit.
+ * ONE module in this package publishes on this bus:
+ * `./globalCapture.ts`, whose two window listeners put a captured
+ * failure on `error`. Every other payload arrives from outside.
  * `error`, `route` and `artefact` run INTO the widget from the host
  * app — announcements it makes about itself, whose payloads stay
  * `unknown` because their shapes are the producer's to settle and a
@@ -28,13 +30,16 @@
  * it.
  *
  * So every reading in `bus.test.ts` publishes its own payloads. That
- * is not a gap in coverage: the bus is finished, and what is missing
- * is a caller. Until one lands, {@link DevToolsBus.last} answers
- * `undefined` and {@link DevToolsBus.recent} an empty array on all
- * four topics for the whole life of the app, and a feature reading
- * either must treat that as the normal case rather than as a failure
- * — which is why neither reading is spelled as a refusal: an
- * untouched topic answers the empty list a drained one answers.
+ * is not a gap in coverage: the bus is finished, and what it is
+ * measured without is a caller — `./globalCapture.ts` publishes on
+ * `error`, but only once something installs it, and the three other
+ * topics are still waiting for the app's bridge. Until both land,
+ * {@link DevToolsBus.last} answers `undefined` and
+ * {@link DevToolsBus.recent} an empty array on all four topics for
+ * the whole life of the app, and a feature reading either must treat
+ * that as the normal case rather than as a failure — which is why
+ * neither reading is spelled as a refusal: an untouched topic answers
+ * the empty list a drained one answers.
  *
  * ## The three assertions in the factory
  *
@@ -345,9 +350,11 @@ export function createDevToolsBus(): DevToolsBus {
  * observe it, so a subscriber registered during the app's own module
  * evaluation is already held before the first publish could happen.
  *
- * No producer exists in this plan: nothing publishes on it yet, so
+ * `./globalCapture.ts` is the one producer in this package, and it
+ * reaches THIS instance only when a caller installs it without a bus
+ * of its own. Nothing in the package does: until the app's bridge
+ * installs the capture and republishes its own signals,
  * {@link DevToolsBus.last} answers `undefined` and
- * {@link DevToolsBus.recent} an empty array on all four topics until
- * the plan that adds the producers lands.
+ * {@link DevToolsBus.recent} an empty array on all four topics.
  */
 export const devtoolsBus: DevToolsBus = createDevToolsBus();

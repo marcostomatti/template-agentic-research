@@ -241,9 +241,10 @@ function cap(text: string): string {
  * record already handles.
  *
  * An `Error` from another realm — an iframe, a worker — is not an
- * `Error` to `instanceof` and lands as its JSON form, `{}`. Nothing
- * publishes on this bus yet at all, and when a producer arrives it
- * will be app code in the page's own realm.
+ * `Error` to `instanceof` and lands as its JSON form, `{}`. Neither
+ * producer hands one over: `src/core/globalCapture.ts` flattens what
+ * it captured to four primitives before publishing, and the app's
+ * bridge is code in the page's own realm.
  *
  * @param payload - What {@link DevToolsBus.last} answered.
  * @returns The value for that key, or `undefined` to omit it.

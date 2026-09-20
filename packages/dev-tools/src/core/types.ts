@@ -555,7 +555,7 @@ export interface DevToolsHost {
    */
   readonly settings: { size: Size; corner: Corner };
 
-  /** The pub/sub. No producer exists in this plan. */
+  /** The pub/sub. Window captures reach `error`; the app settles the rest. */
   readonly bus: DevToolsBus;
 
   /**
