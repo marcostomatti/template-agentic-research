@@ -31,7 +31,7 @@
  * the declarations still land on the widget alone.
  *
  * Measured rather than asserted, over a comment-stripped scan of this
- * file: 52 rule preludes, 60 selectors, 0 of them without
+ * file: 62 rule preludes, 72 selectors, 0 of them without
  * `[data-devtools-root]`. The same scan over this file plus one
  * appended `body { color: red; }` answers 1 unscoped selector,
  * `body` -- so the zero is a reading the check could have failed.
@@ -570,6 +570,96 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------
+ * Screenshot control -- src/features/feedback/DropZone.tsx
+ * ------------------------------------------------------------------ */
+
+/* The only control in this package with no user-agent drawing of its
+   own: a drop target is a div, so its border, its padding and its
+   drag-over state are all this file's. The file input inside it keeps
+   the user agent's own drawing, like every control the form renderer
+   draws. */
+[data-devtools-root] .devtools-screenshot-zone {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  border: 1px dashed var(--devtools-border);
+  border-radius: var(--devtools-radius);
+  padding: 0.75rem;
+  transition: background-color var(--devtools-duration-fast)
+      var(--devtools-ease),
+    border-color var(--devtools-duration-fast) var(--devtools-ease);
+}
+
+/* The drag-over state. Only the border's style and colour and the
+   background change: the width stays 1px, so the highlight repaints
+   and never reflows the drawer under a drag. */
+[data-devtools-root] .devtools-screenshot-zone[data-dragover='true'] {
+  border-style: solid;
+  border-color: var(--devtools-accent);
+  background-color: var(--devtools-surface-hover);
+}
+
+[data-devtools-root] .devtools-screenshot-capture,
+[data-devtools-root] .devtools-screenshot-remove {
+  border: 1px solid var(--devtools-border);
+  border-radius: calc(var(--devtools-radius) - 4px);
+  padding: 0.25rem 0.625rem;
+  color: var(--devtools-text);
+  transition: background-color var(--devtools-duration-fast)
+    var(--devtools-ease);
+}
+
+[data-devtools-root] .devtools-screenshot-capture:hover,
+[data-devtools-root] .devtools-screenshot-remove:hover {
+  background-color: var(--devtools-surface-hover);
+}
+
+/* While the browser's own capture prompt is up. */
+[data-devtools-root] .devtools-screenshot-capture:disabled {
+  color: var(--devtools-text-muted);
+  cursor: default;
+}
+
+[data-devtools-root] .devtools-screenshot-hint {
+  flex: 1 1 12rem;
+  margin: 0;
+  color: var(--devtools-text-muted);
+}
+
+[data-devtools-root] .devtools-screenshot-preview {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0 0;
+}
+
+/* The one image in this package, and the one that cannot carry a
+   width and a height: its pixels are a Blob nobody has decoded. Both
+   axes are capped here instead, so the preview can move the drawer's
+   layout by no more than this box. */
+[data-devtools-root] .devtools-screenshot-thumb {
+  max-inline-size: 8rem;
+  max-block-size: 5rem;
+  border: 1px solid var(--devtools-border);
+  border-radius: calc(var(--devtools-radius) - 4px);
+  object-fit: contain;
+}
+
+[data-devtools-root] .devtools-screenshot-name {
+  flex: 1 1 6rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--devtools-text-muted);
+}
+
+/* Spec decision 4, said once where the image is chosen. */
+[data-devtools-root] .devtools-screenshot-notice {
+  margin: 0.5rem 0 0;
+  color: var(--devtools-text-muted);
 }
 
 /* ------------------------------------------------------------------

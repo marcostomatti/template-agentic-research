@@ -60,10 +60,12 @@
  * `.devtools-menu-item[data-pending='true']`, and it is NOT a menu:
  * it carries no `role`, no `aria-label` and no rows. The alternative
  * was a new `.devtools-action` block in the stylesheet, refused
- * because that file's header carries a measured selector scan (52
- * rule preludes, 60 selectors, 0 unscoped) that a new rule would
+ * because that file's header carries a measured selector scan (62
+ * rule preludes, 72 selectors, 0 unscoped) that a new rule would
  * falsify, and because the pending rule it already carries names this
- * component in its own comment. A reader who does add a class there
+ * component in its own comment. The two figures are the reading AFTER
+ * `src/features/feedback/DropZone.tsx`'s screenshot block was added,
+ * which is what re-measuring a new rule costs. A reader who does add a class there
  * should move this card onto it.
  *
  * The card is `aria-hidden`. It says the label and an ellipsis, which
