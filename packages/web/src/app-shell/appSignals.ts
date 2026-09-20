@@ -25,8 +25,9 @@
  * kind of thing. Three are observations the app makes about itself
  * and the bridge republishes on `devtoolsBus` under the same name:
  *
- * - `error` — a render failure `AppErrorBoundary.componentDidCatch`
- *   reduced through {@link errorPayload}.
+ * - `error` — a render failure, caught by `RouteErrorBoundary` for
+ *   anything the router renders and by `AppErrorBoundary` for the
+ *   rest, reduced through {@link errorPayload} either way.
  * - `route` — a navigation, published from one effect in
  *   `AppLayout.tsx`.
  * - `artefact` — which entity the current surface is about, published

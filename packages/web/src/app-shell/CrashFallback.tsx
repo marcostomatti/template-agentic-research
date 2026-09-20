@@ -1,6 +1,7 @@
 /**
  * @packageDocumentation
- * What the app shows once `./AppErrorBoundary.tsx` has caught: one
+ * What the app shows once `./RouteErrorBoundary.tsx` (anything the
+ * router renders) or `./AppErrorBoundary.tsx` (the rest) has caught: one
  * sentence saying what happened, the failure in the words it was
  * thrown with, and the ways out.
  *

@@ -95,19 +95,26 @@
  * same function value. React StrictMode runs an effect cleanup twice,
  * and this app renders under it.
  *
- * ## Two things it deliberately does NOT do
+ * ## It REPLAYS the last payload per topic, once, at install
  *
- * It does not REPLAY. `AppSignals.last` remembers the most recent
- * payload per topic and this module never reads it, so a navigation
- * that happened before the widget mounted is not republished. That is
- * the honest shape: the bus's ring is what LED to a report, and a
- * single stale payload injected at install time would sit in it dated
- * now rather than then. What that costs is the FIRST `route`:
  * `../main.tsx` reaches this side through a dynamic import, so the
- * layout effect's first publish lands a microtask before the bridge
- * exists — the same ordering `../app-shell/CrashFallback.tsx` states
- * at length, and its reason for subscribing to `devtools` rather than
- * reading `last` once.
+ * app has always rendered once before the bridge exists. Anything
+ * published in that window would otherwise never reach the widget —
+ * and the window holds the most valuable signal there is: a crash on
+ * FIRST render, which is what a deep link to a broken page produces.
+ * Measured before this was added: the dev-only crash route, opened
+ * directly, drew the fallback and opened the drawer, and the report's
+ * context block carried no error at all.
+ *
+ * So at install, before subscribing, each republished topic's
+ * `signals.last(topic)` is put on the bus when there is one. The
+ * payload is passed as it was published and carries its own `at`, so
+ * the ring orders it by when it HAPPENED, not by when it was replayed.
+ * One payload per topic is the most `last` can answer; an earlier one
+ * in the same window is lost, which is the honest limit of a channel
+ * that keeps no history of its own.
+ *
+ * ## One thing it deliberately does NOT do
  *
  * It does not subscribe to the bus. `open-item` is the only topic that
  * runs into the widget, and the shell is already subscribed to it —
@@ -173,12 +180,13 @@
  *   subscribed answers `3 failed | 14 passed`: the `route` case, the
  *   `artefact` case and the sweep. The `error` case does NOT red,
  *   which is exactly why the three are read one topic at a time.
- * - Reading `signals.last(topic)` at install and republishing the
- *   three answers `11 failed | 6 passed` — the loudest leg in the
- *   file, because a replay puts three payloads on the bus before any
- *   case has published anything, so every reading of what the bus saw
- *   moves at once. The one that names the behaviour is `republishes
- *   nothing that was published before it was installed`.
+ * - The replay was first ruled out and is now the behaviour, so its
+ *   leg runs the other way: DROPPING the read of `signals.last` at
+ *   install reds `replays the last payload of each republished topic
+ *   at install` and nothing else, because no other case publishes
+ *   before installing. The counts recorded for the other legs above
+ *   predate the replay and are re-measured by the next task that
+ *   touches this file rather than restated from memory here.
  *
  * One leg came back GREEN and is recorded because it says where these
  * cases stop. Spelling `'devtools.feedback'` and `'report'` as
@@ -291,6 +299,16 @@ export function installDevToolsBridge(
   // be installed after the list that undoes it was closed. The
   // capture is last in, and the loop below takes them all down in the
   // same order they were installed - none of them cares.
+  // The replay, before any subscription exists, so a payload cannot
+  // arrive twice: whatever the app published while this module was
+  // still loading reaches the bus once, carrying its own `at`.
+  for (const topic of REPUBLISHED_TOPICS) {
+    const earlier = signals.last(topic);
+    if (earlier !== undefined) {
+      bus.publish(topic, earlier);
+    }
+  }
+
   const installed: readonly DevToolsBridgeDisposer[] = [
     ...REPUBLISHED_TOPICS.map((topic) => signals.subscribe(topic, (payload) => {
       // The payload itself, not a copy: the bus's ring holds what the

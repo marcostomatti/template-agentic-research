@@ -47,14 +47,17 @@
  * would be the expensive one. Below the cache, "try again" re-renders
  * the failing surface against everything the tab has already read.
  *
- * ABOVE the router, because every surface has to be covered. The
- * router is what mounts the layout route and all of the surfaces
- * under it, so one boundary above it catches a throw from any of
- * them, from the layout chrome itself, and from the route-level code
- * react-router runs in between. A boundary placed inside the tree —
- * in `AppLayout`, say — would leave the chrome and the router's own
- * render uncovered, and would have to be repeated per surface to
- * cover the rest.
+ * ABOVE the router, and it is NOT what catches a surface. A data
+ * router catches a render error from any route element itself and
+ * draws the nearest route `ErrorBoundary`, so a throw from a surface,
+ * a modal sub-route or the layout chrome never travels this far —
+ * measured: before the route tree declared one, the dev-only crash
+ * route drew react-router's default error screen and this boundary
+ * saw nothing. `../app-shell/RouteErrorBoundary.tsx`, declared on
+ * every top-level route in `./routes/router.tsx`, is what covers the
+ * route tree. This boundary covers what is left: a throw from the
+ * router component itself or from anything between it and the cache.
+ * Both draw the same `CrashFallback` and publish the same signal.
  *
  * It sits BELOW `StrictMode` for the same reason everything else
  * does: `StrictMode` is not a runtime provider and catches nothing.

@@ -245,11 +245,11 @@ describe('what the dev-tools bridge refuses to do', () => {
     expect(recording.published).toEqual([]);
   });
 
-  it('republishes nothing that was published before it was installed', () => {
-    // Arrange: the channel remembers the last payload per topic, and
-    // the bridge deliberately never reads it — a navigation from
-    // before the widget mounted would land in the bus's ring dated
-    // now rather than then.
+  it('replays the last payload of each republished topic at install', () => {
+    // Arrange: the bridge arrives through a dynamic import, so the app
+    // has rendered — and may have crashed — before it exists. The
+    // channel remembers the last payload per topic; the bridge puts it
+    // on the bus once, as published, so it keeps its own `at`.
     const signals = createAppSignals();
 
     signals.publish('route', A_ROUTE);
@@ -257,13 +257,23 @@ describe('what the dev-tools bridge refuses to do', () => {
     // Act
     const { recording } = installBridge(signals);
 
+    // Assert: exactly one, the same object, under the same topic.
+    expect(recording.published).toHaveLength(1);
+    expect(recording.published[0]).toEqual({ topic: 'route', payload: A_ROUTE });
+    expect(recording.published[0]?.payload).toBe(A_ROUTE);
+
+    // The control: a later publish arrives once more, not twice — the
+    // replay happened before the subscription, never alongside it.
+    signals.publish('route', A_ROUTE);
+    expect(recording.published).toHaveLength(2);
+  });
+
+  it('replays nothing for a topic nobody has published on', () => {
+    // Arrange / Act
+    const { recording } = installBridge(createAppSignals());
+
     // Assert
     expect(recording.published).toEqual([]);
-    expect(signals.last('route')).toBe(A_ROUTE);
-
-    // The control: published again, with the bridge up, it arrives.
-    signals.publish('route', A_ROUTE);
-    expect(recording.published).toHaveLength(1);
   });
 
   it('keeps the app handshake topics off the bus as themselves', () => {

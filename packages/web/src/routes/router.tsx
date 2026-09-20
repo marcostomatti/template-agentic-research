@@ -161,6 +161,7 @@ import { EmptyState } from '@ar/ui';
 import { Navigate, createBrowserRouter } from 'react-router';
 
 import { AppLayout } from '../app-shell/AppLayout';
+import { RouteErrorBoundary } from '../app-shell/RouteErrorBoundary';
 import { Sidebar } from '../app-shell/Sidebar';
 import { Topbar } from '../app-shell/Topbar';
 import { PlaceholderModal } from '../components/PlaceholderModal';
@@ -626,17 +627,26 @@ export const createRoutes = (options: RouteTreeOptions): RouteObject[] => {
     {
       path: SINGLE_DOMAIN_BASE,
       element: gated(SHELL),
+      ErrorBoundary: RouteErrorBoundary,
       children: routesBelowBase(),
     },
     {
       path: DOMAIN_BASE_PATTERN,
       element: gated(<DomainGuard>{SHELL}</DomainGuard>),
+      ErrorBoundary: RouteErrorBoundary,
       children: routesBelowBase(),
     },
   ];
 
   return auth
-    ? [{ path: LOGIN_PATH, element: LOGIN_PAGE }, ...bases]
+    ? [
+      {
+        path: LOGIN_PATH,
+        element: LOGIN_PAGE,
+        ErrorBoundary: RouteErrorBoundary,
+      },
+      ...bases,
+    ]
     : bases;
 };
 
