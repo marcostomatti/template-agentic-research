@@ -359,7 +359,8 @@ const NODE_CLOCK: DevToolsClock = () => new Date();
 /**
  * The real `git`, run with an argv array and no shell.
  *
- * The one place in this package that spawns a process. Synchronous
+ * One of the two places in this package that spawn a process, the
+ * other being `./gateway/run.ts` and its `rafa` calls. Synchronous
  * because `./git.ts`'s header says why: three values, read once, every
  * caller needing all three before it can define anything.
  *

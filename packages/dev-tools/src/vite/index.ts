@@ -21,8 +21,16 @@
  *   runner and the environment are arguments there, so a consumer that
  *   wants the middleware without Vite — or a test — builds one without
  *   spawning `git` or writing a file.
- * - The `ReportGateway` interface (`file`, `search`, `comment`),
- *   declared with no implementation; the feedback plan supplies one.
+ * - The `ReportGateway` interface (`file`, `search`, `comment`) and
+ *   `rafaGateway(options)`, the one implementation this package ships:
+ *   it files through the `rafa` binary with an argv ARRAY and never
+ *   through a shell, and it takes the runner that executes one as an
+ *   option.
+ * - `rafaRun` beside it — that runner over `execFile`, with no shell,
+ *   a timeout and a captured stderr. It is what `rafaGateway()`
+ *   defaults to, so a consumer names it only to wrap it; stating
+ *   `run: undefined` is the documented way to build a gateway that
+ *   runs nothing and refuses every call.
  *
  * Nothing under `src/vite/` is bundled into the browser entries: the
  * build externalises every `node:` builtin, and `postbuild` fails on
@@ -43,6 +51,8 @@ export type {
   DevToolsOutgoing,
   DevToolsRefusalBody,
 } from './http';
+export type { RafaRun, RafaRunResult } from './gateway/call';
+export type { RafaGatewayOptions } from './gateway/rafa';
 export type {
   ReportGateway,
   ReportGatewayCommentOutcome,
@@ -69,6 +79,8 @@ export {
   DEVTOOLS_TEMPLATES_PATH,
 } from './endpoint';
 export { DEVTOOLS_BODY_BYTES_MAX } from './http';
+export { rafaGateway } from './gateway/rafa';
+export { rafaRun } from './gateway/run';
 export {
   DEVTOOLS_ALLOW_LAN_ENV_NAME,
   DEVTOOLS_PLUGIN_NAME,

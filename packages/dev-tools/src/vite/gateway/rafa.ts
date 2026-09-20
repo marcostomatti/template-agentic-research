@@ -70,23 +70,37 @@
  * a list it cannot read, a list whose every hit is unusable, and a
  * create that named no identifier.
  *
- * ## The runner is injected, and this task ships no default
+ * ## The runner is injected, and the default is `./run.ts`
  *
- * Tests hand over a recording fake and the real binary is never
- * spawned by one. The default — `execFile` with no shell, a timeout
- * and a captured stderr — is `./run.ts`, the NEXT task in this stage;
- * until it lands, a gateway built without a `run` refuses every call
- * with `./call.ts`'s `NO_RUNNER_REASON`, and wiring the default is a
- * one-line change to {@link rafaGateway}'s `run` binding.
+ * `rafaGateway()` runs through `./run.ts`'s `rafaRun` — `execFile`
+ * with no shell, a timeout and a captured stderr — so a consumer
+ * names no runner to file for real, which is what
+ * `packages/web/vite.config.ts` does.
+ *
+ * The binding reads the KEY rather than the value: `'run' in options`.
+ * With `??` a stated `undefined` would silently become the real
+ * runner, and the cases that read `NO_RUNNER_REASON` would spawn
+ * `rafa` and reach the real tracker from a unit test. So
+ * `rafaGateway({ run: undefined })` is the documented way to build a
+ * gateway that runs NOTHING, and it is how the two no-runner cases in
+ * `./rafa.test.ts` stay honest. A gateway whose `bin` cannot exist is
+ * how the same file proves the default IS bound: the refusal names
+ * `ENOENT` rather than the missing runner.
  *
  * ## Mutation note — what the colocated cases actually catch
  *
  * A green suite is not evidence a case can fail. Each leg below was
  * measured by breaking this file, running `bun x vitest run
- * src/vite/gateway/` from `packages/dev-tools`, and restoring it
- * byte-identical (checksums compared before and after, both `OK`).
- * The baseline is `Tests 49 passed (49)` over both files in this
- * directory.
+ * src/vite/gateway/call.test.ts src/vite/gateway/rafa.test.ts` from
+ * `packages/dev-tools`, and restoring it byte-identical (checksums
+ * compared before and after, both `OK`).
+ * Every count below was read when this file's cases and
+ * `./call.test.ts`'s came to 49. They now come to 50, the extra being
+ * the default-runner case at the end, and the directory's total is 59
+ * with `./run.test.ts` beside them — so a rerun prints one more
+ * PASSING case per leg. The first leg was re-measured to confirm that
+ * arithmetic: `9 failed | 41 passed (50)`, the same nine names as the
+ * `9 failed | 40 passed (49)` it recorded before.
  *
  * - Dropping `--type=bug` from the LIST argv answers `Tests 9 failed
  *   | 40 passed (49)`. Nine, because every case that reaches a
@@ -118,6 +132,19 @@
  *   which asserts that the list argv was the ONLY call.
  * - Accepting a dash-leading issue id answers `1 failed | 48 passed`
  *   — `refuses an issue id beginning with a dash`.
+ * - Dropping the default runner — `const run = options.run` — answers
+ *   `1 failed | 49 passed (50)`: `runs through the shipped runner when
+ *   no run is stated`, which reads `Expected: "ENOENT" / Received:
+ *   "This rafa gateway has no command runner configured..."`. Measured
+ *   after the binding landed, so it is the one leg here read at 50.
+ *
+ * One leg is deliberately NOT measured: binding the default with `??`
+ * instead of `'run' in options`. It would make `rafaGateway({run:
+ * undefined})` run the real binary, so the two no-runner cases would
+ * reach the real tracker and one of them calls `file` — the mutation
+ * is an issue filed on a live GitHub repository, not a red test. The
+ * key-not-value binding is therefore carried by the two cases that
+ * state `run: undefined` plus this note, and by no measured leg.
  */
 
 import type {
@@ -137,6 +164,7 @@ import type { DevToolsStoredReport } from '../store';
 import { z } from 'zod';
 
 import { refuse, runRafa } from './call';
+import { rafaRun } from './run';
 
 /**
  * What this gateway answers to, and what `GET /__devtools/status`
@@ -272,11 +300,15 @@ export interface RafaGatewayOptions {
   readonly bin?: string;
 
   /**
-   * What actually runs a command.
+   * What actually runs a command, default `./run.ts`'s `rafaRun`.
    *
-   * Injected so a test never spawns the real binary. Absent means
-   * every call refuses — see this module's header for why the default
-   * runner is not wired yet.
+   * Injected so a test never spawns the real binary. The default is
+   * bound on the KEY and not on the value: leaving `run` out gives
+   * the shipped runner, while stating it as `undefined` gives NO
+   * runner and every call refuses with `./call.ts`'s
+   * `NO_RUNNER_REASON`. That distinction is the seam the colocated
+   * cases read that refusal through, and it is why `??` is not what
+   * binds the default below.
    */
   readonly run?: RafaRun;
 
@@ -480,7 +512,9 @@ export function rafaGateway(options: RafaGatewayOptions = {}): ReportGateway {
   const bin = textOr(options.bin, RAFA_DEFAULT_BIN);
   const issueModule = textOr(options.module, RAFA_DEFAULT_MODULE);
   const priority = options.priority?.trim() ?? '';
-  const { run } = options;
+  const run = 'run' in options
+    ? options.run
+    : rafaRun;
 
   /**
    * Look for issues that may already be this report.

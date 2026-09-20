@@ -90,8 +90,9 @@ function reasonOf(answered: RafaCall): string {
 
 describe('the refusals of one rafa call', () => {
   it('refuses when no runner is configured', async () => {
-    // Arrange + Act: the state this stage ships in, `./run.ts` being
-    // the next task.
+    // Arrange + Act: `runRafa` is reached with no runner two ways —
+    // directly, as here, and through `rafaGateway({run: undefined})`,
+    // which opts out of `./run.ts`'s default.
     const answered = await runRafa(undefined, ARGV, LABEL);
 
     // Assert

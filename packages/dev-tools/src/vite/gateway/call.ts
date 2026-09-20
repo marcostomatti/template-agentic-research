@@ -57,10 +57,18 @@
  *
  * A green suite is not evidence a case can fail. Each leg below was
  * measured by breaking this file, running `bun x vitest run
- * src/vite/gateway/` from `packages/dev-tools`, and restoring it
- * byte-identical (checksums compared before and after, both `OK`).
- * The baseline is `Tests 49 passed (49)` over both files in this
- * directory.
+ * src/vite/gateway/call.test.ts src/vite/gateway/rafa.test.ts` from
+ * `packages/dev-tools`, and restoring it byte-identical (checksums
+ * compared before and after, both `OK`).
+ * Every count below was read when those two files held 49 cases. They
+ * now hold 50 — `./rafa.test.ts` gained the case that proves
+ * `./run.ts` is the bound default — and the directory's own total is
+ * 59 with `./run.test.ts` beside them. So a rerun prints one more
+ * PASSING case per leg than the figures below, which two re-measured
+ * controls confirm: the `errno` leg is restated at its new reading,
+ * and `./rafa.ts`'s `--type=bug` leg answered `9 failed | 41 passed
+ * (50)` against the `9 failed | 40 passed (49)` recorded there. What
+ * each leg is evidence of is the NAMES that fall, not the totals.
  *
  * - Skipping a line that is not a JSON object rather than refusing
  *   the output answers `Tests 3 failed | 46 passed (49)` — `refuses
@@ -72,9 +80,13 @@
  *   shape is other` falls with them, which is the point — it reads
  *   the same rule through a third `error` spelling rather than
  *   carrying a rule of its own.
- * - Ignoring a runner's `errno` answers `2 failed | 47 passed` —
- *   `refuses a binary that could not be started` and the gateway's
- *   `refuses when the binary is missing, after one call`.
+ * - Ignoring a runner's `errno` answers `3 failed | 47 passed (50)`,
+ *   re-measured after the default landed — `refuses a binary that
+ *   could not be started`, the gateway's `refuses when the binary is
+ *   missing, after one call`, and now also its `runs through the
+ *   shipped runner when no run is stated`, which reads a REAL
+ *   `ENOENT` off `execFile` through this same branch. It was `2
+ *   failed | 47 passed (49)` before that case existed.
  * - Ignoring a non-zero exit code answers `7 failed | 42 passed`,
  *   the widest leg here: every reason-shaping case reaches
  *   {@link firstLine} through the exit-code branch, so the
@@ -101,10 +113,11 @@ import { z } from 'zod';
 /**
  * The reason a gateway built without a runner gives.
  *
- * Reachable because `./rafa.ts`'s `run` option is optional and
- * `./run.ts` — the default — is the next task in this stage. A
- * gateway without one refuses every call rather than pretending to
- * have filed something.
+ * Reachable two ways now that `./run.ts` is `./rafa.ts`'s default:
+ * through `runRafa` called with no runner, as the cases below do, and
+ * through `rafaGateway({ run: undefined })`, which states the key and
+ * so opts OUT of that default. A gateway without a runner refuses
+ * every call rather than pretending to have filed something.
  */
 export const NO_RUNNER_REASON
   = 'This rafa gateway has no command runner configured, so nothing '
@@ -184,6 +197,13 @@ export interface RafaRunResult {
    * `'ENOENT'` is the one an operator meets first, a missing `rafa`
    * being the ordinary case; any other code is reported the same
    * way, verbatim.
+   *
+   * `./run.ts` also reports one code that is NOT a spawn failure
+   * here — `'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'`, a process aborted
+   * for printing past its cap — because a loud code beats a vague
+   * "did not exit normally". So {@link interpret}'s "could not be
+   * started" reads slightly wide on that one row, which that file's
+   * header states rather than hides.
    */
   readonly errno: string | null;
 }

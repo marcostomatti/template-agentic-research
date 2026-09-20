@@ -17,11 +17,18 @@ import { rafaGateway } from './rafa';
  *
  * ## Nothing here runs `rafa`
  *
- * Every case injects a `run` that records the argv it was handed and
- * answers a fixed {@link RafaRunResult}. The real binary is never
- * spawned, nothing is filed and nothing is commented on — which is
- * also why the create and comment envelopes below are the plan's
+ * Almost every case injects a `run` that records the argv it was
+ * handed and answers a fixed {@link RafaRunResult}. The real binary is
+ * never spawned, nothing is filed and nothing is commented on — which
+ * is also why the create and comment envelopes below are the plan's
  * reading of rafa's output rather than a live capture.
+ *
+ * The two exceptions are the last two cases, which are about the
+ * DEFAULT runner `./rafa.ts` binds. One states `run: undefined` and so
+ * runs nothing at all; the other lets the default stand and points
+ * `bin` at a name no machine has, so the answer comes from an
+ * `ENOENT` that never became a process. Neither can reach a tracker,
+ * and a `rafaGateway()` with the real `bin` appears in no case here.
  *
  * ## What "the exact argv of every call" means here
  *
@@ -320,9 +327,11 @@ describe('the refusals of the rafa gateway', () => {
   });
 
   it('refuses every call when no runner is configured', async () => {
-    // Arrange: the state this stage ships in, `./run.ts` being the
-    // next task. A gateway with no runner files nothing and says so.
-    const gateway = rafaGateway();
+    // Arrange: `run` STATED as undefined, which is the documented way
+    // to build a gateway that runs nothing now that `./run.ts` is the
+    // default for an absent key. A bare `rafaGateway()` here would
+    // spawn the real binary and reach the real tracker.
+    const gateway = rafaGateway({ run: undefined });
 
     // Act
     const searched = await gateway.search('Modal traps focus');
@@ -698,8 +707,9 @@ describe('the also affected comment', () => {
 describe('the gateway itself', () => {
   it('answers to a name that is not the absent one', async () => {
     // Arrange + Act: `GET /__devtools/status` spells "no gateway" as
-    // `none`, so a gateway may not answer to it.
-    const gateway = rafaGateway();
+    // `none`, so a gateway may not answer to it. `run` is stated as
+    // undefined for the same reason as the case above.
+    const gateway = rafaGateway({ run: undefined });
 
     // Assert
     expect(gateway.name).toBe('rafa');
@@ -707,6 +717,26 @@ describe('the gateway itself', () => {
     await expect(gateway.search('x')).resolves.toMatchObject({
       status: 'refused',
     });
+  });
+
+  it('runs through the shipped runner when no run is stated', async () => {
+    // Arrange: no `run` key at all, so `./run.ts`'s `rafaRun` is what
+    // executes — pointed at a binary no machine has, so the reading
+    // costs one failed spawn and reaches nothing.
+    const gateway = rafaGateway({ bin: 'devtools-no-such-binary-ever' });
+
+    // Act
+    const answered = await gateway.search('Modal traps focus');
+    const reason = answered.status === 'refused'
+      ? answered.reason
+      : '';
+
+    // Assert: the refusal comes from the RUNNER (an ENOENT it read off
+    // `execFile`) and not from the absent-runner branch, which is what
+    // proves the default is bound rather than merely exported.
+    expect(answered.status).toBe('refused');
+    expect(reason).toContain('ENOENT');
+    expect(reason).not.toContain('no command runner');
   });
 
   it('is frozen, so a caller cannot swap a method out', async () => {
